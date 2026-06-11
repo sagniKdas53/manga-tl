@@ -29,7 +29,8 @@ public class Chapter {
 
     private String title;
 
-    @Column(name = "summary_json", columnDefinition = "jsonb")
+    @Column(name = "summary_json")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String summaryJson;
 
     @Column(name = "summary_generated_at")
