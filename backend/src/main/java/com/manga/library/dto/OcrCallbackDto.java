@@ -1,0 +1,26 @@
+package com.manga.library.dto;
+
+import lombok.Data;
+import java.util.List;
+import java.util.UUID;
+
+@Data
+public class OcrCallbackDto {
+    private UUID imageId;
+    private List<OcrRegionData> regions;
+
+    @Data
+    public static class OcrRegionData {
+        private String text;
+        private String detectedLanguage;
+        private Double confidence;
+        private Double rotation;
+        private Integer x;
+        private Integer y;
+        private Integer width;
+        private Integer height;
+        private Integer panelReadingOrder;
+        private Integer bubbleReadingOrder;
+        private List<UUID> conversationGroup; // optional list of indexes
+    }
+}

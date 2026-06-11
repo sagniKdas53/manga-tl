@@ -1,0 +1,5 @@
+redis
+minio
+opencv-python-headless
+numpy
+requests

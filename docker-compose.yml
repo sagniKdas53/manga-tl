@@ -1,0 +1,170 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: manga-db
+    environment:
+      - POSTGRES_DB=manga_library
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - manga-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: manga-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - manga-net
+
+  minio:
+    image: minio/minio
+    container_name: manga-minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    networks:
+      - manga-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: manga-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/manga_library
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - JWT_SECRET=5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
+    depends_on:
+      - db
+      - redis
+      - minio
+    networks:
+      - manga-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: manga-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - manga-net
+
+  worker-panel:
+    build:
+      context: ./workers/worker-panel
+      dockerfile: Dockerfile
+    container_name: manga-worker-panel
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
+    depends_on:
+      - redis
+      - minio
+      - backend
+    networks:
+      - manga-net
+
+  worker-ocr:
+    build:
+      context: ./workers/worker-ocr
+      dockerfile: Dockerfile
+    container_name: manga-worker-ocr
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
+    depends_on:
+      - redis
+      - minio
+      - backend
+    networks:
+      - manga-net
+
+  worker-layout:
+    build:
+      context: ./workers/worker-stubs
+      dockerfile: Dockerfile
+    container_name: manga-worker-layout
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JOB_TYPE=layout
+      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - manga-net
+
+  worker-trans:
+    build:
+      context: ./workers/worker-stubs
+      dockerfile: Dockerfile
+    container_name: manga-worker-trans
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JOB_TYPE=translation
+      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - manga-net
+
+  worker-render:
+    build:
+      context: ./workers/worker-stubs
+      dockerfile: Dockerfile
+    container_name: manga-worker-render
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JOB_TYPE=render
+      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - manga-net
+
+networks:
+  manga-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  miniodata:
