@@ -1,0 +1,8 @@
+redis
+minio
+easyocr
+numpy
+requests
+torch
+torchvision
+opencv-python-headless

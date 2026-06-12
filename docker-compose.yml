@@ -75,11 +75,11 @@ services:
     networks:
       - manga-net
 
-  worker-panel:
+  worker:
     build:
-      context: ./workers/worker-panel
+      context: ./workers/unified-worker
       dockerfile: Dockerfile
-    container_name: manga-worker-panel
+    container_name: manga-worker
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -90,73 +90,6 @@ services:
     depends_on:
       - redis
       - minio
-      - backend
-    networks:
-      - manga-net
-
-  worker-ocr:
-    build:
-      context: ./workers/worker-ocr
-      dockerfile: Dockerfile
-    container_name: manga-worker-ocr
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
-    depends_on:
-      - redis
-      - minio
-      - backend
-    networks:
-      - manga-net
-
-  worker-layout:
-    build:
-      context: ./workers/worker-stubs
-      dockerfile: Dockerfile
-    container_name: manga-worker-layout
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JOB_TYPE=layout
-      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
-    depends_on:
-      - redis
-      - backend
-    networks:
-      - manga-net
-
-  worker-trans:
-    build:
-      context: ./workers/worker-stubs
-      dockerfile: Dockerfile
-    container_name: manga-worker-trans
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JOB_TYPE=translation
-      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
-    depends_on:
-      - redis
-      - backend
-    networks:
-      - manga-net
-
-  worker-render:
-    build:
-      context: ./workers/worker-stubs
-      dockerfile: Dockerfile
-    container_name: manga-worker-render
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JOB_TYPE=render
-      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
-    depends_on:
-      - redis
       - backend
     networks:
       - manga-net
