@@ -28,6 +28,7 @@ public class Image {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private User createdBy;
 
     @Column(name = "created_at", nullable = false, updatable = false)

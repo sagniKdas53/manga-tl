@@ -63,4 +63,18 @@ public class MinioService {
             return null;
         }
     }
+
+    public void deleteFile(String objectPath) {
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectPath)
+                            .build()
+            );
+            log.info("Successfully deleted MinIO file: {}", objectPath);
+        } catch (Exception e) {
+            log.error("Failed to delete MinIO file: {}", objectPath, e);
+        }
+    }
 }

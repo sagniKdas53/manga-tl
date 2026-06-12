@@ -87,11 +87,28 @@ public class PageController {
             dto.setId(p.getId());
             dto.setPageNumber(p.getPageNumber());
             dto.setImageId(p.getImage().getId());
+            dto.setChapterId(p.getChapter().getId());
             dto.setFilename(p.getImage().getFilename());
             dto.setUrl(minioService.generatePresignedUrl(p.getImage().getStoragePath()));
             return dto;
         }).collect(Collectors.toList());
         return ResponseEntity.ok(list);
+    }
+
+    @GetMapping("/pages/{pageId}")
+    public ResponseEntity<PageDto> getPage(@PathVariable UUID pageId) {
+        return pageRepository.findById(pageId)
+                .map(p -> {
+                    PageDto dto = new PageDto();
+                    dto.setId(p.getId());
+                    dto.setPageNumber(p.getPageNumber());
+                    dto.setImageId(p.getImage().getId());
+                    dto.setChapterId(p.getChapter().getId());
+                    dto.setFilename(p.getImage().getFilename());
+                    dto.setUrl(minioService.generatePresignedUrl(p.getImage().getStoragePath()));
+                    return ResponseEntity.ok(dto);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/images/{imageId}")
@@ -125,6 +142,79 @@ public class PageController {
         }
 
         return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/pages/{pageId}")
+    @Transactional
+    public ResponseEntity<?> deletePage(@PathVariable UUID pageId) {
+        log.info("Received request to delete page: {}", pageId);
+        try {
+            Page page = pageRepository.findById(pageId)
+                    .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+            
+            Image image = page.getImage();
+            UUID chapterId = page.getChapter().getId();
+
+            // 1. Delete page first
+            pageRepository.delete(page);
+            
+            // 2. Delete image (triggers cascade delete in Postgres to panels, OCR, layers, etc.)
+            imageRepository.delete(image);
+            
+            // 3. Flush deletions to DB
+            pageRepository.flush();
+
+            // 4. Delete original image file from MinIO
+            minioService.deleteFile(image.getStoragePath());
+
+            // 5. Re-sequence remaining pages in chapter to maintain sequence 1..N
+            List<Page> remainingPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
+            for (int i = 0; i < remainingPages.size(); i++) {
+                remainingPages.get(i).setPageNumber(i + 1);
+                pageRepository.save(remainingPages.get(i));
+            }
+            pageRepository.flush();
+
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Failed to delete page", e);
+            return ResponseEntity.internalServerError().body(e.getMessage());
+        }
+    }
+
+    @PutMapping("/chapters/{chapterId}/pages/reorder")
+    @Transactional
+    public ResponseEntity<?> reorderPages(@PathVariable UUID chapterId, @RequestBody List<UUID> pageIds) {
+        log.info("Received request to reorder pages for chapter {}: {}", chapterId, pageIds);
+        try {
+            List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
+            Map<UUID, Page> pageMap = pages.stream().collect(Collectors.toMap(Page::getId, p -> p));
+
+            if (pageIds.size() != pages.size() || !pageMap.keySet().containsAll(pageIds)) {
+                return ResponseEntity.badRequest().body("Invalid list of page IDs for reordering");
+            }
+
+            // Phase 1: Set temporary high page numbers to avoid unique constraint violations
+            for (int i = 0; i < pageIds.size(); i++) {
+                Page p = pageMap.get(pageIds.get(i));
+                p.setPageNumber((i + 1) + 10000);
+                pageRepository.save(p);
+            }
+            pageRepository.flush();
+
+            // Phase 2: Set final sequence numbers
+            for (int i = 0; i < pageIds.size(); i++) {
+                Page p = pageMap.get(pageIds.get(i));
+                p.setPageNumber(i + 1);
+                pageRepository.save(p);
+            }
+            pageRepository.flush();
+
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Failed to reorder pages", e);
+            return ResponseEntity.internalServerError().body(e.getMessage());
+        }
     }
 
     private String getFileExtension(String filename) {

@@ -50,6 +50,20 @@ public class SeriesController {
         return ResponseEntity.ok(list);
     }
 
+    @GetMapping("/{seriesId}")
+    public ResponseEntity<SeriesDto> getSeries(@PathVariable UUID seriesId) {
+        return seriesRepository.findById(seriesId)
+                .map(s -> {
+                    SeriesDto dto = new SeriesDto();
+                    dto.setId(s.getId());
+                    dto.setTitle(s.getTitle());
+                    dto.setOriginalLanguage(s.getOriginalLanguage());
+                    dto.setReadingDirection(s.getReadingDirection());
+                    return ResponseEntity.ok(dto);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping("/{seriesId}/chapters")
     public ResponseEntity<ChapterDto> createChapter(@PathVariable UUID seriesId, @RequestBody ChapterDto dto) {
         Series series = seriesRepository.findById(seriesId)
@@ -78,5 +92,19 @@ public class SeriesController {
             return dto;
         }).collect(Collectors.toList());
         return ResponseEntity.ok(list);
+    }
+
+    @GetMapping("/chapters/{chapterId}")
+    public ResponseEntity<ChapterDto> getChapter(@PathVariable UUID chapterId) {
+        return chapterRepository.findById(chapterId)
+                .map(c -> {
+                    ChapterDto dto = new ChapterDto();
+                    dto.setId(c.getId());
+                    dto.setSeriesId(c.getSeries().getId());
+                    dto.setChapterNumber(c.getChapterNumber());
+                    dto.setTitle(c.getTitle());
+                    return ResponseEntity.ok(dto);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }

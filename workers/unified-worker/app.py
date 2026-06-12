@@ -23,7 +23,14 @@ print("[Unified Worker] Initializing EasyOCR Reader (ja, en)...", flush=True)
 reader = easyocr.Reader(['ja', 'en'], gpu=False)
 
 # Clients
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
+redis_client = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    socket_timeout=15,
+    socket_connect_timeout=5,
+    socket_keepalive=True,
+    retry_on_timeout=True
+)
 minio_client = Minio(
     MINIO_ENDPOINT,
     access_key=MINIO_ACCESS_KEY,
