@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.time.OffsetDateTime;
 import java.util.*;
 
@@ -33,6 +35,20 @@ public class JobCoordinatorService {
     }
 
     private void enqueueJob(String jobType, UUID imageId) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.info("Transaction active. Deferring enqueue of {} job for image {}", jobType, imageId);
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    enqueueJobDirectly(jobType, imageId);
+                }
+            });
+        } else {
+            enqueueJobDirectly(jobType, imageId);
+        }
+    }
+
+    private void enqueueJobDirectly(String jobType, UUID imageId) {
         try {
             String jobId = UUID.randomUUID().toString();
             Map<String, Object> job = new HashMap<>();
