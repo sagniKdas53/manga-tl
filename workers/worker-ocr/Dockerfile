@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.14-slim
 # Install basic system packages needed by opencv / easyocr
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
