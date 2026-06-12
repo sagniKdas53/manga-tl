@@ -17,10 +17,12 @@ public class OcrRegion {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "image_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Image image;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "panel_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Panel panel;
 
     private String text;

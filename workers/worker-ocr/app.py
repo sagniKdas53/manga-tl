@@ -18,9 +18,9 @@ MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', 'minioadmin')
 MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', 'minioadmin')
 CALLBACK_URL = os.environ.get('BACKEND_CALLBACK_URL', 'http://localhost:8080/api/internal/jobs/callback')
 
-# Initialize EasyOCR reader with Traditional Chinese, Japanese, and English support
-print("[OCR Worker] Initializing EasyOCR Reader (ch_tra, ja, en)...", flush=True)
-reader = easyocr.Reader(['ch_tra', 'ja', 'en'], gpu=False)
+# Initialize EasyOCR reader with Japanese and English support
+print("[OCR Worker] Initializing EasyOCR Reader (ja, en)...", flush=True)
+reader = easyocr.Reader(['ja', 'en'], gpu=False)
 
 # Clients
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)

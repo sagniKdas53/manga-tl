@@ -17,6 +17,7 @@ public class Panel {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "image_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Image image;
 
     @Column(name = "bbox_x", nullable = false)
