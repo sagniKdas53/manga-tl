@@ -22,6 +22,15 @@ CALLBACK_URL = os.environ.get('BACKEND_CALLBACK_URL', 'http://localhost:8080/api
 print("[Unified Worker] Initializing EasyOCR Reader (ja, en)...", flush=True)
 reader = easyocr.Reader(['ja', 'en'], gpu=False)
 
+# Initialize MangaOCR reader with Japanese support (for text inside CJK bubbles)
+manga_ocr_reader = None
+try:
+    from manga_ocr import MangaOcr
+    print("[Unified Worker] Initializing MangaOCR Reader...", flush=True)
+    manga_ocr_reader = MangaOcr()
+except Exception as e:
+    print(f"[Unified Worker] Failed to initialize MangaOCR: {e}. Falling back to EasyOCR recognition.", flush=True)
+
 # Clients
 redis_client = redis.Redis(
     host=REDIS_HOST,
@@ -213,6 +222,15 @@ def process_ocr(job_data):
         print(f"[OCR] Error during OCR: {e}", flush=True)
         return
 
+    # Decode image using OpenCV for cropping if MangaOCR is active
+    img = None
+    if manga_ocr_reader is not None:
+        try:
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        except Exception as e:
+            print(f"[OCR] Error decoding image for MangaOCR: {e}", flush=True)
+
     regions = []
     for bbox, text, confidence in results:
         xs = [pt[0] for pt in bbox]
@@ -220,9 +238,30 @@ def process_ocr(job_data):
         x, y = int(min(xs)), int(min(ys))
         width, height = int(max(xs) - x), int(max(ys) - y)
 
+        lang = detect_language(text)
+
+        # Run MangaOCR on bubbles with CJK (Japanese/Chinese) characters
+        if lang in ('ja', 'zh-TW') and manga_ocr_reader is not None and img is not None:
+            try:
+                img_h, img_w = img.shape[:2]
+                x1, y1 = max(0, x), max(0, y)
+                x2, y2 = min(img_w, x + width), min(img_h, y + height)
+
+                if (x2 - x1) > 0 and (y2 - y1) > 0:
+                    crop = img[y1:y2, x1:x2]
+                    from PIL import Image
+                    crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                    pil_img = Image.fromarray(crop_rgb)
+                    manga_text = manga_ocr_reader(pil_img)
+                    if manga_text and len(manga_text.strip()) > 0:
+                        print(f"[OCR] Overwriting EasyOCR text '{text}' with MangaOCR '{manga_text}'", flush=True)
+                        text = manga_text
+            except Exception as e:
+                print(f"[OCR] MangaOCR failed on region ({x},{y},{width},{height}): {e}", flush=True)
+
         regions.append({
             'text': text,
-            'detectedLanguage': detect_language(text),
+            'detectedLanguage': lang,
             'confidence': float(confidence),
             'rotation': 0.0,
             'x': x,

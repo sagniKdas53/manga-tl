@@ -103,6 +103,13 @@ function AppContent() {
   const [showPanels, setShowPanels] = useState(true);
   const [showOcr, setShowOcr] = useState(true);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isToolbarExpanded, setIsToolbarExpanded] = useState(true);
+  const [zoom, setZoom] = useState(1.0);
+  const [isZoomExpanded, setIsZoomExpanded] = useState(true);
+
+
 
   // Creation Form States
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -226,10 +233,11 @@ function AppContent() {
     }
   }, [chapterId, user]);
 
-  // Clear selectedPage when not in reader view
+  // Clear selectedPage and loadedImageId when not in reader view
   useEffect(() => {
     if (!pageNumber) {
       setSelectedPage(null);
+      setLoadedImageId(null);
     }
   }, [pageNumber]);
 
@@ -240,7 +248,8 @@ function AppContent() {
       if (firstPage.chapterId === chapterId) {
         const targetPage = pages.find(p => p.pageNumber === parseInt(pageNumber));
         if (targetPage) {
-          if (!selectedPage || selectedPage.id !== targetPage.id) {
+          // Fetch image details if selectedPage doesn't match or details for imageId aren't loaded yet
+          if (!selectedPage || selectedPage.id !== targetPage.id || loadedImageId !== targetPage.imageId) {
             setIsLoadingDetails(true);
             setSelectedPage(targetPage);
             
@@ -255,6 +264,7 @@ function AppContent() {
               setPanels(data.panels || []);
               setOcrRegions(data.ocrRegions || []);
               setSelectedRegion(null);
+              setLoadedImageId(targetPage.imageId);
               setIsLoadingDetails(false);
             })
             .catch(err => {
@@ -265,7 +275,7 @@ function AppContent() {
         }
       }
     }
-  }, [chapterId, pageNumber, pages, user, selectedPage]);
+  }, [chapterId, pageNumber, pages, user, selectedPage, loadedImageId]);
 
   // Delete page
   const handleDeletePage = async (pageId: string, e: React.MouseEvent) => {
@@ -332,6 +342,62 @@ function AppContent() {
       .then(r => r.json())
       .then(data => setPages(data))
       .catch(fetchErr => console.error("Error reverting page order:", fetchErr));
+    }
+  };
+
+  // Process uploaded files sequentially
+  const processUploadedFiles = async (files: FileList) => {
+    if (!user || !selectedChapter) return;
+    
+    let nextNum = pages.length + 1;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const formData = new FormData();
+      formData.append('chapterId', selectedChapter.id);
+      formData.append('pageNumber', nextNum.toString());
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/images', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${user.token}`
+          },
+          body: formData
+        });
+        if (res.ok) {
+          nextNum++;
+          // Re-fetch pages list
+          const r = await fetch(`/api/chapters/${selectedChapter.id}/pages`, {
+            headers: { 'Authorization': `Bearer ${user.token}` }
+          });
+          if (r.ok) {
+            const data = await r.json();
+            setPages(data);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to upload page", err);
+      }
+    }
+  };
+
+  // Drag and Drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      processUploadedFiles(files);
     }
   };
 
@@ -432,39 +498,9 @@ function AppContent() {
   };
 
   // Handle File Upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0 || !user || !selectedChapter) return;
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const formData = new FormData();
-      formData.append('chapterId', selectedChapter.id);
-      formData.append('pageNumber', (pages.length + i + 1).toString());
-      formData.append('file', file);
-
-      try {
-        const res = await fetch('/api/images', {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${user.token}`
-          },
-          body: formData
-        });
-        if (res.ok) {
-          // Trigger refresh of pages after brief delay
-          setTimeout(() => {
-            fetch(`/api/chapters/${selectedChapter.id}/pages`, {
-              headers: { 'Authorization': `Bearer ${user.token}` }
-            })
-            .then(r => r.json())
-            .then(data => setPages(data));
-          }, 1000);
-        }
-      } catch (err) {
-        console.error("Failed to upload page", err);
-      }
-    }
+    if (files) processUploadedFiles(files);
   };
 
   // Set image natural dimensions for SVG scaling
@@ -725,12 +761,18 @@ function AppContent() {
           </div>
         </div>
 
-        <div className="upload-dropzone" onClick={() => document.getElementById('file-upload')?.click()}>
+        <div 
+          className={`upload-dropzone ${isDragging ? 'dragging' : ''}`} 
+          onClick={() => document.getElementById('file-upload')?.click()}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <svg className="upload-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           <h3 style={{ margin: '0 0 8px' }}>Upload Manga Pages</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Drag and drop images, or click to browse</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Drag and drop multiple images, or click to browse</p>
           <input 
             id="file-upload" 
             type="file" 
@@ -809,54 +851,169 @@ function AppContent() {
               <p>Loading panels and OCR analysis...</p>
             </div>
           ) : (
-            <div className="manga-canvas-wrapper">
-              <img 
-                src={selectedPage.url} 
-                alt={`Page ${selectedPage.pageNumber}`} 
-                className="reader-image" 
-                onLoad={handleImgLoad}
-              />
-              <svg 
-                className="svg-overlay"
-                viewBox={`0 0 ${imageDims.w} ${imageDims.h}`}
-                style={{ pointerEvents: 'auto' }}
-              >
-                {showPanels && panels.map(p => (
-                  <rect 
-                    key={p.id}
-                    x={p.bboxX}
-                    y={p.bboxY}
-                    width={p.bboxW}
-                    height={p.bboxH}
-                    className="svg-panel-box"
-                    style={{ pointerEvents: 'none' }}
+            <>
+              <div className="reader-canvas-area">
+                <div className="manga-canvas-wrapper">
+                  <img 
+                    src={selectedPage.url} 
+                    alt={`Page ${selectedPage.pageNumber}`} 
+                    className="reader-image" 
+                    onLoad={handleImgLoad}
+                    style={{
+                      maxHeight: `${80 * zoom}vh`,
+                      maxWidth: `${100 * zoom}%`,
+                      width: 'auto',
+                      height: 'auto'
+                    }}
                   />
-                ))}
-
-                {showOcr && ocrRegions.map((r) => {
-                  const isSelected = selectedRegion?.id === r.id;
-                  return (
-                    <g key={r.id} onClick={() => setSelectedRegion(r)}>
+                  <svg 
+                    className="svg-overlay"
+                    viewBox={`0 0 ${imageDims.w} ${imageDims.h}`}
+                    style={{ pointerEvents: 'auto' }}
+                  >
+                    {showPanels && panels.map(p => (
                       <rect 
-                        x={r.bboxX}
-                        y={r.bboxY}
-                        width={r.bboxW}
-                        height={r.bboxH}
-                        className="svg-ocr-box"
-                        style={{ 
-                          fill: isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(16, 185, 129, 0.12)',
-                          stroke: isSelected ? 'var(--primary)' : 'var(--success)'
-                        }}
+                        key={p.id}
+                        x={p.bboxX}
+                        y={p.bboxY}
+                        width={p.bboxW}
+                        height={p.bboxH}
+                        className="svg-panel-box"
+                        style={{ pointerEvents: 'none' }}
                       />
-                      <g transform={`translate(${r.bboxX + 10}, ${r.bboxY + 10})`}>
-                        <circle cx="0" cy="0" r="8" fill={isSelected ? 'var(--primary)' : 'var(--success)'} />
-                        <text cx="0" cy="0" className="bubble-text-tag">{r.bubbleReadingOrder}</text>
-                      </g>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
+                    ))}
+
+                    {showOcr && ocrRegions.map((r) => {
+                      const isSelected = selectedRegion?.id === r.id;
+                      return (
+                        <g key={r.id} onClick={() => setSelectedRegion(r)}>
+                          <rect 
+                            x={r.bboxX}
+                            y={r.bboxY}
+                            width={r.bboxW}
+                            height={r.bboxH}
+                            className="svg-ocr-box"
+                            style={{ 
+                              fill: isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(16, 185, 129, 0.12)',
+                              stroke: isSelected ? 'var(--primary)' : 'var(--success)'
+                            }}
+                          />
+                          <g transform={`translate(${r.bboxX + 10}, ${r.bboxY + 10})`}>
+                            <circle cx="0" cy="0" r="8" fill={isSelected ? 'var(--primary)' : 'var(--success)'} />
+                            <text cx="0" cy="0" className="bubble-text-tag">{r.bubbleReadingOrder}</text>
+                          </g>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+              </div>
+
+              {/* Collapsible Reader Toolbar */}
+              <div className={`floating-reader-toolbar glass ${isToolbarExpanded ? 'expanded' : 'collapsed'}`}>
+                <button 
+                  className="toolbar-toggle-handle" 
+                  onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
+                  title={isToolbarExpanded ? "Hide Controls" : "Show Controls"}
+                >
+                  {isToolbarExpanded ? (
+                    <>
+                      <span>Hide</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </>
+                  ) : (
+                    <>
+                      <span>Page {pageNumber} of {pages.length}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="18 15 12 9 6 15"></polyline>
+                      </svg>
+                    </>
+                  )}
+                </button>
+                <div className="toolbar-content">
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => {
+                      const prevNum = parseInt(pageNumber || '1') - 1;
+                      navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || `chapter-${selectedChapter?.chapterNumber}`)}/reader/${prevNum}`);
+                    }}
+                    disabled={parseInt(pageNumber || '1') <= 1}
+                  >
+                    &larr; Prev Page
+                  </button>
+                  <span className="page-indicator">
+                    Page {pageNumber} of {pages.length}
+                  </span>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => {
+                      const nextNum = parseInt(pageNumber || '1') + 1;
+                      navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || `chapter-${selectedChapter?.chapterNumber}`)}/reader/${nextNum}`);
+                    }}
+                    disabled={parseInt(pageNumber || '1') >= pages.length}
+                  >
+                    Next Page &rarr;
+                  </button>
+                </div>
+              </div>
+
+              {/* Collapsible Zoom Toolbar */}
+              <div className={`floating-zoom-toolbar glass ${isZoomExpanded ? 'expanded' : 'collapsed'}`}>
+                <button 
+                  className="zoom-toggle-handle" 
+                  onClick={() => setIsZoomExpanded(!isZoomExpanded)}
+                  title={isZoomExpanded ? "Hide Zoom Controls" : "Show Zoom Controls"}
+                >
+                  {isZoomExpanded ? (
+                    <>
+                      <span style={{ writingMode: 'vertical-lr', textTransform: 'uppercase' }}>Zoom</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ writingMode: 'vertical-lr', fontWeight: 'bold' }}>{Math.round(zoom * 100)}%</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                      </svg>
+                    </>
+                  )}
+                </button>
+                <div className="zoom-content">
+                  <button 
+                    className="btn btn-secondary"
+                    onClick={() => setZoom(prev => Math.min(3.0, prev + 0.1))}
+                    disabled={zoom >= 3.0}
+                    title="Zoom In"
+                  >
+                    +
+                  </button>
+                  <span className="zoom-value">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button 
+                    className="btn btn-secondary"
+                    onClick={() => setZoom(prev => Math.max(0.5, prev - 0.1))}
+                    disabled={zoom <= 0.5}
+                    title="Zoom Out"
+                  >
+                    -
+                  </button>
+                  <button 
+                    className="btn btn-secondary"
+                    style={{ fontSize: '11px', padding: '6px 10px', marginTop: '8px' }}
+                    onClick={() => setZoom(1.0)}
+                    disabled={zoom === 1.0}
+                    title="Reset Zoom"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
 
