@@ -440,6 +440,7 @@ def translate_text(text, source_lang='auto', target_lang='en'):
             print(f"[Translation] Local dictionary matched: '{text}' -> '{v}'", flush=True)
             return v
 
+    # TODO: Look into https://build.nvidia.com/nvidia/riva-translate-1_6b/api for a better model
     provider = os.environ.get('MODEL_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
     api_key = os.environ.get('API_KEY', os.environ.get('LLM_API_KEY', ''))
     model = os.environ.get('PREFERRED_MODEL', os.environ.get('LLM_MODEL', 'google/gemma-3-4b'))
