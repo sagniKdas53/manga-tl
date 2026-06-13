@@ -64,6 +64,15 @@ public class MinioService {
         }
     }
 
+    public InputStream getFileStream(String objectPath) throws Exception {
+        return minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(objectPath)
+                        .build()
+        );
+    }
+
     public void deleteFile(String objectPath) {
         try {
             minioClient.removeObject(

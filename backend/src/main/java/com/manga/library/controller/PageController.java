@@ -32,6 +32,17 @@ public class PageController {
     private final MinioService minioService;
     private final JobCoordinatorService jobCoordinatorService;
 
+    @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
+    private String contextPath;
+
+    private String getImageUrl(UUID imageId) {
+        String cleanContext = contextPath == null ? "" : contextPath;
+        if (cleanContext.endsWith("/")) {
+            cleanContext = cleanContext.substring(0, cleanContext.length() - 1);
+        }
+        return cleanContext + "/api/images/" + imageId + "/file";
+    }
+
     @PostMapping("/images")
     @Transactional
     public ResponseEntity<UploadResponse> uploadPage(
@@ -89,7 +100,7 @@ public class PageController {
             dto.setImageId(p.getImage().getId());
             dto.setChapterId(p.getChapter().getId());
             dto.setFilename(p.getImage().getFilename());
-            dto.setUrl(minioService.generatePresignedUrl(p.getImage().getStoragePath()));
+            dto.setUrl(getImageUrl(p.getImage().getId()));
             return dto;
         }).collect(Collectors.toList());
         return ResponseEntity.ok(list);
@@ -105,7 +116,7 @@ public class PageController {
                     dto.setImageId(p.getImage().getId());
                     dto.setChapterId(p.getChapter().getId());
                     dto.setFilename(p.getImage().getFilename());
-                    dto.setUrl(minioService.generatePresignedUrl(p.getImage().getStoragePath()));
+                    dto.setUrl(getImageUrl(p.getImage().getId()));
                     return ResponseEntity.ok(dto);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -121,11 +132,38 @@ public class PageController {
 
         Map<String, Object> response = new HashMap<>();
         response.put("image", image);
-        response.put("url", minioService.generatePresignedUrl(image.getStoragePath()));
+        response.put("url", getImageUrl(image.getId()));
         response.put("panels", panels);
         response.put("ocrRegions", ocrRegions);
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/images/{imageId}/file")
+    public ResponseEntity<org.springframework.core.io.InputStreamResource> getImageFile(@PathVariable UUID imageId) {
+        try {
+            Image image = imageRepository.findById(imageId)
+                    .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+            
+            java.io.InputStream is = minioService.getFileStream(image.getStoragePath());
+            
+            String contentType = "image/png";
+            String filename = image.getFilename().toLowerCase();
+            if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
+                contentType = "image/jpeg";
+            } else if (filename.endsWith(".webp")) {
+                contentType = "image/webp";
+            } else if (filename.endsWith(".gif")) {
+                contentType = "image/gif";
+            }
+            
+            return ResponseEntity.ok()
+                    .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+                    .body(new org.springframework.core.io.InputStreamResource(is));
+        } catch (Exception e) {
+            log.error("Failed to retrieve image file for {}", imageId, e);
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @GetMapping("/images/{imageId}/layers")

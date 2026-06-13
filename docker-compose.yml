@@ -31,7 +31,6 @@ services:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     ports:
-      - "9000:9000"
       - "9001:9001"
     volumes:
       - miniodata:/data
@@ -41,8 +40,10 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        - VITE_BASE_PATH=${CONTEXT_PATH:-/tlhub}
     container_name: manga-backend
     ports:
       - "8080:8080"
@@ -56,23 +57,11 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - JWT_SECRET=5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
+      - CONTEXT_PATH=${CONTEXT_PATH:-/tlhub}
     depends_on:
       - db
       - redis
       - minio
-    networks:
-      - manga-net
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: manga-frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
     networks:
       - manga-net
     restart: unless-stopped
@@ -88,7 +77,7 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
-      - BACKEND_CALLBACK_URL=http://backend:8080/api/internal/jobs/callback
+      - BACKEND_CALLBACK_URL=http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
     depends_on:
       - redis
       - minio

@@ -1,4 +1,5 @@
 {
     "java.compile.nullAnalysis.mode": "automatic",
-    "python.useEnvironmentsExtension": false
+    "python.useEnvironmentsExtension": false,
+    "java.configuration.updateBuildConfiguration": "automatic"
 }

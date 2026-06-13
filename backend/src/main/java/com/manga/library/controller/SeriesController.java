@@ -29,6 +29,9 @@ public class SeriesController {
     private final PageRepository pageRepository;
     private final MinioService minioService;
 
+    @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
+    private String contextPath;
+
     private SeriesDto toDto(Series s) {
         SeriesDto dto = new SeriesDto();
         dto.setId(s.getId());
@@ -46,7 +49,11 @@ public class SeriesController {
                     Chapter firstChapter = chapters.get(0);
                     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(firstChapter.getId());
                     if (pages != null && !pages.isEmpty()) {
-                        dto.setCoverImageUrl(minioService.generatePresignedUrl(pages.get(0).getImage().getStoragePath()));
+                        String cleanContext = contextPath == null ? "" : contextPath;
+                        if (cleanContext.endsWith("/")) {
+                            cleanContext = cleanContext.substring(0, cleanContext.length() - 1);
+                        }
+                        dto.setCoverImageUrl(cleanContext + "/api/images/" + pages.get(0).getImage().getId() + "/file");
                     }
                 }
             } catch (Exception e) {

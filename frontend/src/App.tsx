@@ -61,6 +61,40 @@ interface OcrRegion {
   bubbleReadingOrder: number;
 }
 
+// Helper to dynamically resolve the context path from the browser address bar
+const getContextPath = (): string => {
+  const path = window.location.pathname;
+  
+  // Check known routes to extract context path prefix
+  for (const route of ['/login', '/series', '/chapters']) {
+    if (path.includes(route)) {
+      let cp = path.substring(0, path.indexOf(route));
+      if (cp.endsWith('/')) cp = cp.slice(0, -1);
+      return cp;
+    }
+  }
+  
+  // If not on a sub-route, we must be at the base context path root (e.g. "/tlhub/" or "/my/manga/")
+  let cp = path;
+  if (cp.endsWith('/')) cp = cp.slice(0, -1);
+  return cp;
+};
+
+// Override global fetch to prepend the dynamic context path / subfolder base URL to API requests
+const originalFetch = window.fetch;
+window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  let targetUrl = input;
+  if (typeof targetUrl === 'string' && targetUrl.startsWith('/api')) {
+    const context = getContextPath();
+    targetUrl = context + targetUrl;
+    console.log(`[Fetch Override] Rewrote API request: ${input} -> ${targetUrl} (detected context: ${context})`);
+  }
+  return originalFetch(targetUrl, init);
+};
+
+// Shadow global fetch inside App.tsx to use window.fetch
+const fetch = window.fetch;
+
 // Slug helper function: Strips unicode punctuation & url-unsafe chars, preserves unicode letters
 export function toSlug(text: string): string {
   if (!text) return 'manga';
@@ -1796,8 +1830,10 @@ function AppContent() {
 }
 
 function App() {
+  const cleanBaseName = getContextPath() || '/';
+
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={cleanBaseName}>
       <AppContent />
     </BrowserRouter>
   );

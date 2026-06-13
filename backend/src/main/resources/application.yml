@@ -1,6 +1,9 @@
 spring:
   application:
     name: manga-library-backend
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/manga_library}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -24,6 +27,7 @@ spring:
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  externalUrl: ${MINIO_EXTERNAL_URL:}
   accessKey: ${MINIO_ACCESS_KEY:minioadmin}
   secretKey: ${MINIO_SECRET_KEY:minioadmin}
   bucketName: manga-library
@@ -31,3 +35,7 @@ minio:
 jwt:
   secret: ${JWT_SECRET:5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437}
   expirationMs: 86400000 # 24 hours
+
+server:
+  servlet:
+    context-path: ${CONTEXT_PATH:/tlhub}
