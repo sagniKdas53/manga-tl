@@ -3,3 +3,4 @@ inputs/
 .agents/
 backend/target/
 workers/unified-worker/.venv/
+data

@@ -171,16 +171,20 @@ public class JobCoordinatorService {
     }
 
     @Transactional
-    public void handleTranslationCallback(UUID imageId, List<Map<String, String>> translations) {
+    public void handleTranslationCallback(UUID imageId, List<Map<String, Object>> translations) {
         log.info("Received Translation callback for image: {} with {} translations", imageId, translations != null ? translations.size() : 0);
         
         if (translations != null) {
-            for (Map<String, String> t : translations) {
+            for (Map<String, Object> t : translations) {
                 try {
-                    UUID regionId = UUID.fromString(t.get("regionId"));
-                    String translatedText = t.get("translatedText");
+                    UUID regionId = UUID.fromString((String) t.get("regionId"));
+                    String translatedText = (String) t.get("translatedText");
+                    Object failedVal = t.get("translationFailed");
+                    boolean translationFailed = failedVal != null && Boolean.parseBoolean(failedVal.toString());
+                    
                     ocrRegionRepository.findById(regionId).ifPresent(region -> {
                         region.setTranslatedText(translatedText);
+                        region.setTranslationFailed(translationFailed);
                         ocrRegionRepository.save(region);
                     });
                 } catch (Exception e) {

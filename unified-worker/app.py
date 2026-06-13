@@ -166,15 +166,255 @@ def bubble_compare(a, b):
 
 # --- TRANSLATION AND REDO HELPERS ---
 
+# --- TRANSLATION AND REDO HELPERS ---
+
+LAST_REQUEST_TIME = 0.0
+
+def enforce_rate_limit():
+    global LAST_REQUEST_TIME
+    rate_limit_env = os.environ.get('RATE_LIMIT', '').strip()
+    if not rate_limit_env:
+        return
+    try:
+        # Parse formats like "60", "60/m", "60/min", "5/s", "5/sec"
+        rpm = None
+        if '/' in rate_limit_env:
+            parts = rate_limit_env.split('/')
+            val = float(parts[0])
+            unit = parts[1].lower().strip()
+            if unit in ('s', 'sec', 'second', 'seconds'):
+                rpm = val * 60.0
+            else:
+                rpm = val
+        else:
+            rpm = float(rate_limit_env)
+        
+        if rpm > 0:
+            min_delay = 60.0 / rpm
+            now = time.time()
+            elapsed = now - LAST_REQUEST_TIME
+            if elapsed < min_delay:
+                sleep_time = min_delay - elapsed
+                print(f"[Translation] Rate limit: Sleeping for {sleep_time:.2f} seconds to respect {rate_limit_env} rate limit...", flush=True)
+                time.sleep(sleep_time)
+            LAST_REQUEST_TIME = time.time()
+    except Exception as e:
+        print(f"[Translation] Error enforcing rate limit: {e}", flush=True)
+
+def try_cloud_ai(provider, api_key, model, prompt):
+    enforce_rate_limit()
+    url = ""
+    headers = {}
+    payload = {}
+    
+    if provider == 'openrouter':
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model or "meta-llama/llama-3-8b-instruct:free",
+            "messages": [{"role": "user", "content": prompt}]
+        }
+    elif provider == 'openai':
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model or "gpt-4o-mini",
+            "messages": [{"role": "user", "content": prompt}]
+        }
+    elif provider == 'nvidia':
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model or "nvidia/llama-3.1-nemotron-70b-instruct",
+            "messages": [{"role": "user", "content": prompt}]
+        }
+    elif provider == 'anthropic':
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model or "claude-3-5-sonnet-20241022",
+            "max_tokens": 1000,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+    elif provider == 'gemini':
+        gemini_model = model or "gemini-1.5-flash"
+        if "/" not in gemini_model:
+            gemini_model = f"models/{gemini_model}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{gemini_model}:generateContent?key={api_key}"
+        headers = {
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}]
+        }
+    else:
+        return None
+
+    try:
+        print(f"[Translation] Sending request to Cloud LLM provider '{provider}' using model '{model}'...", flush=True)
+        res = requests.post(url, json=payload, headers=headers, timeout=12)
+        if res.status_code == 200:
+            res_json = res.json()
+            if provider == 'gemini':
+                return res_json['candidates'][0]['content']['parts'][0]['text']
+            elif provider == 'anthropic':
+                return res_json['content'][0]['text']
+            else:
+                return res_json['choices'][0]['message']['content']
+        else:
+            print(f"[Translation] Cloud LLM provider '{provider}' returned error: {res.status_code} - {res.text}", flush=True)
+    except Exception as e:
+        print(f"[Translation] Cloud LLM Translation failed: {e}", flush=True)
+    return None
+
+def try_local_ai(prompt, text):
+    enforce_rate_limit()
+    local_provider = os.environ.get('LOCAL_LLM_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
+    local_endpoint = os.environ.get('LOCAL_LLM_ENDPOINT', os.environ.get('LLM_ENDPOINT', '')).strip()
+    model = os.environ.get('PREFERRED_MODEL', os.environ.get('LLM_MODEL', 'google/gemma-3-4b'))
+
+    if not local_endpoint:
+        if local_provider == 'ollama':
+            local_endpoint = "http://host.docker.internal:11434/v1/chat/completions"
+        else:
+            local_endpoint = "http://host.docker.internal:1234/v1/chat/completions"
+
+    endpoints_to_try = [local_endpoint]
+    if "localhost" in local_endpoint:
+        endpoints_to_try.append(local_endpoint.replace("localhost", "host.docker.internal"))
+    elif "host.docker.internal" in local_endpoint:
+        endpoints_to_try.append(local_endpoint.replace("host.docker.internal", "localhost"))
+
+    for endpoint in endpoints_to_try:
+        try:
+            print(f"[Translation] Trying Local AI endpoint '{endpoint}' using model '{model}'...", flush=True)
+            
+            if "/api/v1/chat" in endpoint:
+                payload = {
+                    "model": model,
+                    "system_prompt": "You are a professional manga translation agent. Translate the input text from Japanese/Chinese to natural English. Respond ONLY with the translation, do not add any explanations, notes, or quotes.",
+                    "input": text
+                }
+            else:
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "You are a professional manga translation agent. Translate the input text from Japanese/Chinese to natural English. Respond ONLY with the translation, do not add any explanations, notes, or quotes."},
+                        {"role": "user", "content": text}
+                    ]
+                }
+            
+            res = requests.post(endpoint, json=payload, headers={"Content-Type": "application/json"}, timeout=8)
+            if res.status_code == 200:
+                res_json = res.json()
+                translated = None
+                if "/api/v1/chat" in endpoint:
+                    if 'choices' in res_json:
+                        choice = res_json['choices'][0]
+                        if 'message' in choice:
+                            translated = choice['message']['content']
+                        elif 'text' in choice:
+                            translated = choice['text']
+                    elif 'output' in res_json:
+                        translated = res_json['output']
+                    elif 'response' in res_json:
+                        translated = res_json['response']
+                else:
+                    if 'choices' in res_json:
+                        translated = res_json['choices'][0]['message']['content']
+                    elif 'response' in res_json:
+                        translated = res_json['response']
+                
+                if translated:
+                    return translated
+        except Exception as e:
+            print(f"[Translation] Local AI connection failed for '{endpoint}': {e}", flush=True)
+            
+    return None
+
+def try_deepl(text, target_lang='en'):
+    deepl_key = os.environ.get('DEEPL_API_KEY', os.environ.get('DEEPL_KEY', '')).strip()
+    if not deepl_key:
+        return None
+    
+    if deepl_key.endswith(':fx'):
+        url = "https://api-free.deepl.com/v2/translate"
+    else:
+        url = "https://api.deepl.com/v2/translate"
+        
+    try:
+        print("[Translation] Sending request to DeepL API...", flush=True)
+        headers = {
+            "Authorization": f"DeepL-Auth-Key {deepl_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "text": [text],
+            "target_lang": target_lang.upper()
+        }
+        res = requests.post(url, json=payload, headers=headers, timeout=8)
+        if res.status_code == 200:
+            res_json = res.json()
+            translated = res_json['translations'][0]['text']
+            print(f"[Translation] DeepL Translation Success: '{translated}'", flush=True)
+            return translated
+        else:
+            print(f"[Translation] DeepL API returned error: {res.status_code} - {res.text}", flush=True)
+    except Exception as e:
+        print(f"[Translation] DeepL Translation failed: {e}", flush=True)
+    return None
+
+def try_google_translate(text, source_lang='auto', target_lang='en'):
+    try:
+        print(f"[Translation] Falling back to free Google Translate API...", flush=True)
+        import urllib.parse
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={source_lang}&tl={target_lang}&dt=t&q=" + urllib.parse.quote(text)
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            translated = "".join([part[0] for part in data[0] if part[0]])
+            print(f"[Translation] Google Translate Success: '{translated}'", flush=True)
+            return translated
+    except Exception as e:
+        print(f"[Translation] Google Translate fallback failed: {e}", flush=True)
+    return None
+
+def clean_translated_text(translated):
+    if not translated:
+        return translated
+    if isinstance(translated, list) and len(translated) > 0:
+        if isinstance(translated[0], dict) and 'content' in translated[0]:
+            translated = translated[0]['content']
+        elif isinstance(translated[0], str):
+            translated = translated[0]
+    if isinstance(translated, str):
+        translated = translated.strip()
+        if (translated.startswith('"') and translated.endswith('"')) or (translated.startswith("'") and translated.endswith("'")):
+            translated = translated[1:-1].strip()
+        return translated
+    return translated
+
 def translate_text(text, source_lang='auto', target_lang='en'):
-    # 1. Local translation dictionary for speed, robustness, and offline tests
     local_dict = {
         '你到底想幹嚇': 'What do you even want?',
         '關於巧克力我想向你道謝': 'I wanted to thank you for the chocolates.',
         '我一首都不太擅長做甜點': "I've never been very good at making sweets.",
         '如果没有孝介我肯定無論如何都準備不出那應多的巧克力': "Without Kosuke, I wouldn't have been able to prepare so many chocolates anyway.",
         '你可真是死板昵': "You really are rigid, aren't you?",
-        '！！！これは悪いということで、離然是信機、但是地們都限用心的給我準備了巧克力': "!!! This is bad... although they are homemade, they all prepared chocolates for me with all their heart.",
+        '！！！記憶に新しいうちにということで、手作りなんだけど、みんなが一生懸命用意してくれたチョコです': "!!! While it's still fresh in my memory, they all prepared homemade chocolates for me with all their heart.",
         '我倒也不是狼擅長・': "It's not that I'm very good at it...",
         '我要是你的話肯定都煩死了': "If I were you, I'd be totally annoyed.",
         '要是做不出來也不是不可以買嚇': "If you can't make them, you could always just buy them.",
@@ -200,113 +440,36 @@ def translate_text(text, source_lang='auto', target_lang='en'):
             print(f"[Translation] Local dictionary matched: '{text}' -> '{v}'", flush=True)
             return v
 
-    # Get LLM configuration
-    provider = os.environ.get('LLM_PROVIDER', 'lmstudio').lower().strip()
-    api_key = os.environ.get('LLM_API_KEY', '')
-    model = os.environ.get('LLM_MODEL', 'google/gemma-3-4b')
-    endpoint = os.environ.get('LLM_ENDPOINT', 'http://localhost:1234/api/v1/chat')
+    provider = os.environ.get('MODEL_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
+    api_key = os.environ.get('API_KEY', os.environ.get('LLM_API_KEY', ''))
+    model = os.environ.get('PREFERRED_MODEL', os.environ.get('LLM_MODEL', 'google/gemma-3-4b'))
 
     prompt = f"Translate the following text to natural English, maintaining its tone and context. Respond ONLY with the translated text. Do not include any tags, notes, or explanations.\n\nText: {text}"
 
-    if provider != 'none':
-        try:
-            url = ""
-            headers = {}
-            payload = {}
+    # 1. Cloud AI model with API key (if key exists)
+    if api_key:
+        translated = try_cloud_ai(provider, api_key, model, prompt)
+        if translated:
+            return clean_translated_text(translated)
 
-            if provider == 'openrouter':
-                url = "https://openrouter.ai/api/v1/chat/completions"
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": model or "meta-llama/llama-3-8b-instruct:free",
-                    "messages": [{"role": "user", "content": prompt}]
-                }
-            elif provider == 'nvidia':
-                url = endpoint or "https://integrate.api.nvidia.com/v1/chat/completions"
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": model or "nvidia/llama-3.1-nemotron-70b-instruct",
-                    "messages": [{"role": "user", "content": prompt}]
-                }
-            elif provider == 'ollama':
-                url = endpoint or "http://localhost:11434/v1/chat/completions"
-                headers = {
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": model or "llama3",
-                    "messages": [{"role": "user", "content": prompt}]
-                }
-            elif provider == 'lmstudio':
-                url = endpoint or "http://localhost:1234/api/v1/chat"
-                headers = {
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": model or "google/gemma-3-4b",
-                    "system_prompt": "You are a professional manga translation agent. Translate the input text from Japanese/Chinese to natural English. Respond ONLY with the translation, do not add any explanations, notes, or quotes.",
-                    "input": text
-                }
+    # 2. Local AI model in a container (LMStudio or Ollama)
+    translated = try_local_ai(prompt, text)
+    if translated:
+        return clean_translated_text(translated)
 
-            if url:
-                print(f"[Translation] Sending request to LLM provider '{provider}' using model '{payload.get('model')}'...", flush=True)
-                res = requests.post(url, json=payload, headers=headers, timeout=10)
-                if res.status_code == 200:
-                    res_json = res.json()
-                    translated = None
-                    if provider == 'lmstudio':
-                        if 'choices' in res_json:
-                            choice = res_json['choices'][0]
-                            if 'message' in choice:
-                                translated = choice['message']['content']
-                            elif 'text' in choice:
-                                translated = choice['text']
-                        elif 'output' in res_json:
-                            translated = res_json['output']
-                        elif 'response' in res_json:
-                            translated = res_json['response']
-                    else:
-                        translated = res_json['choices'][0]['message']['content']
-                    
-                    if translated:
-                        if isinstance(translated, list) and len(translated) > 0:
-                            if isinstance(translated[0], dict) and 'content' in translated[0]:
-                                translated = translated[0]['content']
-                            elif isinstance(translated[0], str):
-                                translated = translated[0]
-                        if isinstance(translated, str):
-                            translated = translated.strip()
-                            if (translated.startswith('"') and translated.endswith('"')) or (translated.startswith("'") and translated.endswith("'")):
-                                translated = translated[1:-1].strip()
-                            print(f"[Translation] LLM Translation Success: '{translated}'", flush=True)
-                            return translated
-                else:
-                    print(f"[Translation] LLM provider '{provider}' returned error: {res.status_code} - {res.text}", flush=True)
-        except Exception as e:
-            print(f"[Translation] LLM Translation failed with exception: {e}", flush=True)
+    # 3. DEEPL with API_KEY
+    translated = try_deepl(text, target_lang)
+    if translated:
+        return clean_translated_text(translated)
 
-    # 3. Fallback to free Google Translate API
-    try:
-        print(f"[Translation] Falling back to free Google Translate API...", flush=True)
-        import urllib.parse
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={source_lang}&tl={target_lang}&dt=t&q=" + urllib.parse.quote(text)
-        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            translated = "".join([part[0] for part in data[0] if part[0]])
-            print(f"[Translation] Google Translate Success: '{translated}'", flush=True)
-            return translated
-    except Exception as e:
-        print(f"[Translation] Google Translate fallback failed: {e}", flush=True)
+    # 4. Free google translated
+    translated = try_google_translate(text, source_lang, target_lang)
+    if translated:
+        return clean_translated_text(translated)
 
-    # 4. Final fallback
-    return f"[Translated]: {text}"
+    # 5. Fail (return None)
+    print(f"[Translation] All translation tiers failed for text: '{text}'", flush=True)
+    return None
 
 
 # --- JOB PROCESSORS ---
@@ -518,9 +681,10 @@ def process_translation(job_data):
         translated = translate_text(text, source_lang=lang)
         translations.append({
             'regionId': r['id'],
-            'translatedText': translated
+            'translatedText': translated,
+            'translationFailed': (translated is None)
         })
-        print(f"[Translation] Translated '{text}' ({lang}) -> '{translated}'", flush=True)
+        print(f"[Translation] Translated '{text}' ({lang}) -> '{translated}' (failed={translated is None})", flush=True)
 
     callback_payload = {
         'imageId': image_id,
@@ -532,6 +696,175 @@ def process_translation(job_data):
     except Exception as e:
         print(f"[Translation] Failed to post callback to backend: {e}", flush=True)
 
+
+def try_cloud_ocr(img_crop_bytes, provider, api_key, model):
+    import base64
+    base64_image = base64.b64encode(img_crop_bytes).decode('utf-8')
+    prompt = "Respond ONLY with the text shown in this image. Do not add any explanations, notes, or markdown. If there is no text, respond with empty string."
+    
+    url = ""
+    headers = {}
+    payload = {}
+    
+    if provider == 'openai':
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model or "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    elif provider == 'openrouter':
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model or "google/gemini-2.5-flash",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    elif provider == 'gemini':
+        gemini_model = model or "gemini-1.5-flash"
+        if "/" not in gemini_model:
+            gemini_model = f"models/{gemini_model}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{gemini_model}:generateContent?key={api_key}"
+        headers = {
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inlineData": {
+                                "mimeType": "image/jpeg",
+                                "data": base64_image
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    elif provider == 'anthropic':
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model or "claude-3-5-sonnet-20241022",
+            "max_tokens": 1000,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": base64_image
+                            }
+                        },
+                        {"type": "text", "text": prompt}
+                    ]
+                }
+            ]
+        }
+    else:
+        return None
+
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=12)
+        if res.status_code == 200:
+            res_json = res.json()
+            if provider == 'gemini':
+                return res_json['candidates'][0]['content']['parts'][0]['text']
+            elif provider == 'anthropic':
+                return res_json['content'][0]['text']
+            else:
+                return res_json['choices'][0]['message']['content']
+        else:
+            print(f"[OCR Redo] Cloud OCR error {res.status_code}: {res.text}", flush=True)
+    except Exception as e:
+        print(f"[OCR Redo] Cloud OCR HTTP post failed: {e}", flush=True)
+    return None
+
+def perform_redo_ocr(img_crop_bytes, lang):
+    provider = os.environ.get('MODEL_PROVIDER', os.environ.get('LLM_PROVIDER', 'none')).lower().strip()
+    api_key = os.environ.get('API_KEY', os.environ.get('LLM_API_KEY', ''))
+    model = os.environ.get('PREFERRED_MODEL', os.environ.get('LLM_MODEL', ''))
+    
+    if api_key and provider in ('openai', 'openrouter', 'gemini', 'anthropic'):
+        try:
+            print(f"[OCR Redo] Trying Cloud AI OCR with provider '{provider}'...", flush=True)
+            text = try_cloud_ocr(img_crop_bytes, provider, api_key, model)
+            if text and len(text.strip()) > 0:
+                print(f"[OCR Redo] Cloud AI OCR Success: '{text}'", flush=True)
+                return text.strip(), 1.0
+        except Exception as e:
+            print(f"[OCR Redo] Cloud AI OCR failed: {e}", flush=True)
+
+    # Fallback to local MangaOCR if initialized
+    if manga_ocr_reader is not None:
+        try:
+            print("[OCR Redo] Trying local MangaOCR...", flush=True)
+            nparr = np.frombuffer(img_crop_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            from PIL import Image
+            crop_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(crop_rgb)
+            manga_text = manga_ocr_reader(pil_img)
+            if manga_text and len(manga_text.strip()) > 0:
+                print(f"[OCR Redo] Local MangaOCR Success: '{manga_text}'", flush=True)
+                return manga_text.strip(), 1.0
+        except Exception as e:
+            print(f"[OCR Redo] Local MangaOCR failed: {e}", flush=True)
+
+    # Fallback to EasyOCR
+    try:
+        print("[OCR Redo] Trying local EasyOCR...", flush=True)
+        crop_results = reader.readtext(img_crop_bytes)
+        if crop_results:
+            text = " ".join([res[1] for res in crop_results])
+            confidence = float(np.mean([res[2] for res in crop_results]))
+            print(f"[OCR Redo] Local EasyOCR Success: '{text}' (conf={confidence})", flush=True)
+            return text, confidence
+    except Exception as e:
+        print(f"[OCR Redo] Local EasyOCR failed: {e}", flush=True)
+
+    return "", 0.0
 
 def process_region_redo(job_data):
     image_id = job_data['imageId']
@@ -583,31 +916,15 @@ def process_region_redo(job_data):
             
             if (x2 - x1) > 0 and (y2 - y1) > 0:
                 crop = img[y1:y2, x1:x2]
-                from PIL import Image
-                crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-                pil_img = Image.fromarray(crop_rgb)
+                is_success, buffer = cv2.imencode(".jpg", crop)
+                crop_bytes = buffer.tobytes()
                 
-                lang = region['detectedLanguage']
-                text = ""
-                confidence = 1.0
-                
-                if lang in ('ja', 'zh-TW') and manga_ocr_reader is not None:
-                    text = manga_ocr_reader(pil_img)
-                    confidence = 1.0
-                else:
-                    is_success, buffer = cv2.imencode(".jpg", crop)
-                    crop_bytes = buffer.tobytes()
-                    crop_results = reader.readtext(crop_bytes)
-                    if crop_results:
-                        text = " ".join([res[1] for res in crop_results])
-                        confidence = float(np.mean([res[2] for res in crop_results]))
-                    else:
-                        text = ""
-                        confidence = 0.0
-                
+                text, confidence = perform_redo_ocr(crop_bytes, region['detectedLanguage'])
+                detected_lang = detect_language(text)
                 callback_payload['text'] = text
                 callback_payload['confidence'] = confidence
-                print(f"[Region Redo] Redo OCR success: '{text}' (conf={confidence})", flush=True)
+                callback_payload['detectedLanguage'] = detected_lang
+                print(f"[Region Redo] Redo OCR success: '{text}' (conf={confidence}, lang={detected_lang})", flush=True)
         except Exception as e:
             print(f"[Region Redo] Redo OCR failed: {e}", flush=True)
             return
@@ -618,13 +935,14 @@ def process_region_redo(job_data):
             lang = region['detectedLanguage']
             translated = translate_text(text, source_lang=lang)
             callback_payload['translatedText'] = translated
-            print(f"[Region Redo] Redo Translation success: '{translated}'", flush=True)
+            callback_payload['translationFailed'] = (translated is None)
+            print(f"[Region Redo] Redo Translation result: '{translated}' (failed={translated is None})", flush=True)
         except Exception as e:
             print(f"[Region Redo] Redo Translation failed: {e}", flush=True)
             return
 
     try:
-        callback_url = CALLBACK_URL.replace('/jobs/callback', f'/internal/ocr-regions/{region_id}/callback')
+        callback_url = CALLBACK_URL.replace('/jobs/callback', f'/ocr-regions/{region_id}/callback')
         res = requests.post(callback_url, json=callback_payload)
         print(f"[Region Redo] Callback status code: {res.status_code}", flush=True)
     except Exception as e:

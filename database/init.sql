@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS ocr_regions (
     text TEXT,
     translated_text TEXT,
     approved BOOLEAN DEFAULT FALSE,
+    translation_failed BOOLEAN DEFAULT FALSE,
     detected_language TEXT NOT NULL,
     confidence FLOAT,
     rotation FLOAT DEFAULT 0.0,

@@ -34,6 +34,10 @@ public class OcrRegion {
     @Builder.Default
     private Boolean approved = false;
 
+    @Column(name = "translation_failed")
+    @Builder.Default
+    private Boolean translationFailed = false;
+
     @Column(name = "detected_language", nullable = false)
     private String detectedLanguage;
 

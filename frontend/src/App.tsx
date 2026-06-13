@@ -848,9 +848,9 @@ function AppContent() {
     }
   };
 
-  const handleRedoRegion = async (r: OcrRegion) => {
+  const handleRedoRegion = async (r: OcrRegion, forceType?: 'ocr' | 'translation') => {
     setIsRedoing(true);
-    const type = showTranslations ? 'translation' : 'ocr';
+    const type = forceType || (showTranslations ? 'translation' : 'ocr');
 
     try {
       const res = await fetch(`/api/ocr-regions/${r.id}/redo?type=${type}`, {
@@ -883,9 +883,9 @@ function AppContent() {
             const regions: OcrRegion[] = data.ocrRegions || [];
             const freshRegion = regions.find(item => item.id === r.id);
             if (freshRegion) {
-              const textChanged = showTranslations 
+              const textChanged = type === 'translation'
                 ? freshRegion.translatedText !== r.translatedText 
-                : freshRegion.translatedText !== null && freshRegion.translatedText !== undefined;
+                : freshRegion.text !== r.text;
                 
               if (textChanged || attempts >= 8) {
                 clearInterval(interval);
@@ -1563,10 +1563,9 @@ function AppContent() {
                                     <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                   </svg>
                                 </button>
-
-                                {/* Redo Button */}
+                                                          {/* Re-run OCR Button */}
                                 <button
-                                  onClick={() => handleRedoRegion(activeRegion)}
+                                  onClick={() => handleRedoRegion(activeRegion, 'ocr')}
                                   style={{
                                     background: 'none',
                                     border: 'none',
@@ -1576,10 +1575,29 @@ function AppContent() {
                                     display: 'flex',
                                     alignItems: 'center'
                                   }}
-                                  title={showTranslations ? "Re-translate" : "Re-run OCR"}
+                                  title="Re-run OCR"
                                 >
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+                                  </svg>
+                                </button>
+
+                                {/* Re-translate Button */}
+                                <button
+                                  onClick={() => handleRedoRegion(activeRegion, 'translation')}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-dim)',
+                                    padding: '2px',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title="Re-translate text"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M2 5h12M7 2v3M7 5c0 4.4-3.6 8-8 8M5 9c-.9 2.3-2.9 4-5 4M14 18h8M18 11l4 10M18 11l-4 10"/>
                                   </svg>
                                 </button>
                               </div>

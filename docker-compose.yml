@@ -9,7 +9,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - manga-net
@@ -33,7 +33,7 @@ services:
     ports:
       - "9001:9001"
     volumes:
-      - miniodata:/data
+      - ./data/minio:/data
     networks:
       - manga-net
     restart: unless-stopped
@@ -78,6 +78,11 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - BACKEND_CALLBACK_URL=http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
+      - MODEL_PROVIDER=${MODEL_PROVIDER:-lmstudio}
+      - API_KEY=${API_KEY:-}
+      - PREFERRED_MODEL=${PREFERRED_MODEL:-google/gemma-3-4b}
+      - RATE_LIMIT=${RATE_LIMIT:-}
+      - DEEPL_API_KEY=${DEEPL_API_KEY:-}
     depends_on:
       - redis
       - minio
@@ -90,6 +95,3 @@ networks:
   manga-net:
     driver: bridge
 
-volumes:
-  pgdata:
-  miniodata:

@@ -268,6 +268,7 @@ public class PageController {
                     }
                     if (payload.containsKey("translatedText")) {
                         region.setTranslatedText((String) payload.get("translatedText"));
+                        region.setTranslationFailed(false);
                     }
                     if (payload.containsKey("approved")) {
                         region.setApproved((Boolean) payload.get("approved"));

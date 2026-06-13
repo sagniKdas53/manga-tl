@@ -84,7 +84,7 @@ public class InternalJobController {
         UUID imageId = UUID.fromString((String) payload.get("imageId"));
         log.info("Received translation callback for image: {}", imageId);
         try {
-            List<Map<String, String>> translations = (List<Map<String, String>>) payload.get("translations");
+            List<Map<String, Object>> translations = (List<Map<String, Object>>) payload.get("translations");
             jobCoordinatorService.handleTranslationCallback(imageId, translations);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
@@ -103,8 +103,16 @@ public class InternalJobController {
                 if (payload.containsKey("text")) {
                     region.setText((String) payload.get("text"));
                 }
+                if (payload.containsKey("detectedLanguage")) {
+                    region.setDetectedLanguage((String) payload.get("detectedLanguage"));
+                }
                 if (payload.containsKey("translatedText")) {
                     region.setTranslatedText((String) payload.get("translatedText"));
+                    region.setTranslationFailed(false);
+                }
+                if (payload.containsKey("translationFailed")) {
+                    Object val = payload.get("translationFailed");
+                    region.setTranslationFailed(val != null && Boolean.parseBoolean(val.toString()));
                 }
                 if (payload.containsKey("confidence")) {
                     region.setConfidence(((Number) payload.get("confidence")).doubleValue());
