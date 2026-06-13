@@ -8,24 +8,13 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
+        target: 'http://localhost:8080/tlhub',
+        changeOrigin: true
+      },
+      '/tlhub': {
         target: 'http://localhost:8080',
-        changeOrigin: true,
-        configure: (proxy) => {
-          const contextPath = process.env.CONTEXT_PATH || '/tlhub';
-          let cleanContext = contextPath.endsWith('/') && contextPath.length > 1
-            ? contextPath.slice(0, -1)
-            : contextPath;
-          if (cleanContext === '/') cleanContext = '';
-          
-          proxy.on('proxyReq', (proxyReq) => {
-            if (cleanContext) {
-              proxyReq.path = cleanContext + proxyReq.path;
-            }
-          });
-        }
+        changeOrigin: true
       }
     }
   }
 })
-
-

@@ -48,6 +48,15 @@ public class MinioService {
         }
     }
 
+    public InputStream downloadFile(String objectPath) throws Exception {
+        return minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(objectPath)
+                        .build()
+        );
+    }
+
     public String generatePresignedUrl(String objectPath) {
         try {
             return minioClient.getPresignedObjectUrl(

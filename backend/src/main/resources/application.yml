@@ -24,6 +24,9 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+  web:
+    resources:
+      static-locations: classpath:/static/,file:../frontend/dist/,file:frontend/dist/
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}

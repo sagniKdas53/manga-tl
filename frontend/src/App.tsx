@@ -84,12 +84,20 @@ const getContextPath = (): string => {
 const originalFetch = window.fetch;
 window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   let targetUrl = input;
+  const context = getContextPath();
   if (typeof targetUrl === 'string' && targetUrl.startsWith('/api')) {
-    const context = getContextPath();
     targetUrl = context + targetUrl;
     console.log(`[Fetch Override] Rewrote API request: ${input} -> ${targetUrl} (detected context: ${context})`);
   }
-  return originalFetch(targetUrl, init);
+  return originalFetch(targetUrl, init).then(response => {
+    if (response.status === 401 || response.status === 403) {
+      if (localStorage.getItem('manga_user')) {
+        localStorage.removeItem('manga_user');
+        window.location.href = context + '/login';
+      }
+    }
+    return response;
+  });
 };
 
 // Shadow global fetch inside App.tsx to use window.fetch
@@ -224,8 +232,17 @@ function AppContent() {
       fetch('/api/series', {
         headers: { 'Authorization': `Bearer ${user.token}` }
       })
-      .then(res => res.json())
-      .then(data => setSeriesList(data))
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch series list");
+        return res.json();
+      })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setSeriesList(data);
+        } else {
+          console.error("Expected array for series list, got:", data);
+        }
+      })
       .catch(err => console.error("Error fetching series:", err));
     }
   }, [user, location.pathname]);
@@ -255,8 +272,17 @@ function AppContent() {
       fetch(`/api/series/${seriesId}/chapters`, {
         headers: { 'Authorization': `Bearer ${user.token}` }
       })
-      .then(res => res.json())
-      .then(data => setChapters(data))
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch chapters");
+        return res.json();
+      })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setChapters(data);
+        } else {
+          console.error("Expected array for chapters, got:", data);
+        }
+      })
       .catch(err => console.error("Error fetching chapters:", err));
     }
   }, [seriesId, user]);
@@ -296,8 +322,17 @@ function AppContent() {
       fetch(`/api/chapters/${chapterId}/pages`, {
         headers: { 'Authorization': `Bearer ${user.token}` }
       })
-      .then(res => res.json())
-      .then(data => setPages(data))
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch pages");
+        return res.json();
+      })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setPages(data);
+        } else {
+          console.error("Expected array for pages, got:", data);
+        }
+      })
       .catch(err => console.error("Error fetching pages:", err));
     }
   }, [chapterId, user]);
