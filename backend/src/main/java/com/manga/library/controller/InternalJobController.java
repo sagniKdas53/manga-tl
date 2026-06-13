@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 import java.util.HashMap;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/internal")
@@ -23,6 +24,7 @@ public class InternalJobController {
     private final JobCoordinatorService jobCoordinatorService;
     private final ImageRepository imageRepository;
     private final PanelRepository panelRepository;
+    private final com.manga.library.repository.OcrRegionRepository ocrRegionRepository;
 
     @GetMapping("/images/{imageId}")
     public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
@@ -34,6 +36,7 @@ public class InternalJobController {
                     map.put("filename", image.getFilename());
                     map.put("storagePath", image.getStoragePath());
                     map.put("panels", panelRepository.findByImageId(imageId));
+                    map.put("ocrRegions", ocrRegionRepository.findByImageId(imageId));
                     return ResponseEntity.ok(map);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -77,14 +80,40 @@ public class InternalJobController {
     }
 
     @PostMapping("/jobs/callback/translation")
-    public ResponseEntity<?> translationCallback(@RequestBody Map<String, String> payload) {
-        UUID imageId = UUID.fromString(payload.get("imageId"));
+    public ResponseEntity<?> translationCallback(@RequestBody Map<String, Object> payload) {
+        UUID imageId = UUID.fromString((String) payload.get("imageId"));
         log.info("Received translation callback for image: {}", imageId);
         try {
-            jobCoordinatorService.handleTranslationCallback(imageId);
+            List<Map<String, String>> translations = (List<Map<String, String>>) payload.get("translations");
+            jobCoordinatorService.handleTranslationCallback(imageId, translations);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             log.error("Error processing translation callback", e);
+            return ResponseEntity.internalServerError().body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/ocr-regions/{id}/callback")
+    public ResponseEntity<?> regionCallback(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Object> payload) {
+        log.info("Received callback for region redo {}: {}", id, payload);
+        try {
+            ocrRegionRepository.findById(id).ifPresent(region -> {
+                if (payload.containsKey("text")) {
+                    region.setText((String) payload.get("text"));
+                }
+                if (payload.containsKey("translatedText")) {
+                    region.setTranslatedText((String) payload.get("translatedText"));
+                }
+                if (payload.containsKey("confidence")) {
+                    region.setConfidence(((Number) payload.get("confidence")).doubleValue());
+                }
+                ocrRegionRepository.save(region);
+            });
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Error processing region callback", e);
             return ResponseEntity.internalServerError().body(e.getMessage());
         }
     }

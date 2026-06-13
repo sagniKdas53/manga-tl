@@ -27,6 +27,13 @@ public class OcrRegion {
 
     private String text;
 
+    @Column(name = "translated_text")
+    private String translatedText;
+
+    @Column(name = "approved")
+    @Builder.Default
+    private Boolean approved = false;
+
     @Column(name = "detected_language", nullable = false)
     private String detectedLanguage;
 

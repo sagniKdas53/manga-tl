@@ -171,9 +171,54 @@ public class JobCoordinatorService {
     }
 
     @Transactional
-    public void handleTranslationCallback(UUID imageId) {
-        log.info("Received Translation callback for image: {}", imageId);
+    public void handleTranslationCallback(UUID imageId, List<Map<String, String>> translations) {
+        log.info("Received Translation callback for image: {} with {} translations", imageId, translations != null ? translations.size() : 0);
+        
+        if (translations != null) {
+            for (Map<String, String> t : translations) {
+                try {
+                    UUID regionId = UUID.fromString(t.get("regionId"));
+                    String translatedText = t.get("translatedText");
+                    ocrRegionRepository.findById(regionId).ifPresent(region -> {
+                        region.setTranslatedText(translatedText);
+                        ocrRegionRepository.save(region);
+                    });
+                } catch (Exception e) {
+                    log.error("Error saving translation for region", e);
+                }
+            }
+        }
+        
         enqueueJob("render", imageId);
+    }
+
+    public void triggerRedo(UUID regionId, String redoType) {
+        log.info("Triggering redo for region {} with type {}", regionId, redoType);
+        
+        OcrRegion region = ocrRegionRepository.findById(regionId)
+                .orElseThrow(() -> new IllegalArgumentException("Region not found: " + regionId));
+                
+        Image image = region.getImage();
+        
+        try {
+            String jobId = UUID.randomUUID().toString();
+            Map<String, Object> job = new HashMap<>();
+            job.put("jobId", jobId);
+            job.put("type", "region-redo");
+            job.put("imageId", image.getId().toString());
+            job.put("regionId", regionId.toString());
+            job.put("redoType", redoType);
+            job.put("priority", "high");
+            job.put("attempt", 1);
+            job.put("maxAttempts", 3);
+            job.put("createdAt", OffsetDateTime.now().toString());
+
+            String json = objectMapper.writeValueAsString(job);
+            redisTemplate.opsForList().rightPush("queue:region-redo", json);
+            log.info("Enqueued region-redo job for region {} onto queue:region-redo", regionId);
+        } catch (Exception e) {
+            log.error("Failed to enqueue region-redo job for region {}", regionId, e);
+        }
     }
 
     @Transactional

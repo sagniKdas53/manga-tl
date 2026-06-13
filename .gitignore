@@ -1,5 +1,6 @@
 Examples
 Inputs
 .claude/
-.agents/d
-backend/target
+.agents/
+backend/target/
+workers/unified-worker/.venv/

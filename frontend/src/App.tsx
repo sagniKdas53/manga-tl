@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, matchPath } from 'react-router-dom';
 
 // Types
@@ -15,6 +15,7 @@ interface Series {
   title: string;
   originalLanguage: string;
   readingDirection: string;
+  coverImageUrl?: string | null;
 }
 
 interface Chapter {
@@ -47,6 +48,8 @@ interface Panel {
 interface OcrRegion {
   id: string;
   text: string;
+  translatedText?: string | null;
+  approved?: boolean;
   detectedLanguage: string;
   confidence: number;
   rotation: number;
@@ -102,6 +105,7 @@ function AppContent() {
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
   const [showPanels, setShowPanels] = useState(true);
   const [showOcr, setShowOcr] = useState(true);
+  const [showTranslations, setShowTranslations] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -109,15 +113,46 @@ function AppContent() {
   const [zoom, setZoom] = useState(1.0);
   const [isZoomExpanded, setIsZoomExpanded] = useState(true);
 
+  // Pan & Drag States
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+  // Popover States
+  const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [isEditingRegion, setIsEditingRegion] = useState(false);
+  const [editText, setEditText] = useState('');
+  const [isRedoing, setIsRedoing] = useState(false);
+  const hideTimeout = useRef<any>(null);
+
+  // Theme State & Persistence
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('manga_theme');
+    return saved === 'light' ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+    localStorage.setItem('manga_theme', theme);
+  }, [theme]);
+
 
 
   // Creation Form States
   const [showSeriesModal, setShowSeriesModal] = useState(false);
+  const [editingSeries, setEditingSeries] = useState<Series | null>(null);
   const [newSeriesTitle, setNewSeriesTitle] = useState('');
   const [newSeriesLang, setNewSeriesLang] = useState('ja');
   const [newSeriesDirection, setNewSeriesDirection] = useState('rtl');
+  const [newSeriesCoverUrl, setNewSeriesCoverUrl] = useState('');
 
   const [showChapterModal, setShowChapterModal] = useState(false);
+  const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
   const [newChapterNum, setNewChapterNum] = useState<number>(1);
   const [newChapterTitle, setNewChapterTitle] = useState('');
 
@@ -441,13 +476,43 @@ function AppContent() {
     navigate('/login');
   };
 
-  // Create Series
+  const handleEditSeriesClick = (s: Series, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingSeries(s);
+    setNewSeriesTitle(s.title);
+    setNewSeriesLang(s.originalLanguage);
+    setNewSeriesDirection(s.readingDirection);
+    setNewSeriesCoverUrl(s.coverImageUrl || '');
+    setShowSeriesModal(true);
+  };
+
+  const handleNewSeriesClick = () => {
+    setEditingSeries(null);
+    setNewSeriesTitle('');
+    setNewSeriesLang('ja');
+    setNewSeriesDirection('rtl');
+    setNewSeriesCoverUrl('');
+    setShowSeriesModal(true);
+  };
+
+  const handleCancelSeriesModal = () => {
+    setShowSeriesModal(false);
+    setEditingSeries(null);
+    setNewSeriesTitle('');
+    setNewSeriesCoverUrl('');
+  };
+
+  // Create or Update Series
   const handleCreateSeries = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     try {
-      const res = await fetch('/api/series', {
-        method: 'POST',
+      const isEdit = !!editingSeries;
+      const url = isEdit ? `/api/series/${editingSeries.id}` : '/api/series';
+      const method = isEdit ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method: method,
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user.token}`
@@ -455,27 +520,85 @@ function AppContent() {
         body: JSON.stringify({
           title: newSeriesTitle,
           originalLanguage: newSeriesLang,
-          readingDirection: newSeriesDirection
+          readingDirection: newSeriesDirection,
+          coverImageUrl: newSeriesCoverUrl || null
         })
       });
       if (res.ok) {
         const data = await res.json();
-        setSeriesList([...seriesList, data]);
+        if (isEdit) {
+          setSeriesList(prev => prev.map(s => s.id === data.id ? data : s));
+          if (selectedSeries && selectedSeries.id === data.id) {
+            setSelectedSeries(data);
+          }
+        } else {
+          setSeriesList([...seriesList, data]);
+        }
         setShowSeriesModal(false);
+        setEditingSeries(null);
         setNewSeriesTitle('');
+        setNewSeriesCoverUrl('');
       }
     } catch (err) {
       console.error(err);
     }
   };
 
-  // Create Chapter
+  const handleDeleteSeries = async (seriesId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this series? This will delete all chapters and pages!")) return;
+    try {
+      const res = await fetch(`/api/series/${seriesId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${user?.token}` }
+      });
+      if (res.ok) {
+        setSeriesList(prev => prev.filter(s => s.id !== seriesId));
+        if (selectedSeries && selectedSeries.id === seriesId) {
+          setSelectedSeries(null);
+          navigate('/');
+        }
+      } else {
+        alert("Failed to delete series");
+      }
+    } catch (err) {
+      console.error("Error deleting series:", err);
+    }
+  };
+
+  const handleEditChapterClick = (c: Chapter, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChapter(c);
+    setNewChapterNum(c.chapterNumber);
+    setNewChapterTitle(c.title || '');
+    setShowChapterModal(true);
+  };
+
+  const handleNewChapterClick = () => {
+    setEditingChapter(null);
+    const maxNum = chapters.reduce((max, c) => c.chapterNumber > max ? c.chapterNumber : max, 0);
+    setNewChapterNum(maxNum + 1);
+    setNewChapterTitle('');
+    setShowChapterModal(true);
+  };
+
+  const handleCancelChapterModal = () => {
+    setShowChapterModal(false);
+    setEditingChapter(null);
+    setNewChapterTitle('');
+  };
+
+  // Create or Update Chapter
   const handleCreateChapter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !selectedSeries) return;
     try {
-      const res = await fetch(`/api/series/${selectedSeries.id}/chapters`, {
-        method: 'POST',
+      const isEdit = !!editingChapter;
+      const url = isEdit ? `/api/series/chapters/${editingChapter.id}` : `/api/series/${selectedSeries.id}/chapters`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method: method,
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user.token}`
@@ -487,13 +610,47 @@ function AppContent() {
       });
       if (res.ok) {
         const data = await res.json();
-        setChapters([...chapters, data]);
+        if (isEdit) {
+          setChapters(prev => prev.map(c => c.id === data.id ? { ...c, chapterNumber: data.chapterNumber, title: data.title } : c));
+          if (selectedChapter && selectedChapter.id === data.id) {
+            setSelectedChapter({ ...selectedChapter, chapterNumber: data.chapterNumber, title: data.title });
+          }
+        } else {
+          setChapters([...chapters, data]);
+          setNewChapterNum(newChapterNum + 1);
+        }
         setShowChapterModal(false);
+        setEditingChapter(null);
         setNewChapterTitle('');
-        setNewChapterNum(newChapterNum + 1);
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeleteChapter = async (chapterId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this chapter? This will delete all pages!")) return;
+    try {
+      const res = await fetch(`/api/series/chapters/${chapterId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${user?.token}` }
+      });
+      if (res.ok) {
+        setChapters(prev => prev.filter(c => c.id !== chapterId));
+        if (selectedChapter && selectedChapter.id === chapterId) {
+          setSelectedChapter(null);
+          if (selectedSeries) {
+            navigate(`/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`);
+          } else {
+            navigate('/');
+          }
+        }
+      } else {
+        alert("Failed to delete chapter");
+      }
+    } catch (err) {
+      console.error("Error deleting chapter:", err);
     }
   };
 
@@ -503,13 +660,187 @@ function AppContent() {
     if (files) processUploadedFiles(files);
   };
 
-  // Set image natural dimensions for SVG scaling
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     setImageDims({
       w: e.currentTarget.naturalWidth,
       h: e.currentTarget.naturalHeight
     });
   };
+
+  // --- PANNING / DRAGGING WORKSPACE ---
+  const handleMouseDownCanvas = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    if (
+      (e.target as HTMLElement).closest('.svg-ocr-box') || 
+      (e.target as HTMLElement).closest('.bubble-popover') ||
+      (e.target as HTMLElement).closest('.floating-reader-toolbar') ||
+      (e.target as HTMLElement).closest('.floating-zoom-toolbar') ||
+      (e.target as HTMLElement).closest('.delete-page-btn') ||
+      (e.target as HTMLElement).closest('.reorder-controls')
+    ) {
+      return;
+    }
+    setIsDraggingCanvas(true);
+    dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  };
+
+  const handleMouseMoveCanvas = (e: React.MouseEvent) => {
+    if (!isDraggingCanvas) return;
+    setPan({
+      x: e.clientX - dragStart.current.x,
+      y: e.clientY - dragStart.current.y
+    });
+  };
+
+  const handleMouseUpCanvas = () => {
+    setIsDraggingCanvas(false);
+  };
+
+  // --- HOVER / INTERACTIVE POPOVER CONTROLS ---
+  const handleMouseEnterRegion = (r: OcrRegion) => {
+    if (hideTimeout.current) clearTimeout(hideTimeout.current);
+    setActiveRegion(r);
+    setPopoverOpen(true);
+    setEditText(showTranslations ? (r.translatedText || '') : r.text);
+  };
+
+  const handleMouseLeaveRegion = () => {
+    hideTimeout.current = setTimeout(() => {
+      setPopoverOpen(false);
+      setIsEditingRegion(false);
+    }, 300);
+  };
+
+  const handleMouseEnterPopover = () => {
+    if (hideTimeout.current) clearTimeout(hideTimeout.current);
+  };
+
+  const handleMouseLeavePopover = () => {
+    setPopoverOpen(false);
+    setIsEditingRegion(false);
+  };
+
+  const handleToggleApprove = async (r: OcrRegion) => {
+    const updatedApproved = !(r.approved);
+    
+    setOcrRegions(prev => prev.map(item => item.id === r.id ? { ...item, approved: updatedApproved } : item));
+    if (activeRegion && activeRegion.id === r.id) {
+      setActiveRegion(prev => prev ? { ...prev, approved: updatedApproved } : null);
+    }
+
+    try {
+      const res = await fetch(`/api/ocr-regions/${r.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.token}`
+        },
+        body: JSON.stringify({ approved: updatedApproved })
+      });
+      if (!res.ok) {
+        throw new Error("Failed to update approval on server");
+      }
+    } catch (err) {
+      console.error("Error updating approval status:", err);
+      setOcrRegions(prev => prev.map(item => item.id === r.id ? { ...item, approved: !updatedApproved } : item));
+      if (activeRegion && activeRegion.id === r.id) {
+        setActiveRegion(prev => prev ? { ...prev, approved: !updatedApproved } : null);
+      }
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!activeRegion) return;
+    const body: any = {};
+    if (showTranslations) {
+      body.translatedText = editText;
+    } else {
+      body.text = editText;
+    }
+
+    setOcrRegions(prev => prev.map(item => item.id === activeRegion.id ? { ...item, ...(showTranslations ? { translatedText: editText } : { text: editText }) } : item));
+    setActiveRegion(prev => prev ? { ...prev, ...(showTranslations ? { translatedText: editText } : { text: editText }) } : null);
+    setIsEditingRegion(false);
+
+    try {
+      const res = await fetch(`/api/ocr-regions/${activeRegion.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.token}`
+        },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        throw new Error("Failed to save edit on server");
+      }
+    } catch (err) {
+      console.error("Error saving region text edit:", err);
+    }
+  };
+
+  const handleRedoRegion = async (r: OcrRegion) => {
+    setIsRedoing(true);
+    const type = showTranslations ? 'translation' : 'ocr';
+
+    try {
+      const res = await fetch(`/api/ocr-regions/${r.id}/redo?type=${type}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user?.token}`
+        }
+      });
+      
+      if (!res.ok) {
+        throw new Error("Redo request failed");
+      }
+
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        if (attempts > 20) {
+          clearInterval(interval);
+          setIsRedoing(false);
+          alert("Redo timed out. Please try again.");
+          return;
+        }
+
+        try {
+          const checkRes = await fetch(`/api/images/${selectedPage?.imageId}`, {
+            headers: { 'Authorization': `Bearer ${user?.token}` }
+          });
+          if (checkRes.ok) {
+            const data = await checkRes.json();
+            const regions: OcrRegion[] = data.ocrRegions || [];
+            const freshRegion = regions.find(item => item.id === r.id);
+            if (freshRegion) {
+              const textChanged = showTranslations 
+                ? freshRegion.translatedText !== r.translatedText 
+                : freshRegion.translatedText !== null && freshRegion.translatedText !== undefined;
+                
+              if (textChanged || attempts >= 8) {
+                clearInterval(interval);
+                setOcrRegions(regions);
+                if (activeRegion && activeRegion.id === r.id) {
+                  setActiveRegion(freshRegion);
+                  setEditText(showTranslations ? (freshRegion.translatedText || '') : freshRegion.text);
+                }
+                setIsRedoing(false);
+              }
+            }
+          }
+        } catch (pollErr) {
+          console.error("Polling error during redo:", pollErr);
+        }
+      }, 500);
+
+    } catch (err) {
+      console.error("Error redoing region:", err);
+      setIsRedoing(false);
+      alert("Failed to start redo job.");
+    }
+  };
+
 
   // SUB-RENDER VIEWS
   const renderAuth = () => (
@@ -577,7 +908,7 @@ function AppContent() {
           <h1>My Manga Library</h1>
           <p style={{ color: 'var(--text-muted)', margin: '8px 0 0' }}>Manage translation projects and OCR workflows</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowSeriesModal(true)}>
+        <button className="btn btn-primary" onClick={handleNewSeriesClick}>
           + New Series
         </button>
       </div>
@@ -592,10 +923,33 @@ function AppContent() {
               navigate(`/series/${s.id}/${toSlug(s.title)}`);
             }}
           >
-            <h3>{s.title}</h3>
-            <div className="manga-meta">
-              <span className="meta-badge">{s.originalLanguage}</span>
-              <span className="meta-badge">{s.readingDirection}</span>
+            <div className="manga-cover-container">
+              {s.coverImageUrl ? (
+                <img src={s.coverImageUrl} className="manga-cover-img" alt={s.title} />
+              ) : (
+                <div className="manga-cover-placeholder">{s.title}</div>
+              )}
+              <div className="manga-card-actions" onClick={e => e.stopPropagation()}>
+                <button className="action-btn-small" onClick={(e) => handleEditSeriesClick(s, e)} title="Edit Series">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+                <button className="action-btn-small delete-btn" onClick={(e) => handleDeleteSeries(s.id, e)} title="Delete Series">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="manga-card-content">
+              <h3>{s.title}</h3>
+              <div className="manga-meta">
+                <span className="meta-badge">{s.originalLanguage}</span>
+                <span className="meta-badge">{s.readingDirection}</span>
+              </div>
             </div>
           </div>
         ))}
@@ -604,7 +958,9 @@ function AppContent() {
       {showSeriesModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="glass" style={{ padding: '32px', width: '100%', maxWidth: '440px' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '24px' }}>Create New Series</h2>
+            <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '24px' }}>
+              {editingSeries ? 'Edit Series' : 'Create New Series'}
+            </h2>
             <form onSubmit={handleCreateSeries}>
               <div className="form-group">
                 <label className="form-label">Series Title</label>
@@ -615,6 +971,16 @@ function AppContent() {
                   onChange={e => setNewSeriesTitle(e.target.value)} 
                   placeholder="e.g. My Hero Academia" 
                   required 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Cover Image URL (Optional)</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={newSeriesCoverUrl} 
+                  onChange={e => setNewSeriesCoverUrl(e.target.value)} 
+                  placeholder="Leave empty for default cover" 
                 />
               </div>
               <div className="form-group">
@@ -636,8 +1002,10 @@ function AppContent() {
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowSeriesModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Create</button>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={handleCancelSeriesModal}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                  {editingSeries ? 'Save' : 'Create'}
+                </button>
               </div>
             </form>
           </div>
@@ -669,9 +1037,24 @@ function AppContent() {
                 <span className="meta-badge">{selectedSeries.readingDirection}</span>
               </div>
             </div>
-            <button className="btn btn-primary" onClick={() => setShowChapterModal(true)}>
-              + Add Chapter
-            </button>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={(e) => handleEditSeriesClick(selectedSeries, e)}
+              >
+                Edit Series
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                style={{ color: 'var(--error)' }} 
+                onClick={(e) => handleDeleteSeries(selectedSeries.id, e)}
+              >
+                Delete Series
+              </button>
+              <button className="btn btn-primary" onClick={handleNewChapterClick}>
+                + Add Chapter
+              </button>
+            </div>
           </div>
         </div>
 
@@ -687,7 +1070,32 @@ function AppContent() {
               style={{ cursor: 'pointer' }}
             >
               <div className="chapter-title">Chapter {c.chapterNumber}: {c.title || 'Untitled'}</div>
-              <button className="btn btn-text">Open Workspace &rarr;</button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                  onClick={(e) => handleEditChapterClick(c, e)}
+                >
+                  Edit
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '6px 12px', fontSize: '12px', color: 'var(--error)' }}
+                  onClick={(e) => handleDeleteChapter(c.id, e)}
+                >
+                  Delete
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                  onClick={() => {
+                    setSelectedChapter(c);
+                    navigate(`/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`);
+                  }}
+                >
+                  Open Workspace &rarr;
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -695,7 +1103,9 @@ function AppContent() {
         {showChapterModal && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div className="glass" style={{ padding: '32px', width: '100%', maxWidth: '400px' }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '24px' }}>Add Chapter</h2>
+              <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '24px' }}>
+                {editingChapter ? 'Edit Chapter' : 'Add Chapter'}
+              </h2>
               <form onSubmit={handleCreateChapter}>
                 <div className="form-group">
                   <label className="form-label">Chapter Number</label>
@@ -718,8 +1128,10 @@ function AppContent() {
                   />
                 </div>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowChapterModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Add</button>
+                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={handleCancelChapterModal}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                    {editingChapter ? 'Save' : 'Add'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -852,8 +1264,23 @@ function AppContent() {
             </div>
           ) : (
             <>
-              <div className="reader-canvas-area">
-                <div className="manga-canvas-wrapper">
+              <div 
+                className="reader-canvas-area"
+                onMouseDown={handleMouseDownCanvas}
+                onMouseMove={handleMouseMoveCanvas}
+                onMouseUp={handleMouseUpCanvas}
+                onMouseLeave={handleMouseUpCanvas}
+                style={{ overflow: 'hidden', cursor: isDraggingCanvas ? 'grabbing' : 'grab' }}
+              >
+                <div 
+                  className="manga-canvas-wrapper"
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px)`,
+                    position: 'relative',
+                    transition: isDraggingCanvas ? 'none' : 'transform 0.15s ease-out',
+                    userSelect: 'none'
+                  }}
+                >
                   <img 
                     src={selectedPage.url} 
                     alt={`Page ${selectedPage.pageNumber}`} 
@@ -865,6 +1292,7 @@ function AppContent() {
                       width: 'auto',
                       height: 'auto'
                     }}
+                    draggable={false}
                   />
                   <svg 
                     className="svg-overlay"
@@ -885,8 +1313,20 @@ function AppContent() {
 
                     {showOcr && ocrRegions.map((r) => {
                       const isSelected = selectedRegion?.id === r.id;
+                      const isApproved = r.approved === true;
                       return (
-                        <g key={r.id} onClick={() => setSelectedRegion(r)}>
+                        <g 
+                          key={r.id} 
+                          onClick={() => {
+                            setSelectedRegion(r);
+                            setActiveRegion(r);
+                            setPopoverOpen(true);
+                            setEditText(showTranslations ? (r.translatedText || '') : r.text);
+                          }}
+                          onMouseEnter={() => handleMouseEnterRegion(r)}
+                          onMouseLeave={handleMouseLeaveRegion}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <rect 
                             x={r.bboxX}
                             y={r.bboxY}
@@ -894,18 +1334,192 @@ function AppContent() {
                             height={r.bboxH}
                             className="svg-ocr-box"
                             style={{ 
-                              fill: isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(16, 185, 129, 0.12)',
-                              stroke: isSelected ? 'var(--primary)' : 'var(--success)'
+                              fill: isSelected 
+                                ? 'rgba(139, 92, 246, 0.25)' 
+                                : isApproved 
+                                  ? 'rgba(139, 92, 246, 0.08)' 
+                                  : 'rgba(16, 185, 129, 0.12)',
+                              stroke: isSelected 
+                                ? 'var(--primary)' 
+                                : isApproved 
+                                  ? 'var(--primary)' 
+                                  : 'var(--success)',
+                              strokeWidth: isSelected || isApproved ? 2.5 : 1.5
                             }}
                           />
                           <g transform={`translate(${r.bboxX + 10}, ${r.bboxY + 10})`}>
-                            <circle cx="0" cy="0" r="8" fill={isSelected ? 'var(--primary)' : 'var(--success)'} />
-                            <text cx="0" cy="0" className="bubble-text-tag">{r.bubbleReadingOrder}</text>
+                            <circle 
+                              cx="0" 
+                              cy="0" 
+                              r="8" 
+                              fill={isSelected 
+                                ? 'var(--primary)' 
+                                : isApproved 
+                                  ? 'var(--primary)' 
+                                  : 'var(--success)'} 
+                            />
+                            <text cx="0" cy="0" className="bubble-text-tag">
+                              {isApproved ? '✓' : r.bubbleReadingOrder}
+                            </text>
                           </g>
                         </g>
                       );
                     })}
                   </svg>
+
+                  {/* Popover overlay tooltip */}
+                  {popoverOpen && activeRegion && (() => {
+                    const showBelow = activeRegion.bboxY < 150;
+                    const popoverWidth = 240;
+                    const halfWidth = popoverWidth / 2;
+                    const clampedX = imageDims.w > popoverWidth 
+                      ? Math.max(halfWidth, Math.min(imageDims.w - halfWidth, activeRegion.bboxX + activeRegion.bboxW / 2))
+                      : imageDims.w / 2;
+                    return (
+                      <div 
+                        className="bubble-popover glass"
+                        onMouseEnter={handleMouseEnterPopover}
+                        onMouseLeave={handleMouseLeavePopover}
+                        style={{
+                          position: 'absolute',
+                          left: `${(clampedX / imageDims.w) * 100}%`,
+                          top: showBelow 
+                            ? `${((activeRegion.bboxY + activeRegion.bboxH) / imageDims.h) * 100}%`
+                            : `${(activeRegion.bboxY / imageDims.h) * 100}%`,
+                          transform: showBelow ? 'translate(-50%, 0%)' : 'translate(-50%, -100%)',
+                          marginTop: showBelow ? '12px' : '-12px',
+                          zIndex: 100,
+                          padding: '12px',
+                          width: '240px',
+                          borderRadius: '8px',
+                          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15), 0 4px 6px -2px rgba(0,0,0,0.05)',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'var(--bg-surface)',
+                          color: 'var(--text-main)',
+                          fontSize: '13px',
+                          pointerEvents: 'auto'
+                        }}
+                      >
+                        {isRedoing ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '12px 0' }}>
+                            <div className="spinner" style={{ width: '24px', height: '24px', margin: '0 auto' }}></div>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Running Redo Job...</span>
+                          </div>
+                        ) : isEditingRegion ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <textarea
+                              style={{
+                                width: '100%',
+                                minHeight: '60px',
+                                backgroundColor: 'var(--bg-input, rgba(0,0,0,0.05))',
+                                border: '1px solid var(--primary)',
+                                borderRadius: '4px',
+                                color: 'var(--text-main)',
+                                padding: '6px',
+                                fontSize: '13px',
+                                resize: 'vertical',
+                                outline: 'none',
+                                fontFamily: 'inherit'
+                              }}
+                              value={editText}
+                              onChange={e => setEditText(e.target.value)}
+                              autoFocus
+                            />
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                              <button 
+                                className="btn btn-secondary" 
+                                style={{ padding: '4px 8px', fontSize: '11px' }}
+                                onClick={() => setIsEditingRegion(false)}
+                              >
+                                Cancel
+                              </button>
+                              <button 
+                                className="btn btn-primary" 
+                                style={{ padding: '4px 8px', fontSize: '11px' }}
+                                onClick={handleSaveEdit}
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ wordBreak: 'break-word', lineHeight: '1.4', maxHeight: '120px', overflowY: 'auto' }}>
+                              {showTranslations ? (activeRegion.translatedText || 'No translation yet.') : activeRegion.text}
+                            </div>
+                            
+                            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+                                {showTranslations ? 'Translated' : 'Original'} ({activeRegion.detectedLanguage})
+                              </span>
+                              <div style={{ display: 'flex', gap: '10px' }}>
+                                {/* Tick (Approve) Button */}
+                                <button
+                                  onClick={() => handleToggleApprove(activeRegion)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: activeRegion.approved ? 'var(--primary)' : 'var(--text-dim)',
+                                    padding: '2px',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title={activeRegion.approved ? "Approved" : "Approve"}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                  </svg>
+                                </button>
+
+                                {/* Pencil (Edit) Button */}
+                                <button
+                                  onClick={() => {
+                                    setIsEditingRegion(true);
+                                    setEditText(showTranslations ? (activeRegion.translatedText || '') : activeRegion.text);
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-dim)',
+                                    padding: '2px',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title="Edit text"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  </svg>
+                                </button>
+
+                                {/* Redo Button */}
+                                <button
+                                  onClick={() => handleRedoRegion(activeRegion)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-dim)',
+                                    padding: '2px',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title={showTranslations ? "Re-translate" : "Re-run OCR"}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -1024,33 +1638,47 @@ function AppContent() {
 
           <h2>Workspace Controls</h2>
           
-          <div className="panel-section">
-            <div className="panel-section-title">Layers Overlay</div>
-            
-            <div className="overlay-toggle">
-              <span>Panel Boundaries</span>
-              <label className="switch">
-                <input 
-                  type="checkbox" 
-                  checked={showPanels} 
-                  onChange={e => setShowPanels(e.target.checked)} 
-                />
-                <span className="slider"></span>
-              </label>
-            </div>
+          {!selectedRegion && (
+            <div className="panel-section">
+              <div className="panel-section-title">Layers Overlay</div>
+              
+              <div className="overlay-toggle">
+                <span>Panel Boundaries</span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={showPanels} 
+                    onChange={e => setShowPanels(e.target.checked)} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
 
-            <div className="overlay-toggle">
-              <span>OCR Bounding Boxes</span>
-              <label className="switch">
-                <input 
-                  type="checkbox" 
-                  checked={showOcr} 
-                  onChange={e => setShowOcr(e.target.checked)} 
-                />
-                <span className="slider"></span>
-              </label>
+              <div className="overlay-toggle">
+                <span>OCR Bounding Boxes</span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={showOcr} 
+                    onChange={e => setShowOcr(e.target.checked)} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+
+              <div className="overlay-toggle">
+                <span>Show Translations</span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={showTranslations} 
+                    onChange={e => setShowTranslations(e.target.checked)} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="panel-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <div className="panel-section-title">Region Inspector</div>
@@ -1067,6 +1695,11 @@ function AppContent() {
                   <span className="meta-badge">
                     {(selectedRegion.confidence * 100).toFixed(0)}% Conf
                   </span>
+                  {selectedRegion.approved && (
+                    <span className="meta-badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', borderColor: 'var(--success)' }}>
+                      Approved
+                    </span>
+                  )}
                 </div>
                 
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
@@ -1079,6 +1712,15 @@ function AppContent() {
                     {selectedRegion.text}
                   </div>
                 </div>
+
+                {selectedRegion.translatedText && (
+                  <div style={{ marginTop: '8px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Translated Text</div>
+                    <div className="ocr-text-preview" style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary)' }}>
+                      {selectedRegion.translatedText}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ color: 'var(--text-dim)', textAlign: 'center', margin: 'auto 0', fontSize: '14px' }}>
@@ -1099,17 +1741,44 @@ function AppContent() {
           <div className="logo-icon">M</div>
           Manga Translation Hub
         </div>
-        {user && (
-          <div className="nav-actions">
-            <div className="user-badge">
-              <span className="user-dot"></span>
-              {user.displayName}
-            </div>
-            <button className="btn btn-secondary" onClick={handleLogout} style={{ padding: '6px 12px' }}>
-              Sign Out
-            </button>
-          </div>
-        )}
+        <div className="nav-actions">
+          {/* Theme Toggle Button */}
+          <button 
+            className="theme-toggle-btn"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            {theme === 'dark' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            )}
+          </button>
+          
+          {user && (
+            <>
+              <div className="user-badge">
+                <span className="user-dot"></span>
+                {user.displayName}
+              </div>
+              <button className="btn btn-secondary" onClick={handleLogout} style={{ padding: '6px 12px' }}>
+                Sign Out
+              </button>
+            </>
+          )}
+        </div>
       </nav>
 
       <Routes>

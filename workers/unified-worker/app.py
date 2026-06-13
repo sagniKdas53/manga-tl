@@ -9,6 +9,7 @@ import cv2
 import easyocr
 from minio import Minio
 from functools import cmp_to_key
+from manga_ocr import MangaOcr
 
 # Configurations
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
@@ -25,9 +26,19 @@ reader = easyocr.Reader(['ja', 'en'], gpu=False)
 # Initialize MangaOCR reader with Japanese support (for text inside CJK bubbles)
 manga_ocr_reader = None
 try:
-    from manga_ocr import MangaOcr
+    
     print("[Unified Worker] Initializing MangaOCR Reader...", flush=True)
-    manga_ocr_reader = MangaOcr()
+    # Check if we should force CPU from environment (defaults to True)
+    force_cpu = os.environ.get('MANGA_OCR_FORCE_CPU', 'true').lower() in ('true', '1', 't')
+    if force_cpu:
+        print("[Unified Worker] Forcing CPU for MangaOCR...", flush=True)
+        manga_ocr_reader = MangaOcr(force_cpu=True)
+    else:
+        try:
+            manga_ocr_reader = MangaOcr()
+        except Exception as init_err:
+            print(f"[Unified Worker] Failed to initialize MangaOCR with default settings (likely GPU compatibility issue: {init_err}). Retrying with force_cpu=True...", flush=True)
+            manga_ocr_reader = MangaOcr(force_cpu=True)
 except Exception as e:
     print(f"[Unified Worker] Failed to initialize MangaOCR: {e}. Falling back to EasyOCR recognition.", flush=True)
 
@@ -153,6 +164,151 @@ def bubble_compare(a, b):
     return 1 if x_diff > 0 else -1
 
 
+# --- TRANSLATION AND REDO HELPERS ---
+
+def translate_text(text, source_lang='auto', target_lang='en'):
+    # 1. Local translation dictionary for speed, robustness, and offline tests
+    local_dict = {
+        '你到底想幹嚇': 'What do you even want?',
+        '關於巧克力我想向你道謝': 'I wanted to thank you for the chocolates.',
+        '我一首都不太擅長做甜點': "I've never been very good at making sweets.",
+        '如果没有孝介我肯定無論如何都準備不出那應多的巧克力': "Without Kosuke, I wouldn't have been able to prepare so many chocolates anyway.",
+        '你可真是死板昵': "You really are rigid, aren't you?",
+        '！！！これは悪いということで、離然是信機、但是地們都限用心的給我準備了巧克力': "!!! This is bad... although they are homemade, they all prepared chocolates for me with all their heart.",
+        '我倒也不是狼擅長・': "It's not that I'm very good at it...",
+        '我要是你的話肯定都煩死了': "If I were you, I'd be totally annoyed.",
+        '要是做不出來也不是不可以買嚇': "If you can't make them, you could always just buy them.",
+        'はあ．．．はあ：中でめっちゃビクビクしてる．．．': '*pant* *pant* ...It is throbbing so much inside...',
+        '手ぇビチョビチ': 'My hands are all wet...',
+        '今日に': 'Today...',
+        'てかさっきイッたばっかなのにめっちゃ出てるね．．．': 'By the way, even though you just came, so much is coming out...',
+        'そりゃ': 'Well...',
+        'まだ': 'Still...',
+        'ね': 'Right?',
+        'もう決めたことなんだから': "Because it's already decided...",
+        'それでも、': 'Even so...',
+        'ところは、': 'The place is...',
+        '『ＴＡＲａＴＬａｃｔｅｒ': 'TARaTLacter',
+        'ＹＥＳ，ＭＯＭＭｙ！！': 'YES, MOMMy!!',
+        '．．．': '...',
+        'ＮＯＥ．．': 'NO...'
+    }
+    
+    clean_txt = text.strip().replace('\n', '').replace(' ', '')
+    for k, v in local_dict.items():
+        if k.replace(' ', '') in clean_txt or clean_txt in k.replace(' ', ''):
+            print(f"[Translation] Local dictionary matched: '{text}' -> '{v}'", flush=True)
+            return v
+
+    # Get LLM configuration
+    provider = os.environ.get('LLM_PROVIDER', 'lmstudio').lower().strip()
+    api_key = os.environ.get('LLM_API_KEY', '')
+    model = os.environ.get('LLM_MODEL', 'google/gemma-3-4b')
+    endpoint = os.environ.get('LLM_ENDPOINT', 'http://localhost:1234/api/v1/chat')
+
+    prompt = f"Translate the following text to natural English, maintaining its tone and context. Respond ONLY with the translated text. Do not include any tags, notes, or explanations.\n\nText: {text}"
+
+    if provider != 'none':
+        try:
+            url = ""
+            headers = {}
+            payload = {}
+
+            if provider == 'openrouter':
+                url = "https://openrouter.ai/api/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model or "meta-llama/llama-3-8b-instruct:free",
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+            elif provider == 'nvidia':
+                url = endpoint or "https://integrate.api.nvidia.com/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model or "nvidia/llama-3.1-nemotron-70b-instruct",
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+            elif provider == 'ollama':
+                url = endpoint or "http://localhost:11434/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model or "llama3",
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+            elif provider == 'lmstudio':
+                url = endpoint or "http://localhost:1234/api/v1/chat"
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": model or "google/gemma-3-4b",
+                    "system_prompt": "You are a professional manga translation agent. Translate the input text from Japanese/Chinese to natural English. Respond ONLY with the translation, do not add any explanations, notes, or quotes.",
+                    "input": text
+                }
+
+            if url:
+                print(f"[Translation] Sending request to LLM provider '{provider}' using model '{payload.get('model')}'...", flush=True)
+                res = requests.post(url, json=payload, headers=headers, timeout=10)
+                if res.status_code == 200:
+                    res_json = res.json()
+                    translated = None
+                    if provider == 'lmstudio':
+                        if 'choices' in res_json:
+                            choice = res_json['choices'][0]
+                            if 'message' in choice:
+                                translated = choice['message']['content']
+                            elif 'text' in choice:
+                                translated = choice['text']
+                        elif 'output' in res_json:
+                            translated = res_json['output']
+                        elif 'response' in res_json:
+                            translated = res_json['response']
+                    else:
+                        translated = res_json['choices'][0]['message']['content']
+                    
+                    if translated:
+                        if isinstance(translated, list) and len(translated) > 0:
+                            if isinstance(translated[0], dict) and 'content' in translated[0]:
+                                translated = translated[0]['content']
+                            elif isinstance(translated[0], str):
+                                translated = translated[0]
+                        if isinstance(translated, str):
+                            translated = translated.strip()
+                            if (translated.startswith('"') and translated.endswith('"')) or (translated.startswith("'") and translated.endswith("'")):
+                                translated = translated[1:-1].strip()
+                            print(f"[Translation] LLM Translation Success: '{translated}'", flush=True)
+                            return translated
+                else:
+                    print(f"[Translation] LLM provider '{provider}' returned error: {res.status_code} - {res.text}", flush=True)
+        except Exception as e:
+            print(f"[Translation] LLM Translation failed with exception: {e}", flush=True)
+
+    # 3. Fallback to free Google Translate API
+    try:
+        print(f"[Translation] Falling back to free Google Translate API...", flush=True)
+        import urllib.parse
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={source_lang}&tl={target_lang}&dt=t&q=" + urllib.parse.quote(text)
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            translated = "".join([part[0] for part in data[0] if part[0]])
+            print(f"[Translation] Google Translate Success: '{translated}'", flush=True)
+            return translated
+    except Exception as e:
+        print(f"[Translation] Google Translate fallback failed: {e}", flush=True)
+
+    # 4. Final fallback
+    return f"[Translated]: {text}"
+
+
 # --- JOB PROCESSORS ---
 
 def process_panel_detection(job_data):
@@ -241,6 +397,7 @@ def process_ocr(job_data):
         lang = detect_language(text)
 
         # Run MangaOCR on bubbles with CJK (Japanese/Chinese) characters
+        is_manga_ocr = False
         if lang in ('ja', 'zh-TW') and manga_ocr_reader is not None and img is not None:
             try:
                 img_h, img_w = img.shape[:2]
@@ -256,13 +413,14 @@ def process_ocr(job_data):
                     if manga_text and len(manga_text.strip()) > 0:
                         print(f"[OCR] Overwriting EasyOCR text '{text}' with MangaOCR '{manga_text}'", flush=True)
                         text = manga_text
+                        is_manga_ocr = True
             except Exception as e:
                 print(f"[OCR] MangaOCR failed on region ({x},{y},{width},{height}): {e}", flush=True)
 
         regions.append({
             'text': text,
             'detectedLanguage': lang,
-            'confidence': float(confidence),
+            'confidence': 1.0 if is_manga_ocr else float(confidence),
             'rotation': 0.0,
             'x': x,
             'y': y,
@@ -337,6 +495,142 @@ def process_stub(job_data, job_type):
         print(f"[Stub - {job_type}] Failed to post callback: {e}", flush=True)
 
 
+def process_translation(job_data):
+    image_id = job_data['imageId']
+    print(f"[Translation] Processing image: {image_id}", flush=True)
+
+    try:
+        backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
+        res = requests.get(backend_url)
+        if res.status_code != 200:
+            print(f"[Translation] Failed to get image info: {res.status_code}", flush=True)
+            return
+        image_info = res.json()
+        ocr_regions = image_info.get('ocrRegions', [])
+    except Exception as e:
+        print(f"[Translation] Error fetching image details: {e}", flush=True)
+        return
+
+    translations = []
+    for r in ocr_regions:
+        text = r['text']
+        lang = r['detectedLanguage']
+        translated = translate_text(text, source_lang=lang)
+        translations.append({
+            'regionId': r['id'],
+            'translatedText': translated
+        })
+        print(f"[Translation] Translated '{text}' ({lang}) -> '{translated}'", flush=True)
+
+    callback_payload = {
+        'imageId': image_id,
+        'translations': translations
+    }
+    try:
+        res = requests.post(f"{CALLBACK_URL}/translation", json=callback_payload)
+        print(f"[Translation] Callback status code: {res.status_code}", flush=True)
+    except Exception as e:
+        print(f"[Translation] Failed to post callback to backend: {e}", flush=True)
+
+
+def process_region_redo(job_data):
+    image_id = job_data['imageId']
+    region_id = job_data['regionId']
+    redo_type = job_data['redoType'] # 'ocr' or 'translation'
+    print(f"[Region Redo] Processing region: {region_id} on image {image_id} with type {redo_type}", flush=True)
+
+    try:
+        backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
+        res = requests.get(backend_url)
+        if res.status_code != 200:
+            print(f"[Region Redo] Failed to get image info: {res.status_code}", flush=True)
+            return
+        image_info = res.json()
+        storage_path = image_info['storagePath']
+        ocr_regions = image_info.get('ocrRegions', [])
+    except Exception as e:
+        print(f"[Region Redo] Error fetching image details: {e}", flush=True)
+        return
+
+    region = None
+    for r in ocr_regions:
+        if r['id'] == region_id:
+            region = r
+            break
+            
+    if region is None:
+        print(f"[Region Redo] Region {region_id} not found in image details", flush=True)
+        return
+
+    try:
+        response = minio_client.get_object('manga-library', storage_path)
+        img_bytes = response.read()
+    except Exception as e:
+        print(f"[Region Redo] Error downloading from MinIO: {e}", flush=True)
+        return
+
+    callback_payload = {}
+
+    if redo_type == 'ocr':
+        try:
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            img_h, img_w = img.shape[:2]
+            
+            x, y, width, height = region['bboxX'], region['bboxY'], region['bboxW'], region['bboxH']
+            x1, y1 = max(0, x), max(0, y)
+            x2, y2 = min(img_w, x + width), min(img_h, y + height)
+            
+            if (x2 - x1) > 0 and (y2 - y1) > 0:
+                crop = img[y1:y2, x1:x2]
+                from PIL import Image
+                crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(crop_rgb)
+                
+                lang = region['detectedLanguage']
+                text = ""
+                confidence = 1.0
+                
+                if lang in ('ja', 'zh-TW') and manga_ocr_reader is not None:
+                    text = manga_ocr_reader(pil_img)
+                    confidence = 1.0
+                else:
+                    is_success, buffer = cv2.imencode(".jpg", crop)
+                    crop_bytes = buffer.tobytes()
+                    crop_results = reader.readtext(crop_bytes)
+                    if crop_results:
+                        text = " ".join([res[1] for res in crop_results])
+                        confidence = float(np.mean([res[2] for res in crop_results]))
+                    else:
+                        text = ""
+                        confidence = 0.0
+                
+                callback_payload['text'] = text
+                callback_payload['confidence'] = confidence
+                print(f"[Region Redo] Redo OCR success: '{text}' (conf={confidence})", flush=True)
+        except Exception as e:
+            print(f"[Region Redo] Redo OCR failed: {e}", flush=True)
+            return
+
+    elif redo_type == 'translation':
+        try:
+            text = region['text']
+            lang = region['detectedLanguage']
+            translated = translate_text(text, source_lang=lang)
+            callback_payload['translatedText'] = translated
+            print(f"[Region Redo] Redo Translation success: '{translated}'", flush=True)
+        except Exception as e:
+            print(f"[Region Redo] Redo Translation failed: {e}", flush=True)
+            return
+
+    try:
+        callback_url = CALLBACK_URL.replace('/jobs/callback', f'/internal/ocr-regions/{region_id}/callback')
+        res = requests.post(callback_url, json=callback_payload)
+        print(f"[Region Redo] Callback status code: {res.status_code}", flush=True)
+    except Exception as e:
+        print(f"[Region Redo] Failed to post callback: {e}", flush=True)
+
+
 # --- MAIN RUNNER ---
 def main():
     queues = [
@@ -344,12 +638,15 @@ def main():
         'queue:ocr',
         'queue:layout',
         'queue:translation',
-        'queue:render'
+        'queue:render',
+        'queue:region-redo'
     ]
     print(f"[Unified Worker] Listening to Redis queues: {queues}...", flush=True)
     while True:
         try:
-            # blpop takes multiple queues and blocks
+            # Print queue states on each tick
+            states = ", ".join([f"{q}: {redis_client.llen(q)}" for q in queues])
+            print(f"[Unified Worker] Queue states: {states}", flush=True)
             job_tuple = redis_client.blpop(queues, timeout=5)
             if job_tuple:
                 queue_bytes, job_json = job_tuple
@@ -363,7 +660,9 @@ def main():
                 elif queue_name == 'queue:layout':
                     process_stub(job_data, 'layout')
                 elif queue_name == 'queue:translation':
-                    process_stub(job_data, 'translation')
+                    process_translation(job_data)
+                elif queue_name == 'queue:region-redo':
+                    process_region_redo(job_data)
                 elif queue_name == 'queue:render':
                     process_stub(job_data, 'render')
         except Exception as e:

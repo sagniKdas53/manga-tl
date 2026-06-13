@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS ocr_regions (
     image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
     panel_id UUID REFERENCES panels(id) ON DELETE SET NULL,
     text TEXT,
+    translated_text TEXT,
+    approved BOOLEAN DEFAULT FALSE,
     detected_language TEXT NOT NULL,
     confidence FLOAT,
     rotation FLOAT DEFAULT 0.0,

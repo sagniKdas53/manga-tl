@@ -217,6 +217,47 @@ public class PageController {
         }
     }
 
+    @PutMapping("/ocr-regions/{id}")
+    @Transactional
+    public ResponseEntity<?> updateOcrRegion(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Object> payload) {
+        log.info("Updating OCR region {}: {}", id, payload);
+        return ocrRegionRepository.findById(id)
+                .map(region -> {
+                    if (payload.containsKey("text")) {
+                        region.setText((String) payload.get("text"));
+                    }
+                    if (payload.containsKey("translatedText")) {
+                        region.setTranslatedText((String) payload.get("translatedText"));
+                    }
+                    if (payload.containsKey("approved")) {
+                        region.setApproved((Boolean) payload.get("approved"));
+                    }
+                    if (payload.containsKey("confidence")) {
+                        region.setConfidence(((Number) payload.get("confidence")).doubleValue());
+                    }
+                    ocrRegionRepository.save(region);
+                    return ResponseEntity.ok(region);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/ocr-regions/{id}/redo")
+    public ResponseEntity<?> redoOcrRegion(
+            @PathVariable UUID id,
+            @RequestParam("type") String type) {
+        log.info("Request to redo OCR region {} with type {}", id, type);
+        try {
+            jobCoordinatorService.triggerRedo(id, type);
+            return ResponseEntity.ok(Map.of("status", "enqueued"));
+        } catch (Exception e) {
+            log.error("Failed to trigger region redo", e);
+            return ResponseEntity.internalServerError().body(e.getMessage());
+        }
+    }
+
+
     private String getFileExtension(String filename) {
         if (filename == null) return ".jpg";
         int lastIndex = filename.lastIndexOf('.');

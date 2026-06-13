@@ -9,4 +9,5 @@ public class SeriesDto {
     private String title;
     private String originalLanguage;
     private String readingDirection;
+    private String coverImageUrl;
 }

@@ -25,6 +25,9 @@ public class Series {
     @Column(name = "reading_direction", nullable = false)
     private String readingDirection; // rtl | ltr | ttb
 
+    @Column(name = "cover_image_url")
+    private String coverImageUrl;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     @com.fasterxml.jackson.annotation.JsonIgnore
