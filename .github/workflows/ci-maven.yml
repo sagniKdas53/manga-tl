@@ -1,0 +1,45 @@
+name: CI — Maven (Backend)
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "backend/pom.xml"
+      - "backend/src/**"
+      - "backend/Dockerfile"
+  pull_request:
+    paths:
+      - "backend/pom.xml"
+      - "backend/src/**"
+      - "backend/Dockerfile"
+
+jobs:
+  build:
+    name: Build & Test (Maven)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build with Maven
+        working-directory: backend
+        run: mvn --batch-mode clean package
+
+      - name: Run tests
+        working-directory: backend
+        run: mvn --batch-mode test
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/*.jar
+          retention-days: 7

@@ -1,0 +1,60 @@
+name: CI — Docker (Image Builds)
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "**/Dockerfile"
+  pull_request:
+    paths:
+      - "**/Dockerfile"
+
+jobs:
+  build:
+    name: docker build — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false          # independent: let each service report its own status
+      matrix:
+        include:
+          - service: backend
+            context: backend
+            dockerfile: backend/Dockerfile
+
+          - service: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+
+          - service: unified-worker
+            context: workers/unified-worker
+            dockerfile: workers/unified-worker/Dockerfile
+
+          - service: worker-ocr
+            context: workers/worker-ocr
+            dockerfile: workers/worker-ocr/Dockerfile
+
+          - service: worker-panel
+            context: workers/worker-panel
+            dockerfile: workers/worker-panel/Dockerfile
+
+          - service: worker-stubs
+            context: workers/worker-stubs
+            dockerfile: workers/worker-stubs/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: manga-library/${{ matrix.service }}:pr-test
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
