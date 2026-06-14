@@ -18,6 +18,21 @@ jobs:
     name: Build & Test (Maven)
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: manga_library
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,13 +48,10 @@ jobs:
         working-directory: backend
         run: mvn --batch-mode clean package
 
-      - name: Run tests
-        working-directory: backend
-        run: mvn --batch-mode test
-
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-jar
           path: backend/target/*.jar
           retention-days: 7
+

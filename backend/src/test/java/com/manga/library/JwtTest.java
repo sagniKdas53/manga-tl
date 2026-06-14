@@ -13,12 +13,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Transactional
 public class JwtTest {
 
     @Autowired
@@ -39,13 +41,14 @@ public class JwtTest {
     @Test
     public void testPostChapter() throws Exception {
         // Save mock admin user to avoid 403 Forbidden on role check
-        User user = User.builder()
-                .email("admin@manga.local")
-                .passwordHash("mock_password_hash")
-                .displayName("Admin User")
-                .role("admin")
-                .build();
-        userRepository.save(user);
+        User user = userRepository.findByEmail("admin@manga.local")
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .email("admin@manga.local")
+                        .passwordHash("mock_password_hash")
+                        .displayName("Admin User")
+                        .role("admin")
+                        .build()));
+
 
         // Save test series programmatically
         Series series = Series.builder()
