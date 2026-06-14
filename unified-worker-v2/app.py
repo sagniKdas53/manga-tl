@@ -17,7 +17,7 @@ try:
     from paddleocr import PaddleOCR
     # Initialize PaddleOCR with PP-OCRv5
     print("[Unified Worker] Initializing PaddleOCR (PP-OCRv5, lang='japan')...", flush=True)
-    paddle_ocr_reader = PaddleOCR(ocr_version='PP-OCRv5', use_angle_cls=True, lang='japan', use_gpu=False)
+    paddle_ocr_reader = PaddleOCR(ocr_version='PP-OCRv5', use_textline_orientation=True, lang='japan', device='cpu')
 except Exception as e:
     print(f"[Unified Worker] Failed to initialize PaddleOCR: {e}", flush=True)
 
