@@ -1586,6 +1586,61 @@ function AppContent() {
                           </g>
                         );
                       })}
+
+                      {showTranslations && ocrRegions.map((r) => {
+                        if (!r.translatedText) return null;
+
+                        const overlayWidth = Math.max(r.bboxW, 120);
+                        const overlayHeight = Math.max(r.bboxH, 80);
+                        const overlayX = r.bboxX + (r.bboxW - overlayWidth) / 2;
+                        const overlayY = r.bboxY + (r.bboxH - overlayHeight) / 2;
+
+                        return (
+                          <foreignObject
+                            key={`trans-${r.id}`}
+                            x={overlayX}
+                            y={overlayY}
+                            width={overlayWidth}
+                            height={overlayHeight}
+                            style={{ pointerEvents: 'none' }}
+                          >
+                            <div
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                textAlign: 'center',
+                                padding: '4px',
+                                boxSizing: 'border-box',
+                                overflow: 'hidden',
+                                pointerEvents: 'none'
+                              }}
+                            >
+                              <div
+                                style={{
+                                  background: theme === 'dark' ? 'rgba(15, 17, 23, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                                  color: theme === 'dark' ? '#ffffff' : '#0f172a',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  lineHeight: '1.3',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  border: theme === 'dark' ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(139, 92, 246, 0.2)',
+                                  boxShadow: '0 4px 10px rgba(0, 0, 0, 0.25)',
+                                  wordBreak: 'break-word',
+                                  maxWidth: '100%',
+                                  maxHeight: '100%',
+                                  overflowY: 'auto'
+                                }}
+                              >
+                                {r.translatedText}
+                              </div>
+                            </div>
+                          </foreignObject>
+                        );
+                      })}
                     </svg>
 
                     {/* Popover overlay tooltip */}
@@ -1868,10 +1923,44 @@ function AppContent() {
                 </div>
               )}
 
-              <div className="panel-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="panel-section-title">Region Inspector</div>
-                
-                {selectedRegion ? (
+              {selectedRegion && (
+                <div className="panel-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Region Inspector</span>
+                    <button 
+                      onClick={() => setSelectedRegion(null)}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-main)',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-hover-more)';
+                        e.currentTarget.style.borderColor = 'var(--text-muted)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.borderColor = 'var(--border-color)';
+                      }}
+                      title="Back to Layers Overlay"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                      </svg>
+                      Back
+                    </button>
+                  </div>
+                  
                   <div className="ocr-detail-card" style={{ flex: 1, overflowY: 'auto' }}>
                     <div className="badge-row">
                       <span className="meta-badge" style={{ backgroundColor: 'var(--primary-glow)', color: 'var(--primary-hover)', borderColor: 'var(--primary)' }}>
@@ -1910,12 +1999,8 @@ function AppContent() {
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div style={{ color: 'var(--text-dim)', textAlign: 'center', margin: 'auto 0', fontSize: '14px' }}>
-                    Click on any green OCR region box in the reader to inspect properties.
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </div>
