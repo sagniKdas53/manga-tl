@@ -910,7 +910,44 @@ function AppContent() {
       alert("Failed to start redo job.");
     }
   };
+  const navigateToPage = (num: number) => {
+    if (num >= 1 && num <= pages.length) {
+      const slugPart = selectedChapter ? `${toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`)}/` : '';
+      navigate(`/chapters/${chapterId}/${slugPart}reader/${num}`);
+    }
+  };
 
+  useEffect(() => {
+    if (!readerMatch || pages.length === 0) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      const curPageNum = parseInt(pageNumber || '1');
+      
+      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
+        navigateToPage(curPageNum + 1);
+      } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
+        navigateToPage(curPageNum - 1);
+      } else if (e.key === 'Escape') {
+        setSelectedRegion(null);
+        setActiveRegion(null);
+        setPopoverOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [readerMatch, pageNumber, pages.length, selectedChapter, chapterId, navigate]);
 
   // SUB-RENDER VIEWS
   const renderAuth = () => (
@@ -1369,12 +1406,6 @@ function AppContent() {
     const curPageNum = parseInt(pageNumber || '1');
     const totalPages = pages.length;
 
-    const navigateToPage = (num: number) => {
-      if (num >= 1 && num <= totalPages) {
-        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || `chapter-${selectedChapter?.chapterNumber}`)}/reader/${num}`);
-      }
-    };
-
     return (
       <div className="reader-container-nhentai">
         {/* nHentai-style Top Navigation Bar */}
@@ -1384,7 +1415,7 @@ function AppContent() {
             onClick={() => navigate(`/chapters/${selectedChapter ? selectedChapter.id : ''}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ''}`)}
             title="Back to Chapter"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="19" y1="12" x2="5" y2="12"></line>
               <polyline points="12 19 5 12 12 5"></polyline>
             </svg>
@@ -1437,7 +1468,7 @@ function AppContent() {
             onClick={() => setShowSidebar(!showSidebar)}
             title="Toggle Workspace Sidebar"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
@@ -1525,10 +1556,10 @@ function AppContent() {
                               className="svg-ocr-box"
                               style={{ 
                                 fill: isSelected 
-                                  ? 'rgba(139, 92, 246, 0.25)' 
+                                  ? 'var(--primary-glow-selected)' 
                                   : isApproved 
-                                    ? 'rgba(139, 92, 246, 0.08)' 
-                                    : 'rgba(16, 185, 129, 0.12)',
+                                    ? 'var(--primary-glow-approved)' 
+                                    : 'var(--success-glow)',
                                 stroke: isSelected 
                                   ? 'var(--primary)' 
                                   : isApproved 
@@ -1934,50 +1965,52 @@ function AppContent() {
   return (
     <div className="app-container">
       {/* Navigation Bar */}
-      <nav className="nav-bar">
-        <div className="logo" onClick={() => user && navigate('/')} style={{ cursor: user ? 'pointer' : 'default' }}>
-          <div className="logo-icon">M</div>
-          Manga Translation Hub
-        </div>
-        <div className="nav-actions">
-          {/* Theme Toggle Button */}
-          <button 
-            className="theme-toggle-btn"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-          >
-            {theme === 'dark' ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5"></circle>
-                <line x1="12" y1="1" x2="12" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="23"></line>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                <line x1="1" y1="12" x2="3" y2="12"></line>
-                <line x1="21" y1="12" x2="23" y2="12"></line>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-              </svg>
+      {!readerMatch && (
+        <nav className="nav-bar">
+          <div className="logo" onClick={() => user && navigate('/')} style={{ cursor: user ? 'pointer' : 'default' }}>
+            <div className="logo-icon">M</div>
+            Manga Translation Hub
+          </div>
+          <div className="nav-actions">
+            {/* Theme Toggle Button */}
+            <button 
+              className="theme-toggle-btn"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            >
+              {theme === 'dark' ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <line x1="12" y1="1" x2="12" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="23"></line>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                  <line x1="1" y1="12" x2="3" y2="12"></line>
+                  <line x1="21" y1="12" x2="23" y2="12"></line>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+              )}
+            </button>
+            
+            {user && (
+              <>
+                <div className="user-badge">
+                  <span className="user-dot"></span>
+                  {user.displayName}
+                </div>
+                <button className="btn btn-secondary" onClick={handleLogout} style={{ padding: '6px 12px' }}>
+                  Sign Out
+                </button>
+              </>
             )}
-          </button>
-          
-          {user && (
-            <>
-              <div className="user-badge">
-                <span className="user-dot"></span>
-                {user.displayName}
-              </div>
-              <button className="btn btn-secondary" onClick={handleLogout} style={{ padding: '6px 12px' }}>
-                Sign Out
-              </button>
-            </>
-          )}
-        </div>
-      </nav>
+          </div>
+        </nav>
+      )}
 
       <Routes>
         <Route path="/login" element={renderAuth()} />

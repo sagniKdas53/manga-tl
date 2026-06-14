@@ -4,3 +4,5 @@ inputs/
 backend/target/
 workers/unified-worker/.venv/
 data
+logs*
+*__pycache__

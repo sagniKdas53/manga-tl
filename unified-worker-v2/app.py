@@ -318,7 +318,160 @@ def enforce_rate_limit():
     except Exception as e:
         print(f"[Translation] Error enforcing rate limit: {e}", flush=True)
 
-def try_cloud_ai(provider, api_key, model, prompt):
+TRANSLATION_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "translations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "translation": {"type": "string"}
+                },
+                "required": ["id", "translation"]
+            }
+        }
+    },
+    "required": ["translations"]
+}
+
+MANGA_TRANSLATION_JSON_SYSTEM_PROMPT = """You are an expert manga translator.
+Translate the list of manga text bubbles into natural English.
+These bubbles appear in reading order. Maintain context, tone, emotion, and relationships between speakers.
+Return ONLY valid JSON format conforming to the requested schema. No conversational prefix, suffix, or markdown formatting."""
+
+def contains_japanese(text):
+    return bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', text))
+
+def is_valid_translation(source, translated):
+    if not translated:
+        return False
+        
+    translated_stripped = translated.strip()
+    source_stripped = source.strip()
+    
+    # Check forbidden phrases / boilerplate
+    forbidden_substrings = [
+        "translate the following text",
+        "text:",
+        "output:",
+        "json"
+    ]
+    for pattern in forbidden_substrings:
+        if pattern in translated_stripped.lower():
+            print(f"[Sanity Check] Rejected translation containing boilerplate '{pattern}': '{translated}'", flush=True)
+            return False
+            
+    # Check if translated == source for Japanese
+    if contains_japanese(source_stripped) and translated_stripped == source_stripped:
+        print(f"[Sanity Check] Rejected translation identical to Japanese source: '{translated}'", flush=True)
+        return False
+        
+    # Check if translated is pathologically longer than source
+    if len(source_stripped) <= 5 and len(translated_stripped) > len(source_stripped) * 20:
+        print(f"[Sanity Check] Rejected pathologically long translation for short source: '{translated}' (source: '{source}')", flush=True)
+        return False
+        
+    return True
+
+def should_translate_region(region):
+    text = region.get('text', '')
+    stripped = text.strip()
+    confidence = region.get('confidence', 1.0)
+    width = region.get('width', 0)
+    height = region.get('height', 0)
+
+    # Reject regions smaller than 10x10
+    if width < 10 or height < 10:
+        print(f"[Quality Filter] Rejecting region: too small ({width}x{height}) - text: '{text}'", flush=True)
+        return False
+
+    # Reject low confidence regions (< 0.30)
+    if confidence < 0.30:
+        print(f"[Quality Filter] Rejecting region: low confidence ({confidence:.2f}) - text: '{text}'", flush=True)
+        return False
+
+    # Special handling for SFX and Japanese kana-only text
+    sfx_whitelist = {'ドン', 'ガッ', 'ぱんッ', 'ズキュン'}
+    
+    # Check if text is in whitelist
+    if stripped in sfx_whitelist:
+        return True
+        
+    # Check if text is Japanese kana-only
+    cleaned_for_kana = re.sub(r'[\s！？\?!\.\,\-\_\"]', '', stripped)
+    is_kana_only = False
+    if cleaned_for_kana:
+        is_kana_only = bool(re.match(r'^[\u3040-\u309F\u30A0-\u30FF\u30FC\uFF66-\uFF9F]+$', cleaned_for_kana))
+        
+    if is_kana_only:
+        return True
+
+    # Otherwise, reject obvious garbage / non-Japanese low quality texts
+    if len(stripped) < 2:
+        print(f"[Quality Filter] Rejecting region: too short (len={len(stripped)}) - text: '{text}'", flush=True)
+        return False
+
+    # Reject alphanumeric-only when confidence is low
+    if re.match(r'^[A-Za-z0-9._-]+$', stripped):
+        if confidence < 0.50:
+            print(f"[Quality Filter] Rejecting region: alphanumeric-only with low confidence ({confidence:.2f}) - text: '{text}'", flush=True)
+            return False
+
+    return True
+
+def validate_translation_response(parsed_json):
+    items = []
+    if isinstance(parsed_json, dict):
+        if 'translations' in parsed_json:
+            items = parsed_json['translations']
+        elif 'items' in parsed_json:
+            items = parsed_json['items']
+        else:
+            if all(isinstance(k, str) and isinstance(v, str) for k, v in parsed_json.items()):
+                return parsed_json
+    elif isinstance(parsed_json, list):
+        items = parsed_json
+        
+    if not isinstance(items, list):
+        return None
+        
+    validated = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        rid = item.get('id')
+        translation = item.get('translation')
+        if rid and translation and isinstance(rid, str) and isinstance(translation, str) and translation.strip():
+            validated[rid] = translation.strip()
+            
+    return validated if validated else None
+
+def parse_and_validate_batch(response_text, unmatched_regions):
+    if not response_text:
+        return None
+        
+    cleaned_text = response_text.strip()
+    if cleaned_text.startswith("```"):
+        lines = cleaned_text.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned_text = "\n".join(lines).strip()
+        
+    try:
+        parsed = json.loads(cleaned_text)
+        validated = validate_translation_response(parsed)
+        if validated:
+            return validated
+    except Exception as e:
+        print(f"[Translation] Failed to parse batch translation JSON response: {e}. Raw response: {response_text}", flush=True)
+        
+    return None
+
+def try_cloud_ai(provider, api_key, model, prompt, response_schema=None):
     enforce_rate_limit()
     url = ""
     headers = {}
@@ -334,6 +487,14 @@ def try_cloud_ai(provider, api_key, model, prompt):
             "model": model or "meta-llama/llama-3-8b-instruct:free",
             "messages": [{"role": "user", "content": prompt}]
         }
+        if response_schema:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "manga_translation",
+                    "schema": response_schema
+                }
+            }
     elif provider == 'openai':
         url = "https://api.openai.com/v1/chat/completions"
         headers = {
@@ -344,6 +505,14 @@ def try_cloud_ai(provider, api_key, model, prompt):
             "model": model or "gpt-4o-mini",
             "messages": [{"role": "user", "content": prompt}]
         }
+        if response_schema:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "manga_translation",
+                    "schema": response_schema
+                }
+            }
     elif provider == 'nvidia':
         url = "https://integrate.api.nvidia.com/v1/chat/completions"
         headers = {
@@ -354,6 +523,8 @@ def try_cloud_ai(provider, api_key, model, prompt):
             "model": model or "nvidia/riva-translate-4b-instruct-v1.1",
             "messages": [{"role": "user", "content": prompt}]
         }
+        if response_schema:
+            payload["response_format"] = {"type": "json_object"}
     elif provider == 'anthropic':
         url = "https://api.anthropic.com/v1/messages"
         headers = {
@@ -377,6 +548,11 @@ def try_cloud_ai(provider, api_key, model, prompt):
         payload = {
             "contents": [{"parts": [{"text": prompt}]}]
         }
+        if response_schema:
+            payload["generationConfig"] = {
+                "responseMimeType": "application/json",
+                "responseSchema": response_schema
+            }
     else:
         return None
 
@@ -397,6 +573,89 @@ def try_cloud_ai(provider, api_key, model, prompt):
         print(f"[Translation] Cloud LLM Translation failed: {e}", flush=True)
     return None
 
+def try_cloud_ai_vision(provider, api_key, model, prompt, base64_image, response_schema=None):
+    enforce_rate_limit()
+    url = ""
+    headers = {}
+    payload = {}
+    
+    if provider == 'openrouter':
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        if response_schema:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "manga_translation",
+                    "schema": response_schema
+                }
+            }
+    elif provider == 'gemini':
+        gemini_model = model or "gemini-1.5-flash"
+        if "/" not in gemini_model:
+            gemini_model = f"models/{gemini_model}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{gemini_model}:generateContent?key={api_key}"
+        headers = {
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inlineData": {
+                                "mimeType": "image/jpeg",
+                                "data": base64_image
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        if response_schema:
+            payload["generationConfig"] = {
+                "responseMimeType": "application/json",
+                "responseSchema": response_schema
+            }
+    else:
+        return None
+
+    try:
+        print(f"[Translation VLM] Sending vision request to provider '{provider}' using model '{model}'...", flush=True)
+        res = requests.post(url, json=payload, headers=headers, timeout=20)
+        if res.status_code == 200:
+            res_json = res.json()
+            if provider == 'gemini':
+                return res_json['candidates'][0]['content']['parts'][0]['text']
+            else:
+                return res_json['choices'][0]['message']['content']
+        else:
+            print(f"[Translation VLM] Provider '{provider}' returned error: {res.status_code} - {res.text}", flush=True)
+    except Exception as e:
+        print(f"[Translation VLM] Vision Translation failed: {e}", flush=True)
+    return None
+
 MANGA_TRANSLATION_SYSTEM_PROMPT = """You are an expert manga translator.
 
 Translate Japanese manga dialogue into natural English.
@@ -409,7 +668,7 @@ Rules:
 - Do not add quotation marks.
 - Return only the translated text."""
 
-def try_local_ai(prompt, text):
+def try_local_ai(prompt, text, response_schema=None):
     enforce_rate_limit()
     local_provider = os.environ.get('LOCAL_LLM_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
     local_endpoint = os.environ.get('LOCAL_LLM_ENDPOINT', os.environ.get('LLM_ENDPOINT', '')).strip()
@@ -427,6 +686,8 @@ def try_local_ai(prompt, text):
     elif "host.docker.internal" in local_endpoint:
         endpoints_to_try.append(local_endpoint.replace("host.docker.internal", "localhost"))
 
+    system_pr = MANGA_TRANSLATION_JSON_SYSTEM_PROMPT if response_schema else MANGA_TRANSLATION_SYSTEM_PROMPT
+
     for endpoint in endpoints_to_try:
         try:
             print(f"[Translation] Trying Local AI endpoint '{endpoint}' using model '{model}'...", flush=True)
@@ -434,17 +695,22 @@ def try_local_ai(prompt, text):
             if "/api/v1/chat" in endpoint:
                 payload = {
                     "model": model,
-                    "system_prompt": MANGA_TRANSLATION_SYSTEM_PROMPT,
+                    "system_prompt": system_pr,
                     "input": text
                 }
             else:
                 payload = {
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": MANGA_TRANSLATION_SYSTEM_PROMPT},
+                        {"role": "system", "content": system_pr},
                         {"role": "user", "content": text}
                     ]
                 }
+                if response_schema:
+                    if "ollama" in endpoint or local_provider == 'ollama':
+                        payload["format"] = "json"
+                    else:
+                        payload["response_format"] = {"type": "json_object"}
             
             res = requests.post(endpoint, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
             if res.status_code == 200:
@@ -537,118 +803,174 @@ def clean_translated_text(translated):
     return translated
 
 def translate_text(text, source_lang='auto', target_lang='en'):
-    local_dict = {
-        '你到底想幹嚇': 'What do you even want?',
-        '關於巧克力我想向你道謝': 'I wanted to thank you for the chocolates.',
-        '我一首都不太擅長做甜點': "I've never been very good at making sweets.",
-        '如果没有孝介我肯定無論如何都準備不出那應多的巧克力': "Without Kosuke, I wouldn't have been able to prepare so many chocolates anyway.",
-        '你可真是死板昵': "You really are rigid, aren't you?",
-        '！！！記憶に新しいうちにということで、手作りなんだけど、みんなが一生懸命用意してくれたチョコです': "!!! While it's still fresh in my memory, they all prepared homemade chocolates for me with all their heart.",
-        '我倒也不是狼擅長・': "It's not that I'm very good at it...",
-        '我要是你的話肯定都煩死了': "If I were you, I'd be totally annoyed.",
-        '要是做不出來也不是不可以買嚇': "If you can't make them, you could always just buy them.",
-        'はあ．．．はあ：中でめっちゃビクビクしてる．．．': '*pant* *pant* ...It is throbbing so much inside...',
-        '手ぇビチョビチ': 'My hands are all wet...',
-        '今日に': 'Today...',
-        'てかさっきイッたばっかなのにめっちゃ出てるね．．．': 'By the way, even though you just came, so much is coming out...',
-        'そりゃ': 'Well...',
-        'まだ': 'Still...',
-        'ね': 'Right?',
-        'もう決めたことなんだから': "Because it's already decided...",
-        'それでも、': 'Even so...',
-        'ところは、': 'The place is...',
-        '『ＴＡＲａＴＬａｃｔｅｒ': 'TARaTLacter',
-        'ＹＥＳ，ＭＯＭＭｙ！！': 'YES, MOMMy!!',
-        '．．．': '...',
-        'ＮＯＥ．．': 'NO...'
-    }
+    provider = os.environ.get('MODEL_PROVIDER', '').lower().strip()
+    api_key = os.environ.get('API_KEY', '').strip()
     
-    clean_txt = text.strip().replace('\n', '').replace(' ', '')
-    for k, v in local_dict.items():
-        if k.replace(' ', '') in clean_txt or clean_txt in k.replace(' ', ''):
-            print(f"[Translation] Local dictionary matched: '{text}' -> '{v}'", flush=True)
-            return v
-
-    provider = os.environ.get('MODEL_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
-    api_key = os.environ.get('API_KEY', os.environ.get('LLM_API_KEY', ''))
-    cloud_model = os.environ.get('PREFERRED_MODEL', 'nvidia/riva-translate-4b-instruct-v1.1')
+    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '').strip() or (api_key if provider == 'openrouter' else '')
+    nvidia_key = os.environ.get('NVIDIA_API_KEY', '').strip() or (api_key if provider == 'nvidia' else '')
 
     prompt = f"Translate the following text to natural English, maintaining its tone and context. Respond ONLY with the translated text. Do not include any tags, notes, or explanations.\n\nText: {text}"
 
-    # 1. Cloud AI model with API key (if key exists)
-    if api_key:
-        translated = try_cloud_ai(provider, api_key, cloud_model, prompt)
+    # 1. Cloud LLM Layer (DeepSeek V4 Pro or Nemotron)
+    if openrouter_key:
+        translated = try_cloud_ai('openrouter', openrouter_key, 'deepseek-ai/deepseek-v4-pro', prompt)
         if translated:
-            return clean_translated_text(translated)
+            cleaned = clean_translated_text(translated)
+            if is_valid_translation(text, cleaned):
+                return cleaned
 
-    # 2. Local AI model in a container (LMStudio or Ollama)
+    if nvidia_key:
+        translated = try_cloud_ai('nvidia', nvidia_key, 'nvidia/nemotron-3-nano-30b-a3b', prompt)
+        if translated:
+            cleaned = clean_translated_text(translated)
+            if is_valid_translation(text, cleaned):
+                return cleaned
+
+    # 2. Local Ollama/LMStudio Layer
     translated = try_local_ai(prompt, text)
     if translated:
-        return clean_translated_text(translated)
+        cleaned = clean_translated_text(translated)
+        if is_valid_translation(text, cleaned):
+            return cleaned
 
-    # 3. DEEPL with API_KEY
+    # 3. DeepL Layer
     translated = try_deepl(text, target_lang)
     if translated:
-        return clean_translated_text(translated)
+        cleaned = clean_translated_text(translated)
+        if is_valid_translation(text, cleaned):
+            return cleaned
 
-    # 4. Free google translated
+    # 4. Google Translate Layer
     translated = try_google_translate(text, source_lang, target_lang)
     if translated:
-        return clean_translated_text(translated)
+        cleaned = clean_translated_text(translated)
+        if is_valid_translation(text, cleaned):
+            return cleaned
 
-    # 5. Fail (return None)
     print(f"[Translation] All translation tiers failed for text: '{text}'", flush=True)
     return None
 
 
-def translate_batch_llm(unmatched_regions, provider, api_key, model):
-    # Format bubbles as JSON structure
-    bubbles_input = [{"id": r['id'], "text": r['text']} for r in unmatched_regions]
+def translate_batch_llm(unmatched_regions, response_schema=None):
+    bubbles_input = []
+    for r in unmatched_regions:
+        bubbles_input.append({
+            "id": r['id'],
+            "panel": r.get('panelReadingOrder') or r.get('panelId') or 0,
+            "bubble": r.get('bubbleReadingOrder') or 0,
+            "speaker": None,
+            "text": r['text']
+        })
     bubbles_json = json.dumps(bubbles_input, ensure_ascii=False, indent=2)
     
-    prompt = f"""You are a professional manga translation agent. Translate the following list of Japanese/Chinese manga text bubbles into natural English.
-Maintain the context, tone, and flow between bubbles.
-Respond ONLY with a JSON array containing the translation for each bubble, following the format below. Do not include any explanations, markdown code blocks, or notes.
+    prompt = f"""These bubbles appear in reading order.
+Translate each bubble into natural manga English.
+Preserve:
+- tone
+- emotional state
+- relationships
+- ongoing conversation
 
-Input bubbles:
+Return JSON only.
+
+Input:
 {bubbles_json}
-
-Output format:
-[
-  {{"id": "region_id_1", "translation": "translated_text_1"}},
-  {{"id": "region_id_2", "translation": "translated_text_2"}}
-]
 """
-    # Call try_cloud_ai or try_local_ai based on configuration
-    if api_key:
-        response_text = try_cloud_ai(provider, api_key, model, prompt)
-    else:
-        response_text = try_local_ai(prompt, bubbles_json)
-        
-    if not response_text:
+    provider = os.environ.get('MODEL_PROVIDER', '').lower().strip()
+    api_key = os.environ.get('API_KEY', '').strip()
+    
+    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '').strip() or (api_key if provider == 'openrouter' else '')
+    nvidia_key = os.environ.get('NVIDIA_API_KEY', '').strip() or (api_key if provider == 'nvidia' else '')
+
+    # Try DeepSeek V4 Pro
+    if openrouter_key:
+        print("[Translation] Batch: Trying DeepSeek V4 Pro...", flush=True)
+        try:
+            res = try_cloud_ai('openrouter', openrouter_key, 'deepseek-ai/deepseek-v4-pro', prompt, response_schema)
+            if res:
+                return res
+        except Exception as e:
+            print(f"[Translation] DeepSeek batch translation failed: {e}", flush=True)
+
+    # Try Nemotron
+    if nvidia_key:
+        print("[Translation] Batch: Trying Nemotron...", flush=True)
+        try:
+            res = try_cloud_ai('nvidia', nvidia_key, 'nvidia/nemotron-3-nano-30b-a3b', prompt, response_schema)
+            if res:
+                return res
+        except Exception as e:
+            print(f"[Translation] Nemotron batch translation failed: {e}", flush=True)
+
+    # Try Local LLM (Ollama)
+    local_provider = os.environ.get('LOCAL_LLM_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
+    print(f"[Translation] Batch: Trying Local LLM ({local_provider})...", flush=True)
+    try:
+        res = try_local_ai(prompt, bubbles_json, response_schema)
+        if res:
+            return res
+    except Exception as e:
+        print(f"[Translation] Local LLM batch translation failed: {e}", flush=True)
+
+    return None
+
+def translate_vlm_vision(img_bytes, unmatched_regions, response_schema=None):
+    if not img_bytes:
         return None
         
-    # Clean up markdown fences if present
-    cleaned_text = response_text.strip()
-    if cleaned_text.startswith("```"):
-        lines = cleaned_text.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        cleaned_text = "\n".join(lines).strip()
+    import base64
+    base64_image = base64.b64encode(img_bytes).decode('utf-8')
+    
+    bubbles_input = []
+    for r in unmatched_regions:
+        bubbles_input.append({
+            "id": r['id'],
+            "panel": r.get('panelReadingOrder') or r.get('panelId') or 0,
+            "bubble": r.get('bubbleReadingOrder') or 0,
+            "speaker": None,
+            "text": r['text']
+        })
         
-    try:
-        parsed = json.loads(cleaned_text)
-        if isinstance(parsed, list):
-            mapping = {}
-            for item in parsed:
-                if 'id' in item and 'translation' in item:
-                    mapping[item['id']] = item['translation']
-            return mapping
-    except Exception as e:
-        print(f"[Translation] Failed to parse VLM batch translation JSON response: {e}. Raw response: {response_text}", flush=True)
-        
+    prompt = f"""These OCR regions were extracted from this manga page.
+Use the page image to understand context (characters, expressions, speech bubble placements).
+Translate each bubble into natural manga English.
+Preserve:
+- tone
+- emotional state
+- relationships
+- ongoing conversation
+
+Return JSON only.
+
+Input:
+{json.dumps(bubbles_input, ensure_ascii=False, indent=2)}
+"""
+    provider = os.environ.get('MODEL_PROVIDER', '').lower().strip()
+    api_key = os.environ.get('API_KEY', '').strip()
+    
+    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '').strip() or (api_key if provider == 'openrouter' else '')
+    nvidia_key = os.environ.get('NVIDIA_API_KEY', '').strip() or (api_key if provider == 'nvidia' else '')
+
+    if openrouter_key:
+        print("[Translation] VLM: Trying vision model via OpenRouter...", flush=True)
+        vlm_model = os.environ.get('VLM_MODEL', 'google/gemini-2.5-flash')
+        try:
+            res = try_cloud_ai_vision('openrouter', openrouter_key, vlm_model, prompt, base64_image, response_schema)
+            if res:
+                return res
+        except Exception as e:
+            print(f"[Translation] VLM vision translation via OpenRouter failed: {e}", flush=True)
+
+    if provider == 'gemini' and api_key:
+        print("[Translation] VLM: Trying vision model via Gemini...", flush=True)
+        vlm_model = os.environ.get('PREFERRED_MODEL', 'gemini-1.5-flash')
+        try:
+            res = try_cloud_ai_vision('gemini', api_key, vlm_model, prompt, base64_image, response_schema)
+            if res:
+                return res
+        except Exception as e:
+            print(f"[Translation] VLM vision translation via Gemini failed: {e}", flush=True)
+
     return None
 
 def translate_batch_deepl(unmatched_regions, target_lang='en'):
@@ -954,77 +1276,103 @@ def process_translation(job_data):
         print(f"[Translation] Error fetching image details: {e}", flush=True)
         return
 
-    # 1. Resolve local dictionary matches first
+    # OCR Quality Filter & Separation
     resolved_translations = {}
     unmatched_regions = []
     
-    local_dict = {
-        '你到底想幹嚇': 'What do you even want?',
-        '關於巧克力我想向你道謝': 'I wanted to thank you for the chocolates.',
-        '我一首都不太擅長做甜點': "I've never been very good at making sweets.",
-        '如果没有孝介我肯定無論如何都準備不出那應多的巧克力': "Without Kosuke, I wouldn't have been able to prepare so many chocolates anyway.",
-        '你可真是死板昵': "You really are rigid, aren't you?",
-        '！！！記憶に新しいうちにということで、手作りなんだけど、みんなが一生懸命用意してくれたチョコです': "!!! While it's still fresh in my memory, they all prepared homemade chocolates for me with all their heart.",
-        '我倒也不是狼擅長・': "It's not that I'm very good at it...",
-        '我要是你的話肯定都煩死了': "If I were you, I'd be totally annoyed.",
-        '要是做不出來也不是不可以買嚇': "If you can't make them, you could always just buy them.",
-        'はあ．．．はあ：中でめっちゃビクビクしてる．．．': '*pant* *pant* ...It is throbbing so much inside...',
-        '手ぇビチョビチ': 'My hands are all wet...',
-        '今日に': 'Today...',
-        'てかさっきイッたばっかなのにめっちゃ出てるね．．．': 'By the way, even though you just came, so much is coming out...',
-        'そりゃ': 'Well...',
-        'まだ': 'Still...',
-        'ね': 'Right?',
-        'もう決めたことなんだから': "Because it's already decided...",
-        'それでも、': 'Even so...',
-        'ところは、': 'The place is...',
-        '『ＴＡＲａＴＬａｃｔｅｒ': 'TARaTLacter',
-        'ＹＥＳ，ＭＯＭＭｙ！！': 'YES, MOMMy!!',
-        '．．．': '...',
-        'ＮＯＥ．．': 'NO...'
-    }
-
     for r in ocr_regions:
-        text = r['text']
-        clean_txt = text.strip().replace('\n', '').replace(' ', '')
-        matched = False
-        for k, v in local_dict.items():
-            if k.replace(' ', '') in clean_txt or clean_txt in k.replace(' ', ''):
-                print(f"[Translation] Local dictionary matched: '{text}' -> '{v}'", flush=True)
-                resolved_translations[r['id']] = v
-                matched = True
-                break
-        if not matched:
+        if not should_translate_region(r):
+            # Bypass translation for garbage, keep original text
+            resolved_translations[r['id']] = r['text']
+        else:
             unmatched_regions.append(r)
 
-    # 2. Batch translate unmatched regions using LLM (Cloud AI or Local LLM)
+    # Translate unmatched regions
     if unmatched_regions:
-        provider = os.environ.get('MODEL_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
-        api_key = os.environ.get('API_KEY', os.environ.get('LLM_API_KEY', ''))
-        model = os.environ.get('PREFERRED_MODEL', 'nvidia/riva-translate-4b-instruct-v1.1')
-        
-        # Try LLM batch translation
+        use_vlm_translation = os.environ.get('USE_VLM_TRANSLATION', 'false').lower() in ('true', '1', 't')
         batch_mapping = None
-        try:
-            batch_mapping = translate_batch_llm(unmatched_regions, provider, api_key, model)
-        except Exception as e:
-            print(f"[Translation] LLM batch translation failed with exception: {e}", flush=True)
-
-        if batch_mapping:
-            for rid, trans in batch_mapping.items():
-                resolved_translations[rid] = trans
-        else:
-            # Try DeepL batch translation as fallback
+        
+        # 1. (Optional) VLM vision translation pass
+        if use_vlm_translation:
+            storage_path = image_info.get('storagePath')
+            img_bytes = None
+            if storage_path:
+                try:
+                    response = minio_client.get_object('manga-library', storage_path)
+                    img_bytes = response.read()
+                except Exception as e:
+                    print(f"[Translation] Error downloading image from MinIO for VLM pass: {e}", flush=True)
+            
+            if img_bytes:
+                print(f"[Translation] VLM vision translation pass starting for {len(unmatched_regions)} regions...", flush=True)
+                try:
+                    vlm_res = translate_vlm_vision(img_bytes, unmatched_regions, TRANSLATION_JSON_SCHEMA)
+                    batch_mapping = parse_and_validate_batch(vlm_res, unmatched_regions)
+                except Exception as e:
+                    print(f"[Translation] VLM vision translation pass failed: {e}", flush=True)
+        
+        # 2. Standard LLM batch translation
+        if not batch_mapping:
+            print(f"[Translation] Running standard batch translation for {len(unmatched_regions)} regions...", flush=True)
             try:
-                batch_mapping = translate_batch_deepl(unmatched_regions)
+                batch_res = translate_batch_llm(unmatched_regions, TRANSLATION_JSON_SCHEMA)
+                batch_mapping = parse_and_validate_batch(batch_res, unmatched_regions)
             except Exception as e:
-                print(f"[Translation] DeepL batch translation failed: {e}", flush=True)
-                
-            if batch_mapping:
-                for rid, trans in batch_mapping.items():
-                    resolved_translations[rid] = trans
+                print(f"[Translation] Standard batch translation failed: {e}", flush=True)
 
-    # 3. Fill in any missing/failed translations region-by-region (graceful individual fallback)
+        failed_batch_regions = []
+        if batch_mapping:
+            # Validate output for each unmatched region
+            for r in unmatched_regions:
+                rid = r['id']
+                translated = batch_mapping.get(rid)
+                
+                # Run sanity check
+                if translated and is_valid_translation(r['text'], translated):
+                    resolved_translations[rid] = translated
+                else:
+                    failed_batch_regions.append(r)
+        else:
+            # Entire batch failed, all unmatched are failed
+            failed_batch_regions = unmatched_regions
+
+        # 3. Retry failed items only in a smaller batch
+        if failed_batch_regions:
+            print(f"[Translation] Retrying {len(failed_batch_regions)} failed items in batch...", flush=True)
+            retry_mapping = None
+            try:
+                retry_res = translate_batch_llm(failed_batch_regions, TRANSLATION_JSON_SCHEMA)
+                retry_mapping = parse_and_validate_batch(retry_res, failed_batch_regions)
+            except Exception as e:
+                print(f"[Translation] Retry batch translation failed: {e}", flush=True)
+
+            still_failed_regions = []
+            if retry_mapping:
+                for r in failed_batch_regions:
+                    rid = r['id']
+                    translated = retry_mapping.get(rid)
+                    if translated and is_valid_translation(r['text'], translated):
+                        resolved_translations[rid] = translated
+                    else:
+                        still_failed_regions.append(r)
+            else:
+                still_failed_regions = failed_batch_regions
+
+            # 4. Individual fallback for still failed regions (DeepSeek/Nemotron -> Local -> DeepL -> Google Translate)
+            if still_failed_regions:
+                print(f"[Translation] Falling back to individual translation for {len(still_failed_regions)} regions...", flush=True)
+                for r in still_failed_regions:
+                    rid = r['id']
+                    text = r['text']
+                    lang = r['detectedLanguage']
+                    
+                    translated = translate_text(text, source_lang=lang)
+                    if translated and is_valid_translation(text, translated):
+                        resolved_translations[rid] = translated
+                    else:
+                        resolved_translations[rid] = None # failed
+
+    # Format the final callback response
     translations = []
     for r in ocr_regions:
         rid = r['id']
@@ -1032,10 +1380,7 @@ def process_translation(job_data):
         lang = r['detectedLanguage']
         
         translated = resolved_translations.get(rid)
-        if translated is None:
-            print(f"[Translation] Region {rid} was not translated in batch. Falling back to individual translation...", flush=True)
-            translated = translate_text(text, source_lang=lang)
-            
+        
         translations.append({
             'regionId': rid,
             'translatedText': translated,
