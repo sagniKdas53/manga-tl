@@ -1,7 +1,6 @@
 package com.manga.library.service;
 
 import io.minio.*;
-import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +39,7 @@ public class MinioService {
                     PutObjectArgs.builder()
                             .bucket(bucketName)
                             .object(objectPath)
-                            .stream(is, file.getSize(), -1)
+                            .stream(is, file.getSize(), -1L)
                             .contentType(file.getContentType())
                             .build()
             );
@@ -61,7 +60,7 @@ public class MinioService {
         try {
             return minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
-                            .method(Method.GET)
+                            .method(Http.Method.GET)
                             .bucket(bucketName)
                             .object(objectPath)
                             .expiry(2, TimeUnit.HOURS)
