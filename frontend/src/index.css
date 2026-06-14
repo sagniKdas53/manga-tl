@@ -31,6 +31,10 @@
   --bg-input: rgba(255, 255, 255, 0.03);
   --bg-input-focus: rgba(255, 255, 255, 0.06);
   
+  --primary-glow-selected: rgba(237, 37, 83, 0.25);
+  --primary-glow-approved: rgba(237, 37, 83, 0.08);
+  --success-glow: rgba(16, 185, 129, 0.12);
+  
   background-color: var(--bg-base);
   color: var(--text-main);
   font-family: var(--font-sans);
@@ -65,6 +69,10 @@
   --bg-hover-more: rgba(15, 23, 42, 0.07);
   --bg-input: rgba(15, 23, 42, 0.02);
   --bg-input-focus: rgba(15, 23, 42, 0.05);
+  
+  --primary-glow-selected: rgba(124, 58, 237, 0.25);
+  --primary-glow-approved: rgba(124, 58, 237, 0.08);
+  --success-glow: rgba(16, 185, 129, 0.08);
 }
 
 :root.light body {
@@ -1432,8 +1440,8 @@ input:checked + .slider:before {
 .reader-container-nhentai {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 70px);
-  background: #000000;
+  height: 100vh;
+  background: var(--bg-base);
   color: var(--text-main);
   position: relative;
 }
@@ -1444,10 +1452,10 @@ input:checked + .slider:before {
   justify-content: space-between;
   align-items: center;
   padding: 0 24px;
-  background: rgba(20, 20, 20, 0.95);
+  background: var(--bg-nav);
   border-bottom: 1px solid var(--border-color);
   z-index: 100;
-  height: 56px;
+  height: 42px;
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -1462,9 +1470,9 @@ input:checked + .slider:before {
   background: transparent;
   border: 1px solid var(--border-color);
   color: var(--text-main);
-  border-radius: 8px;
-  width: 38px;
-  height: 38px;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1473,7 +1481,7 @@ input:checked + .slider:before {
 }
 
 .reader-nav-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover-more);
   border-color: var(--text-muted);
 }
 
@@ -1490,15 +1498,16 @@ input:checked + .slider:before {
 }
 
 .reader-control-btn {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-hover);
   border: 1px solid var(--border-color);
   color: var(--text-main);
-  font-weight: 700;
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
+  line-height: 1.2;
 }
 
 .reader-control-btn:hover:not(:disabled) {
@@ -1513,8 +1522,8 @@ input:checked + .slider:before {
 }
 
 .reader-page-indicator-nhentai {
-  font-size: 14px;
-  margin: 0 12px;
+  font-size: 13px;
+  margin: 0 8px;
   user-select: none;
   color: var(--text-muted);
   font-family: var(--font-display);
@@ -1522,7 +1531,7 @@ input:checked + .slider:before {
 
 .reader-page-indicator-nhentai strong {
   color: var(--text-main);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .reader-workspace-frame-nhentai {
@@ -1536,7 +1545,7 @@ input:checked + .slider:before {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #000000;
+  background: var(--bg-base);
   position: relative;
   overflow: hidden;
 }
@@ -1544,7 +1553,7 @@ input:checked + .slider:before {
 .reader-sidebar-nhentai {
   width: 320px;
   border-left: 1px solid var(--border-color);
-  background: #161616;
+  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
   padding: 24px;

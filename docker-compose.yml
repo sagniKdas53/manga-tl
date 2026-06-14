@@ -80,7 +80,7 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - BACKEND_CALLBACK_URL=http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
       - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
-      - API_KEY=${API_KEY:-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}
+      - API_KEY=${API_KEY:-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}
       - PREFERRED_MODEL=${PREFERRED_MODEL:-nvidia/riva-translate-4b-instruct-v1.1}
       - LOCAL_LLM_PROVIDER=ollama
       - LOCAL_LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
@@ -104,28 +104,30 @@ services:
     restart: unless-stopped
     volumes:
       - ollama:/root/.ollama
+      - /home/sagnik/lm-studio/lmstudio-community/gemma-3-4b-it-GGUF:/models
+      - ./Modelfile:/Modelfile
     networks:
       - manga-net
 
-  ollama-init:
-    image: curlimages/curl:latest
-    container_name: manga-ollama-init
-    depends_on:
-      - ollama
-    entrypoint:
-      - sh
-      - -c
-      - |
-        until curl -s http://ollama:11434/api/tags >/dev/null; do
-          echo "Waiting for Ollama..."
-          sleep 5
-        done
-
-        curl -X POST http://ollama:11434/api/pull \
-          -H "Content-Type: application/json" \
-          -d '{"name":"${LOCAL_LLM_MODEL:-gemma3:4b}"}'
-    networks:
-      - manga-net
+#  ollama-init:
+#    image: curlimages/curl:latest
+#    container_name: manga-ollama-init
+#    depends_on:
+#      - ollama
+#    entrypoint:
+#      - sh
+#      - -c
+#      - |
+#        until curl -s http://ollama:11434/api/tags >/dev/null; do
+#          echo "Waiting for Ollama..."
+#          sleep 5
+#        done
+#
+#        curl -X POST http://ollama:11434/api/pull \
+#          -H "Content-Type: application/json" \
+#          -d '{"name":"${LOCAL_LLM_MODEL:-gemma3:4b}"}'
+#    networks:
+#      - manga-net
 
 networks:
   manga-net:
