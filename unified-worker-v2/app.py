@@ -523,9 +523,16 @@ def try_cloud_ai(provider, api_key, model, prompt, response_schema=None):
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
+        system_pr = MANGA_TRANSLATION_JSON_SYSTEM_PROMPT if response_schema else MANGA_TRANSLATION_SYSTEM_PROMPT
         payload = {
             "model": model or "nvidia/riva-translate-4b-instruct-v1.1",
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [
+                {"role": "system", "content": system_pr},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.6,
+            "top_p": 0.95,
+            "max_tokens": 4096
         }
         if response_schema:
             payload["response_format"] = {"type": "json_object"}
@@ -562,7 +569,7 @@ def try_cloud_ai(provider, api_key, model, prompt, response_schema=None):
 
     try:
         print(f"[Translation] Sending request to Cloud LLM provider '{provider}' using model '{model}'...", flush=True)
-        res = requests.post(url, json=payload, headers=headers, timeout=30)
+        res = requests.post(url, json=payload, headers=headers, timeout=45 if provider == 'nvidia' else 30)
         if res.status_code == 200:
             res_json = res.json()
             if provider == 'gemini':
@@ -824,7 +831,7 @@ def translate_text(text, source_lang='auto', target_lang='en'):
                 return cleaned
 
     if nvidia_key:
-        translated = try_cloud_ai('nvidia', nvidia_key, 'nvidia/nemotron-3-nano-30b-a3b', prompt)
+        translated = try_cloud_ai('nvidia', nvidia_key, 'nvidia/llama-3.3-nemotron-super-49b-v1', prompt)
         if translated:
             cleaned = clean_translated_text(translated)
             if is_valid_translation(text, cleaned):
@@ -875,7 +882,23 @@ Preserve:
 - relationships
 - ongoing conversation
 
-Return JSON only.
+You MUST return a JSON object containing a "translations" key with an array of objects.
+Each object in the array MUST have exactly two keys: "id" (the original string ID) and "translation" (your English translation).
+Example structure:
+{{
+  "translations": [
+    {{
+      "id": "some-id-1",
+      "translation": "Translated text here"
+    }},
+    {{
+      "id": "some-id-2",
+      "translation": "Another translated text"
+    }}
+  ]
+}}
+
+Return ONLY valid JSON.
 
 Input:
 {bubbles_json}
@@ -900,7 +923,7 @@ Input:
     if nvidia_key:
         print("[Translation] Batch: Trying Nemotron...", flush=True)
         try:
-            res = try_cloud_ai('nvidia', nvidia_key, 'nvidia/nemotron-3-nano-30b-a3b', prompt, response_schema)
+            res = try_cloud_ai('nvidia', nvidia_key, 'nvidia/llama-3.3-nemotron-super-49b-v1', prompt, response_schema)
             if res:
                 return res
         except Exception as e:
