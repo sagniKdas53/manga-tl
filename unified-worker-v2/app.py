@@ -10,19 +10,38 @@ import cv2
 from minio import Minio
 from functools import cmp_to_key
 from manga_ocr import MangaOcr
-from paddleocr import PaddleOCR
 
 # Import PaddleOCR
 paddle_ocr_reader = None
 try:
     print("[Unified Worker] Importing PaddleOCR...", flush=True)
+    from paddleocr import PaddleOCR
     import os
     os.environ["FLAGS_use_mkldnn"] = "0"
     os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
-    
-    # Initialize PaddleOCR with PP-OCRv5
-    print("[Unified Worker] Initializing PaddleOCR (PP-OCRv5, lang='japan')...", flush=True)
-    paddle_ocr_reader = PaddleOCR(ocr_version='PP-OCRv5', use_textline_orientation=True, lang='japan', device='cpu', enable_mkldnn=False, use_doc_unwarping=False, use_doc_orientation_classify=False)
+
+    # TODO: lang and text direction should not be hardcoded here.
+    # The backend should pass the source language (ja/zh/en) and direction
+    # (rtl/ltr) as part of the OCR job payload so the worker can configure
+    # PaddleOCR per-request instead of being locked to Japanese.
+
+    # Initialize PaddleOCR with PP-OCRv5 Mobile (lighter, lower memory)
+    print("[Unified Worker] Initializing PaddleOCR (PP-OCRv5 Mobile, lang='japan')...", flush=True)
+    paddle_ocr_reader = PaddleOCR(
+        lang='japan',
+        device='cpu',
+
+        # lighter models
+        text_detection_model_name='PP-OCRv5_mobile_det',
+        text_recognition_model_name='PP-OCRv5_mobile_rec',
+
+        # save memory
+        use_textline_orientation=False,
+        use_doc_unwarping=False,
+        use_doc_orientation_classify=False,
+
+        enable_mkldnn=False
+    )
 except Exception as e:
     print(f"[Unified Worker] Failed to initialize PaddleOCR: {e}", flush=True)
 
@@ -186,37 +205,80 @@ def bubble_compare(a, b):
 
 def parse_paddle_ocr_results(raw_results):
     results = []
-    if not raw_results:
-        return results
-    
-    first_res = raw_results[0]
-    if not first_res:
+
+    if raw_results is None:
         return results
 
-    if isinstance(first_res, dict):
-        # PaddleX / PP-OCRv5 dictionary format
-        dt_polys = first_res.get('dt_polys', [])
-        rec_texts = first_res.get('rec_texts', [])
-        rec_scores = first_res.get('rec_scores', [])
-        n = min(len(dt_polys), len(rec_texts), len(rec_scores))
-        for i in range(n):
-            bbox = dt_polys[i]
-            if hasattr(bbox, 'tolist'):
-                bbox = bbox.tolist()
-            text = rec_texts[i]
-            confidence = rec_scores[i]
-            results.append((bbox, text, confidence))
-    elif isinstance(first_res, list):
-        # Classic PaddleOCR list format
-        for line in first_res:
-            if isinstance(line, list) and len(line) >= 2:
-                bbox = line[0]
-                if hasattr(bbox, 'tolist'):
+    try:
+        if not isinstance(raw_results, list):
+            raw_results = [raw_results]
+
+        for result in raw_results:
+
+            dt_polys = result.get("dt_polys", [])
+            rec_texts = result.get("rec_texts", [])
+            rec_scores = result.get("rec_scores", [])
+
+            count = min(
+                len(dt_polys),
+                len(rec_texts),
+                len(rec_scores)
+            )
+
+            for i in range(count):
+
+                bbox = dt_polys[i]
+
+                if hasattr(bbox, "tolist"):
                     bbox = bbox.tolist()
-                text = line[1][0]
-                confidence = line[1][1]
-                results.append((bbox, text, confidence))
+
+                results.append(
+                    (
+                        bbox,
+                        rec_texts[i],
+                        float(rec_scores[i])
+                    )
+                )
+
+    except Exception as e:
+        print(
+            f"[OCR] Failed parsing PaddleOCR results: {e}",
+            flush=True
+        )
+
     return results
+
+
+def downscale_for_ocr(img, max_dim=1024):
+    """
+    Reduce memory consumption before OCR.
+    Returns (downscaled_img, scale_factor).
+    scale_factor is the multiplier to convert downscaled coords back to original.
+    """
+
+    if img is None:
+        return img, 1.0
+
+    h, w = img.shape[:2]
+
+    largest = max(h, w)
+
+    if largest <= max_dim:
+        return img, 1.0
+
+    scale = max_dim / largest
+
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+
+    resized = cv2.resize(
+        img,
+        (new_w, new_h),
+        interpolation=cv2.INTER_AREA
+    )
+
+    # inverse scale: multiply OCR coords by this to get original-image coords
+    return resized, 1.0 / scale
 
 
 # --- TRANSLATION AND REDO HELPERS ---
@@ -289,7 +351,7 @@ def try_cloud_ai(provider, api_key, model, prompt):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": model or "nvidia/llama-3.1-nemotron-70b-instruct",
+            "model": model or "nvidia/riva-translate-4b-instruct-v1.1",
             "messages": [{"role": "user", "content": prompt}]
         }
     elif provider == 'anthropic':
@@ -335,15 +397,27 @@ def try_cloud_ai(provider, api_key, model, prompt):
         print(f"[Translation] Cloud LLM Translation failed: {e}", flush=True)
     return None
 
+MANGA_TRANSLATION_SYSTEM_PROMPT = """You are an expert manga translator.
+
+Translate Japanese manga dialogue into natural English.
+
+Rules:
+- Keep names unchanged.
+- Preserve tone and emotion.
+- Do not explain.
+- Do not add notes.
+- Do not add quotation marks.
+- Return only the translated text."""
+
 def try_local_ai(prompt, text):
     enforce_rate_limit()
     local_provider = os.environ.get('LOCAL_LLM_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
     local_endpoint = os.environ.get('LOCAL_LLM_ENDPOINT', os.environ.get('LLM_ENDPOINT', '')).strip()
-    model = os.environ.get('PREFERRED_MODEL', os.environ.get('LLM_MODEL', 'google/gemma-3-4b'))
+    model = os.environ.get('LOCAL_LLM_MODEL', 'gemma3:4b')
 
     if not local_endpoint:
         if local_provider == 'ollama':
-            local_endpoint = "http://host.docker.internal:11434/v1/chat/completions"
+            local_endpoint = "http://ollama:11434/v1/chat/completions"
         else:
             local_endpoint = "http://host.docker.internal:1234/v1/chat/completions"
 
@@ -360,19 +434,19 @@ def try_local_ai(prompt, text):
             if "/api/v1/chat" in endpoint:
                 payload = {
                     "model": model,
-                    "system_prompt": "You are a professional manga translation agent. Translate the input text from Japanese/Chinese to natural English. Respond ONLY with the translation, do not add any explanations, notes, or quotes.",
+                    "system_prompt": MANGA_TRANSLATION_SYSTEM_PROMPT,
                     "input": text
                 }
             else:
                 payload = {
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": "You are a professional manga translation agent. Translate the input text from Japanese/Chinese to natural English. Respond ONLY with the translation, do not add any explanations, notes, or quotes."},
+                        {"role": "system", "content": MANGA_TRANSLATION_SYSTEM_PROMPT},
                         {"role": "user", "content": text}
                     ]
                 }
             
-            res = requests.post(endpoint, json=payload, headers={"Content-Type": "application/json"}, timeout=8)
+            res = requests.post(endpoint, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
             if res.status_code == 200:
                 res_json = res.json()
                 translated = None
@@ -495,16 +569,15 @@ def translate_text(text, source_lang='auto', target_lang='en'):
             print(f"[Translation] Local dictionary matched: '{text}' -> '{v}'", flush=True)
             return v
 
-    # TODO: Look into https://build.nvidia.com/nvidia/riva-translate-1_6b/api for a better model
     provider = os.environ.get('MODEL_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
     api_key = os.environ.get('API_KEY', os.environ.get('LLM_API_KEY', ''))
-    model = os.environ.get('PREFERRED_MODEL', os.environ.get('LLM_MODEL', 'google/gemma-3-4b'))
+    cloud_model = os.environ.get('PREFERRED_MODEL', 'nvidia/riva-translate-4b-instruct-v1.1')
 
     prompt = f"Translate the following text to natural English, maintaining its tone and context. Respond ONLY with the translated text. Do not include any tags, notes, or explanations.\n\nText: {text}"
 
     # 1. Cloud AI model with API key (if key exists)
     if api_key:
-        translated = try_cloud_ai(provider, api_key, model, prompt)
+        translated = try_cloud_ai(provider, api_key, cloud_model, prompt)
         if translated:
             return clean_translated_text(translated)
 
@@ -679,17 +752,49 @@ def process_ocr(job_data):
 
     try:
         results = []
+        ocr_upscale = 1.0  # multiplier to map OCR coords back to original image
         img_decoded = None  # decoded image reused by both PaddleOCR and MangaOCR
+        img_original = None  # full-resolution image for MangaOCR crops
         # Try PaddleOCR (PP-OCRv5) first
         if paddle_ocr_reader is not None:
             try:
-                print("[OCR] Running PaddleOCR (PP-OCRv5)...", flush=True)
+                print("[OCR] Running PaddleOCR (PP-OCRv5 Mobile).", flush=True)
+
+                try:
+                    import psutil
+
+                    rss = psutil.Process().memory_info().rss / 1024 / 1024
+
+                    print(
+                        f"[OCR] Memory before OCR: {rss:.1f} MB",
+                        flush=True
+                    )
+
+                except Exception:
+                    pass
+
                 nparr = np.frombuffer(img_bytes, np.uint8)
-                img_decoded = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                img_original = cv2.imdecode(
+                    nparr,
+                    cv2.IMREAD_COLOR
+                )
+
+                img_decoded, ocr_upscale = downscale_for_ocr(
+                    img_original,
+                    max_dim=1024
+                )
+
+                if ocr_upscale != 1.0:
+                    print(f"[OCR] Downscaled image for OCR (upscale factor: {ocr_upscale:.2f}x)", flush=True)
+
                 del nparr  # free compressed buffer immediately
                 if img_decoded is not None:
-                    raw_results = paddle_ocr_reader.ocr(img_decoded)
+                    print("[OCR] Calling PaddleOCR...", flush=True)
+                    raw_results = paddle_ocr_reader.predict(img_decoded)
+                    print("[OCR] PaddleOCR returned.", flush=True)
                     results = parse_paddle_ocr_results(raw_results)
+                    del raw_results
+                    gc.collect()
                 else:
                     print("[OCR] OpenCV failed to decode image for PaddleOCR", flush=True)
             except Exception as ocr_err:
@@ -713,8 +818,9 @@ def process_ocr(job_data):
         print(f"[OCR] Error during OCR: {e}", flush=True)
         return
 
-    # Reuse the already-decoded image for MangaOCR crops (avoids a second decode)
-    img = img_decoded
+    # Use the full-resolution original image for MangaOCR crops
+    # (img_decoded may be downscaled, so we use img_original instead)
+    img = img_original if img_original is not None else img_decoded
     if img is None and manga_ocr_reader is not None:
         try:
             nparr = np.frombuffer(img_bytes, np.uint8)
@@ -725,8 +831,9 @@ def process_ocr(job_data):
 
     regions = []
     for bbox, text, confidence in results:
-        xs = [pt[0] for pt in bbox]
-        ys = [pt[1] for pt in bbox]
+        # Scale bounding box coords back to original image dimensions
+        xs = [pt[0] * ocr_upscale for pt in bbox]
+        ys = [pt[1] * ocr_upscale for pt in bbox]
         x, y = int(min(xs)), int(min(ys))
         width, height = int(max(xs) - x), int(max(ys) - y)
 
@@ -894,7 +1001,7 @@ def process_translation(job_data):
     if unmatched_regions:
         provider = os.environ.get('MODEL_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
         api_key = os.environ.get('API_KEY', os.environ.get('LLM_API_KEY', ''))
-        model = os.environ.get('PREFERRED_MODEL', os.environ.get('LLM_MODEL', 'google/gemma-3-4b'))
+        model = os.environ.get('PREFERRED_MODEL', 'nvidia/riva-translate-4b-instruct-v1.1')
         
         # Try LLM batch translation
         batch_mapping = None
@@ -1094,7 +1201,8 @@ def perform_redo_ocr(img_crop_bytes, lang):
             img_crop = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             del nparr
             if img_crop is not None:
-                crop_results = paddle_ocr_reader.ocr(img_crop)
+                img_crop, _ = downscale_for_ocr(img_crop, max_dim=1024)
+                crop_results = paddle_ocr_reader.predict(img_crop)
                 del img_crop
                 gc.collect()
                 parsed_crop_results = parse_paddle_ocr_results(crop_results)

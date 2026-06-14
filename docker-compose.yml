@@ -81,29 +81,55 @@ services:
       - BACKEND_CALLBACK_URL=http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
       - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
       - API_KEY=${API_KEY:-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}
-      - PREFERRED_MODEL=${PREFERRED_MODEL:-nvidia/nemotron-3-super-120b-a12b}
+      - PREFERRED_MODEL=${PREFERRED_MODEL:-nvidia/riva-translate-4b-instruct-v1.1}
       - LOCAL_LLM_PROVIDER=ollama
-      - LOCAL_LLM_ENDPOINT=http://manga-ollama-init:11434/v1/chat/completions
+      - LOCAL_LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
       - RATE_LIMIT=${RATE_LIMIT:-10}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}
     depends_on:
       - redis
       - minio
       - backend
+      - ollama
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - manga-net
     restart: unless-stopped
-  # ollama-init:
-  #   image: curlimages/curl:latest
-  #   container_name: manga-ollama-init
-  #   entrypoint: [ "sh", "-c", "until curl -s http://host.docker.internal:11434/api/tags >/dev/null; do echo 'Waiting for Ollama on host...'; sleep 5; done; curl -X POST http://host.docker.internal:11434/api/pull -d '{\"name\": \"gemma3:4b\"}'" ]
-  #   extra_hosts:
-  #     - "host.docker.internal:host-gateway"
-  #   networks:
-  #     - manga-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: manga-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+    networks:
+      - manga-net
+
+  ollama-init:
+    image: curlimages/curl:latest
+    container_name: manga-ollama-init
+    depends_on:
+      - ollama
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until curl -s http://ollama:11434/api/tags >/dev/null; do
+          echo "Waiting for Ollama..."
+          sleep 5
+        done
+
+        curl -X POST http://ollama:11434/api/pull \
+          -H "Content-Type: application/json" \
+          -d '{"name":"${LOCAL_LLM_MODEL:-gemma3:4b}"}'
+    networks:
+      - manga-net
 
 networks:
   manga-net:
     driver: bridge
+
+volumes:
+  ollama:
