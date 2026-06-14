@@ -1,4 +1,5 @@
 import os
+import gc
 import json
 import time
 import re
@@ -9,6 +10,7 @@ import cv2
 from minio import Minio
 from functools import cmp_to_key
 from manga_ocr import MangaOcr
+from paddleocr import PaddleOCR
 
 # Import PaddleOCR
 paddle_ocr_reader = None
@@ -17,7 +19,7 @@ try:
     import os
     os.environ["FLAGS_use_mkldnn"] = "0"
     os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
-    from paddleocr import PaddleOCR
+    
     # Initialize PaddleOCR with PP-OCRv5
     print("[Unified Worker] Initializing PaddleOCR (PP-OCRv5, lang='japan')...", flush=True)
     paddle_ocr_reader = PaddleOCR(ocr_version='PP-OCRv5', use_textline_orientation=True, lang='japan', device='cpu', enable_mkldnn=False, use_doc_unwarping=False, use_doc_orientation_classify=False)
@@ -677,14 +679,16 @@ def process_ocr(job_data):
 
     try:
         results = []
+        img_decoded = None  # decoded image reused by both PaddleOCR and MangaOCR
         # Try PaddleOCR (PP-OCRv5) first
         if paddle_ocr_reader is not None:
             try:
                 print("[OCR] Running PaddleOCR (PP-OCRv5)...", flush=True)
                 nparr = np.frombuffer(img_bytes, np.uint8)
-                img_to_ocr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                if img_to_ocr is not None:
-                    raw_results = paddle_ocr_reader.ocr(img_to_ocr)
+                img_decoded = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                del nparr  # free compressed buffer immediately
+                if img_decoded is not None:
+                    raw_results = paddle_ocr_reader.ocr(img_decoded)
                     results = parse_paddle_ocr_results(raw_results)
                 else:
                     print("[OCR] OpenCV failed to decode image for PaddleOCR", flush=True)
@@ -702,16 +706,20 @@ def process_ocr(job_data):
         if not results:
             print("[OCR] No text regions detected", flush=True)
             results = []
+
+        # Force GC to reclaim any large temporary tensors created during inference
+        gc.collect()
     except Exception as e:
         print(f"[OCR] Error during OCR: {e}", flush=True)
         return
 
-    # Decode image using OpenCV for cropping if MangaOCR is active
-    img = None
-    if manga_ocr_reader is not None:
+    # Reuse the already-decoded image for MangaOCR crops (avoids a second decode)
+    img = img_decoded
+    if img is None and manga_ocr_reader is not None:
         try:
             nparr = np.frombuffer(img_bytes, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            del nparr
         except Exception as e:
             print(f"[OCR] Error decoding image for MangaOCR: {e}", flush=True)
 
@@ -1084,8 +1092,11 @@ def perform_redo_ocr(img_crop_bytes, lang):
             print("[OCR Redo] Trying local PP-OCRv5...", flush=True)
             nparr = np.frombuffer(img_crop_bytes, np.uint8)
             img_crop = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            del nparr
             if img_crop is not None:
                 crop_results = paddle_ocr_reader.ocr(img_crop)
+                del img_crop
+                gc.collect()
                 parsed_crop_results = parse_paddle_ocr_results(crop_results)
                 if parsed_crop_results:
                     text = " ".join([line[1] for line in parsed_crop_results])
