@@ -121,6 +121,14 @@ public class SeriesController {
             dto.setSeriesId(c.getSeries().getId());
             dto.setChapterNumber(c.getChapterNumber());
             dto.setTitle(c.getTitle());
+            try {
+                List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
+                if (pages != null && !pages.isEmpty()) {
+                    dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
+                }
+            } catch (Exception e) {
+                // Ignore fallback exceptions
+            }
             return dto;
         }).collect(Collectors.toList());
         return ResponseEntity.ok(list);
@@ -135,6 +143,14 @@ public class SeriesController {
                     dto.setSeriesId(c.getSeries().getId());
                     dto.setChapterNumber(c.getChapterNumber());
                     dto.setTitle(c.getTitle());
+                    try {
+                        List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
+                        if (pages != null && !pages.isEmpty()) {
+                            dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
+                        }
+                    } catch (Exception e) {
+                        // Ignore fallback exceptions
+                    }
                     return ResponseEntity.ok(dto);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -172,6 +188,14 @@ public class SeriesController {
                     c = chapterRepository.save(c);
                     dto.setId(c.getId());
                     dto.setSeriesId(c.getSeries().getId());
+                    try {
+                        List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
+                        if (pages != null && !pages.isEmpty()) {
+                            dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
+                        }
+                    } catch (Exception e) {
+                        // Ignore fallback exceptions
+                    }
                     return ResponseEntity.ok(dto);
                 })
                 .orElse(ResponseEntity.notFound().build());

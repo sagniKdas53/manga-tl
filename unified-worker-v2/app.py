@@ -14,10 +14,13 @@ from manga_ocr import MangaOcr
 paddle_ocr_reader = None
 try:
     print("[Unified Worker] Importing PaddleOCR...", flush=True)
+    import os
+    os.environ["FLAGS_use_mkldnn"] = "0"
+    os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
     from paddleocr import PaddleOCR
     # Initialize PaddleOCR with PP-OCRv5
     print("[Unified Worker] Initializing PaddleOCR (PP-OCRv5, lang='japan')...", flush=True)
-    paddle_ocr_reader = PaddleOCR(ocr_version='PP-OCRv5', use_textline_orientation=True, lang='japan', device='cpu')
+    paddle_ocr_reader = PaddleOCR(ocr_version='PP-OCRv5', use_textline_orientation=True, lang='japan', device='cpu', enable_mkldnn=False)
 except Exception as e:
     print(f"[Unified Worker] Failed to initialize PaddleOCR: {e}", flush=True)
 
@@ -646,7 +649,7 @@ def process_ocr(job_data):
                 nparr = np.frombuffer(img_bytes, np.uint8)
                 img_to_ocr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 if img_to_ocr is not None:
-                    raw_results = paddle_ocr_reader.ocr(img_to_ocr, cls=True)
+                    raw_results = paddle_ocr_reader.ocr(img_to_ocr)
                     if raw_results and raw_results[0]:
                         for line in raw_results[0]:
                             bbox = line[0]
@@ -1052,7 +1055,7 @@ def perform_redo_ocr(img_crop_bytes, lang):
             nparr = np.frombuffer(img_crop_bytes, np.uint8)
             img_crop = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if img_crop is not None:
-                crop_results = paddle_ocr_reader.ocr(img_crop, cls=True)
+                crop_results = paddle_ocr_reader.ocr(img_crop)
                 if crop_results and crop_results[0]:
                     text = " ".join([line[1][0] for line in crop_results[0]])
                     confidence = float(np.mean([line[1][1] for line in crop_results[0]]))
