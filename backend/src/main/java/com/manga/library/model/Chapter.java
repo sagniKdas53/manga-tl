@@ -7,18 +7,18 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "chapters", uniqueConstraints = {@UniqueConstraint(columnNames = {"series_id", "chapter_number"})})
-@Data
+@Getter
+@Setter
+@ToString(exclude = {"series"})
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Chapter {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @EqualsAndHashCode.Include
     private UUID id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "volume_id")
-    private Volume volume;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "series_id", nullable = false)

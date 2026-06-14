@@ -15,7 +15,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -67,7 +69,25 @@ public class SeriesController {
         return dto;
     }
 
+    private SeriesDto toDtoWithDefaultCovers(Series s, Map<UUID, UUID> defaultCovers) {
+        SeriesDto dto = new SeriesDto();
+        dto.setId(s.getId());
+        dto.setTitle(s.getTitle());
+        dto.setOriginalLanguage(s.getOriginalLanguage());
+        dto.setReadingDirection(s.getReadingDirection());
+        if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
+            dto.setCoverImageUrl(s.getCoverImageUrl());
+        } else {
+            UUID imageId = defaultCovers.get(s.getId());
+            if (imageId != null) {
+                dto.setCoverImageUrl(getImageUrl(imageId));
+            }
+        }
+        return dto;
+    }
+
     @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
     public ResponseEntity<SeriesDto> createSeries(@RequestBody SeriesDto dto, @AuthenticationPrincipal User user) {
         Series series = Series.builder()
                 .title(dto.getTitle())
@@ -83,8 +103,23 @@ public class SeriesController {
 
     @GetMapping
     public ResponseEntity<List<SeriesDto>> listSeries() {
-        List<SeriesDto> list = seriesRepository.findAll().stream()
-                .map(this::toDto)
+        List<Series> seriesList = seriesRepository.findAll();
+        
+        Map<UUID, UUID> defaultCovers = new HashMap<>();
+        boolean needsDefaultCovers = seriesList.stream().anyMatch(s -> s.getCoverImageUrl() == null || s.getCoverImageUrl().trim().isEmpty());
+        if (needsDefaultCovers) {
+            try {
+                List<Object[]> covers = pageRepository.findDefaultCoverImageIds();
+                for (Object[] row : covers) {
+                    defaultCovers.put((UUID) row[0], (UUID) row[1]);
+                }
+            } catch (Exception e) {
+                // Ignore query exceptions
+            }
+        }
+
+        List<SeriesDto> list = seriesList.stream()
+                .map(s -> toDtoWithDefaultCovers(s, defaultCovers))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(list);
     }
@@ -97,6 +132,7 @@ public class SeriesController {
     }
 
     @PostMapping("/{seriesId}/chapters")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
     public ResponseEntity<ChapterDto> createChapter(@PathVariable UUID seriesId, @RequestBody ChapterDto dto) {
         Series series = seriesRepository.findById(seriesId)
                 .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
@@ -115,19 +151,27 @@ public class SeriesController {
 
     @GetMapping("/{seriesId}/chapters")
     public ResponseEntity<List<ChapterDto>> listChapters(@PathVariable UUID seriesId) {
-        List<ChapterDto> list = chapterRepository.findBySeriesId(seriesId).stream().map(c -> {
+        List<Chapter> chapters = chapterRepository.findBySeriesId(seriesId);
+
+        Map<UUID, UUID> chapterCovers = new HashMap<>();
+        try {
+            List<Object[]> covers = pageRepository.findFirstPageImageIdsBySeriesId(seriesId);
+            for (Object[] row : covers) {
+                chapterCovers.put((UUID) row[0], (UUID) row[1]);
+            }
+        } catch (Exception e) {
+            // Ignore query exceptions
+        }
+
+        List<ChapterDto> list = chapters.stream().map(c -> {
             ChapterDto dto = new ChapterDto();
             dto.setId(c.getId());
             dto.setSeriesId(c.getSeries().getId());
             dto.setChapterNumber(c.getChapterNumber());
             dto.setTitle(c.getTitle());
-            try {
-                List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
-                if (pages != null && !pages.isEmpty()) {
-                    dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
-                }
-            } catch (Exception e) {
-                // Ignore fallback exceptions
+            UUID imageId = chapterCovers.get(c.getId());
+            if (imageId != null) {
+                dto.setCoverImageUrl(getImageUrl(imageId));
             }
             return dto;
         }).collect(Collectors.toList());
@@ -157,6 +201,7 @@ public class SeriesController {
     }
 
     @PutMapping("/{seriesId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
     public ResponseEntity<SeriesDto> updateSeries(@PathVariable UUID seriesId, @RequestBody SeriesDto dto) {
         return seriesRepository.findById(seriesId)
                 .map(s -> {
@@ -171,6 +216,7 @@ public class SeriesController {
     }
 
     @DeleteMapping("/{seriesId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteSeries(@PathVariable UUID seriesId) {
         if (seriesRepository.existsById(seriesId)) {
             seriesRepository.deleteById(seriesId);
@@ -180,6 +226,7 @@ public class SeriesController {
     }
 
     @PutMapping("/chapters/{chapterId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
     public ResponseEntity<ChapterDto> updateChapter(@PathVariable UUID chapterId, @RequestBody ChapterDto dto) {
         return chapterRepository.findById(chapterId)
                 .map(c -> {
@@ -202,6 +249,7 @@ public class SeriesController {
     }
 
     @DeleteMapping("/chapters/{chapterId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteChapter(@PathVariable UUID chapterId) {
         if (chapterRepository.existsById(chapterId)) {
             chapterRepository.deleteById(chapterId);

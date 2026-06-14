@@ -7,13 +7,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "layer_elements")
-@Data
+@Getter
+@Setter
+@ToString(exclude = {"layer", "region"})
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class LayerElement {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @EqualsAndHashCode.Include
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)

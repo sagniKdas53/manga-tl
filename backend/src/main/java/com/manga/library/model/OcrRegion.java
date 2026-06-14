@@ -6,13 +6,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "ocr_regions")
-@Data
+@Getter
+@Setter
+@ToString(exclude = {"image", "panel"})
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class OcrRegion {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @EqualsAndHashCode.Include
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
