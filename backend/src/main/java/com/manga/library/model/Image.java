@@ -7,13 +7,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "images")
-@Data
+@Getter
+@Setter
+@ToString(exclude = {"createdBy"})
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Image {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @EqualsAndHashCode.Include
     private UUID id;
 
     @Column(nullable = false)

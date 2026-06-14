@@ -80,6 +80,8 @@ MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', 'localhost:9000')
 MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', 'minioadmin')
 MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', 'minioadmin')
 CALLBACK_URL = os.environ.get('BACKEND_CALLBACK_URL', 'http://localhost:8080/api/internal/jobs/callback')
+INTERNAL_API_TOKEN = os.environ.get('INTERNAL_API_TOKEN', '')
+BACKEND_HEADERS = {"X-Internal-Token": INTERNAL_API_TOKEN} if INTERNAL_API_TOKEN else {}
 
 # Clients
 redis_client = redis.Redis(
@@ -1019,7 +1021,7 @@ def process_panel_detection(job_data):
 
     try:
         backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
-        res = requests.get(backend_url)
+        res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
             print(f"[Panel Detection] Failed to get image info: {res.status_code}", flush=True)
             return
@@ -1044,7 +1046,7 @@ def process_panel_detection(job_data):
         'panels': panels
     }
     try:
-        res = requests.post(f"{CALLBACK_URL}/panel", json=callback_payload)
+        res = requests.post(f"{CALLBACK_URL}/panel", json=callback_payload, headers=BACKEND_HEADERS)
         print(f"[Panel Detection] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[Panel Detection] Failed to post callback to backend: {e}", flush=True)
@@ -1056,7 +1058,7 @@ def process_ocr(job_data):
 
     try:
         backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
-        res = requests.get(backend_url)
+        res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
             print(f"[OCR] Failed to get image info: {res.status_code}", flush=True)
             return
@@ -1239,7 +1241,7 @@ def process_ocr(job_data):
         'regions': ordered_regions
     }
     try:
-        res = requests.post(f"{CALLBACK_URL}/ocr", json=callback_payload)
+        res = requests.post(f"{CALLBACK_URL}/ocr", json=callback_payload, headers=BACKEND_HEADERS)
         print(f"[OCR] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[OCR] Failed to post callback to backend: {e}", flush=True)
@@ -1256,7 +1258,7 @@ def process_stub(job_data, job_type):
         'imageId': image_id
     }
     try:
-        res = requests.post(f"{CALLBACK_URL}/{job_type}", json=callback_payload)
+        res = requests.post(f"{CALLBACK_URL}/{job_type}", json=callback_payload, headers=BACKEND_HEADERS)
         print(f"[Stub - {job_type}] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[Stub - {job_type}] Failed to post callback: {e}", flush=True)
@@ -1268,7 +1270,7 @@ def process_translation(job_data):
 
     try:
         backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
-        res = requests.get(backend_url)
+        res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
             print(f"[Translation] Failed to get image info: {res.status_code}", flush=True)
             return
@@ -1410,7 +1412,7 @@ def process_translation(job_data):
         'translations': translations
     }
     try:
-        res = requests.post(f"{CALLBACK_URL}/translation", json=callback_payload)
+        res = requests.post(f"{CALLBACK_URL}/translation", json=callback_payload, headers=BACKEND_HEADERS)
         print(f"[Translation] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[Translation] Failed to post callback to backend: {e}", flush=True)
@@ -1615,7 +1617,7 @@ def process_region_redo(job_data):
 
     try:
         backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
-        res = requests.get(backend_url)
+        res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
             print(f"[Region Redo] Failed to get image info: {res.status_code}", flush=True)
             return
@@ -1684,7 +1686,7 @@ def process_region_redo(job_data):
 
     try:
         callback_url = CALLBACK_URL.replace('/jobs/callback', f'/ocr-regions/{region_id}/callback')
-        res = requests.post(callback_url, json=callback_payload)
+        res = requests.post(callback_url, json=callback_payload, headers=BACKEND_HEADERS)
         print(f"[Region Redo] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[Region Redo] Failed to post callback: {e}", flush=True)

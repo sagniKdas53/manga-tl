@@ -6,13 +6,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "conversations")
-@Data
+@Getter
+@Setter
+@ToString(exclude = {"image"})
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Conversation {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @EqualsAndHashCode.Include
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)

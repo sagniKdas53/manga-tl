@@ -7,7 +7,10 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "conversation_regions")
-@Data
+@Getter
+@Setter
+@ToString
+@EqualsAndHashCode
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -25,7 +28,10 @@ public class ConversationRegion {
     @Column(nullable = false)
     private Integer position;
 
-    @Data
+    @Getter
+    @Setter
+    @ToString
+    @EqualsAndHashCode
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ConversationRegionId implements Serializable {

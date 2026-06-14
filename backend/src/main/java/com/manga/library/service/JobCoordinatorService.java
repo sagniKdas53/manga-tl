@@ -81,6 +81,7 @@ public class JobCoordinatorService {
         panelRepository.deleteByImageId(imageId);
 
         // Save new panels
+        List<Panel> panelsToSave = new ArrayList<>();
         for (PanelCallbackDto.PanelData pData : dto.getPanels()) {
             Panel panel = Panel.builder()
                     .image(image)
@@ -92,8 +93,9 @@ public class JobCoordinatorService {
                     .gridCol(pData.getGridCol())
                     .readingOrder(pData.getReadingOrder())
                     .build();
-            panelRepository.save(panel);
+            panelsToSave.add(panel);
         }
+        panelRepository.saveAll(panelsToSave);
 
         // Trigger OCR
         enqueueJob("ocr", imageId);
@@ -115,7 +117,7 @@ public class JobCoordinatorService {
         List<Panel> panels = panelRepository.findByImageId(imageId);
 
         // Save OCR Regions
-        List<OcrRegion> savedRegions = new ArrayList<>();
+        List<OcrRegion> regionsToSave = new ArrayList<>();
         for (OcrCallbackDto.OcrRegionData rData : dto.getRegions()) {
             // Find which panel this OCR region resides in based on overlap
             Panel matchingPanel = findMatchingPanel(rData.getX(), rData.getY(), rData.getWidth(), rData.getHeight(), panels);
@@ -134,8 +136,9 @@ public class JobCoordinatorService {
                     .panelReadingOrder(matchingPanel != null ? matchingPanel.getReadingOrder() : 0)
                     .bubbleReadingOrder(rData.getBubbleReadingOrder())
                     .build();
-            savedRegions.add(ocrRegionRepository.save(region));
+            regionsToSave.add(region);
         }
+        List<OcrRegion> savedRegions = ocrRegionRepository.saveAll(regionsToSave);
 
         // Create default OCR overlay layer
         Layer ocrLayer = Layer.builder()
@@ -146,6 +149,7 @@ public class JobCoordinatorService {
                 .build();
         layerRepository.save(ocrLayer);
 
+        List<LayerElement> elementsToSave = new ArrayList<>();
         for (OcrRegion region : savedRegions) {
             LayerElement element = LayerElement.builder()
                     .layer(ocrLayer)
@@ -157,8 +161,9 @@ public class JobCoordinatorService {
                     .maxHeight(region.getBboxH())
                     .visible(true)
                     .build();
-            layerElementRepository.save(element);
+            elementsToSave.add(element);
         }
+        layerElementRepository.saveAll(elementsToSave);
 
         // Trigger Layout analysis
         enqueueJob("layout", imageId);

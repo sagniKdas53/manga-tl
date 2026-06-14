@@ -1,7 +1,12 @@
 package com.manga.library;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manga.library.config.JwtUtils;
 import com.manga.library.dto.ChapterDto;
+import com.manga.library.model.Series;
+import com.manga.library.model.User;
+import com.manga.library.repository.SeriesRepository;
+import com.manga.library.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -10,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -21,18 +27,46 @@ public class JwtTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private JwtUtils jwtUtils;
+
+    @Autowired
+    private SeriesRepository seriesRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
     @Test
     public void testPostChapter() throws Exception {
+        // Save mock admin user to avoid 403 Forbidden on role check
+        User user = User.builder()
+                .email("admin@manga.local")
+                .passwordHash("mock_password_hash")
+                .displayName("Admin User")
+                .role("admin")
+                .build();
+        userRepository.save(user);
+
+        // Save test series programmatically
+        Series series = Series.builder()
+                .title("Test Series")
+                .originalLanguage("ja")
+                .readingDirection("rtl")
+                .build();
+        series = seriesRepository.save(series);
+
+        // Generate dynamically signed JWT token
+        String token = "Bearer " + jwtUtils.generateToken("admin@manga.local");
+
         ChapterDto dto = new ChapterDto();
         dto.setChapterNumber(1);
         dto.setTitle("One");
 
-        String token = "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJscjh0aHhoNXVAbW96bWFpbC5jb20iLCJpYXQiOjE3ODEyMDUyNTQsImV4cCI6MTc4MTI5MTY1NH0.Oql6msIgRsUkkdOaQ93hXB2d9bH6ptQxQIs-j3pBgGs";
-
-        mockMvc.perform(post("/api/series/0672051f-9264-4d57-878b-d208e59a8326/chapters")
+        mockMvc.perform(post("/api/series/" + series.getId() + "/chapters")
                 .header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(dto)))
-                .andDo(print());
+                .andDo(print())
+                .andExpect(status().isOk());
     }
 }

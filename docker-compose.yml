@@ -59,6 +59,7 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - JWT_SECRET=5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
       - CONTEXT_PATH=${CONTEXT_PATH:-/tlhub}
+      - INTERNAL_API_TOKEN=manga-library-internal-token-12345
     depends_on:
       - db
       - redis
@@ -87,6 +88,7 @@ services:
       - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
       - RATE_LIMIT=${RATE_LIMIT:-10}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}
+      - INTERNAL_API_TOKEN=manga-library-internal-token-12345
     depends_on:
       - redis
       - minio

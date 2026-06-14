@@ -20,17 +20,37 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
 
+    @GetMapping("/setup-required")
+    public ResponseEntity<?> isSetupRequired() {
+        boolean required = userRepository.count() == 0;
+        return ResponseEntity.ok(java.util.Map.of("setupRequired", required));
+    }
+
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(@jakarta.validation.Valid @RequestBody RegisterRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             return ResponseEntity.badRequest().body("Email already exists");
+        }
+
+        long userCount = userRepository.count();
+        String assignedRole;
+        if (userCount == 0) {
+            assignedRole = "admin";
+        } else {
+            if (request.getRole() == null || "admin".equalsIgnoreCase(request.getRole())) {
+                return ResponseEntity.badRequest().body("Cannot register as Admin. Admin is created on first registration.");
+            }
+            assignedRole = request.getRole().toLowerCase();
+            if (!assignedRole.equals("translator") && !assignedRole.equals("viewer")) {
+                assignedRole = "viewer";
+            }
         }
 
         User user = User.builder()
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .displayName(request.getDisplayName())
-                .role("admin") // Register first user as admin by default for easy local test
+                .role(assignedRole)
                 .build();
 
         userRepository.save(user);
@@ -39,7 +59,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@jakarta.validation.Valid @RequestBody LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElse(null);
 

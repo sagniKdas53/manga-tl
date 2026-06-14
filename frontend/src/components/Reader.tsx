@@ -82,11 +82,13 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Reset pan/zoom on page changes
   useEffect(() => {
-    setZoom(1.0);
-    setPan({ x: 0, y: 0 });
-    setSelectedRegion(null);
-    setActiveRegion(null);
-    setPopoverOpen(false);
+    Promise.resolve().then(() => {
+      setZoom(1.0);
+      setPan({ x: 0, y: 0 });
+      setSelectedRegion(null);
+      setActiveRegion(null);
+      setPopoverOpen(false);
+    });
   }, [pageNumber]);
 
   // --- STABLE NAVIGATOR CALLBACK ---

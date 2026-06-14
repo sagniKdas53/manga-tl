@@ -13,7 +13,33 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [role, setRole] = useState('translator');
+  const [isSetupRequired, setIsSetupRequired] = useState(false);
   const [authError, setAuthError] = useState('');
+
+  React.useEffect(() => {
+    if (!isLogin) {
+      safeFetch('/api/auth/setup-required')
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('Failed to check setup');
+        })
+        .then(data => {
+          if (data.setupRequired) {
+            setIsSetupRequired(true);
+            setRole('admin');
+          } else {
+            setIsSetupRequired(false);
+            setRole('translator');
+          }
+        })
+        .catch(err => {
+          console.error('Error checking setup:', err);
+          setIsSetupRequired(false);
+          setRole('translator');
+        });
+    }
+  }, [isLogin]);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,7 +47,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
     const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
     const payload = isLogin 
       ? { email, password } 
-      : { email, password, displayName };
+      : { email, password, displayName, role };
 
     try {
       const res = await safeFetch(endpoint, {
@@ -57,17 +83,37 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         </div>
         <form onSubmit={handleAuthSubmit}>
           {!isLogin && (
-            <div className="form-group">
-              <label className="form-label">Display Name</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={displayName} 
-                onChange={e => setDisplayName(e.target.value)} 
-                placeholder="John Doe" 
-                required 
-              />
-            </div>
+            <>
+              <div className="form-group">
+                <label className="form-label">Display Name</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={displayName} 
+                  onChange={e => setDisplayName(e.target.value)} 
+                  placeholder="John Doe" 
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Account Role</label>
+                {isSetupRequired ? (
+                  <div className="form-info-box" style={{ padding: '10px 12px', background: 'rgba(235,130,20,0.1)', border: '1px solid rgba(235,130,20,0.3)', borderRadius: '6px', fontSize: '13px', color: '#ffb020' }}>
+                    <strong>Administrator</strong> (First user registration forces Admin privileges)
+                  </div>
+                ) : (
+                  <select 
+                    className="form-input" 
+                    value={role} 
+                    onChange={e => setRole(e.target.value)}
+                    style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--border)' }}
+                  >
+                    <option value="translator" style={{ background: '#222', color: '#fff' }}>Translator</option>
+                    <option value="viewer" style={{ background: '#222', color: '#fff' }}>Viewer</option>
+                  </select>
+                )}
+              </div>
+            </>
           )}
           <div className="form-group">
             <label className="form-label">Email Address</label>

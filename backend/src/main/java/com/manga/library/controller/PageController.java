@@ -31,6 +31,7 @@ public class PageController {
     private final LayerElementRepository layerElementRepository;
     private final MinioService minioService;
     private final JobCoordinatorService jobCoordinatorService;
+    private final com.manga.library.service.PageService pageService;
 
     @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
     private String contextPath;
@@ -44,7 +45,7 @@ public class PageController {
     }
 
     @PostMapping("/images")
-    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
     public ResponseEntity<UploadResponse> uploadPage(
             @RequestParam("chapterId") UUID chapterId,
             @RequestParam("pageNumber") Integer pageNumber,
@@ -62,29 +63,16 @@ public class PageController {
             String uuid = UUID.randomUUID().toString();
             String storagePath = "originals/" + uuid + fileExtension;
 
-            // Upload file to MinIO
+            // Upload file to MinIO (blocking network call, now safely outside DB transaction)
             minioService.uploadFile(storagePath, file);
 
-            // Create Image
-            Image image = Image.builder()
-                    .filename(file.getOriginalFilename())
-                    .storagePath(storagePath)
-                    .createdBy(user)
-                    .build();
-            image = imageRepository.save(image);
-
-            // Create Page
-            Page page = Page.builder()
-                    .chapter(chapter)
-                    .pageNumber(pageNumber)
-                    .image(image)
-                    .build();
-            pageRepository.save(page);
+            // Call transactional service to save image and page records
+            Page page = pageService.createPageAndImage(chapter, file.getOriginalFilename(), storagePath, pageNumber, user);
 
             // Trigger pipeline
-            jobCoordinatorService.startPipeline(image.getId());
+            jobCoordinatorService.startPipeline(page.getImage().getId());
 
-            return ResponseEntity.ok(new UploadResponse(page.getId(), image.getId(), "processing"));
+            return ResponseEntity.ok(new UploadResponse(page.getId(), page.getImage().getId(), "processing"));
         } catch (Exception e) {
             log.error("Failed to upload page", e);
             return ResponseEntity.internalServerError().build();
@@ -140,12 +128,10 @@ public class PageController {
     }
 
     @GetMapping("/images/{imageId}/file")
-    public ResponseEntity<org.springframework.core.io.InputStreamResource> getImageFile(@PathVariable UUID imageId) {
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> getImageFile(@PathVariable UUID imageId) {
         try {
             Image image = imageRepository.findById(imageId)
                     .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
-            
-            java.io.InputStream is = minioService.getFileStream(image.getStoragePath());
             
             String contentType = "image/png";
             String filename = image.getFilename().toLowerCase();
@@ -157,9 +143,18 @@ public class PageController {
                 contentType = "image/gif";
             }
             
+            String finalContentType = contentType;
+            org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody = outputStream -> {
+                try (java.io.InputStream is = minioService.getFileStream(image.getStoragePath())) {
+                    is.transferTo(outputStream);
+                } catch (Exception e) {
+                    log.error("Error streaming image file", e);
+                }
+            };
+            
             return ResponseEntity.ok()
-                    .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
-                    .body(new org.springframework.core.io.InputStreamResource(is));
+                    .contentType(org.springframework.http.MediaType.parseMediaType(finalContentType))
+                    .body(responseBody);
         } catch (Exception e) {
             log.error("Failed to retrieve image file for {}", imageId, e);
             return ResponseEntity.notFound().build();
@@ -169,13 +164,16 @@ public class PageController {
     @GetMapping("/images/{imageId}/layers")
     public ResponseEntity<List<Map<String, Object>>> getImageLayers(@PathVariable UUID imageId) {
         List<Layer> layers = layerRepository.findByImageId(imageId);
-        List<Map<String, Object>> response = new ArrayList<>();
+        List<LayerElement> allElements = layerElementRepository.findByLayerImageId(imageId);
+        
+        Map<UUID, List<LayerElement>> elementsByLayer = allElements.stream()
+                .collect(Collectors.groupingBy(le -> le.getLayer().getId()));
 
+        List<Map<String, Object>> response = new ArrayList<>();
         for (Layer l : layers) {
-            List<LayerElement> elements = layerElementRepository.findByLayerId(l.getId());
             Map<String, Object> map = new HashMap<>();
             map.put("layer", l);
-            map.put("elements", elements);
+            map.put("elements", elementsByLayer.getOrDefault(l.getId(), Collections.emptyList()));
             response.add(map);
         }
 
@@ -183,35 +181,15 @@ public class PageController {
     }
 
     @DeleteMapping("/pages/{pageId}")
-    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> deletePage(@PathVariable UUID pageId) {
         log.info("Received request to delete page: {}", pageId);
         try {
-            Page page = pageRepository.findById(pageId)
-                    .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+            // Delete from database within transaction
+            String storagePath = pageService.deletePageDb(pageId);
             
-            Image image = page.getImage();
-            UUID chapterId = page.getChapter().getId();
-
-            // 1. Delete page first
-            pageRepository.delete(page);
-            
-            // 2. Delete image (triggers cascade delete in Postgres to panels, OCR, layers, etc.)
-            imageRepository.delete(image);
-            
-            // 3. Flush deletions to DB
-            pageRepository.flush();
-
-            // 4. Delete original image file from MinIO
-            minioService.deleteFile(image.getStoragePath());
-
-            // 5. Re-sequence remaining pages in chapter to maintain sequence 1..N
-            List<Page> remainingPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
-            for (int i = 0; i < remainingPages.size(); i++) {
-                remainingPages.get(i).setPageNumber(i + 1);
-                pageRepository.save(remainingPages.get(i));
-            }
-            pageRepository.flush();
+            // Delete from MinIO outside transaction (non-blocking)
+            minioService.deleteFile(storagePath);
 
             return ResponseEntity.ok().build();
         } catch (Exception e) {
@@ -222,6 +200,7 @@ public class PageController {
 
     @PutMapping("/chapters/{chapterId}/pages/reorder")
     @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
     public ResponseEntity<?> reorderPages(@PathVariable UUID chapterId, @RequestBody List<UUID> pageIds) {
         log.info("Received request to reorder pages for chapter {}: {}", chapterId, pageIds);
         try {
@@ -257,6 +236,7 @@ public class PageController {
 
     @PutMapping("/ocr-regions/{id}")
     @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
     public ResponseEntity<?> updateOcrRegion(
             @PathVariable UUID id,
             @RequestBody Map<String, Object> payload) {
@@ -283,6 +263,7 @@ public class PageController {
     }
 
     @PostMapping("/ocr-regions/{id}/redo")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
     public ResponseEntity<?> redoOcrRegion(
             @PathVariable UUID id,
             @RequestParam("type") String type) {

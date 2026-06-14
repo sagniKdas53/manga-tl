@@ -6,13 +6,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "pages", uniqueConstraints = {@UniqueConstraint(columnNames = {"chapter_id", "page_number"})})
-@Data
+@Getter
+@Setter
+@ToString(exclude = {"chapter", "image"})
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Page {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @EqualsAndHashCode.Include
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)

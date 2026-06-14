@@ -34,7 +34,7 @@ function AppContent() {
     if (storedUser) {
       try {
         return JSON.parse(storedUser);
-      } catch (e) {
+      } catch {
         localStorage.removeItem('manga_user');
       }
     }
@@ -132,7 +132,7 @@ function AppContent() {
       })
       .catch(err => console.error("Error fetching chapters:", err));
     }
-  }, [seriesId, user, selectedSeries?.id]);
+  }, [seriesId, user, selectedSeries]);
 
   // Load chapter details and pages when chapterId is active in route
   useEffect(() => {
@@ -183,7 +183,7 @@ function AppContent() {
       })
       .catch(err => console.error("Error fetching pages:", err));
     }
-  }, [chapterId, user, selectedChapter?.id]);
+  }, [chapterId, user, selectedChapter]);
 
   // Handle Logout
   const handleLogout = () => {
