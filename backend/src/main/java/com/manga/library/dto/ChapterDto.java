@@ -9,4 +9,5 @@ public class ChapterDto {
     private UUID seriesId;
     private Integer chapterNumber;
     private String title;
+    private String coverImageUrl;
 }

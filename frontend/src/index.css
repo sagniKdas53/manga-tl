@@ -1155,3 +1155,413 @@ input:checked + .slider:before {
   border-color: #ef4444;
 }
 
+/* nHentai Redesign Layout Styles */
+
+.series-details-container {
+  display: flex;
+  gap: 40px;
+  margin-bottom: 40px;
+  background: var(--bg-surface);
+  padding: 32px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .series-details-container {
+    flex-direction: column;
+    gap: 24px;
+    padding: 20px;
+  }
+}
+
+.series-cover-column {
+  flex-shrink: 0;
+  width: 250px;
+  margin: 0 auto;
+}
+
+.series-large-cover {
+  width: 100%;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border-color);
+}
+
+.series-large-cover-placeholder {
+  width: 100%;
+  aspect-ratio: 2/3;
+  background: linear-gradient(135deg, #2a2b36 0%, #1a1b24 100%);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.series-info-column {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.series-title {
+  margin: 0 0 16px;
+  font-size: 32px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--text-main);
+  line-height: 1.25;
+}
+
+.nhentai-meta-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0 24px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.meta-label {
+  color: var(--text-muted);
+  width: 140px;
+  font-weight: 500;
+}
+
+.meta-value {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.meta-badge-nhentai {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--primary-hover);
+  letter-spacing: 0.5px;
+}
+
+.series-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.btn-nhentai {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  outline: none;
+}
+
+.btn-nhentai-primary {
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+.btn-nhentai-primary:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 4px 20px var(--primary-glow);
+  transform: translateY(-1px);
+}
+
+.btn-nhentai-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+.btn-nhentai-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-nhentai-danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.btn-nhentai-danger:hover {
+  background: #ef4444;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.chapters-section-header {
+  margin: 40px 0 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+}
+
+.chapters-section-header h2 {
+  font-family: var(--font-display);
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.chapters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 24px;
+}
+
+.chapter-card-nhentai {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease, box-shadow 0.25s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.chapter-card-nhentai:hover {
+  transform: translateY(-6px);
+  border-color: var(--primary);
+  box-shadow: 0 10px 25px var(--primary-glow);
+}
+
+.chapter-cover-container-nhentai {
+  position: relative;
+  aspect-ratio: 3/4;
+  overflow: hidden;
+  background: #000;
+}
+
+.chapter-cover-img-nhentai {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chapter-card-nhentai:hover .chapter-cover-img-nhentai {
+  transform: scale(1.06);
+}
+
+.chapter-cover-placeholder-nhentai {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1f1f2e 0%, #0d0d14 100%);
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+}
+
+.chapter-actions-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 5;
+}
+
+.chapter-card-nhentai:hover .chapter-actions-overlay {
+  opacity: 1;
+}
+
+.chapter-card-info-nhentai {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(31, 31, 31, 0.95);
+  border-top: 1px solid var(--border-color);
+  flex-grow: 1;
+}
+
+.chapter-card-number-nhentai {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary-hover);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.chapter-card-title-nhentai {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* nHentai Reader Layout Styles */
+
+.reader-container-nhentai {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 70px);
+  background: #000000;
+  color: var(--text-main);
+  position: relative;
+}
+
+.reader-navbar-nhentai,
+.reader-footer-nhentai {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  background: rgba(20, 20, 20, 0.95);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 100;
+  height: 56px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.reader-footer-nhentai {
+  border-bottom: none;
+  border-top: 1px solid var(--border-color);
+  justify-content: center;
+}
+
+.reader-nav-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.reader-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--text-muted);
+}
+
+.reader-nav-btn.gear-btn.active {
+  color: var(--primary-hover);
+  border-color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.reader-page-controls-nhentai {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reader-control-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.reader-control-btn:hover:not(:disabled) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.reader-control-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.reader-page-indicator-nhentai {
+  font-size: 14px;
+  margin: 0 12px;
+  user-select: none;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+}
+
+.reader-page-indicator-nhentai strong {
+  color: var(--text-main);
+  font-size: 16px;
+}
+
+.reader-workspace-frame-nhentai {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.reader-main-nhentai {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #000000;
+  position: relative;
+  overflow: hidden;
+}
+
+.reader-sidebar-nhentai {
+  width: 320px;
+  border-left: 1px solid var(--border-color);
+  background: #161616;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  z-index: 90;
+  flex-shrink: 0;
+}
+
+.reader-sidebar-nhentai h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+  color: var(--text-main);
+}
+
+
