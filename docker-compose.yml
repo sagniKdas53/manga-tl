@@ -23,6 +23,7 @@ services:
     networks:
       - manga-net
     restart: unless-stopped
+
   minio:
     image: minio/minio
     container_name: manga-minio
@@ -78,12 +79,12 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - BACKEND_CALLBACK_URL=http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
-      - MODEL_PROVIDER=${MODEL_PROVIDER:-ollama}
-      - API_KEY=${API_KEY:-}
-      - PREFERRED_MODEL=${PREFERRED_MODEL:-gemma3:4b}
+      - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
+      - API_KEY=${API_KEY:-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}
+      - PREFERRED_MODEL=${PREFERRED_MODEL:-nvidia/nemotron-3-super-120b-a12b}
       - LOCAL_LLM_PROVIDER=ollama
-      - LOCAL_LLM_ENDPOINT=http://host.docker.internal:11434/v1/chat/completions
-      - RATE_LIMIT=${RATE_LIMIT:-}
+      - LOCAL_LLM_ENDPOINT=http://manga-ollama-init:11434/v1/chat/completions
+      - RATE_LIMIT=${RATE_LIMIT:-10}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}
     depends_on:
       - redis
@@ -94,17 +95,15 @@ services:
     networks:
       - manga-net
     restart: unless-stopped
-
-  ollama-init:
-    image: curlimages/curl:latest
-    container_name: manga-ollama-init
-    entrypoint: [ "sh", "-c", "until curl -s http://host.docker.internal:11434/api/tags >/dev/null; do echo 'Waiting for Ollama on host...'; sleep 5; done; curl -X POST http://host.docker.internal:11434/api/pull -d '{\"name\": \"gemma3:4b\"}'" ]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - manga-net
+  # ollama-init:
+  #   image: curlimages/curl:latest
+  #   container_name: manga-ollama-init
+  #   entrypoint: [ "sh", "-c", "until curl -s http://host.docker.internal:11434/api/tags >/dev/null; do echo 'Waiting for Ollama on host...'; sleep 5; done; curl -X POST http://host.docker.internal:11434/api/pull -d '{\"name\": \"gemma3:4b\"}'" ]
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   networks:
+  #     - manga-net
 
 networks:
   manga-net:
     driver: bridge
-
