@@ -68,7 +68,7 @@ services:
 
   worker:
     build:
-      context: ./unified-worker
+      context: ./unified-worker-v2
       dockerfile: Dockerfile
     container_name: manga-worker
     environment:
@@ -78,18 +78,41 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - BACKEND_CALLBACK_URL=http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
-      - MODEL_PROVIDER=${MODEL_PROVIDER:-lmstudio}
+      - MODEL_PROVIDER=${MODEL_PROVIDER:-ollama}
       - API_KEY=${API_KEY:-}
-      - PREFERRED_MODEL=${PREFERRED_MODEL:-google/gemma-3-4b}
+      - PREFERRED_MODEL=${PREFERRED_MODEL:-gemma3:4b}
+      - LOCAL_LLM_PROVIDER=ollama
+      - LOCAL_LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
       - RATE_LIMIT=${RATE_LIMIT:-}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}
     depends_on:
       - redis
       - minio
       - backend
+      - ollama
     networks:
       - manga-net
     restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: manga-ollama
+    volumes:
+      - ./data/ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - manga-net
+    restart: unless-stopped
+
+  ollama-init:
+    image: curlimages/curl:latest
+    container_name: manga-ollama-init
+    entrypoint: [ "sh", "-c", "until curl -s http://ollama:11434/api/tags >/dev/null; do echo 'Waiting for Ollama...'; sleep 5; done; curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"gemma3:4b\"}'" ]
+    depends_on:
+      - ollama
+    networks:
+      - manga-net
 
 networks:
   manga-net:

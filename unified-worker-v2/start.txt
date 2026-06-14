@@ -1,0 +1,9 @@
+REDIS_HOST=localhost 
+REDIS_PORT=6379 
+MINIO_ENDPOINT=localhost:9000 
+BACKEND_CALLBACK_URL=http://localhost:8080/api/internal/jobs/callback
+MODEL_PROVIDER=nvidia
+API_KEY=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
+RATE_LIMIT=60
+PREFERRED_MODEL=
+python app.py
