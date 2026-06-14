@@ -20,7 +20,7 @@ try:
     from paddleocr import PaddleOCR
     # Initialize PaddleOCR with PP-OCRv5
     print("[Unified Worker] Initializing PaddleOCR (PP-OCRv5, lang='japan')...", flush=True)
-    paddle_ocr_reader = PaddleOCR(ocr_version='PP-OCRv5', use_textline_orientation=True, lang='japan', device='cpu', enable_mkldnn=False)
+    paddle_ocr_reader = PaddleOCR(ocr_version='PP-OCRv5', use_textline_orientation=True, lang='japan', device='cpu', enable_mkldnn=False, use_doc_unwarping=False, use_doc_orientation_classify=False)
 except Exception as e:
     print(f"[Unified Worker] Failed to initialize PaddleOCR: {e}", flush=True)
 
@@ -180,6 +180,41 @@ def bubble_compare(a, b):
     
     x_diff = b['x'] - a['x']
     return 1 if x_diff > 0 else -1
+
+
+def parse_paddle_ocr_results(raw_results):
+    results = []
+    if not raw_results:
+        return results
+    
+    first_res = raw_results[0]
+    if not first_res:
+        return results
+
+    if isinstance(first_res, dict):
+        # PaddleX / PP-OCRv5 dictionary format
+        dt_polys = first_res.get('dt_polys', [])
+        rec_texts = first_res.get('rec_texts', [])
+        rec_scores = first_res.get('rec_scores', [])
+        n = min(len(dt_polys), len(rec_texts), len(rec_scores))
+        for i in range(n):
+            bbox = dt_polys[i]
+            if hasattr(bbox, 'tolist'):
+                bbox = bbox.tolist()
+            text = rec_texts[i]
+            confidence = rec_scores[i]
+            results.append((bbox, text, confidence))
+    elif isinstance(first_res, list):
+        # Classic PaddleOCR list format
+        for line in first_res:
+            if isinstance(line, list) and len(line) >= 2:
+                bbox = line[0]
+                if hasattr(bbox, 'tolist'):
+                    bbox = bbox.tolist()
+                text = line[1][0]
+                confidence = line[1][1]
+                results.append((bbox, text, confidence))
+    return results
 
 
 # --- TRANSLATION AND REDO HELPERS ---
@@ -650,12 +685,7 @@ def process_ocr(job_data):
                 img_to_ocr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 if img_to_ocr is not None:
                     raw_results = paddle_ocr_reader.ocr(img_to_ocr)
-                    if raw_results and raw_results[0]:
-                        for line in raw_results[0]:
-                            bbox = line[0]
-                            text = line[1][0]
-                            confidence = line[1][1]
-                            results.append((bbox, text, confidence))
+                    results = parse_paddle_ocr_results(raw_results)
                 else:
                     print("[OCR] OpenCV failed to decode image for PaddleOCR", flush=True)
             except Exception as ocr_err:
@@ -1056,9 +1086,10 @@ def perform_redo_ocr(img_crop_bytes, lang):
             img_crop = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if img_crop is not None:
                 crop_results = paddle_ocr_reader.ocr(img_crop)
-                if crop_results and crop_results[0]:
-                    text = " ".join([line[1][0] for line in crop_results[0]])
-                    confidence = float(np.mean([line[1][1] for line in crop_results[0]]))
+                parsed_crop_results = parse_paddle_ocr_results(crop_results)
+                if parsed_crop_results:
+                    text = " ".join([line[1] for line in parsed_crop_results])
+                    confidence = float(np.mean([line[2] for line in parsed_crop_results]))
                     print(f"[OCR Redo] PP-OCRv5 Success: '{text}' (conf={confidence})", flush=True)
                     return text.strip(), confidence
         except Exception as e:
