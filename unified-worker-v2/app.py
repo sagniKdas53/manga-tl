@@ -378,9 +378,11 @@ def is_valid_translation(source, translated):
 def should_translate_region(region):
     text = region.get('text', '')
     stripped = text.strip()
-    confidence = region.get('confidence', 1.0)
-    width = region.get('width', 0)
-    height = region.get('height', 0)
+    confidence = region.get('confidence')
+    if confidence is None:
+        confidence = 1.0
+    width = region.get('width') or region.get('bboxW') or 0
+    height = region.get('height') or region.get('bboxH') or 0
 
     # Reject regions smaller than 10x10
     if width < 10 or height < 10:
@@ -558,7 +560,7 @@ def try_cloud_ai(provider, api_key, model, prompt, response_schema=None):
 
     try:
         print(f"[Translation] Sending request to Cloud LLM provider '{provider}' using model '{model}'...", flush=True)
-        res = requests.post(url, json=payload, headers=headers, timeout=12)
+        res = requests.post(url, json=payload, headers=headers, timeout=30)
         if res.status_code == 200:
             res_json = res.json()
             if provider == 'gemini':
@@ -643,7 +645,7 @@ def try_cloud_ai_vision(provider, api_key, model, prompt, base64_image, response
 
     try:
         print(f"[Translation VLM] Sending vision request to provider '{provider}' using model '{model}'...", flush=True)
-        res = requests.post(url, json=payload, headers=headers, timeout=20)
+        res = requests.post(url, json=payload, headers=headers, timeout=45)
         if res.status_code == 200:
             res_json = res.json()
             if provider == 'gemini':
@@ -712,7 +714,7 @@ def try_local_ai(prompt, text, response_schema=None):
                     else:
                         payload["response_format"] = {"type": "json_object"}
             
-            res = requests.post(endpoint, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+            res = requests.post(endpoint, json=payload, headers={"Content-Type": "application/json"}, timeout=120)
             if res.status_code == 200:
                 res_json = res.json()
                 translated = None
@@ -1290,73 +1292,88 @@ def process_translation(job_data):
     # Translate unmatched regions
     if unmatched_regions:
         use_vlm_translation = os.environ.get('USE_VLM_TRANSLATION', 'false').lower() in ('true', '1', 't')
-        batch_mapping = None
+        batch_mapping = {}
         
-        # 1. (Optional) VLM vision translation pass
+        # We group unmatched regions into small batches (e.g. max 5 regions per batch)
+        # to prevent extremely large prompt tokens that cause timeouts on CPU.
+        max_batch_size = 5
+        unmatched_chunks = [unmatched_regions[i:i + max_batch_size] for i in range(0, len(unmatched_regions), max_batch_size)]
+        
+        # Download image once if VLM vision translation is enabled
+        img_bytes = None
         if use_vlm_translation:
             storage_path = image_info.get('storagePath')
-            img_bytes = None
             if storage_path:
                 try:
                     response = minio_client.get_object('manga-library', storage_path)
                     img_bytes = response.read()
                 except Exception as e:
                     print(f"[Translation] Error downloading image from MinIO for VLM pass: {e}", flush=True)
+
+        for idx, chunk in enumerate(unmatched_chunks):
+            print(f"[Translation] Processing batch chunk {idx+1}/{len(unmatched_chunks)} ({len(chunk)} regions)...", flush=True)
+            chunk_mapping = None
             
-            if img_bytes:
-                print(f"[Translation] VLM vision translation pass starting for {len(unmatched_regions)} regions...", flush=True)
+            # 1. (Optional) VLM vision translation pass
+            if use_vlm_translation and img_bytes:
+                print(f"[Translation] VLM vision translation pass starting for chunk {idx+1}...", flush=True)
                 try:
-                    vlm_res = translate_vlm_vision(img_bytes, unmatched_regions, TRANSLATION_JSON_SCHEMA)
-                    batch_mapping = parse_and_validate_batch(vlm_res, unmatched_regions)
+                    vlm_res = translate_vlm_vision(img_bytes, chunk, TRANSLATION_JSON_SCHEMA)
+                    chunk_mapping = parse_and_validate_batch(vlm_res, chunk)
                 except Exception as e:
-                    print(f"[Translation] VLM vision translation pass failed: {e}", flush=True)
-        
-        # 2. Standard LLM batch translation
-        if not batch_mapping:
-            print(f"[Translation] Running standard batch translation for {len(unmatched_regions)} regions...", flush=True)
-            try:
-                batch_res = translate_batch_llm(unmatched_regions, TRANSLATION_JSON_SCHEMA)
-                batch_mapping = parse_and_validate_batch(batch_res, unmatched_regions)
-            except Exception as e:
-                print(f"[Translation] Standard batch translation failed: {e}", flush=True)
+                    print(f"[Translation] VLM vision translation pass failed for chunk {idx+1}: {e}", flush=True)
+            
+            # 2. Standard LLM batch translation
+            if not chunk_mapping:
+                print(f"[Translation] Running standard batch translation for chunk {idx+1}...", flush=True)
+                try:
+                    batch_res = translate_batch_llm(chunk, TRANSLATION_JSON_SCHEMA)
+                    chunk_mapping = parse_and_validate_batch(batch_res, chunk)
+                except Exception as e:
+                    print(f"[Translation] Standard batch translation failed for chunk {idx+1}: {e}", flush=True)
+            
+            if chunk_mapping:
+                for rid, trans in chunk_mapping.items():
+                    batch_mapping[rid] = trans
 
         failed_batch_regions = []
-        if batch_mapping:
-            # Validate output for each unmatched region
-            for r in unmatched_regions:
+        # Validate output for each unmatched region
+        for r in unmatched_regions:
+            rid = r['id']
+            translated = batch_mapping.get(rid)
+            
+            # Run sanity check
+            if translated and is_valid_translation(r['text'], translated):
+                resolved_translations[rid] = translated
+            else:
+                failed_batch_regions.append(r)
+
+        # 3. Retry failed items only in small batches
+        if failed_batch_regions:
+            print(f"[Translation] Retrying {len(failed_batch_regions)} failed items in batch...", flush=True)
+            retry_chunks = [failed_batch_regions[i:i + max_batch_size] for i in range(0, len(failed_batch_regions), max_batch_size)]
+            
+            retry_mapping = {}
+            for idx, r_chunk in enumerate(retry_chunks):
+                print(f"[Translation] Processing retry batch chunk {idx+1}/{len(retry_chunks)} ({len(r_chunk)} regions)...", flush=True)
+                r_chunk_mapping = None
+                try:
+                    retry_res = translate_batch_llm(r_chunk, TRANSLATION_JSON_SCHEMA)
+                    r_chunk_mapping = parse_and_validate_batch(retry_res, r_chunk)
+                except Exception as e:
+                    print(f"[Translation] Retry batch chunk {idx+1} translation failed: {e}", flush=True)
+                if r_chunk_mapping:
+                    for rid, trans in r_chunk_mapping.items():
+                        retry_mapping[rid] = trans
+
+            still_failed_regions = []
+            for r in failed_batch_regions:
                 rid = r['id']
-                translated = batch_mapping.get(rid)
-                
-                # Run sanity check
+                translated = retry_mapping.get(rid)
                 if translated and is_valid_translation(r['text'], translated):
                     resolved_translations[rid] = translated
                 else:
-                    failed_batch_regions.append(r)
-        else:
-            # Entire batch failed, all unmatched are failed
-            failed_batch_regions = unmatched_regions
-
-        # 3. Retry failed items only in a smaller batch
-        if failed_batch_regions:
-            print(f"[Translation] Retrying {len(failed_batch_regions)} failed items in batch...", flush=True)
-            retry_mapping = None
-            try:
-                retry_res = translate_batch_llm(failed_batch_regions, TRANSLATION_JSON_SCHEMA)
-                retry_mapping = parse_and_validate_batch(retry_res, failed_batch_regions)
-            except Exception as e:
-                print(f"[Translation] Retry batch translation failed: {e}", flush=True)
-
-            still_failed_regions = []
-            if retry_mapping:
-                for r in failed_batch_regions:
-                    rid = r['id']
-                    translated = retry_mapping.get(rid)
-                    if translated and is_valid_translation(r['text'], translated):
-                        resolved_translations[rid] = translated
-                    else:
-                        still_failed_regions.append(r)
-            else:
-                still_failed_regions = failed_batch_regions
+                    still_failed_regions.append(r)
 
             # 4. Individual fallback for still failed regions (DeepSeek/Nemotron -> Local -> DeepL -> Google Translate)
             if still_failed_regions:
