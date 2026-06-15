@@ -2,7 +2,8 @@ inputs/
 .claude/
 .agents/
 backend/target/
-workers/unified-worker/.venv/
-data
-logs*
+data/
+logs/
 *__pycache__
+.venv/
+.env
