@@ -413,6 +413,9 @@ TRANSLATION_JSON_SCHEMA = {
                 "properties": {
                     "id": {"type": "string"},
                     "translation": {"type": "string"},
+                    "translationNotes": {"type": "string"},
+                    "emotion": {"type": "string"},
+                    "tone": {"type": "string"},
                 },
                 "required": ["id", "translation"],
             },
@@ -564,7 +567,7 @@ def validate_translation_response(parsed_json):
                 isinstance(k, str) and isinstance(v, str)
                 for k, v in parsed_json.items()
             ):
-                return parsed_json
+                return {k: {"translatedText": v, "translationNotes": "", "emotion": "", "tone": ""} for k, v in parsed_json.items()}
     elif isinstance(parsed_json, list):
         items = parsed_json
 
@@ -584,7 +587,12 @@ def validate_translation_response(parsed_json):
             and isinstance(translation, str)
             and translation.strip()
         ):
-            validated[rid] = translation.strip()
+            validated[rid] = {
+                "translatedText": translation.strip(),
+                "translationNotes": item.get("translationNotes", ""),
+                "emotion": item.get("emotion", ""),
+                "tone": item.get("tone", "")
+            }
 
     return validated if validated else None
 
@@ -1295,7 +1303,7 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
     return None
 
 
-def translate_batch_llm(unmatched_regions, response_schema=None, request_id=None):
+def translate_batch_llm(unmatched_regions, context_str="", response_schema=None, request_id=None):
     if not request_id:
         request_id = str(uuid.uuid4())[:8]
     req_prefix = f"[{request_id}] "
@@ -1316,7 +1324,7 @@ def translate_batch_llm(unmatched_regions, response_schema=None, request_id=None
     logger.debug(f"{req_prefix}Batch Input:\n{bubbles_json}")
     logger.info(f"{req_prefix}Prompt={PROMPT_VERSION}")
 
-    prompt = f"""These bubbles appear in reading order.
+    prompt = f"""{context_str}These bubbles appear in reading order.
 Translate each bubble into natural manga English.
 Preserve:
 - tone
@@ -1325,17 +1333,22 @@ Preserve:
 - ongoing conversation
 
 You MUST return a JSON object containing a "translations" key with an array of objects.
-Each object in the array MUST have exactly two keys: "id" (the original string ID) and "translation" (your English translation).
+Each object in the array MUST have the following keys:
+- "id" (the original string ID)
+- "translation" (your English translation)
+- "translationNotes" (brief explanation of translation decisions or register choices)
+- "emotion" (detected speaker emotion, e.g. "earnest", "angry", "playful")
+- "tone" (detected tone, e.g. "formal", "sarcastic", "casual")
+
 Example structure:
 {{
   "translations": [
     {{
       "id": "some-id-1",
-      "translation": "Translated text here"
-    }},
-    {{
-      "id": "some-id-2",
-      "translation": "Another translated text"
+      "translation": "Translated text here",
+      "translationNotes": "Preserved informal/teasing tone",
+      "emotion": "playful",
+      "tone": "casual"
     }}
   ]
 }}
@@ -1458,7 +1471,7 @@ Input:
 
 
 def translate_vlm_vision(
-    img_bytes, unmatched_regions, response_schema=None, request_id=None
+    img_bytes, unmatched_regions, context_str="", response_schema=None, request_id=None
 ):
     if not img_bytes:
         return None
@@ -1480,7 +1493,7 @@ def translate_vlm_vision(
             }
         )
 
-    prompt = f"""These OCR regions were extracted from this manga page.
+    prompt = f"""{context_str}These OCR regions were extracted from this manga page.
 Use the page image to understand context (characters, expressions, speech bubble placements).
 Translate each bubble into natural manga English.
 Preserve:
@@ -1489,7 +1502,28 @@ Preserve:
 - relationships
 - ongoing conversation
 
-Return JSON only.
+You MUST return a JSON object containing a "translations" key with an array of objects.
+Each object in the array MUST have the following keys:
+- "id" (the original string ID)
+- "translation" (your English translation)
+- "translationNotes" (brief explanation of translation decisions or register choices)
+- "emotion" (detected speaker emotion, e.g. "earnest", "angry", "playful")
+- "tone" (detected tone, e.g. "formal", "sarcastic", "casual")
+
+Example structure:
+{{
+  "translations": [
+    {{
+      "id": "some-id-1",
+      "translation": "Translated text here",
+      "translationNotes": "Preserved informal/teasing tone",
+      "emotion": "playful",
+      "tone": "casual"
+    }}
+  ]
+}}
+
+Return ONLY valid JSON.
 
 Input:
 {json.dumps(bubbles_input, ensure_ascii=False, indent=2)}
@@ -2218,6 +2252,72 @@ def process_stub(job_data, job_type):
         print(f"[Stub - {job_type}] Failed to post callback: {e}", flush=True)
 
 
+def build_context_string(image_info):
+    context_str = ""
+    if not image_info:
+        return context_str
+        
+    series_meta = image_info.get("seriesMetadata")
+    if series_meta:
+        context_str += f"Series Title: {series_meta.get('title')}\n"
+        context_str += f"Original Language: {series_meta.get('originalLanguage')}\n"
+        if series_meta.get("metadataJson"):
+            try:
+                meta = series_meta.get("metadataJson")
+                if isinstance(meta, str):
+                    meta = json.loads(meta)
+                context_str += f"Roster & Editorial Style Guidelines:\n{json.dumps(meta, ensure_ascii=False, indent=2)}\n"
+            except Exception:
+                context_str += f"Roster & Editorial Style Guidelines:\n{series_meta.get('metadataJson')}\n"
+                
+    chapter_sum = image_info.get("chapterSummary")
+    if chapter_sum:
+        context_str += f"Previous Chapter Summary:\n{chapter_sum}\n"
+        
+    prev_text = image_info.get("previousPageText")
+    if prev_text:
+        context_str += f"Previous Page Text/Dialogue Context:\n{prev_text}\n"
+        
+    if context_str:
+        return f"Narrative and Style Context:\n{context_str}\n---\n"
+    return ""
+
+
+def chunk_regions_by_conversation(unmatched_regions, conversations, max_batch_size):
+    region_map = {r["id"]: r for r in unmatched_regions}
+    grouped_rids = set()
+    chunks = []
+    current_chunk = []
+    
+    for conv in conversations:
+        conv_regions = []
+        for rid in conv.get("regionIds", []):
+            if rid in region_map:
+                conv_regions.append(region_map[rid])
+                grouped_rids.add(rid)
+                
+        if not conv_regions:
+            continue
+            
+        if len(current_chunk) + len(conv_regions) > max_batch_size and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = []
+            
+        current_chunk.extend(conv_regions)
+        
+    for r in unmatched_regions:
+        if r["id"] not in grouped_rids:
+            if len(current_chunk) >= max_batch_size:
+                chunks.append(current_chunk)
+                current_chunk = []
+            current_chunk.append(r)
+            
+    if current_chunk:
+        chunks.append(current_chunk)
+        
+    return chunks
+
+
 def process_translation(job_data):
     image_id = job_data["imageId"]
     request_id = str(uuid.uuid4())[:8]
@@ -2233,6 +2333,7 @@ def process_translation(job_data):
             return
         image_info = res.json()
         ocr_regions = image_info.get("ocrRegions", [])
+        conversations = image_info.get("conversations", [])
     except Exception as e:
         logger.error(f"{req_prefix}Error fetching image details: {e}")
         return
@@ -2244,7 +2345,7 @@ def process_translation(job_data):
     for r in ocr_regions:
         if not should_translate_region(r):
             # Bypass translation for garbage, keep original text
-            resolved_translations[r["id"]] = r["text"]
+            resolved_translations[r["id"]] = {"translatedText": r["text"]}
         else:
             unmatched_regions.append(r)
 
@@ -2263,14 +2364,15 @@ def process_translation(job_data):
             f"{req_prefix}Batch size set to {max_batch_size} (local_only={local_only})"
         )
 
-        unmatched_chunks = [
-            unmatched_regions[i : i + max_batch_size]
-            for i in range(0, len(unmatched_regions), max_batch_size)
-        ]
+        # Build context string
+        context_str = build_context_string(image_info)
+
+        # Chunk regions respecting conversation grouping
+        unmatched_chunks = chunk_regions_by_conversation(unmatched_regions, conversations, max_batch_size)
 
         # Download image once if VLM vision translation is enabled
         img_bytes = None
-        if use_vlm_translation:
+        if use_vlm_translation and img_bytes is None:
             storage_path = image_info.get("storagePath")
             if storage_path:
                 try:
@@ -2294,7 +2396,7 @@ def process_translation(job_data):
                 )
                 try:
                     vlm_res = translate_vlm_vision(
-                        img_bytes, chunk, TRANSLATION_JSON_SCHEMA, request_id=request_id
+                        img_bytes, chunk, context_str, TRANSLATION_JSON_SCHEMA, request_id=request_id
                     )
                     chunk_mapping = parse_and_validate_batch(vlm_res, chunk)
                 except Exception as e:
@@ -2309,7 +2411,7 @@ def process_translation(job_data):
                 )
                 try:
                     batch_res = translate_batch_llm(
-                        chunk, TRANSLATION_JSON_SCHEMA, request_id=request_id
+                        chunk, context_str, TRANSLATION_JSON_SCHEMA, request_id=request_id
                     )
                     chunk_mapping = parse_and_validate_batch(batch_res, chunk)
                 except Exception as e:
@@ -2327,25 +2429,28 @@ def process_translation(job_data):
             rid = r["id"]
             translated = batch_mapping.get(rid)
 
+            translated_text = None
+            if isinstance(translated, dict):
+                translated_text = translated.get("translatedText")
+            elif isinstance(translated, str):
+                translated_text = translated
+
             # Run sanity check
-            if translated and is_valid_translation(
-                r["text"], translated, request_id=request_id
+            if translated_text and is_valid_translation(
+                r["text"], translated_text, request_id=request_id
             ):
                 resolved_translations[rid] = translated
             else:
                 failed_batch_regions.append(r)
 
-        # 3. Retry failed items (hard limit: 1 retry pass = 3 total attempts incl. initial + individual fallback)
-        LOCAL_AI_MAX_BATCH_RETRIES = 1  # keep total attempts to 3
+        # 3. Retry failed items
+        LOCAL_AI_MAX_BATCH_RETRIES = 1
         if failed_batch_regions:
             logger.info(f"{req_prefix}Retry pass 1")
             logger.info(
                 f"{req_prefix}Retrying {len(failed_batch_regions)} failed items in batch (max {LOCAL_AI_MAX_BATCH_RETRIES} retry pass)..."
             )
-            retry_chunks = [
-                failed_batch_regions[i : i + max_batch_size]
-                for i in range(0, len(failed_batch_regions), max_batch_size)
-            ]
+            retry_chunks = chunk_regions_by_conversation(failed_batch_regions, conversations, max_batch_size)
 
             retry_mapping = {}
             for idx, r_chunk in enumerate(retry_chunks):
@@ -2355,7 +2460,7 @@ def process_translation(job_data):
                 r_chunk_mapping = None
                 try:
                     retry_res = translate_batch_llm(
-                        r_chunk, TRANSLATION_JSON_SCHEMA, request_id=request_id
+                        r_chunk, context_str, TRANSLATION_JSON_SCHEMA, request_id=request_id
                     )
                     r_chunk_mapping = parse_and_validate_batch(retry_res, r_chunk)
                 except Exception as e:
@@ -2370,14 +2475,21 @@ def process_translation(job_data):
             for r in failed_batch_regions:
                 rid = r["id"]
                 translated = retry_mapping.get(rid)
-                if translated and is_valid_translation(
-                    r["text"], translated, request_id=request_id
+                
+                translated_text = None
+                if isinstance(translated, dict):
+                    translated_text = translated.get("translatedText")
+                elif isinstance(translated, str):
+                    translated_text = translated
+
+                if translated_text and is_valid_translation(
+                    r["text"], translated_text, request_id=request_id
                 ):
                     resolved_translations[rid] = translated
                 else:
                     still_failed_regions.append(r)
 
-            # 4. Individual fallback (attempt 3/3) for still-failed regions
+            # 4. Individual fallback for still-failed regions
             if still_failed_regions:
                 logger.info(f"{req_prefix}Individual fallback")
                 logger.info(
@@ -2394,12 +2506,17 @@ def process_translation(job_data):
                     if translated and is_valid_translation(
                         text, translated, request_id=request_id
                     ):
-                        resolved_translations[rid] = translated
+                        resolved_translations[rid] = {
+                            "translatedText": translated,
+                            "translationNotes": "Individual translation fallback",
+                            "emotion": "",
+                            "tone": ""
+                        }
                     else:
                         logger.warning(
                             f"{req_prefix}Giving up on '{text}' after 3 attempts."
                         )
-                        resolved_translations[rid] = None  # failed after 3 attempts
+                        resolved_translations[rid] = None
 
     # Format the final callback response
     translations = []
@@ -2410,15 +2527,30 @@ def process_translation(job_data):
 
         translated = resolved_translations.get(rid)
 
+        translated_text = None
+        notes = ""
+        emotion = ""
+        tone = ""
+        if isinstance(translated, dict):
+            translated_text = translated.get("translatedText")
+            notes = translated.get("translationNotes", "")
+            emotion = translated.get("emotion", "")
+            tone = translated.get("tone", "")
+        elif isinstance(translated, str):
+            translated_text = translated
+
         translations.append(
             {
                 "regionId": rid,
-                "translatedText": translated,
-                "translationFailed": (translated is None),
+                "translatedText": translated_text,
+                "translationFailed": (translated_text is None),
+                "translationNotes": notes,
+                "emotion": emotion,
+                "tone": tone
             }
         )
         logger.info(
-            f"{req_prefix}Final: '{text}' ({lang}) -> '{translated}' (failed={translated is None})"
+            f"{req_prefix}Final: '{text}' ({lang}) -> '{translated_text}' (failed={translated_text is None})"
         )
 
     callback_payload = {"imageId": image_id, "translations": translations}

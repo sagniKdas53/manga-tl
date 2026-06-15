@@ -69,3 +69,42 @@ export interface Conversation {
   regions: ConversationRegion[];
 }
 
+export interface Layer {
+  id: string;
+  type: string; // translation | ocr | notes | mask | sfx
+  targetLanguage?: string | null;
+  visible: boolean;
+  zOrder: number;
+  createdAt: string;
+}
+
+export interface LayerElement {
+  id: string;
+  layerId: string;
+  regionId?: string | null;
+  region?: OcrRegion | null;
+  text?: string | null;
+  font?: string | null;
+  size?: number | null;
+  autoSize: boolean;
+  maxWidth?: number | null;
+  maxHeight?: number | null;
+  wordWrap: boolean;
+  rotation: number;
+  x: number;
+  y: number;
+  visible: boolean;
+  overflow: boolean;
+  isManuallyEdited: boolean;
+  editedAt?: string | null;
+}
+
+export interface LayerEditHistory {
+  id: string;
+  layerElementId: string;
+  previousValueJson: string;
+  newValueJson: string;
+  editedBy?: User | null;
+  editedAt: string;
+}
+

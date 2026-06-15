@@ -184,10 +184,51 @@ public class PageController {
     }
 
     @GetMapping("/images/{imageId}/layers")
+    @Transactional
     public ResponseEntity<List<Map<String, Object>>> getImageLayers(@PathVariable UUID imageId) {
-        List<Layer> layers = layerRepository.findByImageId(imageId);
-        List<LayerElement> allElements = layerElementRepository.findByLayerImageId(imageId);
+        List<Layer> layers = new ArrayList<>(layerRepository.findByImageId(imageId));
         
+        // Auto-initialize default translation layer if it doesn't exist but we have translations
+        if (layers.isEmpty()) {
+            List<OcrRegion> ocrRegions = ocrRegionRepository.findByImageId(imageId);
+            boolean hasTranslations = ocrRegions.stream().anyMatch(r -> r.getTranslatedText() != null && !r.getTranslatedText().trim().isEmpty());
+            
+            if (hasTranslations) {
+                log.info("Auto-initializing default translation layer for image {}", imageId);
+                Image image = imageRepository.findById(imageId)
+                        .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+                
+                Layer defaultLayer = Layer.builder()
+                        .image(image)
+                        .type("translation")
+                        .targetLanguage("en")
+                        .visible(true)
+                        .zOrder(2)
+                        .build();
+                
+                defaultLayer = layerRepository.save(defaultLayer);
+                layers.add(defaultLayer);
+                
+                for (OcrRegion region : ocrRegions) {
+                    if (region.getTranslatedText() != null && !region.getTranslatedText().trim().isEmpty()) {
+                        LayerElement element = LayerElement.builder()
+                                .layer(defaultLayer)
+                                .region(region)
+                                .text(region.getTranslatedText())
+                                .x(region.getBboxX().doubleValue())
+                                .y(region.getBboxY().doubleValue())
+                                .maxWidth(region.getBboxW())
+                                .maxHeight(region.getBboxH())
+                                .visible(true)
+                                .autoSize(true)
+                                .build();
+                        layerElementRepository.save(element);
+                    }
+                }
+            }
+        }
+        
+        List<LayerElement> allElements = layerElementRepository.findByLayerImageId(imageId);
         Map<UUID, List<LayerElement>> elementsByLayer = allElements.stream()
                 .collect(Collectors.groupingBy(le -> le.getLayer().getId()));
 

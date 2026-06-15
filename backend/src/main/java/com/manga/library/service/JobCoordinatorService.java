@@ -238,7 +238,34 @@ public class JobCoordinatorService {
     public void handleTranslationCallback(UUID imageId, List<Map<String, Object>> translations) {
         log.info("Received Translation callback for image: {} with {} translations", imageId, translations != null ? translations.size() : 0);
         
+        Image image = imageRepository.findById(imageId)
+                .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+        // Find or create translation layer for this image (language 'en')
+        Layer translationLayer = layerRepository.findByImageId(imageId).stream()
+                .filter(l -> "translation".equals(l.getType()) && "en".equals(l.getTargetLanguage()))
+                .findFirst()
+                .orElseGet(() -> {
+                    Layer l = Layer.builder()
+                            .image(image)
+                            .type("translation")
+                            .targetLanguage("en")
+                            .visible(true)
+                            .zOrder(2)
+                            .build();
+                    return layerRepository.save(l);
+                });
+
         if (translations != null) {
+            // Find all existing elements for this layer
+            List<LayerElement> existingElements = layerElementRepository.findByLayerId(translationLayer.getId());
+            Map<UUID, LayerElement> elementMap = new HashMap<>();
+            for (LayerElement el : existingElements) {
+                if (el.getRegion() != null) {
+                    elementMap.put(el.getRegion().getId(), el);
+                }
+            }
+
             for (Map<String, Object> t : translations) {
                 try {
                     UUID regionId = UUID.fromString((String) t.get("regionId"));
@@ -247,9 +274,29 @@ public class JobCoordinatorService {
                     boolean translationFailed = failedVal != null && Boolean.parseBoolean(failedVal.toString());
                     
                     ocrRegionRepository.findById(regionId).ifPresent(region -> {
+                        // Update backward-compatible OcrRegion fields
                         region.setTranslatedText(translatedText);
                         region.setTranslationFailed(translationFailed);
                         ocrRegionRepository.save(region);
+
+                        // Find or create LayerElement
+                        LayerElement element = elementMap.get(regionId);
+                        if (element == null) {
+                            element = LayerElement.builder()
+                                    .layer(translationLayer)
+                                    .region(region)
+                                    .text(translatedText)
+                                    .x(region.getBboxX().doubleValue())
+                                    .y(region.getBboxY().doubleValue())
+                                    .maxWidth(region.getBboxW())
+                                    .maxHeight(region.getBboxH())
+                                    .visible(true)
+                                    .autoSize(true)
+                                    .build();
+                        } else {
+                            element.setText(translatedText);
+                        }
+                        layerElementRepository.save(element);
                     });
                 } catch (Exception e) {
                     log.error("Error saving translation for region", e);

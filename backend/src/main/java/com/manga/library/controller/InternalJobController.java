@@ -2,23 +2,14 @@ package com.manga.library.controller;
 
 import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
-import com.manga.library.model.Image;
-import com.manga.library.model.Conversation;
-import com.manga.library.model.ConversationRegion;
-import com.manga.library.repository.ImageRepository;
-import com.manga.library.repository.PanelRepository;
-import com.manga.library.repository.ConversationRepository;
-import com.manga.library.repository.ConversationRegionRepository;
+import com.manga.library.model.*;
+import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.Map;
-import java.util.UUID;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/internal")
@@ -32,6 +23,8 @@ public class InternalJobController {
     private final com.manga.library.repository.OcrRegionRepository ocrRegionRepository;
     private final ConversationRepository conversationRepository;
     private final ConversationRegionRepository conversationRegionRepository;
+    private final PageRepository pageRepository;
+    private final ChapterRepository chapterRepository;
 
     @GetMapping("/images/{imageId}")
     public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
@@ -44,6 +37,46 @@ public class InternalJobController {
                     map.put("storagePath", image.getStoragePath());
                     map.put("panels", panelRepository.findByImageId(imageId));
                     map.put("ocrRegions", ocrRegionRepository.findByImageId(imageId));
+
+                    // Query page history and series context for translation context assembly
+                    pageRepository.findByImageId(imageId).ifPresent(page -> {
+                        Chapter chapter = page.getChapter();
+                        Series series = chapter.getSeries();
+
+                        // Series metadata (character rosters, editorial rules)
+                        Map<String, Object> seriesMap = new HashMap<>();
+                        seriesMap.put("title", series.getTitle());
+                        seriesMap.put("originalLanguage", series.getOriginalLanguage());
+                        seriesMap.put("readingDirection", series.getReadingDirection());
+                        seriesMap.put("metadataJson", series.getMetadataJson());
+                        map.put("seriesMetadata", seriesMap);
+
+                        // Previous page text summary
+                        if (page.getPageNumber() > 1) {
+                            List<Page> chapterPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
+                            Page prevPage = chapterPages.stream()
+                                    .filter(p -> p.getPageNumber() == page.getPageNumber() - 1)
+                                    .findFirst()
+                                    .orElse(null);
+                            if (prevPage != null) {
+                                List<OcrRegion> prevRegions = ocrRegionRepository.findByImageId(prevPage.getImage().getId());
+                                List<String> textList = new ArrayList<>();
+                                for (OcrRegion r : prevRegions) {
+                                    String txt = r.getTranslatedText() != null ? r.getTranslatedText() : r.getText();
+                                    if (txt != null && !txt.trim().isEmpty()) {
+                                        textList.add(txt.trim());
+                                    }
+                                }
+                                map.put("previousPageText", String.join(" | ", textList));
+                            }
+                        }
+
+                        // Chapter summary context
+                        if (chapter.getChapterNumber() > 1) {
+                            chapterRepository.findBySeriesIdAndChapterNumber(series.getId(), chapter.getChapterNumber() - 1)
+                                    .ifPresent(prevChapter -> map.put("chapterSummary", prevChapter.getSummaryJson()));
+                        }
+                    });
 
                     // Include conversations with their region mappings
                     List<Conversation> conversations = conversationRepository.findByImageId(imageId);

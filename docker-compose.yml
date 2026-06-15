@@ -94,6 +94,9 @@ services:
       - minio
       - backend
       #- ollama
+    volumes:
+      - ./data/worker/huggingface:/root/.cache/huggingface
+      - ./data/worker/paddleocr:/root/.paddleocr
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

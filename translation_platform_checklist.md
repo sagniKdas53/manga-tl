@@ -56,12 +56,15 @@ See [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Project
 ## 🤖 AI Translation & Layers (Phases 3, 4)
 
 - [/] **12. Translation Context Assembler**
-  - *Status:* **Partially Done**.
+  - *Status:* **Partially Done** (Detailed in [implementation_plan.md](file:///home/sagnik/.gemini/antigravity-ide/brain/6c2955b3-3843-4157-80a4-57c7118f39d4/implementation_plan.md)).
   - **Done:** `JobCoordinatorService` auto-queues a `translation` job after every `layout` callback. The worker fetches all OCR regions from the backend (including text, detected language, bounding boxes, panel reading order, and bubble reading order) and assembles them into a structured JSON batch prompt. The reading order serves as implicit structural context.
-  - *Remaining:* No **narrative context** assembled — no prior page summary, chapter summary, character roster, or editorial style instructions are included in the prompt. No intermediate-language chain tracking (`isIntermediateTranslation`). No cost estimation or per-user/series budget gating before dispatch.
+  - **Remaining Plan:**
+    - Update `InternalJobController.getImageInfo` to compile and pass narrative context to the worker (previous page translation, previous chapter's summary from `chapters.summary_json`, and character rosters).
+    - Track `isIntermediateTranslation` when series source language differs from scanlation image source language.
+    - Implement cost estimation using character/token counts prior to VLM job dispatch.
 
 - [/] **13. VLM Translation Worker**
-  - *Status:* **Partially Done** — a functional multi-tier pipeline exists, not a stub.
+  - *Status:* **Partially Done** — a functional multi-tier pipeline exists, not a stub (Detailed in [implementation_plan.md](file:///home/sagnik/.gemini/antigravity-ide/brain/6c2955b3-3843-4157-80a4-57c7118f39d4/implementation_plan.md)).
   - **Done:**
     - **Tier 1 (Optional VLM vision pass):** Sends page image + OCR regions to a VLM (OpenRouter/Gemini) for context-aware batch translation when `USE_VLM_TRANSLATION=true`.
     - **Tier 2 (LLM batch):** Sends all bubbles as structured JSON to DeepSeek/Nemotron (OpenRouter), NVIDIA Nemotron, or a local Ollama/LMStudio model.
@@ -69,33 +72,41 @@ See [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Project
     - **Tier 4 (individual fallback):** Per-region translate via the LLM chain → DeepL → free Google Translate.
     - Quality filters: confidence threshold, kana-only SFX whitelist, pathological-length rejection, boilerplate rejection.
     - Rate limiting via `RATE_LIMIT` env var.
-  - *Remaining:* No **conversation grouping** — regions are translated as a flat list, not grouped by conversation/scene. No character roster or chapter summary fed into the VLM prompt. No translation decision notes stored. No dead-letter queue on per-job failure.
+  - **Remaining Plan:**
+    - Group regions by conversation/scene and translate cohesive dialogue blocks rather than a flat list of text bubbles.
+    - Inject narrative context (`chapterSummary`, character rosters, and editorial rules) into VLM/LLM prompts.
+    - Extract and return additional translation metadata (emotions, tones, translation decision notes) to backend.
 
 - [/] **14. Translation Overlay in Viewer**
-  - *Status:* **Partially Done** — basic overlay exists and is working (see screenshot).
+  - *Status:* **Partially Done** — basic overlay exists and is working (Detailed in [implementation_plan.md](file:///home/sagnik/.gemini/antigravity-ide/brain/6c2955b3-3843-4157-80a4-57c7118f39d4/implementation_plan.md)).
   - **Done:**
     - `showTranslations` toggle in the sidebar switches the overlay on/off.
     - When enabled, an SVG `<foreignObject>` renders translated text centred over each OCR bounding box with a dark/light pill background.
     - The region inspector popover shows translated text alongside the original, switching labels between "Original" and "Translated" based on the toggle state.
     - Per-region re-translate button triggers a `region-redo?type=translation` job with live polling.
-  - *Remaining:* No distinct **viewer modes** (Original / OCR / Translation / Split View / Bilingual / Layer View) — just a binary toggle. No overflow indicators. No layer panel with toggles. Translation boxes are not visually distinct from OCR boxes (same bounding box geometry, no styling differentiation). No reading direction indicator or per-chapter override.
+  - **Remaining Plan:**
+    - Implement a **Scanlation Masking View**: Erase/mask original text under speech bubbles using solid background elements, rendering cleanly styled translations centered inside bubbles with digital manga fonts.
+    - Build a full Layer Manager component to toggle visibility of and re-order OCR, translation, SFX, and notes layers.
 
 - [/] **15. Layer Editor**
-  - *Status:* **Partially Done** — inline text editing exists.
+  - *Status:* **Partially Done** — inline text editing exists (Detailed in [implementation_plan.md](file:///home/sagnik/.gemini/antigravity-ide/brain/6c2955b3-3843-4157-80a4-57c7118f39d4/implementation_plan.md)).
   - **Done:**
     - Clicking any OCR region popover opens an inline textarea (edit mode) for either `text` (OCR) or `translatedText` (translation) depending on the `showTranslations` toggle.
     - Save immediately PATCHes `/api/ocr-regions/{id}` and updates local state optimistically.
     - Per-region approve/flag toggle (green checkmark) stored server-side.
-  - *Remaining:* No **font, size, position, or rotation** controls. No auto-size / text-fitting. No layer visibility toggles per layer type (OCR layer, translation layer, notes layer, SFX layer). No layer z-order management. All edits go directly to `ocr_regions.translated_text`; the `layer_elements` table is created on OCR callback but never written to for translation edits.
+  - **Remaining Plan:**
+    - Create backend `LayerController.java` to support full Layer and LayerElement CRUD operations.
+    - Write translation edits to `layer_elements` (and `layer_edit_history` for history logs) instead of directly mutating base `ocr_regions`.
+    - Provide custom UI inputs in the frontend inspector to manipulate layer element properties: font sizes, font families, margins, coordinates, width/height dimensions, and rotation angles.
 - [ ] **16. Text Fitting**
   - *Status:* **Todo**.
-  - *Remaining:* Auto-sizing, wrapping, and overflow checking logic for dialogue boxes.
+  - **Plan:** Implement a client-side text-fitting utility using canvas measurements to scale font sizes dynamically within bounding boxes, flagging overflow elements with warning indicators.
 - [ ] **17. Undo/Redo System**
   - *Status:* **Todo**.
-  - *Remaining:* Frontend hooks tracking session edits via `layer_edit_history`.
+  - **Plan:** Build client-side history stack tracking layer element edits and hook up Ctrl+Z / Ctrl+Y keyboard shortcuts.
 - [ ] **18. SFX Rendering Path**
   - *Status:* **Todo**.
-  - *Remaining:* Configuration per series for Sound Effects handling styles (overlay, omit, preserve).
+  - **Plan:** Support styling and placing sound effects near their original coordinates on an SFX-specific layer.
 
 ---
 
