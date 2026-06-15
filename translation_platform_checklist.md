@@ -44,12 +44,12 @@ See [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Project
   - *Status:* **Partially Done**.
   - **Done:** Bubble sorting within panels now respects `readingDirection` from the job payload (`rtl`, `ltr`, `ttb`) — no longer hardcoded to RTL.
   - *Remaining:* `detect_panels` still sorts panels using a hardcoded RTL row-then-column order. It needs to read and apply the series' `reading_direction` dynamically so LTR (left-to-right column ordering) and TTB (top-to-bottom strip) panels are ordered correctly too.
-- [ ] **10. Conversation Grouping**
-  - *Status:* **Todo**.
-  - *Remaining:* Worker does not perform conversation groupings; backend database mapping is present but unused.
-- [ ] **11. Layout Analysis Worker**
-  - *Status:* **Todo**.
-  - *Remaining:* The layout analyzer is a stub (sleeps for 0.5s). Need classification of region types (`speech`, `thought`, `narration`, `sfx`, `caption`, `sign`).
+- [x] **10. Conversation Grouping**
+  - *Status:* **Complete**.
+  - Groups OCR regions in each panel into conversation groups based on spatial proximity heuristics and reading order.
+- [x] **11. Layout Analysis Worker**
+  - *Status:* **Complete**.
+  - Replaced the layout stub. Classifies each region as `speech`, `narration`, `sfx`, `caption`, or `sign` based on geometry and position relative to the panel.
 
 ---
 

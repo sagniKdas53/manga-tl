@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { User, Chapter, Page, Panel, OcrRegion } from '../types';
+import type { User, Chapter, Page, Panel, OcrRegion, Conversation } from '../types';
 import { safeFetch, toSlug } from '../utils';
 
 interface ReaderProps {
@@ -27,7 +27,6 @@ export const Reader: React.FC<ReaderProps> = ({
   // Reader States
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
-  const [selectedRegion, setSelectedRegion] = useState<OcrRegion | null>(null);
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
   const [showPanels, setShowPanels] = useState(true);
   const [showOcr, setShowOcr] = useState(true);
@@ -36,7 +35,15 @@ export const Reader: React.FC<ReaderProps> = ({
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1.0);
-  const [isZoomExpanded, setIsZoomExpanded] = useState(true);
+
+  // Conversation and Layout enhancements
+  const [groupByConversation, setGroupByConversation] = useState(true);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [activeItem, setActiveItem] = useState<any>(null);
+  const [fitMode, setFitMode] = useState<'page' | 'width' | 'height'>('page');
+  const [isRedoingPageOcr, setIsRedoingPageOcr] = useState(false);
+  const [isRedoingPageTranslation, setIsRedoingPageTranslation] = useState(false);
 
   // Pan & Drag States
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -49,9 +56,102 @@ export const Reader: React.FC<ReaderProps> = ({
   const [isEditingRegion, setIsEditingRegion] = useState(false);
   const [editText, setEditText] = useState('');
   const [isRedoing, setIsRedoing] = useState(false);
-  const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null); // Fixed: Specify correct type to avoid strict 'any' warning
+  const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch page details (panels, OCR regions) when page selection updates
+  // Helper to get combined text (original or translated) for a grouped item
+  const getCombinedText = useCallback((item: any, showTrans: boolean) => {
+    if (!item || !item.regions) return '';
+    return item.regions
+      .map((r: OcrRegion) => showTrans ? (r.translatedText || '') : r.text)
+      .join('\n');
+  }, []);
+
+  // Compute union bounding box for conversations
+  const conversationsWithRegions = React.useMemo(() => {
+    if (!groupByConversation || conversations.length === 0) {
+      return [];
+    }
+
+    return conversations.map(conv => {
+      const regionsInConv = conv.regions
+        .map(cr => ocrRegions.find(r => r.id === cr.regionId))
+        .filter((r): r is OcrRegion => !!r);
+      
+      let bboxX = 0, bboxY = 0, bboxW = 0, bboxH = 0;
+      if (regionsInConv.length > 0) {
+        const minX = Math.min(...regionsInConv.map(r => r.bboxX));
+        const minY = Math.min(...regionsInConv.map(r => r.bboxY));
+        const maxX = Math.max(...regionsInConv.map(r => r.bboxX + r.bboxW));
+        const maxY = Math.max(...regionsInConv.map(r => r.bboxY + r.bboxH));
+        bboxX = minX;
+        bboxY = minY;
+        bboxW = maxX - minX;
+        bboxH = maxY - minY;
+      }
+
+      return {
+        ...conv,
+        regions: regionsInConv,
+        bboxX,
+        bboxY,
+        bboxW,
+        bboxH,
+        approved: regionsInConv.length > 0 && regionsInConv.every(r => r.approved),
+      };
+    }).filter(c => c.regions.length > 0);
+  }, [conversations, ocrRegions, groupByConversation]);
+
+  // Unified list of renderable items (conversations or standalone regions)
+  const renderItems = React.useMemo(() => {
+    if (!groupByConversation || conversations.length === 0) {
+      return ocrRegions.map(r => ({
+        id: `region-${r.id}`,
+        isConversation: false,
+        regions: [r],
+        bboxX: r.bboxX,
+        bboxY: r.bboxY,
+        bboxW: r.bboxW,
+        bboxH: r.bboxH,
+        approved: r.approved === true,
+        sceneType: 'speech',
+        originalRegion: r
+      }));
+    }
+
+    const groupedRegionIds = new Set(conversations.flatMap(c => c.regions.map(r => r.regionId)));
+
+    const convItems = conversationsWithRegions.map(conv => ({
+      id: `conv-${conv.id}`,
+      isConversation: true,
+      regions: conv.regions,
+      bboxX: conv.bboxX,
+      bboxY: conv.bboxY,
+      bboxW: conv.bboxW,
+      bboxH: conv.bboxH,
+      approved: conv.approved,
+      sceneType: conv.sceneType,
+      conversationData: conv
+    }));
+
+    const ungroupedItems = ocrRegions
+      .filter(r => !groupedRegionIds.has(r.id))
+      .map(r => ({
+        id: `region-${r.id}`,
+        isConversation: false,
+        regions: [r],
+        bboxX: r.bboxX,
+        bboxY: r.bboxY,
+        bboxW: r.bboxW,
+        bboxH: r.bboxH,
+        approved: r.approved === true,
+        sceneType: 'speech',
+        originalRegion: r
+      }));
+
+    return [...convItems, ...ungroupedItems];
+  }, [groupByConversation, ocrRegions, conversations, conversationsWithRegions]);
+
+  // Fetch page details (panels, OCR regions, conversations) when page selection updates
   useEffect(() => {
     if (selectedPage && loadedImageId !== selectedPage.imageId) {
       // Defer loading indicator setting to satisfy StrictEffect synchronous state update limits
@@ -69,7 +169,8 @@ export const Reader: React.FC<ReaderProps> = ({
       .then(data => {
         setPanels(data.panels || []);
         setOcrRegions(data.ocrRegions || []);
-        setSelectedRegion(null);
+        setConversations(data.conversations || []);
+        setSelectedItem(null);
         setLoadedImageId(selectedPage.imageId);
         setIsLoadingPageDetails(false);
       })
@@ -85,8 +186,9 @@ export const Reader: React.FC<ReaderProps> = ({
     Promise.resolve().then(() => {
       setZoom(1.0);
       setPan({ x: 0, y: 0 });
-      setSelectedRegion(null);
+      setSelectedItem(null);
       setActiveRegion(null);
+      setActiveItem(null);
       setPopoverOpen(false);
     });
   }, [pageNumber]);
@@ -116,8 +218,9 @@ export const Reader: React.FC<ReaderProps> = ({
       } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
         navigateToPage(curPageNum - 1);
       } else if (e.key === 'Escape') {
-        setSelectedRegion(null);
+        setSelectedItem(null);
         setActiveRegion(null);
+        setActiveItem(null);
         setPopoverOpen(false);
       }
     };
@@ -135,7 +238,7 @@ export const Reader: React.FC<ReaderProps> = ({
       (e.target as HTMLElement).closest('.svg-ocr-box') || 
       (e.target as HTMLElement).closest('.bubble-popover') ||
       (e.target as HTMLElement).closest('.floating-reader-toolbar') ||
-      (e.target as HTMLElement).closest('.floating-zoom-toolbar') ||
+      (e.target as HTMLElement).closest('.vertical-zoom-toolbar') ||
       (e.target as HTMLElement).closest('.delete-page-btn') ||
       (e.target as HTMLElement).closest('.reorder-controls')
     ) {
@@ -157,15 +260,16 @@ export const Reader: React.FC<ReaderProps> = ({
     setIsDraggingCanvas(false);
   };
 
-  // --- HOVER POPUP HANDLERS (useCallback resolved React Compiler Ref Warnings) ---
-  const handleMouseEnterRegion = useCallback((r: OcrRegion) => {
+  // --- HOVER POPUP HANDLERS ---
+  const handleMouseEnterItem = useCallback((item: any) => {
     if (hideTimeout.current) clearTimeout(hideTimeout.current);
-    setActiveRegion(r);
+    setActiveItem(item);
+    setActiveRegion(item.regions[0] || null);
     setPopoverOpen(true);
-    setEditText(showTranslations ? (r.translatedText || '') : r.text);
-  }, [showTranslations]);
+    setEditText(getCombinedText(item, showTranslations));
+  }, [showTranslations, getCombinedText]);
 
-  const handleMouseLeaveRegion = useCallback(() => {
+  const handleMouseLeaveItem = useCallback(() => {
     hideTimeout.current = setTimeout(() => {
       setPopoverOpen(false);
       setIsEditingRegion(false);
@@ -181,66 +285,109 @@ export const Reader: React.FC<ReaderProps> = ({
     setIsEditingRegion(false);
   }, []);
 
-  // --- BUBBLE UPDATES ---
-  const handleToggleApprove = async (r: OcrRegion) => {
-    const updatedApproved = !r.approved;
+  // --- BUBBLE/CONVERSATION UPDATES ---
+  const handleToggleApprove = async (item: any) => {
+    const AegeanApproved = !item.approved;
     
-    setOcrRegions(prev => prev.map(item => item.id === r.id ? { ...item, approved: updatedApproved } : item));
-    if (activeRegion && activeRegion.id === r.id) {
-      setActiveRegion(prev => prev ? { ...prev, approved: updatedApproved } : null);
+    // Optimistically update locally
+    setOcrRegions(prev => prev.map(r => {
+      if (item.regions.some((reg: OcrRegion) => reg.id === r.id)) {
+        return { ...r, approved: AegeanApproved };
+      }
+      return r;
+    }));
+
+    if (activeItem && activeItem.id === item.id) {
+      setActiveItem((prev: any) => prev ? { ...prev, approved: AegeanApproved } : null);
     }
 
-    try {
-      const res = await safeFetch(`/api/ocr-regions/${r.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`
-        },
-        body: JSON.stringify({ approved: updatedApproved })
-      });
-      if (!res.ok) {
-        throw new Error('Failed to update approval on server');
+    const promises = item.regions.map(async (region: OcrRegion) => {
+      try {
+        const res = await safeFetch(`/api/ocr-regions/${region.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${user.token}`
+          },
+          body: JSON.stringify({ approved: AegeanApproved })
+        });
+        if (!res.ok) {
+          throw new Error('Failed to update approval on server');
+        }
+      } catch (err) {
+        console.error('Error updating approval status:', err);
       }
-    } catch (err) {
-      console.error('Error updating approval status:', err);
-      // Revert local changes
-      setOcrRegions(prev => prev.map(item => item.id === r.id ? { ...item, approved: !updatedApproved } : item));
-      if (activeRegion && activeRegion.id === r.id) {
-        setActiveRegion(prev => prev ? { ...prev, approved: !updatedApproved } : null);
-      }
+    });
+
+    await Promise.all(promises);
+
+    // Refresh conversations state from backend
+    if (selectedPage) {
+      safeFetch(`/api/images/${selectedPage.imageId}`, {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        setConversations(data.conversations || []);
+      })
+      .catch(err => console.error(err));
     }
   };
 
   const handleSaveEdit = async () => {
-    if (!activeRegion) return;
+    if (!activeItem) return;
     
-    // Fixed: specify strict type on payload instead of any to satisfy lint warnings
-    const body: { text?: string; translatedText?: string } = {};
-    if (showTranslations) {
-      body.translatedText = editText;
-    } else {
-      body.text = editText;
-    }
+    const lines = editText.split('\n');
+    const promises = activeItem.regions.map(async (region: OcrRegion, idx: number) => {
+      const newText = lines[idx] !== undefined ? lines[idx] : '';
+      
+      setOcrRegions(prev => prev.map(r => {
+        if (r.id === region.id) {
+          return {
+            ...r,
+            ...(showTranslations ? { translatedText: newText } : { text: newText })
+          };
+        }
+        return r;
+      }));
 
-    setOcrRegions(prev => prev.map(item => item.id === activeRegion.id ? { ...item, ...(showTranslations ? { translatedText: editText } : { text: editText }) } : item));
-    setActiveRegion(prev => prev ? { ...prev, ...(showTranslations ? { translatedText: editText } : { text: editText }) } : null);
-    setIsEditingRegion(false);
-
-    try {
-      const res = await safeFetch(`/api/ocr-regions/${activeRegion.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`
-        },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) {
-        throw new Error('Failed to save edit on server');
+      const body: { text?: string; translatedText?: string } = {};
+      if (showTranslations) {
+        body.translatedText = newText;
+      } else {
+        body.text = newText;
       }
-    } catch (err) {
-      console.error('Error saving region text edit:', err);
+
+      try {
+        const res = await safeFetch(`/api/ocr-regions/${region.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${user.token}`
+          },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          throw new Error('Failed to save edit on server');
+        }
+      } catch (err) {
+        console.error('Error saving region edit:', err);
+      }
+    });
+
+    setIsEditingRegion(false);
+    await Promise.all(promises);
+
+    // Refresh conversations state from backend
+    if (selectedPage) {
+      safeFetch(`/api/images/${selectedPage.imageId}`, {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        setConversations(data.conversations || []);
+      })
+      .catch(err => console.error(err));
     }
   };
 
@@ -286,8 +433,16 @@ export const Reader: React.FC<ReaderProps> = ({
               if (textChanged || attempts >= 8) {
                 clearInterval(interval);
                 setOcrRegions(regions);
+                setConversations(data.conversations || []);
                 if (activeRegion && activeRegion.id === r.id) {
                   setActiveRegion(freshRegion);
+                  setActiveItem((prev: any) => {
+                    if (!prev) return null;
+                    return {
+                      ...prev,
+                      regions: prev.regions.map((reg: OcrRegion) => reg.id === r.id ? freshRegion : reg)
+                    };
+                  });
                   setEditText(showTranslations ? (freshRegion.translatedText || '') : freshRegion.text);
                 }
                 setIsRedoing(false);
@@ -303,6 +458,48 @@ export const Reader: React.FC<ReaderProps> = ({
       console.error('Error redoing region:', err);
       setIsRedoing(false);
       alert('Failed to start redo job.');
+    }
+  };
+
+  const handleRedoPageOcr = async () => {
+    if (!selectedPage) return;
+    setIsRedoingPageOcr(true);
+    try {
+      const res = await safeFetch(`/api/images/${selectedPage.imageId}/redo?type=ocr`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      if (res.ok) {
+        alert('Page OCR & Translation redo job enqueued successfully.');
+      } else {
+        alert('Failed to enqueue Page OCR redo job.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error triggering redo job.');
+    } finally {
+      setIsRedoingPageOcr(false);
+    }
+  };
+
+  const handleRedoPageTranslation = async () => {
+    if (!selectedPage) return;
+    setIsRedoingPageTranslation(true);
+    try {
+      const res = await safeFetch(`/api/images/${selectedPage.imageId}/redo?type=translation`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      if (res.ok) {
+        alert('Page Translation redo job enqueued successfully.');
+      } else {
+        alert('Failed to enqueue Page Translation redo job.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error triggering redo job.');
+    } finally {
+      setIsRedoingPageTranslation(false);
     }
   };
 
@@ -415,10 +612,10 @@ export const Reader: React.FC<ReaderProps> = ({
                 className="reader-image" 
                 onLoad={handleImgLoad}
                 style={{
-                  maxHeight: `${80 * zoom}vh`,
-                  maxWidth: `${100 * zoom}%`,
-                  width: 'auto',
-                  height: 'auto'
+                  width: fitMode === 'width' ? `${100 * zoom}%` : 'auto',
+                  height: fitMode === 'height' ? `${85 * zoom}vh` : 'auto',
+                  maxHeight: fitMode === 'page' ? `${80 * zoom}vh` : 'none',
+                  maxWidth: fitMode === 'page' ? `${100 * zoom}%` : 'none'
                 }}
                 draggable={false}
               />
@@ -439,27 +636,28 @@ export const Reader: React.FC<ReaderProps> = ({
                   />
                 ))}
 
-                {showOcr && ocrRegions.map((r) => {
-                  const isSelected = selectedRegion?.id === r.id;
-                  const isApproved = r.approved === true;
+                {showOcr && renderItems.map((item) => {
+                  const isSelected = selectedItem?.id === item.id;
+                  const isApproved = item.approved;
                   return (
                     <g 
-                      key={r.id} 
+                      key={item.id} 
                       onClick={() => {
-                        setSelectedRegion(r);
-                        setActiveRegion(r);
+                        setSelectedItem(item);
+                        setActiveItem(item);
+                        setActiveRegion(item.regions[0] || null);
                         setPopoverOpen(true);
-                        setEditText(showTranslations ? (r.translatedText || '') : r.text);
+                        setEditText(getCombinedText(item, showTranslations));
                       }}
-                      onMouseEnter={() => handleMouseEnterRegion(r)}
-                      onMouseLeave={handleMouseLeaveRegion}
+                      onMouseEnter={() => handleMouseEnterItem(item)}
+                      onMouseLeave={handleMouseLeaveItem}
                       style={{ cursor: 'pointer' }}
                     >
                       <rect 
-                        x={r.bboxX}
-                        y={r.bboxY}
-                        width={r.bboxW}
-                        height={r.bboxH}
+                        x={item.bboxX}
+                        y={item.bboxY}
+                        width={item.bboxW}
+                        height={item.bboxH}
                         className="svg-ocr-box"
                         style={{ 
                           fill: isSelected 
@@ -475,7 +673,7 @@ export const Reader: React.FC<ReaderProps> = ({
                           strokeWidth: isSelected || isApproved ? 2.5 : 1.5
                         }}
                       />
-                      <g transform={`translate(${r.bboxX + 10}, ${r.bboxY + 10})`}>
+                      <g transform={`translate(${item.bboxX + 10}, ${item.bboxY + 10})`}>
                         <circle 
                           cx="0" 
                           cy="0" 
@@ -486,25 +684,41 @@ export const Reader: React.FC<ReaderProps> = ({
                               ? 'var(--primary)' 
                               : 'var(--success)'} 
                         />
-                        <text cx="0" cy="0" className="bubble-text-tag">
-                          {isApproved ? '✓' : r.bubbleReadingOrder}
+                        <text 
+                          x="0" 
+                          y="0" 
+                          className="bubble-text-tag"
+                          style={{
+                            textAnchor: 'middle',
+                            dominantBaseline: 'central',
+                            fontSize: '9px',
+                            fontWeight: 'bold',
+                            fill: '#ffffff'
+                          }}
+                        >
+                          {isApproved ? '✓' : (item.regions[0]?.bubbleReadingOrder || 1)}
                         </text>
                       </g>
                     </g>
                   );
                 })}
 
-                {showTranslations && ocrRegions.map((r) => {
-                  if (!r.translatedText) return null;
+                {showTranslations && renderItems.map((item) => {
+                  const combinedTrans = item.regions
+                    .map(r => r.translatedText)
+                    .filter(Boolean)
+                    .join('\n');
 
-                  const overlayWidth = Math.max(r.bboxW, 120);
-                  const overlayHeight = Math.max(r.bboxH, 80);
-                  const overlayX = r.bboxX + (r.bboxW - overlayWidth) / 2;
-                  const overlayY = r.bboxY + (r.bboxH - overlayHeight) / 2;
+                  if (!combinedTrans.trim()) return null;
+
+                  const overlayWidth = Math.max(item.bboxW, 140);
+                  const overlayHeight = Math.max(item.bboxH, 90);
+                  const overlayX = item.bboxX + (item.bboxW - overlayWidth) / 2;
+                  const overlayY = item.bboxY + (item.bboxH - overlayHeight) / 2;
 
                   return (
                     <foreignObject
-                      key={`trans-${r.id}`}
+                      key={`trans-${item.id}`}
                       x={overlayX}
                       y={overlayY}
                       width={overlayWidth}
@@ -527,22 +741,23 @@ export const Reader: React.FC<ReaderProps> = ({
                       >
                         <div
                           style={{
-                            background: theme === 'dark' ? 'rgba(15, 17, 23, 0.9)' : 'rgba(255, 255, 255, 0.95)',
-                            color: theme === 'dark' ? '#ffffff' : '#0f172a',
-                            fontSize: '11px',
+                            background: theme === 'dark' ? 'rgba(15, 17, 23, 0.95)' : '#ffffff',
+                            color: theme === 'dark' ? '#f8fafc' : '#0f172a',
+                            fontSize: '13px',
                             fontWeight: 600,
-                            lineHeight: '1.3',
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            border: theme === 'dark' ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(139, 92, 246, 0.2)',
-                            boxShadow: '0 4px 10px rgba(0, 0, 0, 0.25)',
+                            lineHeight: '1.4',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: theme === 'dark' ? '2px solid rgba(139, 92, 246, 0.6)' : '2px solid rgba(139, 92, 246, 0.4)',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
                             wordBreak: 'break-word',
                             maxWidth: '100%',
                             maxHeight: '100%',
-                            overflowY: 'auto'
+                            overflowY: 'auto',
+                            whiteSpace: 'pre-wrap'
                           }}
                         >
-                          {r.translatedText}
+                          {combinedTrans}
                         </div>
                       </div>
                     </foreignObject>
@@ -551,12 +766,12 @@ export const Reader: React.FC<ReaderProps> = ({
               </svg>
 
               {/* Popover overlay tooltip */}
-              {popoverOpen && activeRegion && (() => {
-                const showBelow = activeRegion.bboxY < 150;
+              {popoverOpen && activeItem && (() => {
+                const showBelow = activeItem.bboxY < 150;
                 const popoverWidth = 240;
                 const halfWidth = popoverWidth / 2;
                 const clampedX = imageDims.w > popoverWidth 
-                  ? Math.max(halfWidth, Math.min(imageDims.w - halfWidth, activeRegion.bboxX + activeRegion.bboxW / 2))
+                  ? Math.max(halfWidth, Math.min(imageDims.w - halfWidth, activeItem.bboxX + activeItem.bboxW / 2))
                   : imageDims.w / 2;
                 return (
                   <div 
@@ -567,8 +782,8 @@ export const Reader: React.FC<ReaderProps> = ({
                       position: 'absolute',
                       left: `${(clampedX / imageDims.w) * 100}%`,
                       top: showBelow 
-                        ? `${((activeRegion.bboxY + activeRegion.bboxH) / imageDims.h) * 100}%`
-                        : `${(activeRegion.bboxY / imageDims.h) * 100}%`,
+                        ? `${((activeItem.bboxY + activeItem.bboxH) / imageDims.h) * 100}%`
+                        : `${(activeItem.bboxY / imageDims.h) * 100}%`,
                       transform: showBelow ? 'translate(-50%, 0%)' : 'translate(-50%, -100%)',
                       marginTop: showBelow ? '12px' : '-12px',
                       zIndex: 100,
@@ -593,7 +808,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         <textarea
                           style={{
                             width: '100%',
-                            minHeight: '60px',
+                            minHeight: '80px',
                             backgroundColor: 'var(--bg-input, rgba(0,0,0,0.05))',
                             border: '1px solid var(--primary)',
                             borderRadius: '4px',
@@ -627,27 +842,27 @@ export const Reader: React.FC<ReaderProps> = ({
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ wordBreak: 'break-word', lineHeight: '1.4', maxHeight: '120px', overflowY: 'auto' }}>
-                          {showTranslations ? (activeRegion.translatedText || 'No translation yet.') : activeRegion.text}
+                        <div style={{ wordBreak: 'break-word', lineHeight: '1.4', maxHeight: '120px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                          {showTranslations ? (getCombinedText(activeItem, true) || 'No translation yet.') : getCombinedText(activeItem, false)}
                         </div>
                         
                         <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-                            {showTranslations ? 'Translated' : 'Original'} ({activeRegion.detectedLanguage})
+                            {showTranslations ? 'Translated' : 'Original'} ({activeItem.regions[0]?.detectedLanguage})
                           </span>
                           <div style={{ display: 'flex', gap: '10px' }}>
                             <button
-                              onClick={() => handleToggleApprove(activeRegion)}
+                              onClick={() => handleToggleApprove(activeItem)}
                               style={{
                                 background: 'none',
                                 border: 'none',
                                 cursor: 'pointer',
-                                color: activeRegion.approved ? 'var(--primary)' : 'var(--text-dim)',
+                                color: activeItem.approved ? 'var(--primary)' : 'var(--text-dim)',
                                 padding: '2px',
                                 display: 'flex',
                                 alignItems: 'center'
                               }}
-                              title={activeRegion.approved ? 'Approved' : 'Approve'}
+                              title={activeItem.approved ? 'Approved' : 'Approve'}
                             >
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12"></polyline>
@@ -657,7 +872,7 @@ export const Reader: React.FC<ReaderProps> = ({
                             <button
                               onClick={() => {
                                 setIsEditingRegion(true);
-                                setEditText(showTranslations ? (activeRegion.translatedText || '') : activeRegion.text);
+                                setEditText(getCombinedText(activeItem, showTranslations));
                               }}
                               style={{
                                 background: 'none',
@@ -676,41 +891,45 @@ export const Reader: React.FC<ReaderProps> = ({
                               </svg>
                             </button>
 
-                            <button
-                              onClick={() => handleRedoRegion(activeRegion, 'ocr')}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--text-dim)',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center'
-                              }}
-                              title="Re-run OCR"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
-                              </svg>
-                            </button>
+                            {activeRegion && (
+                              <>
+                                <button
+                                  onClick={() => handleRedoRegion(activeRegion, 'ocr')}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-dim)',
+                                    padding: '2px',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title="Re-run OCR"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+                                  </svg>
+                                </button>
 
-                            <button
-                              onClick={() => handleRedoRegion(activeRegion, 'translation')}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--text-dim)',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center'
-                              }}
-                              title="Re-translate text"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M2 5h12M7 2v3M7 5c0 4.4-3.6 8-8 8M5 9c-.9 2.3-2.9 4-5 4M14 18h8M18 11l4 10M18 11l-4 10"/>
-                              </svg>
-                            </button>
+                                <button
+                                  onClick={() => handleRedoRegion(activeRegion, 'translation')}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-dim)',
+                                    padding: '2px',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title="Re-translate text"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M2 5h12M7 2v3M7 5c0 4.4-3.6 8-8 8M5 9c-.9 2.3-2.9 4-5 4M14 18h8M18 11l4 10M18 11l-4 10"/>
+                                  </svg>
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -721,59 +940,35 @@ export const Reader: React.FC<ReaderProps> = ({
             </div>
           </div>
 
-          {/* Collapsible Zoom Toolbar */}
-          <div className={`floating-zoom-toolbar glass ${isZoomExpanded ? 'expanded' : 'collapsed'}`}>
+          {/* Sleek Vertical Zoom Toolbar next to page */}
+          <div className="vertical-zoom-toolbar">
             <button 
-              className="zoom-toggle-handle" 
-              onClick={() => setIsZoomExpanded(prev => !prev)}
-              title={isZoomExpanded ? 'Hide Zoom Controls' : 'Show Zoom Controls'}
+              className="zoom-btn"
+              onClick={() => setZoom(prev => Math.min(3.0, prev + 0.1))}
+              disabled={zoom >= 3.0}
+              title="Zoom In"
             >
-              {isZoomExpanded ? (
-                <>
-                  <span style={{ writingMode: 'vertical-lr', textTransform: 'uppercase' }}>Zoom</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
-                </>
-              ) : (
-                <>
-                  <span style={{ writingMode: 'vertical-lr', fontWeight: 'bold' }}>{Math.round(zoom * 100)}%</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                  </svg>
-                </>
-              )}
+              +
             </button>
-            <div className="zoom-content">
-              <button 
-                className="btn btn-secondary"
-                onClick={() => setZoom(prev => Math.min(3.0, prev + 0.1))}
-                disabled={zoom >= 3.0}
-                title="Zoom In"
-              >
-                +
-              </button>
-              <span className="zoom-value">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button 
-                className="btn btn-secondary"
-                onClick={() => setZoom(prev => Math.max(0.5, prev - 0.1))}
-                disabled={zoom <= 0.5}
-                title="Zoom Out"
-              >
-                -
-              </button>
-              <button 
-                className="btn btn-secondary"
-                style={{ fontSize: '11px', padding: '6px 10px', marginTop: '8px' }}
-                onClick={() => setZoom(1.0)}
-                disabled={zoom === 1.0}
-                title="Reset Zoom"
-              >
-                Reset
-              </button>
+            <div className="zoom-display">
+              {Math.round(zoom * 100)}%
             </div>
+            <button 
+              className="zoom-btn"
+              onClick={() => setZoom(prev => Math.max(0.5, prev - 0.1))}
+              disabled={zoom <= 0.5}
+              title="Zoom Out"
+            >
+              -
+            </button>
+            <button 
+              className="zoom-reset-btn"
+              onClick={() => setZoom(1.0)}
+              disabled={zoom === 1.0}
+              title="Reset Zoom"
+            >
+              Reset
+            </button>
           </div>
         </div>
 
@@ -782,54 +977,119 @@ export const Reader: React.FC<ReaderProps> = ({
           <div className="reader-sidebar-nhentai">
             <h2>Workspace Controls</h2>
             
-            {!selectedRegion && (
-              <div className="panel-section">
-                <div className="panel-section-title">Layers Overlay</div>
-                
-                <div className="overlay-toggle">
-                  <span>Panel Boundaries</span>
-                  <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={showPanels} 
-                      onChange={e => setShowPanels(e.target.checked)} 
-                    />
-                    <span className="slider"></span>
-                  </label>
+            {!selectedItem && (
+              <>
+                <div className="panel-section">
+                  <div className="panel-section-title">Layers Overlay</div>
+                  
+                  <div className="overlay-toggle">
+                    <span>Panel Boundaries</span>
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={showPanels} 
+                        onChange={e => setShowPanels(e.target.checked)} 
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+
+                  <div className="overlay-toggle">
+                    <span>OCR Bounding Boxes</span>
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={showOcr} 
+                        onChange={e => setShowOcr(e.target.checked)} 
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+
+                  <div className="overlay-toggle">
+                    <span>Show Translations</span>
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={showTranslations} 
+                        onChange={e => setShowTranslations(e.target.checked)} 
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+
+                  <div className="overlay-toggle">
+                    <span>Group by Conversation</span>
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={groupByConversation} 
+                        onChange={e => setGroupByConversation(e.target.checked)} 
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
                 </div>
 
-                <div className="overlay-toggle">
-                  <span>OCR Bounding Boxes</span>
-                  <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={showOcr} 
-                      onChange={e => setShowOcr(e.target.checked)} 
-                    />
-                    <span className="slider"></span>
-                  </label>
+                <div className="panel-section">
+                  <div className="panel-section-title">Fit Options</div>
+                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                    <button 
+                      className={`btn ${fitMode === 'page' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, fontSize: '11px', padding: '6px' }}
+                      onClick={() => setFitMode('page')}
+                    >
+                      Fit Page
+                    </button>
+                    <button 
+                      className={`btn ${fitMode === 'width' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, fontSize: '11px', padding: '6px' }}
+                      onClick={() => setFitMode('width')}
+                    >
+                      Fit Width
+                    </button>
+                    <button 
+                      className={`btn ${fitMode === 'height' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, fontSize: '11px', padding: '6px' }}
+                      onClick={() => setFitMode('height')}
+                    >
+                      Fit Height
+                    </button>
+                  </div>
                 </div>
 
-                <div className="overlay-toggle">
-                  <span>Show Translations</span>
-                  <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={showTranslations} 
-                      onChange={e => setShowTranslations(e.target.checked)} 
-                    />
-                    <span className="slider"></span>
-                  </label>
+                <div className="panel-section">
+                  <div className="panel-section-title">Page Actions</div>
+                  <button 
+                    className="btn btn-secondary sidebar-action-btn"
+                    onClick={handleRedoPageOcr}
+                    disabled={isRedoingPageOcr}
+                    style={{ width: '100%', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  >
+                    {isRedoingPageOcr ? <div className="spinner-mini"></div> : null}
+                    Redo Page OCR
+                  </button>
+                  <button 
+                    className="btn btn-secondary sidebar-action-btn"
+                    onClick={handleRedoPageTranslation}
+                    disabled={isRedoingPageTranslation}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  >
+                    {isRedoingPageTranslation ? <div className="spinner-mini"></div> : null}
+                    Redo Page Translation
+                  </button>
                 </div>
-              </div>
+              </>
             )}
 
-            {selectedRegion && (
+            {selectedItem && (
               <div className="panel-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Region Inspector</span>
+                  <span>{selectedItem.isConversation ? 'Conversation Inspector' : 'Region Inspector'}</span>
                   <button 
-                    onClick={() => setSelectedRegion(null)}
+                    onClick={() => {
+                      setSelectedItem(null);
+                    }}
                     style={{
                       background: 'transparent',
                       border: '1px solid var(--border-color)',
@@ -863,42 +1123,50 @@ export const Reader: React.FC<ReaderProps> = ({
                 </div>
                 
                 <div className="ocr-detail-card" style={{ flex: 1, overflowY: 'auto' }}>
-                  <div className="badge-row">
+                  <div className="badge-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                     <span className="meta-badge" style={{ backgroundColor: 'var(--primary-glow)', color: 'var(--primary-hover)', borderColor: 'var(--primary)' }}>
-                      Bubble #{selectedRegion.bubbleReadingOrder}
+                      {selectedItem.isConversation ? `Conv #${selectedItem.regions[0]?.bubbleReadingOrder}` : `Bubble #${selectedItem.regions[0]?.bubbleReadingOrder}`}
                     </span>
                     <span className="meta-badge" style={{ backgroundColor: 'var(--success-glow)', color: 'var(--success)' }}>
-                      {selectedRegion.detectedLanguage}
+                      {selectedItem.regions[0]?.detectedLanguage || 'unknown'}
                     </span>
-                    <span className="meta-badge">
-                      {(selectedRegion.confidence * 100).toFixed(0)}% Conf
-                    </span>
-                    {selectedRegion.approved && (
+                    {selectedItem.isConversation && (
+                      <span className="meta-badge" style={{ textTransform: 'capitalize' }}>
+                        {selectedItem.sceneType}
+                      </span>
+                    )}
+                    {selectedItem.approved && (
                       <span className="meta-badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', borderColor: 'var(--success)' }}>
                         Approved
                       </span>
                     )}
                   </div>
                   
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Position: x={selectedRegion.bboxX}, y={selectedRegion.bboxY} ({selectedRegion.bboxW}x{selectedRegion.bboxH})
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                    Position: x={selectedItem.bboxX}, y={selectedItem.bboxY} ({selectedItem.bboxW}x{selectedItem.bboxH})
                   </div>
 
-                  <div style={{ marginTop: '8px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Detected Text</div>
-                    <div className="ocr-text-preview">
-                      {selectedRegion.text}
-                    </div>
-                  </div>
-
-                  {selectedRegion.translatedText && (
-                    <div style={{ marginTop: '8px' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Translated Text</div>
-                      <div className="ocr-text-preview" style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary)' }}>
-                        {selectedRegion.translatedText}
+                  {selectedItem.regions.map((reg: OcrRegion, idx: number) => (
+                    <div key={reg.id} style={{ borderBottom: idx < selectedItem.regions.length - 1 ? '1px dashed var(--border-color)' : 'none', paddingBottom: '12px', marginBottom: '12px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                        Region #{idx + 1} Original Text
                       </div>
+                      <div className="ocr-text-preview" style={{ marginBottom: '8px' }}>
+                        {reg.text}
+                      </div>
+
+                      {reg.translatedText && (
+                        <>
+                          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                            Region #{idx + 1} Translated Text
+                          </div>
+                          <div className="ocr-text-preview" style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary)' }}>
+                            {reg.translatedText}
+                          </div>
+                        </>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}

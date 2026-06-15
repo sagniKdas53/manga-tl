@@ -32,6 +32,8 @@ public class PageController {
     private final MinioService minioService;
     private final JobCoordinatorService jobCoordinatorService;
     private final com.manga.library.service.PageService pageService;
+    private final ConversationRepository conversationRepository;
+    private final ConversationRegionRepository conversationRegionRepository;
 
     @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
     private String contextPath;
@@ -118,11 +120,31 @@ public class PageController {
         List<Panel> panels = panelRepository.findByImageId(imageId);
         List<OcrRegion> ocrRegions = ocrRegionRepository.findByImageId(imageId);
 
+        // Include conversations with their region mappings
+        List<Conversation> conversations = conversationRepository.findByImageId(imageId);
+        List<Map<String, Object>> convList = new ArrayList<>();
+        for (Conversation conv : conversations) {
+            Map<String, Object> convMap = new HashMap<>();
+            convMap.put("id", conv.getId().toString());
+            convMap.put("sceneType", conv.getSceneType());
+            List<ConversationRegion> crs = conversationRegionRepository.findByConversationId(conv.getId());
+            List<Map<String, Object>> crList = new ArrayList<>();
+            for (ConversationRegion cr : crs) {
+                Map<String, Object> crMap = new HashMap<>();
+                crMap.put("regionId", cr.getRegionId().toString());
+                crMap.put("position", cr.getPosition());
+                crList.add(crMap);
+            }
+            convMap.put("regions", crList);
+            convList.add(convMap);
+        }
+
         Map<String, Object> response = new HashMap<>();
         response.put("image", image);
         response.put("url", getImageUrl(image.getId()));
         response.put("panels", panels);
         response.put("ocrRegions", ocrRegions);
+        response.put("conversations", convList);
 
         return ResponseEntity.ok(response);
     }
@@ -273,6 +295,25 @@ public class PageController {
             return ResponseEntity.ok(Map.of("status", "enqueued"));
         } catch (Exception e) {
             log.error("Failed to trigger region redo", e);
+            return ResponseEntity.internalServerError().body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/images/{imageId}/redo")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+    public ResponseEntity<?> redoImage(
+            @PathVariable UUID imageId,
+            @RequestParam("type") String type) {
+        log.info("Request to redo image {} with type {}", imageId, type);
+        try {
+            if ("ocr".equals(type) || "translation".equals(type) || "layout".equals(type)) {
+                jobCoordinatorService.triggerImageRedo(imageId, type);
+                return ResponseEntity.ok(Map.of("status", "enqueued"));
+            } else {
+                return ResponseEntity.badRequest().body("Invalid redo type");
+            }
+        } catch (Exception e) {
+            log.error("Failed to trigger image redo", e);
             return ResponseEntity.internalServerError().body(e.getMessage());
         }
     }
