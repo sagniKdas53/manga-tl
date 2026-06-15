@@ -50,6 +50,45 @@ export const Reader: React.FC<ReaderProps> = ({
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
+  // Touch & Zoom enhancements
+  const [isTouchScreen, setIsTouchScreen] = useState(false);
+  const [showZoomBar, setShowZoomBar] = useState(() => {
+    const saved = localStorage.getItem('manga_show_zoom_bar');
+    return saved === 'false' ? false : true;
+  });
+  const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
+
+  const canvasAreaRef = useRef<HTMLDivElement>(null);
+  const touchStartDist = useRef<number | null>(null);
+  const touchStartZoom = useRef<number>(1.0);
+  const initialTouchPos = useRef({ x: 0, y: 0 });
+  const hasMoved = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem('manga_show_zoom_bar', showZoomBar.toString());
+  }, [showZoomBar]);
+
+  useEffect(() => {
+    setIsTouchScreen(
+      'ontouchstart' in window ||
+      navigator.maxTouchPoints > 0
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!canvasAreaRef.current) return;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setContainerSize({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+    });
+    resizeObserver.observe(canvasAreaRef.current);
+    return () => resizeObserver.disconnect();
+  }, []);
+
   // Popover States
   const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -151,6 +190,26 @@ export const Reader: React.FC<ReaderProps> = ({
     return [...convItems, ...ungroupedItems];
   }, [groupByConversation, ocrRegions, conversations, conversationsWithRegions]);
 
+  // Dynamic calculation of the absolute zoom percentage
+  const displayedZoom = React.useMemo(() => {
+    if (imageDims.w <= 0 || imageDims.h <= 0) return 100;
+    const aspectRatio = imageDims.w / imageDims.h;
+    const vh = window.innerHeight;
+    const containerWidth = Math.max(100, containerSize.width - 48); // 24px padding on each side
+    const refWidth = Math.min(containerWidth, vh * 0.8 * aspectRatio);
+    
+    let targetWidth = refWidth;
+    if (fitMode === 'page') {
+      targetWidth = refWidth * zoom;
+    } else if (fitMode === 'width') {
+      targetWidth = containerWidth * zoom;
+    } else if (fitMode === 'height') {
+      targetWidth = vh * 0.85 * aspectRatio * zoom;
+    }
+    
+    return Math.round((targetWidth / refWidth) * 100);
+  }, [fitMode, zoom, containerSize, imageDims]);
+
   // Fetch page details (panels, OCR regions, conversations) when page selection updates
   useEffect(() => {
     if (selectedPage && loadedImageId !== selectedPage.imageId) {
@@ -246,10 +305,17 @@ export const Reader: React.FC<ReaderProps> = ({
     }
     setIsDraggingCanvas(true);
     dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    initialTouchPos.current = { x: e.clientX, y: e.clientY };
+    hasMoved.current = false;
   };
 
   const handleMouseMoveCanvas = (e: React.MouseEvent) => {
     if (!isDraggingCanvas) return;
+    const dx = e.clientX - initialTouchPos.current.x;
+    const dy = e.clientY - initialTouchPos.current.y;
+    if (Math.sqrt(dx * dx + dy * dy) > 10) {
+      hasMoved.current = true;
+    }
     setPan({
       x: e.clientX - dragStart.current.x,
       y: e.clientY - dragStart.current.y
@@ -258,6 +324,109 @@ export const Reader: React.FC<ReaderProps> = ({
 
   const handleMouseUpCanvas = () => {
     setIsDraggingCanvas(false);
+  };
+
+  // --- TOUCH HANDLERS FOR TOUCH SCREENS ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isTouchScreen) return;
+    
+    // Ignore touch if inside interactive components
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('.svg-ocr-box') || 
+      target.closest('.bubble-popover') ||
+      target.closest('.floating-reader-toolbar') ||
+      target.closest('.vertical-zoom-toolbar') ||
+      target.closest('.delete-page-btn') ||
+      target.closest('.reorder-controls')
+    ) {
+      return;
+    }
+
+    if (e.touches.length === 2) {
+      // Pinch zoom start
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchStartDist.current = Math.sqrt(dx * dx + dy * dy);
+      touchStartZoom.current = zoom;
+      setIsDraggingCanvas(false);
+    } else if (e.touches.length === 1) {
+      // Single finger pan start
+      setIsDraggingCanvas(true);
+      dragStart.current = {
+        x: e.touches[0].clientX - pan.x,
+        y: e.touches[0].clientY - pan.y
+      };
+      initialTouchPos.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY
+      };
+      hasMoved.current = false;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isTouchScreen) return;
+
+    if (e.touches.length === 2 && touchStartDist.current !== null) {
+      // Pinch zoom logic
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (touchStartDist.current > 0) {
+        const factor = dist / touchStartDist.current;
+        const newZoom = touchStartZoom.current * factor;
+        // Restrict zoom between 0.5 and 3.0
+        setZoom(Math.max(0.5, Math.min(3.0, newZoom)));
+      }
+    } else if (e.touches.length === 1 && isDraggingCanvas) {
+      // Single finger pan logic
+      const dx = e.touches[0].clientX - initialTouchPos.current.x;
+      const dy = e.touches[0].clientY - initialTouchPos.current.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 10) {
+        hasMoved.current = true;
+      }
+      setPan({
+        x: e.touches[0].clientX - dragStart.current.x,
+        y: e.touches[0].clientY - dragStart.current.y
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isTouchScreen) return;
+    if (e.touches.length < 2) {
+      touchStartDist.current = null;
+    }
+    if (e.touches.length === 0) {
+      setIsDraggingCanvas(false);
+    }
+  };
+
+  const handleCanvasAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isTouchScreen) return;
+    if (hasMoved.current) return; // Ignore clicks that were drags
+
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('.manga-canvas-wrapper') ||
+      target.closest('.vertical-zoom-toolbar') ||
+      target.closest('.reader-sidebar-nhentai') ||
+      target.closest('.reader-navbar-nhentai') ||
+      target.closest('.reader-footer-nhentai')
+    ) {
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const isLeftHalf = clickX < rect.width / 2;
+
+    if (isLeftHalf) {
+      navigateToPage(curPageNum - 1);
+    } else {
+      navigateToPage(curPageNum + 1);
+    }
   };
 
   // --- HOVER POPUP HANDLERS ---
@@ -590,12 +759,21 @@ export const Reader: React.FC<ReaderProps> = ({
       <div className="reader-workspace-frame-nhentai">
         <div className="reader-main-nhentai">
           <div 
+            ref={canvasAreaRef}
             className="reader-canvas-area"
             onMouseDown={handleMouseDownCanvas}
             onMouseMove={handleMouseMoveCanvas}
             onMouseUp={handleMouseUpCanvas}
             onMouseLeave={handleMouseUpCanvas}
-            style={{ overflow: 'hidden', cursor: isDraggingCanvas ? 'grabbing' : 'grab' }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onClick={handleCanvasAreaClick}
+            style={{ 
+              overflow: 'hidden', 
+              cursor: isDraggingCanvas ? 'grabbing' : 'grab',
+              touchAction: isTouchScreen ? 'none' : 'auto'
+            }}
           >
             <div 
               className="manga-canvas-wrapper"
@@ -941,35 +1119,40 @@ export const Reader: React.FC<ReaderProps> = ({
           </div>
 
           {/* Sleek Vertical Zoom Toolbar next to page */}
-          <div className="vertical-zoom-toolbar">
-            <button 
-              className="zoom-btn"
-              onClick={() => setZoom(prev => Math.min(3.0, prev + 0.1))}
-              disabled={zoom >= 3.0}
-              title="Zoom In"
-            >
-              +
-            </button>
-            <div className="zoom-display">
-              {Math.round(zoom * 100)}%
+          {showZoomBar && (
+            <div className="vertical-zoom-toolbar">
+              <button 
+                className="zoom-btn"
+                onClick={() => setZoom(prev => Math.min(3.0, prev + 0.1))}
+                disabled={zoom >= 3.0}
+                title="Zoom In"
+              >
+                +
+              </button>
+              <div className="zoom-display">
+                {displayedZoom}%
+              </div>
+              <button 
+                className="zoom-btn"
+                onClick={() => setZoom(prev => Math.max(0.5, prev - 0.1))}
+                disabled={zoom <= 0.5}
+                title="Zoom Out"
+              >
+                -
+              </button>
+              <button 
+                className="zoom-reset-btn"
+                onClick={() => {
+                  setZoom(1.0);
+                  setFitMode('page');
+                }}
+                disabled={zoom === 1.0 && fitMode === 'page'}
+                title="Reset Zoom"
+              >
+                Reset
+              </button>
             </div>
-            <button 
-              className="zoom-btn"
-              onClick={() => setZoom(prev => Math.max(0.5, prev - 0.1))}
-              disabled={zoom <= 0.5}
-              title="Zoom Out"
-            >
-              -
-            </button>
-            <button 
-              className="zoom-reset-btn"
-              onClick={() => setZoom(1.0)}
-              disabled={zoom === 1.0}
-              title="Reset Zoom"
-            >
-              Reset
-            </button>
-          </div>
+          )}
         </div>
 
         {/* Collapsible Translation Sidebar */}
@@ -1013,6 +1196,18 @@ export const Reader: React.FC<ReaderProps> = ({
                         type="checkbox" 
                         checked={showTranslations} 
                         onChange={e => setShowTranslations(e.target.checked)} 
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+
+                  <div className="overlay-toggle">
+                    <span>Show Zoom Bar</span>
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={showZoomBar} 
+                        onChange={e => setShowZoomBar(e.target.checked)} 
                       />
                       <span className="slider"></span>
                     </label>
