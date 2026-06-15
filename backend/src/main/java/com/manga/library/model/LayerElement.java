@@ -22,10 +22,12 @@ public class LayerElement {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "layer_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Layer layer;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "region_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private OcrRegion region;
 
     private String text;
@@ -67,4 +69,14 @@ public class LayerElement {
 
     @Column(name = "edited_at")
     private OffsetDateTime editedAt;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("layerId")
+    public UUID getLayerIdSerialized() {
+        return layer != null ? layer.getId() : null;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("regionId")
+    public UUID getRegionIdSerialized() {
+        return region != null ? region.getId() : null;
+    }
 }

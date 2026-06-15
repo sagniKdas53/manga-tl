@@ -189,7 +189,8 @@ public class PageController {
         List<Layer> layers = new ArrayList<>(layerRepository.findByImageId(imageId));
         
         // Auto-initialize default translation layer if it doesn't exist but we have translations
-        if (layers.isEmpty()) {
+        boolean hasTranslationLayer = layers.stream().anyMatch(l -> "translation".equals(l.getType()));
+        if (!hasTranslationLayer) {
             List<OcrRegion> ocrRegions = ocrRegionRepository.findByImageId(imageId);
             boolean hasTranslations = ocrRegions.stream().anyMatch(r -> r.getTranslatedText() != null && !r.getTranslatedText().trim().isEmpty());
             

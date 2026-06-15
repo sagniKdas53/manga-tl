@@ -22,6 +22,7 @@ public class Layer {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "image_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Image image;
 
     @Column(nullable = false)
