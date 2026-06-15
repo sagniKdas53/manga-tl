@@ -7,9 +7,18 @@ import redis
 import requests
 import numpy as np
 import cv2
+import logging
+import uuid
 from minio import Minio
 from functools import cmp_to_key
 from manga_ocr import MangaOcr
+
+# Configure structured logging
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL), format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger("translation")
 
 # Import PaddleOCR — lazy-initialized per language on first use.
 # The backend passes sourceLanguage + readingDirection in each OCR job payload
@@ -400,13 +409,19 @@ Translate the list of manga text bubbles into natural English.
 These bubbles appear in reading order. Maintain context, tone, emotion, and relationships between speakers.
 Return ONLY valid JSON format conforming to the requested schema. No conversational prefix, suffix, or markdown formatting."""
 
+PROMPT_VERSION = "batch-v3"
+
 
 def contains_japanese(text):
     return bool(re.search(r"[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]", text))
 
 
-def is_valid_translation(source, translated):
+def is_valid_translation(source, translated, request_id=None):
+    req_prefix = f"[{request_id}] " if request_id else ""
     if not translated:
+        logger.warning(
+            f"{req_prefix}Validation failed reason=empty_translation source={source}"
+        )
         return False
 
     translated_stripped = translated.strip()
@@ -416,17 +431,21 @@ def is_valid_translation(source, translated):
     forbidden_substrings = ["translate the following text", "text:", "output:", "json"]
     for pattern in forbidden_substrings:
         if pattern in translated_stripped.lower():
-            print(
-                f"[Sanity Check] Rejected translation containing boilerplate '{pattern}': '{translated}'",
-                flush=True,
+            logger.warning(
+                f"{req_prefix}Validation failed "
+                f"reason=contains_boilerplate "
+                f"boilerplate='{pattern}' "
+                f"source={source} "
+                f"translation={translated}"
             )
             return False
 
     # Check if translated == source for Japanese
     if contains_japanese(source_stripped) and translated_stripped == source_stripped:
-        print(
-            f"[Sanity Check] Rejected translation identical to Japanese source: '{translated}'",
-            flush=True,
+        logger.warning(
+            f"{req_prefix}Validation failed "
+            f"reason=identical_to_source "
+            f"source={source}"
         )
         return False
 
@@ -435,9 +454,11 @@ def is_valid_translation(source, translated):
         len(source_stripped) <= 5
         and len(translated_stripped) > len(source_stripped) * 20
     ):
-        print(
-            f"[Sanity Check] Rejected pathologically long translation for short source: '{translated}' (source: '{source}')",
-            flush=True,
+        logger.warning(
+            f"{req_prefix}Validation failed "
+            f"reason=pathologically_long "
+            f"source={source} "
+            f"translation={translated}"
         )
         return False
 
@@ -573,7 +594,34 @@ def parse_and_validate_batch(response_text, unmatched_regions):
     return None
 
 
-def try_cloud_ai(provider, api_key, model, prompt, response_schema=None):
+def estimate_cost(model, prompt_tokens, completion_tokens, provider=None):
+    if not prompt_tokens or not completion_tokens:
+        return 0.0
+    in_rate = 0.0
+    out_rate = 0.0
+    model_lower = (model or "").lower()
+
+    if "deepseek-v4-pro" in model_lower:
+        in_rate = 0.435 / 1_000_000
+        out_rate = 0.87 / 1_000_000
+    elif "gemini-2.5-flash" in model_lower:
+        if provider == "gemini":
+            in_rate = 0.075 / 1_000_000
+            out_rate = 0.30 / 1_000_000
+        else:  # OpenRouter
+            in_rate = 0.30 / 1_000_000
+            out_rate = 2.50 / 1_000_000
+    elif "claude-3-5-sonnet" in model_lower:
+        in_rate = 3.0 / 1_000_000
+        out_rate = 15.0 / 1_000_000
+
+    return (prompt_tokens * in_rate) + (completion_tokens * out_rate)
+
+
+def try_cloud_ai(
+    provider, api_key, model, prompt, response_schema=None, request_id=None
+):
+    req_prefix = f"[{request_id}] " if request_id else ""
     enforce_rate_limit()
     url = ""
     headers = {}
@@ -660,18 +708,58 @@ def try_cloud_ai(provider, api_key, model, prompt, response_schema=None):
         return None
 
     try:
-        print(
-            f"[Translation] Sending request to Cloud LLM provider '{provider}' using model '{model}'...",
-            flush=True,
+        logger.info(
+            f"{req_prefix}Sending request to Cloud LLM provider '{provider}' using model '{model}'..."
         )
+        start = time.perf_counter()
         res = requests.post(
             url,
             json=payload,
             headers=headers,
             timeout=45 if provider == "nvidia" else 30,
         )
+        elapsed = time.perf_counter() - start
+        logger.info(
+            f"{req_prefix}Provider={provider} " f"Model={model} " f"Time={elapsed:.2f}s"
+        )
+
+        response_text = res.text
+        logger.debug(f"{req_prefix}Raw Model Output:\n{response_text}")
+
         if res.status_code == 200:
             res_json = res.json()
+
+            # Extract and log token usage
+            usage = res_json.get("usage")
+            usage_meta = res_json.get("usageMetadata")
+            prompt_tokens = None
+            completion_tokens = None
+            total_tokens = None
+            if usage:
+                prompt_tokens = usage.get("prompt_tokens") or usage.get("input_tokens")
+                completion_tokens = usage.get("completion_tokens") or usage.get(
+                    "output_tokens"
+                )
+                total_tokens = usage.get("total_tokens") or (
+                    (prompt_tokens + completion_tokens)
+                    if prompt_tokens and completion_tokens
+                    else None
+                )
+            elif usage_meta:
+                prompt_tokens = usage_meta.get("promptTokenCount")
+                completion_tokens = usage_meta.get("candidatesTokenCount")
+                total_tokens = usage_meta.get("totalTokenCount")
+
+            if prompt_tokens is not None:
+                logger.info(
+                    f"{req_prefix}Tokens "
+                    f"in={prompt_tokens} "
+                    f"out={completion_tokens} "
+                    f"total={total_tokens}"
+                )
+                cost = estimate_cost(model, prompt_tokens, completion_tokens, provider)
+                logger.info(f"{req_prefix}Estimated cost: ${cost:.5f}")
+
             if provider == "gemini":
                 return res_json["candidates"][0]["content"]["parts"][0]["text"]
             elif provider == "anthropic":
@@ -679,18 +767,24 @@ def try_cloud_ai(provider, api_key, model, prompt, response_schema=None):
             else:
                 return res_json["choices"][0]["message"]["content"]
         else:
-            print(
-                f"[Translation] Cloud LLM provider '{provider}' returned error: {res.status_code} - {res.text}",
-                flush=True,
+            logger.error(
+                f"{req_prefix}Cloud LLM provider '{provider}' returned error: {res.status_code} - {res.text}"
             )
     except Exception as e:
-        print(f"[Translation] Cloud LLM Translation failed: {e}", flush=True)
+        logger.error(f"{req_prefix}Cloud LLM Translation failed: {e}")
     return None
 
 
 def try_cloud_ai_vision(
-    provider, api_key, model, prompt, base64_image, response_schema=None
+    provider,
+    api_key,
+    model,
+    prompt,
+    base64_image,
+    response_schema=None,
+    request_id=None,
 ):
+    req_prefix = f"[{request_id}] " if request_id else ""
     enforce_rate_limit()
     url = ""
     headers = {}
@@ -754,24 +848,63 @@ def try_cloud_ai_vision(
         return None
 
     try:
-        print(
-            f"[Translation VLM] Sending vision request to provider '{provider}' using model '{model}'...",
-            flush=True,
+        logger.info(
+            f"{req_prefix}Sending vision request to provider '{provider}' using model '{model}'..."
         )
+        start = time.perf_counter()
         res = requests.post(url, json=payload, headers=headers, timeout=45)
+        elapsed = time.perf_counter() - start
+        logger.info(
+            f"{req_prefix}Provider={provider} " f"Model={model} " f"Time={elapsed:.2f}s"
+        )
+
+        response_text = res.text
+        logger.debug(f"{req_prefix}Raw Model Output:\n{response_text}")
+
         if res.status_code == 200:
             res_json = res.json()
+
+            # Extract and log token usage
+            usage = res_json.get("usage")
+            usage_meta = res_json.get("usageMetadata")
+            prompt_tokens = None
+            completion_tokens = None
+            total_tokens = None
+            if usage:
+                prompt_tokens = usage.get("prompt_tokens") or usage.get("input_tokens")
+                completion_tokens = usage.get("completion_tokens") or usage.get(
+                    "output_tokens"
+                )
+                total_tokens = usage.get("total_tokens") or (
+                    (prompt_tokens + completion_tokens)
+                    if prompt_tokens and completion_tokens
+                    else None
+                )
+            elif usage_meta:
+                prompt_tokens = usage_meta.get("promptTokenCount")
+                completion_tokens = usage_meta.get("candidatesTokenCount")
+                total_tokens = usage_meta.get("totalTokenCount")
+
+            if prompt_tokens is not None:
+                logger.info(
+                    f"{req_prefix}Tokens "
+                    f"in={prompt_tokens} "
+                    f"out={completion_tokens} "
+                    f"total={total_tokens}"
+                )
+                cost = estimate_cost(model, prompt_tokens, completion_tokens, provider)
+                logger.info(f"{req_prefix}Estimated cost: ${cost:.5f}")
+
             if provider == "gemini":
                 return res_json["candidates"][0]["content"]["parts"][0]["text"]
             else:
                 return res_json["choices"][0]["message"]["content"]
         else:
-            print(
-                f"[Translation VLM] Provider '{provider}' returned error: {res.status_code} - {res.text}",
-                flush=True,
+            logger.error(
+                f"{req_prefix}Provider '{provider}' returned error: {res.status_code} - {res.text}"
             )
     except Exception as e:
-        print(f"[Translation VLM] Vision Translation failed: {e}", flush=True)
+        logger.error(f"{req_prefix}Vision Translation failed: {e}")
     return None
 
 
@@ -788,7 +921,8 @@ Rules:
 - Return only the translated text."""
 
 
-def try_local_ai(prompt, text, response_schema=None):
+def try_local_ai(prompt, text, response_schema=None, request_id=None):
+    req_prefix = f"[{request_id}] " if request_id else ""
     enforce_rate_limit()
     local_provider = (
         os.environ.get("LOCAL_LLM_PROVIDER", os.environ.get("LLM_PROVIDER", "lmstudio"))
@@ -798,6 +932,7 @@ def try_local_ai(prompt, text, response_schema=None):
     local_endpoint = os.environ.get(
         "LOCAL_LLM_ENDPOINT", os.environ.get("LLM_ENDPOINT", "")
     ).strip()
+    # Keep gemma3:4b as fallback as requested by user
     model = os.environ.get("LOCAL_LLM_MODEL", "gemma3:4b")
 
     if not local_endpoint:
@@ -824,9 +959,8 @@ def try_local_ai(prompt, text, response_schema=None):
 
     for endpoint in endpoints_to_try:
         try:
-            print(
-                f"[Translation] Trying Local AI endpoint '{endpoint}' using model '{model}'...",
-                flush=True,
+            logger.info(
+                f"{req_prefix}Trying Local AI endpoint '{endpoint}' using model '{model}'..."
             )
 
             if "/api/v1/chat" in endpoint:
@@ -845,12 +979,23 @@ def try_local_ai(prompt, text, response_schema=None):
                     else:
                         payload["response_format"] = {"type": "json_object"}
 
+            start = time.perf_counter()
             res = requests.post(
                 endpoint,
                 json=payload,
                 headers={"Content-Type": "application/json"},
                 timeout=300,
             )
+            elapsed = time.perf_counter() - start
+            logger.info(
+                f"{req_prefix}Provider={local_provider} "
+                f"Model={model} "
+                f"Time={elapsed:.2f}s"
+            )
+
+            response_text = res.text
+            logger.debug(f"{req_prefix}Raw Model Output:\n{response_text}")
+
             if res.status_code == 200:
                 res_json = res.json()
                 translated = None
@@ -874,15 +1019,15 @@ def try_local_ai(prompt, text, response_schema=None):
                 if translated:
                     return translated
         except Exception as e:
-            print(
-                f"[Translation] Local AI connection failed for '{endpoint}': {e}",
-                flush=True,
+            logger.error(
+                f"{req_prefix}Local AI connection failed for '{endpoint}': {e}"
             )
 
     return None
 
 
-def try_deepl(text, target_lang="en"):
+def try_deepl(text, target_lang="en", request_id=None):
+    req_prefix = f"[{request_id}] " if request_id else ""
     deepl_key = os.environ.get("DEEPL_API_KEY", os.environ.get("DEEPL_KEY", "")).strip()
     if not deepl_key:
         return None
@@ -893,47 +1038,61 @@ def try_deepl(text, target_lang="en"):
         url = "https://api.deepl.com/v2/translate"
 
     try:
-        print("[Translation] Sending request to DeepL API...", flush=True)
+        logger.info(f"{req_prefix}Sending request to DeepL API...")
         headers = {
             "Authorization": f"DeepL-Auth-Key {deepl_key}",
             "Content-Type": "application/json",
         }
         payload = {"text": [text], "target_lang": target_lang.upper()}
+
+        start = time.perf_counter()
         res = requests.post(url, json=payload, headers=headers, timeout=8)
+        elapsed = time.perf_counter() - start
+        logger.info(
+            f"{req_prefix}Provider=deepl " f"Model=deepl " f"Time={elapsed:.2f}s"
+        )
+
         if res.status_code == 200:
             res_json = res.json()
             translated = res_json["translations"][0]["text"]
-            print(
-                f"[Translation] DeepL Translation Success: '{translated}'", flush=True
-            )
+            logger.info(f"{req_prefix}DeepL Translation Success: '{translated}'")
             return translated
         else:
-            print(
-                f"[Translation] DeepL API returned error: {res.status_code} - {res.text}",
-                flush=True,
+            logger.error(
+                f"{req_prefix}DeepL API returned error: {res.status_code} - {res.text}"
             )
     except Exception as e:
-        print(f"[Translation] DeepL Translation failed: {e}", flush=True)
+        logger.error(f"{req_prefix}DeepL Translation failed: {e}")
     return None
 
 
-def try_google_translate(text, source_lang="auto", target_lang="en"):
+def try_google_translate(text, source_lang="auto", target_lang="en", request_id=None):
+    req_prefix = f"[{request_id}] " if request_id else ""
     try:
-        print(f"[Translation] Falling back to free Google Translate API...", flush=True)
+        logger.info(f"{req_prefix}Falling back to free Google Translate API...")
         import urllib.parse
 
         url = (
             f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={source_lang}&tl={target_lang}&dt=t&q="
             + urllib.parse.quote(text)
         )
+
+        start = time.perf_counter()
         res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+        elapsed = time.perf_counter() - start
+        logger.info(
+            f"{req_prefix}Provider=google_translate "
+            f"Model=free_api "
+            f"Time={elapsed:.2f}s"
+        )
+
         if res.status_code == 200:
             data = res.json()
             translated = "".join([part[0] for part in data[0] if part[0]])
-            print(f"[Translation] Google Translate Success: '{translated}'", flush=True)
+            logger.info(f"{req_prefix}Google Translate Success: '{translated}'")
             return translated
     except Exception as e:
-        print(f"[Translation] Google Translate fallback failed: {e}", flush=True)
+        logger.error(f"{req_prefix}Google Translate fallback failed: {e}")
     return None
 
 
@@ -955,7 +1114,11 @@ def clean_translated_text(translated):
     return translated
 
 
-def translate_text(text, source_lang="auto", target_lang="en"):
+def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
+    if not request_id:
+        request_id = str(uuid.uuid4())[:8]
+    req_prefix = f"[{request_id}] "
+
     provider = os.environ.get("MODEL_PROVIDER", "").lower().strip()
     api_key = os.environ.get("API_KEY", "").strip()
 
@@ -968,70 +1131,153 @@ def translate_text(text, source_lang="auto", target_lang="en"):
     nvidia_key = os.environ.get("NVIDIA_API_KEY", "").strip() or (
         api_key if provider == "nvidia" else ""
     )
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or (
+        api_key if provider == "gemini" else ""
+    )
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip() or (
+        api_key if provider == "anthropic" else ""
+    )
+    deepl_key = os.environ.get("DEEPL_API_KEY", os.environ.get("DEEPL_KEY", "")).strip()
 
     prompt = f"Translate the following text to natural English, maintaining its tone and context. Respond ONLY with the translated text. Do not include any tags, notes, or explanations.\n\nText: {text}"
 
+    # Log Strategy
+    logger.info(f"{req_prefix}Translation Strategy:")
+    strategy_idx = 1
+    if not local_only:
+        if openrouter_key:
+            logger.info(f"{req_prefix}{strategy_idx}. DeepSeek V4 Pro (OpenRouter)")
+            strategy_idx += 1
+            logger.info(f"{req_prefix}{strategy_idx}. Gemini 2.5 Flash (OpenRouter)")
+            strategy_idx += 1
+        elif gemini_key:
+            logger.info(f"{req_prefix}{strategy_idx}. Gemini 2.5 Flash (Direct)")
+            strategy_idx += 1
+
+        if nvidia_key and provider == "nvidia":
+            logger.info(f"{req_prefix}{strategy_idx}. Nemotron (Nvidia)")
+            strategy_idx += 1
+        if anthropic_key:
+            logger.info(f"{req_prefix}{strategy_idx}. Claude 3.5 Sonnet (Direct)")
+            strategy_idx += 1
+
+    logger.info(f"{req_prefix}{strategy_idx}. Local LLM")
+    strategy_idx += 1
+    if not local_only:
+        if deepl_key:
+            logger.info(f"{req_prefix}{strategy_idx}. DeepL")
+            strategy_idx += 1
+        logger.info(f"{req_prefix}{strategy_idx}. Google Translate")
+
     if local_only:
-        print(
-            f"[Translation] LOCAL_ONLY mode (provider='{provider}') — skipping cloud AI tiers.",
-            flush=True,
+        logger.info(
+            f"{req_prefix}LOCAL_ONLY mode (provider='{provider}') — skipping cloud AI tiers."
         )
     else:
-        # 1. Cloud LLM Layer (DeepSeek V4 Pro or Nemotron)
+        # 1. Cloud LLM Layer (DeepSeek V4 Pro, then Gemini 2.5 Flash / Claude Sonnet fallback)
         if openrouter_key:
             translated = try_cloud_ai(
-                "openrouter", openrouter_key, "deepseek-ai/deepseek-v4-pro", prompt
+                "openrouter",
+                openrouter_key,
+                "deepseek-ai/deepseek-v4-pro",
+                prompt,
+                request_id=request_id,
             )
             if translated:
                 cleaned = clean_translated_text(translated)
-                if is_valid_translation(text, cleaned):
+                if is_valid_translation(text, cleaned, request_id=request_id):
                     return cleaned
 
-        if nvidia_key:
+            # Fallback to Gemini 2.5 Flash via OpenRouter
             translated = try_cloud_ai(
-                "nvidia", nvidia_key, "nvidia/llama-3.3-nemotron-super-49b-v1", prompt
+                "openrouter",
+                openrouter_key,
+                "google/gemini-2.5-flash",
+                prompt,
+                request_id=request_id,
             )
             if translated:
                 cleaned = clean_translated_text(translated)
-                if is_valid_translation(text, cleaned):
+                if is_valid_translation(text, cleaned, request_id=request_id):
+                    return cleaned
+
+        elif gemini_key:
+            # Direct Gemini API fallback
+            preferred = os.environ.get("PREFERRED_MODEL", "gemini-2.5-flash")
+            translated = try_cloud_ai(
+                "gemini", gemini_key, preferred, prompt, request_id=request_id
+            )
+            if translated:
+                cleaned = clean_translated_text(translated)
+                if is_valid_translation(text, cleaned, request_id=request_id):
+                    return cleaned
+
+        if nvidia_key and provider == "nvidia":
+            # Keep Nemotron if nvidia is the provider and nvidia key is provided
+            translated = try_cloud_ai(
+                "nvidia",
+                nvidia_key,
+                "nvidia/llama-3.3-nemotron-super-49b-v1",
+                prompt,
+                request_id=request_id,
+            )
+            if translated:
+                cleaned = clean_translated_text(translated)
+                if is_valid_translation(text, cleaned, request_id=request_id):
+                    return cleaned
+
+        if anthropic_key:
+            translated = try_cloud_ai(
+                "anthropic",
+                anthropic_key,
+                "claude-3-5-sonnet-20241022",
+                prompt,
+                request_id=request_id,
+            )
+            if translated:
+                cleaned = clean_translated_text(translated)
+                if is_valid_translation(text, cleaned, request_id=request_id):
                     return cleaned
 
     # 2. Local Ollama/LMStudio Layer
-    translated = try_local_ai(prompt, text)
+    translated = try_local_ai(prompt, text, request_id=request_id)
     if translated:
         cleaned = clean_translated_text(translated)
-        if is_valid_translation(text, cleaned):
+        if is_valid_translation(text, cleaned, request_id=request_id):
             return cleaned
 
     if local_only:
-        print(
-            f"[Translation] LOCAL_ONLY mode — not falling back to DeepL/Google Translate.",
-            flush=True,
+        logger.info(
+            f"{req_prefix}LOCAL_ONLY mode — not falling back to DeepL/Google Translate."
         )
-        print(
-            f"[Translation] All translation tiers failed for text: '{text}'", flush=True
-        )
+        logger.error(f"{req_prefix}All translation tiers failed for text: '{text}'")
         return None
 
     # 3. DeepL Layer
-    translated = try_deepl(text, target_lang)
+    translated = try_deepl(text, target_lang, request_id=request_id)
     if translated:
         cleaned = clean_translated_text(translated)
-        if is_valid_translation(text, cleaned):
+        if is_valid_translation(text, cleaned, request_id=request_id):
             return cleaned
 
     # 4. Google Translate Layer
-    translated = try_google_translate(text, source_lang, target_lang)
+    translated = try_google_translate(
+        text, source_lang, target_lang, request_id=request_id
+    )
     if translated:
         cleaned = clean_translated_text(translated)
-        if is_valid_translation(text, cleaned):
+        if is_valid_translation(text, cleaned, request_id=request_id):
             return cleaned
 
-    print(f"[Translation] All translation tiers failed for text: '{text}'", flush=True)
+    logger.error(f"{req_prefix}All translation tiers failed for text: '{text}'")
     return None
 
 
-def translate_batch_llm(unmatched_regions, response_schema=None):
+def translate_batch_llm(unmatched_regions, response_schema=None, request_id=None):
+    if not request_id:
+        request_id = str(uuid.uuid4())[:8]
+    req_prefix = f"[{request_id}] "
+
     bubbles_input = []
     for r in unmatched_regions:
         bubbles_input.append(
@@ -1044,6 +1290,9 @@ def translate_batch_llm(unmatched_regions, response_schema=None):
             }
         )
     bubbles_json = json.dumps(bubbles_input, ensure_ascii=False, indent=2)
+
+    logger.debug(f"{req_prefix}Batch Input:\n{bubbles_json}")
+    logger.info(f"{req_prefix}Prompt={PROMPT_VERSION}")
 
     prompt = f"""These bubbles appear in reading order.
 Translate each bubble into natural manga English.
@@ -1086,16 +1335,21 @@ Input:
     nvidia_key = os.environ.get("NVIDIA_API_KEY", "").strip() or (
         api_key if provider == "nvidia" else ""
     )
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or (
+        api_key if provider == "gemini" else ""
+    )
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip() or (
+        api_key if provider == "anthropic" else ""
+    )
 
     if local_only:
-        print(
-            f"[Translation] Batch: LOCAL_ONLY mode (provider='{provider}') — skipping cloud AI tiers.",
-            flush=True,
+        logger.info(
+            f"{req_prefix}Batch: LOCAL_ONLY mode (provider='{provider}') — skipping cloud AI tiers."
         )
     else:
         # Try DeepSeek V4 Pro
         if openrouter_key:
-            print("[Translation] Batch: Trying DeepSeek V4 Pro...", flush=True)
+            logger.info(f"{req_prefix}Batch: Trying DeepSeek V4 Pro...")
             try:
                 res = try_cloud_ai(
                     "openrouter",
@@ -1103,17 +1357,52 @@ Input:
                     "deepseek-ai/deepseek-v4-pro",
                     prompt,
                     response_schema,
+                    request_id=request_id,
                 )
                 if res:
                     return res
             except Exception as e:
-                print(
-                    f"[Translation] DeepSeek batch translation failed: {e}", flush=True
+                logger.error(f"{req_prefix}DeepSeek batch translation failed: {e}")
+
+            # Try Gemini 2.5 Flash via OpenRouter
+            logger.info(f"{req_prefix}Batch: Trying Gemini 2.5 Flash (OpenRouter)...")
+            try:
+                res = try_cloud_ai(
+                    "openrouter",
+                    openrouter_key,
+                    "google/gemini-2.5-flash",
+                    prompt,
+                    response_schema,
+                    request_id=request_id,
+                )
+                if res:
+                    return res
+            except Exception as e:
+                logger.error(
+                    f"{req_prefix}Gemini OpenRouter batch translation failed: {e}"
                 )
 
-        # Try Nemotron
-        if nvidia_key:
-            print("[Translation] Batch: Trying Nemotron...", flush=True)
+        elif gemini_key:
+            # Try Direct Gemini API
+            preferred = os.environ.get("PREFERRED_MODEL", "gemini-2.5-flash")
+            logger.info(f"{req_prefix}Batch: Trying Gemini ({preferred}) Direct...")
+            try:
+                res = try_cloud_ai(
+                    "gemini",
+                    gemini_key,
+                    preferred,
+                    prompt,
+                    response_schema,
+                    request_id=request_id,
+                )
+                if res:
+                    return res
+            except Exception as e:
+                logger.error(f"{req_prefix}Gemini Direct batch translation failed: {e}")
+
+        # Try Nemotron (only if provider is nvidia and nvidia key is provided)
+        if nvidia_key and provider == "nvidia":
+            logger.info(f"{req_prefix}Batch: Trying Nemotron...")
             try:
                 res = try_cloud_ai(
                     "nvidia",
@@ -1121,13 +1410,12 @@ Input:
                     "nvidia/llama-3.3-nemotron-super-49b-v1",
                     prompt,
                     response_schema,
+                    request_id=request_id,
                 )
                 if res:
                     return res
             except Exception as e:
-                print(
-                    f"[Translation] Nemotron batch translation failed: {e}", flush=True
-                )
+                logger.error(f"{req_prefix}Nemotron batch translation failed: {e}")
 
     # Try Local LLM (Ollama/LMStudio)
     local_provider = (
@@ -1135,20 +1423,23 @@ Input:
         .lower()
         .strip()
     )
-    print(f"[Translation] Batch: Trying Local LLM ({local_provider})...", flush=True)
+    logger.info(f"{req_prefix}Batch: Trying Local LLM ({local_provider})...")
     try:
-        res = try_local_ai(prompt, bubbles_json, response_schema)
+        res = try_local_ai(prompt, bubbles_json, response_schema, request_id=request_id)
         if res:
             return res
     except Exception as e:
-        print(f"[Translation] Local LLM batch translation failed: {e}", flush=True)
+        logger.error(f"{req_prefix}Local LLM batch translation failed: {e}")
 
     return None
 
 
-def translate_vlm_vision(img_bytes, unmatched_regions, response_schema=None):
+def translate_vlm_vision(
+    img_bytes, unmatched_regions, response_schema=None, request_id=None
+):
     if not img_bytes:
         return None
+    req_prefix = f"[{request_id}] " if request_id else ""
 
     import base64
 
@@ -1186,12 +1477,12 @@ Input:
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip() or (
         api_key if provider == "openrouter" else ""
     )
-    nvidia_key = os.environ.get("NVIDIA_API_KEY", "").strip() or (
-        api_key if provider == "nvidia" else ""
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or (
+        api_key if provider == "gemini" else ""
     )
 
     if openrouter_key:
-        print("[Translation] VLM: Trying vision model via OpenRouter...", flush=True)
+        logger.info(f"{req_prefix}VLM: Trying vision model via OpenRouter...")
         vlm_model = os.environ.get("VLM_MODEL", "google/gemini-2.5-flash")
         try:
             res = try_cloud_ai_vision(
@@ -1201,34 +1492,38 @@ Input:
                 prompt,
                 base64_image,
                 response_schema,
+                request_id=request_id,
             )
             if res:
                 return res
         except Exception as e:
-            print(
-                f"[Translation] VLM vision translation via OpenRouter failed: {e}",
-                flush=True,
+            logger.error(
+                f"{req_prefix}VLM vision translation via OpenRouter failed: {e}"
             )
 
-    if provider == "gemini" and api_key:
-        print("[Translation] VLM: Trying vision model via Gemini...", flush=True)
+    if (provider == "gemini" or gemini_key) and gemini_key:
+        logger.info(f"{req_prefix}VLM: Trying vision model via Gemini...")
         vlm_model = os.environ.get("PREFERRED_MODEL", "gemini-1.5-flash")
         try:
             res = try_cloud_ai_vision(
-                "gemini", api_key, vlm_model, prompt, base64_image, response_schema
+                "gemini",
+                gemini_key or api_key,
+                vlm_model,
+                prompt,
+                base64_image,
+                response_schema,
+                request_id=request_id,
             )
             if res:
                 return res
         except Exception as e:
-            print(
-                f"[Translation] VLM vision translation via Gemini failed: {e}",
-                flush=True,
-            )
+            logger.error(f"{req_prefix}VLM vision translation via Gemini failed: {e}")
 
     return None
 
 
-def translate_batch_deepl(unmatched_regions, target_lang="en"):
+def translate_batch_deepl(unmatched_regions, target_lang="en", request_id=None):
+    req_prefix = f"[{request_id}] " if request_id else ""
     deepl_key = os.environ.get("DEEPL_API_KEY", os.environ.get("DEEPL_KEY", "")).strip()
     if not deepl_key:
         return None
@@ -1239,9 +1534,8 @@ def translate_batch_deepl(unmatched_regions, target_lang="en"):
         url = "https://api.deepl.com/v2/translate"
 
     try:
-        print(
-            f"[Translation] Sending batch request of {len(unmatched_regions)} bubbles to DeepL API...",
-            flush=True,
+        logger.info(
+            f"{req_prefix}Sending batch request of {len(unmatched_regions)} bubbles to DeepL API..."
         )
         headers = {
             "Authorization": f"DeepL-Auth-Key {deepl_key}",
@@ -1249,7 +1543,14 @@ def translate_batch_deepl(unmatched_regions, target_lang="en"):
         }
         texts = [r["text"] for r in unmatched_regions]
         payload = {"text": texts, "target_lang": target_lang.upper()}
+
+        start = time.perf_counter()
         res = requests.post(url, json=payload, headers=headers, timeout=8)
+        elapsed = time.perf_counter() - start
+        logger.info(
+            f"{req_prefix}Provider=deepl " f"Model=deepl_batch " f"Time={elapsed:.2f}s"
+        )
+
         if res.status_code == 200:
             res_json = res.json()
             translations = res_json["translations"]
@@ -1258,12 +1559,11 @@ def translate_batch_deepl(unmatched_regions, target_lang="en"):
                 mapping[r["id"]] = translations[i]["text"]
             return mapping
         else:
-            print(
-                f"[Translation] DeepL API returned error: {res.status_code} - {res.text}",
-                flush=True,
+            logger.error(
+                f"{req_prefix}DeepL API returned error: {res.status_code} - {res.text}"
             )
     except Exception as e:
-        print(f"[Translation] DeepL batch translation failed: {e}", flush=True)
+        logger.error(f"{req_prefix}DeepL batch translation failed: {e}")
     return None
 
 
@@ -1560,20 +1860,21 @@ def process_stub(job_data, job_type):
 
 def process_translation(job_data):
     image_id = job_data["imageId"]
-    print(f"[Translation] Processing image: {image_id}", flush=True)
+    request_id = str(uuid.uuid4())[:8]
+    req_prefix = f"[{request_id}] "
+
+    logger.info(f"{req_prefix}Processing translation for image: {image_id}")
 
     try:
         backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
         res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
-            print(
-                f"[Translation] Failed to get image info: {res.status_code}", flush=True
-            )
+            logger.error(f"{req_prefix}Failed to get image info: {res.status_code}")
             return
         image_info = res.json()
         ocr_regions = image_info.get("ocrRegions", [])
     except Exception as e:
-        print(f"[Translation] Error fetching image details: {e}", flush=True)
+        logger.error(f"{req_prefix}Error fetching image details: {e}")
         return
 
     # OCR Quality Filter & Separation
@@ -1594,9 +1895,14 @@ def process_translation(job_data):
         ).lower() in ("true", "1", "t")
         batch_mapping = {}
 
-        # We group unmatched regions into small batches (e.g. max 5 regions per batch)
-        # to prevent extremely large prompt tokens that cause timeouts on CPU.
-        max_batch_size = 5
+        provider = os.environ.get("MODEL_PROVIDER", "").lower().strip()
+        local_only = provider in ("ollama", "lmstudio")
+        max_batch_size = 5 if local_only else 15
+
+        logger.info(
+            f"{req_prefix}Batch size set to {max_batch_size} (local_only={local_only})"
+        )
+
         unmatched_chunks = [
             unmatched_regions[i : i + max_batch_size]
             for i in range(0, len(unmatched_regions), max_batch_size)
@@ -1611,48 +1917,44 @@ def process_translation(job_data):
                     response = minio_client.get_object("manga-library", storage_path)
                     img_bytes = response.read()
                 except Exception as e:
-                    print(
-                        f"[Translation] Error downloading image from MinIO for VLM pass: {e}",
-                        flush=True,
+                    logger.error(
+                        f"{req_prefix}Error downloading image from MinIO for VLM pass: {e}"
                     )
 
         for idx, chunk in enumerate(unmatched_chunks):
-            print(
-                f"[Translation] Processing batch chunk {idx+1}/{len(unmatched_chunks)} ({len(chunk)} regions)...",
-                flush=True,
+            logger.info(
+                f"{req_prefix}Processing batch chunk {idx+1}/{len(unmatched_chunks)} ({len(chunk)} regions)..."
             )
             chunk_mapping = None
 
             # 1. (Optional) VLM vision translation pass
             if use_vlm_translation and img_bytes:
-                print(
-                    f"[Translation] VLM vision translation pass starting for chunk {idx+1}...",
-                    flush=True,
+                logger.info(
+                    f"{req_prefix}VLM vision translation pass starting for chunk {idx+1}..."
                 )
                 try:
                     vlm_res = translate_vlm_vision(
-                        img_bytes, chunk, TRANSLATION_JSON_SCHEMA
+                        img_bytes, chunk, TRANSLATION_JSON_SCHEMA, request_id=request_id
                     )
                     chunk_mapping = parse_and_validate_batch(vlm_res, chunk)
                 except Exception as e:
-                    print(
-                        f"[Translation] VLM vision translation pass failed for chunk {idx+1}: {e}",
-                        flush=True,
+                    logger.error(
+                        f"{req_prefix}VLM vision translation pass failed for chunk {idx+1}: {e}"
                     )
 
             # 2. Standard LLM batch translation
             if not chunk_mapping:
-                print(
-                    f"[Translation] Running standard batch translation for chunk {idx+1}...",
-                    flush=True,
+                logger.info(
+                    f"{req_prefix}Running standard batch translation for chunk {idx+1}..."
                 )
                 try:
-                    batch_res = translate_batch_llm(chunk, TRANSLATION_JSON_SCHEMA)
+                    batch_res = translate_batch_llm(
+                        chunk, TRANSLATION_JSON_SCHEMA, request_id=request_id
+                    )
                     chunk_mapping = parse_and_validate_batch(batch_res, chunk)
                 except Exception as e:
-                    print(
-                        f"[Translation] Standard batch translation failed for chunk {idx+1}: {e}",
-                        flush=True,
+                    logger.error(
+                        f"{req_prefix}Standard batch translation failed for chunk {idx+1}: {e}"
                     )
 
             if chunk_mapping:
@@ -1666,7 +1968,9 @@ def process_translation(job_data):
             translated = batch_mapping.get(rid)
 
             # Run sanity check
-            if translated and is_valid_translation(r["text"], translated):
+            if translated and is_valid_translation(
+                r["text"], translated, request_id=request_id
+            ):
                 resolved_translations[rid] = translated
             else:
                 failed_batch_regions.append(r)
@@ -1674,9 +1978,9 @@ def process_translation(job_data):
         # 3. Retry failed items (hard limit: 1 retry pass = 3 total attempts incl. initial + individual fallback)
         LOCAL_AI_MAX_BATCH_RETRIES = 1  # keep total attempts to 3
         if failed_batch_regions:
-            print(
-                f"[Translation] Retrying {len(failed_batch_regions)} failed items in batch (max {LOCAL_AI_MAX_BATCH_RETRIES} retry pass)...",
-                flush=True,
+            logger.info(f"{req_prefix}Retry pass 1")
+            logger.info(
+                f"{req_prefix}Retrying {len(failed_batch_regions)} failed items in batch (max {LOCAL_AI_MAX_BATCH_RETRIES} retry pass)..."
             )
             retry_chunks = [
                 failed_batch_regions[i : i + max_batch_size]
@@ -1685,18 +1989,18 @@ def process_translation(job_data):
 
             retry_mapping = {}
             for idx, r_chunk in enumerate(retry_chunks):
-                print(
-                    f"[Translation] Processing retry batch chunk {idx+1}/{len(retry_chunks)} ({len(r_chunk)} regions)...",
-                    flush=True,
+                logger.info(
+                    f"{req_prefix}Processing retry batch chunk {idx+1}/{len(retry_chunks)} ({len(r_chunk)} regions)..."
                 )
                 r_chunk_mapping = None
                 try:
-                    retry_res = translate_batch_llm(r_chunk, TRANSLATION_JSON_SCHEMA)
+                    retry_res = translate_batch_llm(
+                        r_chunk, TRANSLATION_JSON_SCHEMA, request_id=request_id
+                    )
                     r_chunk_mapping = parse_and_validate_batch(retry_res, r_chunk)
                 except Exception as e:
-                    print(
-                        f"[Translation] Retry batch chunk {idx+1} translation failed: {e}",
-                        flush=True,
+                    logger.error(
+                        f"{req_prefix}Retry batch chunk {idx+1} translation failed: {e}"
                     )
                 if r_chunk_mapping:
                     for rid, trans in r_chunk_mapping.items():
@@ -1706,29 +2010,34 @@ def process_translation(job_data):
             for r in failed_batch_regions:
                 rid = r["id"]
                 translated = retry_mapping.get(rid)
-                if translated and is_valid_translation(r["text"], translated):
+                if translated and is_valid_translation(
+                    r["text"], translated, request_id=request_id
+                ):
                     resolved_translations[rid] = translated
                 else:
                     still_failed_regions.append(r)
 
             # 4. Individual fallback (attempt 3/3) for still-failed regions
             if still_failed_regions:
-                print(
-                    f"[Translation] Falling back to individual translation for {len(still_failed_regions)} regions (attempt 3/3)...",
-                    flush=True,
+                logger.info(f"{req_prefix}Individual fallback")
+                logger.info(
+                    f"{req_prefix}Falling back to individual translation for {len(still_failed_regions)} regions (attempt 3/3)..."
                 )
                 for r in still_failed_regions:
                     rid = r["id"]
                     text = r["text"]
                     lang = r["detectedLanguage"]
 
-                    translated = translate_text(text, source_lang=lang)
-                    if translated and is_valid_translation(text, translated):
+                    translated = translate_text(
+                        text, source_lang=lang, request_id=request_id
+                    )
+                    if translated and is_valid_translation(
+                        text, translated, request_id=request_id
+                    ):
                         resolved_translations[rid] = translated
                     else:
-                        print(
-                            f"[Translation] Giving up on '{text}' after 3 attempts.",
-                            flush=True,
+                        logger.warning(
+                            f"{req_prefix}Giving up on '{text}' after 3 attempts."
                         )
                         resolved_translations[rid] = None  # failed after 3 attempts
 
@@ -1748,9 +2057,8 @@ def process_translation(job_data):
                 "translationFailed": (translated is None),
             }
         )
-        print(
-            f"[Translation] Final: '{text}' ({lang}) -> '{translated}' (failed={translated is None})",
-            flush=True,
+        logger.info(
+            f"{req_prefix}Final: '{text}' ({lang}) -> '{translated}' (failed={translated is None})"
         )
 
     callback_payload = {"imageId": image_id, "translations": translations}
@@ -1760,9 +2068,9 @@ def process_translation(job_data):
             json=callback_payload,
             headers=BACKEND_HEADERS,
         )
-        print(f"[Translation] Callback status code: {res.status_code}", flush=True)
+        logger.info(f"{req_prefix}Callback status code: {res.status_code}")
     except Exception as e:
-        print(f"[Translation] Failed to post callback to backend: {e}", flush=True)
+        logger.error(f"{req_prefix}Failed to post callback to backend: {e}")
 
 
 def try_cloud_ocr(img_crop_bytes, provider, api_key, model):
@@ -1980,24 +2288,41 @@ def process_region_redo(job_data):
     image_id = job_data["imageId"]
     region_id = job_data["regionId"]
     redo_type = job_data["redoType"]  # 'ocr' or 'translation'
-    print(
-        f"[Region Redo] Processing region: {region_id} on image {image_id} with type {redo_type}",
-        flush=True,
-    )
+
+    # Generate request_id specifically for translation redo tracking
+    request_id = str(uuid.uuid4())[:8] if redo_type == "translation" else None
+    req_prefix = f"[{request_id}] " if request_id else ""
+
+    if redo_type == "translation":
+        logger.info(
+            f"{req_prefix}Processing region redo: {region_id} on image {image_id} with type {redo_type}"
+        )
+    else:
+        print(
+            f"[Region Redo] Processing region: {region_id} on image {image_id} with type {redo_type}",
+            flush=True,
+        )
 
     try:
         backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
         res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
-            print(
-                f"[Region Redo] Failed to get image info: {res.status_code}", flush=True
-            )
+            if redo_type == "translation":
+                logger.error(f"{req_prefix}Failed to get image info: {res.status_code}")
+            else:
+                print(
+                    f"[Region Redo] Failed to get image info: {res.status_code}",
+                    flush=True,
+                )
             return
         image_info = res.json()
         storage_path = image_info["storagePath"]
         ocr_regions = image_info.get("ocrRegions", [])
     except Exception as e:
-        print(f"[Region Redo] Error fetching image details: {e}", flush=True)
+        if redo_type == "translation":
+            logger.error(f"{req_prefix}Error fetching image details: {e}")
+        else:
+            print(f"[Region Redo] Error fetching image details: {e}", flush=True)
         return
 
     region = None
@@ -2007,16 +2332,23 @@ def process_region_redo(job_data):
             break
 
     if region is None:
-        print(
-            f"[Region Redo] Region {region_id} not found in image details", flush=True
-        )
+        if redo_type == "translation":
+            logger.error(f"{req_prefix}Region {region_id} not found in image details")
+        else:
+            print(
+                f"[Region Redo] Region {region_id} not found in image details",
+                flush=True,
+            )
         return
 
     try:
         response = minio_client.get_object("manga-library", storage_path)
         img_bytes = response.read()
     except Exception as e:
-        print(f"[Region Redo] Error downloading from MinIO: {e}", flush=True)
+        if redo_type == "translation":
+            logger.error(f"{req_prefix}Error downloading from MinIO: {e}")
+        else:
+            print(f"[Region Redo] Error downloading from MinIO: {e}", flush=True)
         return
 
     callback_payload = {}
@@ -2060,15 +2392,14 @@ def process_region_redo(job_data):
         try:
             text = region["text"]
             lang = region["detectedLanguage"]
-            translated = translate_text(text, source_lang=lang)
+            translated = translate_text(text, source_lang=lang, request_id=request_id)
             callback_payload["translatedText"] = translated
             callback_payload["translationFailed"] = translated is None
-            print(
-                f"[Region Redo] Redo Translation result: '{translated}' (failed={translated is None})",
-                flush=True,
+            logger.info(
+                f"{req_prefix}Redo Translation result: '{translated}' (failed={translated is None})"
             )
         except Exception as e:
-            print(f"[Region Redo] Redo Translation failed: {e}", flush=True)
+            logger.error(f"{req_prefix}Redo Translation failed: {e}")
             return
 
     try:
@@ -2078,9 +2409,15 @@ def process_region_redo(job_data):
         res = requests.post(
             callback_url, json=callback_payload, headers=BACKEND_HEADERS
         )
-        print(f"[Region Redo] Callback status code: {res.status_code}", flush=True)
+        if redo_type == "translation":
+            logger.info(f"{req_prefix}Callback status code: {res.status_code}")
+        else:
+            print(f"[Region Redo] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
-        print(f"[Region Redo] Failed to post callback: {e}", flush=True)
+        if redo_type == "translation":
+            logger.error(f"{req_prefix}Failed to post callback: {e}")
+        else:
+            print(f"[Region Redo] Failed to post callback: {e}", flush=True)
 
 
 # --- MAIN RUNNER ---
