@@ -26,6 +26,7 @@ public class JobCoordinatorService {
     private final PanelRepository panelRepository;
     private final OcrRegionRepository ocrRegionRepository;
     private final ConversationRepository conversationRepository;
+    private final ConversationRegionRepository conversationRegionRepository;
     private final LayerRepository layerRepository;
     private final LayerElementRepository layerElementRepository;
 
@@ -170,8 +171,66 @@ public class JobCoordinatorService {
     }
 
     @Transactional
-    public void handleLayoutCallback(UUID imageId) {
-        log.info("Received Layout callback for image: {}", imageId);
+    public void handleLayoutCallback(UUID imageId, List<Map<String, String>> regionTypes,
+                                      List<Map<String, Object>> conversations) {
+        log.info("Received Layout callback for image: {} with {} regionTypes, {} conversations",
+                imageId, regionTypes != null ? regionTypes.size() : 0,
+                conversations != null ? conversations.size() : 0);
+
+        Image image = imageRepository.findById(imageId)
+                .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+        // 1. Update region_type on each OcrRegion
+        if (regionTypes != null) {
+            for (Map<String, String> rt : regionTypes) {
+                try {
+                    UUID regionId = UUID.fromString(rt.get("regionId"));
+                    String regionType = rt.get("regionType");
+                    ocrRegionRepository.findById(regionId).ifPresent(region -> {
+                        region.setRegionType(regionType != null ? regionType : "speech");
+                        ocrRegionRepository.save(region);
+                    });
+                } catch (Exception e) {
+                    log.error("Error updating region type", e);
+                }
+            }
+        }
+
+        // 2. Delete old conversations + conversation_regions for this image
+        conversationRegionRepository.deleteByImageId(imageId);
+        conversationRepository.deleteByImageId(imageId);
+
+        // 3. Create new Conversation + ConversationRegion entries
+        if (conversations != null) {
+            for (Map<String, Object> convData : conversations) {
+                try {
+                    String sceneType = (String) convData.getOrDefault("sceneType", "dialogue");
+                    List<String> regionIds = (List<String>) convData.get("regionIds");
+
+                    Conversation conv = Conversation.builder()
+                            .image(image)
+                            .sceneType(sceneType != null ? sceneType : "dialogue")
+                            .build();
+                    conv = conversationRepository.save(conv);
+
+                    if (regionIds != null) {
+                        int position = 1;
+                        for (String ridStr : regionIds) {
+                            ConversationRegion cr = ConversationRegion.builder()
+                                    .conversationId(conv.getId())
+                                    .regionId(UUID.fromString(ridStr))
+                                    .position(position++)
+                                    .build();
+                            conversationRegionRepository.save(cr);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Error creating conversation", e);
+                }
+            }
+        }
+
+        // 4. Enqueue translation job
         enqueueJob("translation", imageId);
     }
 

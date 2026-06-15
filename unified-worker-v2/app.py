@@ -168,7 +168,14 @@ minio_client = Minio(
 
 
 # --- PANEL DETECTION HELPER FUNCTIONS ---
-def detect_panels(image_bytes):
+def detect_panels(image_bytes, reading_direction="rtl"):
+    """Detect panels in a manga page and sort them by *reading_direction*.
+
+    Supported reading directions:
+      'rtl' — Japanese manga: row-grouped, rightmost panel first
+      'ltr' — Western comics: row-grouped, leftmost panel first
+      'ttb' — Webtoons / manhwa: pure top-to-bottom, no row grouping
+    """
     # Decode image
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -201,7 +208,16 @@ def detect_panels(image_bytes):
     if not panels:
         panels.append({"x": 0, "y": 0, "width": w, "height": h})
 
-    # Sort panels for reading order (RTL: right-to-left, top-to-bottom)
+    # --- TTB (top-to-bottom, webtoons) ---
+    if reading_direction == "ttb":
+        panels.sort(key=lambda p: p["y"])
+        for idx, p in enumerate(panels, start=1):
+            p["gridRow"] = idx - 1
+            p["gridCol"] = 0
+            p["readingOrder"] = idx
+        return panels
+
+    # --- RTL / LTR: row-grouped sorting ---
     panels.sort(key=lambda p: p["y"])
     rows = []
     for p in panels:
@@ -218,11 +234,12 @@ def detect_panels(image_bytes):
         if not added:
             rows.append([p])
 
-    # Sort each row right-to-left (for RTL) and flatten
+    # Sort each row by x — RTL reverses, LTR does not
+    reverse_x = reading_direction != "ltr"
     final_panels = []
     reading_order = 1
     for r_idx, row in enumerate(rows):
-        row.sort(key=lambda p: p["x"], reverse=True)  # Rightmost panel first in RTL
+        row.sort(key=lambda p: p["x"], reverse=reverse_x)
         for c_idx, p in enumerate(row):
             p["gridRow"] = r_idx
             p["gridCol"] = c_idx
@@ -473,6 +490,11 @@ def should_translate_region(region):
         confidence = 1.0
     width = region.get("width") or region.get("bboxW") or 0
     height = region.get("height") or region.get("bboxH") or 0
+    region_type = region.get("regionType") or region.get("region_type") or "speech"
+
+    # SFX regions identified by layout analysis are always kept — even if small
+    if region_type == "sfx":
+        return True
 
     # Reject regions smaller than 10x10
     if width < 10 or height < 10:
@@ -1573,7 +1595,11 @@ def translate_batch_deepl(unmatched_regions, target_lang="en", request_id=None):
 
 def process_panel_detection(job_data):
     image_id = job_data["imageId"]
-    print(f"[Panel Detection] Processing image: {image_id}", flush=True)
+    reading_direction = (job_data.get("readingDirection") or "rtl").strip().lower()
+    print(
+        f"[Panel Detection] Processing image: {image_id} (direction={reading_direction})",
+        flush=True,
+    )
 
     try:
         backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
@@ -1597,7 +1623,7 @@ def process_panel_detection(job_data):
         print(f"[Panel Detection] Error downloading from MinIO: {e}", flush=True)
         return
 
-    panels = detect_panels(img_bytes)
+    panels = detect_panels(img_bytes, reading_direction=reading_direction)
     print(
         f"[Panel Detection] Detected {len(panels)} panels for image {image_id}",
         flush=True,
@@ -1838,6 +1864,339 @@ def process_ocr(job_data):
         print(f"[OCR] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[OCR] Failed to post callback to backend: {e}", flush=True)
+
+
+# --- LAYOUT ANALYSIS HELPER FUNCTIONS (Steps 10 + 11) ---
+
+
+def classify_region_type(region, panel, image_width, image_height):
+    """Classify an OCR region as speech/narration/sfx/caption/sign.
+
+    Uses heuristic rules based on geometry, position, and text content.
+    Returns one of: 'speech', 'narration', 'sfx', 'caption', 'sign'
+    """
+    text = region.get("text", "")
+    confidence = region.get("confidence") or 1.0
+    rx = region.get("bboxX") or region.get("x", 0)
+    ry = region.get("bboxY") or region.get("y", 0)
+    rw = region.get("bboxW") or region.get("width", 1)
+    rh = region.get("bboxH") or region.get("height", 1)
+
+    # Aspect ratios
+    aspect = rw / max(rh, 1)
+    tall_aspect = rh / max(rw, 1)
+
+    # Check if text is kana-only (hiragana/katakana) — strong SFX signal
+    cleaned = re.sub(r"[\s！？\?!\.\,\-\_\"]", "", text.strip())
+    is_kana_only = False
+    if cleaned:
+        is_kana_only = bool(
+            re.match(r"^[\u3040-\u309F\u30A0-\u30FF\u30FC\uFF66-\uFF9F]+$", cleaned)
+        )
+
+    # --- SFX detection ---
+    # Kana-only text or very tall narrow region (vertical SFX)
+    if is_kana_only and len(cleaned) <= 5:
+        return "sfx"
+    if tall_aspect > 3.0 and len(text.strip()) <= 6:
+        return "sfx"
+
+    # --- Check if region is inside any panel ---
+    in_panel = panel is not None
+
+    # --- Caption: outside all panels, at page top or bottom edges ---
+    if not in_panel:
+        # Top 8% or bottom 8% of the image
+        if ry < image_height * 0.08 or (ry + rh) > image_height * 0.92:
+            return "caption"
+        # Outside panels but not at page edges — could be narration box overlay
+        if aspect > 2.5:
+            return "narration"
+        return "caption"
+
+    # --- Narration: very wide region or at panel edge ---
+    if panel is not None:
+        px = panel.get("bboxX", 0)
+        py = panel.get("bboxY", 0)
+        pw = panel.get("bboxW", 1)
+        ph = panel.get("bboxH", 1)
+
+        # Wide aspect ratio relative to panel width — narration box
+        if aspect > 3.0 and rw > pw * 0.6:
+            return "narration"
+
+        # At very top or bottom edge of panel (within 8% of panel height)
+        rel_top = (ry - py) / max(ph, 1)
+        rel_bottom = ((py + ph) - (ry + rh)) / max(ph, 1)
+        if (rel_top < 0.08 or rel_bottom < 0.08) and aspect > 2.0:
+            return "narration"
+
+    # --- Sign: inside panel but low confidence and small ---
+    if in_panel and confidence < 0.50:
+        region_area = rw * rh
+        panel_area = panel.get("bboxW", 1) * panel.get("bboxH", 1) if panel else 1
+        if panel_area > 0 and region_area / panel_area < 0.05:
+            return "sign"
+
+    # Default: speech bubble
+    return "speech"
+
+
+def group_conversations(regions, panels, reading_direction="rtl"):
+    """Group OCR regions into conversation clusters.
+
+    Algorithm:
+    1. For each panel, collect its assigned regions sorted by bubble reading order.
+    2. Within a panel, group regions into conversations using spatial proximity:
+       - Two regions belong to the same conversation if their vertical gap is
+         ≤ 1.5× the average bubble height in the panel.
+       - Narration and SFX regions start their own group.
+    3. Assign scene_type based on the region types within each group.
+
+    Returns list of:
+      {"regionIds": [region_id, ...], "sceneType": "dialogue"|..., "panelIds": [...]}
+    """
+    # Build panel → regions mapping
+    panel_map = {}  # panel_reading_order → list of regions
+    unmapped = []
+
+    for r in regions:
+        panel_order = r.get("panelReadingOrder") or 0
+        if panel_order > 0:
+            if panel_order not in panel_map:
+                panel_map[panel_order] = []
+            panel_map[panel_order].append(r)
+        else:
+            unmapped.append(r)
+
+    conversations = []
+
+    for panel_order in sorted(panel_map.keys()):
+        panel_regions = panel_map[panel_order]
+        # Sort by bubble reading order
+        panel_regions.sort(key=lambda r: r.get("bubbleReadingOrder", 0))
+
+        # Calculate average bubble height for proximity threshold
+        heights = [r.get("bboxH") or r.get("height", 50) for r in panel_regions]
+        avg_height = sum(heights) / len(heights) if heights else 50
+        proximity_threshold = avg_height * 1.5
+
+        current_group = []
+        current_panel_ids = set()
+
+        for r in panel_regions:
+            region_type = r.get("regionType") or r.get("region_type") or "speech"
+            rid = r.get("id", "")
+            ry = r.get("bboxY") or r.get("y", 0)
+            rh = r.get("bboxH") or r.get("height", 0)
+
+            # Narration and SFX always start their own group
+            if region_type in ("narration", "sfx", "caption", "sign"):
+                # Flush current dialogue group
+                if current_group:
+                    conversations.append(
+                        _finish_conversation_group(current_group, current_panel_ids)
+                    )
+                    current_group = []
+                    current_panel_ids = set()
+
+                # Single-region group for narration/sfx
+                scene = (
+                    "narration"
+                    if region_type in ("narration", "caption")
+                    else "sfx_cluster"
+                )
+                conversations.append(
+                    {
+                        "regionIds": [rid],
+                        "sceneType": scene,
+                        "panelIds": [str(panel_order)],
+                    }
+                )
+                continue
+
+            # Speech/thought — group by spatial proximity
+            if current_group:
+                last_r = current_group[-1]
+                last_bottom = (last_r.get("bboxY") or last_r.get("y", 0)) + (
+                    last_r.get("bboxH") or last_r.get("height", 0)
+                )
+                gap = ry - last_bottom
+                if gap > proximity_threshold:
+                    # Start new group
+                    conversations.append(
+                        _finish_conversation_group(current_group, current_panel_ids)
+                    )
+                    current_group = []
+                    current_panel_ids = set()
+
+            current_group.append(r)
+            current_panel_ids.add(str(panel_order))
+
+        # Flush remaining group
+        if current_group:
+            conversations.append(
+                _finish_conversation_group(current_group, current_panel_ids)
+            )
+
+    # Handle unmapped regions (outside all panels)
+    for r in unmapped:
+        rid = r.get("id", "")
+        region_type = r.get("regionType") or r.get("region_type") or "speech"
+        scene = (
+            "narration"
+            if region_type in ("narration", "caption")
+            else ("sfx_cluster" if region_type == "sfx" else "dialogue")
+        )
+        conversations.append(
+            {
+                "regionIds": [rid],
+                "sceneType": scene,
+                "panelIds": [],
+            }
+        )
+
+    return conversations
+
+
+def _finish_conversation_group(group, panel_ids):
+    """Convert a group of regions into a conversation dict."""
+    region_ids = [r.get("id", "") for r in group]
+    scene_type = "monologue" if len(region_ids) == 1 else "dialogue"
+    return {
+        "regionIds": region_ids,
+        "sceneType": scene_type,
+        "panelIds": list(panel_ids),
+    }
+
+
+def process_layout(job_data):
+    """Layout analysis: classify region types and group conversations.
+
+    Replaces the previous stub that only slept for 0.5s.
+    """
+    image_id = job_data["imageId"]
+    print(f"[Layout] Processing image: {image_id}", flush=True)
+
+    # 1. Fetch OCR regions + panels from backend
+    try:
+        backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
+        res = requests.get(backend_url, headers=BACKEND_HEADERS)
+        if res.status_code != 200:
+            print(f"[Layout] Failed to get image info: {res.status_code}", flush=True)
+            return
+        image_info = res.json()
+        ocr_regions = image_info.get("ocrRegions", [])
+        panels = image_info.get("panels", [])
+    except Exception as e:
+        print(f"[Layout] Error fetching image details: {e}", flush=True)
+        return
+
+    if not ocr_regions:
+        print("[Layout] No OCR regions found, skipping layout analysis.", flush=True)
+        # Still send callback so pipeline continues
+        callback_payload = {"imageId": image_id, "regionTypes": [], "conversations": []}
+        try:
+            res = requests.post(
+                f"{CALLBACK_URL}/layout", json=callback_payload, headers=BACKEND_HEADERS
+            )
+            print(f"[Layout] Callback status code: {res.status_code}", flush=True)
+        except Exception as e:
+            print(f"[Layout] Failed to post callback: {e}", flush=True)
+        return
+
+    # Get image dimensions from the first panel or estimate from regions
+    image_width = max(
+        (p.get("bboxX", 0) + p.get("bboxW", 0) for p in panels),
+        default=max(
+            (r.get("bboxX", 0) + r.get("bboxW", 0) for r in ocr_regions), default=1000
+        ),
+    )
+    image_height = max(
+        (p.get("bboxY", 0) + p.get("bboxH", 0) for p in panels),
+        default=max(
+            (r.get("bboxY", 0) + r.get("bboxH", 0) for r in ocr_regions), default=1400
+        ),
+    )
+
+    # Build panel lookup by ID
+    panel_by_id = {}
+    for p in panels:
+        pid = p.get("id") or p.get("panelId")
+        if pid:
+            panel_by_id[str(pid)] = p
+
+    # 2. Classify each region type
+    region_types = []
+    for r in ocr_regions:
+        # Find matching panel for this region
+        panel_id = r.get("panelId") or r.get("panel_id")
+        panel = panel_by_id.get(str(panel_id)) if panel_id else None
+
+        rtype = classify_region_type(r, panel, image_width, image_height)
+        r["regionType"] = rtype  # Annotate in-memory for conversation grouping
+        region_types.append(
+            {
+                "regionId": str(r.get("id", "")),
+                "regionType": rtype,
+            }
+        )
+        print(
+            f"[Layout] Region {str(r.get('id', ''))[:8]}... "
+            f"type={rtype} text='{(r.get('text', '') or '')[:30]}'",
+            flush=True,
+        )
+
+    print(
+        f"[Layout] Region types: "
+        + ", ".join(
+            f"{t}: {sum(1 for rt in region_types if rt['regionType'] == t)}"
+            for t in set(rt["regionType"] for rt in region_types)
+        ),
+        flush=True,
+    )
+
+    # 3. Group conversations
+    reading_direction = "rtl"  # Default; could be passed in job_data if needed
+    conversations = group_conversations(ocr_regions, panels, reading_direction)
+    print(
+        f"[Layout] Grouped {len(ocr_regions)} regions into {len(conversations)} conversations",
+        flush=True,
+    )
+
+    # Detailed logging for the grouped conversations
+    print("[Layout] --- Conversation Grouping Details ---", flush=True)
+    for idx, conv in enumerate(conversations):
+        region_details = []
+        for rid in conv["regionIds"]:
+            reg = next((r for r in ocr_regions if str(r.get("id")) == rid), None)
+            if reg:
+                text = reg.get("text", "").strip().replace('\n', ' ')
+                rtype = reg.get("regionType") or reg.get("region_type") or "speech"
+                region_details.append(f"[{rtype}] '{text}'")
+        panel_info = f"panels={conv['panelIds']}" if conv.get('panelIds') else "unmapped"
+        print(f"[Layout] Conversation #{idx+1} ({conv['sceneType']}, {panel_info}): " + " -> ".join(region_details), flush=True)
+    print("[Layout] -------------------------------------", flush=True)
+
+    # 4. Send enriched layout callback
+    callback_payload = {
+        "imageId": image_id,
+        "regionTypes": region_types,
+        "conversations": [
+            {
+                "regionIds": conv["regionIds"],
+                "sceneType": conv["sceneType"],
+            }
+            for conv in conversations
+        ],
+    }
+    try:
+        res = requests.post(
+            f"{CALLBACK_URL}/layout", json=callback_payload, headers=BACKEND_HEADERS
+        )
+        print(f"[Layout] Callback status code: {res.status_code}", flush=True)
+    except Exception as e:
+        print(f"[Layout] Failed to post callback to backend: {e}", flush=True)
 
 
 def process_stub(job_data, job_type):
@@ -2448,7 +2807,7 @@ def main():
                 elif queue_name == "queue:ocr":
                     process_ocr(job_data)
                 elif queue_name == "queue:layout":
-                    process_stub(job_data, "layout")
+                    process_layout(job_data)
                 elif queue_name == "queue:translation":
                     process_translation(job_data)
                 elif queue_name == "queue:region-redo":

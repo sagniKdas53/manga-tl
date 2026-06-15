@@ -3,8 +3,12 @@ package com.manga.library.controller;
 import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.model.Image;
+import com.manga.library.model.Conversation;
+import com.manga.library.model.ConversationRegion;
 import com.manga.library.repository.ImageRepository;
 import com.manga.library.repository.PanelRepository;
+import com.manga.library.repository.ConversationRepository;
+import com.manga.library.repository.ConversationRegionRepository;
 import com.manga.library.service.JobCoordinatorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -25,6 +30,8 @@ public class InternalJobController {
     private final ImageRepository imageRepository;
     private final PanelRepository panelRepository;
     private final com.manga.library.repository.OcrRegionRepository ocrRegionRepository;
+    private final ConversationRepository conversationRepository;
+    private final ConversationRegionRepository conversationRegionRepository;
 
     @GetMapping("/images/{imageId}")
     public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
@@ -37,6 +44,27 @@ public class InternalJobController {
                     map.put("storagePath", image.getStoragePath());
                     map.put("panels", panelRepository.findByImageId(imageId));
                     map.put("ocrRegions", ocrRegionRepository.findByImageId(imageId));
+
+                    // Include conversations with their region mappings
+                    List<Conversation> conversations = conversationRepository.findByImageId(imageId);
+                    List<Map<String, Object>> convList = new ArrayList<>();
+                    for (Conversation conv : conversations) {
+                        Map<String, Object> convMap = new HashMap<>();
+                        convMap.put("id", conv.getId().toString());
+                        convMap.put("sceneType", conv.getSceneType());
+                        List<ConversationRegion> crs = conversationRegionRepository.findByConversationId(conv.getId());
+                        List<Map<String, Object>> crList = new ArrayList<>();
+                        for (ConversationRegion cr : crs) {
+                            Map<String, Object> crMap = new HashMap<>();
+                            crMap.put("regionId", cr.getRegionId().toString());
+                            crMap.put("position", cr.getPosition());
+                            crList.add(crMap);
+                        }
+                        convMap.put("regions", crList);
+                        convList.add(convMap);
+                    }
+                    map.put("conversations", convList);
+
                     return ResponseEntity.ok(map);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -67,11 +95,13 @@ public class InternalJobController {
     }
 
     @PostMapping("/jobs/callback/layout")
-    public ResponseEntity<?> layoutCallback(@RequestBody Map<String, String> payload) {
-        UUID imageId = UUID.fromString(payload.get("imageId"));
+    public ResponseEntity<?> layoutCallback(@RequestBody Map<String, Object> payload) {
+        UUID imageId = UUID.fromString((String) payload.get("imageId"));
         log.info("Received layout callback for image: {}", imageId);
         try {
-            jobCoordinatorService.handleLayoutCallback(imageId);
+            List<Map<String, String>> regionTypes = (List<Map<String, String>>) payload.get("regionTypes");
+            List<Map<String, Object>> conversations = (List<Map<String, Object>>) payload.get("conversations");
+            jobCoordinatorService.handleLayoutCallback(imageId, regionTypes, conversations);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             log.error("Error processing layout callback", e);

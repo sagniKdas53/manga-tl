@@ -95,7 +95,8 @@ CREATE TABLE IF NOT EXISTS ocr_regions (
     bbox_w INT NOT NULL,
     bbox_h INT NOT NULL,
     panel_reading_order INT,
-    bubble_reading_order INT
+    bubble_reading_order INT,
+    region_type TEXT DEFAULT 'speech' -- speech, thought, narration, sfx, caption, sign
 );
 
 -- Conversations
