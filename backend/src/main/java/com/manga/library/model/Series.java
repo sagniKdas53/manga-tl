@@ -32,6 +32,10 @@ public class Series {
     @Column(name = "cover_image_url")
     private String coverImageUrl;
 
+    @Column(name = "metadata_json")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private String metadataJson;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     @com.fasterxml.jackson.annotation.JsonIgnore

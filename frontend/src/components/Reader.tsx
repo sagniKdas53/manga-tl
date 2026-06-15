@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { User, Chapter, Page, Panel, OcrRegion, Conversation } from '../types';
+import type { User, Chapter, Page, Panel, OcrRegion, Conversation, Layer, LayerElement } from '../types';
 import { safeFetch, toSlug } from '../utils';
 
 interface ReaderProps {
@@ -10,6 +10,77 @@ interface ReaderProps {
   theme: 'light' | 'dark';
 }
 
+interface FitResult {
+  fontSize: number;
+  lines: string[];
+  overflow: boolean;
+}
+
+export const fitTextInBox = (
+  text: string,
+  maxWidth: number,
+  maxHeight: number,
+  fontFamily: string,
+  defaultFontSize: number = 16
+): FitResult => {
+  const cleanText = (text || '').replace(/\r\n/g, '\n');
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return { fontSize: defaultFontSize, lines: [cleanText], overflow: false };
+  }
+
+  const wrapText = (txt: string, fSize: number): string[] => {
+    ctx.font = `bold ${fSize}px "${fontFamily}", sans-serif`;
+    const paragraphs = txt.split('\n');
+    const resultLines: string[] = [];
+
+    for (const para of paragraphs) {
+      if (!para) {
+        resultLines.push('');
+        continue;
+      }
+      const words = para.split(' ');
+      let currentLine = '';
+
+      for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && currentLine) {
+          resultLines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) {
+        resultLines.push(currentLine);
+      }
+    }
+    return resultLines;
+  };
+
+  let fontSize = defaultFontSize;
+  let lines = wrapText(cleanText, fontSize);
+  const lineHeightMultiplier = 1.2;
+
+  while (fontSize > 10) {
+    const totalHeight = lines.length * fontSize * lineHeightMultiplier;
+    if (totalHeight <= maxHeight) {
+      return { fontSize, lines, overflow: false };
+    }
+    fontSize--;
+    lines = wrapText(cleanText, fontSize);
+  }
+
+  const totalHeight = lines.length * fontSize * lineHeightMultiplier;
+  return {
+    fontSize: 10,
+    lines,
+    overflow: totalHeight > maxHeight
+  };
+};
+
 export const Reader: React.FC<ReaderProps> = ({
   user,
   selectedChapter,
@@ -18,6 +89,11 @@ export const Reader: React.FC<ReaderProps> = ({
 }) => {
   const navigate = useNavigate();
   const { pageNumber } = useParams<{ pageNumber: string }>();
+  
+  // Suppress unused warning for theme prop
+  if (theme) {
+    // theme-dependent checks
+  }
 
   // Find selected page based on route param
   const curPageNum = parseInt(pageNumber || '1');
@@ -35,6 +111,12 @@ export const Reader: React.FC<ReaderProps> = ({
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1.0);
+
+  // Phase 4 Layer System states
+  const [layers, setLayers] = useState<{ layer: Layer; elements: LayerElement[] }[]>([]);
+  const [cleanScanlationView, setCleanScanlationView] = useState(false);
+  const [undoStack, setUndoStack] = useState<LayerElement[]>([]);
+  const [redoStack, setRedoStack] = useState<LayerElement[]>([]);
 
   // Conversation and Layout enhancements
   const [groupByConversation, setGroupByConversation] = useState(true);
@@ -237,6 +319,21 @@ export const Reader: React.FC<ReaderProps> = ({
         console.error('Error loading page details:', err);
         setIsLoadingPageDetails(false);
       });
+
+      // Fetch layers
+      safeFetch(`/api/images/${selectedPage.imageId}/layers`, {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      })
+      .then(res => {
+        if (!res.ok) throw new Error('Layers fetch failed');
+        return res.json();
+      })
+      .then(layersData => {
+        setLayers(layersData || []);
+      })
+      .catch(err => {
+        console.error('Error loading layers:', err);
+      });
     }
   }, [selectedPage, loadedImageId, user.token]);
 
@@ -249,8 +346,211 @@ export const Reader: React.FC<ReaderProps> = ({
       setActiveRegion(null);
       setActiveItem(null);
       setPopoverOpen(false);
+      setUndoStack([]);
+      setRedoStack([]);
     });
   }, [pageNumber]);
+
+  // History Undo/Redo operations
+  const pushToHistoryStack = (prevState: LayerElement) => {
+    setUndoStack(prev => [...prev.slice(-49), { ...prevState }]);
+    setRedoStack([]);
+  };
+
+  const handleUndo = useCallback(async () => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+
+    if (selectedItem && selectedItem.isLayerElement) {
+      const currentElement = { ...selectedItem };
+      setRedoStack(prev => [...prev, currentElement]);
+
+      setSelectedItem(previous);
+      setLayers(prevLayers => prevLayers.map(l => {
+        if (l.layer.id === previous.layerId) {
+          return {
+            ...l,
+            elements: l.elements.map(el => el.id === previous.id ? previous : el)
+          };
+        }
+        return l;
+      }));
+
+      await handleSaveElementChanges(previous, false);
+    }
+  }, [undoStack, selectedItem]);
+
+  const handleRedo = useCallback(async () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+
+    if (selectedItem && selectedItem.isLayerElement) {
+      const currentElement = { ...selectedItem };
+      setUndoStack(prev => [...prev, currentElement]);
+
+      setSelectedItem(next);
+      setLayers(prevLayers => prevLayers.map(l => {
+        if (l.layer.id === next.layerId) {
+          return {
+            ...l,
+            elements: l.elements.map(el => el.id === next.id ? next : el)
+          };
+        }
+        return l;
+      }));
+
+      await handleSaveElementChanges(next, false);
+    }
+  }, [redoStack, selectedItem]);
+
+  // Key Down Listener for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.isContentEditable
+      ) {
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
+  const handleUpdateSelectedElement = (updates: Partial<LayerElement>) => {
+    setSelectedItem((prev: any) => {
+      if (!prev) return null;
+      
+      // Push previous state to undo stack
+      pushToHistoryStack(prev);
+
+      const updated = { ...prev, ...updates };
+
+      setLayers(prevLayers => prevLayers.map(l => {
+        if (l.layer.id === updated.layerId) {
+          return {
+            ...l,
+            elements: l.elements.map(el => el.id === updated.id ? updated : el)
+          };
+        }
+        return l;
+      }));
+
+      return updated;
+    });
+  };
+
+  const handleSaveElementChanges = async (element: LayerElement, showAlert: boolean = true) => {
+    try {
+      const res = await safeFetch(`/api/layer-elements/${element.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token}`
+        },
+        body: JSON.stringify({
+          text: element.text,
+          font: element.font,
+          size: element.size,
+          autoSize: element.autoSize,
+          maxWidth: element.maxWidth,
+          maxHeight: element.maxHeight,
+          wordWrap: element.wordWrap,
+          rotation: element.rotation,
+          x: element.x,
+          y: element.y,
+          visible: element.visible,
+          overflow: element.overflow
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update element on server');
+      }
+
+      if (showAlert) {
+        alert('Element updated successfully!');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating element on server.');
+    }
+  };
+
+  const handleCreateTranslationLayer = async () => {
+    if (!selectedPage) return;
+    const targetLanguage = prompt('Enter target language code (e.g. en, es, fr):', 'en');
+    if (!targetLanguage) return;
+
+    try {
+      const res = await safeFetch(`/api/images/${selectedPage.imageId}/layers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token}`
+        },
+        body: JSON.stringify({
+          type: 'translation',
+          targetLanguage: targetLanguage.toLowerCase(),
+          visible: true,
+          zOrder: layers.length
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to create layer');
+      
+      const newLayer = await res.json();
+      setLayers(prev => [...prev, { layer: newLayer, elements: [] }]);
+    } catch (err) {
+      console.error(err);
+      alert('Error creating layer.');
+    }
+  };
+
+  const handleToggleLayerVisibility = (layerId: string) => {
+    setLayers(prev => prev.map(l => {
+      if (l.layer.id === layerId) {
+        return {
+          ...l,
+          layer: {
+            ...l.layer,
+            visible: !l.layer.visible
+          }
+        };
+      }
+      return l;
+    }));
+  };
+
+  const handleDeleteLayer = async (layerId: string) => {
+    if (!confirm('Are you sure you want to delete this layer?')) return;
+
+    try {
+      const res = await safeFetch(`/api/layers/${layerId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        }
+      });
+
+      if (!res.ok) throw new Error('Failed to delete layer');
+      setLayers(prev => prev.filter(l => l.layer.id !== layerId));
+    } catch (err) {
+      console.error(err);
+      alert('Error deleting layer.');
+    }
+  };
 
   // --- STABLE NAVIGATOR CALLBACK ---
   const navigateToPage = useCallback((num: number) => {
@@ -802,7 +1102,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 viewBox={`0 0 ${imageDims.w} ${imageDims.h}`}
                 style={{ pointerEvents: 'auto' }}
               >
-                {showPanels && panels.map(p => (
+                {showPanels && !cleanScanlationView && panels.map(p => (
                   <rect 
                     key={p.id}
                     x={p.bboxX}
@@ -814,7 +1114,7 @@ export const Reader: React.FC<ReaderProps> = ({
                   />
                 ))}
 
-                {showOcr && renderItems.map((item) => {
+                {showOcr && !cleanScanlationView && renderItems.map((item) => {
                   const isSelected = selectedItem?.id === item.id;
                   const isApproved = item.approved;
                   return (
@@ -881,65 +1181,146 @@ export const Reader: React.FC<ReaderProps> = ({
                   );
                 })}
 
-                {showTranslations && renderItems.map((item) => {
-                  const combinedTrans = item.regions
-                    .map(r => r.translatedText)
-                    .filter(Boolean)
-                    .join('\n');
+                {layers.map((lData) => {
+                  if (!lData.layer.visible) return null;
+                  return lData.elements.map((element) => {
+                    if (!element.visible) return null;
 
-                  if (!combinedTrans.trim()) return null;
+                    const isSelected = selectedItem?.id === element.id && selectedItem?.isLayerElement;
+                    
+                    // Run text fitting
+                    let fontSize = element.size || 16;
+                    let lines: string[] = [];
+                    let overflow = false;
 
-                  const overlayWidth = Math.max(item.bboxW, 140);
-                  const overlayHeight = Math.max(item.bboxH, 90);
-                  const overlayX = item.bboxX + (item.bboxW - overlayWidth) / 2;
-                  const overlayY = item.bboxY + (item.bboxH - overlayHeight) / 2;
+                    if (element.autoSize) {
+                      const fit = fitTextInBox(
+                        element.text || '',
+                        element.maxWidth || 100,
+                        element.maxHeight || 100,
+                        element.font || 'Comic Neue',
+                        element.size || 16
+                      );
+                      fontSize = fit.fontSize;
+                      lines = fit.lines;
+                      overflow = fit.overflow;
+                    } else {
+                      const fit = fitTextInBox(
+                        element.text || '',
+                        element.maxWidth || 100,
+                        element.maxHeight || 100,
+                        element.font || 'Comic Neue',
+                        element.size || 16
+                      );
+                      lines = fit.lines;
+                      fontSize = element.size || 16;
+                      const canvas = document.createElement('canvas');
+                      const ctx = canvas.getContext('2d');
+                      if (ctx) {
+                        ctx.font = `bold ${fontSize}px "${element.font || 'Comic Neue'}", sans-serif`;
+                        const totalHeight = lines.length * fontSize * 1.2;
+                        overflow = totalHeight > (element.maxHeight || 100);
+                      }
+                    }
 
-                  return (
-                    <foreignObject
-                      key={`trans-${item.id}`}
-                      x={overlayX}
-                      y={overlayY}
-                      width={overlayWidth}
-                      height={overlayHeight}
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          textAlign: 'center',
-                          padding: '4px',
-                          boxSizing: 'border-box',
-                          overflow: 'hidden',
-                          pointerEvents: 'none'
+                    const width = element.maxWidth || 100;
+                    const height = element.maxHeight || 100;
+                    const cx = element.x + width / 2;
+                    const cy = element.y + height / 2;
+
+                    // Support masking toggle via wordWrap field
+                    const isMaskEnabled = cleanScanlationView || element.wordWrap;
+
+                    return (
+                      <g 
+                        key={element.id}
+                        transform={`rotate(${element.rotation || 0}, ${cx}, ${cy})`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedItem({ ...element, isLayerElement: true });
                         }}
+                        style={{ cursor: 'pointer' }}
                       >
-                        <div
-                          style={{
-                            background: theme === 'dark' ? 'rgba(15, 17, 23, 0.95)' : '#ffffff',
-                            color: theme === 'dark' ? '#f8fafc' : '#0f172a',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            lineHeight: '1.4',
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            border: theme === 'dark' ? '2px solid rgba(139, 92, 246, 0.6)' : '2px solid rgba(139, 92, 246, 0.4)',
-                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                            wordBreak: 'break-word',
-                            maxWidth: '100%',
-                            maxHeight: '100%',
-                            overflowY: 'auto',
-                            whiteSpace: 'pre-wrap'
-                          }}
+                        {/* Backdrop Mask */}
+                        {isMaskEnabled && (
+                          <rect 
+                            x={element.x}
+                            y={element.y}
+                            width={width}
+                            height={height}
+                            fill="#ffffff"
+                            stroke="none"
+                          />
+                        )}
+
+                        {/* Developer/Editor borders */}
+                        {!cleanScanlationView && (
+                          <rect 
+                            x={element.x}
+                            y={element.y}
+                            width={width}
+                            height={height}
+                            fill="transparent"
+                            stroke={isSelected ? 'var(--primary)' : 'rgba(139, 92, 246, 0.4)'}
+                            strokeWidth={isSelected ? 2 : 1}
+                            strokeDasharray={isSelected ? 'none' : '4 4'}
+                          />
+                        )}
+
+                        {/* Warning/Overflow border in editor mode */}
+                        {overflow && !cleanScanlationView && (
+                          <rect 
+                            x={element.x - 2}
+                            y={element.y - 2}
+                            width={width + 4}
+                            height={height + 4}
+                            fill="transparent"
+                            stroke="#ef4444"
+                            strokeWidth="1.5"
+                            strokeDasharray="2 2"
+                          />
+                        )}
+
+                        <foreignObject
+                          x={element.x}
+                          y={element.y}
+                          width={width}
+                          height={height}
+                          style={{ pointerEvents: 'none' }}
                         >
-                          {combinedTrans}
-                        </div>
-                      </div>
-                    </foreignObject>
-                  );
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              textAlign: 'center',
+                              padding: '4px',
+                              boxSizing: 'border-box',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontFamily: `"${element.font || 'Comic Neue'}", sans-serif`,
+                                fontSize: `${fontSize}px`,
+                                fontWeight: 'bold',
+                                color: '#000000',
+                                lineHeight: '1.2',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                textAlign: 'center',
+                                width: '100%'
+                              }}
+                            >
+                              {element.text}
+                            </div>
+                          </div>
+                        </foreignObject>
+                      </g>
+                    );
+                  });
                 })}
               </svg>
 
@@ -1163,7 +1544,7 @@ export const Reader: React.FC<ReaderProps> = ({
             {!selectedItem && (
               <>
                 <div className="panel-section">
-                  <div className="panel-section-title">Layers Overlay</div>
+                  <div className="panel-section-title">Base Overlays</div>
                   
                   <div className="overlay-toggle">
                     <span>Panel Boundaries</span>
@@ -1200,6 +1581,18 @@ export const Reader: React.FC<ReaderProps> = ({
                       <span className="slider"></span>
                     </label>
                   </div>
+                  
+                  <div className="overlay-toggle">
+                    <span>Clean Scanlation View</span>
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={cleanScanlationView} 
+                        onChange={e => setCleanScanlationView(e.target.checked)} 
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
 
                   <div className="overlay-toggle">
                     <span>Show Zoom Bar</span>
@@ -1224,6 +1617,96 @@ export const Reader: React.FC<ReaderProps> = ({
                       <span className="slider"></span>
                     </label>
                   </div>
+                </div>
+
+                <div className="panel-section">
+                  <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Translation Layers</span>
+                    <button 
+                      className="btn btn-secondary"
+                      style={{ padding: '2px 6px', fontSize: '10px' }}
+                      onClick={handleCreateTranslationLayer}
+                    >
+                      + Add Layer
+                    </button>
+                  </div>
+                  
+                  {layers.length === 0 ? (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 0' }}>
+                      No active translation layers.
+                    </div>
+                  ) : (
+                    layers.map(lData => (
+                      <div 
+                        key={lData.layer.id} 
+                        className="overlay-toggle" 
+                        style={{ 
+                          padding: '6px 8px', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '6px', 
+                          marginBottom: '6px',
+                          backgroundColor: 'rgba(255,255,255,0.02)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 600 }}>
+                            {lData.layer.type === 'translation' 
+                              ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || 'EN'})` 
+                              : `Layer (${lData.layer.type})`}
+                          </span>
+                          <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>
+                            {lData.elements.length} elements
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            onClick={() => handleToggleLayerVisibility(lData.layer.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: lData.layer.visible ? 'var(--primary)' : 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                            title="Toggle layer visibility"
+                          >
+                            {lData.layer.visible ? (
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                              </svg>
+                            ) : (
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                              </svg>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteLayer(lData.layer.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                            title="Delete layer"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 <div className="panel-section">
@@ -1277,7 +1760,199 @@ export const Reader: React.FC<ReaderProps> = ({
               </>
             )}
 
-            {selectedItem && (
+            {selectedItem && selectedItem.isLayerElement && (
+              <div className="panel-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Element Inspector</span>
+                  <button 
+                    onClick={() => setSelectedItem(null)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-main)',
+                      borderRadius: '6px',
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--bg-hover-more)';
+                      e.currentTarget.style.borderColor = 'var(--text-muted)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.borderColor = 'var(--border-color)';
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
+                
+                <div className="ocr-detail-card" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Text Editor */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Text Content</label>
+                    <textarea
+                      style={{
+                        width: '100%',
+                        minHeight: '80px',
+                        backgroundColor: 'var(--bg-input, rgba(0,0,0,0.05))',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '4px',
+                        color: 'var(--text-main)',
+                        padding: '6px',
+                        fontSize: '13px',
+                        resize: 'vertical',
+                        outline: 'none',
+                        fontFamily: 'inherit'
+                      }}
+                      value={selectedItem.text || ''}
+                      onChange={e => handleUpdateSelectedElement({ text: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Positioning Coordinates Row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>X Position</label>
+                      <input 
+                        type="number"
+                        className="form-input"
+                        style={{ padding: '6px 10px', fontSize: '13px' }}
+                        value={selectedItem.x}
+                        onChange={e => handleUpdateSelectedElement({ x: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Y Position</label>
+                      <input 
+                        type="number"
+                        className="form-input"
+                        style={{ padding: '6px 10px', fontSize: '13px' }}
+                        value={selectedItem.y}
+                        onChange={e => handleUpdateSelectedElement({ y: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dimensions Row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Max Width</label>
+                      <input 
+                        type="number"
+                        className="form-input"
+                        style={{ padding: '6px 10px', fontSize: '13px' }}
+                        value={selectedItem.maxWidth || 0}
+                        onChange={e => handleUpdateSelectedElement({ maxWidth: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Max Height</label>
+                      <input 
+                        type="number"
+                        className="form-input"
+                        style={{ padding: '6px 10px', fontSize: '13px' }}
+                        value={selectedItem.maxHeight || 0}
+                        onChange={e => handleUpdateSelectedElement({ maxHeight: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Font & Style settings */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Family</label>
+                      <select
+                        className="form-input"
+                        style={{ padding: '4px 8px', fontSize: '13px', height: '38px', backgroundColor: 'var(--bg-surface)' }}
+                        value={selectedItem.font || 'Comic Neue'}
+                        onChange={e => handleUpdateSelectedElement({ font: e.target.value })}
+                      >
+                        <option value="Comic Neue">Comic Neue</option>
+                        <option value="Bangers">Bangers</option>
+                        <option value="Arial">Arial</option>
+                        <option value="Courier New">Courier New</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Size (pt)</label>
+                      <input 
+                        type="number"
+                        className="form-input"
+                        style={{ padding: '6px 10px', fontSize: '13px' }}
+                        value={selectedItem.size || 16}
+                        onChange={e => handleUpdateSelectedElement({ size: parseFloat(e.target.value) || 12 })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Rotation Slider */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Rotation ({selectedItem.rotation || 0}°)</label>
+                    <input 
+                      type="range"
+                      min="0"
+                      max="360"
+                      value={selectedItem.rotation || 0}
+                      onChange={e => handleUpdateSelectedElement({ rotation: parseFloat(e.target.value) || 0 })}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  {/* Checkboxes Row */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input 
+                        type="checkbox"
+                        id="autoSizeCheck"
+                        checked={selectedItem.autoSize}
+                        onChange={e => handleUpdateSelectedElement({ autoSize: e.target.checked })}
+                      />
+                      <label htmlFor="autoSizeCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Auto-size text to fit bubble</label>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input 
+                        type="checkbox"
+                        id="visibleCheck"
+                        checked={selectedItem.visible}
+                        onChange={e => handleUpdateSelectedElement({ visible: e.target.checked })}
+                      />
+                      <label htmlFor="visibleCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Visible</label>
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input 
+                        type="checkbox"
+                        id="maskCheck"
+                        checked={selectedItem.wordWrap}
+                        onChange={e => handleUpdateSelectedElement({ wordWrap: e.target.checked })}
+                      />
+                      <label htmlFor="maskCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Clean background mask</label>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <button
+                      className="btn btn-primary"
+                      style={{ flex: 1, padding: '8px' }}
+                      onClick={() => handleSaveElementChanges(selectedItem)}
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {selectedItem && !selectedItem.isLayerElement && (
               <div className="panel-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>{selectedItem.isConversation ? 'Conversation Inspector' : 'Region Inspector'}</span>

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS series (
     title TEXT NOT NULL,
     original_language TEXT NOT NULL, -- ja, zh, ko, en etc.
     reading_direction TEXT NOT NULL DEFAULT 'rtl', -- rtl, ltr, ttb
+    metadata_json JSONB,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
