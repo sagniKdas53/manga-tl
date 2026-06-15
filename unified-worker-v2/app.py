@@ -11,47 +11,93 @@ from minio import Minio
 from functools import cmp_to_key
 from manga_ocr import MangaOcr
 
-# Import PaddleOCR
-paddle_ocr_reader = None
+# Import PaddleOCR — lazy-initialized per language on first use.
+# The backend passes sourceLanguage + readingDirection in each OCR job payload
+# (read from series context) so the worker is not locked to Japanese.
+PaddleOCR = None
 try:
     print("[Unified Worker] Importing PaddleOCR...", flush=True)
-    from paddleocr import PaddleOCR
+    from paddleocr import PaddleOCR as _PaddleOCR
     import os
+
     os.environ["FLAGS_use_mkldnn"] = "0"
     os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
-
-    # TODO: lang and text direction should not be hardcoded here.
-    # The backend should pass the source language (ja/zh/en) and direction
-    # (rtl/ltr) as part of the OCR job payload so the worker can configure
-    # PaddleOCR per-request instead of being locked to Japanese.
-
-    # Initialize PaddleOCR with PP-OCRv5 Mobile (lighter, lower memory)
-    print("[Unified Worker] Initializing PaddleOCR (PP-OCRv5 Mobile, lang='japan')...", flush=True)
-    paddle_ocr_reader = PaddleOCR(
-        lang='japan',
-        device='cpu',
-
-        # lighter models
-        text_detection_model_name='PP-OCRv5_mobile_det',
-        text_recognition_model_name='PP-OCRv5_mobile_rec',
-
-        # save memory
-        use_textline_orientation=False,
-        use_doc_unwarping=False,
-        use_doc_orientation_classify=False,
-
-        enable_mkldnn=False
+    PaddleOCR = _PaddleOCR
+    print(
+        "[Unified Worker] PaddleOCR imported successfully (readers will be initialized on first use per language).",
+        flush=True,
     )
 except Exception as e:
-    print(f"[Unified Worker] Failed to initialize PaddleOCR: {e}", flush=True)
+    print(f"[Unified Worker] Failed to import PaddleOCR: {e}", flush=True)
+
+# Cache of already-initialized PaddleOCR readers keyed by PaddleOCR language string.
+# Readers are created lazily on first OCR request for a given language.
+_paddle_ocr_readers: dict = {}
+
+# Map from ISO 639-1 source language codes (as stored in the series table) to
+# the corresponding PaddleOCR lang identifier.
+LANG_TO_PADDLE: dict = {
+    "ja": "japan",
+    "zh": "chinese_cht",  # Traditional Chinese (most scanlations)
+    "zh-tw": "chinese_cht",
+    "zh-cn": "ch",  # Simplified Chinese
+    "ko": "korean",
+    "en": "en",
+}
+
+
+def get_paddle_ocr_reader(source_language: str):
+    """Return a cached PaddleOCR reader for *source_language* (ISO 639-1 code).
+
+    If no reader for this language has been created yet it is instantiated now
+    and cached for future calls.  Falls back to 'japan' when the language code
+    is unknown so existing behaviour is preserved.
+    """
+    if PaddleOCR is None:
+        return None
+
+    paddle_lang = LANG_TO_PADDLE.get((source_language or "ja").lower(), "japan")
+
+    if paddle_lang not in _paddle_ocr_readers:
+        try:
+            print(
+                f"[Unified Worker] Initializing PaddleOCR (PP-OCRv5 Mobile, lang='{paddle_lang}')...",
+                flush=True,
+            )
+            _paddle_ocr_readers[paddle_lang] = PaddleOCR(
+                lang=paddle_lang,
+                device="cpu",
+                # lighter models
+                text_detection_model_name="PP-OCRv5_mobile_det",
+                text_recognition_model_name="PP-OCRv5_mobile_rec",
+                # save memory
+                use_textline_orientation=False,
+                use_doc_unwarping=False,
+                use_doc_orientation_classify=False,
+                enable_mkldnn=False,
+            )
+            print(
+                f"[Unified Worker] PaddleOCR reader ready for lang='{paddle_lang}'.",
+                flush=True,
+            )
+        except Exception as e:
+            print(
+                f"[Unified Worker] Failed to initialize PaddleOCR for lang='{paddle_lang}': {e}",
+                flush=True,
+            )
+            _paddle_ocr_readers[paddle_lang] = None
+
+    return _paddle_ocr_readers.get(paddle_lang)
+
 
 # Initialize EasyOCR reader with Japanese and English support (Fallback)
 reader = None
 try:
     print("[Unified Worker] Importing EasyOCR...", flush=True)
     import easyocr
+
     print("[Unified Worker] Initializing EasyOCR Reader (ja, en)...", flush=True)
-    reader = easyocr.Reader(['ja', 'en'], gpu=False)
+    reader = easyocr.Reader(["ja", "en"], gpu=False)
 except Exception as e:
     print(f"[Unified Worker] Failed to initialize EasyOCR: {e}", flush=True)
 
@@ -60,7 +106,11 @@ manga_ocr_reader = None
 try:
     print("[Unified Worker] Initializing MangaOCR Reader...", flush=True)
     # Check if we should force CPU from environment (defaults to True)
-    force_cpu = os.environ.get('MANGA_OCR_FORCE_CPU', 'true').lower() in ('true', '1', 't')
+    force_cpu = os.environ.get("MANGA_OCR_FORCE_CPU", "true").lower() in (
+        "true",
+        "1",
+        "t",
+    )
     if force_cpu:
         print("[Unified Worker] Forcing CPU for MangaOCR...", flush=True)
         manga_ocr_reader = MangaOcr(force_cpu=True)
@@ -68,19 +118,27 @@ try:
         try:
             manga_ocr_reader = MangaOcr()
         except Exception as init_err:
-            print(f"[Unified Worker] Failed to initialize MangaOCR with default settings (likely GPU compatibility issue: {init_err}). Retrying with force_cpu=True...", flush=True)
+            print(
+                f"[Unified Worker] Failed to initialize MangaOCR with default settings (likely GPU compatibility issue: {init_err}). Retrying with force_cpu=True...",
+                flush=True,
+            )
             manga_ocr_reader = MangaOcr(force_cpu=True)
 except Exception as e:
-    print(f"[Unified Worker] Failed to initialize MangaOCR: {e}. Falling back to EasyOCR recognition.", flush=True)
+    print(
+        f"[Unified Worker] Failed to initialize MangaOCR: {e}. Falling back to EasyOCR recognition.",
+        flush=True,
+    )
 
 # Configurations
-REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
-MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', 'localhost:9000')
-MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', 'minioadmin')
-MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', 'minioadmin')
-CALLBACK_URL = os.environ.get('BACKEND_CALLBACK_URL', 'http://localhost:8080/api/internal/jobs/callback')
-INTERNAL_API_TOKEN = os.environ.get('INTERNAL_API_TOKEN', '')
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
+CALLBACK_URL = os.environ.get(
+    "BACKEND_CALLBACK_URL", "http://localhost:8080/api/internal/jobs/callback"
+)
+INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
 BACKEND_HEADERS = {"X-Internal-Token": INTERNAL_API_TOKEN} if INTERNAL_API_TOKEN else {}
 
 # Clients
@@ -90,14 +148,15 @@ redis_client = redis.Redis(
     socket_timeout=15,
     socket_connect_timeout=5,
     socket_keepalive=True,
-    retry_on_timeout=True
+    retry_on_timeout=True,
 )
 minio_client = Minio(
     MINIO_ENDPOINT,
     access_key=MINIO_ACCESS_KEY,
     secret_key=MINIO_SECRET_KEY,
-    secure=False
+    secure=False,
 )
+
 
 # --- PANEL DETECTION HELPER FUNCTIONS ---
 def detect_panels(image_bytes):
@@ -127,33 +186,23 @@ def detect_panels(image_bytes):
         x, y, width, height = cv2.boundingRect(c)
         area = width * height
         if area >= min_area and width < w * 0.98 and height < h * 0.98:
-            panels.append({
-                'x': x,
-                'y': y,
-                'width': width,
-                'height': height
-            })
+            panels.append({"x": x, "y": y, "width": width, "height": height})
 
     # If no panels were detected, default to a single panel containing the whole image
     if not panels:
-        panels.append({
-            'x': 0,
-            'y': 0,
-            'width': w,
-            'height': h
-        })
+        panels.append({"x": 0, "y": 0, "width": w, "height": h})
 
     # Sort panels for reading order (RTL: right-to-left, top-to-bottom)
-    panels.sort(key=lambda p: p['y'])
+    panels.sort(key=lambda p: p["y"])
     rows = []
     for p in panels:
         added = False
         for row in rows:
             # Check if this panel y overlaps with the row's typical y
-            avg_y = sum(item['y'] for item in row) / len(row)
-            avg_h = sum(item['height'] for item in row) / len(row)
+            avg_y = sum(item["y"] for item in row) / len(row)
+            avg_h = sum(item["height"] for item in row) / len(row)
             # Overlap threshold: 25% of height
-            if abs(p['y'] - avg_y) < avg_h * 0.25:
+            if abs(p["y"] - avg_y) < avg_h * 0.25:
                 row.append(p)
                 added = True
                 break
@@ -164,44 +213,64 @@ def detect_panels(image_bytes):
     final_panels = []
     reading_order = 1
     for r_idx, row in enumerate(rows):
-        row.sort(key=lambda p: p['x'], reverse=True) # Rightmost panel first in RTL
+        row.sort(key=lambda p: p["x"], reverse=True)  # Rightmost panel first in RTL
         for c_idx, p in enumerate(row):
-            p['gridRow'] = r_idx
-            p['gridCol'] = c_idx
-            p['readingOrder'] = reading_order
+            p["gridRow"] = r_idx
+            p["gridCol"] = c_idx
+            p["readingOrder"] = reading_order
             reading_order += 1
             final_panels.append(p)
 
     return final_panels
 
+
 # --- OCR HELPER FUNCTIONS ---
 def detect_language(text):
     # Regex ranges for CJK
     # Japanese Hiragana/Katakana
-    if re.search(r'[\u3040-\u309F\u30A0-\u30FF]', text):
-        return 'ja'
+    if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", text):
+        return "ja"
     # Chinese Hanzi (CJK Unified Ideographs)
-    elif re.search(r'[\u4E00-\u9FFF]', text):
-        return 'zh-TW'
+    elif re.search(r"[\u4E00-\u9FFF]", text):
+        return "zh-TW"
     # Otherwise fallback to English
-    return 'en'
+    return "en"
+
 
 def calculate_overlap_area(r, p):
     # r is ocr region dict, p is panel dict (from db)
-    rx, ry, rw, rh = r['x'], r['y'], r['width'], r['height']
-    px, py, pw, ph = p['bboxX'], p['bboxY'], p['bboxW'], p['bboxH']
-    
+    rx, ry, rw, rh = r["x"], r["y"], r["width"], r["height"]
+    px, py, pw, ph = p["bboxX"], p["bboxY"], p["bboxW"], p["bboxH"]
+
     overlap_x = max(0, min(rx + rw, px + pw) - max(rx, px))
     overlap_y = max(0, min(ry + rh, py + ph) - max(ry, py))
     return overlap_x * overlap_y
 
-def bubble_compare(a, b):
-    # RTL comparator
-    y_diff = a['y'] - b['y']
+
+def bubble_compare(a, b, reading_direction="rtl"):
+    """Sort OCR bubbles within a panel according to *reading_direction*.
+
+    Supported values (matching the series table field):
+      'rtl' — right-to-left, top-before-bottom  (Japanese manga default)
+      'ltr' — left-to-right, top-before-bottom  (Western comics)
+      'ttb' — top-to-bottom strip               (webtoons / manhwa)
+    """
+    y_diff = a["y"] - b["y"]
+
+    if reading_direction == "ttb":
+        # Pure top-to-bottom: y position decides everything
+        return 1 if y_diff > 0 else (-1 if y_diff < 0 else 0)
+
+    # For both RTL and LTR, cluster into rows first (within 100 px)
     if abs(y_diff) > 100:
         return 1 if y_diff > 0 else -1
-    
-    x_diff = b['x'] - a['x']
+
+    # Within the same row: RTL puts rightmost bubble first, LTR puts leftmost first
+    if reading_direction == "ltr":
+        x_diff = a["x"] - b["x"]
+    else:  # default: rtl
+        x_diff = b["x"] - a["x"]
+
     return 1 if x_diff > 0 else -1
 
 
@@ -221,11 +290,7 @@ def parse_paddle_ocr_results(raw_results):
             rec_texts = result.get("rec_texts", [])
             rec_scores = result.get("rec_scores", [])
 
-            count = min(
-                len(dt_polys),
-                len(rec_texts),
-                len(rec_scores)
-            )
+            count = min(len(dt_polys), len(rec_texts), len(rec_scores))
 
             for i in range(count):
 
@@ -234,19 +299,10 @@ def parse_paddle_ocr_results(raw_results):
                 if hasattr(bbox, "tolist"):
                     bbox = bbox.tolist()
 
-                results.append(
-                    (
-                        bbox,
-                        rec_texts[i],
-                        float(rec_scores[i])
-                    )
-                )
+                results.append((bbox, rec_texts[i], float(rec_scores[i])))
 
     except Exception as e:
-        print(
-            f"[OCR] Failed parsing PaddleOCR results: {e}",
-            flush=True
-        )
+        print(f"[OCR] Failed parsing PaddleOCR results: {e}", flush=True)
 
     return results
 
@@ -273,11 +329,7 @@ def downscale_for_ocr(img, max_dim=1024):
     new_w = int(w * scale)
     new_h = int(h * scale)
 
-    resized = cv2.resize(
-        img,
-        (new_w, new_h),
-        interpolation=cv2.INTER_AREA
-    )
+    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
     # inverse scale: multiply OCR coords by this to get original-image coords
     return resized, 1.0 / scale
@@ -289,36 +341,41 @@ def downscale_for_ocr(img, max_dim=1024):
 
 LAST_REQUEST_TIME = 0.0
 
+
 def enforce_rate_limit():
     global LAST_REQUEST_TIME
-    rate_limit_env = os.environ.get('RATE_LIMIT', '').strip()
+    rate_limit_env = os.environ.get("RATE_LIMIT", "").strip()
     if not rate_limit_env:
         return
     try:
         # Parse formats like "60", "60/m", "60/min", "5/s", "5/sec"
         rpm = None
-        if '/' in rate_limit_env:
-            parts = rate_limit_env.split('/')
+        if "/" in rate_limit_env:
+            parts = rate_limit_env.split("/")
             val = float(parts[0])
             unit = parts[1].lower().strip()
-            if unit in ('s', 'sec', 'second', 'seconds'):
+            if unit in ("s", "sec", "second", "seconds"):
                 rpm = val * 60.0
             else:
                 rpm = val
         else:
             rpm = float(rate_limit_env)
-        
+
         if rpm > 0:
             min_delay = 60.0 / rpm
             now = time.time()
             elapsed = now - LAST_REQUEST_TIME
             if elapsed < min_delay:
                 sleep_time = min_delay - elapsed
-                print(f"[Translation] Rate limit: Sleeping for {sleep_time:.2f} seconds to respect {rate_limit_env} rate limit...", flush=True)
+                print(
+                    f"[Translation] Rate limit: Sleeping for {sleep_time:.2f} seconds to respect {rate_limit_env} rate limit...",
+                    flush=True,
+                )
                 time.sleep(sleep_time)
             LAST_REQUEST_TIME = time.time()
     except Exception as e:
         print(f"[Translation] Error enforcing rate limit: {e}", flush=True)
+
 
 TRANSLATION_JSON_SCHEMA = {
     "type": "object",
@@ -329,13 +386,13 @@ TRANSLATION_JSON_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "id": {"type": "string"},
-                    "translation": {"type": "string"}
+                    "translation": {"type": "string"},
                 },
-                "required": ["id", "translation"]
-            }
+                "required": ["id", "translation"],
+            },
         }
     },
-    "required": ["translations"]
+    "required": ["translations"],
 }
 
 MANGA_TRANSLATION_JSON_SYSTEM_PROMPT = """You are an expert manga translator.
@@ -343,119 +400,156 @@ Translate the list of manga text bubbles into natural English.
 These bubbles appear in reading order. Maintain context, tone, emotion, and relationships between speakers.
 Return ONLY valid JSON format conforming to the requested schema. No conversational prefix, suffix, or markdown formatting."""
 
+
 def contains_japanese(text):
-    return bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', text))
+    return bool(re.search(r"[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]", text))
+
 
 def is_valid_translation(source, translated):
     if not translated:
         return False
-        
+
     translated_stripped = translated.strip()
     source_stripped = source.strip()
-    
+
     # Check forbidden phrases / boilerplate
-    forbidden_substrings = [
-        "translate the following text",
-        "text:",
-        "output:",
-        "json"
-    ]
+    forbidden_substrings = ["translate the following text", "text:", "output:", "json"]
     for pattern in forbidden_substrings:
         if pattern in translated_stripped.lower():
-            print(f"[Sanity Check] Rejected translation containing boilerplate '{pattern}': '{translated}'", flush=True)
+            print(
+                f"[Sanity Check] Rejected translation containing boilerplate '{pattern}': '{translated}'",
+                flush=True,
+            )
             return False
-            
+
     # Check if translated == source for Japanese
     if contains_japanese(source_stripped) and translated_stripped == source_stripped:
-        print(f"[Sanity Check] Rejected translation identical to Japanese source: '{translated}'", flush=True)
+        print(
+            f"[Sanity Check] Rejected translation identical to Japanese source: '{translated}'",
+            flush=True,
+        )
         return False
-        
+
     # Check if translated is pathologically longer than source
-    if len(source_stripped) <= 5 and len(translated_stripped) > len(source_stripped) * 20:
-        print(f"[Sanity Check] Rejected pathologically long translation for short source: '{translated}' (source: '{source}')", flush=True)
+    if (
+        len(source_stripped) <= 5
+        and len(translated_stripped) > len(source_stripped) * 20
+    ):
+        print(
+            f"[Sanity Check] Rejected pathologically long translation for short source: '{translated}' (source: '{source}')",
+            flush=True,
+        )
         return False
-        
+
     return True
 
+
 def should_translate_region(region):
-    text = region.get('text', '')
+    text = region.get("text", "")
     stripped = text.strip()
-    confidence = region.get('confidence')
+    confidence = region.get("confidence")
     if confidence is None:
         confidence = 1.0
-    width = region.get('width') or region.get('bboxW') or 0
-    height = region.get('height') or region.get('bboxH') or 0
+    width = region.get("width") or region.get("bboxW") or 0
+    height = region.get("height") or region.get("bboxH") or 0
 
     # Reject regions smaller than 10x10
     if width < 10 or height < 10:
-        print(f"[Quality Filter] Rejecting region: too small ({width}x{height}) - text: '{text}'", flush=True)
+        print(
+            f"[Quality Filter] Rejecting region: too small ({width}x{height}) - text: '{text}'",
+            flush=True,
+        )
         return False
 
     # Reject low confidence regions (< 0.30)
     if confidence < 0.30:
-        print(f"[Quality Filter] Rejecting region: low confidence ({confidence:.2f}) - text: '{text}'", flush=True)
+        print(
+            f"[Quality Filter] Rejecting region: low confidence ({confidence:.2f}) - text: '{text}'",
+            flush=True,
+        )
         return False
 
     # Special handling for SFX and Japanese kana-only text
-    sfx_whitelist = {'ドン', 'ガッ', 'ぱんッ', 'ズキュン'}
-    
+    sfx_whitelist = {"ドン", "ガッ", "ぱんッ", "ズキュン"}
+
     # Check if text is in whitelist
     if stripped in sfx_whitelist:
         return True
-        
+
     # Check if text is Japanese kana-only
-    cleaned_for_kana = re.sub(r'[\s！？\?!\.\,\-\_\"]', '', stripped)
+    cleaned_for_kana = re.sub(r"[\s！？\?!\.\,\-\_\"]", "", stripped)
     is_kana_only = False
     if cleaned_for_kana:
-        is_kana_only = bool(re.match(r'^[\u3040-\u309F\u30A0-\u30FF\u30FC\uFF66-\uFF9F]+$', cleaned_for_kana))
-        
+        is_kana_only = bool(
+            re.match(
+                r"^[\u3040-\u309F\u30A0-\u30FF\u30FC\uFF66-\uFF9F]+$", cleaned_for_kana
+            )
+        )
+
     if is_kana_only:
         return True
 
     # Otherwise, reject obvious garbage / non-Japanese low quality texts
     if len(stripped) < 2:
-        print(f"[Quality Filter] Rejecting region: too short (len={len(stripped)}) - text: '{text}'", flush=True)
+        print(
+            f"[Quality Filter] Rejecting region: too short (len={len(stripped)}) - text: '{text}'",
+            flush=True,
+        )
         return False
 
     # Reject alphanumeric-only when confidence is low
-    if re.match(r'^[A-Za-z0-9._-]+$', stripped):
+    if re.match(r"^[A-Za-z0-9._-]+$", stripped):
         if confidence < 0.50:
-            print(f"[Quality Filter] Rejecting region: alphanumeric-only with low confidence ({confidence:.2f}) - text: '{text}'", flush=True)
+            print(
+                f"[Quality Filter] Rejecting region: alphanumeric-only with low confidence ({confidence:.2f}) - text: '{text}'",
+                flush=True,
+            )
             return False
 
     return True
 
+
 def validate_translation_response(parsed_json):
     items = []
     if isinstance(parsed_json, dict):
-        if 'translations' in parsed_json:
-            items = parsed_json['translations']
-        elif 'items' in parsed_json:
-            items = parsed_json['items']
+        if "translations" in parsed_json:
+            items = parsed_json["translations"]
+        elif "items" in parsed_json:
+            items = parsed_json["items"]
         else:
-            if all(isinstance(k, str) and isinstance(v, str) for k, v in parsed_json.items()):
+            if all(
+                isinstance(k, str) and isinstance(v, str)
+                for k, v in parsed_json.items()
+            ):
                 return parsed_json
     elif isinstance(parsed_json, list):
         items = parsed_json
-        
+
     if not isinstance(items, list):
         return None
-        
+
     validated = {}
     for item in items:
         if not isinstance(item, dict):
             continue
-        rid = item.get('id')
-        translation = item.get('translation')
-        if rid and translation and isinstance(rid, str) and isinstance(translation, str) and translation.strip():
+        rid = item.get("id")
+        translation = item.get("translation")
+        if (
+            rid
+            and translation
+            and isinstance(rid, str)
+            and isinstance(translation, str)
+            and translation.strip()
+        ):
             validated[rid] = translation.strip()
-            
+
     return validated if validated else None
+
 
 def parse_and_validate_batch(response_text, unmatched_regions):
     if not response_text:
         return None
-        
+
     cleaned_text = response_text.strip()
     if cleaned_text.startswith("```"):
         lines = cleaned_text.splitlines()
@@ -464,137 +558,149 @@ def parse_and_validate_batch(response_text, unmatched_regions):
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         cleaned_text = "\n".join(lines).strip()
-        
+
     try:
         parsed = json.loads(cleaned_text)
         validated = validate_translation_response(parsed)
         if validated:
             return validated
     except Exception as e:
-        print(f"[Translation] Failed to parse batch translation JSON response: {e}. Raw response: {response_text}", flush=True)
-        
+        print(
+            f"[Translation] Failed to parse batch translation JSON response: {e}. Raw response: {response_text}",
+            flush=True,
+        )
+
     return None
+
 
 def try_cloud_ai(provider, api_key, model, prompt, response_schema=None):
     enforce_rate_limit()
     url = ""
     headers = {}
     payload = {}
-    
-    if provider == 'openrouter':
+
+    if provider == "openrouter":
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         payload = {
             "model": model or "meta-llama/llama-3-8b-instruct:free",
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [{"role": "user", "content": prompt}],
         }
         if response_schema:
             payload["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "manga_translation",
-                    "schema": response_schema
-                }
+                "json_schema": {"name": "manga_translation", "schema": response_schema},
             }
-    elif provider == 'openai':
+    elif provider == "openai":
         url = "https://api.openai.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         payload = {
             "model": model or "gpt-4o-mini",
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [{"role": "user", "content": prompt}],
         }
         if response_schema:
             payload["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "manga_translation",
-                    "schema": response_schema
-                }
+                "json_schema": {"name": "manga_translation", "schema": response_schema},
             }
-    elif provider == 'nvidia':
+    elif provider == "nvidia":
         url = "https://integrate.api.nvidia.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        system_pr = MANGA_TRANSLATION_JSON_SYSTEM_PROMPT if response_schema else MANGA_TRANSLATION_SYSTEM_PROMPT
+        system_pr = (
+            MANGA_TRANSLATION_JSON_SYSTEM_PROMPT
+            if response_schema
+            else MANGA_TRANSLATION_SYSTEM_PROMPT
+        )
         payload = {
             "model": model or "nvidia/riva-translate-4b-instruct-v1.1",
             "messages": [
                 {"role": "system", "content": system_pr},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             "temperature": 0.6,
             "top_p": 0.95,
-            "max_tokens": 4096
+            "max_tokens": 4096,
         }
         if response_schema:
             payload["response_format"] = {"type": "json_object"}
-    elif provider == 'anthropic':
+    elif provider == "anthropic":
         url = "https://api.anthropic.com/v1/messages"
         headers = {
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         payload = {
             "model": model or "claude-3-5-sonnet-20241022",
             "max_tokens": 1000,
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [{"role": "user", "content": prompt}],
         }
-    elif provider == 'gemini':
+    elif provider == "gemini":
         gemini_model = model or "gemini-1.5-flash"
         if "/" not in gemini_model:
             gemini_model = f"models/{gemini_model}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{gemini_model}:generateContent?key={api_key}"
-        headers = {
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}]
-        }
+        headers = {"Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
         if response_schema:
             payload["generationConfig"] = {
                 "responseMimeType": "application/json",
-                "responseSchema": response_schema
+                "responseSchema": response_schema,
             }
     else:
         return None
 
     try:
-        print(f"[Translation] Sending request to Cloud LLM provider '{provider}' using model '{model}'...", flush=True)
-        res = requests.post(url, json=payload, headers=headers, timeout=45 if provider == 'nvidia' else 30)
+        print(
+            f"[Translation] Sending request to Cloud LLM provider '{provider}' using model '{model}'...",
+            flush=True,
+        )
+        res = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=45 if provider == "nvidia" else 30,
+        )
         if res.status_code == 200:
             res_json = res.json()
-            if provider == 'gemini':
-                return res_json['candidates'][0]['content']['parts'][0]['text']
-            elif provider == 'anthropic':
-                return res_json['content'][0]['text']
+            if provider == "gemini":
+                return res_json["candidates"][0]["content"]["parts"][0]["text"]
+            elif provider == "anthropic":
+                return res_json["content"][0]["text"]
             else:
-                return res_json['choices'][0]['message']['content']
+                return res_json["choices"][0]["message"]["content"]
         else:
-            print(f"[Translation] Cloud LLM provider '{provider}' returned error: {res.status_code} - {res.text}", flush=True)
+            print(
+                f"[Translation] Cloud LLM provider '{provider}' returned error: {res.status_code} - {res.text}",
+                flush=True,
+            )
     except Exception as e:
         print(f"[Translation] Cloud LLM Translation failed: {e}", flush=True)
     return None
 
-def try_cloud_ai_vision(provider, api_key, model, prompt, base64_image, response_schema=None):
+
+def try_cloud_ai_vision(
+    provider, api_key, model, prompt, base64_image, response_schema=None
+):
     enforce_rate_limit()
     url = ""
     headers = {}
     payload = {}
-    
-    if provider == 'openrouter':
+
+    if provider == "openrouter":
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         payload = {
             "model": model,
@@ -607,28 +713,23 @@ def try_cloud_ai_vision(provider, api_key, model, prompt, base64_image, response
                             "type": "image_url",
                             "image_url": {
                                 "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
+                            },
+                        },
+                    ],
                 }
-            ]
+            ],
         }
         if response_schema:
             payload["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "manga_translation",
-                    "schema": response_schema
-                }
+                "json_schema": {"name": "manga_translation", "schema": response_schema},
             }
-    elif provider == 'gemini':
+    elif provider == "gemini":
         gemini_model = model or "gemini-1.5-flash"
         if "/" not in gemini_model:
             gemini_model = f"models/{gemini_model}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{gemini_model}:generateContent?key={api_key}"
-        headers = {
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [
                 {
@@ -637,9 +738,9 @@ def try_cloud_ai_vision(provider, api_key, model, prompt, base64_image, response
                         {
                             "inlineData": {
                                 "mimeType": "image/jpeg",
-                                "data": base64_image
+                                "data": base64_image,
                             }
-                        }
+                        },
                     ]
                 }
             ]
@@ -647,25 +748,32 @@ def try_cloud_ai_vision(provider, api_key, model, prompt, base64_image, response
         if response_schema:
             payload["generationConfig"] = {
                 "responseMimeType": "application/json",
-                "responseSchema": response_schema
+                "responseSchema": response_schema,
             }
     else:
         return None
 
     try:
-        print(f"[Translation VLM] Sending vision request to provider '{provider}' using model '{model}'...", flush=True)
+        print(
+            f"[Translation VLM] Sending vision request to provider '{provider}' using model '{model}'...",
+            flush=True,
+        )
         res = requests.post(url, json=payload, headers=headers, timeout=45)
         if res.status_code == 200:
             res_json = res.json()
-            if provider == 'gemini':
-                return res_json['candidates'][0]['content']['parts'][0]['text']
+            if provider == "gemini":
+                return res_json["candidates"][0]["content"]["parts"][0]["text"]
             else:
-                return res_json['choices'][0]['message']['content']
+                return res_json["choices"][0]["message"]["content"]
         else:
-            print(f"[Translation VLM] Provider '{provider}' returned error: {res.status_code} - {res.text}", flush=True)
+            print(
+                f"[Translation VLM] Provider '{provider}' returned error: {res.status_code} - {res.text}",
+                flush=True,
+            )
     except Exception as e:
         print(f"[Translation VLM] Vision Translation failed: {e}", flush=True)
     return None
+
 
 MANGA_TRANSLATION_SYSTEM_PROMPT = """You are an expert manga translator.
 
@@ -679,116 +787,146 @@ Rules:
 - Do not add quotation marks.
 - Return only the translated text."""
 
+
 def try_local_ai(prompt, text, response_schema=None):
     enforce_rate_limit()
-    local_provider = os.environ.get('LOCAL_LLM_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
-    local_endpoint = os.environ.get('LOCAL_LLM_ENDPOINT', os.environ.get('LLM_ENDPOINT', '')).strip()
-    model = os.environ.get('LOCAL_LLM_MODEL', 'gemma3:4b')
+    local_provider = (
+        os.environ.get("LOCAL_LLM_PROVIDER", os.environ.get("LLM_PROVIDER", "lmstudio"))
+        .lower()
+        .strip()
+    )
+    local_endpoint = os.environ.get(
+        "LOCAL_LLM_ENDPOINT", os.environ.get("LLM_ENDPOINT", "")
+    ).strip()
+    model = os.environ.get("LOCAL_LLM_MODEL", "gemma3:4b")
 
     if not local_endpoint:
-        if local_provider == 'ollama':
+        if local_provider == "ollama":
             local_endpoint = "http://ollama:11434/v1/chat/completions"
         else:
             local_endpoint = "http://host.docker.internal:1234/v1/chat/completions"
 
     endpoints_to_try = [local_endpoint]
     if "localhost" in local_endpoint:
-        endpoints_to_try.append(local_endpoint.replace("localhost", "host.docker.internal"))
+        endpoints_to_try.append(
+            local_endpoint.replace("localhost", "host.docker.internal")
+        )
     elif "host.docker.internal" in local_endpoint:
-        endpoints_to_try.append(local_endpoint.replace("host.docker.internal", "localhost"))
+        endpoints_to_try.append(
+            local_endpoint.replace("host.docker.internal", "localhost")
+        )
 
-    system_pr = MANGA_TRANSLATION_JSON_SYSTEM_PROMPT if response_schema else MANGA_TRANSLATION_SYSTEM_PROMPT
+    system_pr = (
+        MANGA_TRANSLATION_JSON_SYSTEM_PROMPT
+        if response_schema
+        else MANGA_TRANSLATION_SYSTEM_PROMPT
+    )
 
     for endpoint in endpoints_to_try:
         try:
-            print(f"[Translation] Trying Local AI endpoint '{endpoint}' using model '{model}'...", flush=True)
-            
+            print(
+                f"[Translation] Trying Local AI endpoint '{endpoint}' using model '{model}'...",
+                flush=True,
+            )
+
             if "/api/v1/chat" in endpoint:
-                payload = {
-                    "model": model,
-                    "system_prompt": system_pr,
-                    "input": text
-                }
+                payload = {"model": model, "system_prompt": system_pr, "input": text}
             else:
                 payload = {
                     "model": model,
                     "messages": [
                         {"role": "system", "content": system_pr},
-                        {"role": "user", "content": text}
-                    ]
+                        {"role": "user", "content": text},
+                    ],
                 }
                 if response_schema:
-                    if "ollama" in endpoint or local_provider == 'ollama':
+                    if "ollama" in endpoint or local_provider == "ollama":
                         payload["format"] = "json"
                     else:
                         payload["response_format"] = {"type": "json_object"}
-            
-            res = requests.post(endpoint, json=payload, headers={"Content-Type": "application/json"}, timeout=120)
+
+            res = requests.post(
+                endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=120,
+            )
             if res.status_code == 200:
                 res_json = res.json()
                 translated = None
                 if "/api/v1/chat" in endpoint:
-                    if 'choices' in res_json:
-                        choice = res_json['choices'][0]
-                        if 'message' in choice:
-                            translated = choice['message']['content']
-                        elif 'text' in choice:
-                            translated = choice['text']
-                    elif 'output' in res_json:
-                        translated = res_json['output']
-                    elif 'response' in res_json:
-                        translated = res_json['response']
+                    if "choices" in res_json:
+                        choice = res_json["choices"][0]
+                        if "message" in choice:
+                            translated = choice["message"]["content"]
+                        elif "text" in choice:
+                            translated = choice["text"]
+                    elif "output" in res_json:
+                        translated = res_json["output"]
+                    elif "response" in res_json:
+                        translated = res_json["response"]
                 else:
-                    if 'choices' in res_json:
-                        translated = res_json['choices'][0]['message']['content']
-                    elif 'response' in res_json:
-                        translated = res_json['response']
-                
+                    if "choices" in res_json:
+                        translated = res_json["choices"][0]["message"]["content"]
+                    elif "response" in res_json:
+                        translated = res_json["response"]
+
                 if translated:
                     return translated
         except Exception as e:
-            print(f"[Translation] Local AI connection failed for '{endpoint}': {e}", flush=True)
-            
+            print(
+                f"[Translation] Local AI connection failed for '{endpoint}': {e}",
+                flush=True,
+            )
+
     return None
 
-def try_deepl(text, target_lang='en'):
-    deepl_key = os.environ.get('DEEPL_API_KEY', os.environ.get('DEEPL_KEY', '')).strip()
+
+def try_deepl(text, target_lang="en"):
+    deepl_key = os.environ.get("DEEPL_API_KEY", os.environ.get("DEEPL_KEY", "")).strip()
     if not deepl_key:
         return None
-    
-    if deepl_key.endswith(':fx'):
+
+    if deepl_key.endswith(":fx"):
         url = "https://api-free.deepl.com/v2/translate"
     else:
         url = "https://api.deepl.com/v2/translate"
-        
+
     try:
         print("[Translation] Sending request to DeepL API...", flush=True)
         headers = {
             "Authorization": f"DeepL-Auth-Key {deepl_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        payload = {
-            "text": [text],
-            "target_lang": target_lang.upper()
-        }
+        payload = {"text": [text], "target_lang": target_lang.upper()}
         res = requests.post(url, json=payload, headers=headers, timeout=8)
         if res.status_code == 200:
             res_json = res.json()
-            translated = res_json['translations'][0]['text']
-            print(f"[Translation] DeepL Translation Success: '{translated}'", flush=True)
+            translated = res_json["translations"][0]["text"]
+            print(
+                f"[Translation] DeepL Translation Success: '{translated}'", flush=True
+            )
             return translated
         else:
-            print(f"[Translation] DeepL API returned error: {res.status_code} - {res.text}", flush=True)
+            print(
+                f"[Translation] DeepL API returned error: {res.status_code} - {res.text}",
+                flush=True,
+            )
     except Exception as e:
         print(f"[Translation] DeepL Translation failed: {e}", flush=True)
     return None
 
-def try_google_translate(text, source_lang='auto', target_lang='en'):
+
+def try_google_translate(text, source_lang="auto", target_lang="en"):
     try:
         print(f"[Translation] Falling back to free Google Translate API...", flush=True)
         import urllib.parse
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={source_lang}&tl={target_lang}&dt=t&q=" + urllib.parse.quote(text)
-        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+
+        url = (
+            f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={source_lang}&tl={target_lang}&dt=t&q="
+            + urllib.parse.quote(text)
+        )
+        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
         if res.status_code == 200:
             data = res.json()
             translated = "".join([part[0] for part in data[0] if part[0]])
@@ -798,44 +936,65 @@ def try_google_translate(text, source_lang='auto', target_lang='en'):
         print(f"[Translation] Google Translate fallback failed: {e}", flush=True)
     return None
 
+
 def clean_translated_text(translated):
     if not translated:
         return translated
     if isinstance(translated, list) and len(translated) > 0:
-        if isinstance(translated[0], dict) and 'content' in translated[0]:
-            translated = translated[0]['content']
+        if isinstance(translated[0], dict) and "content" in translated[0]:
+            translated = translated[0]["content"]
         elif isinstance(translated[0], str):
             translated = translated[0]
     if isinstance(translated, str):
         translated = translated.strip()
-        if (translated.startswith('"') and translated.endswith('"')) or (translated.startswith("'") and translated.endswith("'")):
+        if (translated.startswith('"') and translated.endswith('"')) or (
+            translated.startswith("'") and translated.endswith("'")
+        ):
             translated = translated[1:-1].strip()
         return translated
     return translated
 
-def translate_text(text, source_lang='auto', target_lang='en'):
-    provider = os.environ.get('MODEL_PROVIDER', '').lower().strip()
-    api_key = os.environ.get('API_KEY', '').strip()
-    
-    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '').strip() or (api_key if provider == 'openrouter' else '')
-    nvidia_key = os.environ.get('NVIDIA_API_KEY', '').strip() or (api_key if provider == 'nvidia' else '')
+
+def translate_text(text, source_lang="auto", target_lang="en"):
+    provider = os.environ.get("MODEL_PROVIDER", "").lower().strip()
+    api_key = os.environ.get("API_KEY", "").strip()
+
+    # LOCAL_ONLY mode: when provider is a local runtime, skip all cloud tiers
+    local_only = provider in ("ollama", "lmstudio")
+
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip() or (
+        api_key if provider == "openrouter" else ""
+    )
+    nvidia_key = os.environ.get("NVIDIA_API_KEY", "").strip() or (
+        api_key if provider == "nvidia" else ""
+    )
 
     prompt = f"Translate the following text to natural English, maintaining its tone and context. Respond ONLY with the translated text. Do not include any tags, notes, or explanations.\n\nText: {text}"
 
-    # 1. Cloud LLM Layer (DeepSeek V4 Pro or Nemotron)
-    if openrouter_key:
-        translated = try_cloud_ai('openrouter', openrouter_key, 'deepseek-ai/deepseek-v4-pro', prompt)
-        if translated:
-            cleaned = clean_translated_text(translated)
-            if is_valid_translation(text, cleaned):
-                return cleaned
+    if local_only:
+        print(
+            f"[Translation] LOCAL_ONLY mode (provider='{provider}') — skipping cloud AI tiers.",
+            flush=True,
+        )
+    else:
+        # 1. Cloud LLM Layer (DeepSeek V4 Pro or Nemotron)
+        if openrouter_key:
+            translated = try_cloud_ai(
+                "openrouter", openrouter_key, "deepseek-ai/deepseek-v4-pro", prompt
+            )
+            if translated:
+                cleaned = clean_translated_text(translated)
+                if is_valid_translation(text, cleaned):
+                    return cleaned
 
-    if nvidia_key:
-        translated = try_cloud_ai('nvidia', nvidia_key, 'nvidia/llama-3.3-nemotron-super-49b-v1', prompt)
-        if translated:
-            cleaned = clean_translated_text(translated)
-            if is_valid_translation(text, cleaned):
-                return cleaned
+        if nvidia_key:
+            translated = try_cloud_ai(
+                "nvidia", nvidia_key, "nvidia/llama-3.3-nemotron-super-49b-v1", prompt
+            )
+            if translated:
+                cleaned = clean_translated_text(translated)
+                if is_valid_translation(text, cleaned):
+                    return cleaned
 
     # 2. Local Ollama/LMStudio Layer
     translated = try_local_ai(prompt, text)
@@ -843,6 +1002,16 @@ def translate_text(text, source_lang='auto', target_lang='en'):
         cleaned = clean_translated_text(translated)
         if is_valid_translation(text, cleaned):
             return cleaned
+
+    if local_only:
+        print(
+            f"[Translation] LOCAL_ONLY mode — not falling back to DeepL/Google Translate.",
+            flush=True,
+        )
+        print(
+            f"[Translation] All translation tiers failed for text: '{text}'", flush=True
+        )
+        return None
 
     # 3. DeepL Layer
     translated = try_deepl(text, target_lang)
@@ -865,15 +1034,17 @@ def translate_text(text, source_lang='auto', target_lang='en'):
 def translate_batch_llm(unmatched_regions, response_schema=None):
     bubbles_input = []
     for r in unmatched_regions:
-        bubbles_input.append({
-            "id": r['id'],
-            "panel": r.get('panelReadingOrder') or r.get('panelId') or 0,
-            "bubble": r.get('bubbleReadingOrder') or 0,
-            "speaker": None,
-            "text": r['text']
-        })
+        bubbles_input.append(
+            {
+                "id": r["id"],
+                "panel": r.get("panelReadingOrder") or r.get("panelId") or 0,
+                "bubble": r.get("bubbleReadingOrder") or 0,
+                "speaker": None,
+                "text": r["text"],
+            }
+        )
     bubbles_json = json.dumps(bubbles_input, ensure_ascii=False, indent=2)
-    
+
     prompt = f"""These bubbles appear in reading order.
 Translate each bubble into natural manga English.
 Preserve:
@@ -903,34 +1074,67 @@ Return ONLY valid JSON.
 Input:
 {bubbles_json}
 """
-    provider = os.environ.get('MODEL_PROVIDER', '').lower().strip()
-    api_key = os.environ.get('API_KEY', '').strip()
-    
-    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '').strip() or (api_key if provider == 'openrouter' else '')
-    nvidia_key = os.environ.get('NVIDIA_API_KEY', '').strip() or (api_key if provider == 'nvidia' else '')
+    provider = os.environ.get("MODEL_PROVIDER", "").lower().strip()
+    api_key = os.environ.get("API_KEY", "").strip()
 
-    # Try DeepSeek V4 Pro
-    if openrouter_key:
-        print("[Translation] Batch: Trying DeepSeek V4 Pro...", flush=True)
-        try:
-            res = try_cloud_ai('openrouter', openrouter_key, 'deepseek-ai/deepseek-v4-pro', prompt, response_schema)
-            if res:
-                return res
-        except Exception as e:
-            print(f"[Translation] DeepSeek batch translation failed: {e}", flush=True)
+    # LOCAL_ONLY mode: when provider is a local runtime, skip all cloud tiers
+    local_only = provider in ("ollama", "lmstudio")
 
-    # Try Nemotron
-    if nvidia_key:
-        print("[Translation] Batch: Trying Nemotron...", flush=True)
-        try:
-            res = try_cloud_ai('nvidia', nvidia_key, 'nvidia/llama-3.3-nemotron-super-49b-v1', prompt, response_schema)
-            if res:
-                return res
-        except Exception as e:
-            print(f"[Translation] Nemotron batch translation failed: {e}", flush=True)
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip() or (
+        api_key if provider == "openrouter" else ""
+    )
+    nvidia_key = os.environ.get("NVIDIA_API_KEY", "").strip() or (
+        api_key if provider == "nvidia" else ""
+    )
 
-    # Try Local LLM (Ollama)
-    local_provider = os.environ.get('LOCAL_LLM_PROVIDER', os.environ.get('LLM_PROVIDER', 'lmstudio')).lower().strip()
+    if local_only:
+        print(
+            f"[Translation] Batch: LOCAL_ONLY mode (provider='{provider}') — skipping cloud AI tiers.",
+            flush=True,
+        )
+    else:
+        # Try DeepSeek V4 Pro
+        if openrouter_key:
+            print("[Translation] Batch: Trying DeepSeek V4 Pro...", flush=True)
+            try:
+                res = try_cloud_ai(
+                    "openrouter",
+                    openrouter_key,
+                    "deepseek-ai/deepseek-v4-pro",
+                    prompt,
+                    response_schema,
+                )
+                if res:
+                    return res
+            except Exception as e:
+                print(
+                    f"[Translation] DeepSeek batch translation failed: {e}", flush=True
+                )
+
+        # Try Nemotron
+        if nvidia_key:
+            print("[Translation] Batch: Trying Nemotron...", flush=True)
+            try:
+                res = try_cloud_ai(
+                    "nvidia",
+                    nvidia_key,
+                    "nvidia/llama-3.3-nemotron-super-49b-v1",
+                    prompt,
+                    response_schema,
+                )
+                if res:
+                    return res
+            except Exception as e:
+                print(
+                    f"[Translation] Nemotron batch translation failed: {e}", flush=True
+                )
+
+    # Try Local LLM (Ollama/LMStudio)
+    local_provider = (
+        os.environ.get("LOCAL_LLM_PROVIDER", os.environ.get("LLM_PROVIDER", "lmstudio"))
+        .lower()
+        .strip()
+    )
     print(f"[Translation] Batch: Trying Local LLM ({local_provider})...", flush=True)
     try:
         res = try_local_ai(prompt, bubbles_json, response_schema)
@@ -941,23 +1145,27 @@ Input:
 
     return None
 
+
 def translate_vlm_vision(img_bytes, unmatched_regions, response_schema=None):
     if not img_bytes:
         return None
-        
+
     import base64
-    base64_image = base64.b64encode(img_bytes).decode('utf-8')
-    
+
+    base64_image = base64.b64encode(img_bytes).decode("utf-8")
+
     bubbles_input = []
     for r in unmatched_regions:
-        bubbles_input.append({
-            "id": r['id'],
-            "panel": r.get('panelReadingOrder') or r.get('panelId') or 0,
-            "bubble": r.get('bubbleReadingOrder') or 0,
-            "speaker": None,
-            "text": r['text']
-        })
-        
+        bubbles_input.append(
+            {
+                "id": r["id"],
+                "panel": r.get("panelReadingOrder") or r.get("panelId") or 0,
+                "bubble": r.get("bubbleReadingOrder") or 0,
+                "speaker": None,
+                "text": r["text"],
+            }
+        )
+
     prompt = f"""These OCR regions were extracted from this manga page.
 Use the page image to understand context (characters, expressions, speech bubble placements).
 Translate each bubble into natural manga English.
@@ -972,65 +1180,88 @@ Return JSON only.
 Input:
 {json.dumps(bubbles_input, ensure_ascii=False, indent=2)}
 """
-    provider = os.environ.get('MODEL_PROVIDER', '').lower().strip()
-    api_key = os.environ.get('API_KEY', '').strip()
-    
-    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '').strip() or (api_key if provider == 'openrouter' else '')
-    nvidia_key = os.environ.get('NVIDIA_API_KEY', '').strip() or (api_key if provider == 'nvidia' else '')
+    provider = os.environ.get("MODEL_PROVIDER", "").lower().strip()
+    api_key = os.environ.get("API_KEY", "").strip()
+
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip() or (
+        api_key if provider == "openrouter" else ""
+    )
+    nvidia_key = os.environ.get("NVIDIA_API_KEY", "").strip() or (
+        api_key if provider == "nvidia" else ""
+    )
 
     if openrouter_key:
         print("[Translation] VLM: Trying vision model via OpenRouter...", flush=True)
-        vlm_model = os.environ.get('VLM_MODEL', 'google/gemini-2.5-flash')
+        vlm_model = os.environ.get("VLM_MODEL", "google/gemini-2.5-flash")
         try:
-            res = try_cloud_ai_vision('openrouter', openrouter_key, vlm_model, prompt, base64_image, response_schema)
+            res = try_cloud_ai_vision(
+                "openrouter",
+                openrouter_key,
+                vlm_model,
+                prompt,
+                base64_image,
+                response_schema,
+            )
             if res:
                 return res
         except Exception as e:
-            print(f"[Translation] VLM vision translation via OpenRouter failed: {e}", flush=True)
+            print(
+                f"[Translation] VLM vision translation via OpenRouter failed: {e}",
+                flush=True,
+            )
 
-    if provider == 'gemini' and api_key:
+    if provider == "gemini" and api_key:
         print("[Translation] VLM: Trying vision model via Gemini...", flush=True)
-        vlm_model = os.environ.get('PREFERRED_MODEL', 'gemini-1.5-flash')
+        vlm_model = os.environ.get("PREFERRED_MODEL", "gemini-1.5-flash")
         try:
-            res = try_cloud_ai_vision('gemini', api_key, vlm_model, prompt, base64_image, response_schema)
+            res = try_cloud_ai_vision(
+                "gemini", api_key, vlm_model, prompt, base64_image, response_schema
+            )
             if res:
                 return res
         except Exception as e:
-            print(f"[Translation] VLM vision translation via Gemini failed: {e}", flush=True)
+            print(
+                f"[Translation] VLM vision translation via Gemini failed: {e}",
+                flush=True,
+            )
 
     return None
 
-def translate_batch_deepl(unmatched_regions, target_lang='en'):
-    deepl_key = os.environ.get('DEEPL_API_KEY', os.environ.get('DEEPL_KEY', '')).strip()
+
+def translate_batch_deepl(unmatched_regions, target_lang="en"):
+    deepl_key = os.environ.get("DEEPL_API_KEY", os.environ.get("DEEPL_KEY", "")).strip()
     if not deepl_key:
         return None
-    
-    if deepl_key.endswith(':fx'):
+
+    if deepl_key.endswith(":fx"):
         url = "https://api-free.deepl.com/v2/translate"
     else:
         url = "https://api.deepl.com/v2/translate"
-        
+
     try:
-        print(f"[Translation] Sending batch request of {len(unmatched_regions)} bubbles to DeepL API...", flush=True)
+        print(
+            f"[Translation] Sending batch request of {len(unmatched_regions)} bubbles to DeepL API...",
+            flush=True,
+        )
         headers = {
             "Authorization": f"DeepL-Auth-Key {deepl_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        texts = [r['text'] for r in unmatched_regions]
-        payload = {
-            "text": texts,
-            "target_lang": target_lang.upper()
-        }
+        texts = [r["text"] for r in unmatched_regions]
+        payload = {"text": texts, "target_lang": target_lang.upper()}
         res = requests.post(url, json=payload, headers=headers, timeout=8)
         if res.status_code == 200:
             res_json = res.json()
-            translations = res_json['translations']
+            translations = res_json["translations"]
             mapping = {}
             for i, r in enumerate(unmatched_regions):
-                mapping[r['id']] = translations[i]['text']
+                mapping[r["id"]] = translations[i]["text"]
             return mapping
         else:
-            print(f"[Translation] DeepL API returned error: {res.status_code} - {res.text}", flush=True)
+            print(
+                f"[Translation] DeepL API returned error: {res.status_code} - {res.text}",
+                flush=True,
+            )
     except Exception as e:
         print(f"[Translation] DeepL batch translation failed: {e}", flush=True)
     return None
@@ -1038,62 +1269,75 @@ def translate_batch_deepl(unmatched_regions, target_lang='en'):
 
 # --- JOB PROCESSORS ---
 
+
 def process_panel_detection(job_data):
-    image_id = job_data['imageId']
+    image_id = job_data["imageId"]
     print(f"[Panel Detection] Processing image: {image_id}", flush=True)
 
     try:
-        backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
+        backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
         res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
-            print(f"[Panel Detection] Failed to get image info: {res.status_code}", flush=True)
+            print(
+                f"[Panel Detection] Failed to get image info: {res.status_code}",
+                flush=True,
+            )
             return
         image_info = res.json()
-        storage_path = image_info['storagePath']
+        storage_path = image_info["storagePath"]
     except Exception as e:
         print(f"[Panel Detection] Error fetching image details: {e}", flush=True)
         return
 
     try:
-        response = minio_client.get_object('manga-library', storage_path)
+        response = minio_client.get_object("manga-library", storage_path)
         img_bytes = response.read()
     except Exception as e:
         print(f"[Panel Detection] Error downloading from MinIO: {e}", flush=True)
         return
 
     panels = detect_panels(img_bytes)
-    print(f"[Panel Detection] Detected {len(panels)} panels for image {image_id}", flush=True)
+    print(
+        f"[Panel Detection] Detected {len(panels)} panels for image {image_id}",
+        flush=True,
+    )
 
-    callback_payload = {
-        'imageId': image_id,
-        'panels': panels
-    }
+    callback_payload = {"imageId": image_id, "panels": panels}
     try:
-        res = requests.post(f"{CALLBACK_URL}/panel", json=callback_payload, headers=BACKEND_HEADERS)
+        res = requests.post(
+            f"{CALLBACK_URL}/panel", json=callback_payload, headers=BACKEND_HEADERS
+        )
         print(f"[Panel Detection] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[Panel Detection] Failed to post callback to backend: {e}", flush=True)
 
 
 def process_ocr(job_data):
-    image_id = job_data['imageId']
-    print(f"[OCR] Processing image: {image_id}", flush=True)
+    image_id = job_data["imageId"]
+    # The backend sets these from the series context when it enqueues the job.
+    # Defaults preserve the original behaviour (Japanese RTL) when not supplied.
+    source_language = (job_data.get("sourceLanguage") or "ja").strip().lower()
+    reading_direction = (job_data.get("readingDirection") or "rtl").strip().lower()
+    print(
+        f"[OCR] Processing image: {image_id} (lang={source_language}, direction={reading_direction})",
+        flush=True,
+    )
 
     try:
-        backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
+        backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
         res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
             print(f"[OCR] Failed to get image info: {res.status_code}", flush=True)
             return
         image_info = res.json()
-        storage_path = image_info['storagePath']
-        panels = image_info.get('panels', [])
+        storage_path = image_info["storagePath"]
+        panels = image_info.get("panels", [])
     except Exception as e:
         print(f"[OCR] Error fetching image details: {e}", flush=True)
         return
 
     try:
-        response = minio_client.get_object('manga-library', storage_path)
+        response = minio_client.get_object("manga-library", storage_path)
         img_bytes = response.read()
     except Exception as e:
         print(f"[OCR] Error downloading from MinIO: {e}", flush=True)
@@ -1104,37 +1348,35 @@ def process_ocr(job_data):
         ocr_upscale = 1.0  # multiplier to map OCR coords back to original image
         img_decoded = None  # decoded image reused by both PaddleOCR and MangaOCR
         img_original = None  # full-resolution image for MangaOCR crops
-        # Try PaddleOCR (PP-OCRv5) first
+        # Try PaddleOCR (PP-OCRv5) first — reader is lazily created per language
+        paddle_ocr_reader = get_paddle_ocr_reader(source_language)
         if paddle_ocr_reader is not None:
             try:
-                print("[OCR] Running PaddleOCR (PP-OCRv5 Mobile).", flush=True)
+                print(
+                    f"[OCR] Running PaddleOCR (PP-OCRv5 Mobile, lang={source_language}).",
+                    flush=True,
+                )
 
                 try:
                     import psutil
 
                     rss = psutil.Process().memory_info().rss / 1024 / 1024
 
-                    print(
-                        f"[OCR] Memory before OCR: {rss:.1f} MB",
-                        flush=True
-                    )
+                    print(f"[OCR] Memory before OCR: {rss:.1f} MB", flush=True)
 
                 except Exception:
                     pass
 
                 nparr = np.frombuffer(img_bytes, np.uint8)
-                img_original = cv2.imdecode(
-                    nparr,
-                    cv2.IMREAD_COLOR
-                )
+                img_original = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-                img_decoded, ocr_upscale = downscale_for_ocr(
-                    img_original,
-                    max_dim=1024
-                )
+                img_decoded, ocr_upscale = downscale_for_ocr(img_original, max_dim=1024)
 
                 if ocr_upscale != 1.0:
-                    print(f"[OCR] Downscaled image for OCR (upscale factor: {ocr_upscale:.2f}x)", flush=True)
+                    print(
+                        f"[OCR] Downscaled image for OCR (upscale factor: {ocr_upscale:.2f}x)",
+                        flush=True,
+                    )
 
                 del nparr  # free compressed buffer immediately
                 if img_decoded is not None:
@@ -1145,9 +1387,14 @@ def process_ocr(job_data):
                     del raw_results
                     gc.collect()
                 else:
-                    print("[OCR] OpenCV failed to decode image for PaddleOCR", flush=True)
+                    print(
+                        "[OCR] OpenCV failed to decode image for PaddleOCR", flush=True
+                    )
             except Exception as ocr_err:
-                print(f"[OCR] PaddleOCR failed with exception: {ocr_err}. Falling back...", flush=True)
+                print(
+                    f"[OCR] PaddleOCR failed with exception: {ocr_err}. Falling back...",
+                    flush=True,
+                )
 
         # Fallback to EasyOCR if results are empty and reader is available
         if not results and reader is not None:
@@ -1190,7 +1437,7 @@ def process_ocr(job_data):
 
         # Run MangaOCR on bubbles with CJK (Japanese/Chinese) characters
         is_manga_ocr = False
-        if lang in ('ja', 'zh-TW') and manga_ocr_reader is not None and img is not None:
+        if lang in ("ja", "zh-TW") and manga_ocr_reader is not None and img is not None:
             try:
                 img_h, img_w = img.shape[:2]
                 x1, y1 = max(0, x), max(0, y)
@@ -1199,28 +1446,37 @@ def process_ocr(job_data):
                 if (x2 - x1) > 0 and (y2 - y1) > 0:
                     crop = img[y1:y2, x1:x2]
                     from PIL import Image
+
                     crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
                     pil_img = Image.fromarray(crop_rgb)
                     manga_text = manga_ocr_reader(pil_img)
                     if manga_text and len(manga_text.strip()) > 0:
-                        print(f"[OCR] Overwriting EasyOCR text '{text}' with MangaOCR '{manga_text}'", flush=True)
+                        print(
+                            f"[OCR] Overwriting EasyOCR text '{text}' with MangaOCR '{manga_text}'",
+                            flush=True,
+                        )
                         text = manga_text
                         is_manga_ocr = True
             except Exception as e:
-                print(f"[OCR] MangaOCR failed on region ({x},{y},{width},{height}): {e}", flush=True)
+                print(
+                    f"[OCR] MangaOCR failed on region ({x},{y},{width},{height}): {e}",
+                    flush=True,
+                )
 
-        regions.append({
-            'text': text,
-            'detectedLanguage': lang,
-            'confidence': 1.0 if is_manga_ocr else float(confidence),
-            'rotation': 0.0,
-            'x': x,
-            'y': y,
-            'width': width,
-            'height': height,
-            'panelId': None,
-            'bubbleReadingOrder': 0
-        })
+        regions.append(
+            {
+                "text": text,
+                "detectedLanguage": lang,
+                "confidence": 1.0 if is_manga_ocr else float(confidence),
+                "rotation": 0.0,
+                "x": x,
+                "y": y,
+                "width": width,
+                "height": height,
+                "panelId": None,
+                "bubbleReadingOrder": 0,
+            }
+        )
 
     panel_regions_map = {}
     unmapped_regions = []
@@ -1233,7 +1489,7 @@ def process_ocr(job_data):
             if overlap > max_overlap:
                 max_overlap = overlap
                 best_panel_idx = idx
-        
+
         if best_panel_idx != -1:
             if best_panel_idx not in panel_regions_map:
                 panel_regions_map[best_panel_idx] = []
@@ -1242,63 +1498,80 @@ def process_ocr(job_data):
             unmapped_regions.append(r)
 
     ordered_regions = []
-    sorted_panel_indices = sorted(panel_regions_map.keys(), key=lambda idx: panels[idx]['readingOrder'])
-    
+    sorted_panel_indices = sorted(
+        panel_regions_map.keys(), key=lambda idx: panels[idx]["readingOrder"]
+    )
+
+    # Curry the reading direction into the comparator so sort is direction-aware
+    def _bubble_cmp(a, b):
+        return bubble_compare(a, b, reading_direction)
+
     for panel_idx in sorted_panel_indices:
         panel_bubbles = panel_regions_map[panel_idx]
-        panel_bubbles.sort(key=cmp_to_key(bubble_compare))
-        
+        panel_bubbles.sort(key=cmp_to_key(_bubble_cmp))
+
         for b_order, r in enumerate(panel_bubbles, start=1):
-            r['bubbleReadingOrder'] = b_order
+            r["bubbleReadingOrder"] = b_order
             ordered_regions.append(r)
-            
-    unmapped_regions.sort(key=cmp_to_key(bubble_compare))
+
+    unmapped_regions.sort(key=cmp_to_key(_bubble_cmp))
     for b_order, r in enumerate(unmapped_regions, start=1):
-        r['bubbleReadingOrder'] = b_order
+        r["bubbleReadingOrder"] = b_order
         ordered_regions.append(r)
 
-    print(f"[OCR] Completed OCR. Found {len(ordered_regions)} text regions", flush=True)
+    print(
+        f"[OCR] Completed OCR. Found {len(ordered_regions)} text regions (lang={source_language}, direction={reading_direction})",
+        flush=True,
+    )
 
     callback_payload = {
-        'imageId': image_id,
-        'regions': ordered_regions
+        "imageId": image_id,
+        "sourceLanguage": source_language,
+        "readingDirection": reading_direction,
+        "regions": ordered_regions,
     }
     try:
-        res = requests.post(f"{CALLBACK_URL}/ocr", json=callback_payload, headers=BACKEND_HEADERS)
+        res = requests.post(
+            f"{CALLBACK_URL}/ocr", json=callback_payload, headers=BACKEND_HEADERS
+        )
         print(f"[OCR] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[OCR] Failed to post callback to backend: {e}", flush=True)
 
 
 def process_stub(job_data, job_type):
-    image_id = job_data['imageId']
+    image_id = job_data["imageId"]
     print(f"[Stub - {job_type}] Processing image: {image_id}", flush=True)
 
     # Mimic work
     time.sleep(0.5)
 
-    callback_payload = {
-        'imageId': image_id
-    }
+    callback_payload = {"imageId": image_id}
     try:
-        res = requests.post(f"{CALLBACK_URL}/{job_type}", json=callback_payload, headers=BACKEND_HEADERS)
-        print(f"[Stub - {job_type}] Callback status code: {res.status_code}", flush=True)
+        res = requests.post(
+            f"{CALLBACK_URL}/{job_type}", json=callback_payload, headers=BACKEND_HEADERS
+        )
+        print(
+            f"[Stub - {job_type}] Callback status code: {res.status_code}", flush=True
+        )
     except Exception as e:
         print(f"[Stub - {job_type}] Failed to post callback: {e}", flush=True)
 
 
 def process_translation(job_data):
-    image_id = job_data['imageId']
+    image_id = job_data["imageId"]
     print(f"[Translation] Processing image: {image_id}", flush=True)
 
     try:
-        backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
+        backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
         res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
-            print(f"[Translation] Failed to get image info: {res.status_code}", flush=True)
+            print(
+                f"[Translation] Failed to get image info: {res.status_code}", flush=True
+            )
             return
         image_info = res.json()
-        ocr_regions = image_info.get('ocrRegions', [])
+        ocr_regions = image_info.get("ocrRegions", [])
     except Exception as e:
         print(f"[Translation] Error fetching image details: {e}", flush=True)
         return
@@ -1306,57 +1579,82 @@ def process_translation(job_data):
     # OCR Quality Filter & Separation
     resolved_translations = {}
     unmatched_regions = []
-    
+
     for r in ocr_regions:
         if not should_translate_region(r):
             # Bypass translation for garbage, keep original text
-            resolved_translations[r['id']] = r['text']
+            resolved_translations[r["id"]] = r["text"]
         else:
             unmatched_regions.append(r)
 
     # Translate unmatched regions
     if unmatched_regions:
-        use_vlm_translation = os.environ.get('USE_VLM_TRANSLATION', 'false').lower() in ('true', '1', 't')
+        use_vlm_translation = os.environ.get(
+            "USE_VLM_TRANSLATION", "false"
+        ).lower() in ("true", "1", "t")
         batch_mapping = {}
-        
+
         # We group unmatched regions into small batches (e.g. max 5 regions per batch)
         # to prevent extremely large prompt tokens that cause timeouts on CPU.
         max_batch_size = 5
-        unmatched_chunks = [unmatched_regions[i:i + max_batch_size] for i in range(0, len(unmatched_regions), max_batch_size)]
-        
+        unmatched_chunks = [
+            unmatched_regions[i : i + max_batch_size]
+            for i in range(0, len(unmatched_regions), max_batch_size)
+        ]
+
         # Download image once if VLM vision translation is enabled
         img_bytes = None
         if use_vlm_translation:
-            storage_path = image_info.get('storagePath')
+            storage_path = image_info.get("storagePath")
             if storage_path:
                 try:
-                    response = minio_client.get_object('manga-library', storage_path)
+                    response = minio_client.get_object("manga-library", storage_path)
                     img_bytes = response.read()
                 except Exception as e:
-                    print(f"[Translation] Error downloading image from MinIO for VLM pass: {e}", flush=True)
+                    print(
+                        f"[Translation] Error downloading image from MinIO for VLM pass: {e}",
+                        flush=True,
+                    )
 
         for idx, chunk in enumerate(unmatched_chunks):
-            print(f"[Translation] Processing batch chunk {idx+1}/{len(unmatched_chunks)} ({len(chunk)} regions)...", flush=True)
+            print(
+                f"[Translation] Processing batch chunk {idx+1}/{len(unmatched_chunks)} ({len(chunk)} regions)...",
+                flush=True,
+            )
             chunk_mapping = None
-            
+
             # 1. (Optional) VLM vision translation pass
             if use_vlm_translation and img_bytes:
-                print(f"[Translation] VLM vision translation pass starting for chunk {idx+1}...", flush=True)
+                print(
+                    f"[Translation] VLM vision translation pass starting for chunk {idx+1}...",
+                    flush=True,
+                )
                 try:
-                    vlm_res = translate_vlm_vision(img_bytes, chunk, TRANSLATION_JSON_SCHEMA)
+                    vlm_res = translate_vlm_vision(
+                        img_bytes, chunk, TRANSLATION_JSON_SCHEMA
+                    )
                     chunk_mapping = parse_and_validate_batch(vlm_res, chunk)
                 except Exception as e:
-                    print(f"[Translation] VLM vision translation pass failed for chunk {idx+1}: {e}", flush=True)
-            
+                    print(
+                        f"[Translation] VLM vision translation pass failed for chunk {idx+1}: {e}",
+                        flush=True,
+                    )
+
             # 2. Standard LLM batch translation
             if not chunk_mapping:
-                print(f"[Translation] Running standard batch translation for chunk {idx+1}...", flush=True)
+                print(
+                    f"[Translation] Running standard batch translation for chunk {idx+1}...",
+                    flush=True,
+                )
                 try:
                     batch_res = translate_batch_llm(chunk, TRANSLATION_JSON_SCHEMA)
                     chunk_mapping = parse_and_validate_batch(batch_res, chunk)
                 except Exception as e:
-                    print(f"[Translation] Standard batch translation failed for chunk {idx+1}: {e}", flush=True)
-            
+                    print(
+                        f"[Translation] Standard batch translation failed for chunk {idx+1}: {e}",
+                        flush=True,
+                    )
+
             if chunk_mapping:
                 for rid, trans in chunk_mapping.items():
                     batch_mapping[rid] = trans
@@ -1364,78 +1662,99 @@ def process_translation(job_data):
         failed_batch_regions = []
         # Validate output for each unmatched region
         for r in unmatched_regions:
-            rid = r['id']
+            rid = r["id"]
             translated = batch_mapping.get(rid)
-            
+
             # Run sanity check
-            if translated and is_valid_translation(r['text'], translated):
+            if translated and is_valid_translation(r["text"], translated):
                 resolved_translations[rid] = translated
             else:
                 failed_batch_regions.append(r)
 
         # 3. Retry failed items only in small batches
         if failed_batch_regions:
-            print(f"[Translation] Retrying {len(failed_batch_regions)} failed items in batch...", flush=True)
-            retry_chunks = [failed_batch_regions[i:i + max_batch_size] for i in range(0, len(failed_batch_regions), max_batch_size)]
-            
+            print(
+                f"[Translation] Retrying {len(failed_batch_regions)} failed items in batch...",
+                flush=True,
+            )
+            retry_chunks = [
+                failed_batch_regions[i : i + max_batch_size]
+                for i in range(0, len(failed_batch_regions), max_batch_size)
+            ]
+
             retry_mapping = {}
             for idx, r_chunk in enumerate(retry_chunks):
-                print(f"[Translation] Processing retry batch chunk {idx+1}/{len(retry_chunks)} ({len(r_chunk)} regions)...", flush=True)
+                print(
+                    f"[Translation] Processing retry batch chunk {idx+1}/{len(retry_chunks)} ({len(r_chunk)} regions)...",
+                    flush=True,
+                )
                 r_chunk_mapping = None
                 try:
                     retry_res = translate_batch_llm(r_chunk, TRANSLATION_JSON_SCHEMA)
                     r_chunk_mapping = parse_and_validate_batch(retry_res, r_chunk)
                 except Exception as e:
-                    print(f"[Translation] Retry batch chunk {idx+1} translation failed: {e}", flush=True)
+                    print(
+                        f"[Translation] Retry batch chunk {idx+1} translation failed: {e}",
+                        flush=True,
+                    )
                 if r_chunk_mapping:
                     for rid, trans in r_chunk_mapping.items():
                         retry_mapping[rid] = trans
 
             still_failed_regions = []
             for r in failed_batch_regions:
-                rid = r['id']
+                rid = r["id"]
                 translated = retry_mapping.get(rid)
-                if translated and is_valid_translation(r['text'], translated):
+                if translated and is_valid_translation(r["text"], translated):
                     resolved_translations[rid] = translated
                 else:
                     still_failed_regions.append(r)
 
             # 4. Individual fallback for still failed regions (DeepSeek/Nemotron -> Local -> DeepL -> Google Translate)
             if still_failed_regions:
-                print(f"[Translation] Falling back to individual translation for {len(still_failed_regions)} regions...", flush=True)
+                print(
+                    f"[Translation] Falling back to individual translation for {len(still_failed_regions)} regions...",
+                    flush=True,
+                )
                 for r in still_failed_regions:
-                    rid = r['id']
-                    text = r['text']
-                    lang = r['detectedLanguage']
-                    
+                    rid = r["id"]
+                    text = r["text"]
+                    lang = r["detectedLanguage"]
+
                     translated = translate_text(text, source_lang=lang)
                     if translated and is_valid_translation(text, translated):
                         resolved_translations[rid] = translated
                     else:
-                        resolved_translations[rid] = None # failed
+                        resolved_translations[rid] = None  # failed
 
     # Format the final callback response
     translations = []
     for r in ocr_regions:
-        rid = r['id']
-        text = r['text']
-        lang = r['detectedLanguage']
-        
-        translated = resolved_translations.get(rid)
-        
-        translations.append({
-            'regionId': rid,
-            'translatedText': translated,
-            'translationFailed': (translated is None)
-        })
-        print(f"[Translation] Final: '{text}' ({lang}) -> '{translated}' (failed={translated is None})", flush=True)
+        rid = r["id"]
+        text = r["text"]
+        lang = r["detectedLanguage"]
 
-    callback_payload = {
-        'imageId': image_id,
-        'translations': translations
-    }
+        translated = resolved_translations.get(rid)
+
+        translations.append(
+            {
+                "regionId": rid,
+                "translatedText": translated,
+                "translationFailed": (translated is None),
+            }
+        )
+        print(
+            f"[Translation] Final: '{text}' ({lang}) -> '{translated}' (failed={translated is None})",
+            flush=True,
+        )
+
+    callback_payload = {"imageId": image_id, "translations": translations}
     try:
-        res = requests.post(f"{CALLBACK_URL}/translation", json=callback_payload, headers=BACKEND_HEADERS)
+        res = requests.post(
+            f"{CALLBACK_URL}/translation",
+            json=callback_payload,
+            headers=BACKEND_HEADERS,
+        )
         print(f"[Translation] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[Translation] Failed to post callback to backend: {e}", flush=True)
@@ -1443,18 +1762,19 @@ def process_translation(job_data):
 
 def try_cloud_ocr(img_crop_bytes, provider, api_key, model):
     import base64
-    base64_image = base64.b64encode(img_crop_bytes).decode('utf-8')
+
+    base64_image = base64.b64encode(img_crop_bytes).decode("utf-8")
     prompt = "Respond ONLY with the text shown in this image. Do not add any explanations, notes, or markdown. If there is no text, respond with empty string."
-    
+
     url = ""
     headers = {}
     payload = {}
-    
-    if provider == 'openai':
+
+    if provider == "openai":
         url = "https://api.openai.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         payload = {
             "model": model or "gpt-4o-mini",
@@ -1467,17 +1787,17 @@ def try_cloud_ocr(img_crop_bytes, provider, api_key, model):
                             "type": "image_url",
                             "image_url": {
                                 "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
+                            },
+                        },
+                    ],
                 }
-            ]
+            ],
         }
-    elif provider == 'openrouter':
+    elif provider == "openrouter":
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         payload = {
             "model": model or "google/gemini-2.5-flash",
@@ -1490,20 +1810,18 @@ def try_cloud_ocr(img_crop_bytes, provider, api_key, model):
                             "type": "image_url",
                             "image_url": {
                                 "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
+                            },
+                        },
+                    ],
                 }
-            ]
+            ],
         }
-    elif provider == 'gemini':
+    elif provider == "gemini":
         gemini_model = model or "gemini-1.5-flash"
         if "/" not in gemini_model:
             gemini_model = f"models/{gemini_model}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{gemini_model}:generateContent?key={api_key}"
-        headers = {
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [
                 {
@@ -1512,19 +1830,19 @@ def try_cloud_ocr(img_crop_bytes, provider, api_key, model):
                         {
                             "inlineData": {
                                 "mimeType": "image/jpeg",
-                                "data": base64_image
+                                "data": base64_image,
                             }
-                        }
+                        },
                     ]
                 }
             ]
         }
-    elif provider == 'anthropic':
+    elif provider == "anthropic":
         url = "https://api.anthropic.com/v1/messages"
         headers = {
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         payload = {
             "model": model or "claude-3-5-sonnet-20241022",
@@ -1538,13 +1856,13 @@ def try_cloud_ocr(img_crop_bytes, provider, api_key, model):
                             "source": {
                                 "type": "base64",
                                 "media_type": "image/jpeg",
-                                "data": base64_image
-                            }
+                                "data": base64_image,
+                            },
                         },
-                        {"type": "text", "text": prompt}
-                    ]
+                        {"type": "text", "text": prompt},
+                    ],
                 }
-            ]
+            ],
         }
     else:
         return None
@@ -1553,26 +1871,36 @@ def try_cloud_ocr(img_crop_bytes, provider, api_key, model):
         res = requests.post(url, json=payload, headers=headers, timeout=12)
         if res.status_code == 200:
             res_json = res.json()
-            if provider == 'gemini':
-                return res_json['candidates'][0]['content']['parts'][0]['text']
-            elif provider == 'anthropic':
-                return res_json['content'][0]['text']
+            if provider == "gemini":
+                return res_json["candidates"][0]["content"]["parts"][0]["text"]
+            elif provider == "anthropic":
+                return res_json["content"][0]["text"]
             else:
-                return res_json['choices'][0]['message']['content']
+                return res_json["choices"][0]["message"]["content"]
         else:
-            print(f"[OCR Redo] Cloud OCR error {res.status_code}: {res.text}", flush=True)
+            print(
+                f"[OCR Redo] Cloud OCR error {res.status_code}: {res.text}", flush=True
+            )
     except Exception as e:
         print(f"[OCR Redo] Cloud OCR HTTP post failed: {e}", flush=True)
     return None
 
+
 def perform_redo_ocr(img_crop_bytes, lang):
-    provider = os.environ.get('MODEL_PROVIDER', os.environ.get('LLM_PROVIDER', 'none')).lower().strip()
-    api_key = os.environ.get('API_KEY', os.environ.get('LLM_API_KEY', ''))
-    model = os.environ.get('PREFERRED_MODEL', os.environ.get('LLM_MODEL', ''))
-    
-    if api_key and provider in ('openai', 'openrouter', 'gemini', 'anthropic'):
+    provider = (
+        os.environ.get("MODEL_PROVIDER", os.environ.get("LLM_PROVIDER", "none"))
+        .lower()
+        .strip()
+    )
+    api_key = os.environ.get("API_KEY", os.environ.get("LLM_API_KEY", ""))
+    model = os.environ.get("PREFERRED_MODEL", os.environ.get("LLM_MODEL", ""))
+
+    if api_key and provider in ("openai", "openrouter", "gemini", "anthropic"):
         try:
-            print(f"[OCR Redo] Trying Cloud AI OCR with provider '{provider}'...", flush=True)
+            print(
+                f"[OCR Redo] Trying Cloud AI OCR with provider '{provider}'...",
+                flush=True,
+            )
             text = try_cloud_ocr(img_crop_bytes, provider, api_key, model)
             if text and len(text.strip()) > 0:
                 print(f"[OCR Redo] Cloud AI OCR Success: '{text}'", flush=True)
@@ -1580,8 +1908,9 @@ def perform_redo_ocr(img_crop_bytes, lang):
         except Exception as e:
             print(f"[OCR Redo] Cloud AI OCR failed: {e}", flush=True)
 
-    # Try PP-OCRv5 first
-    if paddle_ocr_reader is not None:
+    # Try PP-OCRv5 first — use the lazy-init reader for the region's language
+    _redo_paddle_reader = get_paddle_ocr_reader(lang)
+    if _redo_paddle_reader is not None:
         try:
             print("[OCR Redo] Trying local PP-OCRv5...", flush=True)
             nparr = np.frombuffer(img_crop_bytes, np.uint8)
@@ -1589,14 +1918,19 @@ def perform_redo_ocr(img_crop_bytes, lang):
             del nparr
             if img_crop is not None:
                 img_crop, _ = downscale_for_ocr(img_crop, max_dim=1024)
-                crop_results = paddle_ocr_reader.predict(img_crop)
+                crop_results = _redo_paddle_reader.predict(img_crop)
                 del img_crop
                 gc.collect()
                 parsed_crop_results = parse_paddle_ocr_results(crop_results)
                 if parsed_crop_results:
                     text = " ".join([line[1] for line in parsed_crop_results])
-                    confidence = float(np.mean([line[2] for line in parsed_crop_results]))
-                    print(f"[OCR Redo] PP-OCRv5 Success: '{text}' (conf={confidence})", flush=True)
+                    confidence = float(
+                        np.mean([line[2] for line in parsed_crop_results])
+                    )
+                    print(
+                        f"[OCR Redo] PP-OCRv5 Success: '{text}' (conf={confidence})",
+                        flush=True,
+                    )
                     return text.strip(), confidence
         except Exception as e:
             print(f"[OCR Redo] PP-OCRv5 failed: {e}", flush=True)
@@ -1608,6 +1942,7 @@ def perform_redo_ocr(img_crop_bytes, lang):
             nparr = np.frombuffer(img_crop_bytes, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             from PIL import Image
+
             crop_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             pil_img = Image.fromarray(crop_rgb)
             manga_text = manga_ocr_reader(pil_img)
@@ -1625,44 +1960,55 @@ def perform_redo_ocr(img_crop_bytes, lang):
             if crop_results:
                 text = " ".join([res[1] for res in crop_results])
                 confidence = float(np.mean([res[2] for res in crop_results]))
-                print(f"[OCR Redo] Local EasyOCR Success: '{text}' (conf={confidence})", flush=True)
+                print(
+                    f"[OCR Redo] Local EasyOCR Success: '{text}' (conf={confidence})",
+                    flush=True,
+                )
                 return text, confidence
         except Exception as e:
             print(f"[OCR Redo] Local EasyOCR failed: {e}", flush=True)
 
     return "", 0.0
 
+
 def process_region_redo(job_data):
-    image_id = job_data['imageId']
-    region_id = job_data['regionId']
-    redo_type = job_data['redoType'] # 'ocr' or 'translation'
-    print(f"[Region Redo] Processing region: {region_id} on image {image_id} with type {redo_type}", flush=True)
+    image_id = job_data["imageId"]
+    region_id = job_data["regionId"]
+    redo_type = job_data["redoType"]  # 'ocr' or 'translation'
+    print(
+        f"[Region Redo] Processing region: {region_id} on image {image_id} with type {redo_type}",
+        flush=True,
+    )
 
     try:
-        backend_url = CALLBACK_URL.replace('/jobs/callback', f'/images/{image_id}')
+        backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
         res = requests.get(backend_url, headers=BACKEND_HEADERS)
         if res.status_code != 200:
-            print(f"[Region Redo] Failed to get image info: {res.status_code}", flush=True)
+            print(
+                f"[Region Redo] Failed to get image info: {res.status_code}", flush=True
+            )
             return
         image_info = res.json()
-        storage_path = image_info['storagePath']
-        ocr_regions = image_info.get('ocrRegions', [])
+        storage_path = image_info["storagePath"]
+        ocr_regions = image_info.get("ocrRegions", [])
     except Exception as e:
         print(f"[Region Redo] Error fetching image details: {e}", flush=True)
         return
 
     region = None
     for r in ocr_regions:
-        if r['id'] == region_id:
+        if r["id"] == region_id:
             region = r
             break
-            
+
     if region is None:
-        print(f"[Region Redo] Region {region_id} not found in image details", flush=True)
+        print(
+            f"[Region Redo] Region {region_id} not found in image details", flush=True
+        )
         return
 
     try:
-        response = minio_client.get_object('manga-library', storage_path)
+        response = minio_client.get_object("manga-library", storage_path)
         img_bytes = response.read()
     except Exception as e:
         print(f"[Region Redo] Error downloading from MinIO: {e}", flush=True)
@@ -1670,46 +2016,63 @@ def process_region_redo(job_data):
 
     callback_payload = {}
 
-    if redo_type == 'ocr':
+    if redo_type == "ocr":
         try:
             nparr = np.frombuffer(img_bytes, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             img_h, img_w = img.shape[:2]
-            
-            x, y, width, height = region['bboxX'], region['bboxY'], region['bboxW'], region['bboxH']
+
+            x, y, width, height = (
+                region["bboxX"],
+                region["bboxY"],
+                region["bboxW"],
+                region["bboxH"],
+            )
             x1, y1 = max(0, x), max(0, y)
             x2, y2 = min(img_w, x + width), min(img_h, y + height)
-            
+
             if (x2 - x1) > 0 and (y2 - y1) > 0:
                 crop = img[y1:y2, x1:x2]
                 is_success, buffer = cv2.imencode(".jpg", crop)
                 crop_bytes = buffer.tobytes()
-                
-                text, confidence = perform_redo_ocr(crop_bytes, region['detectedLanguage'])
+
+                text, confidence = perform_redo_ocr(
+                    crop_bytes, region["detectedLanguage"]
+                )
                 detected_lang = detect_language(text)
-                callback_payload['text'] = text
-                callback_payload['confidence'] = confidence
-                callback_payload['detectedLanguage'] = detected_lang
-                print(f"[Region Redo] Redo OCR success: '{text}' (conf={confidence}, lang={detected_lang})", flush=True)
+                callback_payload["text"] = text
+                callback_payload["confidence"] = confidence
+                callback_payload["detectedLanguage"] = detected_lang
+                print(
+                    f"[Region Redo] Redo OCR success: '{text}' (conf={confidence}, lang={detected_lang})",
+                    flush=True,
+                )
         except Exception as e:
             print(f"[Region Redo] Redo OCR failed: {e}", flush=True)
             return
 
-    elif redo_type == 'translation':
+    elif redo_type == "translation":
         try:
-            text = region['text']
-            lang = region['detectedLanguage']
+            text = region["text"]
+            lang = region["detectedLanguage"]
             translated = translate_text(text, source_lang=lang)
-            callback_payload['translatedText'] = translated
-            callback_payload['translationFailed'] = (translated is None)
-            print(f"[Region Redo] Redo Translation result: '{translated}' (failed={translated is None})", flush=True)
+            callback_payload["translatedText"] = translated
+            callback_payload["translationFailed"] = translated is None
+            print(
+                f"[Region Redo] Redo Translation result: '{translated}' (failed={translated is None})",
+                flush=True,
+            )
         except Exception as e:
             print(f"[Region Redo] Redo Translation failed: {e}", flush=True)
             return
 
     try:
-        callback_url = CALLBACK_URL.replace('/jobs/callback', f'/ocr-regions/{region_id}/callback')
-        res = requests.post(callback_url, json=callback_payload, headers=BACKEND_HEADERS)
+        callback_url = CALLBACK_URL.replace(
+            "/jobs/callback", f"/ocr-regions/{region_id}/callback"
+        )
+        res = requests.post(
+            callback_url, json=callback_payload, headers=BACKEND_HEADERS
+        )
         print(f"[Region Redo] Callback status code: {res.status_code}", flush=True)
     except Exception as e:
         print(f"[Region Redo] Failed to post callback: {e}", flush=True)
@@ -1718,12 +2081,12 @@ def process_region_redo(job_data):
 # --- MAIN RUNNER ---
 def main():
     queues = [
-        'queue:panel-detection',
-        'queue:ocr',
-        'queue:layout',
-        'queue:translation',
-        'queue:render',
-        'queue:region-redo'
+        "queue:panel-detection",
+        "queue:ocr",
+        "queue:layout",
+        "queue:translation",
+        "queue:render",
+        "queue:region-redo",
     ]
     print(f"[Unified Worker] Listening to Redis queues: {queues}...", flush=True)
     while True:
@@ -1734,24 +2097,25 @@ def main():
             job_tuple = redis_client.blpop(queues, timeout=5)
             if job_tuple:
                 queue_bytes, job_json = job_tuple
-                queue_name = queue_bytes.decode('utf-8')
+                queue_name = queue_bytes.decode("utf-8")
                 job_data = json.loads(job_json)
 
-                if queue_name == 'queue:panel-detection':
+                if queue_name == "queue:panel-detection":
                     process_panel_detection(job_data)
-                elif queue_name == 'queue:ocr':
+                elif queue_name == "queue:ocr":
                     process_ocr(job_data)
-                elif queue_name == 'queue:layout':
-                    process_stub(job_data, 'layout')
-                elif queue_name == 'queue:translation':
+                elif queue_name == "queue:layout":
+                    process_stub(job_data, "layout")
+                elif queue_name == "queue:translation":
                     process_translation(job_data)
-                elif queue_name == 'queue:region-redo':
+                elif queue_name == "queue:region-redo":
                     process_region_redo(job_data)
-                elif queue_name == 'queue:render':
-                    process_stub(job_data, 'render')
+                elif queue_name == "queue:render":
+                    process_stub(job_data, "render")
         except Exception as e:
             print(f"[Unified Worker] Error in main loop: {e}", flush=True)
             time.sleep(1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
