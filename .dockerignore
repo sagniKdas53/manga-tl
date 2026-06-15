@@ -1,0 +1,26 @@
+.git
+.github
+.idea
+.vscode
+.venv
+.gitnexus
+
+# Frontend dependencies (handled inside Docker)
+frontend/node_modules
+frontend/dist
+
+# Backend build output (handled inside Docker)
+backend/target
+
+# Logs
+*.log
+logs/
+
+# Secrets / env
+.env
+secrets/
+
+# Misc
+*.md
+data/
+inputs/

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { User, Chapter, Page, Panel, OcrRegion, Conversation, Layer, LayerElement } from '../types';
 import { safeFetch, toSlug } from '../utils';
+import { fitTextInBox } from '../utils/fitText';
 import ConfirmModal from './ConfirmModal';
 import JSZip from 'jszip';
 
@@ -12,76 +13,33 @@ interface ReaderProps {
   theme: 'light' | 'dark';
 }
 
-interface FitResult {
-  fontSize: number;
-  lines: string[];
-  overflow: boolean;
+/** A single renderable item in the reader — either a conversation group or a standalone region. */
+interface RenderItem {
+  id: string;
+  isConversation: boolean;
+  regions: OcrRegion[];
+  bboxX: number;
+  bboxY: number;
+  bboxW: number;
+  bboxH: number;
+  approved: boolean;
+  sceneType: string;
+  /** Only present for standalone regions */
+  originalRegion?: OcrRegion;
+  /** Only present for conversation items */
+  conversationData?: Conversation & {
+    regions: OcrRegion[];
+    bboxX: number;
+    bboxY: number;
+    bboxW: number;
+    bboxH: number;
+    approved: boolean;
+  };
+  /** Set when item is a layer element */
+  isLayerElement?: boolean;
 }
 
-export const fitTextInBox = (
-  text: string,
-  maxWidth: number,
-  maxHeight: number,
-  fontFamily: string,
-  defaultFontSize: number = 16
-): FitResult => {
-  const cleanText = (text || '').replace(/\r\n/g, '\n');
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    return { fontSize: defaultFontSize, lines: [cleanText], overflow: false };
-  }
-
-  const wrapText = (txt: string, fSize: number): string[] => {
-    ctx.font = `bold ${fSize}px "${fontFamily}", sans-serif`;
-    const paragraphs = txt.split('\n');
-    const resultLines: string[] = [];
-
-    for (const para of paragraphs) {
-      if (!para) {
-        resultLines.push('');
-        continue;
-      }
-      const words = para.split(' ');
-      let currentLine = '';
-
-      for (const word of words) {
-        const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && currentLine) {
-          resultLines.push(currentLine);
-          currentLine = word;
-        } else {
-          currentLine = testLine;
-        }
-      }
-      if (currentLine) {
-        resultLines.push(currentLine);
-      }
-    }
-    return resultLines;
-  };
-
-  let fontSize = defaultFontSize;
-  let lines = wrapText(cleanText, fontSize);
-  const lineHeightMultiplier = 1.2;
-
-  while (fontSize > 10) {
-    const totalHeight = lines.length * fontSize * lineHeightMultiplier;
-    if (totalHeight <= maxHeight) {
-      return { fontSize, lines, overflow: false };
-    }
-    fontSize--;
-    lines = wrapText(cleanText, fontSize);
-  }
-
-  const totalHeight = lines.length * fontSize * lineHeightMultiplier;
-  return {
-    fontSize: 10,
-    lines,
-    overflow: totalHeight > maxHeight
-  };
-};
+type SelectedItemType = (RenderItem & LayerElement) | RenderItem | LayerElement | null;
 
 export const Reader: React.FC<ReaderProps> = ({
   user,
@@ -123,8 +81,8 @@ export const Reader: React.FC<ReaderProps> = ({
   // Conversation and Layout enhancements
   const [groupByConversation, setGroupByConversation] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [activeItem, setActiveItem] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<SelectedItemType>(null);
+  const [activeItem, setActiveItem] = useState<RenderItem | null>(null);
   const [fitMode, setFitMode] = useState<'page' | 'width' | 'height'>('page');
   const [isRedoingPageOcr, setIsRedoingPageOcr] = useState(false);
   const [isRedoingPageTranslation, setIsRedoingPageTranslation] = useState(false);
@@ -135,7 +93,8 @@ export const Reader: React.FC<ReaderProps> = ({
   const dragStart = useRef({ x: 0, y: 0 });
 
   // Touch & Zoom enhancements
-  const [isTouchScreen, setIsTouchScreen] = useState(false);
+  // Detected once at component initialization — never changes after mount
+  const isTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const [showZoomBar, setShowZoomBar] = useState(() => {
     const saved = localStorage.getItem('manga_show_zoom_bar');
     return saved === 'false' ? false : true;
@@ -152,17 +111,13 @@ export const Reader: React.FC<ReaderProps> = ({
     localStorage.setItem('manga_show_zoom_bar', showZoomBar.toString());
   }, [showZoomBar]);
 
-  useEffect(() => {
-    setIsTouchScreen(
-      'ontouchstart' in window ||
-      navigator.maxTouchPoints > 0
-    );
-  }, []);
+  // isTouchScreen is detected once at mount — no effect needed, computed directly
+  // (avoids react-hooks/set-state-in-effect lint error)
 
   useEffect(() => {
     if (!canvasAreaRef.current) return;
     const resizeObserver = new ResizeObserver((entries) => {
-      for (let entry of entries) {
+      for (const entry of entries) {
         setContainerSize({
           width: entry.contentRect.width,
           height: entry.contentRect.height
@@ -202,7 +157,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Helper to get combined text (original or translated) for a grouped item
-  const getCombinedText = useCallback((item: any, showTrans: boolean) => {
+  const getCombinedText = useCallback((item: RenderItem, showTrans: boolean) => {
     if (!item || !item.regions) return '';
     return item.regions
       .map((r: OcrRegion) => showTrans ? (r.translatedText || '') : r.text)
@@ -379,101 +334,8 @@ export const Reader: React.FC<ReaderProps> = ({
     setRedoStack([]);
   };
 
-  const handleUndo = useCallback(async () => {
-    if (undoStack.length === 0) return;
-    const previous = undoStack[undoStack.length - 1];
-    setUndoStack(prev => prev.slice(0, -1));
-
-    if (selectedItem && selectedItem.isLayerElement) {
-      const currentElement = { ...selectedItem };
-      setRedoStack(prev => [...prev, currentElement]);
-
-      setSelectedItem(previous);
-      setLayers(prevLayers => prevLayers.map(l => {
-        if (l.layer.id === previous.layerId) {
-          return {
-            ...l,
-            elements: l.elements.map(el => el.id === previous.id ? previous : el)
-          };
-        }
-        return l;
-      }));
-
-      await handleSaveElementChanges(previous, false);
-    }
-  }, [undoStack, selectedItem]);
-
-  const handleRedo = useCallback(async () => {
-    if (redoStack.length === 0) return;
-    const next = redoStack[redoStack.length - 1];
-    setRedoStack(prev => prev.slice(0, -1));
-
-    if (selectedItem && selectedItem.isLayerElement) {
-      const currentElement = { ...selectedItem };
-      setUndoStack(prev => [...prev, currentElement]);
-
-      setSelectedItem(next);
-      setLayers(prevLayers => prevLayers.map(l => {
-        if (l.layer.id === next.layerId) {
-          return {
-            ...l,
-            elements: l.elements.map(el => el.id === next.id ? next : el)
-          };
-        }
-        return l;
-      }));
-
-      await handleSaveElementChanges(next, false);
-    }
-  }, [redoStack, selectedItem]);
-
-  // Key Down Listener for undo/redo
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === 'INPUT' || 
-        target.tagName === 'TEXTAREA' || 
-        target.isContentEditable
-      ) {
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        handleUndo();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-        e.preventDefault();
-        handleRedo();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
-
-  const handleUpdateSelectedElement = (updates: Partial<LayerElement>) => {
-    setSelectedItem((prev: any) => {
-      if (!prev) return null;
-      
-      // Push previous state to undo stack
-      pushToHistoryStack(prev);
-
-      const updated = { ...prev, ...updates };
-
-      setLayers(prevLayers => prevLayers.map(l => {
-        if (l.layer.id === updated.layerId) {
-          return {
-            ...l,
-            elements: l.elements.map(el => el.id === updated.id ? updated : el)
-          };
-        }
-        return l;
-      }));
-
-      return updated;
-    });
-  };
-
-  const handleSaveElementChanges = async (element: LayerElement, showAlert: boolean = true) => {
+  // Declared before handleUndo/handleRedo so the callbacks can reference it
+  const handleSaveElementChanges = useCallback(async (element: LayerElement, showAlert: boolean = true) => {
     try {
       const res = await safeFetch(`/api/layer-elements/${element.id}`, {
         method: 'PUT',
@@ -508,6 +370,100 @@ export const Reader: React.FC<ReaderProps> = ({
       console.error(err);
       alert('Error updating element on server.');
     }
+  }, [user.token]);
+
+  const handleUndo = useCallback(async () => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+
+    if (selectedItem && selectedItem.isLayerElement) {
+      const currentElement = { ...selectedItem };
+      setRedoStack(prev => [...prev, currentElement as LayerElement]);
+
+      setSelectedItem(previous as SelectedItemType);
+      setLayers(prevLayers => prevLayers.map(l => {
+        if (l.layer.id === previous.layerId) {
+          return {
+            ...l,
+            elements: l.elements.map(el => el.id === previous.id ? previous : el)
+          };
+        }
+        return l;
+      }));
+
+      await handleSaveElementChanges(previous, false);
+    }
+  }, [undoStack, selectedItem, handleSaveElementChanges]);
+
+  const handleRedo = useCallback(async () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+
+    if (selectedItem && selectedItem.isLayerElement) {
+      const currentElement = { ...selectedItem };
+      setUndoStack(prev => [...prev, currentElement as LayerElement]);
+
+      setSelectedItem(next as SelectedItemType);
+      setLayers(prevLayers => prevLayers.map(l => {
+        if (l.layer.id === next.layerId) {
+          return {
+            ...l,
+            elements: l.elements.map(el => el.id === next.id ? next : el)
+          };
+        }
+        return l;
+      }));
+
+      await handleSaveElementChanges(next, false);
+    }
+  }, [redoStack, selectedItem, handleSaveElementChanges]);
+
+  // Key Down Listener for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.isContentEditable
+      ) {
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
+  const handleUpdateSelectedElement = (updates: Partial<LayerElement>) => {
+    setSelectedItem((prev: SelectedItemType) => {
+      if (!prev) return null;
+      
+      // Push previous state to undo stack
+      pushToHistoryStack(prev as LayerElement);
+
+      const updated = { ...prev, ...updates };
+
+      setLayers(prevLayers => prevLayers.map(l => {
+        if (l.layer.id === (updated as LayerElement).layerId) {
+          return {
+            ...l,
+            elements: l.elements.map(el => el.id === (updated as LayerElement).id ? (updated as LayerElement) : el)
+          };
+        }
+        return l;
+      }));
+
+      return updated as SelectedItemType;
+    });
   };
 
   const handleCreateTranslationLayer = async () => {
@@ -952,7 +908,7 @@ export const Reader: React.FC<ReaderProps> = ({
   };
 
   // --- HOVER POPUP HANDLERS ---
-  const handleMouseEnterItem = useCallback((item: any) => {
+  const handleMouseEnterItem = useCallback((item: RenderItem) => {
     if (hideTimeout.current) clearTimeout(hideTimeout.current);
     setActiveItem(item);
     setActiveRegion(item.regions[0] || null);
@@ -977,7 +933,7 @@ export const Reader: React.FC<ReaderProps> = ({
   }, []);
 
   // --- BUBBLE/CONVERSATION UPDATES ---
-  const handleToggleApprove = async (item: any) => {
+  const handleToggleApprove = async (item: RenderItem) => {
     const AegeanApproved = !item.approved;
     
     // Optimistically update locally
@@ -989,7 +945,7 @@ export const Reader: React.FC<ReaderProps> = ({
     }));
 
     if (activeItem && activeItem.id === item.id) {
-      setActiveItem((prev: any) => prev ? { ...prev, approved: AegeanApproved } : null);
+      setActiveItem((prev: RenderItem | null) => prev ? { ...prev, approved: AegeanApproved } : null);
     }
 
     const promises = item.regions.map(async (region: OcrRegion) => {
@@ -1127,7 +1083,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 setConversations(data.conversations || []);
                 if (activeRegion && activeRegion.id === r.id) {
                   setActiveRegion(freshRegion);
-                  setActiveItem((prev: any) => {
+                  setActiveItem((prev: RenderItem | null) => {
                     if (!prev) return null;
                     return {
                       ...prev,
@@ -1412,9 +1368,8 @@ export const Reader: React.FC<ReaderProps> = ({
                     const isSelected = selectedItem?.id === element.id && selectedItem?.isLayerElement;
                     
                     // Run text fitting
-                    let fontSize = element.size || 16;
-                    let lines: string[] = [];
-                    let overflow = false;
+                    let fontSize: number;
+                    let overflow: boolean;
 
                     if (element.autoSize) {
                       const fit = fitTextInBox(
@@ -1425,7 +1380,6 @@ export const Reader: React.FC<ReaderProps> = ({
                         element.size || 16
                       );
                       fontSize = fit.fontSize;
-                      lines = fit.lines;
                       overflow = fit.overflow;
                     } else {
                       const fit = fitTextInBox(
@@ -1435,15 +1389,9 @@ export const Reader: React.FC<ReaderProps> = ({
                         element.font || 'Comic Neue',
                         element.size || 16
                       );
-                      lines = fit.lines;
                       fontSize = element.size || 16;
-                      const canvas = document.createElement('canvas');
-                      const ctx = canvas.getContext('2d');
-                      if (ctx) {
-                        ctx.font = `bold ${fontSize}px "${element.font || 'Comic Neue'}", sans-serif`;
-                        const totalHeight = lines.length * fontSize * 1.2;
-                        overflow = totalHeight > (element.maxHeight || 100);
-                      }
+                      const totalHeight = fit.lines.length * fontSize * 1.2;
+                      overflow = totalHeight > (element.maxHeight || 100);
                     }
 
                     const width = element.maxWidth || 100;
