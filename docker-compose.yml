@@ -105,33 +105,31 @@ services:
     container_name: manga-ollama
     restart: unless-stopped
     volumes:
-      - ollama:/root/.ollama
-      - /home/sagnik/lm-studio/lmstudio-community/gemma-3-4b-it-GGUF:/models
-      - /home/sagnik/lm-studio/lmstudio-community/NVIDIA-Nemotron-3-Nano-4B-GGUF:/models-nemotron
-      - ./Modelfile:/Modelfile
-      - ./Modelfile.nemotron:/Modelfile.nemotron
+      - ./data/ollama:/root/.ollama
+      - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     networks:
       - manga-net
 
-#  ollama-init:
-#    image: curlimages/curl:latest
-#    container_name: manga-ollama-init
-#    depends_on:
-#      - ollama
-#    entrypoint:
-#      - sh
-#      - -c
-#      - |
-#        until curl -s http://ollama:11434/api/tags >/dev/null; do
-#          echo "Waiting for Ollama..."
-#          sleep 5
-#        done
-#
-#        curl -X POST http://ollama:11434/api/pull \
-#          -H "Content-Type: application/json" \
-#          -d '{"name":"${LOCAL_LLM_MODEL:-gemma3:4b}"}'
-#    networks:
-#      - manga-net
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: manga-ollama-init
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    volumes:
+      - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
+      - ./ollama/init.sh:/init.sh
+    entrypoint: [ "sh", "/init.sh" ]
+    depends_on:
+      - ollama
+    networks:
+      - manga-net
 
 networks:
   manga-net:

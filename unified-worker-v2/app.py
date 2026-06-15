@@ -1155,7 +1155,8 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
             strategy_idx += 1
 
         if nvidia_key and provider == "nvidia":
-            logger.info(f"{req_prefix}{strategy_idx}. Nemotron (Nvidia)")
+            nvidia_model = os.environ.get("PREFERRED_MODEL", "google/gemma-3n-e4b-it")
+            logger.info(f"{req_prefix}{strategy_idx}. {nvidia_model} (Nvidia)")
             strategy_idx += 1
         if anthropic_key:
             logger.info(f"{req_prefix}{strategy_idx}. Claude 3.5 Sonnet (Direct)")
@@ -1211,13 +1212,12 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
                 cleaned = clean_translated_text(translated)
                 if is_valid_translation(text, cleaned, request_id=request_id):
                     return cleaned
-
         if nvidia_key and provider == "nvidia":
-            # Keep Nemotron if nvidia is the provider and nvidia key is provided
+            nvidia_model = os.environ.get("PREFERRED_MODEL", "google/gemma-3n-e4b-it")
             translated = try_cloud_ai(
                 "nvidia",
                 nvidia_key,
-                "nvidia/llama-3.3-nemotron-super-49b-v1",
+                nvidia_model,
                 prompt,
                 request_id=request_id,
             )
@@ -1400,14 +1400,15 @@ Input:
             except Exception as e:
                 logger.error(f"{req_prefix}Gemini Direct batch translation failed: {e}")
 
-        # Try Nemotron (only if provider is nvidia and nvidia key is provided)
+        # Try Nvidia NIM (only if provider is nvidia and nvidia key is provided)
         if nvidia_key and provider == "nvidia":
-            logger.info(f"{req_prefix}Batch: Trying Nemotron...")
+            nvidia_model = os.environ.get("PREFERRED_MODEL", "google/gemma-3n-e4b-it")
+            logger.info(f"{req_prefix}Batch: Trying Nvidia model {nvidia_model}...")
             try:
                 res = try_cloud_ai(
                     "nvidia",
                     nvidia_key,
-                    "nvidia/llama-3.3-nemotron-super-49b-v1",
+                    nvidia_model,
                     prompt,
                     response_schema,
                     request_id=request_id,
@@ -1415,7 +1416,7 @@ Input:
                 if res:
                     return res
             except Exception as e:
-                logger.error(f"{req_prefix}Nemotron batch translation failed: {e}")
+                logger.error(f"{req_prefix}Nvidia batch translation failed: {e}")
 
     # Try Local LLM (Ollama/LMStudio)
     local_provider = (
