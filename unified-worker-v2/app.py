@@ -849,7 +849,7 @@ def try_local_ai(prompt, text, response_schema=None):
                 endpoint,
                 json=payload,
                 headers={"Content-Type": "application/json"},
-                timeout=120,
+                timeout=300,
             )
             if res.status_code == 200:
                 res_json = res.json()
@@ -1671,10 +1671,11 @@ def process_translation(job_data):
             else:
                 failed_batch_regions.append(r)
 
-        # 3. Retry failed items only in small batches
+        # 3. Retry failed items (hard limit: 1 retry pass = 3 total attempts incl. initial + individual fallback)
+        LOCAL_AI_MAX_BATCH_RETRIES = 1  # keep total attempts to 3
         if failed_batch_regions:
             print(
-                f"[Translation] Retrying {len(failed_batch_regions)} failed items in batch...",
+                f"[Translation] Retrying {len(failed_batch_regions)} failed items in batch (max {LOCAL_AI_MAX_BATCH_RETRIES} retry pass)...",
                 flush=True,
             )
             retry_chunks = [
@@ -1710,10 +1711,10 @@ def process_translation(job_data):
                 else:
                     still_failed_regions.append(r)
 
-            # 4. Individual fallback for still failed regions (DeepSeek/Nemotron -> Local -> DeepL -> Google Translate)
+            # 4. Individual fallback (attempt 3/3) for still-failed regions
             if still_failed_regions:
                 print(
-                    f"[Translation] Falling back to individual translation for {len(still_failed_regions)} regions...",
+                    f"[Translation] Falling back to individual translation for {len(still_failed_regions)} regions (attempt 3/3)...",
                     flush=True,
                 )
                 for r in still_failed_regions:
@@ -1725,7 +1726,11 @@ def process_translation(job_data):
                     if translated and is_valid_translation(text, translated):
                         resolved_translations[rid] = translated
                     else:
-                        resolved_translations[rid] = None  # failed
+                        print(
+                            f"[Translation] Giving up on '{text}' after 3 attempts.",
+                            flush=True,
+                        )
+                        resolved_translations[rid] = None  # failed after 3 attempts
 
     # Format the final callback response
     translations = []
