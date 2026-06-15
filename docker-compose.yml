@@ -80,9 +80,9 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - BACKEND_CALLBACK_URL=http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
-      - MODEL_PROVIDER=${MODEL_PROVIDER:-ollama}
+      - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
       - API_KEY=${API_KEY:-}
-      - PREFERRED_MODEL=${PREFERRED_MODEL:-gemma3:4b}
+      - PREFERRED_MODEL=${PREFERRED_MODEL:-google/gemma-3n-e4b-it}
       - LOCAL_LLM_PROVIDER=ollama
       - LOCAL_LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
       - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
@@ -93,43 +93,42 @@ services:
       - redis
       - minio
       - backend
-      - ollama
+      #- ollama
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - manga-net
     restart: unless-stopped
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: manga-ollama
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./data/ollama:/root/.ollama
+  #     - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [ gpu ]
+  #   networks:
+  #     - manga-net
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: manga-ollama
-    restart: unless-stopped
-    volumes:
-      - ./data/ollama:/root/.ollama
-      - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
-    networks:
-      - manga-net
-
-  ollama-init:
-    image: ollama/ollama:latest
-    container_name: manga-ollama-init
-    environment:
-      - OLLAMA_HOST=ollama:11434
-    volumes:
-      - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
-      - ./ollama/init.sh:/init.sh
-    entrypoint: [ "sh", "/init.sh" ]
-    depends_on:
-      - ollama
-    networks:
-      - manga-net
+  # ollama-init:
+  #   image: ollama/ollama:latest
+  #   container_name: manga-ollama-init
+  #   environment:
+  #     - OLLAMA_HOST=ollama:11434
+  #   volumes:
+  #     - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
+  #     - ./ollama/init.sh:/init.sh
+  #   entrypoint: [ "sh", "/init.sh" ]
+  #   depends_on:
+  #     - ollama
+  #   networks:
+  #     - manga-net
 
 networks:
   manga-net:

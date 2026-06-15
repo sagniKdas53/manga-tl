@@ -1,0 +1,50 @@
+Attaching to manga-worker
+manga-worker  | [Unified Worker] Importing PaddleOCR...
+manga-worker  | [Unified Worker] PaddleOCR imported successfully (readers will be initialized on first use per language).
+manga-worker  | [Unified Worker] Importing EasyOCR...
+manga-worker  | [Unified Worker] Failed to initialize EasyOCR: No module named 'easyocr'
+manga-worker  | [Unified Worker] Initializing MangaOCR Reader...
+manga-worker  | [Unified Worker] Forcing CPU for MangaOCR...
+manga-worker  | 2026-06-15 17:03:02.410 | INFO     | manga_ocr.ocr:__init__:16 - Loading OCR model from kha-white/manga-ocr-base
+manga-worker  | 2026-06-15 17:03:02,711 [INFO] HTTP Request: GET https://huggingface.co/api/agent-harnesses "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:02,989 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:03,228 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/preprocessor_config.json "HTTP/1.1 307 Temporary Redirect"
+manga-worker  | 2026-06-15 17:03:03,244 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/preprocessor_config.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:03,264 [INFO] HTTP Request: GET https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/preprocessor_config.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:03,570 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+manga-worker  | 2026-06-15 17:03:03,588 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/config.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:03,602 [INFO] HTTP Request: GET https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/config.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:04,014 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+manga-worker  | 2026-06-15 17:03:04,030 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/tokenizer_config.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:04,050 [INFO] HTTP Request: GET https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/tokenizer_config.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:04,319 [INFO] HTTP Request: GET https://huggingface.co/api/models/kha-white/manga-ocr-base/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:04,550 [INFO] HTTP Request: GET https://huggingface.co/api/models/kha-white/manga-ocr-base/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:04,830 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/vocab.txt "HTTP/1.1 307 Temporary Redirect"
+manga-worker  | 2026-06-15 17:03:04,839 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/vocab.txt "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:04,850 [INFO] HTTP Request: GET https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/vocab.txt "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:05,082 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/spiece.model "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:05,342 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/added_tokens.json "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:05,651 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/special_tokens_map.json "HTTP/1.1 307 Temporary Redirect"
+manga-worker  | 2026-06-15 17:03:05,665 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/special_tokens_map.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:05,685 [INFO] HTTP Request: GET https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/special_tokens_map.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:05,959 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/tokenizer.json "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:06,265 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/chat_template.jinja "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:06,572 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+manga-worker  | 2026-06-15 17:03:06,587 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/config.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:06,982 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/model.safetensors "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:07,289 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/model.safetensors.index.json "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:07,595 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/pytorch_model.bin "HTTP/1.1 302 Found"
+manga-worker  | 2026-06-15 17:03:40,888 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/model.safetensors "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:41,187 [INFO] HTTP Request: GET https://huggingface.co/api/models/kha-white/manga-ocr-base "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/264 [00:00<?, ?itLoading weights: 100%|██████████| 264/264 [00:00<00:00, 16369.23it/s]
+manga-worker  | 2026-06-15 17:03:41,436 [INFO] HTTP Request: GET https://huggingface.co/api/models/kha-white/manga-ocr-base/commits/main "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:41,595 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/generation_config.json "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:41,680 [INFO] HTTP Request: GET https://huggingface.co/api/models/kha-white/manga-ocr-base/discussions?p=0 "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:41,901 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+manga-worker  | 2026-06-15 17:03:41,918 [INFO] HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/kha-white/manga-ocr-base/aa6573bd10b0d446cbf622e29c3e084914df9741/config.json "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:41,932 [INFO] HTTP Request: GET https://huggingface.co/api/models/kha-white/manga-ocr-base/commits/refs%2Fpr%2F4 "HTTP/1.1 200 OK"
+manga-worker  | 2026-06-15 17:03:41.954 | INFO     | manga_ocr.ocr:__init__:28 - Using CPU
+manga-worker  | 2026-06-15 17:03:42,309 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/refs%2Fpr%2F4/model.safetensors.index.json "HTTP/1.1 404 Not Found"
+manga-worker  | 2026-06-15 17:03:42,616 [INFO] HTTP Request: HEAD https://huggingface.co/kha-white/manga-ocr-base/resolve/refs%2Fpr%2F4/model.safetensors "HTTP/1.1 302 Found"
+manga-worker  | 2026-06-15 17:03:43.193 | INFO     | manga_ocr.ocr:__init__:35 - OCR ready
+manga-worker  | [Unified Worker] Listening to Redis queues: ['queue:panel-detection', 'queue:ocr', 'queue:layout', 'queue:translation', 'queue:render', 'queue:region-redo']...
