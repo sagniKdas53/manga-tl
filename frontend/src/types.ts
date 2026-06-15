@@ -57,3 +57,15 @@ export interface OcrRegion {
   panelReadingOrder: number;
   bubbleReadingOrder: number;
 }
+
+export interface ConversationRegion {
+  regionId: string;
+  position: number;
+}
+
+export interface Conversation {
+  id: string;
+  sceneType: string;
+  regions: ConversationRegion[];
+}
+

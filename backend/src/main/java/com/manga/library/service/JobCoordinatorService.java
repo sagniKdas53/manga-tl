@@ -289,6 +289,11 @@ public class JobCoordinatorService {
         }
     }
 
+    public void triggerImageRedo(UUID imageId, String jobType) {
+        log.info("Triggering image redo for image {} with job type {}", imageId, jobType);
+        enqueueJob(jobType, imageId);
+    }
+
     @Transactional
     public void handleRenderCallback(UUID imageId) {
         log.info("Received Render callback for image: {}. Pipeline complete!", imageId);
