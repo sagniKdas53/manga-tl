@@ -67,4 +67,12 @@ public class OcrRegion {
 
     @Column(name = "bubble_reading_order")
     private Integer bubbleReadingOrder;
+
+    @Column(name = "region_type")
+    @Builder.Default
+    private String regionType = "speech";
+
+    public UUID getPanelId() {
+        return panel != null ? panel.getId() : null;
+    }
 }
