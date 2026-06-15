@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { User, Chapter, Page, Panel, OcrRegion, Conversation, Layer, LayerElement } from '../types';
 import { safeFetch, toSlug } from '../utils';
+import ConfirmModal from './ConfirmModal';
+import JSZip from 'jszip';
 
 interface ReaderProps {
   user: User;
@@ -170,6 +172,26 @@ export const Reader: React.FC<ReaderProps> = ({
     resizeObserver.observe(canvasAreaRef.current);
     return () => resizeObserver.disconnect();
   }, []);
+
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    isDangerous?: boolean;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const closeConfirm = () => setConfirmModal(prev => ({ ...prev, isOpen: false }));
+
+  // Image ref for export
+  const imgRef = useRef<HTMLImageElement>(null);
 
   // Popover States
   const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
@@ -533,10 +555,16 @@ export const Reader: React.FC<ReaderProps> = ({
     }));
   };
 
-  const handleDeleteLayer = async (layerId: string) => {
-    if (!confirm('Are you sure you want to delete this layer?')) return;
-
-    try {
+  const handleDeleteLayer = (layerId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Layer',
+      message: 'Are you sure you want to delete this layer? This action cannot be undone.',
+      confirmText: 'Delete Layer',
+      isDangerous: true,
+      onConfirm: async () => {
+        closeConfirm();
+        try {
       const res = await safeFetch(`/api/layers/${layerId}`, {
         method: 'DELETE',
         headers: {
@@ -544,13 +572,207 @@ export const Reader: React.FC<ReaderProps> = ({
         }
       });
 
-      if (!res.ok) throw new Error('Failed to delete layer');
-      setLayers(prev => prev.filter(l => l.layer.id !== layerId));
-    } catch (err) {
-      console.error(err);
-      alert('Error deleting layer.');
-    }
+          if (!res.ok) throw new Error('Failed to delete layer');
+          setLayers(prev => prev.filter(l => l.layer.id !== layerId));
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
   };
+
+  // --- EXPORT HANDLERS ---
+  const handleExportPng = useCallback(() => {
+    if (!selectedPage || !imgRef.current) return;
+    const img = imgRef.current;
+    const W = imageDims.w;
+    const H = imageDims.h;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Draw the base page image
+    ctx.drawImage(img, 0, 0, W, H);
+
+    // Draw visible layer elements
+    layers.forEach(lData => {
+      if (!lData.layer.visible) return;
+      lData.elements.forEach(el => {
+        if (!el.visible) return;
+        const width = el.maxWidth || 100;
+        const height = el.maxHeight || 100;
+
+        ctx.save();
+        // Apply rotation around element center
+        const cx = el.x + width / 2;
+        const cy = el.y + height / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
+        ctx.translate(-cx, -cy);
+
+        // White mask backdrop
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(el.x, el.y, width, height);
+
+        // Draw text
+        const fit = fitTextInBox(
+          el.text || '',
+          width - 8,
+          height - 8,
+          el.font || 'Comic Neue',
+          el.size || 16
+        );
+        const fSize = fit.fontSize;
+        ctx.font = `bold ${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const lineH = fSize * 1.2;
+        const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
+        fit.lines.forEach((line, i) => {
+          ctx.fillText(line, el.x + width / 2, startY + i * lineH);
+        });
+
+        ctx.restore();
+      });
+    });
+
+    // Trigger download
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `page-${selectedPage.pageNumber}-export.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  }, [selectedPage, imageDims, layers]);
+
+  const handleExportZip = useCallback(async () => {
+    if (!selectedPage || !imgRef.current) return;
+    const img = imgRef.current;
+    const W = imageDims.w;
+    const H = imageDims.h;
+
+    const zip = new JSZip();
+
+    // 1. original.png
+    const origCanvas = document.createElement('canvas');
+    origCanvas.width = W;
+    origCanvas.height = H;
+    const origCtx = origCanvas.getContext('2d')!;
+    origCtx.drawImage(img, 0, 0, W, H);
+    const origBlob = await new Promise<Blob>(res => origCanvas.toBlob(b => res(b!), 'image/png'));
+    zip.file('original.png', origBlob);
+
+    // 2. mask.png  – white backdrop rects only, on transparent canvas
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = W;
+    maskCanvas.height = H;
+    const maskCtx = maskCanvas.getContext('2d')!;
+    layers.forEach(lData => {
+      if (!lData.layer.visible) return;
+      lData.elements.forEach(el => {
+        if (!el.visible) return;
+        const width = el.maxWidth || 100;
+        const height = el.maxHeight || 100;
+        maskCtx.save();
+        const cx = el.x + width / 2;
+        const cy = el.y + height / 2;
+        maskCtx.translate(cx, cy);
+        maskCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
+        maskCtx.translate(-cx, -cy);
+        maskCtx.fillStyle = '#ffffff';
+        maskCtx.fillRect(el.x, el.y, width, height);
+        maskCtx.restore();
+      });
+    });
+    const maskBlob = await new Promise<Blob>(res => maskCanvas.toBlob(b => res(b!), 'image/png'));
+    zip.file('mask.png', maskBlob);
+
+    // 3. translation.png – text only, on transparent canvas
+    const textCanvas = document.createElement('canvas');
+    textCanvas.width = W;
+    textCanvas.height = H;
+    const textCtx = textCanvas.getContext('2d')!;
+    layers.forEach(lData => {
+      if (!lData.layer.visible || lData.layer.type !== 'translation') return;
+      lData.elements.forEach(el => {
+        if (!el.visible) return;
+        const width = el.maxWidth || 100;
+        const height = el.maxHeight || 100;
+        const fit = fitTextInBox(
+          el.text || '',
+          width - 8,
+          height - 8,
+          el.font || 'Comic Neue',
+          el.size || 16
+        );
+        const fSize = fit.fontSize;
+        textCtx.save();
+        const cx = el.x + width / 2;
+        const cy = el.y + height / 2;
+        textCtx.translate(cx, cy);
+        textCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
+        textCtx.translate(-cx, -cy);
+        textCtx.font = `bold ${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
+        textCtx.fillStyle = '#000000';
+        textCtx.textAlign = 'center';
+        textCtx.textBaseline = 'middle';
+        const lineH = fSize * 1.2;
+        const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
+        fit.lines.forEach((line, i) => {
+          textCtx.fillText(line, el.x + width / 2, startY + i * lineH);
+        });
+        textCtx.restore();
+      });
+    });
+    const textBlob = await new Promise<Blob>(res => textCanvas.toBlob(b => res(b!), 'image/png'));
+    zip.file('translation.png', textBlob);
+
+    // 4. project.json
+    const projectData = {
+      pageNumber: selectedPage.pageNumber,
+      imageId: selectedPage.imageId,
+      dimensions: { width: W, height: H },
+      exportedAt: new Date().toISOString(),
+      layers: layers.map(lData => ({
+        id: lData.layer.id,
+        type: lData.layer.type,
+        targetLanguage: lData.layer.targetLanguage,
+        visible: lData.layer.visible,
+        zOrder: lData.layer.zOrder,
+        elements: lData.elements.map(el => ({
+          id: el.id,
+          text: el.text,
+          font: el.font || 'Comic Neue',
+          size: el.size,
+          autoSize: el.autoSize,
+          x: el.x,
+          y: el.y,
+          maxWidth: el.maxWidth,
+          maxHeight: el.maxHeight,
+          rotation: el.rotation,
+          visible: el.visible,
+          wordWrap: el.wordWrap,
+        })),
+      })),
+    };
+    zip.file('project.json', JSON.stringify(projectData, null, 2));
+
+    // Generate and download zip
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `page-${selectedPage.pageNumber}-layers.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [selectedPage, imageDims, layers]);
 
   // --- STABLE NAVIGATOR CALLBACK ---
   const navigateToPage = useCallback((num: number) => {
@@ -1085,6 +1307,7 @@ export const Reader: React.FC<ReaderProps> = ({
               }}
             >
               <img 
+                ref={imgRef}
                 src={selectedPage.url} 
                 alt={`Page ${selectedPage.pageNumber}`} 
                 className="reader-image" 
@@ -1757,6 +1980,42 @@ export const Reader: React.FC<ReaderProps> = ({
                     Redo Page Translation
                   </button>
                 </div>
+
+                {/* Export Section */}
+                <div className="panel-section">
+                  <div className="panel-section-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Export
+                  </div>
+                  <button
+                    className="btn btn-secondary sidebar-action-btn"
+                    onClick={handleExportPng}
+                    style={{ width: '100%', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    Export Page (PNG)
+                  </button>
+                  <button
+                    className="btn btn-secondary sidebar-action-btn"
+                    onClick={handleExportZip}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                      <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                    Export Layer Project (ZIP)
+                  </button>
+                </div>
               </>
             )}
 
@@ -2082,6 +2341,17 @@ export const Reader: React.FC<ReaderProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDangerous={confirmModal.isDangerous}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
     </div>
   );
 };
