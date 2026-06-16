@@ -70,7 +70,7 @@ services:
 
   worker:
     build:
-      context: ./unified-worker-v2
+      context: ./unified-workers
       dockerfile: Dockerfile
     container_name: manga-worker
     environment:
@@ -103,22 +103,22 @@ services:
       - manga-net
     restart: unless-stopped
   #
-  ollama:
-    image: ollama/ollama:latest
-    container_name: manga-ollama
-    restart: unless-stopped
-    volumes:
-      - ./data/ollama:/root/.ollama
-      - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
-    networks:
-      - manga-net
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: manga-ollama
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./data/ollama:/root/.ollama
+  #     - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [ gpu ]
+  #   networks:
+  #     - manga-net
   #
   # ollama-init:
   #   image: ollama/ollama:latest
