@@ -15,7 +15,7 @@ services:
       - manga-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-manga_library}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,7 +29,7 @@ services:
       - manga-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,7 +49,7 @@ services:
       - manga-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -82,9 +82,21 @@ services:
       - minio
     networks:
       - manga-net
+      - revProxy-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.manga-backend.entrypoints=web,websecure"
+      - "traefik.http.routers.manga-backend.rule=Host(`${HOSTNAME}`) && PathPrefix(`${CONTEXT_PATH:-/tlhub}`)"
+      - "traefik.http.services.manga-backend.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.http-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.http-to-https.redirectscheme.permanent=true"
+      - "traefik.http.routers.manga-backend.middlewares=http-to-https@docker"
+      - "traefik.http.routers.manga-backend.tls=true"
+      - "traefik.http.routers.manga-backend.tls.certresolver=tailsolver"
+      - "traefik.http.routers.manga-backend.tls.domains[0].main=${HOSTNAME}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080$${CONTEXT_PATH:-/tlhub}/actuator/health || exit 1"]
+      test: [ "CMD-SHELL", "wget --spider -q http://localhost:8080$${CONTEXT_PATH:-/tlhub}/actuator/health || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -125,7 +137,7 @@ services:
       - manga-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -165,3 +177,5 @@ services:
 networks:
   manga-net:
     driver: bridge
+  revProxy-net:
+    external: true
