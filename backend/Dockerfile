@@ -14,7 +14,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Backend JAR
-FROM maven:3.9-eclipse-temurin-17 AS backend-build
+FROM maven:3-eclipse-temurin-26 AS backend-build
 WORKDIR /app
 
 # Cache Maven dependencies separately so source changes don't re-download deps
