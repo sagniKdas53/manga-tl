@@ -8,7 +8,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,8 +28,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
   @Override
   protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      @NonNull HttpServletRequest request,
+      @NonNull HttpServletResponse response,
+      @NonNull FilterChain filterChain)
       throws ServletException, IOException {
+    Objects.requireNonNull(request, "request cannot be null");
+    Objects.requireNonNull(response, "response cannot be null");
+    Objects.requireNonNull(filterChain, "filterChain cannot be null");
     try {
       String jwt = parseJwt(request);
       if (jwt != null && jwtUtils.validateToken(jwt)) {

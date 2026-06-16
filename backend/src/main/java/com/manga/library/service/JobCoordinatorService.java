@@ -64,6 +64,8 @@ public class JobCoordinatorService {
 
       String json = objectMapper.writeValueAsString(job);
       String queueName = "queue:" + jobType;
+      Objects.requireNonNull(queueName, "queueName cannot be null");
+      Objects.requireNonNull(json, "json cannot be null");
       redisTemplate.opsForList().rightPush(queueName, json);
       log.info("Enqueued {} job for image {} onto {}", jobType, imageId, queueName);
     } catch (Exception e) {
@@ -77,6 +79,7 @@ public class JobCoordinatorService {
     log.info(
         "Received panel callback for image: {} with {} panels", imageId, dto.getPanels().size());
 
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
             .findById(imageId)
@@ -113,6 +116,7 @@ public class JobCoordinatorService {
     log.info(
         "Received OCR callback for image: {} with {} regions", imageId, dto.getRegions().size());
 
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
             .findById(imageId)
@@ -154,6 +158,7 @@ public class JobCoordinatorService {
 
     // Create default OCR overlay layer
     Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(1).build();
+    Objects.requireNonNull(ocrLayer, "ocrLayer cannot be null");
     layerRepository.save(ocrLayer);
 
     List<LayerElement> elementsToSave = new ArrayList<>();
@@ -188,6 +193,7 @@ public class JobCoordinatorService {
         regionTypes != null ? regionTypes.size() : 0,
         conversations != null ? conversations.size() : 0);
 
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
             .findById(imageId)
@@ -199,6 +205,7 @@ public class JobCoordinatorService {
         try {
           UUID regionId = UUID.fromString(rt.get("regionId"));
           String regionType = rt.get("regionType");
+          Objects.requireNonNull(regionId, "regionId cannot be null");
           ocrRegionRepository
               .findById(regionId)
               .ifPresent(
@@ -221,13 +228,22 @@ public class JobCoordinatorService {
       for (Map<String, Object> convData : conversations) {
         try {
           String sceneType = (String) convData.getOrDefault("sceneType", "dialogue");
-          List<String> regionIds = (List<String>) convData.get("regionIds");
+          List<?> rawRegionIds = (List<?>) convData.get("regionIds");
+          List<String> regionIds = new ArrayList<>();
+          if (rawRegionIds != null) {
+            for (Object rid : rawRegionIds) {
+              if (rid instanceof String) {
+                regionIds.add((String) rid);
+              }
+            }
+          }
 
           Conversation conv =
               Conversation.builder()
                   .image(image)
                   .sceneType(sceneType != null ? sceneType : "dialogue")
                   .build();
+          Objects.requireNonNull(conv, "conv cannot be null");
           conv = conversationRepository.save(conv);
 
           if (regionIds != null) {
@@ -239,6 +255,7 @@ public class JobCoordinatorService {
                       .regionId(UUID.fromString(ridStr))
                       .position(position++)
                       .build();
+              Objects.requireNonNull(cr, "cr cannot be null");
               conversationRegionRepository.save(cr);
             }
           }
@@ -259,6 +276,7 @@ public class JobCoordinatorService {
         imageId,
         translations != null ? translations.size() : 0);
 
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
             .findById(imageId)
@@ -279,6 +297,7 @@ public class JobCoordinatorService {
                           .visible(true)
                           .zOrder(2)
                           .build();
+                  Objects.requireNonNull(l, "layer cannot be null");
                   return layerRepository.save(l);
                 });
 
@@ -301,6 +320,7 @@ public class JobCoordinatorService {
           boolean translationFailed =
               failedVal != null && Boolean.parseBoolean(failedVal.toString());
 
+          Objects.requireNonNull(regionId, "regionId cannot be null");
           ocrRegionRepository
               .findById(regionId)
               .ifPresent(
@@ -328,6 +348,7 @@ public class JobCoordinatorService {
                     } else {
                       element.setText(translatedText);
                     }
+                    Objects.requireNonNull(element, "element cannot be null");
                     layerElementRepository.save(element);
                   });
         } catch (Exception e) {
@@ -342,6 +363,7 @@ public class JobCoordinatorService {
   public void triggerRedo(UUID regionId, String redoType) {
     log.info("Triggering redo for region {} with type {}", regionId, redoType);
 
+    Objects.requireNonNull(regionId, "regionId cannot be null");
     OcrRegion region =
         ocrRegionRepository
             .findById(regionId)
@@ -363,6 +385,7 @@ public class JobCoordinatorService {
       job.put("createdAt", OffsetDateTime.now().toString());
 
       String json = objectMapper.writeValueAsString(job);
+      Objects.requireNonNull(json, "json cannot be null");
       redisTemplate.opsForList().rightPush("queue:region-redo", json);
       log.info("Enqueued region-redo job for region {} onto queue:region-redo", regionId);
     } catch (Exception e) {

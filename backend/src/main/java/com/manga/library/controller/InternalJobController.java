@@ -28,6 +28,7 @@ public class InternalJobController {
 
   @GetMapping("/images/{imageId}")
   public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Worker requested metadata for image: {}", imageId);
     return imageRepository
         .findById(imageId)
@@ -146,12 +147,41 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/layout")
   public ResponseEntity<?> layoutCallback(@RequestBody Map<String, Object> payload) {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received layout callback for image: {}", imageId);
     try {
-      List<Map<String, String>> regionTypes =
-          (List<Map<String, String>>) payload.get("regionTypes");
-      List<Map<String, Object>> conversations =
-          (List<Map<String, Object>>) payload.get("conversations");
+      List<?> rawRegionTypes = (List<?>) payload.get("regionTypes");
+      List<Map<String, String>> regionTypes = new ArrayList<>();
+      if (rawRegionTypes != null) {
+        for (Object item : rawRegionTypes) {
+          if (item instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) item;
+            Map<String, String> typedMap = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+              if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
+                typedMap.put((String) entry.getKey(), (String) entry.getValue());
+              }
+            }
+            regionTypes.add(typedMap);
+          }
+        }
+      }
+      List<?> rawConversations = (List<?>) payload.get("conversations");
+      List<Map<String, Object>> conversations = new ArrayList<>();
+      if (rawConversations != null) {
+        for (Object item : rawConversations) {
+          if (item instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) item;
+            Map<String, Object> typedMap = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+              if (entry.getKey() instanceof String) {
+                typedMap.put((String) entry.getKey(), entry.getValue());
+              }
+            }
+            conversations.add(typedMap);
+          }
+        }
+      }
       jobCoordinatorService.handleLayoutCallback(imageId, regionTypes, conversations);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -163,10 +193,25 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/translation")
   public ResponseEntity<?> translationCallback(@RequestBody Map<String, Object> payload) {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received translation callback for image: {}", imageId);
     try {
-      List<Map<String, Object>> translations =
-          (List<Map<String, Object>>) payload.get("translations");
+      List<?> rawTranslations = (List<?>) payload.get("translations");
+      List<Map<String, Object>> translations = new ArrayList<>();
+      if (rawTranslations != null) {
+        for (Object item : rawTranslations) {
+          if (item instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) item;
+            Map<String, Object> typedMap = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+              if (entry.getKey() instanceof String) {
+                typedMap.put((String) entry.getKey(), entry.getValue());
+              }
+            }
+            translations.add(typedMap);
+          }
+        }
+      }
       jobCoordinatorService.handleTranslationCallback(imageId, translations);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -178,12 +223,14 @@ public class InternalJobController {
   @PostMapping("/ocr-regions/{id}/callback")
   public ResponseEntity<?> regionCallback(
       @PathVariable UUID id, @RequestBody Map<String, Object> payload) {
+    Objects.requireNonNull(id, "id cannot be null");
     log.info("Received callback for region redo {}: {}", id, payload);
     try {
       ocrRegionRepository
           .findById(id)
           .ifPresent(
               region -> {
+                Objects.requireNonNull(region, "region cannot be null");
                 if (payload.containsKey("text")) {
                   region.setText((String) payload.get("text"));
                 }
@@ -213,6 +260,7 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/render")
   public ResponseEntity<?> renderCallback(@RequestBody Map<String, String> payload) {
     UUID imageId = UUID.fromString(payload.get("imageId"));
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received render callback for image: {}", imageId);
     try {
       jobCoordinatorService.handleRenderCallback(imageId);

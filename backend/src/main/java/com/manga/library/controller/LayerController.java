@@ -32,6 +32,7 @@ public class LayerController {
   public ResponseEntity<LayerElement> updateLayerElement(
       @PathVariable UUID id, @RequestBody LayerElementDto dto, @AuthenticationPrincipal User user) {
 
+    Objects.requireNonNull(id, "id cannot be null");
     log.info("Updating LayerElement {} by user {}", id, user.getEmail());
 
     return layerElementRepository
@@ -73,6 +74,7 @@ public class LayerController {
                           .newValueJson(newJson)
                           .editedBy(user)
                           .build();
+                  Objects.requireNonNull(history, "history cannot be null");
                   layerEditHistoryRepository.save(history);
                   log.info("Saved edit history for LayerElement {}", id);
                 }
@@ -103,6 +105,7 @@ public class LayerController {
   public ResponseEntity<Layer> createLayer(
       @PathVariable UUID imageId, @RequestBody Map<String, Object> payload) {
 
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Creating new layer for image {}", imageId);
 
     return imageRepository
@@ -123,6 +126,7 @@ public class LayerController {
                       .zOrder(zOrder)
                       .build();
 
+              Objects.requireNonNull(layer, "layer cannot be null");
               Layer saved = layerRepository.save(layer);
               return ResponseEntity.ok(saved);
             })
@@ -133,11 +137,13 @@ public class LayerController {
   @Transactional
   @PreAuthorize("hasRole('ADMIN')")
   public ResponseEntity<?> deleteLayer(@PathVariable UUID id) {
+    Objects.requireNonNull(id, "id cannot be null");
     log.info("Deleting layer {}", id);
     return layerRepository
         .findById(id)
         .map(
             layer -> {
+              Objects.requireNonNull(layer, "layer cannot be null");
               layerRepository.delete(layer);
               return ResponseEntity.ok().build();
             })

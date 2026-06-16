@@ -6,6 +6,7 @@ import com.manga.library.dto.LoginRequest;
 import com.manga.library.dto.RegisterRequest;
 import com.manga.library.model.User;
 import com.manga.library.repository.UserRepository;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -56,6 +57,7 @@ public class AuthController {
             .role(assignedRole)
             .build();
 
+    Objects.requireNonNull(user, "user cannot be null");
     userRepository.save(user);
     String token = jwtUtils.generateToken(user.getEmail());
     return ResponseEntity.ok(
