@@ -91,6 +91,16 @@ export const Reader: React.FC<ReaderProps> = ({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
+  const [draggedElement, setDraggedElement] = useState<{
+    id: string;
+    type: 'move' | 'resize-br' | 'resize-tr' | 'resize-bl' | 'resize-tl';
+    startX: number;
+    startY: number;
+    startElX: number;
+    startElY: number;
+    startElW: number;
+    startElH: number;
+  } | null>(null);
 
   // Touch & Zoom enhancements
   // Detected once at component initialization — never changes after mount
@@ -465,6 +475,151 @@ export const Reader: React.FC<ReaderProps> = ({
       return updated as SelectedItemType;
     });
   };
+
+  const handleElementDragStart = (
+    e: React.MouseEvent,
+    element: LayerElement,
+    type: 'move' | 'resize-br' | 'resize-tr' | 'resize-bl' | 'resize-tl'
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const svg = e.currentTarget.closest('svg');
+    if (!svg) return;
+    const point = svg.createSVGPoint();
+    point.x = e.clientX;
+    point.y = e.clientY;
+    const svgPoint = point.matrixTransform(svg.getScreenCTM()!.inverse());
+    
+    setDraggedElement({
+      id: element.id,
+      type,
+      startX: svgPoint.x,
+      startY: svgPoint.y,
+      startElX: element.x,
+      startElY: element.y,
+      startElW: element.maxWidth || 100,
+      startElH: element.maxHeight || 100,
+    });
+  };
+
+  useEffect(() => {
+    if (!draggedElement) return;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      const svg = document.querySelector('.svg-overlay') as SVGSVGElement | null;
+      if (!svg) return;
+
+      const point = svg.createSVGPoint();
+      point.x = e.clientX;
+      point.y = e.clientY;
+      const svgPoint = point.matrixTransform(svg.getScreenCTM()!.inverse());
+
+      const dx = svgPoint.x - draggedElement.startX;
+      const dy = svgPoint.y - draggedElement.startY;
+
+      let newX = draggedElement.startElX;
+      let newY = draggedElement.startElY;
+      let newW = draggedElement.startElW;
+      let newH = draggedElement.startElH;
+
+      if (draggedElement.type === 'move') {
+        newX = Math.round(draggedElement.startElX + dx);
+        newY = Math.round(draggedElement.startElY + dy);
+      } else if (draggedElement.type === 'resize-br') {
+        newW = Math.max(10, Math.round(draggedElement.startElW + dx));
+        newH = Math.max(10, Math.round(draggedElement.startElH + dy));
+      } else if (draggedElement.type === 'resize-tr') {
+        newW = Math.max(10, Math.round(draggedElement.startElW + dx));
+        const possibleH = Math.round(draggedElement.startElH - dy);
+        if (possibleH > 10) {
+          newH = possibleH;
+          newY = Math.round(draggedElement.startElY + dy);
+        }
+      } else if (draggedElement.type === 'resize-bl') {
+        const possibleW = Math.round(draggedElement.startElW - dx);
+        if (possibleW > 10) {
+          newW = possibleW;
+          newX = Math.round(draggedElement.startElX + dx);
+        }
+        newH = Math.max(10, Math.round(draggedElement.startElH + dy));
+      } else if (draggedElement.type === 'resize-tl') {
+        const possibleW = Math.round(draggedElement.startElW - dx);
+        const possibleH = Math.round(draggedElement.startElH - dy);
+        if (possibleW > 10) {
+          newW = possibleW;
+          newX = Math.round(draggedElement.startElX + dx);
+        }
+        if (possibleH > 10) {
+          newH = possibleH;
+          newY = Math.round(draggedElement.startElY + dy);
+        }
+      }
+
+      setSelectedItem(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          x: newX,
+          y: newY,
+          maxWidth: newW,
+          maxHeight: newH
+        };
+      });
+
+      setLayers(prevLayers => prevLayers.map(l => {
+        if (l.layer.id === (selectedItem as LayerElement).layerId) {
+          return {
+            ...l,
+            elements: l.elements.map(el => el.id === draggedElement.id ? {
+              ...el,
+              x: newX,
+              y: newY,
+              maxWidth: newW,
+              maxHeight: newH
+            } : el)
+          };
+        }
+        return l;
+      }));
+    };
+
+    const handleWindowMouseUp = async (e: MouseEvent) => {
+      if (!draggedElement) return;
+
+      let updatedElement: LayerElement | undefined;
+      setLayers(prevLayers => {
+        for (const layer of prevLayers) {
+          const found = layer.elements.find(el => el.id === draggedElement.id);
+          if (found) {
+            updatedElement = found;
+            break;
+          }
+        }
+        return prevLayers;
+      });
+
+      if (updatedElement) {
+        const originalElement: LayerElement = {
+          ...(updatedElement as LayerElement),
+          x: draggedElement.startElX,
+          y: draggedElement.startElY,
+          maxWidth: draggedElement.startElW,
+          maxHeight: draggedElement.startElH
+        };
+        pushToHistoryStack(originalElement);
+        await handleSaveElementChanges(updatedElement, false);
+      }
+
+      setDraggedElement(null);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [draggedElement, layers, selectedItem, pushToHistoryStack, handleSaveElementChanges]);
 
   const handleCreateTranslationLayer = async () => {
     if (!selectedPage) return;
@@ -1438,6 +1593,21 @@ export const Reader: React.FC<ReaderProps> = ({
                           />
                         )}
 
+                        {/* Interactive overlay rect for drag moving */}
+                        {!cleanScanlationView && (
+                          <rect
+                            x={element.x}
+                            y={element.y}
+                            width={width}
+                            height={height}
+                            fill="transparent"
+                            style={{ cursor: 'move' }}
+                            onMouseDown={(e) => {
+                              handleElementDragStart(e, element, 'move');
+                            }}
+                          />
+                        )}
+
                         {/* Warning/Overflow border in editor mode */}
                         {overflow && !cleanScanlationView && (
                           <rect 
@@ -1450,6 +1620,60 @@ export const Reader: React.FC<ReaderProps> = ({
                             strokeWidth="1.5"
                             strokeDasharray="2 2"
                           />
+                        )}
+
+                        {/* Drag and Resize Handles */}
+                        {isSelected && !cleanScanlationView && (
+                          <>
+                            {/* Top-Left Handle */}
+                            <rect
+                              x={element.x - 4}
+                              y={element.y - 4}
+                              width={8}
+                              height={8}
+                              fill="var(--primary)"
+                              stroke="#ffffff"
+                              strokeWidth={1.5}
+                              style={{ cursor: 'nwse-resize' }}
+                              onMouseDown={(e) => handleElementDragStart(e, element, 'resize-tl')}
+                            />
+                            {/* Top-Right Handle */}
+                            <rect
+                              x={element.x + width - 4}
+                              y={element.y - 4}
+                              width={8}
+                              height={8}
+                              fill="var(--primary)"
+                              stroke="#ffffff"
+                              strokeWidth={1.5}
+                              style={{ cursor: 'nesw-resize' }}
+                              onMouseDown={(e) => handleElementDragStart(e, element, 'resize-tr')}
+                            />
+                            {/* Bottom-Left Handle */}
+                            <rect
+                              x={element.x - 4}
+                              y={element.y + height - 4}
+                              width={8}
+                              height={8}
+                              fill="var(--primary)"
+                              stroke="#ffffff"
+                              strokeWidth={1.5}
+                              style={{ cursor: 'nesw-resize' }}
+                              onMouseDown={(e) => handleElementDragStart(e, element, 'resize-bl')}
+                            />
+                            {/* Bottom-Right Handle */}
+                            <rect
+                              x={element.x + width - 4}
+                              y={element.y + height - 4}
+                              width={8}
+                              height={8}
+                              fill="var(--primary)"
+                              stroke="#ffffff"
+                              strokeWidth={1.5}
+                              style={{ cursor: 'nwse-resize' }}
+                              onMouseDown={(e) => handleElementDragStart(e, element, 'resize-br')}
+                            />
+                          </>
                         )}
 
                         <foreignObject

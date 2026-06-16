@@ -9,36 +9,55 @@ export const fitTextInBox = (
   maxWidth: number,
   maxHeight: number,
   fontFamily: string,
-  defaultFontSize: number = 16
+  defaultFontSize: number = 16,
 ): FitResult => {
-  const cleanText = (text || '').replace(/\r\n/g, '\n');
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
+  const cleanText = (text || "").replace(/\r\n/g, "\n");
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
   if (!ctx) {
     return { fontSize: defaultFontSize, lines: [cleanText], overflow: false };
   }
 
   const wrapText = (txt: string, fSize: number): string[] => {
     ctx.font = `bold ${fSize}px "${fontFamily}", sans-serif`;
-    const paragraphs = txt.split('\n');
+    const paragraphs = txt.split("\n");
     const resultLines: string[] = [];
 
     for (const para of paragraphs) {
       if (!para) {
-        resultLines.push('');
+        resultLines.push("");
         continue;
       }
-      const words = para.split(' ');
-      let currentLine = '';
+      const words = para.split(" ");
+      let currentLine = "";
 
       for (const word of words) {
-        const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && currentLine) {
-          resultLines.push(currentLine);
-          currentLine = word;
+        const wordWidth = ctx.measureText(word).width;
+        if (wordWidth > maxWidth) {
+          if (currentLine) {
+            resultLines.push(currentLine);
+            currentLine = "";
+          }
+          let currentWordPart = "";
+          for (const char of word) {
+            const testPart = currentWordPart + char;
+            if (ctx.measureText(testPart).width > maxWidth && currentWordPart) {
+              resultLines.push(currentWordPart);
+              currentWordPart = char;
+            } else {
+              currentWordPart = testPart;
+            }
+          }
+          currentLine = currentWordPart;
         } else {
-          currentLine = testLine;
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > maxWidth && currentLine) {
+            resultLines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
         }
       }
       if (currentLine) {
@@ -65,6 +84,6 @@ export const fitTextInBox = (
   return {
     fontSize: 10,
     lines,
-    overflow: totalHeight > maxHeight
+    overflow: totalHeight > maxHeight,
   };
 };

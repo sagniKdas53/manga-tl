@@ -118,12 +118,14 @@ services:
       - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
       - API_KEY=${API_KEY}
       - PREFERRED_MODEL=${PREFERRED_MODEL:-google/gemma-3n-e4b-it}
+      - VLM_MODEL=${VLM_MODEL:-nvidia/nemotron-nano-12b-v2-vl}
       - LOCAL_LLM_PROVIDER=ollama
       - LOCAL_LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
       - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
       - RATE_LIMIT=${RATE_LIMIT:-10}
       # - DEEPL_API_KEY=${DEEPL_API_KEY:-}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-1.0}
     depends_on:
       - redis
       - minio
