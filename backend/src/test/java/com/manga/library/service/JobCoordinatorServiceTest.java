@@ -62,6 +62,27 @@ public class JobCoordinatorServiceTest {
   }
 
   @Test
+  public void testIsWorkerHealthy_HealthyWithSpaces() {
+    testServer.createContext(
+        "/health-spaces",
+        new HttpHandler() {
+          @Override
+          public void handle(HttpExchange exchange) throws IOException {
+            String response = "{ \"status\": \"healthy\", \"redis\": \"connected\" }";
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+              os.write(response.getBytes());
+            }
+          }
+        });
+
+    ReflectionTestUtils.setField(
+        jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/health-spaces");
+    assertTrue(jobCoordinatorService.isWorkerHealthy());
+  }
+
+  @Test
   public void testIsWorkerHealthy_UnhealthyStatus() {
     testServer.createContext(
         "/health",
