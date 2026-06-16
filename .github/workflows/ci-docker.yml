@@ -19,7 +19,7 @@ jobs:
       matrix:
         include:
           - service: backend
-            context: backend
+            context: .
             dockerfile: backend/Dockerfile
 
           - service: frontend
@@ -27,20 +27,8 @@ jobs:
             dockerfile: frontend/Dockerfile
 
           - service: unified-worker
-            context: workers/unified-worker
-            dockerfile: workers/unified-worker/Dockerfile
-
-          - service: worker-ocr
-            context: workers/worker-ocr
-            dockerfile: workers/worker-ocr/Dockerfile
-
-          - service: worker-panel
-            context: workers/worker-panel
-            dockerfile: workers/worker-panel/Dockerfile
-
-          - service: worker-stubs
-            context: workers/worker-stubs
-            dockerfile: workers/worker-stubs/Dockerfile
+            context: unified-workers
+            dockerfile: unified-workers/Dockerfile
 
     steps:
       - name: Checkout
