@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User, Series } from '../types';
 import { safeFetch, toSlug } from '../utils';
+import ConfirmModal from './ConfirmModal';
 
 interface DashboardProps {
   user: User;
@@ -25,6 +26,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [newSeriesCoverUrl, setNewSeriesCoverUrl] = useState('');
   const [newSeriesLang, setNewSeriesLang] = useState('ja');
   const [newSeriesDirection, setNewSeriesDirection] = useState('rtl');
+
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    isDangerous?: boolean;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const closeConfirmModal = () => setConfirmModal(prev => ({ ...prev, isOpen: false }));
 
   const handleEditSeriesClick = (s: Series, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -89,22 +107,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const handleDeleteSeries = async (seriesId: string, e: React.MouseEvent) => {
+  const handleDeleteSeries = (seriesId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this series? This will delete all chapters and pages!')) return;
-    try {
-      const res = await safeFetch(`/api/series/${seriesId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${user.token}` }
-      });
-      if (res.ok) {
-        setSeriesList(prev => prev.filter(s => s.id !== seriesId));
-      } else {
-        alert('Failed to delete series');
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Series',
+      message: 'Are you sure you want to delete this series? This will delete all chapters and pages!',
+      confirmText: 'Delete Series',
+      isDangerous: true,
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          const res = await safeFetch(`/api/series/${seriesId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${user.token}` }
+          });
+          if (res.ok) {
+            setSeriesList(prev => prev.filter(s => s.id !== seriesId));
+          } else {
+            alert('Failed to delete series');
+          }
+        } catch (err) {
+          console.error('Error deleting series:', err);
+        }
       }
-    } catch (err) {
-      console.error('Error deleting series:', err);
-    }
+    });
   };
 
   return (
@@ -217,6 +244,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDangerous={confirmModal.isDangerous}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirmModal}
+      />
     </div>
   );
 };

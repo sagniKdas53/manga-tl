@@ -339,10 +339,10 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [pageNumber]);
 
   // History Undo/Redo operations
-  const pushToHistoryStack = (prevState: LayerElement) => {
+  const pushToHistoryStack = useCallback((prevState: LayerElement) => {
     setUndoStack(prev => [...prev.slice(-49), { ...prevState }]);
     setRedoStack([]);
-  };
+  }, []);
 
   // Declared before handleUndo/handleRedo so the callbacks can reference it
   const handleSaveElementChanges = useCallback(async (element: LayerElement, showAlert: boolean = true) => {
@@ -556,18 +556,21 @@ export const Reader: React.FC<ReaderProps> = ({
       }
 
       setSelectedItem(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          x: newX,
-          y: newY,
-          maxWidth: newW,
-          maxHeight: newH
-        };
+        if (prev && 'id' in prev && prev.id === draggedElement.id) {
+          return {
+            ...prev,
+            x: newX,
+            y: newY,
+            maxWidth: newW,
+            maxHeight: newH
+          };
+        }
+        return prev;
       });
 
       setLayers(prevLayers => prevLayers.map(l => {
-        if (l.layer.id === (selectedItem as LayerElement).layerId) {
+        const hasElement = l.elements.some(el => el.id === draggedElement.id);
+        if (hasElement) {
           return {
             ...l,
             elements: l.elements.map(el => el.id === draggedElement.id ? {
@@ -583,7 +586,7 @@ export const Reader: React.FC<ReaderProps> = ({
       }));
     };
 
-    const handleWindowMouseUp = async (e: MouseEvent) => {
+    const handleWindowMouseUp = async () => {
       if (!draggedElement) return;
 
       let updatedElement: LayerElement | undefined;
@@ -928,6 +931,7 @@ export const Reader: React.FC<ReaderProps> = ({
     if (e.button !== 0) return; // Only left click
     if (
       (e.target as HTMLElement).closest('.svg-ocr-box') || 
+      (e.target as HTMLElement).closest('.svg-conv-box') || 
       (e.target as HTMLElement).closest('.bubble-popover') ||
       (e.target as HTMLElement).closest('.floating-reader-toolbar') ||
       (e.target as HTMLElement).closest('.vertical-zoom-toolbar') ||
@@ -967,6 +971,7 @@ export const Reader: React.FC<ReaderProps> = ({
     const target = e.target as HTMLElement;
     if (
       target.closest('.svg-ocr-box') || 
+      target.closest('.svg-conv-box') || 
       target.closest('.bubble-popover') ||
       target.closest('.floating-reader-toolbar') ||
       target.closest('.vertical-zoom-toolbar') ||
@@ -1470,18 +1475,18 @@ export const Reader: React.FC<ReaderProps> = ({
                         y={item.bboxY}
                         width={item.bboxW}
                         height={item.bboxH}
-                        className="svg-ocr-box"
+                        className={item.isConversation ? "svg-conv-box" : "svg-ocr-box"}
                         style={{ 
                           fill: isSelected 
-                            ? 'var(--primary-glow-selected)' 
+                            ? (item.isConversation ? 'var(--conversation-glow-selected)' : 'var(--primary-glow-selected)') 
                             : isApproved 
-                              ? 'var(--primary-glow-approved)' 
-                              : 'var(--success-glow)',
+                              ? (item.isConversation ? 'var(--conversation-glow-approved)' : 'var(--primary-glow-approved)') 
+                              : (item.isConversation ? 'var(--conversation-glow)' : 'var(--success-glow)'),
                           stroke: isSelected 
-                            ? 'var(--primary)' 
+                            ? (item.isConversation ? 'var(--conversation)' : 'var(--primary)') 
                             : isApproved 
-                              ? 'var(--primary)' 
-                              : 'var(--success)',
+                              ? (item.isConversation ? 'var(--conversation)' : 'var(--primary)') 
+                              : (item.isConversation ? 'var(--conversation)' : 'var(--success)'),
                           strokeWidth: isSelected || isApproved ? 2.5 : 1.5
                         }}
                       />
@@ -1491,10 +1496,10 @@ export const Reader: React.FC<ReaderProps> = ({
                           cy="0" 
                           r="8" 
                           fill={isSelected 
-                            ? 'var(--primary)' 
+                            ? (item.isConversation ? 'var(--conversation)' : 'var(--primary)') 
                             : isApproved 
-                              ? 'var(--primary)' 
-                              : 'var(--success)'} 
+                              ? (item.isConversation ? 'var(--conversation)' : 'var(--primary)') 
+                              : (item.isConversation ? 'var(--conversation)' : 'var(--success)')} 
                         />
                         <text 
                           x="0" 
@@ -1965,17 +1970,7 @@ export const Reader: React.FC<ReaderProps> = ({
                     </label>
                   </div>
 
-                  <div className="overlay-toggle">
-                    <span>Show Translations</span>
-                    <label className="switch">
-                      <input 
-                        type="checkbox" 
-                        checked={showTranslations} 
-                        onChange={e => setShowTranslations(e.target.checked)} 
-                      />
-                      <span className="slider"></span>
-                    </label>
-                  </div>
+
                   
                   <div className="overlay-toggle">
                     <span>Clean Scanlation View</span>
