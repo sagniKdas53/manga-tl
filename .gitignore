@@ -8,3 +8,5 @@ logs/
 .venv/
 .env
 .idea
+examples/Sample[2-9]
+examples/Sample10
