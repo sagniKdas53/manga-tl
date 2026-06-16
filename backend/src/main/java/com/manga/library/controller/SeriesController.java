@@ -9,11 +9,11 @@ import com.manga.library.model.User;
 import com.manga.library.repository.ChapterRepository;
 import com.manga.library.repository.PageRepository;
 import com.manga.library.repository.SeriesRepository;
-import com.manga.library.service.MinioService;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +29,6 @@ public class SeriesController {
   private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
   private final PageRepository pageRepository;
-  private final MinioService minioService;
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
@@ -99,6 +98,7 @@ public class SeriesController {
             .coverImageUrl(dto.getCoverImageUrl())
             .createdBy(user)
             .build();
+    Objects.requireNonNull(series, "series cannot be null");
     series = seriesRepository.save(series);
 
     return ResponseEntity.ok(toDto(series));
@@ -132,6 +132,7 @@ public class SeriesController {
 
   @GetMapping("/{seriesId}")
   public ResponseEntity<SeriesDto> getSeries(@PathVariable UUID seriesId) {
+    Objects.requireNonNull(seriesId, "seriesId cannot be null");
     return seriesRepository
         .findById(seriesId)
         .map(s -> ResponseEntity.ok(toDto(s)))
@@ -142,6 +143,7 @@ public class SeriesController {
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<ChapterDto> createChapter(
       @PathVariable UUID seriesId, @RequestBody ChapterDto dto) {
+    Objects.requireNonNull(seriesId, "seriesId cannot be null");
     Series series =
         seriesRepository
             .findById(seriesId)
@@ -153,6 +155,7 @@ public class SeriesController {
             .chapterNumber(dto.getChapterNumber())
             .title(dto.getTitle())
             .build();
+    Objects.requireNonNull(chapter, "chapter cannot be null");
     chapter = chapterRepository.save(chapter);
 
     dto.setId(chapter.getId());
@@ -195,6 +198,7 @@ public class SeriesController {
 
   @GetMapping("/chapters/{chapterId}")
   public ResponseEntity<ChapterDto> getChapter(@PathVariable UUID chapterId) {
+    Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
         .findById(chapterId)
         .map(
@@ -221,6 +225,7 @@ public class SeriesController {
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<SeriesDto> updateSeries(
       @PathVariable UUID seriesId, @RequestBody SeriesDto dto) {
+    Objects.requireNonNull(seriesId, "seriesId cannot be null");
     return seriesRepository
         .findById(seriesId)
         .map(
@@ -229,6 +234,7 @@ public class SeriesController {
               s.setOriginalLanguage(dto.getOriginalLanguage());
               s.setReadingDirection(dto.getReadingDirection());
               s.setCoverImageUrl(dto.getCoverImageUrl());
+              Objects.requireNonNull(s, "series cannot be null");
               s = seriesRepository.save(s);
               return ResponseEntity.ok(toDto(s));
             })
@@ -238,6 +244,7 @@ public class SeriesController {
   @DeleteMapping("/{seriesId}")
   @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
   public ResponseEntity<Void> deleteSeries(@PathVariable UUID seriesId) {
+    Objects.requireNonNull(seriesId, "seriesId cannot be null");
     if (seriesRepository.existsById(seriesId)) {
       seriesRepository.deleteById(seriesId);
       return ResponseEntity.ok().build();
@@ -249,12 +256,14 @@ public class SeriesController {
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<ChapterDto> updateChapter(
       @PathVariable UUID chapterId, @RequestBody ChapterDto dto) {
+    Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
         .findById(chapterId)
         .map(
             c -> {
               c.setTitle(dto.getTitle());
               c.setChapterNumber(dto.getChapterNumber());
+              Objects.requireNonNull(c, "chapter cannot be null");
               c = chapterRepository.save(c);
               dto.setId(c.getId());
               dto.setSeriesId(c.getSeries().getId());
@@ -274,6 +283,7 @@ public class SeriesController {
   @DeleteMapping("/chapters/{chapterId}")
   @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
   public ResponseEntity<Void> deleteChapter(@PathVariable UUID chapterId) {
+    Objects.requireNonNull(chapterId, "chapterId cannot be null");
     if (chapterRepository.existsById(chapterId)) {
       chapterRepository.deleteById(chapterId);
       return ResponseEntity.ok().build();

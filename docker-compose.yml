@@ -3,9 +3,9 @@ services:
     image: postgres:15-alpine
     container_name: manga-db
     environment:
-      - POSTGRES_DB=manga_library
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${POSTGRES_DB:-manga_library}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -29,8 +29,8 @@ services:
     container_name: manga-minio
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
       - "9001:9001"
     volumes:
@@ -49,17 +49,17 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/manga_library
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/${POSTGRES_DB:-manga_library}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
       - MINIO_ENDPOINT=http://minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - JWT_SECRET=5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - JWT_SECRET=${JWT_SECRET}
       - CONTEXT_PATH=${CONTEXT_PATH:-/tlhub}
-      - INTERNAL_API_TOKEN=manga-library-internal-token-12345
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     depends_on:
       - db
       - redis
@@ -77,18 +77,18 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - BACKEND_CALLBACK_URL=http://backend:8080${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
       - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
-      - API_KEY=${API_KEY:-}
+      - API_KEY=${API_KEY}
       - PREFERRED_MODEL=${PREFERRED_MODEL:-google/gemma-3n-e4b-it}
       - LOCAL_LLM_PROVIDER=ollama
       - LOCAL_LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
       - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
       - RATE_LIMIT=${RATE_LIMIT:-10}
-      - DEEPL_API_KEY=${DEEPL_API_KEY:-}
-      - INTERNAL_API_TOKEN=manga-library-internal-token-12345
+      # - DEEPL_API_KEY=${DEEPL_API_KEY:-}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     depends_on:
       - redis
       - minio
@@ -102,23 +102,24 @@ services:
     networks:
       - manga-net
     restart: unless-stopped
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: manga-ollama
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./data/ollama:/root/.ollama
-  #     - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: [ gpu ]
-  #   networks:
-  #     - manga-net
-
+  #
+  ollama:
+    image: ollama/ollama:latest
+    container_name: manga-ollama
+    restart: unless-stopped
+    volumes:
+      - ./data/ollama:/root/.ollama
+      - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    networks:
+      - manga-net
+  #
   # ollama-init:
   #   image: ollama/ollama:latest
   #   container_name: manga-ollama-init
@@ -136,6 +137,3 @@ services:
 networks:
   manga-net:
     driver: bridge
-
-volumes:
-  ollama:

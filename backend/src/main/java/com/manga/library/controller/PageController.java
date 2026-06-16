@@ -57,6 +57,7 @@ public class PageController {
     log.info("Received request to upload page {} for chapter {}", pageNumber, chapterId);
 
     try {
+      Objects.requireNonNull(chapterId, "chapterId cannot be null");
       Chapter chapter =
           chapterRepository
               .findById(chapterId)
@@ -107,6 +108,7 @@ public class PageController {
 
   @GetMapping("/pages/{pageId}")
   public ResponseEntity<PageDto> getPage(@PathVariable UUID pageId) {
+    Objects.requireNonNull(pageId, "pageId cannot be null");
     return pageRepository
         .findById(pageId)
         .map(
@@ -125,6 +127,7 @@ public class PageController {
 
   @GetMapping("/images/{imageId}")
   public ResponseEntity<Map<String, Object>> getImageDetails(@PathVariable UUID imageId) {
+    Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
             .findById(imageId)
@@ -167,6 +170,7 @@ public class PageController {
   public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
       getImageFile(@PathVariable UUID imageId) {
     try {
+      Objects.requireNonNull(imageId, "imageId cannot be null");
       Image image =
           imageRepository
               .findById(imageId)
@@ -217,6 +221,7 @@ public class PageController {
 
       if (hasTranslations) {
         log.info("Auto-initializing default translation layer for image {}", imageId);
+        Objects.requireNonNull(imageId, "imageId cannot be null");
         Image image =
             imageRepository
                 .findById(imageId)
@@ -231,6 +236,7 @@ public class PageController {
                 .zOrder(2)
                 .build();
 
+        Objects.requireNonNull(defaultLayer, "defaultLayer cannot be null");
         defaultLayer = layerRepository.save(defaultLayer);
         layers.add(defaultLayer);
 
@@ -248,6 +254,7 @@ public class PageController {
                     .visible(true)
                     .autoSize(true)
                     .build();
+            Objects.requireNonNull(element, "element cannot be null");
             layerElementRepository.save(element);
           }
         }
@@ -329,6 +336,7 @@ public class PageController {
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<?> updateOcrRegion(
       @PathVariable UUID id, @RequestBody Map<String, Object> payload) {
+    Objects.requireNonNull(id, "id cannot be null");
     log.info("Updating OCR region {}: {}", id, payload);
     return ocrRegionRepository
         .findById(id)
@@ -347,6 +355,7 @@ public class PageController {
               if (payload.containsKey("confidence")) {
                 region.setConfidence(((Number) payload.get("confidence")).doubleValue());
               }
+              Objects.requireNonNull(region, "region cannot be null");
               ocrRegionRepository.save(region);
               return ResponseEntity.ok(region);
             })

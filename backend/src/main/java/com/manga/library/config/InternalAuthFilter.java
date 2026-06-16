@@ -5,7 +5,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -17,8 +19,13 @@ public class InternalAuthFilter extends OncePerRequestFilter {
 
   @Override
   protected void doFilterInternal(
-      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      @NonNull HttpServletRequest request,
+      @NonNull HttpServletResponse response,
+      @NonNull FilterChain filterChain)
       throws ServletException, IOException {
+    Objects.requireNonNull(request, "request cannot be null");
+    Objects.requireNonNull(response, "response cannot be null");
+    Objects.requireNonNull(filterChain, "filterChain cannot be null");
     String path = request.getServletPath();
     if (path != null && path.startsWith("/api/internal")) {
       String token = request.getHeader("X-Internal-Token");

@@ -11,6 +11,7 @@ import com.manga.library.model.Series;
 import com.manga.library.model.User;
 import com.manga.library.repository.SeriesRepository;
 import com.manga.library.repository.UserRepository;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,18 +38,20 @@ public class JwtTest {
   @Test
   public void testPostChapter() throws Exception {
     // Save mock admin user to avoid 403 Forbidden on role check
-    User user =
-        userRepository
-            .findByEmail("admin@manga.local")
-            .orElseGet(
-                () ->
-                    userRepository.save(
-                        User.builder()
-                            .email("admin@manga.local")
-                            .passwordHash("mock_password_hash")
-                            .displayName("Admin User")
-                            .role("admin")
-                            .build()));
+    userRepository
+        .findByEmail("admin@manga.local")
+        .orElseGet(
+            () -> {
+              User buildUser =
+                  User.builder()
+                      .email("admin@manga.local")
+                      .passwordHash("mock_password_hash")
+                      .displayName("Admin User")
+                      .role("admin")
+                      .build();
+              Objects.requireNonNull(buildUser, "user cannot be null");
+              return userRepository.save(buildUser);
+            });
 
     // Save test series programmatically
     Series series =
@@ -57,6 +60,7 @@ public class JwtTest {
             .originalLanguage("ja")
             .readingDirection("rtl")
             .build();
+    Objects.requireNonNull(series, "series cannot be null");
     series = seriesRepository.save(series);
 
     // Generate dynamically signed JWT token
@@ -70,8 +74,8 @@ public class JwtTest {
         .perform(
             post("/api/series/" + series.getId() + "/chapters")
                 .header("Authorization", token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(dto)))
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
         .andDo(print())
         .andExpect(status().isOk());
   }
