@@ -96,6 +96,48 @@ def is_valid_translation(source, translated, request_id=None):
         )
         return False
 
+    # 1. CJK leak detection — Japanese/Chinese in "English" translation
+    if contains_japanese(source_stripped):
+        import re
+        cjk_chars = re.findall(r'[\u3040-\u9FFF\uF900-\uFAFF]', translated_stripped)
+        cjk_ratio = len(cjk_chars) / max(len(translated_stripped), 1)
+        if cjk_ratio > 0.15:
+            logger.warning(
+                f"{req_prefix}Validation failed "
+                f"reason=cjk_leak "
+                f"cjk_ratio={cjk_ratio:.2f} "
+                f"source={source} "
+                f"translation={translated}"
+            )
+            return False
+
+    # 2. Length ratio check — flag translations that are excessively long
+    if len(source_stripped) > 5:
+        ratio = len(translated_stripped) / len(source_stripped)
+        if ratio > 10.0:
+            logger.warning(
+                f"{req_prefix}Validation failed "
+                f"reason=length_ratio_exceeded "
+                f"ratio={ratio:.1f} "
+                f"source={source} "
+                f"translation={translated}"
+            )
+            return False
+
+    # 3. Duplicate word detection — filter out repetition anomalies
+    words = translated_stripped.split()
+    if len(words) >= 4:
+        unique_ratio = len(set(words)) / len(words)
+        if unique_ratio < 0.3:
+            logger.warning(
+                f"{req_prefix}Validation failed "
+                f"reason=excessive_repetition "
+                f"unique_ratio={unique_ratio:.2f} "
+                f"source={source} "
+                f"translation={translated}"
+            )
+            return False
+
     return True
 
 
@@ -464,6 +506,31 @@ def try_cloud_ai_vision(
                 "responseMimeType": "application/json",
                 "responseSchema": response_schema,
             }
+    elif provider == "nvidia":
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model or "nvidia/nemotron-nano-12b-v2-vl",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+        if response_schema:
+            payload["response_format"] = {"type": "json_object"}
     else:
         return None
 
@@ -1046,19 +1113,39 @@ def translate_vlm_vision(
                 "id": r["id"],
                 "panel": r.get("panelReadingOrder") or r.get("panelId") or 0,
                 "bubble": r.get("bubbleReadingOrder") or 0,
-                "speaker": None,
+                "speaker": r.get("speakerLabel") or None,
+                "regionType": r.get("regionType") or "speech",
+                "conversationGroup": r.get("conversationId") or None,
                 "text": r["text"],
             }
         )
 
-    prompt = f"""{context_str}These OCR regions were extracted from this manga page.
-Use the page image to understand context (characters, expressions, speech bubble placements).
-Translate each bubble into natural manga English.
+    prompt = f"""{context_str}These OCR regions were extracted from this manga page using automated OCR.
+
+IMPORTANT — Before translating:
+1. Verify each region's OCR text against the visible text in the image. If the OCR text
+   appears incorrect (garbled, truncated, or mis-recognized), use the text you actually
+   see in the image instead.
+2. For each bubble, identify the speaker based on visual cues (speech bubble tails,
+   character positions, expressions, panel context).
+3. If a region's "regionType" is "sfx", look at the visual style of the text (bold,
+   angular, wavy) to inform your transliteration style.
+
+Translate each region into natural manga English.
 Preserve:
 - tone
 - emotional state
 - relationships
 - ongoing conversation
+
+Region type handling:
+- "speech": Translate as natural dialogue.
+- "narration": Translate as third-person narrative prose.
+- "sfx": Transliterate the sound effect AND provide an English equivalent in parentheses (e.g. "DOKAA (WHAM)").
+- "caption": Translate as editorial/scene-setting text.
+- "sign": Translate literally, noting it's environmental text.
+
+If multiple regions share the same conversationGroup, treat them as a continuous dialogue exchange and ensure coherent flow.
 
 You MUST return a JSON object containing a "translations" key with an array of objects.
 Each object in the array MUST have the following keys:
@@ -1094,6 +1181,9 @@ Input:
     )
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip() or (
         api_key if provider == "gemini" else ""
+    )
+    nvidia_key = os.environ.get("NVIDIA_API_KEY", "").strip() or (
+        api_key if provider == "nvidia" else ""
     )
 
     if openrouter_key:
@@ -1133,6 +1223,26 @@ Input:
                 return res
         except Exception as e:
             logger.error(f"{req_prefix}VLM vision translation via Gemini failed: {e}")
+
+    if (provider == "nvidia" or nvidia_key) and nvidia_key:
+        logger.info(f"{req_prefix}VLM: Trying vision model via Nvidia...")
+        nvidia_vlm_model = os.environ.get("NVIDIA_VLM_MODEL", "").strip() or os.environ.get("VLM_MODEL", "").strip()
+        if not nvidia_vlm_model:
+            nvidia_vlm_model = "nvidia/nemotron-nano-12b-v2-vl"
+        try:
+            res = try_cloud_ai_vision(
+                "nvidia",
+                nvidia_key,
+                nvidia_vlm_model,
+                prompt,
+                base64_image,
+                response_schema,
+                request_id=request_id,
+            )
+            if res:
+                return res
+        except Exception as e:
+            logger.error(f"{req_prefix}VLM vision translation via Nvidia failed: {e}")
 
     return None
 
@@ -1206,7 +1316,12 @@ def build_context_string(image_info):
         
     prev_text = image_info.get("previousPageText")
     if prev_text:
-        context_str += f"Previous Page Text/Dialogue Context:\n{prev_text}\n"
+        if isinstance(prev_text, str) and "|" in prev_text:
+            lines = [line.strip() for line in prev_text.split("|") if line.strip()]
+            formatted = "\n".join(f"  - {line}" for line in lines)
+            context_str += f"Previous Page Dialogue (in reading order):\n{formatted}\n"
+        else:
+            context_str += f"Previous Page Text/Dialogue Context:\n{prev_text}\n"
         
     if context_str:
         return f"Narrative and Style Context:\n{context_str}\n---\n"

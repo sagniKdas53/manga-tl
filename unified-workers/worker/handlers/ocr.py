@@ -177,6 +177,9 @@ def process_ocr(job_data):
             }
         )
 
+    from worker.services.merge_regions import merge_ocr_regions
+    regions = merge_ocr_regions(regions, reading_direction)
+
     panel_regions_map = {}
     unmapped_regions = []
 

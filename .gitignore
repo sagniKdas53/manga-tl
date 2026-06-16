@@ -9,4 +9,4 @@ logs/
 .env
 .idea
 examples/Sample[2-9]
-examples/Sample10
+examples/Sample1[0-9]

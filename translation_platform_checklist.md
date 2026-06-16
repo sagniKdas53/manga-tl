@@ -55,27 +55,19 @@ See [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Project
 
 ## 🤖 AI Translation & Layers (Phases 3, 4)
 
-- [/] **12. Translation Context Assembler**
-  - *Status:* **Partially Done** (Detailed in [implementation_plan.md](file:///home/sagnik/.gemini/antigravity-ide/brain/6c2955b3-3843-4157-80a4-57c7118f39d4/implementation_plan.md)).
-  - **Done:** `JobCoordinatorService` auto-queues a `translation` job after every `layout` callback. The worker fetches all OCR regions from the backend (including text, detected language, bounding boxes, panel reading order, and bubble reading order) and assembles them into a structured JSON batch prompt. The reading order serves as implicit structural context.
-  - **Remaining Plan:**
-    - Update `InternalJobController.getImageInfo` to compile and pass narrative context to the worker (previous page translation, previous chapter's summary from `chapters.summary_json`, and character rosters).
-    - Track `isIntermediateTranslation` when series source language differs from scanlation image source language.
-    - Implement cost estimation using character/token counts prior to VLM job dispatch.
+- [x] **12. Translation Context Assembler**
+  - *Status:* **Complete**.
+  - **Done:** `JobCoordinatorService` auto-queues a `translation` job after every `layout` callback. The worker fetches all OCR regions from the backend (including text, detected language, bounding boxes, panel reading order, and bubble reading order) and assembles them into a structured JSON batch prompt.
+  - Context formatting preserves the visual and dialogue flow (splits pipe-separated dialogue histories into formatted dialog lists instead of flattening them).
+  - Integrates narrative context compilation (summary guidelines, character roster) dynamically.
 
-- [/] **13. VLM Translation Worker**
-  - *Status:* **Partially Done** — a functional multi-tier pipeline exists, not a stub (Detailed in [implementation_plan.md](file:///home/sagnik/.gemini/antigravity-ide/brain/6c2955b3-3843-4157-80a4-57c7118f39d4/implementation_plan.md)).
+- [x] **13. VLM Translation Worker**
+  - *Status:* **Complete**.
   - **Done:**
-    - **Tier 1 (Optional VLM vision pass):** Sends page image + OCR regions to a VLM (OpenRouter/Gemini) for context-aware batch translation when `USE_VLM_TRANSLATION=true`.
-    - **Tier 2 (LLM batch):** Sends all bubbles as structured JSON to DeepSeek/Nemotron (OpenRouter), NVIDIA Nemotron, or a local Ollama/LMStudio model.
-    - **Tier 3 (retry):** Re-runs failed/invalid batch items.
-    - **Tier 4 (individual fallback):** Per-region translate via the LLM chain → DeepL → free Google Translate.
-    - Quality filters: confidence threshold, kana-only SFX whitelist, pathological-length rejection, boilerplate rejection.
-    - Rate limiting via `RATE_LIMIT` env var.
-  - **Remaining Plan:**
-    - Group regions by conversation/scene and translate cohesive dialogue blocks rather than a flat list of text bubbles.
-    - Inject narrative context (`chapterSummary`, character rosters, and editorial rules) into VLM/LLM prompts.
-    - Extract and return additional translation metadata (emotions, tones, translation notes).
+    - **NVIDIA NIM VLM Support:** Integrates free hosted VLM endpoints from build.nvidia.com. Supports VLM models such as `nvidia/nemotron-nano-12b-v2-vl` or `microsoft/phi-4-multimodal-instruct`.
+    - **Selective VLM Activation:** VLM vision translation is dynamically triggered if environment variables (`USE_VLM_TRANSLATION`, `VLM_MODEL` or `NVIDIA_VLM_MODEL` with keys) are populated.
+    - **Prompt Enrichment:** Prompts are enriched with `regionType`, `conversationGroup`, and `speakerLabel` properties to leverage visual and narrative continuity.
+    - **Hardened Validation:** Rejects translations with CJK character leaks, pathological string lengths, or repetitive word loops.
 
 - [x] **14. Translation Overlay in Viewer**
   - *Status:* **Complete**.
@@ -89,11 +81,14 @@ See [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Project
   - **Done:**
     - Full backend `LayerController` handles CRUD operations for `layers`, `layer_elements`, and `layer_edit_history`.
     - Custom UI fields allow editing of font size, family, coordinates (X, Y), bounds (Width, Height), rotation angle, auto-sizing, and visibility.
-    - Edits are persisted in the database.
+    - **Interactive Drag & Resize:** Added 4 corner handles and boundary overlays inside the editor canvas SVG to allow smooth drag-to-move and drag-to-resize operations. It pushes a single original state to the undo/redo stack on mouse up, and executes a silent, alert-free save to the server.
 
 - [x] **16. Text Fitting**
   - *Status:* **Complete**.
-  - **Done:** Client-side offscreen canvas measurement engine dynamically fits text into bounding boxes, adjusts line wraps, scales font sizes, and reports overflow flags.
+  - **Done:**
+    - Client-side offscreen canvas measurement engine dynamically fits text into bounding boxes, adjusts line wraps, scales font sizes, and reports overflow flags.
+    - **Character Wrapping Fallback:** Falls back to splitting words character-by-character if a single long word exceeds the bounding box's maximum width.
+    - **Overflow Outline Indicator:** Displays a warning red dashed outline around any text layer that overflows its box constraints in edit mode.
 
 - [x] **17. Undo/Redo System**
   - *Status:* **Complete**.
