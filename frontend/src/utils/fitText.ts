@@ -36,7 +36,6 @@ export const fitTextInBox = (
         if (wordWidth > maxWidth) {
           if (currentLine) {
             resultLines.push(currentLine);
-            currentLine = "";
           }
           let currentWordPart = "";
           for (const char of word) {

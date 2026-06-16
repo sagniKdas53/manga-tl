@@ -27,7 +27,16 @@ def merge_ocr_regions(regions: list, reading_direction: str = "rtl") -> list:
     avg_height = sum(r["height"] for r in regions) / len(regions)
     avg_width = sum(r["width"] for r in regions) / len(regions)
 
-    max_vertical_gap = avg_height * threshold_ratio
+    # For vertical Japanese text (typically reading_direction == "rtl"),
+    # the character/font size is represented by the line's width, so the vertical gap
+    # threshold should be scaled relative to avg_width rather than avg_height.
+    # For horizontal text (LTR), the character size is represented by the line's height.
+    if reading_direction == "rtl":
+        char_size_vertical = avg_width
+    else:
+        char_size_vertical = avg_height
+
+    max_vertical_gap = char_size_vertical * threshold_ratio
     max_horizontal_gap = avg_width * threshold_ratio
 
     n = len(regions)

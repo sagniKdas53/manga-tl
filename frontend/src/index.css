@@ -18,6 +18,11 @@
   --success-glow: rgba(16, 185, 129, 0.1);
   --warning: #f59e0b;
   --error: #ef4444;
+
+  --conversation: #3b82f6;
+  --conversation-glow: rgba(59, 130, 246, 0.12);
+  --conversation-glow-selected: rgba(59, 130, 246, 0.25);
+  --conversation-glow-approved: rgba(59, 130, 246, 0.08);
   
   --text-main: #f3f4f6;
   --text-muted: #b3b3b3;
@@ -73,6 +78,11 @@
   --primary-glow-selected: rgba(124, 58, 237, 0.25);
   --primary-glow-approved: rgba(124, 58, 237, 0.08);
   --success-glow: rgba(16, 185, 129, 0.08);
+
+  --conversation: #2563eb;
+  --conversation-glow: rgba(37, 99, 235, 0.08);
+  --conversation-glow-selected: rgba(37, 99, 235, 0.25);
+  --conversation-glow-approved: rgba(37, 99, 235, 0.08);
 }
 
 :root.light body {
@@ -660,6 +670,21 @@ body {
   fill: rgba(16, 185, 129, 0.35);
   stroke-width: 2.5px;
   filter: drop-shadow(0 0 6px var(--success));
+}
+
+.svg-conv-box {
+  fill: rgba(59, 130, 246, 0.15);
+  stroke: var(--conversation);
+  stroke-width: 1.5px;
+  pointer-events: visiblePainted;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.svg-conv-box:hover {
+  fill: rgba(59, 130, 246, 0.35);
+  stroke-width: 2.5px;
+  filter: drop-shadow(0 0 6px var(--conversation));
 }
 
 .bubble-tag {

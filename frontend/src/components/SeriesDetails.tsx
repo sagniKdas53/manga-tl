@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User, Series, Chapter } from '../types';
 import { safeFetch, toSlug } from '../utils';
+import ConfirmModal from './ConfirmModal';
 
 interface SeriesDetailsProps {
   user: User;
@@ -36,6 +37,23 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
   const [newChapterNum, setNewChapterNum] = useState<number>(1);
   const [newChapterTitle, setNewChapterTitle] = useState('');
+
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    isDangerous?: boolean;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const closeConfirmModal = () => setConfirmModal(prev => ({ ...prev, isOpen: false }));
 
   if (isLoadingDetails || !selectedSeries) {
     return (
@@ -81,23 +99,32 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     }
   };
 
-  const handleDeleteSeries = async (e: React.MouseEvent) => {
+  const handleDeleteSeries = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this series? This will delete all chapters and pages!')) return;
-    try {
-      const res = await safeFetch(`/api/series/${selectedSeries.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${user.token}` }
-      });
-      if (res.ok) {
-        setSelectedSeries(null);
-        navigate('/');
-      } else {
-        alert('Failed to delete series');
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Series',
+      message: 'Are you sure you want to delete this series? This will delete all chapters and pages!',
+      confirmText: 'Delete Series',
+      isDangerous: true,
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          const res = await safeFetch(`/api/series/${selectedSeries.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${user.token}` }
+          });
+          if (res.ok) {
+            setSelectedSeries(null);
+            navigate('/');
+          } else {
+            alert('Failed to delete series');
+          }
+        } catch (err) {
+          console.error('Error deleting series:', err);
+        }
       }
-    } catch (err) {
-      console.error('Error deleting series:', err);
-    }
+    });
   };
 
   // --- CHAPTER ACTIONS ---
@@ -157,22 +184,31 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     }
   };
 
-  const handleDeleteChapter = async (chapterId: string, e: React.MouseEvent) => {
+  const handleDeleteChapter = (chapterId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this chapter? This will delete all pages!')) return;
-    try {
-      const res = await safeFetch(`/api/series/chapters/${chapterId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${user.token}` }
-      });
-      if (res.ok) {
-        setChapters(prev => prev.filter(c => c.id !== chapterId));
-      } else {
-        alert('Failed to delete chapter');
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Chapter',
+      message: 'Are you sure you want to delete this chapter? This will delete all pages!',
+      confirmText: 'Delete Chapter',
+      isDangerous: true,
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          const res = await safeFetch(`/api/series/chapters/${chapterId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${user.token}` }
+          });
+          if (res.ok) {
+            setChapters(prev => prev.filter(c => c.id !== chapterId));
+          } else {
+            alert('Failed to delete chapter');
+          }
+        } catch (err) {
+          console.error('Error deleting chapter:', err);
+        }
       }
-    } catch (err) {
-      console.error('Error deleting chapter:', err);
-    }
+    });
   };
 
   return (
@@ -373,6 +409,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDangerous={confirmModal.isDangerous}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirmModal}
+      />
     </div>
   );
 };
