@@ -44,6 +44,6 @@ EXPOSE 8080
 
 # Healthcheck via Actuator endpoint (requires spring-boot-starter-actuator)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
-    CMD wget --spider -q http://localhost:8080/actuator/health || exit 1
+    CMD wget --spider -q http://localhost:8080${CONTEXT_PATH:-/tlhub}/actuator/health || exit 1
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
