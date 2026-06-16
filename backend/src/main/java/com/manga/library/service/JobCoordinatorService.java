@@ -5,10 +5,16 @@ import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +25,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 @Slf4j
 public class JobCoordinatorService {
+
+  @Value("${worker.health-url}")
+  private String workerHealthUrl;
+
+  private final HttpClient httpClient =
+      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
@@ -51,6 +63,9 @@ public class JobCoordinatorService {
   }
 
   private void enqueueJobDirectly(String jobType, UUID imageId) {
+    if (!isWorkerHealthy()) {
+      throw new IllegalStateException("Worker is not healthy or unreachable at " + workerHealthUrl);
+    }
     try {
       String jobId = UUID.randomUUID().toString();
       Map<String, Object> job = new HashMap<>();
@@ -361,6 +376,9 @@ public class JobCoordinatorService {
   }
 
   public void triggerRedo(UUID regionId, String redoType) {
+    if (!isWorkerHealthy()) {
+      throw new IllegalStateException("Worker is not healthy or unreachable at " + workerHealthUrl);
+    }
     log.info("Triggering redo for region {} with type {}", regionId, redoType);
 
     Objects.requireNonNull(regionId, "regionId cannot be null");
@@ -420,5 +438,27 @@ public class JobCoordinatorService {
       }
     }
     return bestPanel;
+  }
+
+  public boolean isWorkerHealthy() {
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(workerHealthUrl))
+              .timeout(Duration.ofSeconds(2))
+              .GET()
+              .build();
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() != 200) {
+        log.warn("Worker health check returned status code: {}", response.statusCode());
+        return false;
+      }
+      String body = response.body();
+      return body != null && body.contains("\"status\":\"healthy\"");
+    } catch (Exception e) {
+      log.error("Failed to connect to worker health endpoint: {}", workerHealthUrl, e);
+      return false;
+    }
   }
 }
