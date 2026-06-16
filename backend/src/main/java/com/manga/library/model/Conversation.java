@@ -1,8 +1,8 @@
 package com.manga.library.model;
 
 import jakarta.persistence.*;
-import lombok.*;
 import java.util.UUID;
+import lombok.*;
 
 @Entity
 @Table(name = "conversations")
@@ -14,16 +14,17 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class Conversation {
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    @EqualsAndHashCode.Include
-    private UUID id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.AUTO)
+  @EqualsAndHashCode.Include
+  private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "image_id", nullable = false)
-    private Image image;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "image_id", nullable = false)
+  private Image image;
 
-    @Column(name = "scene_type", nullable = false)
-    @Builder.Default
-    private String sceneType = "dialogue"; // dialogue | monologue | narration | flashback | sfx_cluster
+  @Column(name = "scene_type", nullable = false)
+  @Builder.Default
+  private String sceneType =
+      "dialogue"; // dialogue | monologue | narration | flashback | sfx_cluster
 }
