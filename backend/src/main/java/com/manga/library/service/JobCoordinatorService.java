@@ -455,7 +455,16 @@ public class JobCoordinatorService {
         return false;
       }
       String body = response.body();
-      return body != null && body.contains("\"status\":\"healthy\"");
+      if (body == null) {
+        return false;
+      }
+      try {
+        Map<?, ?> map = objectMapper.readValue(body, Map.class);
+        return "healthy".equals(map.get("status"));
+      } catch (Exception e) {
+        log.warn("Failed to parse worker health check response body: {}", body, e);
+        return body.contains("\"status\"") && body.contains("\"healthy\"");
+      }
     } catch (Exception e) {
       log.error("Failed to connect to worker health endpoint: {}", workerHealthUrl, e);
       return false;
