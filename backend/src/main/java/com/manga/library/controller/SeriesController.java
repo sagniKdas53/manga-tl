@@ -141,7 +141,7 @@ public class SeriesController {
 
   @PostMapping("/{seriesId}/chapters")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
-  public ResponseEntity<ChapterDto> createChapter(
+  public ResponseEntity<?> createChapter(
       @PathVariable UUID seriesId, @RequestBody ChapterDto dto) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     Series series =
@@ -150,9 +150,8 @@ public class SeriesController {
             .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
 
     if (chapterRepository.findBySeriesIdAndChapterNumber(seriesId, dto.getChapterNumber()).isPresent()) {
-      throw new org.springframework.web.server.ResponseStatusException(
-          org.springframework.http.HttpStatus.CONFLICT,
-          "Chapter " + dto.getChapterNumber() + " already exists for this series.");
+      return ResponseEntity.status(409).body(
+          Map.of("message", "Chapter " + dto.getChapterNumber() + " already exists in this series. Please select a different chapter number."));
     }
 
     Chapter chapter =
@@ -260,7 +259,7 @@ public class SeriesController {
 
   @PutMapping("/chapters/{chapterId}")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
-  public ResponseEntity<ChapterDto> updateChapter(
+  public ResponseEntity<?> updateChapter(
       @PathVariable UUID chapterId, @RequestBody ChapterDto dto) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
@@ -269,9 +268,8 @@ public class SeriesController {
             c -> {
               java.util.Optional<Chapter> existing = chapterRepository.findBySeriesIdAndChapterNumber(c.getSeries().getId(), dto.getChapterNumber());
               if (existing.isPresent() && !existing.get().getId().equals(c.getId())) {
-                throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.CONFLICT,
-                    "Chapter " + dto.getChapterNumber() + " already exists for this series.");
+                return ResponseEntity.status(409).body(
+                    Map.of("message", "Chapter " + dto.getChapterNumber() + " already exists in this series. Please select a different chapter number."));
               }
               c.setTitle(dto.getTitle());
               c.setChapterNumber(dto.getChapterNumber());
