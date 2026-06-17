@@ -81,13 +81,13 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
     - Custom UI fields allow editing of font size, family, coordinates (X, Y), bounds (Width, Height), rotation angle, auto-sizing, and visibility.
     - **Interactive Drag & Resize:** Added 4 corner handles and boundary overlays inside the editor canvas SVG to allow smooth drag-to-move and drag-to-resize operations. It pushes a single original state to the undo/redo stack on mouse up, and executes a silent, alert-free save to the server.
 
-- [/] **16. Text Fitting**
-  - *Status:* **Partially Done**.
+- [x] **16. Text Fitting**
+  - *Status:* **Complete**.
   - **Done:**
     - Client-side offscreen canvas measurement engine dynamically fits text into bounding boxes, adjusts line wraps, scales font sizes, and reports overflow flags.
     - **Character Wrapping Fallback:** Falls back to splitting words character-by-character if a single long word exceeds the bounding box's maximum width.
     - **Overflow Outline Indicator:** Displays a warning red dashed outline around any text layer that overflows its box constraints in edit mode.
-  - *Remaining (From Pipeline Improvement Plan):* Reduce the hardcoded minimum font size floor from `10px` to `6px` or `8px` in `fitText.ts` to accommodate small text bubbles.
+    - **Minimum Font Floor Reduction:** Reduced the hardcoded minimum font size floor from `10px` to `6px` in `fitText.ts` to accommodate small text bubbles.
 
 - [x] **17. Undo/Redo System**
   - *Status:* **Complete**.
@@ -137,10 +137,10 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
 
 ## 🛠️ Pipeline Improvement Plan (Carryover Tasks)
 
-- [/] **25. LLM Prompt Enrichment for Standard LLM Batch Translation**
-  - *Status:* **Partially Done**.
-  - **Done:** VLM vision prompt (`translate_vlm_vision`) is fully enriched with `regionType`, `conversationGroup`, and `speaker` properties.
-  - *Remaining:* Update `translate_batch_llm` in `unified-workers/worker/services/translation.py` to map these properties and update prompt templates for non-VLM standard batch LLM translations.
+- [x] **25. LLM Prompt Enrichment for Standard LLM Batch Translation**
+  - *Status:* **Complete**.
+  - **Done:** 
+    - Both VLM vision prompt (`translate_vlm_vision`) and standard LLM batch prompt (`translate_batch_llm`) are fully enriched with `regionType`, `conversationGroup`, and `speaker` properties. Prompt templates are updated with instructions for standard LLMs.
 
 ---
 
@@ -161,12 +161,12 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
 - [ ] **28. Frontend Editor & Canvas Enhancements**
   - [ ] Backend Thumbnailer integration: Save downscaled thumbnail copies to MinIO and use them for quick gallery rendering.
   - [ ] Fix Zoom Sync: Update scale indicator correctly when "Fit Width" or "Fit Height" is used.
-  - [ ] Fix scale-independent bounds rendering: Bounding boxes and borders must scale without displacement at <100% scales.
+  - [x] Fix scale-independent bounds rendering: Bounding boxes and borders must scale without displacement at <100% scales.
   - [ ] Add manual text box creation and deletion/dismissal buttons in the canvas overlay.
   - [ ] Implement Eye-Dropper tool to sample background colors from base image.
 
 - [ ] **29. Valkey & Pipeline Optimizations**
-  - [ ] Update `docker-compose.yml` to replace `manga-redis` with `valkey/valkey:8-alpine`.
+  - [x] Update `docker-compose.yml` to replace `manga-redis` with `valkey/valkey:8-alpine`.
   - [ ] Implement optional PostgreSQL-based internal job queue (removing Valkey dependency).
   - [ ] Configure parallel processing pipelines for layout analysis and translation stages (leaving OCR and local LLMs sequential).
 

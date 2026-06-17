@@ -70,7 +70,7 @@ export const fitTextInBox = (
   let lines = wrapText(cleanText, fontSize);
   const lineHeightMultiplier = 1.2;
 
-  while (fontSize > 10) {
+  while (fontSize > 6) {
     const totalHeight = lines.length * fontSize * lineHeightMultiplier;
     if (totalHeight <= maxHeight) {
       return { fontSize, lines, overflow: false };
@@ -81,7 +81,7 @@ export const fitTextInBox = (
 
   const totalHeight = lines.length * fontSize * lineHeightMultiplier;
   return {
-    fontSize: 10,
+    fontSize: 6,
     lines,
     overflow: totalHeight > maxHeight,
   };
