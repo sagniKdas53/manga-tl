@@ -1,8 +1,6 @@
 # Manga Translation Platform Implementation Status
 
-This checklist maps the **Development Order** defined in [Manga_Translation_Platform_Specification_v2.md](file:///home/sagnik/Projects/docker-composes/manga-library/Manga_Translation_Platform_Specification_v2.md) against the codebase, noting what is complete, partially implemented, and what remains.
-
-See [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Projects/docker-composes/manga-library/Manga_Translation_Platform_Specification_v3.md) for the v3 delta (dynamic OCR language & reading direction).
+This checklist maps the **Development Order** defined in [Manga_Translation_Platform_Specification_v4.md](file:///home/sagnik/Projects/docker-composes/manga-library/Manga_Translation_Platform_Specification_v4.md) against the codebase, noting what is complete, partially implemented, and what remains.
 
 ---
 
@@ -83,12 +81,13 @@ See [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Project
     - Custom UI fields allow editing of font size, family, coordinates (X, Y), bounds (Width, Height), rotation angle, auto-sizing, and visibility.
     - **Interactive Drag & Resize:** Added 4 corner handles and boundary overlays inside the editor canvas SVG to allow smooth drag-to-move and drag-to-resize operations. It pushes a single original state to the undo/redo stack on mouse up, and executes a silent, alert-free save to the server.
 
-- [x] **16. Text Fitting**
-  - *Status:* **Complete**.
+- [/] **16. Text Fitting**
+  - *Status:* **Partially Done**.
   - **Done:**
     - Client-side offscreen canvas measurement engine dynamically fits text into bounding boxes, adjusts line wraps, scales font sizes, and reports overflow flags.
     - **Character Wrapping Fallback:** Falls back to splitting words character-by-character if a single long word exceeds the bounding box's maximum width.
     - **Overflow Outline Indicator:** Displays a warning red dashed outline around any text layer that overflows its box constraints in edit mode.
+  - *Remaining (From Pipeline Improvement Plan):* Reduce the hardcoded minimum font size floor from `10px` to `6px` or `8px` in `fitText.ts` to accommodate small text bubbles.
 
 - [x] **17. Undo/Redo System**
   - *Status:* **Complete**.
@@ -136,35 +135,52 @@ See [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Project
 
 ---
 
-## 🤖 AI-Powered Typesetting Roadmap
+## 🛠️ Pipeline Improvement Plan (Carryover Tasks)
 
-The current typesetting engine delivers solid text-fitting within bounding boxes. To reach print-quality, comic-native rendering, the following advanced AI integrations are planned:
+- [/] **25. LLM Prompt Enrichment for Standard LLM Batch Translation**
+  - *Status:* **Partially Done**.
+  - **Done:** VLM vision prompt (`translate_vlm_vision`) is fully enriched with `regionType`, `conversationGroup`, and `speaker` properties.
+  - *Remaining:* Update `translate_batch_llm` in `unified-workers/worker/services/translation.py` to map these properties and update prompt templates for non-VLM standard batch LLM translations.
 
-### 1. Context-Aware Font Selection
-- Classify region category (`whispering`, `screaming`, `narration`, `sfx`, `caption`, `thought`) during the **layout analysis stage** (already has the labels, just needs to be passed to layers).
-- Map classification labels to styled comic font faces dynamically:
-  - *Bangers* / *Permanent Marker* → action SFX
-  - Condensed sans → speech bubbles
-  - Serif italic → internal monologue / narration boxes
-  - Uppercase heavy-weight → yelling / emphasis
-- Font mapping table configurable per series (editorial style guide).
+---
 
-### 2. Contour-Aware Text Wrapping
-- Detect bubble boundary contours using computer vision (OpenCV on binarized bubble masks from the `mask.png` export layer).
-- Represent boundary as a polygon and compute per-scanline available width for text layout — enabling natural oval/irregular wrapping that doesn't clip corners.
-- Expose as an optional layer flag `contourWrap: true` with a fallback to rectangular bounds.
+## 🚀 Specification v4.0 Additions
 
-### 3. VLM Styling Insights
-- Prompt Vision-Language Models to output visual metadata per bubble (`styleMultiplier`, `isBold`, `emotionKey`, `bubbleShape`) based on visual inspection of the speech bubble shape (spikey → bold uppercase, round → regular, cloud → thought).
-- Store metadata in `layer_elements.style_hints` JSON column (already schematised in `layer_edit_history`).
-- Apply hints at render time as an override on top of the font mapping table.
+- [ ] **26. Database & Chapter Numbering Rules**
+  - [ ] Alter PostgreSQL schema: Change `chapters.chapter_number` to `NUMERIC` or `DOUBLE PRECISION`.
+  - [ ] Enforce backend unique check on `(series_id, chapter_number)`.
+  - [ ] Implement deletion gap insertion rules and moving/renumbering validation.
+  - [ ] Support Ascending/Descending chapter list sorting toggling in the frontend.
 
-### 4. Automatic Balloon Replacement / Inpainting
-- Feed `mask.png` + `original.png` into a Stable Diffusion inpainting pipeline (SD-XL Inpaint or ComfyUI workflow) to white-out Japanese text while preserving artwork texture.
-- Use `translation.png` as the typesetting overlay applied post-inpainting.
-- Integrates directly with item **23 (Inpainting)** above.
+- [ ] **27. Frontend Double-Sidebar Layout**
+  - [ ] Restructure layout: Create Left Sidebar for controls (zoom, overlays, navigation), Center Canvas for editor, Right Sidebar for details inspector.
+  - [ ] Update Nav Bar to modern Glassmorphism styling.
+  - [ ] Set browser window title dynamically based on series/chapter/page details.
+  - [ ] Save viewer toggle and zoom preferences in `localStorage` across page reloads.
 
-### 5. Lettering Quality Scoring
-- Compare rendered translation PNG against OCR region dimensions and font metrics to produce a quality score (`overflow`, `too_small`, `ideal`).
-- Surface warnings in the Layer Inspector panel for elements scoring below threshold.
-- Use score as a signal for human review queue prioritisation.
+- [ ] **28. Frontend Editor & Canvas Enhancements**
+  - [ ] Backend Thumbnailer integration: Save downscaled thumbnail copies to MinIO and use them for quick gallery rendering.
+  - [ ] Fix Zoom Sync: Update scale indicator correctly when "Fit Width" or "Fit Height" is used.
+  - [ ] Fix scale-independent bounds rendering: Bounding boxes and borders must scale without displacement at <100% scales.
+  - [ ] Add manual text box creation and deletion/dismissal buttons in the canvas overlay.
+  - [ ] Implement Eye-Dropper tool to sample background colors from base image.
+
+- [ ] **29. Valkey & Pipeline Optimizations**
+  - [ ] Update `docker-compose.yml` to replace `manga-redis` with `valkey/valkey:8-alpine`.
+  - [ ] Implement optional PostgreSQL-based internal job queue (removing Valkey dependency).
+  - [ ] Configure parallel processing pipelines for layout analysis and translation stages (leaving OCR and local LLMs sequential).
+
+- [ ] **30. Advanced VLM Translation & QA**
+  - [ ] Add support for Single-Pass Multimodal VLM (merging layout, grouping, and translation).
+  - [ ] Implement headless Canvas/Node rendering on worker side to output final images.
+  - [ ] Implement final VLM-based Quality Assurance review pass on rendered images to verify typesetting fit.
+  - [ ] Add test configurations for comics, documents, web novels, and screenshots.
+
+- [ ] **31. Remote Machine Learning Integration**
+  - [ ] Support remote Ollama and remote Immich ML engines.
+  - [ ] Set up signed MinIO URL delivery for remote API processing.
+
+- [ ] **32. Repository Cleanup & Publishing**
+  - [ ] Audit and remove all hardcoded API keys.
+  - [ ] Purge references to nHentai endpoints.
+  - [ ] Set up cloud-based Docker image build triggers instead of local host-side builds.

@@ -6,7 +6,7 @@ An automated manga scanlation translation and typesetting dashboard. This platfo
 
 ## 🏗️ Architecture & Stack
 
-The platform is designed as a distributed service coordinate via a Redis queue:
+The platform is designed as a distributed service coordinated via a Valkey job queue:
 
 ```
                   ┌───────────────────────┐
@@ -19,23 +19,23 @@ The platform is designed as a distributed service coordinate via a Redis queue:
                   │     Backend API       │
                   └───────────┬───────────┘
                               │
-         ┌────────────────────┼────────────────────┐
-   ┌─────▼─────┐        ┌─────▼─────┐        ┌─────▼─────┐
-   │PostgreSQL │        │ MinIO S3  │        │   Redis   │
-   │ Database  │        │  Storage  │        │   Queue   │
-   └───────────┘        └───────────┘        └─────┬─────┘
-                                                   │ Jobs
-                                             ┌─────▼─────┐
-                                             │  Unified  │
-                                             │ Python ML │
-                                             │  Worker   │
-                                             └───────────┘
+          ┌────────────────────┼────────────────────┐
+    ┌─────▼─────┐        ┌─────▼─────┐        ┌─────▼─────┐
+    │PostgreSQL │        │ MinIO S3  │        │  Valkey   │
+    │ Database  │        │  Storage  │        │   Queue   │
+    └───────────┘        └───────────┘        └─────┬─────┘
+                                                    │ Jobs
+                                              ┌─────▼─────┐
+                                              │  Unified  │
+                                              │ Python ML │
+                                              │  Worker   │
+                                              └───────────┘
 ```
 
 1.  **Frontend**: React, TypeScript, Vite, Vanilla CSS.
 2.  **Backend**: Spring Boot, Java, PostgreSQL, Hibernate, MinIO SDK.
-3.  **Database & Storage**: PostgreSQL for structure and layer history; MinIO S3 for raw/processed images and generated masks.
-4.  **Job Pipeline**: Redis coordinates workers through specialized queues (panel detection, OCR, layout analysis, translation, and rendering).
+3.  **Database & Storage**: PostgreSQL for metadata, layers, and edit history; MinIO S3 for raw/processed images and generated masks.
+4.  **Job Pipeline**: Valkey coordinates workers through specialized job queues (panel detection, OCR, layout analysis, translation, and rendering). An optional database-driven queue is supported for brokerless deployments.
 5.  **ML Workers**: A unified Python runner executing a multi-tier OCR (PaddleOCR + EasyOCR + MangaOCR) and AI Translation pipeline.
 
 ---
@@ -110,3 +110,12 @@ source .venv/bin/activate
 # Execute backend validation tests
 python -c "import sys; sys.path.insert(0, 'unified-workers'); from tests.test_merge_regions import *; test_merge_no_regions(); test_merge_single_region(); test_merge_overlapping_regions(); test_merge_rtl_regions(); from tests.test_translation_validation import *; test_valid_translation(); test_cjk_leak_translation(); test_length_ratio_translation(); test_excessive_repetition_translation(); print('ALL TESTS PASSED!')"
 ```
+
+---
+
+## 📄 Documentation Index
+
+- **Core Product Specification**: [Manga_Translation_Platform_Specification_v4.md](file:///home/sagnik/Projects/docker-composes/manga-library/Manga_Translation_Platform_Specification_v4.md)
+- **Development Roadmap & Status**: [translation_platform_checklist.md](file:///home/sagnik/Projects/docker-composes/manga-library/translation_platform_checklist.md)
+- **Dynamic OCR & Multi-Language Config**: [Manga_Translation_Platform_Specification_v3.md](file:///home/sagnik/Projects/docker-composes/manga-library/Manga_Translation_Platform_Specification_v3.md)
+- **Base Architecture Specifications**: [Manga_Translation_Platform_Specification_v2.md](file:///home/sagnik/Projects/docker-composes/manga-library/Manga_Translation_Platform_Specification_v2.md)
