@@ -1464,8 +1464,6 @@ export const Reader: React.FC<ReaderProps> = ({
         {/* Left Sidebar (Global Controls) */}
         {showLeftSidebar && (
           <div className="reader-left-sidebar-nhentai">
-            <h2>Controls</h2>
-            
             {/* Overlays Visibility Section */}
             <div className="panel-section">
               <div className="panel-section-title">Overlays</div>
@@ -1524,6 +1522,56 @@ export const Reader: React.FC<ReaderProps> = ({
                   <span className="slider"></span>
                 </label>
               </div>
+            </div>
+
+            {/* Zoom Controls Section */}
+            <div className="panel-section">
+              <div className="panel-section-title">Zoom & View</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <input 
+                  type="range" 
+                  min="0.5" 
+                  max="3.0" 
+                  step="0.1" 
+                  value={zoom} 
+                  onChange={e => setZoom(parseFloat(e.target.value))} 
+                  style={{ flex: 1 }}
+                />
+                <span style={{ fontSize: '12px', fontWeight: 'bold', minWidth: '40px', textAlign: 'right' }}>
+                  {Math.round(zoom * 100)}%
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '8px' }}>
+                <button 
+                  className={`btn ${fitMode === 'page' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                  onClick={() => setFitMode('page')}
+                >
+                  Page
+                </button>
+                <button 
+                  className={`btn ${fitMode === 'width' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                  onClick={() => setFitMode('width')}
+                >
+                  Width
+                </button>
+                <button 
+                  className={`btn ${fitMode === 'height' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                  onClick={() => setFitMode('height')}
+                >
+                  Height
+                </button>
+              </div>
+              <button 
+                className="btn btn-secondary" 
+                style={{ width: '100%', fontSize: '11px', padding: '6px' }} 
+                onClick={() => { setZoom(1.0); setFitMode('page'); }}
+                disabled={zoom === 1.0 && fitMode === 'page'}
+              >
+                Reset Zoom
+              </button>
             </div>
 
             {/* Page & Chapter Navigation */}
@@ -1591,56 +1639,6 @@ export const Reader: React.FC<ReaderProps> = ({
                   Next Ch &rarr;
                 </button>
               </div>
-            </div>
-
-            {/* Zoom Controls Section */}
-            <div className="panel-section">
-              <div className="panel-section-title">Zoom & View</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <input 
-                  type="range" 
-                  min="0.5" 
-                  max="3.0" 
-                  step="0.1" 
-                  value={zoom} 
-                  onChange={e => setZoom(parseFloat(e.target.value))} 
-                  style={{ flex: 1 }}
-                />
-                <span style={{ fontSize: '12px', fontWeight: 'bold', minWidth: '40px', textAlign: 'right' }}>
-                  {Math.round(zoom * 100)}%
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '8px' }}>
-                <button 
-                  className={`btn ${fitMode === 'page' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
-                  onClick={() => setFitMode('page')}
-                >
-                  Page
-                </button>
-                <button 
-                  className={`btn ${fitMode === 'width' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
-                  onClick={() => setFitMode('width')}
-                >
-                  Width
-                </button>
-                <button 
-                  className={`btn ${fitMode === 'height' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
-                  onClick={() => setFitMode('height')}
-                >
-                  Height
-                </button>
-              </div>
-              <button 
-                className="btn btn-secondary" 
-                style={{ width: '100%', fontSize: '11px', padding: '6px' }} 
-                onClick={() => { setZoom(1.0); setFitMode('page'); }}
-                disabled={zoom === 1.0 && fitMode === 'page'}
-              >
-                Reset Zoom
-              </button>
             </div>
           </div>
         )}
