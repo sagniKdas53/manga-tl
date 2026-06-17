@@ -1,1 +1,0 @@
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/manga_library SPRING_DATA_REDIS_HOST=localhost MINIO_ENDPOINT=http://localhost:9000 mvn spring-boot:run
