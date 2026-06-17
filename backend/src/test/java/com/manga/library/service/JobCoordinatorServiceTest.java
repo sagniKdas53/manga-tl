@@ -78,7 +78,9 @@ public class JobCoordinatorServiceTest {
         });
 
     ReflectionTestUtils.setField(
-        jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/health-spaces");
+        jobCoordinatorService,
+        "workerHealthUrl",
+        "http://localhost:" + testPort + "/health-spaces");
     assertTrue(jobCoordinatorService.isWorkerHealthy());
   }
 
