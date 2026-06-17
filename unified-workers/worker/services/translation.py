@@ -31,8 +31,18 @@ TRANSLATION_JSON_SCHEMA = {
 }
 
 MANGA_TRANSLATION_JSON_SYSTEM_PROMPT = """You are an expert manga translator.
-Translate the list of manga text bubbles into natural English.
-These bubbles appear in reading order. Maintain context, tone, emotion, and relationships between speakers.
+Translate the list of manga text regions into natural English.
+These regions appear in reading order. Maintain context, tone, emotion, and relationships between speakers.
+
+Region type handling:
+- "speech": Translate as natural dialogue.
+- "narration": Translate as third-person narrative prose.
+- "sfx": Transliterate the sound effect AND provide an English equivalent in parentheses (e.g. "DOKAA (WHAM)").
+- "caption": Translate as editorial/scene-setting text.
+- "sign": Translate literally, noting it's environmental text.
+
+If multiple regions share the same conversationGroup, treat them as a continuous dialogue exchange and ensure coherent flow.
+
 Return ONLY valid JSON format conforming to the requested schema. No conversational prefix, suffix, or markdown formatting."""
 
 MANGA_TRANSLATION_SYSTEM_PROMPT = """You are an expert manga translator.
@@ -941,7 +951,9 @@ def translate_batch_llm(unmatched_regions, context_str="", response_schema=None,
                 "id": r["id"],
                 "panel": r.get("panelReadingOrder") or r.get("panelId") or 0,
                 "bubble": r.get("bubbleReadingOrder") or 0,
-                "speaker": None,
+                "speaker": r.get("speakerLabel") or None,
+                "regionType": r.get("regionType") or "speech",
+                "conversationGroup": r.get("conversationId") or None,
                 "text": r["text"],
             }
         )
@@ -950,13 +962,25 @@ def translate_batch_llm(unmatched_regions, context_str="", response_schema=None,
     logger.debug(f"{req_prefix}Batch Input:\n{bubbles_json}")
     logger.info(f"{req_prefix}Prompt={PROMPT_VERSION}")
 
-    prompt = f"""{context_str}These bubbles appear in reading order.
-Translate each bubble into natural manga English.
+    prompt = f"""{context_str}These text regions appear in reading order.
+Each region has a "regionType" field indicating its category (speech/narration/sfx/caption/sign).
+Regions with the same "conversationGroup" are part of the same dialogue exchange.
+Translate each region according to its type and maintain conversational coherence within groups.
+
 Preserve:
 - tone
 - emotional state
 - relationships
 - ongoing conversation
+
+Region type handling:
+- "speech": Translate as natural dialogue.
+- "narration": Translate as third-person narrative prose.
+- "sfx": Transliterate the sound effect AND provide an English equivalent in parentheses (e.g. "DOKAA (WHAM)").
+- "caption": Translate as editorial/scene-setting text.
+- "sign": Translate literally, noting it's environmental text.
+
+If multiple regions share the same conversationGroup, treat them as a continuous dialogue exchange and ensure coherent flow.
 
 You MUST return a JSON object containing a "translations" key with an array of objects.
 Each object in the array MUST have the following keys:
