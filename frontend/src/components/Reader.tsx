@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { User, Chapter, Page, Panel, OcrRegion, Conversation, Layer, LayerElement } from '../types';
+import type { User, Chapter, Page, Panel, OcrRegion, Conversation, Layer, LayerElement, Series } from '../types';
 import { safeFetch, toSlug } from '../utils';
 import { fitTextInBox } from '../utils/fitText';
 import ConfirmModal from './ConfirmModal';
@@ -8,7 +8,9 @@ import JSZip from 'jszip';
 
 interface ReaderProps {
   user: User;
+  selectedSeries: Series | null;
   selectedChapter: Chapter | null;
+  chapters: Chapter[];
   pages: Page[];
   theme: 'light' | 'dark';
 }
@@ -43,7 +45,9 @@ type SelectedItemType = (RenderItem & LayerElement) | RenderItem | LayerElement 
 
 export const Reader: React.FC<ReaderProps> = ({
   user,
+  selectedSeries,
   selectedChapter,
+  chapters,
   pages,
   theme,
 }) => {
@@ -64,26 +68,52 @@ export const Reader: React.FC<ReaderProps> = ({
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
-  const [showPanels, setShowPanels] = useState(true);
-  const [showOcr, setShowOcr] = useState(true);
+  const [showPanels, setShowPanels] = useState(() => {
+    const saved = localStorage.getItem('manga_show_panels');
+    return saved === null ? true : saved === 'true';
+  });
+  const [showOcr, setShowOcr] = useState(() => {
+    const saved = localStorage.getItem('manga_show_ocr');
+    return saved === null ? true : saved === 'true';
+  });
   const [showTranslations] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showLeftSidebar, setShowLeftSidebar] = useState(() => {
+    const saved = localStorage.getItem('manga_show_left_sidebar');
+    return saved === null ? true : saved === 'true';
+  });
+  const [showRightSidebar, setShowRightSidebar] = useState(() => {
+    const saved = localStorage.getItem('manga_show_right_sidebar');
+    return saved === null ? true : saved === 'true';
+  });
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1.0);
+  const [zoom, setZoom] = useState(() => {
+    const saved = localStorage.getItem('manga_zoom');
+    const parsed = parseFloat(saved || '1.0');
+    return isNaN(parsed) ? 1.0 : parsed;
+  });
 
   // Phase 4 Layer System states
   const [layers, setLayers] = useState<{ layer: Layer; elements: LayerElement[] }[]>([]);
-  const [cleanScanlationView, setCleanScanlationView] = useState(false);
+  const [cleanScanlationView, setCleanScanlationView] = useState(() => {
+    const saved = localStorage.getItem('manga_clean_view');
+    return saved === null ? false : saved === 'true';
+  });
   const [undoStack, setUndoStack] = useState<LayerElement[]>([]);
   const [redoStack, setRedoStack] = useState<LayerElement[]>([]);
 
   // Conversation and Layout enhancements
-  const [groupByConversation, setGroupByConversation] = useState(true);
+  const [groupByConversation, setGroupByConversation] = useState(() => {
+    const saved = localStorage.getItem('manga_group_by_conversation');
+    return saved === null ? true : saved === 'true';
+  });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedItem, setSelectedItem] = useState<SelectedItemType>(null);
   const [activeItem, setActiveItem] = useState<RenderItem | null>(null);
-  const [fitMode, setFitMode] = useState<'page' | 'width' | 'height'>('page');
+  const [fitMode, setFitMode] = useState<'page' | 'width' | 'height'>(() => {
+    const saved = localStorage.getItem('manga_fit_mode');
+    return (saved === 'page' || saved === 'width' || saved === 'height') ? saved : 'page';
+  });
   const [isRedoingPageOcr, setIsRedoingPageOcr] = useState(false);
   const [isRedoingPageTranslation, setIsRedoingPageTranslation] = useState(false);
 
@@ -117,9 +147,68 @@ export const Reader: React.FC<ReaderProps> = ({
   const initialTouchPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
 
+  // Persistence effects
   useEffect(() => {
     localStorage.setItem('manga_show_zoom_bar', showZoomBar.toString());
   }, [showZoomBar]);
+
+  useEffect(() => {
+    localStorage.setItem('manga_show_panels', showPanels.toString());
+  }, [showPanels]);
+
+  useEffect(() => {
+    localStorage.setItem('manga_show_ocr', showOcr.toString());
+  }, [showOcr]);
+
+  useEffect(() => {
+    localStorage.setItem('manga_show_left_sidebar', showLeftSidebar.toString());
+  }, [showLeftSidebar]);
+
+  useEffect(() => {
+    localStorage.setItem('manga_show_right_sidebar', showRightSidebar.toString());
+  }, [showRightSidebar]);
+
+  useEffect(() => {
+    localStorage.setItem('manga_clean_view', cleanScanlationView.toString());
+  }, [cleanScanlationView]);
+
+  useEffect(() => {
+    localStorage.setItem('manga_group_by_conversation', groupByConversation.toString());
+  }, [groupByConversation]);
+
+  useEffect(() => {
+    localStorage.setItem('manga_fit_mode', fitMode);
+  }, [fitMode]);
+
+  useEffect(() => {
+    localStorage.setItem('manga_zoom', zoom.toString());
+  }, [zoom]);
+
+  // Window title synchronization
+  useEffect(() => {
+    if (selectedChapter) {
+      const seriesTitle = selectedSeries ? selectedSeries.title : 'Series';
+      const chapterNum = selectedChapter.chapterNumber;
+      const pageNum = curPageNum;
+      document.title = `[TLHub] ${seriesTitle} - Ch. ${chapterNum} Page ${pageNum}`;
+    } else {
+      document.title = 'TLHub - Manga Translation Platform';
+    }
+    return () => {
+      document.title = 'TLHub';
+    };
+  }, [selectedSeries, selectedChapter, curPageNum]);
+
+  // Chapter navigation logic
+  const sortedChapters = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+  const currentChapterIdx = sortedChapters.findIndex(c => c.id === selectedChapter?.id);
+  const prevChapter = currentChapterIdx > 0 ? sortedChapters[currentChapterIdx - 1] : null;
+  const nextChapter = currentChapterIdx !== -1 && currentChapterIdx < sortedChapters.length - 1 ? sortedChapters[currentChapterIdx + 1] : null;
+
+  const navigateToChapter = (chapter: Chapter) => {
+    const slugPart = chapter.title ? `${toSlug(chapter.title)}/` : `chapter-${chapter.chapterNumber}/`;
+    navigate(`/chapters/${chapter.id}/${slugPart}reader/1`);
+  };
 
   // isTouchScreen is detected once at mount — no effect needed, computed directly
   // (avoids react-hooks/set-state-in-effect lint error)
@@ -1329,72 +1418,367 @@ export const Reader: React.FC<ReaderProps> = ({
   return (
     <div className="reader-container-nhentai">
       {/* Top Navbar */}
-      <div className="reader-navbar-nhentai">
-        <button 
-          className="reader-nav-btn back-btn"
-          onClick={() => navigate(`/chapters/${selectedChapter ? selectedChapter.id : ''}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ''}`)}
-          title="Back to Chapter"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
-        </button>
-
-        <div className="reader-page-controls-nhentai">
+      <div className="reader-navbar-nhentai" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button 
-            className="reader-control-btn"
-            onClick={() => navigateToPage(1)}
-            disabled={curPageNum <= 1}
-            title="First Page"
+            className="reader-nav-btn back-btn"
+            onClick={() => navigate(`/chapters/${selectedChapter ? selectedChapter.id : ''}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ''}`)}
+            title="Back to Chapter"
           >
-            &lt;&lt;
-          </button>
-          <button 
-            className="reader-control-btn"
-            onClick={() => navigateToPage(curPageNum - 1)}
-            disabled={curPageNum <= 1}
-            title="Previous Page"
-          >
-            &lt;
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
           </button>
           
-          <span className="reader-page-indicator-nhentai">
-            <strong>{curPageNum}</strong> of {totalPages}
-          </span>
-
           <button 
-            className="reader-control-btn"
-            onClick={() => navigateToPage(curPageNum + 1)}
-            disabled={curPageNum >= totalPages}
-            title="Next Page"
+            className={`reader-nav-btn gear-btn ${showLeftSidebar ? 'active' : ''}`}
+            onClick={() => setShowLeftSidebar(prev => !prev)}
+            title="Toggle Global Controls (Left Sidebar)"
           >
-            &gt;
-          </button>
-          <button 
-            className="reader-control-btn"
-            onClick={() => navigateToPage(totalPages)}
-            disabled={curPageNum >= totalPages}
-            title="Last Page"
-          >
-            &gt;&gt;
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
           </button>
         </div>
 
+        <div style={{ fontWeight: 600, fontSize: '14px', fontFamily: 'var(--font-display)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '50%' }}>
+          {selectedSeries ? selectedSeries.title : 'Series'} &mdash; Chapter {selectedChapter?.chapterNumber}
+        </div>
+
         <button 
-          className={`reader-nav-btn gear-btn ${showSidebar ? 'active' : ''}`}
-          onClick={() => setShowSidebar(prev => !prev)}
-          title="Toggle Workspace Sidebar"
+          className={`reader-nav-btn gear-btn ${showRightSidebar ? 'active' : ''}`}
+          onClick={() => setShowRightSidebar(prev => !prev)}
+          title="Toggle Property Inspector (Right Sidebar)"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="15" y1="3" x2="15" y2="21" />
           </svg>
         </button>
       </div>
 
       {/* Main Workspace split */}
       <div className="reader-workspace-frame-nhentai">
+        {/* Left Sidebar (Global Controls) */}
+        {showLeftSidebar && (
+          <div className="reader-left-sidebar-nhentai">
+            <h2>Controls</h2>
+            
+            {/* Page & Chapter Navigation */}
+            <div className="panel-section">
+              <div className="panel-section-title">Navigation</div>
+              
+              <div className="reader-page-controls-nhentai" style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px', gap: '6px' }}>
+                <button 
+                  className="reader-control-btn"
+                  onClick={() => navigateToPage(1)}
+                  disabled={curPageNum <= 1}
+                  title="First Page"
+                >
+                  &lt;&lt;
+                </button>
+                <button 
+                  className="reader-control-btn"
+                  onClick={() => navigateToPage(curPageNum - 1)}
+                  disabled={curPageNum <= 1}
+                  title="Previous Page"
+                >
+                  &lt;
+                </button>
+                
+                <span className="reader-page-indicator-nhentai" style={{ margin: '0 4px', fontSize: '12px' }}>
+                  <strong>{curPageNum}</strong> / {totalPages}
+                </span>
+
+                <button 
+                  className="reader-control-btn"
+                  onClick={() => navigateToPage(curPageNum + 1)}
+                  disabled={curPageNum >= totalPages}
+                  title="Next Page"
+                >
+                  &gt;
+                </button>
+                <button 
+                  className="reader-control-btn"
+                  onClick={() => navigateToPage(totalPages)}
+                  disabled={curPageNum >= totalPages}
+                  title="Last Page"
+                >
+                  &gt;&gt;
+                </button>
+              </div>
+
+              {/* Chapter Navigation */}
+              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ flex: 1, fontSize: '11px', padding: '6px' }}
+                  onClick={() => prevChapter && navigateToChapter(prevChapter)}
+                  disabled={!prevChapter}
+                  title={prevChapter ? `Go to Chapter ${prevChapter.chapterNumber}` : 'No previous chapter'}
+                >
+                  &larr; Prev Ch
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ flex: 1, fontSize: '11px', padding: '6px' }}
+                  onClick={() => nextChapter && navigateToChapter(nextChapter)}
+                  disabled={!nextChapter}
+                  title={nextChapter ? `Go to Chapter ${nextChapter.chapterNumber}` : 'No next chapter'}
+                >
+                  Next Ch &rarr;
+                </button>
+              </div>
+            </div>
+
+            {/* Zoom Controls Section */}
+            <div className="panel-section">
+              <div className="panel-section-title">Zoom & View</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <input 
+                  type="range" 
+                  min="0.5" 
+                  max="3.0" 
+                  step="0.1" 
+                  value={zoom} 
+                  onChange={e => setZoom(parseFloat(e.target.value))} 
+                  style={{ flex: 1 }}
+                />
+                <span style={{ fontSize: '12px', fontWeight: 'bold', minWidth: '40px', textAlign: 'right' }}>
+                  {Math.round(zoom * 100)}%
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '8px' }}>
+                <button 
+                  className={`btn ${fitMode === 'page' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                  onClick={() => setFitMode('page')}
+                >
+                  Page
+                </button>
+                <button 
+                  className={`btn ${fitMode === 'width' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                  onClick={() => setFitMode('width')}
+                >
+                  Width
+                </button>
+                <button 
+                  className={`btn ${fitMode === 'height' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                  onClick={() => setFitMode('height')}
+                >
+                  Height
+                </button>
+              </div>
+              <button 
+                className="btn btn-secondary" 
+                style={{ width: '100%', fontSize: '11px', padding: '6px' }} 
+                onClick={() => { setZoom(1.0); setFitMode('page'); }}
+                disabled={zoom === 1.0 && fitMode === 'page'}
+              >
+                Reset Zoom
+              </button>
+            </div>
+
+            {/* Overlays Visibility Section */}
+            <div className="panel-section">
+              <div className="panel-section-title">Overlays</div>
+              <div className="overlay-toggle">
+                <span>Panel Boundaries</span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={showPanels} 
+                    onChange={e => setShowPanels(e.target.checked)} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+              <div className="overlay-toggle">
+                <span>OCR Boxes</span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={showOcr} 
+                    onChange={e => setShowOcr(e.target.checked)} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+              <div className="overlay-toggle">
+                <span>Clean Scanlation</span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={cleanScanlationView} 
+                    onChange={e => setCleanScanlationView(e.target.checked)} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+              <div className="overlay-toggle">
+                <span>Group Conversation</span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={groupByConversation} 
+                    onChange={e => setGroupByConversation(e.target.checked)} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+              <div className="overlay-toggle">
+                <span>Show Zoom Bar</span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={showZoomBar} 
+                    onChange={e => setShowZoomBar(e.target.checked)} 
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            {/* Translation Layers Section */}
+            <div className="panel-section">
+              <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Layers</span>
+                <button 
+                  className="btn btn-secondary"
+                  style={{ padding: '2px 6px', fontSize: '10px' }}
+                  onClick={handleCreateTranslationLayer}
+                >
+                  + Add
+                </button>
+              </div>
+              
+              {layers.length === 0 ? (
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 0' }}>
+                  No active translation layers.
+                </div>
+              ) : (
+                layers.map(lData => (
+                  <div 
+                    key={lData.layer.id} 
+                    className="overlay-toggle" 
+                    style={{ 
+                      padding: '6px 8px', 
+                      border: '1px solid var(--border-color)', 
+                      borderRadius: '6px', 
+                      marginBottom: '6px',
+                      backgroundColor: 'rgba(255,255,255,0.02)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600 }}>
+                        {lData.layer.type === 'translation' 
+                          ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || 'EN'})` 
+                          : `Layer (${lData.layer.type})`}
+                      </span>
+                      <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>
+                        {lData.elements.length} elements
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        onClick={() => handleToggleLayerVisibility(lData.layer.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: lData.layer.visible ? 'var(--primary)' : 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        title="Toggle layer visibility"
+                      >
+                        {lData.layer.visible ? (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                        ) : (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                          </svg>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteLayer(lData.layer.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        title="Delete layer"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Page Actions Section */}
+            <div className="panel-section">
+              <div className="panel-section-title">Page Actions</div>
+              <button 
+                className="btn btn-secondary sidebar-action-btn"
+                onClick={handleRedoPageOcr}
+                disabled={isRedoingPageOcr}
+                style={{ width: '100%', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              >
+                {isRedoingPageOcr ? <div className="spinner-mini"></div> : null}
+                Redo Page OCR
+              </button>
+              <button 
+                className="btn btn-secondary sidebar-action-btn"
+                onClick={handleRedoPageTranslation}
+                disabled={isRedoingPageTranslation}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              >
+                {isRedoingPageTranslation ? <div className="spinner-mini"></div> : null}
+                Redo Page Translation
+              </button>
+            </div>
+
+            {/* Export Section */}
+            <div className="panel-section">
+              <div className="panel-section-title">Export</div>
+              <button
+                className="btn btn-secondary sidebar-action-btn"
+                onClick={handleExportPng}
+                style={{ width: '100%', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              >
+                Export Page (PNG)
+              </button>
+              <button
+                className="btn btn-secondary sidebar-action-btn"
+                onClick={handleExportZip}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              >
+                Export Project (ZIP)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Center Canvas */}
         <div className="reader-main-nhentai">
           <div 
             ref={canvasAreaRef}
@@ -1936,259 +2320,20 @@ export const Reader: React.FC<ReaderProps> = ({
           )}
         </div>
 
-        {/* Collapsible Translation Sidebar */}
-        {showSidebar && (
-          <div className="reader-sidebar-nhentai">
-            <h2>Workspace Controls</h2>
+        {/* Right Sidebar (Property Inspector) */}
+        {showRightSidebar && (
+          <div className="reader-right-sidebar-nhentai">
+            <h2>Inspector</h2>
             
             {!selectedItem && (
-              <>
-                <div className="panel-section">
-                  <div className="panel-section-title">Base Overlays</div>
-                  
-                  <div className="overlay-toggle">
-                    <span>Panel Boundaries</span>
-                    <label className="switch">
-                      <input 
-                        type="checkbox" 
-                        checked={showPanels} 
-                        onChange={e => setShowPanels(e.target.checked)} 
-                      />
-                      <span className="slider"></span>
-                    </label>
-                  </div>
-
-                  <div className="overlay-toggle">
-                    <span>OCR Bounding Boxes</span>
-                    <label className="switch">
-                      <input 
-                        type="checkbox" 
-                        checked={showOcr} 
-                        onChange={e => setShowOcr(e.target.checked)} 
-                      />
-                      <span className="slider"></span>
-                    </label>
-                  </div>
-
-
-                  
-                  <div className="overlay-toggle">
-                    <span>Clean Scanlation View</span>
-                    <label className="switch">
-                      <input 
-                        type="checkbox" 
-                        checked={cleanScanlationView} 
-                        onChange={e => setCleanScanlationView(e.target.checked)} 
-                      />
-                      <span className="slider"></span>
-                    </label>
-                  </div>
-
-                  <div className="overlay-toggle">
-                    <span>Show Zoom Bar</span>
-                    <label className="switch">
-                      <input 
-                        type="checkbox" 
-                        checked={showZoomBar} 
-                        onChange={e => setShowZoomBar(e.target.checked)} 
-                      />
-                      <span className="slider"></span>
-                    </label>
-                  </div>
-
-                  <div className="overlay-toggle">
-                    <span>Group by Conversation</span>
-                    <label className="switch">
-                      <input 
-                        type="checkbox" 
-                        checked={groupByConversation} 
-                        onChange={e => setGroupByConversation(e.target.checked)} 
-                      />
-                      <span className="slider"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Translation Layers</span>
-                    <button 
-                      className="btn btn-secondary"
-                      style={{ padding: '2px 6px', fontSize: '10px' }}
-                      onClick={handleCreateTranslationLayer}
-                    >
-                      + Add Layer
-                    </button>
-                  </div>
-                  
-                  {layers.length === 0 ? (
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 0' }}>
-                      No active translation layers.
-                    </div>
-                  ) : (
-                    layers.map(lData => (
-                      <div 
-                        key={lData.layer.id} 
-                        className="overlay-toggle" 
-                        style={{ 
-                          padding: '6px 8px', 
-                          border: '1px solid var(--border-color)', 
-                          borderRadius: '6px', 
-                          marginBottom: '6px',
-                          backgroundColor: 'rgba(255,255,255,0.02)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                            {lData.layer.type === 'translation' 
-                              ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || 'EN'})` 
-                              : `Layer (${lData.layer.type})`}
-                          </span>
-                          <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>
-                            {lData.elements.length} elements
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <button
-                            onClick={() => handleToggleLayerVisibility(lData.layer.id)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: lData.layer.visible ? 'var(--primary)' : 'var(--text-muted)',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              display: 'flex',
-                              alignItems: 'center'
-                            }}
-                            title="Toggle layer visibility"
-                          >
-                            {lData.layer.visible ? (
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                <circle cx="12" cy="12" r="3"></circle>
-                              </svg>
-                            ) : (
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                                <line x1="1" y1="1" x2="23" y2="23"></line>
-                              </svg>
-                            )}
-                          </button>
-
-                          <button
-                            onClick={() => handleDeleteLayer(lData.layer.id)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: 'var(--text-muted)',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              display: 'flex',
-                              alignItems: 'center'
-                            }}
-                            title="Delete layer"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="panel-section">
-                  <div className="panel-section-title">Fit Options</div>
-                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                    <button 
-                      className={`btn ${fitMode === 'page' ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ flex: 1, fontSize: '11px', padding: '6px' }}
-                      onClick={() => setFitMode('page')}
-                    >
-                      Fit Page
-                    </button>
-                    <button 
-                      className={`btn ${fitMode === 'width' ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ flex: 1, fontSize: '11px', padding: '6px' }}
-                      onClick={() => setFitMode('width')}
-                    >
-                      Fit Width
-                    </button>
-                    <button 
-                      className={`btn ${fitMode === 'height' ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ flex: 1, fontSize: '11px', padding: '6px' }}
-                      onClick={() => setFitMode('height')}
-                    >
-                      Fit Height
-                    </button>
-                  </div>
-                </div>
-
-                <div className="panel-section">
-                  <div className="panel-section-title">Page Actions</div>
-                  <button 
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleRedoPageOcr}
-                    disabled={isRedoingPageOcr}
-                    style={{ width: '100%', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                  >
-                    {isRedoingPageOcr ? <div className="spinner-mini"></div> : null}
-                    Redo Page OCR
-                  </button>
-                  <button 
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleRedoPageTranslation}
-                    disabled={isRedoingPageTranslation}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                  >
-                    {isRedoingPageTranslation ? <div className="spinner-mini"></div> : null}
-                    Redo Page Translation
-                  </button>
-                </div>
-
-                {/* Export Section */}
-                <div className="panel-section">
-                  <div className="panel-section-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Export
-                  </div>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleExportPng}
-                    style={{ width: '100%', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2"/>
-                      <circle cx="8.5" cy="8.5" r="1.5"/>
-                      <polyline points="21 15 16 10 5 21"/>
-                    </svg>
-                    Export Page (PNG)
-                  </button>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleExportZip}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                      <line x1="12" y1="22.08" x2="12" y2="12"/>
-                    </svg>
-                    Export Layer Project (ZIP)
-                  </button>
-                </div>
-              </>
+              <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '40px 0' }}>
+                Select an OCR region or a text layer to inspect and edit details.
+              </div>
             )}
 
             {selectedItem && selectedItem.isLayerElement && (
-              <div className="panel-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="ocr-detail-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 0 }}>
                   <span>Element Inspector</span>
                   <button 
                     onClick={() => setSelectedItem(null)}
@@ -2199,193 +2344,177 @@ export const Reader: React.FC<ReaderProps> = ({
                       borderRadius: '6px',
                       padding: '4px 8px',
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
                       fontSize: '11px',
                       fontWeight: 600,
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--bg-hover-more)';
-                      e.currentTarget.style.borderColor = 'var(--text-muted)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = 'var(--border-color)';
                     }}
                   >
-                    Back
+                    Deselect
                   </button>
                 </div>
                 
-                <div className="ocr-detail-card" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* Text Editor */}
+                {/* Text Content */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Text Content</label>
+                  <textarea
+                    style={{
+                      width: '100%',
+                      minHeight: '80px',
+                      backgroundColor: 'var(--bg-input, rgba(0,0,0,0.05))',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                      color: 'var(--text-main)',
+                      padding: '6px',
+                      fontSize: '13px',
+                      resize: 'vertical',
+                      outline: 'none',
+                      fontFamily: 'inherit'
+                    }}
+                    value={selectedItem.text || ''}
+                    onChange={e => handleUpdateSelectedElement({ text: e.target.value })}
+                  />
+                </div>
+
+                {/* Positioning Coordinates Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Text Content</label>
-                    <textarea
-                      style={{
-                        width: '100%',
-                        minHeight: '80px',
-                        backgroundColor: 'var(--bg-input, rgba(0,0,0,0.05))',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '4px',
-                        color: 'var(--text-main)',
-                        padding: '6px',
-                        fontSize: '13px',
-                        resize: 'vertical',
-                        outline: 'none',
-                        fontFamily: 'inherit'
-                      }}
-                      value={selectedItem.text || ''}
-                      onChange={e => handleUpdateSelectedElement({ text: e.target.value })}
-                    />
-                  </div>
-
-                  {/* Positioning Coordinates Row */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>X Position</label>
-                      <input 
-                        type="number"
-                        className="form-input"
-                        style={{ padding: '6px 10px', fontSize: '13px' }}
-                        value={selectedItem.x}
-                        onChange={e => handleUpdateSelectedElement({ x: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Y Position</label>
-                      <input 
-                        type="number"
-                        className="form-input"
-                        style={{ padding: '6px 10px', fontSize: '13px' }}
-                        value={selectedItem.y}
-                        onChange={e => handleUpdateSelectedElement({ y: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Dimensions Row */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Max Width</label>
-                      <input 
-                        type="number"
-                        className="form-input"
-                        style={{ padding: '6px 10px', fontSize: '13px' }}
-                        value={selectedItem.maxWidth || 0}
-                        onChange={e => handleUpdateSelectedElement({ maxWidth: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Max Height</label>
-                      <input 
-                        type="number"
-                        className="form-input"
-                        style={{ padding: '6px 10px', fontSize: '13px' }}
-                        value={selectedItem.maxHeight || 0}
-                        onChange={e => handleUpdateSelectedElement({ maxHeight: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Font & Style settings */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Family</label>
-                      <select
-                        className="form-input"
-                        style={{ padding: '4px 8px', fontSize: '13px', height: '38px', backgroundColor: 'var(--bg-surface)' }}
-                        value={selectedItem.font || 'Comic Neue'}
-                        onChange={e => handleUpdateSelectedElement({ font: e.target.value })}
-                      >
-                        <option value="Comic Neue">Comic Neue</option>
-                        <option value="Bangers">Bangers</option>
-                        <option value="Arial">Arial</option>
-                        <option value="Courier New">Courier New</option>
-                      </select>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Size (pt)</label>
-                      <input 
-                        type="number"
-                        className="form-input"
-                        style={{ padding: '6px 10px', fontSize: '13px' }}
-                        value={selectedItem.size || 16}
-                        onChange={e => handleUpdateSelectedElement({ size: parseFloat(e.target.value) || 12 })}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Rotation Slider */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Rotation ({selectedItem.rotation || 0}°)</label>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>X Position</label>
                     <input 
-                      type="range"
-                      min="0"
-                      max="360"
-                      value={selectedItem.rotation || 0}
-                      onChange={e => handleUpdateSelectedElement({ rotation: parseFloat(e.target.value) || 0 })}
-                      style={{ width: '100%' }}
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '6px 10px', fontSize: '13px' }}
+                      value={selectedItem.x}
+                      onChange={e => handleUpdateSelectedElement({ x: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
-
-                  {/* Checkboxes Row */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input 
-                        type="checkbox"
-                        id="autoSizeCheck"
-                        checked={selectedItem.autoSize}
-                        onChange={e => handleUpdateSelectedElement({ autoSize: e.target.checked })}
-                      />
-                      <label htmlFor="autoSizeCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Auto-size text to fit bubble</label>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input 
-                        type="checkbox"
-                        id="visibleCheck"
-                        checked={selectedItem.visible}
-                        onChange={e => handleUpdateSelectedElement({ visible: e.target.checked })}
-                      />
-                      <label htmlFor="visibleCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Visible</label>
-                    </div>
-                    
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input 
-                        type="checkbox"
-                        id="maskCheck"
-                        checked={selectedItem.wordWrap}
-                        onChange={e => handleUpdateSelectedElement({ wordWrap: e.target.checked })}
-                      />
-                      <label htmlFor="maskCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Clean background mask</label>
-                    </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Y Position</label>
+                    <input 
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '6px 10px', fontSize: '13px' }}
+                      value={selectedItem.y}
+                      onChange={e => handleUpdateSelectedElement({ y: parseFloat(e.target.value) || 0 })}
+                    />
                   </div>
+                </div>
 
-                  {/* Action Buttons */}
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                    <button
-                      className="btn btn-primary"
-                      style={{ flex: 1, padding: '8px' }}
-                      onClick={() => handleSaveElementChanges(selectedItem)}
+                {/* Dimensions Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Max Width</label>
+                    <input 
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '6px 10px', fontSize: '13px' }}
+                      value={selectedItem.maxWidth || 0}
+                      onChange={e => handleUpdateSelectedElement({ maxWidth: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Max Height</label>
+                    <input 
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '6px 10px', fontSize: '13px' }}
+                      value={selectedItem.maxHeight || 0}
+                      onChange={e => handleUpdateSelectedElement({ maxHeight: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+
+                {/* Font & Style settings */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Family</label>
+                    <select
+                      className="form-input"
+                      style={{ padding: '4px 8px', fontSize: '13px', height: '38px', backgroundColor: 'var(--bg-surface)' }}
+                      value={selectedItem.font || 'Comic Neue'}
+                      onChange={e => handleUpdateSelectedElement({ font: e.target.value })}
                     >
-                      Save Changes
-                    </button>
+                      <option value="Comic Neue">Comic Neue</option>
+                      <option value="Bangers">Bangers</option>
+                      <option value="Arial">Arial</option>
+                      <option value="Courier New">Courier New</option>
+                    </select>
                   </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Size (pt)</label>
+                    <input 
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '6px 10px', fontSize: '13px' }}
+                      value={selectedItem.size || 16}
+                      onChange={e => handleUpdateSelectedElement({ size: parseFloat(e.target.value) || 12 })}
+                    />
+                  </div>
+                </div>
+
+                {/* Rotation Slider */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Rotation ({selectedItem.rotation || 0}°)</label>
+                  <input 
+                    type="range"
+                    min="0"
+                    max="360"
+                    value={selectedItem.rotation || 0}
+                    onChange={e => handleUpdateSelectedElement({ rotation: parseFloat(e.target.value) || 0 })}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                {/* Checkboxes Row */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                      type="checkbox"
+                      id="autoSizeCheck"
+                      checked={selectedItem.autoSize}
+                      onChange={e => handleUpdateSelectedElement({ autoSize: e.target.checked })}
+                    />
+                    <label htmlFor="autoSizeCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Auto-size text to fit bubble</label>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                      type="checkbox"
+                      id="visibleCheck"
+                      checked={selectedItem.visible}
+                      onChange={e => handleUpdateSelectedElement({ visible: e.target.checked })}
+                    />
+                    <label htmlFor="visibleCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Visible</label>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                      type="checkbox"
+                      id="maskCheck"
+                      checked={selectedItem.wordWrap}
+                      onChange={e => handleUpdateSelectedElement({ wordWrap: e.target.checked })}
+                    />
+                    <label htmlFor="maskCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Clean background mask</label>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1, padding: '8px' }}
+                    onClick={() => handleSaveElementChanges(selectedItem)}
+                  >
+                    Save Changes
+                  </button>
                 </div>
               </div>
             )}
 
             {selectedItem && !selectedItem.isLayerElement && (
-              <div className="panel-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="ocr-detail-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 0 }}>
                   <span>{selectedItem.isConversation ? 'Conversation Inspector' : 'Region Inspector'}</span>
                   <button 
-                    onClick={() => {
-                      setSelectedItem(null);
-                    }}
+                    onClick={() => setSelectedItem(null)}
                     style={{
                       background: 'transparent',
                       border: '1px solid var(--border-color)',
@@ -2393,59 +2522,42 @@ export const Reader: React.FC<ReaderProps> = ({
                       borderRadius: '6px',
                       padding: '4px 8px',
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
                       fontSize: '11px',
                       fontWeight: 600,
-                      transition: 'all 0.2s ease',
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--bg-hover-more)';
-                      e.currentTarget.style.borderColor = 'var(--text-muted)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = 'var(--border-color)';
-                    }}
-                    title="Back to Layers Overlay"
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="19" y1="12" x2="5" y2="12"></line>
-                      <polyline points="12 19 5 12 12 5"></polyline>
-                    </svg>
-                    Back
+                    Deselect
                   </button>
                 </div>
                 
-                <div className="ocr-detail-card" style={{ flex: 1, overflowY: 'auto' }}>
-                  <div className="badge-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
-                    <span className="meta-badge" style={{ backgroundColor: 'var(--primary-glow)', color: 'var(--primary-hover)', borderColor: 'var(--primary)' }}>
-                      {selectedItem.isConversation ? `Conv #${selectedItem.regions[0]?.bubbleReadingOrder}` : `Bubble #${selectedItem.regions[0]?.bubbleReadingOrder}`}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '4px 0 8px' }}>
+                  <span className="meta-badge" style={{ backgroundColor: 'var(--primary-glow)', color: 'var(--primary-hover)', borderColor: 'var(--primary)' }}>
+                    {selectedItem.isConversation ? `Conv #${selectedItem.regions[0]?.bubbleReadingOrder}` : `Bubble #${selectedItem.regions[0]?.bubbleReadingOrder}`}
+                  </span>
+                  <span className="meta-badge" style={{ backgroundColor: 'var(--success-glow)', color: 'var(--success)' }}>
+                    {selectedItem.regions[0]?.detectedLanguage || 'unknown'}
+                  </span>
+                  {selectedItem.isConversation && (
+                    <span className="meta-badge" style={{ textTransform: 'capitalize' }}>
+                      {selectedItem.sceneType}
                     </span>
-                    <span className="meta-badge" style={{ backgroundColor: 'var(--success-glow)', color: 'var(--success)' }}>
-                      {selectedItem.regions[0]?.detectedLanguage || 'unknown'}
+                  )}
+                  {selectedItem.approved && (
+                    <span className="meta-badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', borderColor: 'var(--success)' }}>
+                      Approved
                     </span>
-                    {selectedItem.isConversation && (
-                      <span className="meta-badge" style={{ textTransform: 'capitalize' }}>
-                        {selectedItem.sceneType}
-                      </span>
-                    )}
-                    {selectedItem.approved && (
-                      <span className="meta-badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', borderColor: 'var(--success)' }}>
-                        Approved
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                    Position: x={selectedItem.bboxX}, y={selectedItem.bboxY} ({selectedItem.bboxW}x{selectedItem.bboxH})
-                  </div>
-
+                  )}
+                </div>
+                
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  Position: x={selectedItem.bboxX}, y={selectedItem.bboxY} ({selectedItem.bboxW}x{selectedItem.bboxH})
+                </div>
+                
+                <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {selectedItem.regions.map((reg: OcrRegion, idx: number) => (
-                    <div key={reg.id} style={{ borderBottom: idx < selectedItem.regions.length - 1 ? '1px dashed var(--border-color)' : 'none', paddingBottom: '12px', marginBottom: '12px' }}>
+                    <div key={reg.id} style={{ borderBottom: idx < selectedItem.regions.length - 1 ? '1px dashed var(--border-color)' : 'none', paddingBottom: '12px' }}>
                       <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
-                        Region #{idx + 1} Original Text
+                        Region #{idx + 1} Original
                       </div>
                       <div className="ocr-text-preview" style={{ marginBottom: '8px' }}>
                         {reg.text}
@@ -2454,7 +2566,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       {reg.translatedText && (
                         <>
                           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
-                            Region #{idx + 1} Translated Text
+                            Region #{idx + 1} Translation
                           </div>
                           <div className="ocr-text-preview" style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary)' }}>
                             {reg.translatedText}
@@ -2468,45 +2580,6 @@ export const Reader: React.FC<ReaderProps> = ({
             )}
           </div>
         )}
-      </div>
-
-      {/* Bottom controls */}
-      <div className="reader-footer-nhentai">
-        <div className="reader-page-controls-nhentai">
-          <button 
-            className="reader-control-btn"
-            onClick={() => navigateToPage(1)}
-            disabled={curPageNum <= 1}
-          >
-            &lt;&lt;
-          </button>
-          <button 
-            className="reader-control-btn"
-            onClick={() => navigateToPage(curPageNum - 1)}
-            disabled={curPageNum <= 1}
-          >
-            &lt;
-          </button>
-          
-          <span className="reader-page-indicator-nhentai">
-            <strong>{curPageNum}</strong> of {totalPages}
-          </span>
-
-          <button 
-            className="reader-control-btn"
-            onClick={() => navigateToPage(curPageNum + 1)}
-            disabled={curPageNum >= totalPages}
-          >
-            &gt;
-          </button>
-          <button 
-            className="reader-control-btn"
-            onClick={() => navigateToPage(totalPages)}
-            disabled={curPageNum >= totalPages}
-          >
-            &gt;&gt;
-          </button>
-        </div>
       </div>
 
       {/* Confirm Modal */}

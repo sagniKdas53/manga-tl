@@ -49,13 +49,15 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
   // Chapter editing modal state
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editChapterNum, setEditChapterNum] = useState<number>(1);
+  const [editChapterNum, setEditChapterNum] = useState<number>(1.0);
   const [editChapterTitle, setEditChapterTitle] = useState('');
+  const [editError, setEditError] = useState('');
 
   const handleEditClick = () => {
     if (selectedChapter) {
       setEditChapterNum(selectedChapter.chapterNumber);
       setEditChapterTitle(selectedChapter.title || '');
+      setEditError('');
       setShowEditModal(true);
     }
   };
@@ -63,6 +65,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedChapter) return;
+    setEditError('');
     try {
       const res = await safeFetch(`/api/series/chapters/${selectedChapter.id}`, {
         method: 'PUT',
@@ -79,11 +82,27 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         const data: Chapter = await res.json();
         setSelectedChapter(data);
         setShowEditModal(false);
+        setEditError('');
       } else {
-        alert('Failed to update chapter');
+        let errMsg = 'Failed to update chapter';
+        try {
+          const text = await res.text();
+          if (text) {
+            try {
+              const parsed = JSON.parse(text);
+              errMsg = parsed.message || parsed.error || errMsg;
+            } catch {
+              errMsg = text;
+            }
+          }
+        } catch (readErr) {
+          console.error(readErr);
+        }
+        setEditError(errMsg);
       }
     } catch (err) {
       console.error('Error updating chapter:', err);
+      setEditError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -464,9 +483,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                 <label className="form-label">Chapter Number</label>
                 <input 
                   type="number" 
+                  step="any"
                   className="form-input" 
                   value={editChapterNum} 
-                  onChange={e => setEditChapterNum(parseInt(e.target.value))} 
+                  onChange={e => setEditChapterNum(parseFloat(e.target.value) || 0)} 
                   required 
                 />
               </div>
@@ -480,8 +500,13 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                   placeholder="e.g. The Beginning" 
                 />
               </div>
+              {editError && (
+                <div style={{ color: 'var(--error, #ff4d4f)', fontSize: '13px', marginTop: '16px', textAlign: 'center' }}>
+                  {editError}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowEditModal(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setShowEditModal(false); setEditError(''); }}>Cancel</button>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save</button>
               </div>
             </form>

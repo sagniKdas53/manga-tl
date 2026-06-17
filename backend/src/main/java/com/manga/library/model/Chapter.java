@@ -27,7 +27,7 @@ public class Chapter {
   private Series series;
 
   @Column(name = "chapter_number", nullable = false)
-  private Integer chapterNumber;
+  private Double chapterNumber;
 
   private String title;
 
