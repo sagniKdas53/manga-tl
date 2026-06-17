@@ -1,5 +1,14 @@
 -- Initial Schema for Manga Translation Platform
 
+-- Create postgres role if it does not exist (in case database is initialized with a different POSTGRES_USER)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'postgres') THEN
+        CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgres';
+    END IF;
+END
+$$;
+
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
