@@ -329,7 +329,9 @@ function AppContent() {
             user ? (
               <Reader 
                 user={user} 
+                selectedSeries={selectedSeries}
                 selectedChapter={selectedChapter} 
+                chapters={chapters}
                 pages={pages} 
                 theme={theme} 
               />
@@ -342,7 +344,9 @@ function AppContent() {
             user ? (
               <Reader 
                 user={user} 
+                selectedSeries={selectedSeries}
                 selectedChapter={selectedChapter} 
+                chapters={chapters}
                 pages={pages} 
                 theme={theme} 
               />

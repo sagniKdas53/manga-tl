@@ -149,6 +149,12 @@ public class SeriesController {
             .findById(seriesId)
             .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
 
+    if (chapterRepository.findBySeriesIdAndChapterNumber(seriesId, dto.getChapterNumber()).isPresent()) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.CONFLICT,
+          "Chapter " + dto.getChapterNumber() + " already exists for this series.");
+    }
+
     Chapter chapter =
         Chapter.builder()
             .series(series)
@@ -261,6 +267,12 @@ public class SeriesController {
         .findById(chapterId)
         .map(
             c -> {
+              java.util.Optional<Chapter> existing = chapterRepository.findBySeriesIdAndChapterNumber(c.getSeries().getId(), dto.getChapterNumber());
+              if (existing.isPresent() && !existing.get().getId().equals(c.getId())) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "Chapter " + dto.getChapterNumber() + " already exists for this series.");
+              }
               c.setTitle(dto.getTitle());
               c.setChapterNumber(dto.getChapterNumber());
               Objects.requireNonNull(c, "chapter cannot be null");

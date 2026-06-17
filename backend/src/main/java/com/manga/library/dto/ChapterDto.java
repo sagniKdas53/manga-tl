@@ -7,7 +7,7 @@ import lombok.Data;
 public class ChapterDto {
   private UUID id;
   private UUID seriesId;
-  private Integer chapterNumber;
+  private Double chapterNumber;
   private String title;
   private String coverImageUrl;
 }

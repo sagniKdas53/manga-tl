@@ -147,16 +147,16 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
 ## 🚀 Specification v4.0 Additions
 
 - [ ] **26. Database & Chapter Numbering Rules**
-  - [ ] Alter PostgreSQL schema: Change `chapters.chapter_number` to `NUMERIC` or `DOUBLE PRECISION`.
-  - [ ] Enforce backend unique check on `(series_id, chapter_number)`.
-  - [ ] Implement deletion gap insertion rules and moving/renumbering validation.
-  - [ ] Support Ascending/Descending chapter list sorting toggling in the frontend.
+  - [x] Alter PostgreSQL schema: Change `chapters.chapter_number` to `NUMERIC` or `DOUBLE PRECISION`.
+  - [x] Enforce backend unique check on `(series_id, chapter_number)`.
+  - [x] Implement deletion gap insertion rules and moving/renumbering validation.
+  - [x] Support Ascending/Descending chapter list sorting toggling in the frontend.
 
-- [ ] **27. Frontend Double-Sidebar Layout**
-  - [ ] Restructure layout: Create Left Sidebar for controls (zoom, overlays, navigation), Center Canvas for editor, Right Sidebar for details inspector.
-  - [ ] Update Nav Bar to modern Glassmorphism styling.
-  - [ ] Set browser window title dynamically based on series/chapter/page details.
-  - [ ] Save viewer toggle and zoom preferences in `localStorage` across page reloads.
+- [x] **27. Frontend Double-Sidebar Layout**
+  - [x] Restructure layout: Create Left Sidebar for controls (zoom, overlays, navigation), Center Canvas for editor, Right Sidebar for details inspector.
+  - [x] Update Nav Bar to modern Glassmorphism styling.
+  - [x] Set browser window title dynamically based on series/chapter/page details.
+  - [x] Save viewer toggle and zoom preferences in `localStorage` across page reloads.
 
 - [ ] **28. Frontend Editor & Canvas Enhancements**
   - [ ] Backend Thumbnailer integration: Save downscaled thumbnail copies to MinIO and use them for quick gallery rendering.
@@ -167,7 +167,7 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
 
 - [ ] **29. Valkey & Pipeline Optimizations**
   - [x] Update `docker-compose.yml` to replace `manga-redis` with `valkey/valkey:8-alpine`.
-  - [ ] Implement optional PostgreSQL-based internal job queue (removing Valkey dependency).
+  - [ ] Implement optional PostgreSQL-based internal job queue (removing Valkey dependency) [OPTIONAL]
   - [ ] Configure parallel processing pipelines for layout analysis and translation stages (leaving OCR and local LLMs sequential).
 
 - [ ] **30. Advanced VLM Translation & QA**

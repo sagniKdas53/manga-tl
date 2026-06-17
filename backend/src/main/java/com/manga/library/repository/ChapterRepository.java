@@ -9,5 +9,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   List<Chapter> findBySeriesId(UUID seriesId);
 
-  Optional<Chapter> findBySeriesIdAndChapterNumber(UUID seriesId, Integer chapterNumber);
+  Optional<Chapter> findBySeriesIdAndChapterNumber(UUID seriesId, Double chapterNumber);
 }

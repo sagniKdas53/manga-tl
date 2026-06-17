@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS chapters (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     volume_id UUID REFERENCES volumes(id) ON DELETE SET NULL,
     series_id UUID NOT NULL REFERENCES series(id) ON DELETE CASCADE,
-    chapter_number INT NOT NULL,
+    chapter_number DOUBLE PRECISION NOT NULL,
     title TEXT,
     summary_json JSONB,
     summary_generated_at TIMESTAMPTZ,

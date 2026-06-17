@@ -25,6 +25,11 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 }) => {
   const navigate = useNavigate();
 
+  const [sortAsc, setSortAsc] = useState<boolean>(() => {
+    const cached = localStorage.getItem('chapters_sort_asc');
+    return cached === null ? true : cached === 'true';
+  });
+
   // Local states for series edit modal
   const [showSeriesModal, setShowSeriesModal] = useState(false);
   const [newSeriesTitle, setNewSeriesTitle] = useState('');
@@ -37,6 +42,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
   const [newChapterNum, setNewChapterNum] = useState<number>(1);
   const [newChapterTitle, setNewChapterTitle] = useState('');
+  const [chapterError, setChapterError] = useState('');
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -133,6 +139,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setEditingChapter(c);
     setNewChapterNum(c.chapterNumber);
     setNewChapterTitle(c.title || '');
+    setChapterError('');
     setShowChapterModal(true);
   };
 
@@ -141,6 +148,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     const maxNum = chapters.reduce((max, c) => c.chapterNumber > max ? c.chapterNumber : max, 0);
     setNewChapterNum(maxNum + 1);
     setNewChapterTitle('');
+    setChapterError('');
     setShowChapterModal(true);
   };
 
@@ -148,10 +156,12 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setShowChapterModal(false);
     setEditingChapter(null);
     setNewChapterTitle('');
+    setChapterError('');
   };
 
   const handleCreateChapter = async (e: React.FormEvent) => {
     e.preventDefault();
+    setChapterError('');
     try {
       const isEdit = !!editingChapter;
       const url = isEdit ? `/api/series/chapters/${editingChapter.id}` : `/api/series/${selectedSeries.id}/chapters`;
@@ -178,9 +188,27 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         setShowChapterModal(false);
         setEditingChapter(null);
         setNewChapterTitle('');
+        setChapterError('');
+      } else {
+        let errMsg = 'Failed to save chapter';
+        try {
+          const text = await res.text();
+          if (text) {
+            try {
+              const parsed = JSON.parse(text);
+              errMsg = parsed.message || parsed.error || errMsg;
+            } catch {
+              errMsg = text;
+            }
+          }
+        } catch (readErr) {
+          console.error(readErr);
+        }
+        setChapterError(errMsg);
       }
     } catch (err) {
       console.error('Error saving chapter:', err);
+      setChapterError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -270,12 +298,25 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         </div>
       </div>
 
-      <div className="chapters-section-header">
+      <div className="chapters-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Chapters ({chapters.length})</h2>
+        <button 
+          className="btn-nhentai btn-nhentai-secondary" 
+          onClick={() => {
+            const nextSort = !sortAsc;
+            setSortAsc(nextSort);
+            localStorage.setItem('chapters_sort_asc', String(nextSort));
+          }}
+          style={{ padding: '6px 12px', fontSize: '13px' }}
+        >
+          Sort: {sortAsc ? 'Ascending ↑' : 'Descending ↓'}
+        </button>
       </div>
 
       <div className="chapters-grid">
-        {chapters.map(c => (
+        {[...chapters]
+          .sort((a, b) => sortAsc ? a.chapterNumber - b.chapterNumber : b.chapterNumber - a.chapterNumber)
+          .map(c => (
           <div 
             key={c.id} 
             className="chapter-card-nhentai" 
@@ -383,9 +424,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 <label className="form-label">Chapter Number</label>
                 <input 
                   type="number" 
+                  step="any"
                   className="form-input" 
                   value={newChapterNum} 
-                  onChange={e => setNewChapterNum(parseInt(e.target.value))} 
+                  onChange={e => setNewChapterNum(parseFloat(e.target.value) || 0)} 
                   required 
                 />
               </div>
@@ -399,6 +441,11 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   placeholder="e.g. The Beginning" 
                 />
               </div>
+              {chapterError && (
+                <div style={{ color: 'var(--error, #ff4d4f)', fontSize: '13px', marginTop: '16px', textAlign: 'center' }}>
+                  {chapterError}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={handleCancelChapterModal}>Cancel</button>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>

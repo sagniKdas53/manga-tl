@@ -67,7 +67,7 @@ public class JwtTest {
     String token = "Bearer " + jwtUtils.generateToken("admin@manga.local");
 
     ChapterDto dto = new ChapterDto();
-    dto.setChapterNumber(1);
+    dto.setChapterNumber(1.0);
     dto.setTitle("One");
 
     mockMvc
