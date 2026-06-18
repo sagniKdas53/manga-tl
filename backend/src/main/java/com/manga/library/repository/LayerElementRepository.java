@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface LayerElementRepository extends JpaRepository<LayerElement, UUID> {
   List<LayerElement> findByLayerId(UUID layerId);
 
+  List<LayerElement> findByRegionId(UUID regionId);
+
   @org.springframework.data.jpa.repository.Query(
       "SELECT le FROM LayerElement le JOIN FETCH le.layer l WHERE l.image.id = :imageId")
   List<LayerElement> findByLayerImageId(

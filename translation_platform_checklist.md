@@ -170,11 +170,11 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
   - [ ] Implement optional Spring cache abstraction with PostgreSQL as fallback to remove Valkey dependency for internal job queue [Not right now]
   - [x] Configure parallel processing pipelines for layout analysis and translation stages (leaving OCR and local LLMs sequential).
 
-- [ ] **30. Advanced VLM Translation & QA**
-  - [ ] Add support for Single-Pass Multimodal VLM (merging layout, grouping, and translation).
-  - [ ] Implement headless Canvas/Node rendering on worker side to output final images.
-  - [ ] Implement final VLM-based Quality Assurance review pass on rendered images to verify typesetting fit.
-  - [ ] Add test configurations for comics, documents, web novels, and screenshots.
+- [x] **30. Advanced VLM Translation & QA**
+  - [x] Add support for Single-Pass Multimodal VLM (merging layout, grouping, and translation).
+  - [x] Implement headless Canvas/Node rendering on worker side to output final images.
+  - [x] Implement final VLM-based Quality Assurance review pass on rendered images to verify typesetting fit.
+  - [x] Add test configurations for comics, documents, web novels, and screenshots.
 
 - [x] **31. Remote Machine Learning Integration**
   - [x] Support remote Ollama and remote workers, configurable though env vars in docker compose.

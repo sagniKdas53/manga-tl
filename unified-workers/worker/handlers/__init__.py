@@ -5,6 +5,8 @@ from .layout import process_layout
 from .translation import process_translation
 from .redo import process_region_redo, perform_redo_ocr
 from .stub import process_stub
+from .render import process_render
+from .qa import process_qa
 
 __all__ = [
     "process_panel_detection",
@@ -14,4 +16,6 @@ __all__ = [
     "process_region_redo",
     "perform_redo_ocr",
     "process_stub",
+    "process_render",
+    "process_qa",
 ]

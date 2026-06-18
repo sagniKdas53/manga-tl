@@ -27,6 +27,7 @@ public class InternalJobController {
   private final PageRepository pageRepository;
   private final ChapterRepository chapterRepository;
   private final MinioService minioService;
+  private final LayerElementRepository layerElementRepository;
 
   @GetMapping("/images/{imageId}")
   public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
@@ -43,6 +44,7 @@ public class InternalJobController {
               map.put("presignedUrl", minioService.generatePresignedUrl(image.getStoragePath()));
               map.put("panels", panelRepository.findByImageId(imageId));
               map.put("ocrRegions", ocrRegionRepository.findByImageId(imageId));
+              map.put("layerElements", layerElementRepository.findByLayerImageId(imageId));
 
               // Query page history and series context for translation context assembly
               pageRepository
@@ -270,6 +272,36 @@ public class InternalJobController {
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing render callback", e);
+      return ResponseEntity.internalServerError().body(e.getMessage());
+    }
+  }
+
+  @PostMapping("/jobs/callback/qa")
+  public ResponseEntity<?> qaCallback(@RequestBody Map<String, Object> payload) {
+    UUID imageId = UUID.fromString((String) payload.get("imageId"));
+    Objects.requireNonNull(imageId, "imageId cannot be null");
+    log.info("Received QA callback for image: {}", imageId);
+    try {
+      List<?> rawResults = (List<?>) payload.get("qaResults");
+      List<Map<String, Object>> qaResults = new ArrayList<>();
+      if (rawResults != null) {
+        for (Object item : rawResults) {
+          if (item instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) item;
+            Map<String, Object> typedMap = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+              if (entry.getKey() instanceof String) {
+                typedMap.put((String) entry.getKey(), entry.getValue());
+              }
+            }
+            qaResults.add(typedMap);
+          }
+        }
+      }
+      jobCoordinatorService.handleQaCallback(imageId, qaResults);
+      return ResponseEntity.ok().build();
+    } catch (Exception e) {
+      log.error("Error processing QA callback", e);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }

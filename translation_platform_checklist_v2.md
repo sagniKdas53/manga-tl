@@ -43,7 +43,7 @@ This document tracks the translation platform checklist, restructured and priori
 
 ### Phase 3: Smart Masking & Box Shaping (Medium Priority)
 
-- [ ] **Context-Aware Masking & Typesetting (No SD/ComfyUI)**
+- [x] **Context-Aware Masking & Typesetting (No SD/ComfyUI)**
   - **Context:** Rather than using Stable Diffusion for full image inpainting, refine the existing mask-and-text flow.
   - **Action:**
     - **Adaptive Mask Color:** Implement color-sampling/auto-detection of bubble background color so masks match the local background color instead of being hardcoded to white.
@@ -51,13 +51,13 @@ This document tracks the translation platform checklist, restructured and priori
 
 ### Phase 4: Advanced VLM Processing & Quality Assurance (Medium Priority)
 
-- [ ] **Single-Pass Multimodal VLM Pipeline**
+- [x] **Single-Pass Multimodal VLM Pipeline**
   - **Action:** Integrate a multimodal workflow where a single prompt sends the page image to a VLM to extract layout, reading order, and translation in a single pass.
-- [ ] **Headless Render Engine on Worker**
+- [x] **Headless Render Engine on Worker**
   - **Action:** Implement headless canvas/Node rendering inside the Python worker to render the final typeset images directly.
-- [ ] **VLM Quality Assurance Review Pass**
+- [x] **VLM Quality Assurance Review Pass**
   - **Action:** Set up a QA loop where a VLM reviews the final rendered typeset images to detect text bounds overflow, clipping, or incorrect font sizes.
-- [ ] **Web Novels, Comics, & Document Configs**
+- [x] **Web Novels, Comics, & Document Configs**
   - **Action:** Create customized pipeline templates and prompt profiles for non-manga documents (screenshots, documents, web novels).
 
 ---
