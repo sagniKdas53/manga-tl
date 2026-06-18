@@ -98,6 +98,10 @@ export interface LayerElement {
   overflow: boolean;
   isManuallyEdited: boolean;
   editedAt?: string | null;
+  backgroundColor?: string | null;
+  textColor?: string | null;
+  fontWeight?: string | null;
+  fontStyle?: string | null;
 }
 
 export interface LayerEditHistory {

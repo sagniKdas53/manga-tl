@@ -16,4 +16,8 @@ public class LayerElementDto {
   private Double y;
   private Boolean visible;
   private Boolean overflow;
+  private String backgroundColor;
+  private String textColor;
+  private String fontWeight;
+  private String fontStyle;
 }

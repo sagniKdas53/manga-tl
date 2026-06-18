@@ -57,6 +57,10 @@ public class LayerController {
                 if (dto.getY() != null) element.setY(dto.getY());
                 if (dto.getVisible() != null) element.setVisible(dto.getVisible());
                 if (dto.getOverflow() != null) element.setOverflow(dto.getOverflow());
+                if (dto.getBackgroundColor() != null) element.setBackgroundColor(dto.getBackgroundColor());
+                if (dto.getTextColor() != null) element.setTextColor(dto.getTextColor());
+                if (dto.getFontWeight() != null) element.setFontWeight(dto.getFontWeight());
+                if (dto.getFontStyle() != null) element.setFontStyle(dto.getFontStyle());
 
                 element.setIsManuallyEdited(true);
                 element.setEditedAt(OffsetDateTime.now());
@@ -150,6 +154,58 @@ public class LayerController {
         .orElse(ResponseEntity.notFound().build());
   }
 
+  @PostMapping("/layers/{layerId}/elements")
+  @Transactional
+  @PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  public ResponseEntity<LayerElement> createLayerElement(
+      @PathVariable UUID layerId, @RequestBody LayerElementDto dto) {
+    Objects.requireNonNull(layerId, "layerId cannot be null");
+    log.info("Creating new LayerElement in layer {}", layerId);
+    return layerRepository
+        .findById(layerId)
+        .map(
+            layer -> {
+              LayerElement el =
+                  LayerElement.builder()
+                      .layer(layer)
+                      .text(dto.getText() != null ? dto.getText() : "")
+                      .font(dto.getFont() != null ? dto.getFont() : "Comic Neue")
+                      .size(dto.getSize() != null ? dto.getSize() : 16.0)
+                      .autoSize(dto.getAutoSize() != null ? dto.getAutoSize() : false)
+                      .maxWidth(dto.getMaxWidth() != null ? dto.getMaxWidth() : 150)
+                      .maxHeight(dto.getMaxHeight() != null ? dto.getMaxHeight() : 80)
+                      .wordWrap(dto.getWordWrap() != null ? dto.getWordWrap() : false)
+                      .rotation(dto.getRotation() != null ? dto.getRotation() : 0.0)
+                      .x(dto.getX() != null ? dto.getX() : 100.0)
+                      .y(dto.getY() != null ? dto.getY() : 100.0)
+                      .visible(dto.getVisible() != null ? dto.getVisible() : true)
+                      .backgroundColor(dto.getBackgroundColor())
+                      .fontWeight(dto.getFontWeight() != null ? dto.getFontWeight() : "normal")
+                      .fontStyle(dto.getFontStyle() != null ? dto.getFontStyle() : "normal")
+                      .build();
+              LayerElement saved = layerElementRepository.save(el);
+              return ResponseEntity.ok(saved);
+            })
+        .orElse(ResponseEntity.notFound().build());
+  }
+
+  @DeleteMapping("/layer-elements/{id}")
+  @Transactional
+  @PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  public ResponseEntity<?> deleteLayerElement(@PathVariable UUID id) {
+    Objects.requireNonNull(id, "id cannot be null");
+    log.info("Deleting LayerElement {}", id);
+    return layerElementRepository
+        .findById(id)
+        .map(
+            element -> {
+              Objects.requireNonNull(element, "element cannot be null");
+              layerElementRepository.delete(element);
+              return ResponseEntity.ok().build();
+            })
+        .orElse(ResponseEntity.notFound().build());
+  }
+
   private Map<String, Object> captureStateMap(LayerElement el) {
     Map<String, Object> map = new HashMap<>();
     map.put("text", el.getText());
@@ -164,6 +220,10 @@ public class LayerController {
     map.put("y", el.getY());
     map.put("visible", el.getVisible());
     map.put("overflow", el.getOverflow());
+    map.put("backgroundColor", el.getBackgroundColor());
+    map.put("textColor", el.getTextColor());
+    map.put("fontWeight", el.getFontWeight());
+    map.put("fontStyle", el.getFontStyle());
     return map;
   }
 }
