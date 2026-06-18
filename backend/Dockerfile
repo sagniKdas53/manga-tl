@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn clean package -DskipTests -P!frontend
 
 # Stage 3: Runtime JRE Image
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 # Non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
