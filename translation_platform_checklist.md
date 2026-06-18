@@ -139,7 +139,7 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
 
 - [x] **25. LLM Prompt Enrichment for Standard LLM Batch Translation**
   - *Status:* **Complete**.
-  - **Done:** 
+  - **Done:**
     - Both VLM vision prompt (`translate_vlm_vision`) and standard LLM batch prompt (`translate_batch_llm`) are fully enriched with `regionType`, `conversationGroup`, and `speaker` properties. Prompt templates are updated with instructions for standard LLMs.
 
 ---

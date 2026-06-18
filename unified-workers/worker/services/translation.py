@@ -619,15 +619,12 @@ def try_local_ai(prompt, text, response_schema=None, request_id=None):
     # Keep gemma3:4b as fallback as requested by user
     model = os.environ.get("LOCAL_LLM_MODEL", "gemma3:4b")
 
-    remote_ollama = os.environ.get("OLLAMA_REMOTE_URL", os.environ.get("REMOTE_ML_URL", "")).strip()
-    if remote_ollama:
-        if not remote_ollama.endswith("/v1/chat/completions") and not remote_ollama.endswith("/api/v1/chat"):
-            if remote_ollama.endswith("/"):
-                remote_ollama += "v1/chat/completions"
+    if local_endpoint:
+        if not local_endpoint.endswith("/v1/chat/completions") and not local_endpoint.endswith("/api/v1/chat"):
+            if local_endpoint.endswith("/"):
+                local_endpoint += "v1/chat/completions"
             else:
-                remote_ollama += "/v1/chat/completions"
-        local_endpoint = remote_ollama
-        local_provider = "ollama"
+                local_endpoint += "/v1/chat/completions"
 
     if not local_endpoint:
         if local_provider == "ollama":
@@ -1129,6 +1126,65 @@ Input:
     except Exception as e:
         logger.error(f"{req_prefix}Local LLM batch translation failed: {e}")
 
+def try_local_vlm_vision(model, prompt, base64_image, response_schema=None, request_id=None):
+    req_prefix = f"[{request_id}] " if request_id else ""
+    local_provider = os.environ.get("LOCAL_LLM_PROVIDER", "ollama").lower().strip()
+    local_endpoint = os.environ.get("LOCAL_LLM_ENDPOINT", "").strip()
+    if not local_endpoint:
+        if local_provider == "ollama":
+            local_endpoint = "http://ollama:11434/v1/chat/completions"
+        else:
+            local_endpoint = "http://host.docker.internal:1234/v1/chat/completions"
+
+    if not local_endpoint.endswith("/v1/chat/completions") and not local_endpoint.endswith("/api/v1/chat"):
+        if local_endpoint.endswith("/"):
+            local_endpoint += "v1/chat/completions"
+        else:
+            local_endpoint += "/v1/chat/completions"
+
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+    
+    if response_schema:
+        if local_provider == "ollama":
+            payload["format"] = "json"
+        else:
+            payload["response_format"] = {
+                "type": "json_object"
+            }
+
+    from worker.utils.lock import acquire_lock
+    try:
+        with acquire_lock("local-llm"):
+            logger.info(f"{req_prefix}Sending local VLM request to {local_endpoint} using model {model}...")
+            start = time.perf_counter()
+            response = requests.post(local_endpoint, json=payload, timeout=90)
+            elapsed = time.perf_counter() - start
+            logger.info(f"{req_prefix}Local VLM query completed in {elapsed:.2f}s")
+            
+            if response.status_code == 200:
+                res_json = response.json()
+                choice = res_json["choices"][0]["message"]["content"]
+                return choice
+            else:
+                logger.error(f"{req_prefix}Local VLM API returned status {response.status_code}: {response.text}")
+    except Exception as e:
+        logger.error(f"{req_prefix}Error during local VLM query: {e}")
     return None
 
 
@@ -1224,7 +1280,7 @@ Input:
 
     if openrouter_key:
         logger.info(f"{req_prefix}VLM: Trying vision model via OpenRouter...")
-        vlm_model = os.environ.get("VLM_MODEL", "google/gemini-2.5-flash")
+        vlm_model = os.environ.get("PREFERRED_VLM_MODEL", "google/gemini-2.5-flash")
         try:
             res = try_cloud_ai_vision(
                 "openrouter",
@@ -1262,7 +1318,7 @@ Input:
 
     if (provider == "nvidia" or nvidia_key) and nvidia_key:
         logger.info(f"{req_prefix}VLM: Trying vision model via Nvidia...")
-        nvidia_vlm_model = os.environ.get("NVIDIA_VLM_MODEL", "").strip() or os.environ.get("VLM_MODEL", "").strip()
+        nvidia_vlm_model = os.environ.get("NVIDIA_VLM_MODEL", "").strip() or os.environ.get("PREFERRED_VLM_MODEL", "").strip()
         if not nvidia_vlm_model:
             nvidia_vlm_model = "nvidia/nemotron-nano-12b-v2-vl"
         try:
@@ -1279,6 +1335,23 @@ Input:
                 return res
         except Exception as e:
             logger.error(f"{req_prefix}VLM vision translation via Nvidia failed: {e}")
+
+    # Fallback to local VLM if cloud failed or skipped, and LOCAL_VLM_MODEL is configured
+    local_vlm_model = os.environ.get("LOCAL_VLM_MODEL", "").strip()
+    if local_vlm_model:
+        logger.info(f"{req_prefix}VLM: Trying local VLM model '{local_vlm_model}'...")
+        try:
+            res = try_local_vlm_vision(
+                local_vlm_model,
+                prompt,
+                base64_image,
+                response_schema,
+                request_id=request_id,
+            )
+            if res:
+                return res
+        except Exception as e:
+            logger.error(f"{req_prefix}Local VLM vision translation failed: {e}")
 
     return None
 

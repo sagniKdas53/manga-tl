@@ -78,6 +78,8 @@ services:
       - CONTEXT_PATH=${CONTEXT_PATH:-/tlhub}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - WORKER_HEALTH_URL=${WORKER_HEALTH_URL:-http://worker:8000/health}
+      - USE_REMOTE_ML=${USE_REMOTE_ML:-false}
+      - REMOTE_ML_URL=${REMOTE_ML_URL:-http://worker:8000}
     depends_on:
       - db
       - redis
@@ -118,19 +120,23 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - BACKEND_CALLBACK_URL=${BACKEND_CALLBACK_URL:-http://backend:8080}${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-1.0}
+      # Models
+      # This is the main controller which controls which LLM's are used
       - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
       - API_KEY=${API_KEY}
       - PREFERRED_MODEL=${PREFERRED_MODEL:-google/gemma-3n-e4b-it}
-      - VLM_MODEL=${VLM_MODEL:-nvidia/nemotron-nano-12b-v2-vl}
+      - PREFERRED_VLM_MODEL=${PREFERRED_VLM_MODEL:-nvidia/nemotron-nano-12b-v2-vl}
+      - RATE_LIMIT=${RATE_LIMIT:-10}
+      # These are the local fallbacks if cloud is not available and these are configured then use these
+      # LOCAL_LLM_ENDPOINT and OLLAMA_REMOTE_URL do the same thing so just keep LOCAL_LLM_ENDPOINT
       - LOCAL_LLM_PROVIDER=${LOCAL_LLM_PROVIDER:-ollama}
       - LOCAL_LLM_ENDPOINT=${LOCAL_LLM_ENDPOINT:-http://ollama:11434/v1/chat/completions}
       - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
-      - RATE_LIMIT=${RATE_LIMIT:-10}
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-1.0}
-      - OLLAMA_REMOTE_URL=${OLLAMA_REMOTE_URL:-}
-      - REMOTE_ML_URL=${REMOTE_ML_URL:-}
-      - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-8}
+      - LOCAL_VLM_MODEL=${LOCAL_VLM_MODEL:-}
+      # Finally the remote workers, to distibute load to shouldn't this be added to the back-end
+      - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-1}
     depends_on:
       - redis
       - minio
