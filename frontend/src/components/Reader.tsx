@@ -4,6 +4,7 @@ import type { User, Chapter, Page, Panel, OcrRegion, Conversation, Layer, LayerE
 import { safeFetch, toSlug } from '../utils';
 import { fitTextInBox } from '../utils/fitText';
 import ConfirmModal from './ConfirmModal';
+import { ColorPicker } from './ColorPicker';
 import JSZip from 'jszip';
 
 const normalizeHexColor = (val: string | null | undefined): string => {
@@ -2659,80 +2660,24 @@ export const Reader: React.FC<ReaderProps> = ({
 
                   {/* Mask Background Color (only relevant if clean background mask is enabled) */}
                   {selectedItem.wordWrap && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Mask Background Color</label>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <input 
-                          type="color"
-                          style={{ 
-                            width: '40px', 
-                            height: '38px', 
-                            padding: '2px', 
-                            border: '1px solid var(--border-color)', 
-                            borderRadius: '6px',
-                            backgroundColor: 'transparent',
-                            cursor: 'pointer' 
-                          }}
-                          value={normalizeHexColor(selectedItem.backgroundColor)}
-                          onChange={e => handleUpdateSelectedElement({ backgroundColor: e.target.value })}
-                        />
-                        <input 
-                          type="text"
-                          className="form-input"
-                          style={{ flex: 1, padding: '6px 10px', fontSize: '13px', fontFamily: 'monospace' }}
-                          placeholder="#ffffff"
-                          value={selectedItem.backgroundColor || ''}
-                          onChange={e => handleUpdateSelectedElement({ backgroundColor: e.target.value })}
-                        />
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '8px 12px', fontSize: '13px' }}
-                          onClick={() => handleLaunchEyeDropper('backgroundColor')}
-                          title="Color Dropper"
-                        >
-                          🧪
-                        </button>
-                      </div>
-                    </div>
+                    <ColorPicker
+                      label="Mask Background Color"
+                      value={selectedItem.backgroundColor !== undefined && selectedItem.backgroundColor !== null ? selectedItem.backgroundColor : '#ffffff'}
+                      onChange={val => handleUpdateSelectedElement({ backgroundColor: val })}
+                      onLaunchEyeDropper={() => handleLaunchEyeDropper('backgroundColor')}
+                      allowTransparent={true}
+                    />
                   )}
 
                   {/* Text Color (only relevant if it is a text-bearing element) */}
                   {selectedItem.text !== undefined && selectedItem.text !== null && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Text Color</label>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <input 
-                          type="color"
-                          style={{ 
-                            width: '40px', 
-                            height: '38px', 
-                            padding: '2px', 
-                            border: '1px solid var(--border-color)', 
-                            borderRadius: '6px',
-                            backgroundColor: 'transparent',
-                            cursor: 'pointer' 
-                          }}
-                          value={normalizeHexTextColor(selectedItem.textColor)}
-                          onChange={e => handleUpdateSelectedElement({ textColor: e.target.value })}
-                        />
-                        <input 
-                          type="text"
-                          className="form-input"
-                          style={{ flex: 1, padding: '6px 10px', fontSize: '13px', fontFamily: 'monospace' }}
-                          placeholder="#000000"
-                          value={selectedItem.textColor || ''}
-                          onChange={e => handleUpdateSelectedElement({ textColor: e.target.value })}
-                        />
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '8px 12px', fontSize: '13px' }}
-                          onClick={() => handleLaunchEyeDropper('textColor')}
-                          title="Color Dropper"
-                        >
-                          🧪
-                        </button>
-                      </div>
-                    </div>
+                    <ColorPicker
+                      label="Text Color"
+                      value={selectedItem.textColor !== undefined && selectedItem.textColor !== null ? selectedItem.textColor : '#000000'}
+                      onChange={val => handleUpdateSelectedElement({ textColor: val })}
+                      onLaunchEyeDropper={() => handleLaunchEyeDropper('textColor')}
+                      allowTransparent={false}
+                    />
                   )}
 
                  {/* Rotation Slider */}
