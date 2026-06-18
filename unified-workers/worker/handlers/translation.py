@@ -54,14 +54,15 @@ def process_translation(job_data):
         ).lower() in ("true", "1", "t")
 
         if not use_vlm_translation:
-            has_vlm_model = bool(os.environ.get("VLM_MODEL", "").strip() or os.environ.get("NVIDIA_VLM_MODEL", "").strip())
+            has_vlm_model = bool(os.environ.get("PREFERRED_VLM_MODEL", "").strip() or os.environ.get("NVIDIA_VLM_MODEL", "").strip())
             has_vlm_keys = bool(
                 os.environ.get("NVIDIA_API_KEY", "").strip() or
                 os.environ.get("GEMINI_API_KEY", "").strip() or
                 os.environ.get("OPENROUTER_API_KEY", "").strip() or
                 (os.environ.get("API_KEY", "").strip() and os.environ.get("MODEL_PROVIDER", "").lower().strip() in ("nvidia", "gemini", "openrouter"))
             )
-            if has_vlm_model and has_vlm_keys:
+            has_local_vlm = bool(os.environ.get("LOCAL_VLM_MODEL", "").strip())
+            if (has_vlm_model and has_vlm_keys) or has_local_vlm:
                 use_vlm_translation = True
         batch_mapping = {}
 
