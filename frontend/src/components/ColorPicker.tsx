@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 
 // Convert hex to HSV
 const hexToHsv = (hex: string): { h: number; s: number; v: number } => {
@@ -71,7 +71,7 @@ const hsvToHex = (h: number, s: number, v: number): string => {
 
 // Normalize typed HEX string to valid 6/7-character string for display helper
 const normalizeHexInput = (val: string): string => {
-  let clean = val.trim();
+  const clean = val.trim();
   if (clean === '') return '';
   if (clean === 'transparent') return 'transparent';
   if (!clean.startsWith('#') && (clean.length === 3 || clean.length === 6)) {
