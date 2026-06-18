@@ -7,52 +7,6 @@ import ConfirmModal from './ConfirmModal';
 import { ColorPicker } from './ColorPicker';
 import JSZip from 'jszip';
 
-const normalizeHexColor = (val: string | null | undefined): string => {
-  if (!val) return '#ffffff';
-  let clean = val.trim();
-  if (clean === 'transparent') return '#ffffff';
-  if (!clean.startsWith('#')) {
-    if (/^[0-9a-fA-F]{3}$/.test(clean) || /^[0-9a-fA-F]{6}$/.test(clean)) {
-      clean = '#' + clean;
-    } else {
-      return '#ffffff';
-    }
-  }
-  if (/^#[0-9a-fA-F]{3}$/.test(clean)) {
-    const r = clean[1];
-    const g = clean[2];
-    const b = clean[3];
-    return `#${r}${r}${g}${g}${b}${b}`;
-  }
-  if (/^#[0-9a-fA-F]{6}$/.test(clean)) {
-    return clean;
-  }
-  return '#ffffff';
-};
-
-const normalizeHexTextColor = (val: string | null | undefined): string => {
-  if (!val) return '#000000';
-  let clean = val.trim();
-  if (clean === 'transparent') return '#000000';
-  if (!clean.startsWith('#')) {
-    if (/^[0-9a-fA-F]{3}$/.test(clean) || /^[0-9a-fA-F]{6}$/.test(clean)) {
-      clean = '#' + clean;
-    } else {
-      return '#000000';
-    }
-  }
-  if (/^#[0-9a-fA-F]{3}$/.test(clean)) {
-    const r = clean[1];
-    const g = clean[2];
-    const b = clean[3];
-    return `#${r}${r}${g}${g}${b}${b}`;
-  }
-  if (/^#[0-9a-fA-F]{6}$/.test(clean)) {
-    return clean;
-  }
-  return '#000000';
-};
-
 interface ReaderProps {
   user: User;
   selectedSeries: Series | null;
@@ -183,10 +137,6 @@ export const Reader: React.FC<ReaderProps> = ({
   // Touch & Zoom enhancements
   // Detected once at component initialization — never changes after mount
   const isTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  const [showZoomBar, setShowZoomBar] = useState(() => {
-    const saved = localStorage.getItem('manga_show_zoom_bar');
-    return saved === 'false' ? false : true;
-  });
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
 
   const canvasAreaRef = useRef<HTMLDivElement>(null);
@@ -196,10 +146,6 @@ export const Reader: React.FC<ReaderProps> = ({
   const hasMoved = useRef(false);
 
   // Persistence effects
-  useEffect(() => {
-    localStorage.setItem('manga_show_zoom_bar', showZoomBar.toString());
-  }, [showZoomBar]);
-
   useEffect(() => {
     localStorage.setItem('manga_show_panels', showPanels.toString());
   }, [showPanels]);
@@ -900,12 +846,18 @@ export const Reader: React.FC<ReaderProps> = ({
       return;
     }
 
-    if (typeof (window as any).EyeDropper === 'undefined') {
+    const win = window as unknown as {
+      EyeDropper?: new () => {
+        open(): Promise<{ sRGBHex: string }>;
+      };
+    };
+
+    if (typeof win.EyeDropper === 'undefined') {
       alert('EyeDropper API is not supported in this browser. Please use the color input in the Element Inspector.');
       return;
     }
 
-    const eyeDropper = new (window as any).EyeDropper();
+    const eyeDropper = new win.EyeDropper();
     try {
       const result = await eyeDropper.open();
       const color = result.sRGBHex;

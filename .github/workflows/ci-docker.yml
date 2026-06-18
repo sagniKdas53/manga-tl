@@ -22,10 +22,6 @@ jobs:
             context: .
             dockerfile: backend/Dockerfile
 
-          - service: frontend
-            context: frontend
-            dockerfile: frontend/Dockerfile
-
           - service: worker
             context: unified-workers
             dockerfile: unified-workers/Dockerfile
@@ -45,6 +41,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Downcase registry owner
+        id: registry_owner
+        shell: bash
+        run: echo "owner=${OWNER,,}" >> $GITHUB_OUTPUT
+        env:
+          OWNER: ${{ github.repository_owner }}
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
@@ -52,7 +55,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/manga-${{ matrix.service }}:latest
-            ghcr.io/${{ github.repository_owner }}/manga-${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ steps.registry_owner.outputs.owner }}/manga-tl-${{ matrix.service }}:latest
+            ghcr.io/${{ steps.registry_owner.outputs.owner }}/manga-tl-${{ matrix.service }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
