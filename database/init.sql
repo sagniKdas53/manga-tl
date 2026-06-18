@@ -107,7 +107,12 @@ CREATE TABLE IF NOT EXISTS ocr_regions (
     bbox_h INT NOT NULL,
     panel_reading_order INT,
     bubble_reading_order INT,
-    region_type TEXT DEFAULT 'speech' -- speech, thought, narration, sfx, caption, sign
+    region_type TEXT DEFAULT 'speech', -- speech, thought, narration, sfx, caption, sign
+    background_color TEXT,
+    bubble_x INT,
+    bubble_y INT,
+    bubble_w INT,
+    bubble_h INT
 );
 
 -- Conversations
@@ -184,7 +189,12 @@ CREATE TABLE IF NOT EXISTS layer_elements (
     visible BOOLEAN DEFAULT TRUE,
     overflow BOOLEAN DEFAULT FALSE,
     is_manually_edited BOOLEAN DEFAULT FALSE,
-    edited_at TIMESTAMPTZ
+    edited_at TIMESTAMPTZ,
+    background_color TEXT,
+    text_color TEXT,
+    font_weight TEXT DEFAULT 'normal',
+    font_style TEXT DEFAULT 'normal',
+    box_shape TEXT DEFAULT 'rectangular'
 );
 
 -- Layer Edit History

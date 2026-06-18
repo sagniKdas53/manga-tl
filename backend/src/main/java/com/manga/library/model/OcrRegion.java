@@ -71,6 +71,21 @@ public class OcrRegion {
   @Builder.Default
   private String regionType = "speech";
 
+  @Column(name = "background_color")
+  private String backgroundColor;
+
+  @Column(name = "bubble_x")
+  private Integer bubbleX;
+
+  @Column(name = "bubble_y")
+  private Integer bubbleY;
+
+  @Column(name = "bubble_w")
+  private Integer bubbleW;
+
+  @Column(name = "bubble_h")
+  private Integer bubbleH;
+
   public UUID getPanelId() {
     return panel != null ? panel.getId() : null;
   }

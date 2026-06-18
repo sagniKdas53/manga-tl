@@ -22,10 +22,10 @@ This document tracks the translation platform checklist, restructured and priori
 
 ### Phase 1: Core Engine & UI Refinements (High Priority)
 
-- [ ] **Dynamic Panel Sorting by Reading Direction**
+- [x] **Dynamic Panel Sorting by Reading Direction**
   - **Context:** Currently, bubble sorting inside panels respects the series' `readingDirection` (`rtl`, `ltr`, `ttb`), but the panel segmenter (`detect_panels` in `panel.py`) still sorts panels using a hardcoded RTL row-then-column order.
   - **Action:** Update the panel detection handler to read `readingDirection` from the enqueued Redis job payload and apply dynamic sorting logic so LTR (left-to-right column ordering) and TTB (top-to-bottom strip) layouts are parsed correctly.
-- [ ] **UI Refinements & Fixes (Annotated Screenshot Feedback)**
+- [x] **UI Refinements & Fixes (Annotated Screenshot Feedback)**
   - **Layer Zoom Bug:** Investigate and fix the layer alignment/rendering breaking when zooming in/out on the page.
   - **Zoom Widget Cleanup:** Remove the floating canvas zoom control panel (and the "Show Zoom Bar" toggle in the sidebar) to simplify the viewport; use only the left sidebar zoom/pan controls.
   - **Toolbar Insertion:** Add a toolbar between the Layers panel and Page Actions panel with controls to:
@@ -35,7 +35,7 @@ This document tracks the translation platform checklist, restructured and priori
 
 ### Phase 2: Simplified SFX Layer (High Priority)
 
-- [ ] **SFX Dialogue & Font Support**
+- [x] **SFX Dialogue & Font Support**
   - **Context:** Keep SFX on a separate canvas layer for clarity, but avoid complex/stylized sound effect paths.
   - **Action:**
     - Support bold and italic styling for typescript/dialogue fonts.
