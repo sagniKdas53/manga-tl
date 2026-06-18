@@ -53,22 +53,25 @@ public class PageController {
         log.warn("Unsupported image format or failed to read image for thumbnail generation.");
         return null;
       }
-      
+
       int targetWidth = 300;
       double ratio = (double) originalImage.getHeight() / originalImage.getWidth();
       int targetHeight = (int) (targetWidth * ratio);
       if (targetHeight <= 0) {
         targetHeight = 1;
       }
-      
-      java.awt.image.BufferedImage thumbnail = new java.awt.image.BufferedImage(
-          targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
-      
+
+      java.awt.image.BufferedImage thumbnail =
+          new java.awt.image.BufferedImage(
+              targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
+
       java.awt.Graphics2D g = thumbnail.createGraphics();
-      g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+      g.setRenderingHint(
+          java.awt.RenderingHints.KEY_INTERPOLATION,
+          java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
       g.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
       g.dispose();
-      
+
       java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
       javax.imageio.ImageIO.write(thumbnail, "jpg", out);
       return out.toByteArray();
@@ -120,7 +123,12 @@ public class PageController {
       // Call transactional service to save image and page records
       Page page =
           pageService.createPageAndImage(
-              chapter, file.getOriginalFilename(), storagePath, thumbnailStoragePath, pageNumber, user);
+              chapter,
+              file.getOriginalFilename(),
+              storagePath,
+              thumbnailStoragePath,
+              pageNumber,
+              user);
 
       // Trigger pipeline
       jobCoordinatorService.startPipeline(page.getImage().getId());

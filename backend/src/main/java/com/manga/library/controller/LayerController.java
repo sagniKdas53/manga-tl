@@ -57,7 +57,8 @@ public class LayerController {
                 if (dto.getY() != null) element.setY(dto.getY());
                 if (dto.getVisible() != null) element.setVisible(dto.getVisible());
                 if (dto.getOverflow() != null) element.setOverflow(dto.getOverflow());
-                if (dto.getBackgroundColor() != null) element.setBackgroundColor(dto.getBackgroundColor());
+                if (dto.getBackgroundColor() != null)
+                  element.setBackgroundColor(dto.getBackgroundColor());
                 if (dto.getTextColor() != null) element.setTextColor(dto.getTextColor());
                 if (dto.getFontWeight() != null) element.setFontWeight(dto.getFontWeight());
                 if (dto.getFontStyle() != null) element.setFontStyle(dto.getFontStyle());

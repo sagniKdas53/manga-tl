@@ -2,21 +2,21 @@ package com.manga.library.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.manga.library.model.*;
+import com.manga.library.repository.*;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.util.ReflectionTestUtils;
-import com.manga.library.model.*;
-import com.manga.library.repository.*;
-import java.util.*;
 
 @SpringBootTest
 public class JobCoordinatorServiceTest {
@@ -52,7 +52,9 @@ public class JobCoordinatorServiceTest {
         });
     testServer.start();
     ReflectionTestUtils.setField(
-        jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/default-health");
+        jobCoordinatorService,
+        "workerHealthUrl",
+        "http://localhost:" + testPort + "/default-health");
   }
 
   @AfterEach
@@ -140,23 +142,21 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testHandleQaCallback_Passed() {
-    Image image = Image.builder()
-        .filename("test.png")
-        .storagePath("test/test.png")
-        .build();
+    Image image = Image.builder().filename("test.png").storagePath("test/test.png").build();
     image = imageRepository.save(image);
 
-    OcrRegion region = OcrRegion.builder()
-        .image(image)
-        .bboxX(10)
-        .bboxY(20)
-        .bboxW(100)
-        .bboxH(50)
-        .text("こんにちは")
-        .detectedLanguage("ja")
-        .confidence(0.9)
-        .qaStatus("pending")
-        .build();
+    OcrRegion region =
+        OcrRegion.builder()
+            .image(image)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .qaStatus("pending")
+            .build();
     region = ocrRegionRepository.save(region);
 
     Map<String, Object> qaResult = new HashMap<>();
@@ -179,43 +179,43 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testHandleQaCallback_DirectFix() {
-    Image image = Image.builder()
-        .filename("test_df.png")
-        .storagePath("test/test_df.png")
-        .build();
+    Image image = Image.builder().filename("test_df.png").storagePath("test/test_df.png").build();
     image = imageRepository.save(image);
 
-    Layer layer = Layer.builder()
-        .image(image)
-        .type("translation")
-        .targetLanguage("en")
-        .visible(true)
-        .zOrder(2)
-        .build();
+    Layer layer =
+        Layer.builder()
+            .image(image)
+            .type("translation")
+            .targetLanguage("en")
+            .visible(true)
+            .zOrder(2)
+            .build();
     layer = layerRepository.save(layer);
 
-    OcrRegion region = OcrRegion.builder()
-        .image(image)
-        .bboxX(10)
-        .bboxY(20)
-        .bboxW(100)
-        .bboxH(50)
-        .text("こんにちは")
-        .detectedLanguage("ja")
-        .confidence(0.9)
-        .qaStatus("pending")
-        .build();
+    OcrRegion region =
+        OcrRegion.builder()
+            .image(image)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .qaStatus("pending")
+            .build();
     region = ocrRegionRepository.save(region);
 
-    LayerElement element = LayerElement.builder()
-        .layer(layer)
-        .region(region)
-        .text("Hello")
-        .size(12.0)
-        .x(10.0)
-        .y(20.0)
-        .visible(true)
-        .build();
+    LayerElement element =
+        LayerElement.builder()
+            .layer(layer)
+            .region(region)
+            .text("Hello")
+            .size(12.0)
+            .x(10.0)
+            .y(20.0)
+            .visible(true)
+            .build();
     element = layerElementRepository.save(element);
 
     Map<String, Object> qaResult = new HashMap<>();
@@ -249,23 +249,22 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testHandleQaCallback_FailedWithRetry() {
-    Image image = Image.builder()
-        .filename("test_retry.png")
-        .storagePath("test/test_retry.png")
-        .build();
+    Image image =
+        Image.builder().filename("test_retry.png").storagePath("test/test_retry.png").build();
     image = imageRepository.save(image);
 
-    OcrRegion region = OcrRegion.builder()
-        .image(image)
-        .bboxX(10)
-        .bboxY(20)
-        .bboxW(100)
-        .bboxH(50)
-        .text("こんにちは")
-        .detectedLanguage("ja")
-        .confidence(0.9)
-        .qaStatus("pending")
-        .build();
+    OcrRegion region =
+        OcrRegion.builder()
+            .image(image)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .qaStatus("pending")
+            .build();
     region = ocrRegionRepository.save(region);
 
     String retryKey = "image:qa:retries:" + image.getId();
@@ -305,23 +304,25 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testHandleQaCallback_FailedMaxRetries() {
-    Image image = Image.builder()
-        .filename("test_max_retry.png")
-        .storagePath("test/test_max_retry.png")
-        .build();
+    Image image =
+        Image.builder()
+            .filename("test_max_retry.png")
+            .storagePath("test/test_max_retry.png")
+            .build();
     image = imageRepository.save(image);
 
-    OcrRegion region = OcrRegion.builder()
-        .image(image)
-        .bboxX(10)
-        .bboxY(20)
-        .bboxW(100)
-        .bboxH(50)
-        .text("こんにちは")
-        .detectedLanguage("ja")
-        .confidence(0.9)
-        .qaStatus("pending")
-        .build();
+    OcrRegion region =
+        OcrRegion.builder()
+            .image(image)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .qaStatus("pending")
+            .build();
     region = ocrRegionRepository.save(region);
 
     String retryKey = "image:qa:retries:" + image.getId();
@@ -356,24 +357,22 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testHandleQaCallback_Escalation() {
-    Image image = Image.builder()
-        .filename("test_esc.png")
-        .storagePath("test/test_esc.png")
-        .build();
+    Image image = Image.builder().filename("test_esc.png").storagePath("test/test_esc.png").build();
     image = imageRepository.save(image);
 
-    OcrRegion region = OcrRegion.builder()
-        .image(image)
-        .bboxX(10)
-        .bboxY(20)
-        .bboxW(100)
-        .bboxH(50)
-        .text("こんにちは")
-        .detectedLanguage("ja")
-        .confidence(0.9)
-        .bubbleReadingOrder(1)
-        .qaStatus("pending")
-        .build();
+    OcrRegion region =
+        OcrRegion.builder()
+            .image(image)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .bubbleReadingOrder(1)
+            .qaStatus("pending")
+            .build();
     region = ocrRegionRepository.save(region);
 
     Map<String, Object> qaResult = new HashMap<>();
