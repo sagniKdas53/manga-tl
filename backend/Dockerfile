@@ -1,5 +1,5 @@
 # Stage 1: Build Frontend
-FROM node:20-alpine AS frontend-build
+FROM node:26-alpine AS frontend-build
 WORKDIR /app
 
 ARG VITE_BASE_PATH=/
@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn clean package -DskipTests -P!frontend
 
 # Stage 3: Runtime JRE Image
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:26-jre-alpine
 
 # Non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
