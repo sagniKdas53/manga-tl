@@ -28,6 +28,7 @@ export interface Page {
   imageId: string;
   filename: string;
   url: string;
+  thumbnailUrl?: string;
   chapterId?: string;
 }
 

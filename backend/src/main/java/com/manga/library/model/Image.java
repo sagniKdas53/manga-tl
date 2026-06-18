@@ -30,6 +30,9 @@ public class Image {
   @Column(name = "storage_path", nullable = false)
   private String storagePath;
 
+  @Column(name = "thumbnail_storage_path")
+  private String thumbnailStoragePath;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by")
   @com.fasterxml.jackson.annotation.JsonIgnore

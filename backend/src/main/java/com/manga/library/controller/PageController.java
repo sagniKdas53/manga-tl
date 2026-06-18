@@ -46,6 +46,38 @@ public class PageController {
     return cleanContext + "/api/images/" + imageId + "/file";
   }
 
+  private byte[] generateThumbnail(byte[] originalBytes) {
+    try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(originalBytes)) {
+      java.awt.image.BufferedImage originalImage = javax.imageio.ImageIO.read(in);
+      if (originalImage == null) {
+        log.warn("Unsupported image format or failed to read image for thumbnail generation.");
+        return null;
+      }
+      
+      int targetWidth = 300;
+      double ratio = (double) originalImage.getHeight() / originalImage.getWidth();
+      int targetHeight = (int) (targetWidth * ratio);
+      if (targetHeight <= 0) {
+        targetHeight = 1;
+      }
+      
+      java.awt.image.BufferedImage thumbnail = new java.awt.image.BufferedImage(
+          targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      
+      java.awt.Graphics2D g = thumbnail.createGraphics();
+      g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+      g.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
+      g.dispose();
+      
+      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+      javax.imageio.ImageIO.write(thumbnail, "jpg", out);
+      return out.toByteArray();
+    } catch (Exception e) {
+      log.error("Failed to generate thumbnail", e);
+      return null;
+    }
+  }
+
   @PostMapping("/images")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<UploadResponse> uploadPage(
@@ -71,10 +103,24 @@ public class PageController {
       // Upload file to MinIO (blocking network call, now safely outside DB transaction)
       minioService.uploadFile(storagePath, file);
 
+      // Generate and upload thumbnail
+      String thumbnailStoragePath = null;
+      try {
+        byte[] originalBytes = file.getBytes();
+        byte[] thumbBytes = generateThumbnail(originalBytes);
+        if (thumbBytes != null) {
+          thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
+          minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
+          log.info("Successfully generated and uploaded thumbnail to {}", thumbnailStoragePath);
+        }
+      } catch (Exception e) {
+        log.error("Failed to generate/upload thumbnail, proceeding without it", e);
+      }
+
       // Call transactional service to save image and page records
       Page page =
           pageService.createPageAndImage(
-              chapter, file.getOriginalFilename(), storagePath, pageNumber, user);
+              chapter, file.getOriginalFilename(), storagePath, thumbnailStoragePath, pageNumber, user);
 
       // Trigger pipeline
       jobCoordinatorService.startPipeline(page.getImage().getId());
@@ -85,6 +131,14 @@ public class PageController {
       log.error("Failed to upload page", e);
       return ResponseEntity.internalServerError().build();
     }
+  }
+
+  private String getThumbnailUrl(UUID imageId) {
+    String cleanContext = contextPath == null ? "" : contextPath;
+    if (cleanContext.endsWith("/")) {
+      cleanContext = cleanContext.substring(0, cleanContext.length() - 1);
+    }
+    return cleanContext + "/api/images/" + imageId + "/thumbnail";
   }
 
   @GetMapping("/chapters/{chapterId}/pages")
@@ -100,6 +154,7 @@ public class PageController {
                   dto.setChapterId(p.getChapter().getId());
                   dto.setFilename(p.getImage().getFilename());
                   dto.setUrl(getImageUrl(p.getImage().getId()));
+                  dto.setThumbnailUrl(getThumbnailUrl(p.getImage().getId()));
                   return dto;
                 })
             .collect(Collectors.toList());
@@ -120,6 +175,7 @@ public class PageController {
               dto.setChapterId(p.getChapter().getId());
               dto.setFilename(p.getImage().getFilename());
               dto.setUrl(getImageUrl(p.getImage().getId()));
+              dto.setThumbnailUrl(getThumbnailUrl(p.getImage().getId()));
               return ResponseEntity.ok(dto);
             })
         .orElse(ResponseEntity.notFound().build());
@@ -205,6 +261,53 @@ public class PageController {
     }
   }
 
+  @GetMapping("/images/{imageId}/thumbnail")
+  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
+      getImageThumbnail(@PathVariable UUID imageId) {
+    try {
+      Objects.requireNonNull(imageId, "imageId cannot be null");
+      Image image =
+          imageRepository
+              .findById(imageId)
+              .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+      String storagePath = image.getThumbnailStoragePath();
+      String contentType = "image/jpeg"; // generated thumbnails are always JPEG
+
+      if (storagePath == null || storagePath.trim().isEmpty()) {
+        // Fall back to original file if no thumbnail exists
+        storagePath = image.getStoragePath();
+        String filename = image.getFilename().toLowerCase();
+        contentType = "image/png";
+        if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
+          contentType = "image/jpeg";
+        } else if (filename.endsWith(".webp")) {
+          contentType = "image/webp";
+        } else if (filename.endsWith(".gif")) {
+          contentType = "image/gif";
+        }
+      }
+
+      String finalStoragePath = storagePath;
+      String finalContentType = contentType;
+      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
+          outputStream -> {
+            try (java.io.InputStream is = minioService.getFileStream(finalStoragePath)) {
+              is.transferTo(outputStream);
+            } catch (Exception e) {
+              log.error("Error streaming image thumbnail", e);
+            }
+          };
+
+      return ResponseEntity.ok()
+          .contentType(org.springframework.http.MediaType.parseMediaType(finalContentType))
+          .body(responseBody);
+    } catch (Exception e) {
+      log.error("Failed to retrieve image thumbnail for {}", imageId, e);
+      return ResponseEntity.notFound().build();
+    }
+  }
+
   @GetMapping("/images/{imageId}/layers")
   @Transactional
   public ResponseEntity<List<Map<String, Object>>> getImageLayers(@PathVariable UUID imageId) {
@@ -282,10 +385,12 @@ public class PageController {
     log.info("Received request to delete page: {}", pageId);
     try {
       // Delete from database within transaction
-      String storagePath = pageService.deletePageDb(pageId);
+      List<String> pathsToDelete = pageService.deletePageDb(pageId);
 
       // Delete from MinIO outside transaction (non-blocking)
-      minioService.deleteFile(storagePath);
+      for (String storagePath : pathsToDelete) {
+        minioService.deleteFile(storagePath);
+      }
 
       return ResponseEntity.ok().build();
     } catch (Exception e) {

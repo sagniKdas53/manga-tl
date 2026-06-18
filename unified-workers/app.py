@@ -1,6 +1,8 @@
+import os
 import time
 import json
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 
 from worker.config import redis_client, MODEL_TTL, HEALTH_PORT
 from worker.health_server import start_health_server
@@ -13,6 +15,24 @@ from worker.handlers import (
     process_region_redo,
     process_stub,
 )
+
+def process_job(queue_name, job_data):
+    try:
+        if queue_name == "queue:panel-detection":
+            process_panel_detection(job_data)
+        elif queue_name == "queue:ocr":
+            process_ocr(job_data)
+        elif queue_name == "queue:layout":
+            process_layout(job_data)
+        elif queue_name == "queue:translation":
+            process_translation(job_data)
+        elif queue_name == "queue:region-redo":
+            process_region_redo(job_data)
+        elif queue_name == "queue:render":
+            process_stub(job_data, "render")
+    except Exception as e:
+        print(f"[Unified Worker] Error processing job from {queue_name}: {e}", flush=True)
+        traceback.print_exc()
 
 def main():
     start_time = time.time()
@@ -28,7 +48,11 @@ def main():
         "queue:render",
         "queue:region-redo",
     ]
-    print(f"[Unified Worker] Listening to Redis queues: {queues}...", flush=True)
+    
+    concurrent_workers = int(os.environ.get("CONCURRENT_WORKERS", "4"))
+    print(f"[Unified Worker] Listening to Redis queues: {queues} with {concurrent_workers} concurrent threads...", flush=True)
+    
+    pool = ThreadPoolExecutor(max_workers=concurrent_workers)
     
     last_status_time = 0.0
     status_interval = 300.0  # 5 minutes in seconds
@@ -73,18 +97,7 @@ def main():
                 queue_name = queue_bytes.decode("utf-8")
                 job_data = json.loads(job_json)
 
-                if queue_name == "queue:panel-detection":
-                    process_panel_detection(job_data)
-                elif queue_name == "queue:ocr":
-                    process_ocr(job_data)
-                elif queue_name == "queue:layout":
-                    process_layout(job_data)
-                elif queue_name == "queue:translation":
-                    process_translation(job_data)
-                elif queue_name == "queue:region-redo":
-                    process_region_redo(job_data)
-                elif queue_name == "queue:render":
-                    process_stub(job_data, "render")
+                pool.submit(process_job, queue_name, job_data)
         except Exception as e:
             print(f"[Unified Worker] Error in main loop: {e}", flush=True)
             traceback.print_exc()
