@@ -137,6 +137,12 @@ services:
       - LOCAL_VLM_MODEL=${LOCAL_VLM_MODEL:-}
       # Finally the remote workers, to distibute load to shouldn't this be added to the back-end
       - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-1}
+      - HF_HUB_OFFLINE=1
+      - PADDLEX_OFFLINE_MODE=1
+      - PADDLE_DISABLE_TELEMETRY=1
+      - HF_HUB_DISABLE_SYMLINKS_WARNING=1
+      - MANGA_OCR_USE_LOCAL=true
+      - MANGA_OCR_MODEL_PATH=/root/.cache/huggingface
     depends_on:
       - redis
       - minio
@@ -144,6 +150,8 @@ services:
     volumes:
       - ./data/worker/huggingface:/root/.cache/huggingface
       - ./data/worker/paddleocr:/root/.paddleocr
+      - ./data/worker/paddlex:/root/.paddlex
+      - ./data/worker/easyocr:/root/.EasyOCR
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

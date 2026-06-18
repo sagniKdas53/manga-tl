@@ -7,10 +7,13 @@ from manga_ocr import MangaOcr
 PaddleOCR = None
 try:
     print("[Unified Worker] Importing PaddleOCR...", flush=True)
-    from paddleocr import PaddleOCR as _PaddleOCR
-
+    os.environ["PADDLEX_OFFLINE_MODE"] = "1"
+    os.environ["PADDLE_DISABLE_TELEMETRY"] = "1"
+    os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["FLAGS_use_mkldnn"] = "0"
     os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
+
+    from paddleocr import PaddleOCR as _PaddleOCR
     PaddleOCR = _PaddleOCR
     print(
         "[Unified Worker] PaddleOCR imported successfully (readers will be initialized on first use per language).",
@@ -116,18 +119,40 @@ class ModelManager:
                         "1",
                         "t",
                     )
+                    use_local = os.environ.get("MANGA_OCR_USE_LOCAL", "false").lower() in (
+                        "true",
+                        "1",
+                        "t",
+                    )
+                    model_path = os.environ.get("MANGA_OCR_MODEL_PATH", "kha-white/manga-ocr-base")
+
+                    pretrained_path = "kha-white/manga-ocr-base"
+                    if use_local:
+                        resolved_path = model_path
+                        if not os.path.exists(os.path.join(resolved_path, "config.json")):
+                            hub_dir = os.path.join(model_path, "hub/models--kha-white--manga-ocr-base/snapshots")
+                            if os.path.exists(hub_dir):
+                                snapshots = [os.path.join(hub_dir, d) for d in os.listdir(hub_dir) if os.path.isdir(os.path.join(hub_dir, d))]
+                                if snapshots:
+                                    for s in snapshots:
+                                        if os.path.exists(os.path.join(s, "config.json")):
+                                            resolved_path = s
+                                            break
+                        pretrained_path = resolved_path
+                        print(f"[Unified Worker] Using local cached MangaOCR model resolved to: {pretrained_path}", flush=True)
+
                     if force_cpu:
-                        print("[Unified Worker] Forcing CPU for MangaOCR...", flush=True)
-                        self.manga_reader = MangaOcr(force_cpu=True)
+                        print(f"[Unified Worker] Forcing CPU for MangaOCR (model={pretrained_path})...", flush=True)
+                        self.manga_reader = MangaOcr(pretrained_model_name_or_path=pretrained_path, force_cpu=True)
                     else:
                         try:
-                            self.manga_reader = MangaOcr()
+                            self.manga_reader = MangaOcr(pretrained_model_name_or_path=pretrained_path)
                         except Exception as init_err:
                             print(
                                 f"[Unified Worker] Failed to initialize MangaOCR with default settings: {init_err}. Retrying with force_cpu=True...",
                                 flush=True,
                             )
-                            self.manga_reader = MangaOcr(force_cpu=True)
+                            self.manga_reader = MangaOcr(pretrained_model_name_or_path=pretrained_path, force_cpu=True)
                 except Exception as e:
                     print(f"[Unified Worker] Failed to initialize MangaOCR: {e}.", flush=True)
                     self.manga_reader = None
