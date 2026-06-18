@@ -19,7 +19,12 @@ public class PageService {
 
   @Transactional
   public Page createPageAndImage(
-      Chapter chapter, String filename, String storagePath, String thumbnailStoragePath, Integer pageNumber, User user) {
+      Chapter chapter,
+      String filename,
+      String storagePath,
+      String thumbnailStoragePath,
+      Integer pageNumber,
+      User user) {
     Image image =
         Image.builder()
             .filename(filename)

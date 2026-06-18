@@ -78,17 +78,20 @@ public class JobCoordinatorService {
       job.put("maxAttempts", 3);
       job.put("createdAt", OffsetDateTime.now().toString());
 
-      pageRepository.findByImageId(imageId).ifPresent(page -> {
-        if (page.getChapter() != null && page.getChapter().getSeries() != null) {
-          Series series = page.getChapter().getSeries();
-          if (series.getReadingDirection() != null) {
-            job.put("readingDirection", series.getReadingDirection().trim().toLowerCase());
-          }
-          if (series.getOriginalLanguage() != null) {
-            job.put("sourceLanguage", series.getOriginalLanguage().trim().toLowerCase());
-          }
-        }
-      });
+      pageRepository
+          .findByImageId(imageId)
+          .ifPresent(
+              page -> {
+                if (page.getChapter() != null && page.getChapter().getSeries() != null) {
+                  Series series = page.getChapter().getSeries();
+                  if (series.getReadingDirection() != null) {
+                    job.put("readingDirection", series.getReadingDirection().trim().toLowerCase());
+                  }
+                  if (series.getOriginalLanguage() != null) {
+                    job.put("sourceLanguage", series.getOriginalLanguage().trim().toLowerCase());
+                  }
+                }
+              });
 
       String json = objectMapper.writeValueAsString(job);
       String queueName = "queue:" + jobType;
@@ -354,7 +357,10 @@ public class JobCoordinatorService {
           boolean translationFailed =
               failedVal != null && Boolean.parseBoolean(failedVal.toString());
 
-          Double translationScore = t.get("translationScore") != null ? ((Number) t.get("translationScore")).doubleValue() : null;
+          Double translationScore =
+              t.get("translationScore") != null
+                  ? ((Number) t.get("translationScore")).doubleValue()
+                  : null;
 
           Objects.requireNonNull(regionId, "regionId cannot be null");
           ocrRegionRepository
@@ -370,10 +376,18 @@ public class JobCoordinatorService {
                     // Find or create LayerElement
                     LayerElement element = elementMap.get(regionId);
                     if (element == null) {
-                      double ex = region.getBubbleX() != null ? region.getBubbleX().doubleValue() : region.getBboxX().doubleValue();
-                      double ey = region.getBubbleY() != null ? region.getBubbleY().doubleValue() : region.getBboxY().doubleValue();
-                      int ew = region.getBubbleW() != null ? region.getBubbleW() : region.getBboxW();
-                      int eh = region.getBubbleH() != null ? region.getBubbleH() : region.getBboxH();
+                      double ex =
+                          region.getBubbleX() != null
+                              ? region.getBubbleX().doubleValue()
+                              : region.getBboxX().doubleValue();
+                      double ey =
+                          region.getBubbleY() != null
+                              ? region.getBubbleY().doubleValue()
+                              : region.getBboxY().doubleValue();
+                      int ew =
+                          region.getBubbleW() != null ? region.getBubbleW() : region.getBboxW();
+                      int eh =
+                          region.getBubbleH() != null ? region.getBubbleH() : region.getBboxH();
 
                       element =
                           LayerElement.builder()
@@ -388,7 +402,10 @@ public class JobCoordinatorService {
                               .autoSize(true)
                               .backgroundColor(region.getBackgroundColor())
                               .textColor(getContrastingTextColor(region.getBackgroundColor()))
-                              .boxShape("speech".equalsIgnoreCase(region.getRegionType()) ? "elliptical" : "rectangular")
+                              .boxShape(
+                                  "speech".equalsIgnoreCase(region.getRegionType())
+                                      ? "elliptical"
+                                      : "rectangular")
                               .build();
                     } else {
                       element.setText(translatedText);
@@ -454,57 +471,67 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleQaCallback(UUID imageId, List<Map<String, Object>> qaResults) {
-    log.info("Received QA callback for image: {} with {} results", imageId, qaResults != null ? qaResults.size() : 0);
+    log.info(
+        "Received QA callback for image: {} with {} results",
+        imageId,
+        qaResults != null ? qaResults.size() : 0);
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    
+
     boolean needsRetry = false;
-    
+
     if (qaResults != null) {
       for (Map<String, Object> r : qaResults) {
         try {
           UUID regionId = UUID.fromString((String) r.get("regionId"));
           String qaStatus = (String) r.get("qaStatus");
-          Double qaScore = r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
+          Double qaScore =
+              r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
           String qaFeedback = (String) r.get("qaFeedback");
-          
-          ocrRegionRepository.findById(regionId).ifPresent(region -> {
-            region.setQaStatus(qaStatus);
-            region.setQaScore(qaScore);
-            region.setQaFeedback(qaFeedback);
-            
-            // Check for direct fix first
-            if ("direct_fix".equalsIgnoreCase(qaStatus) && r.containsKey("directFix")) {
-              Map<?, ?> directFix = (Map<?, ?>) r.get("directFix");
-              // Find the layer element in the translation layer
-              List<LayerElement> elements = layerElementRepository.findByRegionId(regionId);
-              for (LayerElement el : elements) {
-                if ("translation".equalsIgnoreCase(el.getLayer().getType())) {
-                  if (directFix.containsKey("correctedText")) {
-                    el.setText((String) directFix.get("correctedText"));
-                    region.setTranslatedText((String) directFix.get("correctedText"));
-                  }
-                  if (directFix.containsKey("suggestedFontSize")) {
-                    el.setSize(((Number) directFix.get("suggestedFontSize")).doubleValue());
-                  }
-                  layerElementRepository.save(el);
-                }
-              }
-              region.setQaStatus("fixed");
-            } else if ("failed".equalsIgnoreCase(qaStatus)) {
-              // Check for escalations
-              if (r.containsKey("escalation")) {
-                Map<?, ?> escalation = (Map<?, ?>) r.get("escalation");
-                if (Boolean.TRUE.equals(escalation.get("ocrBad")) && escalation.containsKey("correctedSourceText")) {
-                  region.setText((String) escalation.get("correctedSourceText"));
-                }
-                if (Boolean.TRUE.equals(escalation.get("orderBad")) && escalation.containsKey("suggestedReadingOrderIndex")) {
-                  region.setBubbleReadingOrder(((Number) escalation.get("suggestedReadingOrderIndex")).intValue());
-                }
-              }
-            }
-            ocrRegionRepository.save(region);
-          });
-          
+
+          ocrRegionRepository
+              .findById(regionId)
+              .ifPresent(
+                  region -> {
+                    region.setQaStatus(qaStatus);
+                    region.setQaScore(qaScore);
+                    region.setQaFeedback(qaFeedback);
+
+                    // Check for direct fix first
+                    if ("direct_fix".equalsIgnoreCase(qaStatus) && r.containsKey("directFix")) {
+                      Map<?, ?> directFix = (Map<?, ?>) r.get("directFix");
+                      // Find the layer element in the translation layer
+                      List<LayerElement> elements = layerElementRepository.findByRegionId(regionId);
+                      for (LayerElement el : elements) {
+                        if ("translation".equalsIgnoreCase(el.getLayer().getType())) {
+                          if (directFix.containsKey("correctedText")) {
+                            el.setText((String) directFix.get("correctedText"));
+                            region.setTranslatedText((String) directFix.get("correctedText"));
+                          }
+                          if (directFix.containsKey("suggestedFontSize")) {
+                            el.setSize(((Number) directFix.get("suggestedFontSize")).doubleValue());
+                          }
+                          layerElementRepository.save(el);
+                        }
+                      }
+                      region.setQaStatus("fixed");
+                    } else if ("failed".equalsIgnoreCase(qaStatus)) {
+                      // Check for escalations
+                      if (r.containsKey("escalation")) {
+                        Map<?, ?> escalation = (Map<?, ?>) r.get("escalation");
+                        if (Boolean.TRUE.equals(escalation.get("ocrBad"))
+                            && escalation.containsKey("correctedSourceText")) {
+                          region.setText((String) escalation.get("correctedSourceText"));
+                        }
+                        if (Boolean.TRUE.equals(escalation.get("orderBad"))
+                            && escalation.containsKey("suggestedReadingOrderIndex")) {
+                          region.setBubbleReadingOrder(
+                              ((Number) escalation.get("suggestedReadingOrderIndex")).intValue());
+                        }
+                      }
+                    }
+                    ocrRegionRepository.save(region);
+                  });
+
           if ("failed".equalsIgnoreCase(qaStatus)) {
             needsRetry = true;
           }
@@ -513,15 +540,16 @@ public class JobCoordinatorService {
         }
       }
     }
-    
+
     // Check retry count via Redis
     String retryKey = "image:qa:retries:" + imageId;
     String retryValStr = redisTemplate.opsForValue().get(retryKey);
     int retries = retryValStr != null ? Integer.parseInt(retryValStr) : 0;
-    
+
     if (needsRetry && retries < 2) {
       redisTemplate.opsForValue().set(retryKey, String.valueOf(retries + 1));
-      log.info("QA failed for image {}. Retry {}/2. Enqueuing translation job...", imageId, retries + 1);
+      log.info(
+          "QA failed for image {}. Retry {}/2. Enqueuing translation job...", imageId, retries + 1);
       enqueueJob("translation", imageId);
     } else {
       if (needsRetry) {

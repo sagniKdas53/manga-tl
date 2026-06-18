@@ -54,10 +54,8 @@ public class MinioService {
   public String uploadFile(String objectPath, byte[] bytes, String contentType) throws Exception {
     try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(bytes)) {
       minioClient.putObject(
-          PutObjectArgs.builder()
-              .bucket(bucketName)
-              .object(objectPath)
-              .stream(bais, (long) bytes.length, -1L)
+          PutObjectArgs.builder().bucket(bucketName).object(objectPath).stream(
+                  bais, (long) bytes.length, -1L)
               .contentType(contentType)
               .build());
       return objectPath;
@@ -71,13 +69,14 @@ public class MinioService {
 
   public String generatePresignedUrl(String objectPath) {
     try {
-      String url = minioClient.getPresignedObjectUrl(
-          GetPresignedObjectUrlArgs.builder()
-              .method(Http.Method.GET)
-              .bucket(bucketName)
-              .object(objectPath)
-              .expiry(10, TimeUnit.MINUTES)
-              .build());
+      String url =
+          minioClient.getPresignedObjectUrl(
+              GetPresignedObjectUrlArgs.builder()
+                  .method(Http.Method.GET)
+                  .bucket(bucketName)
+                  .object(objectPath)
+                  .expiry(10, TimeUnit.MINUTES)
+                  .build());
       if (externalUrl != null && !externalUrl.trim().isEmpty() && url != null) {
         url = url.replace(endpoint, externalUrl);
       }
