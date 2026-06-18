@@ -820,20 +820,20 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
     logger.info(f"{req_prefix}Translation Strategy:")
     strategy_idx = 1
     if not local_only:
-        if openrouter_key:
+        if provider == "openrouter":
             logger.info(f"{req_prefix}{strategy_idx}. DeepSeek V4 Pro (OpenRouter)")
             strategy_idx += 1
             logger.info(f"{req_prefix}{strategy_idx}. Gemini 2.5 Flash (OpenRouter)")
             strategy_idx += 1
-        elif gemini_key:
+        elif provider == "gemini":
             logger.info(f"{req_prefix}{strategy_idx}. Gemini 2.5 Flash (Direct)")
             strategy_idx += 1
 
-        if nvidia_key and provider == "nvidia":
+        if provider == "nvidia":
             nvidia_model = os.environ.get("PREFERRED_MODEL", "google/gemma-3n-e4b-it")
             logger.info(f"{req_prefix}{strategy_idx}. {nvidia_model} (Nvidia)")
             strategy_idx += 1
-        if anthropic_key:
+        if provider == "anthropic":
             logger.info(f"{req_prefix}{strategy_idx}. Claude 3.5 Sonnet (Direct)")
             strategy_idx += 1
 
@@ -851,7 +851,7 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
         )
     else:
         # 1. Cloud LLM Layer (DeepSeek V4 Pro, then Gemini 2.5 Flash / Claude Sonnet fallback)
-        if openrouter_key:
+        if provider == "openrouter":
             translated = try_cloud_ai(
                 "openrouter",
                 openrouter_key,
@@ -877,7 +877,7 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
                 if is_valid_translation(text, cleaned, request_id=request_id):
                     return cleaned
 
-        elif gemini_key:
+        elif provider == "gemini":
             # Direct Gemini API fallback
             preferred = os.environ.get("PREFERRED_MODEL", "gemini-2.5-flash")
             translated = try_cloud_ai(
@@ -887,7 +887,7 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
                 cleaned = clean_translated_text(translated)
                 if is_valid_translation(text, cleaned, request_id=request_id):
                     return cleaned
-        if nvidia_key and provider == "nvidia":
+        if provider == "nvidia":
             nvidia_model = os.environ.get("PREFERRED_MODEL", "google/gemma-3n-e4b-it")
             translated = try_cloud_ai(
                 "nvidia",
@@ -901,7 +901,7 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
                 if is_valid_translation(text, cleaned, request_id=request_id):
                     return cleaned
 
-        if anthropic_key:
+        if provider == "anthropic":
             translated = try_cloud_ai(
                 "anthropic",
                 anthropic_key,
@@ -1042,7 +1042,7 @@ Input:
         )
     else:
         # Try DeepSeek V4 Pro
-        if openrouter_key:
+        if provider == "openrouter":
             logger.info(f"{req_prefix}Batch: Trying DeepSeek V4 Pro...")
             try:
                 res = try_cloud_ai(
@@ -1076,7 +1076,7 @@ Input:
                     f"{req_prefix}Gemini OpenRouter batch translation failed: {e}"
                 )
 
-        elif gemini_key:
+        elif provider == "gemini":
             # Try Direct Gemini API
             preferred = os.environ.get("PREFERRED_MODEL", "gemini-2.5-flash")
             logger.info(f"{req_prefix}Batch: Trying Gemini ({preferred}) Direct...")
@@ -1095,7 +1095,7 @@ Input:
                 logger.error(f"{req_prefix}Gemini Direct batch translation failed: {e}")
 
         # Try Nvidia NIM
-        if nvidia_key and provider == "nvidia":
+        if provider == "nvidia":
             nvidia_model = os.environ.get("PREFERRED_MODEL", "google/gemma-3n-e4b-it")
             logger.info(f"{req_prefix}Batch: Trying Nvidia model {nvidia_model}...")
             try:
