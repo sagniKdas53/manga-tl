@@ -6,6 +6,52 @@ import { fitTextInBox } from '../utils/fitText';
 import ConfirmModal from './ConfirmModal';
 import JSZip from 'jszip';
 
+const normalizeHexColor = (val: string | null | undefined): string => {
+  if (!val) return '#ffffff';
+  let clean = val.trim();
+  if (clean === 'transparent') return '#ffffff';
+  if (!clean.startsWith('#')) {
+    if (/^[0-9a-fA-F]{3}$/.test(clean) || /^[0-9a-fA-F]{6}$/.test(clean)) {
+      clean = '#' + clean;
+    } else {
+      return '#ffffff';
+    }
+  }
+  if (/^#[0-9a-fA-F]{3}$/.test(clean)) {
+    const r = clean[1];
+    const g = clean[2];
+    const b = clean[3];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  if (/^#[0-9a-fA-F]{6}$/.test(clean)) {
+    return clean;
+  }
+  return '#ffffff';
+};
+
+const normalizeHexTextColor = (val: string | null | undefined): string => {
+  if (!val) return '#000000';
+  let clean = val.trim();
+  if (clean === 'transparent') return '#000000';
+  if (!clean.startsWith('#')) {
+    if (/^[0-9a-fA-F]{3}$/.test(clean) || /^[0-9a-fA-F]{6}$/.test(clean)) {
+      clean = '#' + clean;
+    } else {
+      return '#000000';
+    }
+  }
+  if (/^#[0-9a-fA-F]{3}$/.test(clean)) {
+    const r = clean[1];
+    const g = clean[2];
+    const b = clean[3];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  if (/^#[0-9a-fA-F]{6}$/.test(clean)) {
+    return clean;
+  }
+  return '#000000';
+};
+
 interface ReaderProps {
   user: User;
   selectedSeries: Series | null;
@@ -95,6 +141,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Phase 4 Layer System states
   const [layers, setLayers] = useState<{ layer: Layer; elements: LayerElement[] }[]>([]);
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const [cleanScanlationView, setCleanScanlationView] = useState(() => {
     const saved = localStorage.getItem('manga_clean_view');
     return saved === null ? false : saved === 'true';
@@ -405,7 +452,13 @@ export const Reader: React.FC<ReaderProps> = ({
         return res.json();
       })
       .then(layersData => {
-        setLayers(layersData || []);
+        const data = layersData || [];
+        setLayers(data);
+        if (data.length > 0) {
+          setActiveLayerId(data[0].layer.id);
+        } else {
+          setActiveLayerId(null);
+        }
       })
       .catch(err => {
         console.error('Error loading layers:', err);
@@ -454,7 +507,10 @@ export const Reader: React.FC<ReaderProps> = ({
           x: element.x,
           y: element.y,
           visible: element.visible,
-          overflow: element.overflow
+          overflow: element.overflow,
+          backgroundColor: element.backgroundColor,
+          fontWeight: element.fontWeight || 'normal',
+          fontStyle: element.fontStyle || 'normal'
         })
       });
 
@@ -713,10 +769,13 @@ export const Reader: React.FC<ReaderProps> = ({
     };
   }, [draggedElement, layers, selectedItem, pushToHistoryStack, handleSaveElementChanges]);
 
-  const handleCreateTranslationLayer = async () => {
+  const handleCreateLayer = async (type: 'translation' | 'sfx') => {
     if (!selectedPage) return;
-    const targetLanguage = prompt('Enter target language code (e.g. en, es, fr):', 'en');
-    if (!targetLanguage) return;
+    let targetLanguage: string | null = null;
+    if (type === 'translation') {
+      targetLanguage = prompt('Enter target language code (e.g. en, es, fr):', 'en');
+      if (!targetLanguage) return;
+    }
 
     try {
       const res = await safeFetch(`/api/images/${selectedPage.imageId}/layers`, {
@@ -726,8 +785,8 @@ export const Reader: React.FC<ReaderProps> = ({
           'Authorization': `Bearer ${user.token}`
         },
         body: JSON.stringify({
-          type: 'translation',
-          targetLanguage: targetLanguage.toLowerCase(),
+          type,
+          targetLanguage: targetLanguage ? targetLanguage.toLowerCase() : null,
           visible: true,
           zOrder: layers.length
         })
@@ -737,9 +796,121 @@ export const Reader: React.FC<ReaderProps> = ({
       
       const newLayer = await res.json();
       setLayers(prev => [...prev, { layer: newLayer, elements: [] }]);
+      setActiveLayerId(newLayer.id);
     } catch (err) {
       console.error(err);
       alert('Error creating layer.');
+    }
+  };
+
+  const handleCreateTranslationLayer = () => handleCreateLayer('translation');
+  const handleCreateSfxLayer = () => handleCreateLayer('sfx');
+
+  const handleAddNewElement = async (type: 'text' | 'mask') => {
+    if (!activeLayerId) {
+      alert('Please select or create an active layer first.');
+      return;
+    }
+
+    try {
+      const res = await safeFetch(`/api/layers/${activeLayerId}/elements`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token}`
+        },
+        body: JSON.stringify({
+          text: type === 'text' ? 'New Text' : '',
+          font: 'Comic Neue',
+          size: 16.0,
+          autoSize: false,
+          maxWidth: type === 'text' ? 150 : 100,
+          maxHeight: type === 'text' ? 80 : 100,
+          wordWrap: type === 'mask',
+          rotation: 0.0,
+          x: 100.0,
+          y: 100.0,
+          visible: true,
+          backgroundColor: type === 'mask' ? '#ffffff' : null,
+          textColor: type === 'text' ? '#000000' : null,
+          fontWeight: 'normal',
+          fontStyle: 'normal'
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to create layer element');
+
+      const newElement = await res.json();
+      const elementWithFlag = { ...newElement, isLayerElement: true };
+
+      setLayers(prevLayers => prevLayers.map(l => {
+        if (l.layer.id === activeLayerId) {
+          return {
+            ...l,
+            elements: [...l.elements, elementWithFlag]
+          };
+        }
+        return l;
+      }));
+
+      setSelectedItem(elementWithFlag);
+    } catch (err) {
+      console.error(err);
+      alert('Error creating layer element.');
+    }
+  };
+
+  const handleDeleteElement = async (elementId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Element',
+      message: 'Are you sure you want to delete this element?',
+      confirmText: 'Delete',
+      isDangerous: true,
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await safeFetch(`/api/layer-elements/${elementId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${user.token}`
+            }
+          });
+
+          if (!res.ok) throw new Error('Failed to delete layer element');
+
+          setLayers(prevLayers => prevLayers.map(l => ({
+            ...l,
+            elements: l.elements.filter(el => el.id !== elementId)
+          })));
+
+          setSelectedItem(null);
+        } catch (err) {
+          console.error(err);
+          alert('Error deleting layer element.');
+        }
+      }
+    });
+  };
+
+  const handleLaunchEyeDropper = async (targetField: 'backgroundColor' | 'textColor' = 'backgroundColor') => {
+    if (!selectedItem || !selectedItem.isLayerElement) {
+      alert('Please select a mask or text element first.');
+      return;
+    }
+
+    if (typeof (window as any).EyeDropper === 'undefined') {
+      alert('EyeDropper API is not supported in this browser. Please use the color input in the Element Inspector.');
+      return;
+    }
+
+    const eyeDropper = new (window as any).EyeDropper();
+    try {
+      const result = await eyeDropper.open();
+      const color = result.sRGBHex;
+      handleUpdateSelectedElement({ [targetField]: color });
+    } catch (err) {
+      console.error('EyeDropper failed or cancelled:', err);
     }
   };
 
@@ -1511,17 +1682,6 @@ export const Reader: React.FC<ReaderProps> = ({
                   <span className="slider"></span>
                 </label>
               </div>
-              <div className="overlay-toggle">
-                <span>Show Zoom Bar</span>
-                <label className="switch">
-                  <input 
-                    type="checkbox" 
-                    checked={showZoomBar} 
-                    onChange={e => setShowZoomBar(e.target.checked)} 
-                  />
-                  <span className="slider"></span>
-                </label>
-              </div>
             </div>
 
             {/* Zoom Controls Section */}
@@ -1665,7 +1825,8 @@ export const Reader: React.FC<ReaderProps> = ({
             <div 
               className="manga-canvas-wrapper"
               style={{
-                transform: `translate(${pan.x}px, ${pan.y}px)`,
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transformOrigin: 'center center',
                 position: 'relative',
                 transition: isDraggingCanvas ? 'none' : 'transform 0.15s ease-out',
                 userSelect: 'none'
@@ -1678,10 +1839,10 @@ export const Reader: React.FC<ReaderProps> = ({
                 className="reader-image" 
                 onLoad={handleImgLoad}
                 style={{
-                  width: fitMode === 'width' ? `${100 * zoom}%` : 'auto',
-                  height: fitMode === 'height' ? `${85 * zoom}vh` : 'auto',
-                  maxHeight: fitMode === 'page' ? `${80 * zoom}vh` : 'none',
-                  maxWidth: fitMode === 'page' ? `${100 * zoom}%` : 'none'
+                  width: fitMode === 'width' ? '100%' : 'auto',
+                  height: fitMode === 'height' ? '85vh' : 'auto',
+                  maxHeight: fitMode === 'page' ? '80vh' : 'none',
+                  maxWidth: fitMode === 'page' ? '100%' : 'none'
                 }}
                 draggable={false}
               />
@@ -1828,7 +1989,7 @@ export const Reader: React.FC<ReaderProps> = ({
                             y={element.y}
                             width={width}
                             height={height}
-                            fill="#ffffff"
+                            fill={element.backgroundColor || '#ffffff'}
                             stroke="none"
                           />
                         )}
@@ -1954,8 +2115,9 @@ export const Reader: React.FC<ReaderProps> = ({
                               style={{
                                 fontFamily: `"${element.font || 'Comic Neue'}", sans-serif`,
                                 fontSize: `${fontSize}px`,
-                                fontWeight: 'bold',
-                                color: '#000000',
+                                fontWeight: element.fontWeight || 'normal',
+                                fontStyle: element.fontStyle || 'normal',
+                                color: element.textColor || '#000000',
                                 lineHeight: '1.2',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word',
@@ -1992,7 +2154,8 @@ export const Reader: React.FC<ReaderProps> = ({
                       top: showBelow 
                         ? `${((activeItem.bboxY + activeItem.bboxH) / imageDims.h) * 100}%`
                         : `${(activeItem.bboxY / imageDims.h) * 100}%`,
-                      transform: showBelow ? 'translate(-50%, 0%)' : 'translate(-50%, -100%)',
+                      transform: `${showBelow ? 'translate(-50%, 0%)' : 'translate(-50%, -100%)'} scale(${1 / zoom})`,
+                      transformOrigin: showBelow ? 'top center' : 'bottom center',
                       marginTop: showBelow ? '12px' : '-12px',
                       zIndex: 100,
                       padding: '12px',
@@ -2148,41 +2311,6 @@ export const Reader: React.FC<ReaderProps> = ({
             </div>
           </div>
 
-          {/* Sleek Vertical Zoom Toolbar next to page */}
-          {showZoomBar && (
-            <div className="vertical-zoom-toolbar">
-              <button 
-                className="zoom-btn"
-                onClick={() => setZoom(prev => Math.min(3.0, prev + 0.1))}
-                disabled={zoom >= 3.0}
-                title="Zoom In"
-              >
-                +
-              </button>
-              <div className="zoom-display">
-                {displayedZoom}%
-              </div>
-              <button 
-                className="zoom-btn"
-                onClick={() => setZoom(prev => Math.max(0.5, prev - 0.1))}
-                disabled={zoom <= 0.5}
-                title="Zoom Out"
-              >
-                -
-              </button>
-              <button 
-                className="zoom-reset-btn"
-                onClick={() => {
-                  setZoom(1.0);
-                  setFitMode('page');
-                }}
-                disabled={zoom === 1.0 && fitMode === 'page'}
-                title="Reset Zoom"
-              >
-                Reset
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Right Sidebar (Property Inspector) */}
@@ -2194,96 +2322,149 @@ export const Reader: React.FC<ReaderProps> = ({
                   Select an OCR region or a text layer to inspect and edit details.
                 </div>
                 
-                {/* Translation Layers Section */}
-                <div className="panel-section">
-                  <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Layers</span>
-                    <button 
-                      className="btn btn-secondary"
-                      style={{ padding: '2px 6px', fontSize: '10px' }}
-                      onClick={handleCreateTranslationLayer}
-                    >
-                      + Add
-                    </button>
-                  </div>
-                  
-                  {layers.length === 0 ? (
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 0' }}>
-                      No active translation layers.
-                    </div>
-                  ) : (
-                    layers.map(lData => (
-                      <div 
-                        key={lData.layer.id} 
-                        className="overlay-toggle" 
-                        style={{ 
-                          padding: '6px 8px', 
-                          border: '1px solid var(--border-color)', 
-                          borderRadius: '6px', 
-                          marginBottom: '6px',
-                          backgroundColor: 'rgba(255,255,255,0.02)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                            {lData.layer.type === 'translation' 
-                              ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || 'EN'})` 
-                              : `Layer (${lData.layer.type})`}
-                          </span>
-                          <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>
-                            {lData.elements.length} elements
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <button
-                            onClick={() => handleToggleLayerVisibility(lData.layer.id)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: lData.layer.visible ? 'var(--primary)' : 'var(--text-muted)',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              display: 'flex',
-                              alignItems: 'center'
-                            }}
-                            title="Toggle layer visibility"
-                          >
-                            {lData.layer.visible ? (
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                <circle cx="12" cy="12" r="3"></circle>
-                              </svg>
-                            ) : (
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                                <line x1="1" y1="1" x2="23" y2="23"></line>
-                              </svg>
-                            )}
-                          </button>
+                 {/* Translation Layers Section */}
+                 <div className="panel-section">
+                   <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <span>Layers</span>
+                     <div style={{ display: 'flex', gap: '4px' }}>
+                       <button 
+                         className="btn btn-secondary"
+                         style={{ padding: '2px 6px', fontSize: '10px' }}
+                         onClick={handleCreateTranslationLayer}
+                         title="Add Translation Layer"
+                       >
+                         + TL
+                       </button>
+                       <button 
+                         className="btn btn-secondary"
+                         style={{ padding: '2px 6px', fontSize: '10px' }}
+                         onClick={handleCreateSfxLayer}
+                         title="Add SFX Layer"
+                       >
+                         + SFX
+                       </button>
+                     </div>
+                   </div>
+                   
+                   {layers.length === 0 ? (
+                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 0' }}>
+                       No active layers.
+                     </div>
+                   ) : (
+                     layers.map(lData => {
+                       const isActive = lData.layer.id === activeLayerId;
+                       return (
+                         <div 
+                           key={lData.layer.id} 
+                           className="overlay-toggle" 
+                           onClick={() => setActiveLayerId(lData.layer.id)}
+                           style={{ 
+                             padding: '6px 8px', 
+                             border: isActive ? '1px solid var(--primary)' : '1px solid var(--border-color)', 
+                             borderRadius: '6px', 
+                             marginBottom: '6px',
+                             backgroundColor: isActive ? 'var(--primary-glow)' : 'rgba(255,255,255,0.02)',
+                             cursor: 'pointer',
+                             boxShadow: isActive ? '0 0 8px var(--primary-glow)' : 'none'
+                           }}
+                         >
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                             <span style={{ fontSize: '12px', fontWeight: isActive ? 700 : 600, color: isActive ? 'var(--primary-hover)' : 'inherit' }}>
+                               {lData.layer.type === 'translation' 
+                                 ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || 'EN'})` 
+                                 : lData.layer.type === 'sfx'
+                                   ? 'SFX Layer'
+                                   : `Layer (${lData.layer.type})`}
+                             </span>
+                             <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>
+                               {lData.elements.length} elements
+                             </span>
+                           </div>
+                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={e => e.stopPropagation()}>
+                             <button
+                               onClick={() => handleToggleLayerVisibility(lData.layer.id)}
+                               style={{
+                                 background: 'none',
+                                 border: 'none',
+                                 color: lData.layer.visible ? 'var(--primary)' : 'var(--text-muted)',
+                                 cursor: 'pointer',
+                                 padding: '2px',
+                                 display: 'flex',
+                                 alignItems: 'center'
+                               }}
+                               title="Toggle layer visibility"
+                             >
+                               {lData.layer.visible ? (
+                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                   <circle cx="12" cy="12" r="3"></circle>
+                                 </svg>
+                               ) : (
+                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                   <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                   <line x1="1" y1="1" x2="23" y2="23"></line>
+                                 </svg>
+                               )}
+                             </button>
+ 
+                             <button
+                               onClick={() => handleDeleteLayer(lData.layer.id)}
+                               style={{
+                                 background: 'none',
+                                 border: 'none',
+                                 color: 'var(--text-muted)',
+                                 cursor: 'pointer',
+                                 padding: '2px',
+                                 display: 'flex',
+                                 alignItems: 'center'
+                               }}
+                               title="Delete layer"
+                             >
+                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                 <polyline points="3 6 5 6 21 6"></polyline>
+                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                               </svg>
+                             </button>
+                           </div>
+                         </div>
+                       );
+                     })
+                   )}
+                 </div>
 
-                          <button
-                            onClick={() => handleDeleteLayer(lData.layer.id)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: 'var(--text-muted)',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              display: 'flex',
-                              alignItems: 'center'
-                            }}
-                            title="Delete layer"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                 {/* Editor Tools Section */}
+                 <div className="panel-section">
+                   <div className="panel-section-title">Editor Tools</div>
+                   <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                     <button 
+                       className="btn btn-secondary"
+                       style={{ flex: 1, padding: '8px', fontSize: '11px', fontWeight: 600 }}
+                       onClick={() => handleAddNewElement('text')}
+                       disabled={!activeLayerId}
+                       title={activeLayerId ? "Add a new text element to active layer" : "Select or create a layer first"}
+                     >
+                       💬 Add Text
+                     </button>
+                     <button 
+                       className="btn btn-secondary"
+                       style={{ flex: 1, padding: '8px', fontSize: '11px', fontWeight: 600 }}
+                       onClick={() => handleAddNewElement('mask')}
+                       disabled={!activeLayerId}
+                       title={activeLayerId ? "Add a new background mask to active layer" : "Select or create a layer first"}
+                     >
+                       ⬜ Add Mask
+                     </button>
+                   </div>
+                   <button 
+                     className="btn btn-secondary sidebar-action-btn"
+                     style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                     onClick={handleLaunchEyeDropper}
+                     disabled={!selectedItem || !selectedItem.isLayerElement}
+                     title="Sample color from screen to apply to selected element's background"
+                   >
+                     🧪 Color Dropper
+                   </button>
+                 </div>
 
                 {/* Page Actions Section */}
                 <div className="panel-section">
@@ -2420,90 +2601,203 @@ export const Reader: React.FC<ReaderProps> = ({
                   </div>
                 </div>
 
-                {/* Font & Style settings */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Family</label>
-                    <select
-                      className="form-input"
-                      style={{ padding: '4px 8px', fontSize: '13px', height: '38px', backgroundColor: 'var(--bg-surface)' }}
-                      value={selectedItem.font || 'Comic Neue'}
-                      onChange={e => handleUpdateSelectedElement({ font: e.target.value })}
-                    >
-                      <option value="Comic Neue">Comic Neue</option>
-                      <option value="Bangers">Bangers</option>
-                      <option value="Arial">Arial</option>
-                      <option value="Courier New">Courier New</option>
-                    </select>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Size (pt)</label>
-                    <input 
-                      type="number"
-                      className="form-input"
-                      style={{ padding: '6px 10px', fontSize: '13px' }}
-                      value={selectedItem.size || 16}
-                      onChange={e => handleUpdateSelectedElement({ size: parseFloat(e.target.value) || 12 })}
-                    />
-                  </div>
-                </div>
+                 {/* Font & Style settings */}
+                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                     <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Family</label>
+                     <select
+                       className="form-input"
+                       style={{ padding: '4px 8px', fontSize: '13px', height: '38px', backgroundColor: 'var(--bg-surface)' }}
+                       value={selectedItem.font || 'Comic Neue'}
+                       onChange={e => handleUpdateSelectedElement({ font: e.target.value })}
+                     >
+                       <option value="Comic Neue">Comic Neue</option>
+                       <option value="Bangers">Bangers</option>
+                       <option value="Arial">Arial</option>
+                       <option value="Courier New">Courier New</option>
+                     </select>
+                   </div>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                     <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Size (pt)</label>
+                     <input 
+                       type="number"
+                       className="form-input"
+                       style={{ padding: '6px 10px', fontSize: '13px' }}
+                       value={selectedItem.size || 16}
+                       onChange={e => handleUpdateSelectedElement({ size: parseFloat(e.target.value) || 12 })}
+                     />
+                   </div>
+                 </div>
 
-                {/* Rotation Slider */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Rotation ({selectedItem.rotation || 0}°)</label>
-                  <input 
-                    type="range"
-                    min="0"
-                    max="360"
-                    value={selectedItem.rotation || 0}
-                    onChange={e => handleUpdateSelectedElement({ rotation: parseFloat(e.target.value) || 0 })}
-                    style={{ width: '100%' }}
-                  />
-                </div>
+                 {/* Font Weight & Style Row */}
+                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                     <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Weight</label>
+                     <select
+                       className="form-input"
+                       style={{ padding: '4px 8px', fontSize: '13px', height: '38px', backgroundColor: 'var(--bg-surface)' }}
+                       value={selectedItem.fontWeight || 'normal'}
+                       onChange={e => handleUpdateSelectedElement({ fontWeight: e.target.value })}
+                     >
+                       <option value="normal">Normal</option>
+                       <option value="bold">Bold</option>
+                     </select>
+                   </div>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                     <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Font Style</label>
+                     <select
+                       className="form-input"
+                       style={{ padding: '4px 8px', fontSize: '13px', height: '38px', backgroundColor: 'var(--bg-surface)' }}
+                       value={selectedItem.fontStyle || 'normal'}
+                       onChange={e => handleUpdateSelectedElement({ fontStyle: e.target.value })}
+                     >
+                       <option value="normal">Normal</option>
+                       <option value="italic">Italic</option>
+                     </select>
+                   </div>
+                 </div>
 
-                {/* Checkboxes Row */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input 
-                      type="checkbox"
-                      id="autoSizeCheck"
-                      checked={selectedItem.autoSize}
-                      onChange={e => handleUpdateSelectedElement({ autoSize: e.target.checked })}
-                    />
-                    <label htmlFor="autoSizeCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Auto-size text to fit bubble</label>
-                  </div>
+                  {/* Mask Background Color (only relevant if clean background mask is enabled) */}
+                  {selectedItem.wordWrap && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Mask Background Color</label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input 
+                          type="color"
+                          style={{ 
+                            width: '40px', 
+                            height: '38px', 
+                            padding: '2px', 
+                            border: '1px solid var(--border-color)', 
+                            borderRadius: '6px',
+                            backgroundColor: 'transparent',
+                            cursor: 'pointer' 
+                          }}
+                          value={normalizeHexColor(selectedItem.backgroundColor)}
+                          onChange={e => handleUpdateSelectedElement({ backgroundColor: e.target.value })}
+                        />
+                        <input 
+                          type="text"
+                          className="form-input"
+                          style={{ flex: 1, padding: '6px 10px', fontSize: '13px', fontFamily: 'monospace' }}
+                          placeholder="#ffffff"
+                          value={selectedItem.backgroundColor || ''}
+                          onChange={e => handleUpdateSelectedElement({ backgroundColor: e.target.value })}
+                        />
+                        <button 
+                          className="btn btn-secondary"
+                          style={{ padding: '8px 12px', fontSize: '13px' }}
+                          onClick={() => handleLaunchEyeDropper('backgroundColor')}
+                          title="Color Dropper"
+                        >
+                          🧪
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input 
-                      type="checkbox"
-                      id="visibleCheck"
-                      checked={selectedItem.visible}
-                      onChange={e => handleUpdateSelectedElement({ visible: e.target.checked })}
-                    />
-                    <label htmlFor="visibleCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Visible</label>
-                  </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input 
-                      type="checkbox"
-                      id="maskCheck"
-                      checked={selectedItem.wordWrap}
-                      onChange={e => handleUpdateSelectedElement({ wordWrap: e.target.checked })}
-                    />
-                    <label htmlFor="maskCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Clean background mask</label>
-                  </div>
-                </div>
+                  {/* Text Color (only relevant if it is a text-bearing element) */}
+                  {selectedItem.text !== undefined && selectedItem.text !== null && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Text Color</label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input 
+                          type="color"
+                          style={{ 
+                            width: '40px', 
+                            height: '38px', 
+                            padding: '2px', 
+                            border: '1px solid var(--border-color)', 
+                            borderRadius: '6px',
+                            backgroundColor: 'transparent',
+                            cursor: 'pointer' 
+                          }}
+                          value={normalizeHexTextColor(selectedItem.textColor)}
+                          onChange={e => handleUpdateSelectedElement({ textColor: e.target.value })}
+                        />
+                        <input 
+                          type="text"
+                          className="form-input"
+                          style={{ flex: 1, padding: '6px 10px', fontSize: '13px', fontFamily: 'monospace' }}
+                          placeholder="#000000"
+                          value={selectedItem.textColor || ''}
+                          onChange={e => handleUpdateSelectedElement({ textColor: e.target.value })}
+                        />
+                        <button 
+                          className="btn btn-secondary"
+                          style={{ padding: '8px 12px', fontSize: '13px' }}
+                          onClick={() => handleLaunchEyeDropper('textColor')}
+                          title="Color Dropper"
+                        >
+                          🧪
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                {/* Action Buttons */}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  <button
-                    className="btn btn-primary"
-                    style={{ flex: 1, padding: '8px' }}
-                    onClick={() => handleSaveElementChanges(selectedItem)}
-                  >
-                    Save Changes
-                  </button>
-                </div>
+                 {/* Rotation Slider */}
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                   <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Rotation ({selectedItem.rotation || 0}°)</label>
+                   <input 
+                     type="range"
+                     min="0"
+                     max="360"
+                     value={selectedItem.rotation || 0}
+                     onChange={e => handleUpdateSelectedElement({ rotation: parseFloat(e.target.value) || 0 })}
+                     style={{ width: '100%' }}
+                   />
+                 </div>
+
+                 {/* Checkboxes Row */}
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                     <input 
+                       type="checkbox"
+                       id="autoSizeCheck"
+                       checked={selectedItem.autoSize}
+                       onChange={e => handleUpdateSelectedElement({ autoSize: e.target.checked })}
+                     />
+                     <label htmlFor="autoSizeCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Auto-size text to fit bubble</label>
+                   </div>
+
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                     <input 
+                       type="checkbox"
+                       id="visibleCheck"
+                       checked={selectedItem.visible}
+                       onChange={e => handleUpdateSelectedElement({ visible: e.target.checked })}
+                     />
+                     <label htmlFor="visibleCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Visible</label>
+                   </div>
+                   
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                     <input 
+                       type="checkbox"
+                       id="maskCheck"
+                       checked={selectedItem.wordWrap}
+                       onChange={e => handleUpdateSelectedElement({ wordWrap: e.target.checked })}
+                     />
+                     <label htmlFor="maskCheck" style={{ fontSize: '12px', cursor: 'pointer' }}>Clean background mask</label>
+                   </div>
+                 </div>
+
+                 {/* Action Buttons */}
+                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                   <button
+                     className="btn btn-primary"
+                     style={{ flex: 1, padding: '8px' }}
+                     onClick={() => handleSaveElementChanges(selectedItem)}
+                   >
+                     Save
+                   </button>
+                   <button
+                     className="btn btn-secondary"
+                     style={{ flex: 1, padding: '8px', borderColor: 'var(--error, #ef4444)', color: 'var(--error, #ef4444)' }}
+                     onClick={() => handleDeleteElement(selectedItem.id)}
+                   >
+                     Delete
+                   </button>
+                 </div>
               </div>
             )}
 

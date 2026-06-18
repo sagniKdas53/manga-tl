@@ -60,6 +60,20 @@ public class LayerElement {
 
   @Builder.Default private Boolean overflow = false;
 
+  @Column(name = "background_color")
+  private String backgroundColor;
+
+  @Column(name = "text_color")
+  private String textColor;
+
+  @Column(name = "font_weight")
+  @Builder.Default
+  private String fontWeight = "normal";
+
+  @Column(name = "font_style")
+  @Builder.Default
+  private String fontStyle = "normal";
+
   @Column(name = "is_manually_edited")
   @Builder.Default
   private Boolean isManuallyEdited = false;

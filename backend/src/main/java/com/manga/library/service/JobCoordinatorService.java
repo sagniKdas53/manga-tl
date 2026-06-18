@@ -41,6 +41,7 @@ public class JobCoordinatorService {
   private final ConversationRegionRepository conversationRegionRepository;
   private final LayerRepository layerRepository;
   private final LayerElementRepository layerElementRepository;
+  private final PageRepository pageRepository;
 
   public void startPipeline(UUID imageId) {
     log.info("Starting pipeline for image {}", imageId);
@@ -76,6 +77,18 @@ public class JobCoordinatorService {
       job.put("attempt", 1);
       job.put("maxAttempts", 3);
       job.put("createdAt", OffsetDateTime.now().toString());
+
+      pageRepository.findByImageId(imageId).ifPresent(page -> {
+        if (page.getChapter() != null && page.getChapter().getSeries() != null) {
+          Series series = page.getChapter().getSeries();
+          if (series.getReadingDirection() != null) {
+            job.put("readingDirection", series.getReadingDirection().trim().toLowerCase());
+          }
+          if (series.getOriginalLanguage() != null) {
+            job.put("sourceLanguage", series.getOriginalLanguage().trim().toLowerCase());
+          }
+        }
+      });
 
       String json = objectMapper.writeValueAsString(job);
       String queueName = "queue:" + jobType;
