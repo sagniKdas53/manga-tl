@@ -57,6 +57,11 @@ export interface OcrRegion {
   bboxH: number;
   panelReadingOrder: number;
   bubbleReadingOrder: number;
+  bubbleX?: number | null;
+  bubbleY?: number | null;
+  bubbleW?: number | null;
+  bubbleH?: number | null;
+  backgroundColor?: string | null;
 }
 
 export interface ConversationRegion {
@@ -102,6 +107,7 @@ export interface LayerElement {
   textColor?: string | null;
   fontWeight?: string | null;
   fontStyle?: string | null;
+  boxShape?: string | null;
 }
 
 export interface LayerEditHistory {

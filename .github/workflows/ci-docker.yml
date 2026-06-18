@@ -13,6 +13,9 @@ jobs:
   build:
     name: docker build — ${{ matrix.service }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     strategy:
       fail-fast: false          # independent: let each service report its own status

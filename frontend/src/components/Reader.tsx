@@ -940,8 +940,8 @@ export const Reader: React.FC<ReaderProps> = ({
         ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
         ctx.translate(-cx, -cy);
 
-        // White mask backdrop
-        ctx.fillStyle = '#ffffff';
+        // Mask backdrop
+        ctx.fillStyle = el.backgroundColor || '#ffffff';
         ctx.fillRect(el.x, el.y, width, height);
 
         // Draw text
@@ -950,7 +950,8 @@ export const Reader: React.FC<ReaderProps> = ({
           width - 8,
           height - 8,
           el.font || 'Comic Neue',
-          el.size || 16
+          el.size || 16,
+          (el.boxShape as any) || 'rectangular'
         );
         const fSize = fit.fontSize;
         ctx.font = `bold ${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
@@ -1013,7 +1014,7 @@ export const Reader: React.FC<ReaderProps> = ({
         maskCtx.translate(cx, cy);
         maskCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
         maskCtx.translate(-cx, -cy);
-        maskCtx.fillStyle = '#ffffff';
+        maskCtx.fillStyle = el.backgroundColor || '#ffffff';
         maskCtx.fillRect(el.x, el.y, width, height);
         maskCtx.restore();
       });
@@ -1037,7 +1038,8 @@ export const Reader: React.FC<ReaderProps> = ({
           width - 8,
           height - 8,
           el.font || 'Comic Neue',
-          el.size || 16
+          el.size || 16,
+          (el.boxShape as any) || 'rectangular'
         );
         const fSize = fit.fontSize;
         textCtx.save();
@@ -1086,6 +1088,11 @@ export const Reader: React.FC<ReaderProps> = ({
           rotation: el.rotation,
           visible: el.visible,
           wordWrap: el.wordWrap,
+          backgroundColor: el.backgroundColor,
+          textColor: el.textColor,
+          fontWeight: el.fontWeight || 'normal',
+          fontStyle: el.fontStyle || 'normal',
+          boxShape: el.boxShape || 'rectangular',
         })),
       })),
     };
@@ -1893,29 +1900,26 @@ export const Reader: React.FC<ReaderProps> = ({
                     // Run text fitting
                     let fontSize: number;
                     let overflow: boolean;
+                    let textToRender = element.text || '';
+
+                    const fit = fitTextInBox(
+                      element.text || '',
+                      element.maxWidth || 100,
+                      element.maxHeight || 100,
+                      element.font || 'Comic Neue',
+                      element.size || 16,
+                      (element.boxShape as any) || 'rectangular'
+                    );
 
                     if (element.autoSize) {
-                      const fit = fitTextInBox(
-                        element.text || '',
-                        element.maxWidth || 100,
-                        element.maxHeight || 100,
-                        element.font || 'Comic Neue',
-                        element.size || 16
-                      );
                       fontSize = fit.fontSize;
                       overflow = fit.overflow;
                     } else {
-                      const fit = fitTextInBox(
-                        element.text || '',
-                        element.maxWidth || 100,
-                        element.maxHeight || 100,
-                        element.font || 'Comic Neue',
-                        element.size || 16
-                      );
                       fontSize = element.size || 16;
                       const totalHeight = fit.lines.length * fontSize * 1.2;
                       overflow = totalHeight > (element.maxHeight || 100);
                     }
+                    textToRender = fit.lines.join('\n');
 
                     const width = element.maxWidth || 100;
                     const height = element.maxHeight || 100;
@@ -2078,7 +2082,7 @@ export const Reader: React.FC<ReaderProps> = ({
                                 width: '100%'
                               }}
                             >
-                              {element.text}
+                               {textToRender}
                             </div>
                           </div>
                         </foreignObject>
@@ -2606,9 +2610,23 @@ export const Reader: React.FC<ReaderProps> = ({
                      >
                        <option value="normal">Normal</option>
                        <option value="italic">Italic</option>
-                     </select>
-                   </div>
-                 </div>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Box Shape selection */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)' }}>Box Shape</label>
+                    <select
+                      className="form-input"
+                      style={{ padding: '4px 8px', fontSize: '13px', height: '38px', backgroundColor: 'var(--bg-surface)' }}
+                      value={selectedItem.boxShape || 'rectangular'}
+                      onChange={e => handleUpdateSelectedElement({ boxShape: e.target.value })}
+                    >
+                      <option value="rectangular">Rectangular</option>
+                      <option value="elliptical">Elliptical (Contour-Based)</option>
+                    </select>
+                  </div>
 
                   {/* Mask Background Color (only relevant if clean background mask is enabled) */}
                   {selectedItem.wordWrap && (

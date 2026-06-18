@@ -81,6 +81,10 @@ public class LayerElement {
   @Column(name = "edited_at")
   private OffsetDateTime editedAt;
 
+  @Column(name = "box_shape")
+  @Builder.Default
+  private String boxShape = "rectangular";
+
   @com.fasterxml.jackson.annotation.JsonProperty("layerId")
   public UUID getLayerIdSerialized() {
     return layer != null ? layer.getId() : null;

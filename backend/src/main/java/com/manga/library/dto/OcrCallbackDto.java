@@ -22,5 +22,10 @@ public class OcrCallbackDto {
     private Integer panelReadingOrder;
     private Integer bubbleReadingOrder;
     private List<UUID> conversationGroup; // optional list of indexes
+    private String backgroundColor;
+    private Integer bubbleX;
+    private Integer bubbleY;
+    private Integer bubbleWidth;
+    private Integer bubbleHeight;
   }
 }

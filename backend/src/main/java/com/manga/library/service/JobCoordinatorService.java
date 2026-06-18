@@ -179,6 +179,11 @@ public class JobCoordinatorService {
               .bboxH(rData.getHeight())
               .panelReadingOrder(matchingPanel != null ? matchingPanel.getReadingOrder() : 0)
               .bubbleReadingOrder(rData.getBubbleReadingOrder())
+              .backgroundColor(rData.getBackgroundColor())
+              .bubbleX(rData.getBubbleX())
+              .bubbleY(rData.getBubbleY())
+              .bubbleW(rData.getBubbleWidth())
+              .bubbleH(rData.getBubbleHeight())
               .build();
       regionsToSave.add(region);
     }
@@ -361,17 +366,25 @@ public class JobCoordinatorService {
                     // Find or create LayerElement
                     LayerElement element = elementMap.get(regionId);
                     if (element == null) {
+                      double ex = region.getBubbleX() != null ? region.getBubbleX().doubleValue() : region.getBboxX().doubleValue();
+                      double ey = region.getBubbleY() != null ? region.getBubbleY().doubleValue() : region.getBboxY().doubleValue();
+                      int ew = region.getBubbleW() != null ? region.getBubbleW() : region.getBboxW();
+                      int eh = region.getBubbleH() != null ? region.getBubbleH() : region.getBboxH();
+
                       element =
                           LayerElement.builder()
                               .layer(translationLayer)
                               .region(region)
                               .text(translatedText)
-                              .x(region.getBboxX().doubleValue())
-                              .y(region.getBboxY().doubleValue())
-                              .maxWidth(region.getBboxW())
-                              .maxHeight(region.getBboxH())
+                              .x(ex)
+                              .y(ey)
+                              .maxWidth(ew)
+                              .maxHeight(eh)
                               .visible(true)
                               .autoSize(true)
+                              .backgroundColor(region.getBackgroundColor())
+                              .textColor(getContrastingTextColor(region.getBackgroundColor()))
+                              .boxShape("speech".equalsIgnoreCase(region.getRegionType()) ? "elliptical" : "rectangular")
                               .build();
                     } else {
                       element.setText(translatedText);
@@ -481,6 +494,21 @@ public class JobCoordinatorService {
     } catch (Exception e) {
       log.error("Failed to connect to worker health endpoint: {}", workerHealthUrl, e);
       return false;
+    }
+  }
+
+  private String getContrastingTextColor(String hexColor) {
+    if (hexColor == null || !hexColor.startsWith("#") || hexColor.length() < 7) {
+      return "#000000";
+    }
+    try {
+      int r = Integer.parseInt(hexColor.substring(1, 3), 16);
+      int g = Integer.parseInt(hexColor.substring(3, 5), 16);
+      int b = Integer.parseInt(hexColor.substring(5, 7), 16);
+      double luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+      return luminance < 0.5 ? "#ffffff" : "#000000";
+    } catch (Exception e) {
+      return "#000000";
     }
   }
 }

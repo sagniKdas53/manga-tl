@@ -20,4 +20,5 @@ public class LayerElementDto {
   private String textColor;
   private String fontWeight;
   private String fontStyle;
+  private String boxShape;
 }

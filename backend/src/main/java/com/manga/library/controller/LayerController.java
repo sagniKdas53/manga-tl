@@ -61,6 +61,7 @@ public class LayerController {
                 if (dto.getTextColor() != null) element.setTextColor(dto.getTextColor());
                 if (dto.getFontWeight() != null) element.setFontWeight(dto.getFontWeight());
                 if (dto.getFontStyle() != null) element.setFontStyle(dto.getFontStyle());
+                if (dto.getBoxShape() != null) element.setBoxShape(dto.getBoxShape());
 
                 element.setIsManuallyEdited(true);
                 element.setEditedAt(OffsetDateTime.now());
@@ -182,6 +183,7 @@ public class LayerController {
                       .backgroundColor(dto.getBackgroundColor())
                       .fontWeight(dto.getFontWeight() != null ? dto.getFontWeight() : "normal")
                       .fontStyle(dto.getFontStyle() != null ? dto.getFontStyle() : "normal")
+                      .boxShape(dto.getBoxShape() != null ? dto.getBoxShape() : "rectangular")
                       .build();
               LayerElement saved = layerElementRepository.save(el);
               return ResponseEntity.ok(saved);
@@ -224,6 +226,7 @@ public class LayerController {
     map.put("textColor", el.getTextColor());
     map.put("fontWeight", el.getFontWeight());
     map.put("fontStyle", el.getFontStyle());
+    map.put("boxShape", el.getBoxShape());
     return map;
   }
 }
