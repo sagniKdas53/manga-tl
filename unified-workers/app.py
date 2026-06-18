@@ -14,6 +14,8 @@ from worker.handlers import (
     process_translation,
     process_region_redo,
     process_stub,
+    process_render,
+    process_qa,
 )
 
 def process_job(queue_name, job_data):
@@ -29,7 +31,9 @@ def process_job(queue_name, job_data):
         elif queue_name == "queue:region-redo":
             process_region_redo(job_data)
         elif queue_name == "queue:render":
-            process_stub(job_data, "render")
+            process_render(job_data)
+        elif queue_name == "queue:qa":
+            process_qa(job_data)
     except Exception as e:
         print(f"[Unified Worker] Error processing job from {queue_name}: {e}", flush=True)
         traceback.print_exc()
@@ -46,6 +50,7 @@ def main():
         "queue:layout",
         "queue:translation",
         "queue:render",
+        "queue:qa",
         "queue:region-redo",
     ]
     

@@ -86,6 +86,22 @@ public class OcrRegion {
   @Column(name = "bubble_h")
   private Integer bubbleH;
 
+  @Column(name = "ocr_score")
+  private Double ocrScore;
+
+  @Column(name = "translation_score")
+  private Double translationScore;
+
+  @Column(name = "qa_score")
+  private Double qaScore;
+
+  @Column(name = "qa_feedback")
+  private String qaFeedback;
+
+  @Column(name = "qa_status")
+  @Builder.Default
+  private String qaStatus = "pending";
+
   public UUID getPanelId() {
     return panel != null ? panel.getId() : null;
   }

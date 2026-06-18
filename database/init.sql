@@ -112,7 +112,12 @@ CREATE TABLE IF NOT EXISTS ocr_regions (
     bubble_x INT,
     bubble_y INT,
     bubble_w INT,
-    bubble_h INT
+    bubble_h INT,
+    ocr_score FLOAT,
+    translation_score FLOAT,
+    qa_score FLOAT,
+    qa_feedback TEXT,
+    qa_status TEXT DEFAULT 'pending'
 );
 
 -- Conversations

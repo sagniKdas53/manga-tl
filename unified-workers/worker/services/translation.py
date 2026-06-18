@@ -22,6 +22,7 @@ TRANSLATION_JSON_SCHEMA = {
                     "translationNotes": {"type": "string"},
                     "emotion": {"type": "string"},
                     "tone": {"type": "string"},
+                    "translationScore": {"type": "number", "minimum": 0.0, "maximum": 1.0},
                 },
                 "required": ["id", "translation"],
             },
@@ -257,7 +258,8 @@ def validate_translation_response(parsed_json):
                 "translatedText": translation.strip(),
                 "translationNotes": item.get("translationNotes", ""),
                 "emotion": item.get("emotion", ""),
-                "tone": item.get("tone", "")
+                "tone": item.get("tone", ""),
+                "translationScore": float(item.get("translationScore", 1.0))
             }
 
     return validated if validated else None
@@ -955,17 +957,19 @@ def translate_batch_llm(unmatched_regions, context_str="", response_schema=None,
 
     bubbles_input = []
     for r in unmatched_regions:
-        bubbles_input.append(
-            {
-                "id": r["id"],
-                "panel": r.get("panelReadingOrder") or r.get("panelId") or 0,
-                "bubble": r.get("bubbleReadingOrder") or 0,
-                "speaker": r.get("speakerLabel") or None,
-                "regionType": r.get("regionType") or "speech",
-                "conversationGroup": r.get("conversationId") or None,
-                "text": r["text"],
-            }
-        )
+        entry = {
+            "id": r["id"],
+            "panel": r.get("panelReadingOrder") or r.get("panelId") or 0,
+            "bubble": r.get("bubbleReadingOrder") or 0,
+            "speaker": r.get("speakerLabel") or None,
+            "regionType": r.get("regionType") or "speech",
+            "conversationGroup": r.get("conversationId") or None,
+            "text": r["text"],
+        }
+        if r.get("qaStatus") == "failed" and r.get("qaFeedback"):
+            entry["previousTranslation"] = r.get("translatedText")
+            entry["qaFeedback"] = r.get("qaFeedback")
+        bubbles_input.append(entry)
     bubbles_json = json.dumps(bubbles_input, ensure_ascii=False, indent=2)
 
     logger.debug(f"{req_prefix}Batch Input:\n{bubbles_json}")
@@ -991,6 +995,8 @@ Region type handling:
 
 If multiple regions share the same conversationGroup, treat them as a continuous dialogue exchange and ensure coherent flow.
 
+If a region has "previousTranslation" and "qaFeedback" fields, it means the previous translation attempt failed QA (e.g. text overflow, poor phrasing, or formatting issues). Adjust your translation accordingly based on the feedback (for example, shortening the text to fit if it overflowed).
+
 You MUST return a JSON object containing a "translations" key with an array of objects.
 Each object in the array MUST have the following keys:
 - "id" (the original string ID)
@@ -998,6 +1004,7 @@ Each object in the array MUST have the following keys:
 - "translationNotes" (brief explanation of translation decisions or register choices)
 - "emotion" (detected speaker emotion, e.g. "earnest", "angry", "playful")
 - "tone" (detected tone, e.g. "formal", "sarcastic", "casual")
+- "translationScore" (a self-evaluation score from 0.0 to 1.0 representing translation quality/confidence)
 
 Example structure:
 {{
@@ -1007,7 +1014,8 @@ Example structure:
       "translation": "Translated text here",
       "translationNotes": "Preserved informal/teasing tone",
       "emotion": "playful",
-      "tone": "casual"
+      "tone": "casual",
+      "translationScore": 0.95
     }}
   ]
 }}
@@ -1200,17 +1208,19 @@ def translate_vlm_vision(
 
     bubbles_input = []
     for r in unmatched_regions:
-        bubbles_input.append(
-            {
-                "id": r["id"],
-                "panel": r.get("panelReadingOrder") or r.get("panelId") or 0,
-                "bubble": r.get("bubbleReadingOrder") or 0,
-                "speaker": r.get("speakerLabel") or None,
-                "regionType": r.get("regionType") or "speech",
-                "conversationGroup": r.get("conversationId") or None,
-                "text": r["text"],
-            }
-        )
+        entry = {
+            "id": r["id"],
+            "panel": r.get("panelReadingOrder") or r.get("panelId") or 0,
+            "bubble": r.get("bubbleReadingOrder") or 0,
+            "speaker": r.get("speakerLabel") or None,
+            "regionType": r.get("regionType") or "speech",
+            "conversationGroup": r.get("conversationId") or None,
+            "text": r["text"],
+        }
+        if r.get("qaStatus") == "failed" and r.get("qaFeedback"):
+            entry["previousTranslation"] = r.get("translatedText")
+            entry["qaFeedback"] = r.get("qaFeedback")
+        bubbles_input.append(entry)
 
     prompt = f"""{context_str}These OCR regions were extracted from this manga page using automated OCR.
 
@@ -1239,6 +1249,8 @@ Region type handling:
 
 If multiple regions share the same conversationGroup, treat them as a continuous dialogue exchange and ensure coherent flow.
 
+If a region has "previousTranslation" and "qaFeedback" fields, it means the previous translation attempt failed QA (e.g. text overflow, poor phrasing, or formatting issues). Adjust your translation accordingly based on the feedback (for example, shortening the text to fit if it overflowed).
+
 You MUST return a JSON object containing a "translations" key with an array of objects.
 Each object in the array MUST have the following keys:
 - "id" (the original string ID)
@@ -1246,6 +1258,7 @@ Each object in the array MUST have the following keys:
 - "translationNotes" (brief explanation of translation decisions or register choices)
 - "emotion" (detected speaker emotion, e.g. "earnest", "angry", "playful")
 - "tone" (detected tone, e.g. "formal", "sarcastic", "casual")
+- "translationScore" (a self-evaluation score from 0.0 to 1.0 representing translation quality/confidence)
 
 Example structure:
 {{
@@ -1255,7 +1268,8 @@ Example structure:
       "translation": "Translated text here",
       "translationNotes": "Preserved informal/teasing tone",
       "emotion": "playful",
-      "tone": "casual"
+      "tone": "casual",
+      "translationScore": 0.95
     }}
   ]
 }}

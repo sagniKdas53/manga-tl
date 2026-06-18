@@ -238,11 +238,13 @@ def process_translation(job_data):
         notes = ""
         emotion = ""
         tone = ""
+        translation_score = 1.0
         if isinstance(translated, dict):
             translated_text = translated.get("translatedText")
             notes = translated.get("translationNotes", "")
             emotion = translated.get("emotion", "")
             tone = translated.get("tone", "")
+            translation_score = float(translated.get("translationScore", 1.0))
         elif isinstance(translated, str):
             translated_text = translated
 
@@ -253,7 +255,8 @@ def process_translation(job_data):
                 "translationFailed": (translated_text is None),
                 "translationNotes": notes,
                 "emotion": emotion,
-                "tone": tone
+                "tone": tone,
+                "translationScore": translation_score
             }
         )
         logger.info(
