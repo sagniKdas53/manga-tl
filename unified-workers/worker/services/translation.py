@@ -619,6 +619,16 @@ def try_local_ai(prompt, text, response_schema=None, request_id=None):
     # Keep gemma3:4b as fallback as requested by user
     model = os.environ.get("LOCAL_LLM_MODEL", "gemma3:4b")
 
+    remote_ollama = os.environ.get("OLLAMA_REMOTE_URL", os.environ.get("REMOTE_ML_URL", "")).strip()
+    if remote_ollama:
+        if not remote_ollama.endswith("/v1/chat/completions") and not remote_ollama.endswith("/api/v1/chat"):
+            if remote_ollama.endswith("/"):
+                remote_ollama += "v1/chat/completions"
+            else:
+                remote_ollama += "/v1/chat/completions"
+        local_endpoint = remote_ollama
+        local_provider = "ollama"
+
     if not local_endpoint:
         if local_provider == "ollama":
             local_endpoint = "http://ollama:11434/v1/chat/completions"
@@ -663,14 +673,16 @@ def try_local_ai(prompt, text, response_schema=None, request_id=None):
                     else:
                         payload["response_format"] = {"type": "json_object"}
 
-            start = time.perf_counter()
-            res = requests.post(
-                endpoint,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=300,
-            )
-            elapsed = time.perf_counter() - start
+            from worker.utils.lock import acquire_lock
+            with acquire_lock("local-llm"):
+                start = time.perf_counter()
+                res = requests.post(
+                    endpoint,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=300,
+                )
+                elapsed = time.perf_counter() - start
             logger.info(
                 f"{req_prefix}Provider={local_provider} "
                 f"Model={model} "

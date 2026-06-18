@@ -20,6 +20,12 @@ public class MinioService {
   @Value("${minio.bucketName}")
   private String bucketName;
 
+  @Value("${minio.externalUrl:}")
+  private String externalUrl;
+
+  @Value("${minio.endpoint}")
+  private String endpoint;
+
   @PostConstruct
   public void init() {
     try {
@@ -45,6 +51,19 @@ public class MinioService {
     }
   }
 
+  public String uploadFile(String objectPath, byte[] bytes, String contentType) throws Exception {
+    try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(bytes)) {
+      minioClient.putObject(
+          PutObjectArgs.builder()
+              .bucket(bucketName)
+              .object(objectPath)
+              .stream(bais, (long) bytes.length, -1L)
+              .contentType(contentType)
+              .build());
+      return objectPath;
+    }
+  }
+
   public InputStream downloadFile(String objectPath) throws Exception {
     return minioClient.getObject(
         GetObjectArgs.builder().bucket(bucketName).object(objectPath).build());
@@ -52,13 +71,17 @@ public class MinioService {
 
   public String generatePresignedUrl(String objectPath) {
     try {
-      return minioClient.getPresignedObjectUrl(
+      String url = minioClient.getPresignedObjectUrl(
           GetPresignedObjectUrlArgs.builder()
               .method(Http.Method.GET)
               .bucket(bucketName)
               .object(objectPath)
-              .expiry(2, TimeUnit.HOURS)
+              .expiry(10, TimeUnit.MINUTES)
               .build());
+      if (externalUrl != null && !externalUrl.trim().isEmpty() && url != null) {
+        url = url.replace(endpoint, externalUrl);
+      }
+      return url;
     } catch (Exception e) {
       log.error("Error generating presigned URL for {}", objectPath, e);
       return null;

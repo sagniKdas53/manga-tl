@@ -3,7 +3,8 @@ import requests
 import cv2
 import numpy as np
 
-from worker.config import logger, CALLBACK_URL, BACKEND_HEADERS, minio_client
+from worker.config import logger, CALLBACK_URL, BACKEND_HEADERS
+from worker.utils.image import download_image
 from worker.utils.text import detect_language
 from worker.services.ocr import perform_redo_ocr
 from worker.services.translation import translate_text
@@ -67,13 +68,12 @@ def process_region_redo(job_data):
         return
 
     try:
-        response = minio_client.get_object("manga-library", storage_path)
-        img_bytes = response.read()
+        img_bytes = download_image(image_info)
     except Exception as e:
         if redo_type == "translation":
-            logger.error(f"{req_prefix}Error downloading from MinIO: {e}")
+            logger.error(f"{req_prefix}Error downloading image: {e}")
         else:
-            print(f"[Region Redo] Error downloading from MinIO: {e}", flush=True)
+            print(f"[Region Redo] Error downloading image: {e}", flush=True)
         return
 
     callback_payload = {}

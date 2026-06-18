@@ -130,8 +130,8 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
 - [ ] **23. Inpainting**
   - *Status:* **Todo**.
   - *Note:* The `mask.png` produced by the Export Engine (item 20) is the natural input artifact for the inpainting pipeline — white-filled speech bubble rects on transparent background, ready for SD/ComfyUI inpainting.
-- [ ] **24. Local Model Support**
-  - *Status:* **Todo**.
+- [x] **24. Local Model Support**
+  - *Status:* **Complete** (Supports custom Ollama or LMStudio endpoints).
 
 ---
 
@@ -146,7 +146,7 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
 
 ## 🚀 Specification v4.0 Additions
 
-- [ ] **26. Database & Chapter Numbering Rules**
+- [x] **26. Database & Chapter Numbering Rules**
   - [x] Alter PostgreSQL schema: Change `chapters.chapter_number` to `NUMERIC` or `DOUBLE PRECISION`.
   - [x] Enforce backend unique check on `(series_id, chapter_number)`.
   - [x] Implement deletion gap insertion rules and moving/renumbering validation.
@@ -158,17 +158,17 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
   - [x] Set browser window title dynamically based on series/chapter/page details.
   - [x] Save viewer toggle and zoom preferences in `localStorage` across page reloads.
 
-- [ ] **28. Frontend Editor & Canvas Enhancements**
-  - [ ] Backend Thumbnailer integration: Save downscaled thumbnail copies to MinIO and use them for quick gallery rendering.
-  - [ ] Fix Zoom Sync: Update scale indicator correctly when "Fit Width" or "Fit Height" is used.
+- [/] **28. Frontend Editor & Canvas Enhancements**
+  - [x] Backend Thumbnailer integration: Save downscaled thumbnail copies to MinIO and use them for quick gallery rendering.
+  - [x] Fix Zoom Sync: Update scale indicator correctly when "Fit Width" or "Fit Height" is used.
   - [x] Fix scale-independent bounds rendering: Bounding boxes and borders must scale without displacement at <100% scales.
-  - [ ] Add manual text box creation and deletion/dismissal buttons in the canvas overlay.
-  - [ ] Implement Eye-Dropper tool to sample background colors from base image.
+  - [ ] Add manual text box creation and deletion/dismissal buttons in the canvas overlay [Not right now]
+  - [ ] Implement Eye-Dropper tool to sample background colors from base image to be used [Not right now]
 
-- [ ] **29. Valkey & Pipeline Optimizations**
+- [/] **29. Valkey & Pipeline Optimizations**
   - [x] Update `docker-compose.yml` to replace `manga-redis` with `valkey/valkey:8-alpine`.
-  - [ ] Implement optional PostgreSQL-based internal job queue (removing Valkey dependency) [OPTIONAL]
-  - [ ] Configure parallel processing pipelines for layout analysis and translation stages (leaving OCR and local LLMs sequential).
+  - [ ] Implement optional Spring cache abstraction with PostgreSQL as fallback to remove Valkey dependency for internal job queue [Not right now]
+  - [x] Configure parallel processing pipelines for layout analysis and translation stages (leaving OCR and local LLMs sequential).
 
 - [ ] **30. Advanced VLM Translation & QA**
   - [ ] Add support for Single-Pass Multimodal VLM (merging layout, grouping, and translation).
@@ -176,11 +176,11 @@ This checklist maps the **Development Order** defined in [Manga_Translation_Plat
   - [ ] Implement final VLM-based Quality Assurance review pass on rendered images to verify typesetting fit.
   - [ ] Add test configurations for comics, documents, web novels, and screenshots.
 
-- [ ] **31. Remote Machine Learning Integration**
-  - [ ] Support remote Ollama and remote Immich ML engines.
-  - [ ] Set up signed MinIO URL delivery for remote API processing.
+- [x] **31. Remote Machine Learning Integration**
+  - [x] Support remote Ollama and remote workers, configurable though env vars in docker compose.
+  - [x] Set up signed MinIO URL delivery for remote API processing.
 
-- [ ] **32. Repository Cleanup & Publishing**
-  - [ ] Audit and remove all hardcoded API keys.
-  - [ ] Purge references to nHentai endpoints.
-  - [ ] Set up cloud-based Docker image build triggers instead of local host-side builds.
+- [x] **32. Repository Cleanup & Publishing**
+  - [x] Audit and remove all hardcoded API keys.
+  - [x] Purge references to nHentai endpoints.
+  - [x] Set up cloud-based Docker image build triggers instead of local host-side builds.

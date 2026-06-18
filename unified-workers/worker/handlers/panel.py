@@ -1,6 +1,7 @@
 import requests
-from worker.config import CALLBACK_URL, BACKEND_HEADERS, minio_client
+from worker.config import CALLBACK_URL, BACKEND_HEADERS
 from worker.services.panel_detection import detect_panels
+from worker.utils.image import download_image
 
 def process_panel_detection(job_data):
     image_id = job_data["imageId"]
@@ -20,16 +21,14 @@ def process_panel_detection(job_data):
             )
             return
         image_info = res.json()
-        storage_path = image_info["storagePath"]
     except Exception as e:
         print(f"[Panel Detection] Error fetching image details: {e}", flush=True)
         return
 
     try:
-        response = minio_client.get_object("manga-library", storage_path)
-        img_bytes = response.read()
+        img_bytes = download_image(image_info)
     except Exception as e:
-        print(f"[Panel Detection] Error downloading from MinIO: {e}", flush=True)
+        print(f"[Panel Detection] Error downloading image: {e}", flush=True)
         return
 
     panels = detect_panels(img_bytes, reading_direction=reading_direction)

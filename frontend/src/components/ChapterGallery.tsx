@@ -376,7 +376,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             }}
             style={{ position: 'relative' }}
           >
-            <img src={p.url} className="page-thumbnail" alt={`Page ${p.pageNumber}`} />
+            <img src={p.thumbnailUrl || p.url} className="page-thumbnail" alt={`Page ${p.pageNumber}`} />
             <span className="page-num-tag">Page {p.pageNumber}</span>
 
             <button 

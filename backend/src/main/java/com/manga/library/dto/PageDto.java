@@ -11,4 +11,5 @@ public class PageDto {
   private UUID chapterId;
   private String filename;
   private String url;
+  private String thumbnailUrl;
 }

@@ -1538,7 +1538,7 @@ export const Reader: React.FC<ReaderProps> = ({
                   style={{ flex: 1 }}
                 />
                 <span style={{ fontSize: '12px', fontWeight: 'bold', minWidth: '40px', textAlign: 'right' }}>
-                  {Math.round(zoom * 100)}%
+                  {displayedZoom}%
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '8px' }}>

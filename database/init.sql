@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS images (
     height INT,
     hash TEXT,
     storage_path TEXT NOT NULL,
+    thumbnail_storage_path TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

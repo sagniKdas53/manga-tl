@@ -2,6 +2,7 @@ package com.manga.library.service;
 
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -18,9 +19,14 @@ public class PageService {
 
   @Transactional
   public Page createPageAndImage(
-      Chapter chapter, String filename, String storagePath, Integer pageNumber, User user) {
+      Chapter chapter, String filename, String storagePath, String thumbnailStoragePath, Integer pageNumber, User user) {
     Image image =
-        Image.builder().filename(filename).storagePath(storagePath).createdBy(user).build();
+        Image.builder()
+            .filename(filename)
+            .storagePath(storagePath)
+            .thumbnailStoragePath(thumbnailStoragePath)
+            .createdBy(user)
+            .build();
     Objects.requireNonNull(image, "image cannot be null");
     image = imageRepository.save(image);
 
@@ -30,7 +36,7 @@ public class PageService {
   }
 
   @Transactional
-  public String deletePageDb(UUID pageId) {
+  public List<String> deletePageDb(UUID pageId) {
     Objects.requireNonNull(pageId, "pageId cannot be null");
     Page page =
         pageRepository
@@ -38,7 +44,13 @@ public class PageService {
             .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
 
     Image image = page.getImage();
-    String storagePath = image.getStoragePath();
+    List<String> pathsToDelete = new ArrayList<>();
+    if (image.getStoragePath() != null) {
+      pathsToDelete.add(image.getStoragePath());
+    }
+    if (image.getThumbnailStoragePath() != null) {
+      pathsToDelete.add(image.getThumbnailStoragePath());
+    }
     UUID chapterId = page.getChapter().getId();
 
     // 1. Delete page first
@@ -60,6 +72,6 @@ public class PageService {
     }
     pageRepository.flush();
 
-    return storagePath;
+    return pathsToDelete;
   }
 }

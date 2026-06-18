@@ -1,8 +1,8 @@
 import os
 import uuid
 import requests
-
-from worker.config import logger, CALLBACK_URL, BACKEND_HEADERS, minio_client
+from worker.config import logger, CALLBACK_URL, BACKEND_HEADERS
+from worker.utils.image import download_image
 from worker.services.translation import (
     should_translate_region,
     is_valid_translation,
@@ -82,15 +82,12 @@ def process_translation(job_data):
         # Download image once if VLM vision translation is enabled
         img_bytes = None
         if use_vlm_translation and img_bytes is None:
-            storage_path = image_info.get("storagePath")
-            if storage_path:
-                try:
-                    response = minio_client.get_object("manga-library", storage_path)
-                    img_bytes = response.read()
-                except Exception as e:
-                    logger.error(
-                        f"{req_prefix}Error downloading image from MinIO for VLM pass: {e}"
-                    )
+            try:
+                img_bytes = download_image(image_info)
+            except Exception as e:
+                logger.error(
+                    f"{req_prefix}Error downloading image for VLM pass: {e}"
+                )
 
         for idx, chunk in enumerate(unmatched_chunks):
             logger.info(

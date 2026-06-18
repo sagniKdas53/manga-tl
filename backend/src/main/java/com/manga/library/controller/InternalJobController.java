@@ -5,6 +5,7 @@ import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
+import com.manga.library.service.MinioService;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class InternalJobController {
   private final ConversationRegionRepository conversationRegionRepository;
   private final PageRepository pageRepository;
   private final ChapterRepository chapterRepository;
+  private final MinioService minioService;
 
   @GetMapping("/images/{imageId}")
   public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
@@ -38,6 +40,7 @@ public class InternalJobController {
               map.put("id", image.getId().toString());
               map.put("filename", image.getFilename());
               map.put("storagePath", image.getStoragePath());
+              map.put("presignedUrl", minioService.generatePresignedUrl(image.getStoragePath()));
               map.put("panels", panelRepository.findByImageId(imageId));
               map.put("ocrRegions", ocrRegionRepository.findByImageId(imageId));
 

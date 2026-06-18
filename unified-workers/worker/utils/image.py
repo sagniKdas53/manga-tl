@@ -33,3 +33,20 @@ def calculate_overlap_area(r, p):
     overlap_x = max(0, min(rx + rw, px + pw) - max(rx, px))
     overlap_y = max(0, min(ry + rh, py + ph) - max(ry, py))
     return overlap_x * overlap_y
+
+
+def download_image(image_info):
+    presigned_url = image_info.get("presignedUrl")
+    if presigned_url:
+        import requests
+        from worker.config import logger
+        logger.info("Downloading image via presigned GET URL")
+        res = requests.get(presigned_url)
+        res.raise_for_status()
+        return res.content
+    else:
+        from worker.config import minio_client, logger
+        storage_path = image_info["storagePath"]
+        logger.info(f"Downloading image from local MinIO path: {storage_path}")
+        response = minio_client.get_object("manga-library", storage_path)
+        return response.read()
