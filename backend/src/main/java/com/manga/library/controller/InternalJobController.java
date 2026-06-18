@@ -21,7 +21,7 @@ public class InternalJobController {
   private final JobCoordinatorService jobCoordinatorService;
   private final ImageRepository imageRepository;
   private final PanelRepository panelRepository;
-  private final com.manga.library.repository.OcrRegionRepository ocrRegionRepository;
+  private final OcrRegionRepository ocrRegionRepository;
   private final ConversationRepository conversationRepository;
   private final ConversationRegionRepository conversationRegionRepository;
   private final PageRepository pageRepository;

@@ -424,7 +424,7 @@ public class PageController {
       // Phase 1: Set temporary high page numbers to avoid unique constraint violations
       for (int i = 0; i < pageIds.size(); i++) {
         Page p = pageMap.get(pageIds.get(i));
-        p.setPageNumber((i + 1) + 10000);
+        p.setPageNumber(i + 1 + 10000);
         pageRepository.save(p);
       }
       pageRepository.flush();
