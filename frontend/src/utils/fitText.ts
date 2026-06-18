@@ -105,7 +105,6 @@ export const fitTextInBox = (
           if (wordWidth > allowedW) {
             if (currentLine) {
               tentativeLines.push(currentLine);
-              currentLine = "";
               lineIndex++;
               if (lineIndex >= N) return null;
             }

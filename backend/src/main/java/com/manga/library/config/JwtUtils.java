@@ -27,7 +27,7 @@ public class JwtUtils {
     return Jwts.builder()
         .subject(email)
         .issuedAt(new Date())
-        .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
+        .expiration(new Date(new Date().getTime() + jwtExpirationMs))
         .signWith(getSigningKey())
         .compact();
   }

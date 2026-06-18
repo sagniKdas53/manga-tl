@@ -514,19 +514,16 @@ public class JobCoordinatorService {
                         }
                       }
                       region.setQaStatus("fixed");
-                    } else if ("failed".equalsIgnoreCase(qaStatus)) {
-                      // Check for escalations
-                      if (r.containsKey("escalation")) {
-                        Map<?, ?> escalation = (Map<?, ?>) r.get("escalation");
-                        if (Boolean.TRUE.equals(escalation.get("ocrBad"))
-                            && escalation.containsKey("correctedSourceText")) {
-                          region.setText((String) escalation.get("correctedSourceText"));
-                        }
-                        if (Boolean.TRUE.equals(escalation.get("orderBad"))
-                            && escalation.containsKey("suggestedReadingOrderIndex")) {
-                          region.setBubbleReadingOrder(
-                              ((Number) escalation.get("suggestedReadingOrderIndex")).intValue());
-                        }
+                    } else if ("failed".equalsIgnoreCase(qaStatus) && r.containsKey("escalation")) {
+                      Map<?, ?> escalation = (Map<?, ?>) r.get("escalation");
+                      if (Boolean.TRUE.equals(escalation.get("ocrBad"))
+                          && escalation.containsKey("correctedSourceText")) {
+                        region.setText((String) escalation.get("correctedSourceText"));
+                      }
+                      if (Boolean.TRUE.equals(escalation.get("orderBad"))
+                          && escalation.containsKey("suggestedReadingOrderIndex")) {
+                        region.setBubbleReadingOrder(
+                            ((Number) escalation.get("suggestedReadingOrderIndex")).intValue());
                       }
                     }
                     ocrRegionRepository.save(region);

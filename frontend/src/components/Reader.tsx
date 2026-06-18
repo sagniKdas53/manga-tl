@@ -951,7 +951,7 @@ export const Reader: React.FC<ReaderProps> = ({
           height - 8,
           el.font || 'Comic Neue',
           el.size || 16,
-          (el.boxShape as any) || 'rectangular'
+          (el.boxShape === 'elliptical' ? 'elliptical' : 'rectangular')
         );
         const fSize = fit.fontSize;
         ctx.font = `bold ${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
@@ -1039,7 +1039,7 @@ export const Reader: React.FC<ReaderProps> = ({
           height - 8,
           el.font || 'Comic Neue',
           el.size || 16,
-          (el.boxShape as any) || 'rectangular'
+          (el.boxShape === 'elliptical' ? 'elliptical' : 'rectangular')
         );
         const fSize = fit.fontSize;
         textCtx.save();
@@ -1900,7 +1900,6 @@ export const Reader: React.FC<ReaderProps> = ({
                     // Run text fitting
                     let fontSize: number;
                     let overflow: boolean;
-                    let textToRender = element.text || '';
 
                     const fit = fitTextInBox(
                       element.text || '',
@@ -1908,7 +1907,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       element.maxHeight || 100,
                       element.font || 'Comic Neue',
                       element.size || 16,
-                      (element.boxShape as any) || 'rectangular'
+                      (element.boxShape === 'elliptical' ? 'elliptical' : 'rectangular')
                     );
 
                     if (element.autoSize) {
@@ -1919,7 +1918,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       const totalHeight = fit.lines.length * fontSize * 1.2;
                       overflow = totalHeight > (element.maxHeight || 100);
                     }
-                    textToRender = fit.lines.join('\n');
+                    const textToRender = fit.lines.join('\n');
 
                     const width = element.maxWidth || 100;
                     const height = element.maxHeight || 100;

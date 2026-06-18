@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/series")
 @RequiredArgsConstructor
+@Slf4j
 public class SeriesController {
 
   private final SeriesRepository seriesRepository;
@@ -33,7 +35,7 @@ public class SeriesController {
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
 
-  private String getImageUrl(java.util.UUID imageId) {
+  private String getImageUrl(UUID imageId) {
     String cleanContext = contextPath == null ? "" : contextPath;
     if (cleanContext.endsWith("/")) {
       cleanContext = cleanContext.substring(0, cleanContext.length() - 1);
@@ -63,7 +65,7 @@ public class SeriesController {
           }
         }
       } catch (Exception e) {
-        // Ignore fallback exceptions
+        log.debug("Ignore fallback exception in toDto", e);
       }
     }
     return dto;
@@ -119,7 +121,7 @@ public class SeriesController {
           defaultCovers.put((UUID) row[0], (UUID) row[1]);
         }
       } catch (Exception e) {
-        // Ignore query exceptions
+        log.debug("Ignore query exception in listSeries", e);
       }
     }
 
@@ -185,7 +187,7 @@ public class SeriesController {
         chapterCovers.put((UUID) row[0], (UUID) row[1]);
       }
     } catch (Exception e) {
-      // Ignore query exceptions
+      log.debug("Ignore query exception in listChapters", e);
     }
 
     List<ChapterDto> list =
@@ -225,7 +227,7 @@ public class SeriesController {
                   dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
                 }
               } catch (Exception e) {
-                // Ignore fallback exceptions
+                log.debug("Ignore fallback exception in getChapter", e);
               }
               return ResponseEntity.ok(dto);
             })
@@ -296,7 +298,7 @@ public class SeriesController {
                   dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
                 }
               } catch (Exception e) {
-                // Ignore fallback exceptions
+                log.debug("Ignore fallback exception in updateChapter", e);
               }
               return ResponseEntity.ok(dto);
             })
