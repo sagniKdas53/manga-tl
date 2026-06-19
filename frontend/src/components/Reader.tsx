@@ -122,6 +122,7 @@ export const Reader: React.FC<ReaderProps> = ({
   // Pan & Drag States
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
+  const [freeResizeMode, setFreeResizeMode] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const [draggedElement, setDraggedElement] = useState<{
     id: string;
@@ -184,12 +185,12 @@ export const Reader: React.FC<ReaderProps> = ({
       const seriesTitle = selectedSeries ? selectedSeries.title : 'Series';
       const chapterNum = selectedChapter.chapterNumber;
       const pageNum = curPageNum;
-      document.title = `[TLHub] ${seriesTitle} - Ch. ${chapterNum} Page ${pageNum}`;
+      document.title = `[tl-hub] ${seriesTitle} - Ch. ${chapterNum} Page ${pageNum}`;
     } else {
-      document.title = 'TLHub - Manga Translation Platform';
+      document.title = 'tl-hub - Manga Translation Platform';
     }
     return () => {
-      document.title = 'TLHub';
+      document.title = 'tl-hub';
     };
   }, [selectedSeries, selectedChapter, curPageNum]);
 
@@ -424,8 +425,16 @@ export const Reader: React.FC<ReaderProps> = ({
       setPopoverOpen(false);
       setUndoStack([]);
       setRedoStack([]);
+      setFreeResizeMode(false);
     });
   }, [pageNumber]);
+
+  // Reset free resize mode on selectedItem changes
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setFreeResizeMode(false);
+    });
+  }, [selectedItem]);
 
   // History Undo/Redo operations
   const pushToHistoryStack = useCallback((prevState: LayerElement) => {
@@ -1972,9 +1981,11 @@ export const Reader: React.FC<ReaderProps> = ({
                             width={width}
                             height={height}
                             fill="transparent"
-                            style={{ cursor: 'move' }}
+                            style={{ cursor: freeResizeMode && isSelected ? 'move' : 'pointer' }}
                             onMouseDown={(e) => {
-                              handleElementDragStart(e, element, 'move');
+                              if (freeResizeMode && isSelected) {
+                                handleElementDragStart(e, element, 'move');
+                              }
                             }}
                           />
                         )}
@@ -1994,7 +2005,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         )}
 
                         {/* Drag and Resize Handles */}
-                        {isSelected && !cleanScanlationView && (
+                        {isSelected && freeResizeMode && !cleanScanlationView && (
                           <>
                             {/* Top-Left Handle */}
                             <rect
@@ -2555,6 +2566,35 @@ export const Reader: React.FC<ReaderProps> = ({
                       onChange={e => handleUpdateSelectedElement({ maxHeight: parseInt(e.target.value) || 0 })}
                     />
                   </div>
+                </div>
+
+                {/* Free Resize Mode Toggle */}
+                <div style={{ margin: '4px 0' }}>
+                  <button
+                    type="button"
+                    className={`btn ${freeResizeMode ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '13px', padding: '10px' }}
+                    onClick={() => setFreeResizeMode(!freeResizeMode)}
+                  >
+                    {freeResizeMode ? (
+                      <>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Free Resize: ACTIVE
+                      </>
+                    ) : (
+                      <>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M15 3h6v6"></path>
+                          <path d="M9 21H3v-6"></path>
+                          <path d="M21 3l-7 7"></path>
+                          <path d="M3 21l7-7"></path>
+                        </svg>
+                        Switch to Free Resize Mode
+                      </>
+                    )}
+                  </button>
                 </div>
 
                  {/* Font & Style settings */}

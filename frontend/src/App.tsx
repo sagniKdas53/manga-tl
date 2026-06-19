@@ -13,6 +13,8 @@ import { Dashboard } from './components/Dashboard';
 import { SeriesDetails } from './components/SeriesDetails';
 import { ChapterGallery } from './components/ChapterGallery';
 import { Reader } from './components/Reader';
+import logoDark from './assets/logo-dark.svg';
+import logoLight from './assets/logo-light.svg';
 
 function AppContent() {
   const navigate = useNavigate();
@@ -185,6 +187,22 @@ function AppContent() {
     }
   }, [chapterId, user, selectedChapter]);
 
+  // Dynamically manage browser tab title
+  useEffect(() => {
+    if (readerMatch) return;
+
+    if (location.pathname === '/' || location.pathname === '/login') {
+      document.title = 'tl-hub - Home';
+    } else if (seriesId && selectedSeries) {
+      document.title = `tl-hub - ${selectedSeries.title}`;
+    } else if (chapterId && selectedChapter) {
+      const seriesTitle = selectedSeries ? selectedSeries.title : 'Series';
+      document.title = `tl-hub - ${seriesTitle} - Ch. ${selectedChapter.chapterNumber}`;
+    } else {
+      document.title = 'tl-hub';
+    }
+  }, [location.pathname, seriesId, chapterId, selectedSeries, selectedChapter, readerMatch]);
+
   // Handle Logout
   const handleLogout = () => {
     localStorage.removeItem('manga_user');
@@ -197,9 +215,13 @@ function AppContent() {
       {/* Navigation Bar */}
       {!readerMatch && (
         <nav className="nav-bar">
-          <div className="logo" onClick={() => user && navigate('/')} style={{ cursor: user ? 'pointer' : 'default' }}>
-            <div className="logo-icon">M</div>
-            Manga Translation Hub
+          <div className="logo" onClick={() => user && navigate('/')} style={{ cursor: user ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <img 
+              src={theme === 'dark' ? logoDark : logoLight} 
+              alt="tl-hub logo" 
+              style={{ height: '32px', width: 'auto' }} 
+            />
+            <span style={{ fontWeight: 700 }}>tl-hub</span>
           </div>
           <div className="nav-actions">
             {/* Theme Toggle Button */}
