@@ -1,23 +1,29 @@
-name: CI — npm (Frontend)
+name: CI - Frontend
 
 on:
   push:
-    branches: ["main"]
+    branches: ["master"]
     paths:
       - "frontend/package.json"
       - "frontend/package-lock.json"
       - "frontend/src/**"
-      - "frontend/Dockerfile"
+      - "frontend/public/**"
+      - "frontend/index.html"
+      - "frontend/vite.config.*"
+      - ".github/workflows/ci-npm.yml"
   pull_request:
     paths:
       - "frontend/package.json"
       - "frontend/package-lock.json"
       - "frontend/src/**"
-      - "frontend/Dockerfile"
+      - "frontend/public/**"
+      - "frontend/index.html"
+      - "frontend/vite.config.*"
+      - ".github/workflows/ci-npm.yml"
 
 jobs:
   build:
-    name: Install, Lint & Build (npm)
+    name: Install, lint, and build frontend
     runs-on: ubuntu-latest
 
     steps:

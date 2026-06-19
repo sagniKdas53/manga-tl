@@ -1,21 +1,21 @@
-name: CI — Maven (Backend)
+name: CI - Backend
 
 on:
   push:
-    branches: ["main"]
+    branches: ["master"]
     paths:
       - "backend/pom.xml"
       - "backend/src/**"
-      - "backend/Dockerfile"
+      - ".github/workflows/ci-maven.yml"
   pull_request:
     paths:
       - "backend/pom.xml"
       - "backend/src/**"
-      - "backend/Dockerfile"
+      - ".github/workflows/ci-maven.yml"
 
 jobs:
   build:
-    name: Build & Test (Maven)
+    name: Build and test backend
     runs-on: ubuntu-latest
 
     services:
@@ -54,4 +54,3 @@ jobs:
           name: backend-jar
           path: backend/target/*.jar
           retention-days: 7
-
