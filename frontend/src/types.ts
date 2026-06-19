@@ -67,6 +67,13 @@ export interface OcrRegion {
   qaStatus?: 'passed' | 'failed' | 'direct_fix' | null;
   qaScore?: number | null;
   qaFeedback?: string | null;
+  bubbleId?: string | null;
+  detectionConfidence?: number | null;
+  maskPolygon?: string | null;
+  safeTextX?: number | null;
+  safeTextY?: number | null;
+  safeTextW?: number | null;
+  safeTextH?: number | null;
 }
 
 export interface ConversationRegion {
@@ -113,6 +120,7 @@ export interface LayerElement {
   fontWeight?: string | null;
   fontStyle?: string | null;
   boxShape?: string | null;
+  maskPolygon?: string | null;
 }
 
 export interface LayerEditHistory {

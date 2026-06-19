@@ -191,6 +191,13 @@ public class JobCoordinatorService {
               .bubbleY(rData.getBubbleY())
               .bubbleW(rData.getBubbleWidth())
               .bubbleH(rData.getBubbleHeight())
+              .bubbleId(rData.getBubbleId())
+              .detectionConfidence(rData.getDetectionConfidence())
+              .maskPolygon(rData.getMaskPolygon())
+              .safeTextX(rData.getSafeTextX())
+              .safeTextY(rData.getSafeTextY())
+              .safeTextW(rData.getSafeTextW())
+              .safeTextH(rData.getSafeTextH())
               .build();
       regionsToSave.add(region);
     }
@@ -403,18 +410,22 @@ public class JobCoordinatorService {
                     // Find or create LayerElement
                     LayerElement element = elementMap.get(regionId);
                     if (element == null) {
-                      double ex =
-                          region.getBubbleX() != null
+                      double ex = region.getSafeTextX() != null
+                          ? region.getSafeTextX().doubleValue()
+                          : (region.getBubbleX() != null
                               ? region.getBubbleX().doubleValue()
-                              : region.getBboxX().doubleValue();
-                      double ey =
-                          region.getBubbleY() != null
+                              : region.getBboxX().doubleValue());
+                      double ey = region.getSafeTextY() != null
+                          ? region.getSafeTextY().doubleValue()
+                          : (region.getBubbleY() != null
                               ? region.getBubbleY().doubleValue()
-                              : region.getBboxY().doubleValue();
-                      int ew =
-                          region.getBubbleW() != null ? region.getBubbleW() : region.getBboxW();
-                      int eh =
-                          region.getBubbleH() != null ? region.getBubbleH() : region.getBboxH();
+                              : region.getBboxY().doubleValue());
+                      int ew = region.getSafeTextW() != null
+                          ? region.getSafeTextW()
+                          : (region.getBubbleW() != null ? region.getBubbleW() : region.getBboxW());
+                      int eh = region.getSafeTextH() != null
+                          ? region.getSafeTextH()
+                          : (region.getBubbleH() != null ? region.getBubbleH() : region.getBboxH());
 
                       element =
                           LayerElement.builder()
@@ -433,9 +444,17 @@ public class JobCoordinatorService {
                                   "speech".equalsIgnoreCase(region.getRegionType())
                                       ? "elliptical"
                                       : "rectangular")
+                              .maskPolygon(region.getMaskPolygon())
                               .build();
                     } else {
                       element.setText(translatedText);
+                      if (region.getSafeTextX() != null) {
+                        element.setX(region.getSafeTextX().doubleValue());
+                        element.setY(region.getSafeTextY().doubleValue());
+                        element.setMaxWidth(region.getSafeTextW());
+                        element.setMaxHeight(region.getSafeTextH());
+                      }
+                      element.setMaskPolygon(region.getMaskPolygon());
                     }
                     Objects.requireNonNull(element, "element cannot be null");
                     layerElementRepository.save(element);

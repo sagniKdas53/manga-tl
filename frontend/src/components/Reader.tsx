@@ -942,16 +942,42 @@ export const Reader: React.FC<ReaderProps> = ({
         const height = el.maxHeight || 100;
 
         ctx.save();
-        // Apply rotation around element center
-        const cx = el.x + width / 2;
-        const cy = el.y + height / 2;
-        ctx.translate(cx, cy);
-        ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
-        ctx.translate(-cx, -cy);
+        if (!el.maskPolygon) {
+          // Apply rotation around element center only if not absolute maskPolygon
+          const cx = el.x + width / 2;
+          const cy = el.y + height / 2;
+          ctx.translate(cx, cy);
+          ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
+          ctx.translate(-cx, -cy);
+        }
 
         // Mask backdrop
-        ctx.fillStyle = el.backgroundColor || '#ffffff';
-        ctx.fillRect(el.x, el.y, width, height);
+        if (el.maskPolygon) {
+          try {
+            const pts = JSON.parse(el.maskPolygon);
+            if (Array.isArray(pts) && pts.length > 0) {
+              ctx.beginPath();
+              ctx.moveTo(pts[0][0], pts[0][1]);
+              for (let i = 1; i < pts.length; i++) {
+                ctx.lineTo(pts[i][0], pts[i][1]);
+              }
+              ctx.closePath();
+              ctx.fillStyle = el.backgroundColor || '#ffffff';
+              ctx.fill();
+            }
+          } catch (e) {
+            console.error("Failed to draw canvas maskPolygon", e);
+          }
+        } else {
+          ctx.fillStyle = el.backgroundColor || '#ffffff';
+          if (el.boxShape === 'elliptical') {
+            ctx.beginPath();
+            ctx.ellipse(el.x + width / 2, el.y + height / 2, width / 2, height / 2, 0, 0, 2 * Math.PI);
+            ctx.fill();
+          } else {
+            ctx.fillRect(el.x, el.y, width, height);
+          }
+        }
 
         // Draw text
         const fit = fitTextInBox(
@@ -960,17 +986,23 @@ export const Reader: React.FC<ReaderProps> = ({
           height - 8,
           el.font || 'Comic Neue',
           el.size || 16,
-          (el.boxShape === 'elliptical' ? 'elliptical' : 'rectangular')
+          (el.boxShape === 'elliptical' ? 'elliptical' : 'rectangular'),
+          el.x + 4,
+          el.y + 4,
+          el.maskPolygon
         );
         const fSize = fit.fontSize;
         ctx.font = `bold ${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = el.textColor || '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         const lineH = fSize * 1.2;
         const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
         fit.lines.forEach((line, i) => {
-          ctx.fillText(line, el.x + width / 2, startY + i * lineH);
+          const lineCenterX = (fit.lineCenters && fit.lineCenters[i] !== undefined)
+            ? fit.lineCenters[i]
+            : el.x + width / 2;
+          ctx.fillText(line, lineCenterX, startY + i * lineH);
         });
 
         ctx.restore();
@@ -1006,7 +1038,7 @@ export const Reader: React.FC<ReaderProps> = ({
     const origBlob = await new Promise<Blob>(res => origCanvas.toBlob(b => res(b!), 'image/png'));
     zip.file('original.png', origBlob);
 
-    // 2. mask.png  – white backdrop rects only, on transparent canvas
+    // 2. mask.png  – white backdrop rects/polygons only, on transparent canvas
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = W;
     maskCanvas.height = H;
@@ -1017,15 +1049,42 @@ export const Reader: React.FC<ReaderProps> = ({
         if (!el.visible) return;
         const width = el.maxWidth || 100;
         const height = el.maxHeight || 100;
-        maskCtx.save();
-        const cx = el.x + width / 2;
-        const cy = el.y + height / 2;
-        maskCtx.translate(cx, cy);
-        maskCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
-        maskCtx.translate(-cx, -cy);
-        maskCtx.fillStyle = el.backgroundColor || '#ffffff';
-        maskCtx.fillRect(el.x, el.y, width, height);
-        maskCtx.restore();
+
+        if (el.maskPolygon) {
+          try {
+            const pts = JSON.parse(el.maskPolygon);
+            if (Array.isArray(pts) && pts.length > 0) {
+              maskCtx.save();
+              maskCtx.beginPath();
+              maskCtx.moveTo(pts[0][0], pts[0][1]);
+              for (let i = 1; i < pts.length; i++) {
+                maskCtx.lineTo(pts[i][0], pts[i][1]);
+              }
+              maskCtx.closePath();
+              maskCtx.fillStyle = el.backgroundColor || '#ffffff';
+              maskCtx.fill();
+              maskCtx.restore();
+            }
+          } catch (e) {
+            console.error("Failed to draw canvas maskPolygon in zip export", e);
+          }
+        } else {
+          maskCtx.save();
+          const cx = el.x + width / 2;
+          const cy = el.y + height / 2;
+          maskCtx.translate(cx, cy);
+          maskCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
+          maskCtx.translate(-cx, -cy);
+          maskCtx.fillStyle = el.backgroundColor || '#ffffff';
+          if (el.boxShape === 'elliptical') {
+            maskCtx.beginPath();
+            maskCtx.ellipse(el.x + width / 2, el.y + height / 2, width / 2, height / 2, 0, 0, 2 * Math.PI);
+            maskCtx.fill();
+          } else {
+            maskCtx.fillRect(el.x, el.y, width, height);
+          }
+          maskCtx.restore();
+        }
       });
     });
     const maskBlob = await new Promise<Blob>(res => maskCanvas.toBlob(b => res(b!), 'image/png'));
@@ -1048,23 +1107,31 @@ export const Reader: React.FC<ReaderProps> = ({
           height - 8,
           el.font || 'Comic Neue',
           el.size || 16,
-          (el.boxShape === 'elliptical' ? 'elliptical' : 'rectangular')
+          (el.boxShape === 'elliptical' ? 'elliptical' : 'rectangular'),
+          el.x + 4,
+          el.y + 4,
+          el.maskPolygon
         );
         const fSize = fit.fontSize;
         textCtx.save();
-        const cx = el.x + width / 2;
-        const cy = el.y + height / 2;
-        textCtx.translate(cx, cy);
-        textCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
-        textCtx.translate(-cx, -cy);
+        if (!el.maskPolygon) {
+          const cx = el.x + width / 2;
+          const cy = el.y + height / 2;
+          textCtx.translate(cx, cy);
+          textCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
+          textCtx.translate(-cx, -cy);
+        }
         textCtx.font = `bold ${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
-        textCtx.fillStyle = '#000000';
+        textCtx.fillStyle = el.textColor || '#000000';
         textCtx.textAlign = 'center';
         textCtx.textBaseline = 'middle';
         const lineH = fSize * 1.2;
         const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
         fit.lines.forEach((line, i) => {
-          textCtx.fillText(line, el.x + width / 2, startY + i * lineH);
+          const lineCenterX = (fit.lineCenters && fit.lineCenters[i] !== undefined)
+            ? fit.lineCenters[i]
+            : el.x + width / 2;
+          textCtx.fillText(line, lineCenterX, startY + i * lineH);
         });
         textCtx.restore();
       });
@@ -1916,7 +1983,10 @@ export const Reader: React.FC<ReaderProps> = ({
                       element.maxHeight || 100,
                       element.font || 'Comic Neue',
                       element.size || 16,
-                      (element.boxShape === 'elliptical' ? 'elliptical' : 'rectangular')
+                      (element.boxShape === 'elliptical' ? 'elliptical' : 'rectangular'),
+                      element.x,
+                      element.y,
+                      element.maskPolygon
                     );
 
                     if (element.autoSize) {
@@ -1940,7 +2010,7 @@ export const Reader: React.FC<ReaderProps> = ({
                     return (
                       <g 
                         key={element.id}
-                        transform={`rotate(${element.rotation || 0}, ${cx}, ${cy})`}
+                        transform={element.maskPolygon ? undefined : `rotate(${element.rotation || 0}, ${cx}, ${cy})`}
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedItem({ ...element, isLayerElement: true });
@@ -1949,14 +2019,42 @@ export const Reader: React.FC<ReaderProps> = ({
                       >
                         {/* Backdrop Mask */}
                         {isMaskEnabled && (
-                          <rect 
-                            x={element.x}
-                            y={element.y}
-                            width={width}
-                            height={height}
-                            fill={element.backgroundColor || '#ffffff'}
-                            stroke="none"
-                          />
+                          element.maskPolygon ? (() => {
+                            try {
+                              const pts = JSON.parse(element.maskPolygon);
+                              if (Array.isArray(pts) && pts.length > 0) {
+                                const pointsStr = pts.map(p => `${p[0]},${p[1]}`).join(' ');
+                                return (
+                                  <polygon 
+                                    points={pointsStr}
+                                    fill={element.backgroundColor || '#ffffff'}
+                                    stroke="none"
+                                  />
+                                );
+                              }
+                            } catch(e) {}
+                            return null;
+                          })() : (
+                            element.boxShape === 'elliptical' ? (
+                              <ellipse 
+                                cx={cx}
+                                cy={cy}
+                                rx={width / 2}
+                                ry={height / 2}
+                                fill={element.backgroundColor || '#ffffff'}
+                                stroke="none"
+                              />
+                            ) : (
+                              <rect 
+                                x={element.x}
+                                y={element.y}
+                                width={width}
+                                height={height}
+                                fill={element.backgroundColor || '#ffffff'}
+                                stroke="none"
+                              />
+                            )
+                          )
                         )}
 
                         {/* Developer/Editor borders */}
@@ -2078,22 +2176,56 @@ export const Reader: React.FC<ReaderProps> = ({
                               overflow: 'hidden'
                             }}
                           >
-                            <div
-                              style={{
-                                fontFamily: `"${element.font || 'Comic Neue'}", sans-serif`,
-                                fontSize: `${fontSize}px`,
-                                fontWeight: element.fontWeight || 'normal',
-                                fontStyle: element.fontStyle || 'normal',
-                                color: element.textColor || '#000000',
-                                lineHeight: '1.2',
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-word',
-                                textAlign: 'center',
-                                width: '100%'
-                              }}
-                            >
-                               {textToRender}
-                            </div>
+                            {element.maskPolygon ? (
+                              <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                                {fit.lines.map((line, i) => {
+                                  const lineCenterX = (fit.lineCenters && fit.lineCenters[i] !== undefined)
+                                    ? fit.lineCenters[i]
+                                    : element.x + width / 2;
+                                  const lineH = fontSize * 1.2;
+                                  const startY = element.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
+                                  const lineY = startY + i * lineH;
+
+                                  return (
+                                    <div
+                                      key={i}
+                                      style={{
+                                        position: 'absolute',
+                                        left: `${lineCenterX - element.x}px`,
+                                        top: `${lineY - element.y}px`,
+                                        transform: 'translate(-50%, -50%)',
+                                        fontFamily: `"${element.font || 'Comic Neue'}", sans-serif`,
+                                        fontSize: `${fontSize}px`,
+                                        fontWeight: element.fontWeight || 'normal',
+                                        fontStyle: element.fontStyle || 'normal',
+                                        color: element.textColor || '#000000',
+                                        lineHeight: '1.2',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {line}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  fontFamily: `"${element.font || 'Comic Neue'}", sans-serif`,
+                                  fontSize: `${fontSize}px`,
+                                  fontWeight: element.fontWeight || 'normal',
+                                  fontStyle: element.fontStyle || 'normal',
+                                  color: element.textColor || '#000000',
+                                  lineHeight: '1.2',
+                                  whiteSpace: 'pre-wrap',
+                                  wordBreak: 'break-word',
+                                  textAlign: 'center',
+                                  width: '100%'
+                                }}
+                              >
+                                {textToRender}
+                              </div>
+                            )}
                           </div>
                         </foreignObject>
                       </g>
