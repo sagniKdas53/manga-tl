@@ -6,11 +6,13 @@ on:
     paths:
       - "backend/**"
       - "frontend/**"
+      - "unified-workers/**"
       - "backend/Dockerfile"
+      - "unified-workers/Dockerfile"
       - ".github/workflows/ci-docker.yml"
 
 jobs:
-  build-and-push:
+  build-and-push-backend:
     name: Build and push backend image
     runs-on: ubuntu-latest
     permissions:
@@ -38,7 +40,7 @@ jobs:
         env:
           OWNER: ${{ github.repository_owner }}
 
-      - name: Build and push image
+      - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -49,3 +51,44 @@ jobs:
             ghcr.io/${{ steps.registry_owner.outputs.owner }}/manga-tl:${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+
+  build-and-push-worker:
+    name: Build and push worker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Downcase registry owner
+        id: registry_owner
+        shell: bash
+        run: echo "owner=${OWNER,,}" >> "$GITHUB_OUTPUT"
+        env:
+          OWNER: ${{ github.repository_owner }}
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./unified-workers
+          file: unified-workers/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.registry_owner.outputs.owner }}/manga-tl-worker:latest
+            ghcr.io/${{ steps.registry_owner.outputs.owner }}/manga-tl-worker:${{ github.sha }}
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
+
