@@ -26,7 +26,8 @@ public class JobCoordinatorServiceTest {
   @Autowired private OcrRegionRepository ocrRegionRepository;
   @Autowired private LayerRepository layerRepository;
   @Autowired private LayerElementRepository layerElementRepository;
-  @Autowired private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
+  @org.springframework.boot.test.mock.mockito.MockBean
+  private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
   private HttpServer testServer;
   private int testPort;
@@ -55,6 +56,51 @@ public class JobCoordinatorServiceTest {
         jobCoordinatorService,
         "workerHealthUrl",
         "http://localhost:" + testPort + "/default-health");
+
+    // Set up mock for redisTemplate using in-memory structures
+    final Map<String, String> mockRedisValueStore = new HashMap<>();
+    final Map<String, List<String>> mockRedisListStore = new HashMap<>();
+
+    org.springframework.data.redis.core.ValueOperations<String, String> valueOps =
+        org.mockito.Mockito.mock(org.springframework.data.redis.core.ValueOperations.class);
+    org.mockito.Mockito.when(valueOps.get(org.mockito.Mockito.anyString()))
+        .thenAnswer(invocation -> mockRedisValueStore.get(invocation.getArgument(0)));
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              mockRedisValueStore.put(invocation.getArgument(0), invocation.getArgument(1));
+              return null;
+            })
+        .when(valueOps)
+        .set(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString());
+
+    org.springframework.data.redis.core.ListOperations<String, String> listOps =
+        org.mockito.Mockito.mock(org.springframework.data.redis.core.ListOperations.class);
+    org.mockito.Mockito.when(listOps.rightPush(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
+        .thenAnswer(
+            invocation -> {
+              String key = invocation.getArgument(0);
+              String val = invocation.getArgument(1);
+              mockRedisListStore.computeIfAbsent(key, k -> new ArrayList<>()).add(val);
+              return (long) mockRedisListStore.get(key).size();
+            });
+    org.mockito.Mockito.when(listOps.size(org.mockito.Mockito.anyString()))
+        .thenAnswer(
+            invocation -> {
+              String key = invocation.getArgument(0);
+              List<String> list = mockRedisListStore.get(key);
+              return list == null ? 0L : (long) list.size();
+            });
+
+    org.mockito.Mockito.when(redisTemplate.opsForValue()).thenReturn(valueOps);
+    org.mockito.Mockito.when(redisTemplate.opsForList()).thenReturn(listOps);
+    org.mockito.Mockito.when(redisTemplate.delete(org.mockito.Mockito.anyString()))
+        .thenAnswer(
+            invocation -> {
+              String key = invocation.getArgument(0);
+              boolean existed =
+                  mockRedisValueStore.remove(key) != null || mockRedisListStore.remove(key) != null;
+              return existed;
+            });
   }
 
   @AfterEach
