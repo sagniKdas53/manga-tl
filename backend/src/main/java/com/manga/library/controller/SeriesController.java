@@ -96,7 +96,8 @@ public class SeriesController {
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<SeriesDto> createSeries(
       @RequestBody SeriesDto dto, @AuthenticationPrincipal User user) {
-    String sourceLang = dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage();
+    String sourceLang =
+        dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage();
     String targetLang = dto.getTargetLanguage() != null ? dto.getTargetLanguage() : "en";
     Series series =
         Series.builder()
@@ -252,7 +253,10 @@ public class SeriesController {
         .map(
             s -> {
               s.setTitle(dto.getTitle());
-              String sourceLang = dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage();
+              String sourceLang =
+                  dto.getSourceLanguage() != null
+                      ? dto.getSourceLanguage()
+                      : dto.getOriginalLanguage();
               String targetLang = dto.getTargetLanguage() != null ? dto.getTargetLanguage() : "en";
               s.setOriginalLanguage(sourceLang != null ? sourceLang : "ja");
               s.setSourceLanguage(sourceLang != null ? sourceLang : "ja");

@@ -26,6 +26,7 @@ public class JobCoordinatorServiceTest {
   @Autowired private OcrRegionRepository ocrRegionRepository;
   @Autowired private LayerRepository layerRepository;
   @Autowired private LayerElementRepository layerElementRepository;
+
   @org.springframework.boot.test.mock.mockito.MockBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
@@ -75,7 +76,8 @@ public class JobCoordinatorServiceTest {
 
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
         org.mockito.Mockito.mock(org.springframework.data.redis.core.ListOperations.class);
-    org.mockito.Mockito.when(listOps.rightPush(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
+    org.mockito.Mockito.when(
+            listOps.rightPush(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
         .thenAnswer(
             invocation -> {
               String key = invocation.getArgument(0);
@@ -442,6 +444,60 @@ public class JobCoordinatorServiceTest {
     assertEquals(3, updatedRegion.getBubbleReadingOrder().intValue());
 
     // Clean up
+    ocrRegionRepository.delete(updatedRegion);
+    imageRepository.delete(image);
+  }
+
+  @Test
+  public void testHandleTranslationCallback_NewElement() {
+    Image image =
+        Image.builder().filename("test_trans.png").storagePath("test/test_trans.png").build();
+    image = imageRepository.save(image);
+
+    OcrRegion region =
+        OcrRegion.builder()
+            .image(image)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .regionType("speech")
+            .build();
+    region = ocrRegionRepository.save(region);
+
+    Map<String, Object> translation = new HashMap<>();
+    translation.put("regionId", region.getId().toString());
+    translation.put("translatedText", "Hello");
+    translation.put("translationFailed", false);
+    translation.put("translationScore", 0.98);
+
+    jobCoordinatorService.handleTranslationCallback(image.getId(), List.of(translation));
+
+    // Verify OcrRegion updated
+    OcrRegion updatedRegion = ocrRegionRepository.findById(region.getId()).orElseThrow();
+    assertEquals("Hello", updatedRegion.getTranslatedText());
+    assertFalse(updatedRegion.getTranslationFailed());
+    assertEquals(0.98, updatedRegion.getTranslationScore(), 0.001);
+
+    // Verify LayerElement created and saved
+    List<LayerElement> elements = layerElementRepository.findByRegionId(region.getId());
+    assertFalse(elements.isEmpty());
+    LayerElement el = elements.get(0);
+    assertEquals("Hello", el.getText());
+    assertEquals(10.0, el.getX(), 0.001);
+    assertEquals(20.0, el.getY(), 0.001);
+    assertEquals(100, el.getMaxWidth().intValue());
+    assertEquals(50, el.getMaxHeight().intValue());
+
+    // Clean up
+    layerElementRepository.delete(el);
+    List<Layer> layers = layerRepository.findByImageId(image.getId());
+    for (Layer l : layers) {
+      layerRepository.delete(l);
+    }
     ocrRegionRepository.delete(updatedRegion);
     imageRepository.delete(image);
   }

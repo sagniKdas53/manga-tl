@@ -339,16 +339,17 @@ public class PageController {
                 .findById(imageId)
                 .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
-        UUID seriesId = pageRepository.findByImageId(imageId)
-            .map(Page::getChapter)
-            .map(Chapter::getSeries)
-            .map(Series::getId)
-            .orElse(null);
+        UUID seriesId =
+            pageRepository
+                .findByImageId(imageId)
+                .map(Page::getChapter)
+                .map(Chapter::getSeries)
+                .map(Series::getId)
+                .orElse(null);
         String targetLang = "en";
         if (seriesId != null) {
-          targetLang = seriesRepository.findById(seriesId)
-              .map(Series::getTargetLanguage)
-              .orElse("en");
+          targetLang =
+              seriesRepository.findById(seriesId).map(Series::getTargetLanguage).orElse("en");
         }
 
         Layer defaultLayer =
