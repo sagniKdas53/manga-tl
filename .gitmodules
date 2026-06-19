@@ -1,0 +1,3 @@
+[submodule "unified-workers"]
+	path = unified-workers
+	url = https://github.com/sagniKdas53/manga-tl-worker.git
