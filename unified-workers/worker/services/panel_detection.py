@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+
 def detect_panels(image_bytes, reading_direction="rtl"):
     """Detect panels in a manga page and sort them by *reading_direction*.
 

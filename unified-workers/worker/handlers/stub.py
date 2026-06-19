@@ -2,6 +2,7 @@ import time
 import requests
 from worker.config import CALLBACK_URL, BACKEND_HEADERS
 
+
 def process_stub(job_data, job_type):
     image_id = job_data["imageId"]
     print(f"[Stub - {job_type}] Processing image: {image_id}", flush=True)

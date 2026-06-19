@@ -54,12 +54,19 @@ def process_translation(job_data):
         ).lower() in ("true", "1", "t")
 
         if not use_vlm_translation:
-            has_vlm_model = bool(os.environ.get("PREFERRED_VLM_MODEL", "").strip() or os.environ.get("NVIDIA_VLM_MODEL", "").strip())
+            has_vlm_model = bool(
+                os.environ.get("PREFERRED_VLM_MODEL", "").strip()
+                or os.environ.get("NVIDIA_VLM_MODEL", "").strip()
+            )
             has_vlm_keys = bool(
-                os.environ.get("NVIDIA_API_KEY", "").strip() or
-                os.environ.get("GEMINI_API_KEY", "").strip() or
-                os.environ.get("OPENROUTER_API_KEY", "").strip() or
-                (os.environ.get("API_KEY", "").strip() and os.environ.get("MODEL_PROVIDER", "").lower().strip() in ("nvidia", "gemini", "openrouter"))
+                os.environ.get("NVIDIA_API_KEY", "").strip()
+                or os.environ.get("GEMINI_API_KEY", "").strip()
+                or os.environ.get("OPENROUTER_API_KEY", "").strip()
+                or (
+                    os.environ.get("API_KEY", "").strip()
+                    and os.environ.get("MODEL_PROVIDER", "").lower().strip()
+                    in ("nvidia", "gemini", "openrouter")
+                )
             )
             has_local_vlm = bool(os.environ.get("LOCAL_VLM_MODEL", "").strip())
             if (has_vlm_model and has_vlm_keys) or has_local_vlm:
@@ -78,7 +85,9 @@ def process_translation(job_data):
         context_str = build_context_string(image_info)
 
         # Chunk regions respecting conversation grouping
-        unmatched_chunks = chunk_regions_by_conversation(unmatched_regions, conversations, max_batch_size)
+        unmatched_chunks = chunk_regions_by_conversation(
+            unmatched_regions, conversations, max_batch_size
+        )
 
         # Download image once if VLM vision translation is enabled
         img_bytes = None
@@ -86,9 +95,7 @@ def process_translation(job_data):
             try:
                 img_bytes = download_image(image_info)
             except Exception as e:
-                logger.error(
-                    f"{req_prefix}Error downloading image for VLM pass: {e}"
-                )
+                logger.error(f"{req_prefix}Error downloading image for VLM pass: {e}")
 
         for idx, chunk in enumerate(unmatched_chunks):
             logger.info(
@@ -103,7 +110,11 @@ def process_translation(job_data):
                 )
                 try:
                     vlm_res = translate_vlm_vision(
-                        img_bytes, chunk, context_str, TRANSLATION_JSON_SCHEMA, request_id=request_id
+                        img_bytes,
+                        chunk,
+                        context_str,
+                        TRANSLATION_JSON_SCHEMA,
+                        request_id=request_id,
                     )
                     chunk_mapping = parse_and_validate_batch(vlm_res, chunk)
                 except Exception as e:
@@ -118,7 +129,10 @@ def process_translation(job_data):
                 )
                 try:
                     batch_res = translate_batch_llm(
-                        chunk, context_str, TRANSLATION_JSON_SCHEMA, request_id=request_id
+                        chunk,
+                        context_str,
+                        TRANSLATION_JSON_SCHEMA,
+                        request_id=request_id,
                     )
                     chunk_mapping = parse_and_validate_batch(batch_res, chunk)
                 except Exception as e:
@@ -157,7 +171,9 @@ def process_translation(job_data):
             logger.info(
                 f"{req_prefix}Retrying {len(failed_batch_regions)} failed items in batch (max {LOCAL_AI_MAX_BATCH_RETRIES} retry pass)..."
             )
-            retry_chunks = chunk_regions_by_conversation(failed_batch_regions, conversations, max_batch_size)
+            retry_chunks = chunk_regions_by_conversation(
+                failed_batch_regions, conversations, max_batch_size
+            )
 
             retry_mapping = {}
             for idx, r_chunk in enumerate(retry_chunks):
@@ -167,7 +183,10 @@ def process_translation(job_data):
                 r_chunk_mapping = None
                 try:
                     retry_res = translate_batch_llm(
-                        r_chunk, context_str, TRANSLATION_JSON_SCHEMA, request_id=request_id
+                        r_chunk,
+                        context_str,
+                        TRANSLATION_JSON_SCHEMA,
+                        request_id=request_id,
                     )
                     r_chunk_mapping = parse_and_validate_batch(retry_res, r_chunk)
                 except Exception as e:
@@ -182,7 +201,7 @@ def process_translation(job_data):
             for r in failed_batch_regions:
                 rid = r["id"]
                 translated = retry_mapping.get(rid)
-                
+
                 translated_text = None
                 if isinstance(translated, dict):
                     translated_text = translated.get("translatedText")
@@ -217,7 +236,7 @@ def process_translation(job_data):
                             "translatedText": translated,
                             "translationNotes": "Individual translation fallback",
                             "emotion": "",
-                            "tone": ""
+                            "tone": "",
                         }
                     else:
                         logger.warning(
@@ -256,7 +275,7 @@ def process_translation(job_data):
                 "translationNotes": notes,
                 "emotion": emotion,
                 "tone": tone,
-                "translationScore": translation_score
+                "translationScore": translation_score,
             }
         )
         logger.info(

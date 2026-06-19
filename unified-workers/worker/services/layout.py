@@ -1,5 +1,6 @@
 import re
 
+
 def bubble_compare(a, b, reading_direction="rtl"):
     """Sort OCR bubbles within a panel according to *reading_direction*.
 

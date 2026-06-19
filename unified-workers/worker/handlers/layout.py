@@ -2,6 +2,7 @@ import requests
 from worker.config import CALLBACK_URL, BACKEND_HEADERS
 from worker.services.layout import classify_region_type, group_conversations
 
+
 def process_layout(job_data):
     """Layout analysis: classify region types and group conversations."""
     image_id = job_data["imageId"]
@@ -100,11 +101,17 @@ def process_layout(job_data):
         for rid in conv["regionIds"]:
             reg = next((r for r in ocr_regions if str(r.get("id")) == rid), None)
             if reg:
-                text = reg.get("text", "").strip().replace('\n', ' ')
+                text = reg.get("text", "").strip().replace("\n", " ")
                 rtype = reg.get("regionType") or reg.get("region_type") or "speech"
                 region_details.append(f"[{rtype}] '{text}'")
-        panel_info = f"panels={conv['panelIds']}" if conv.get('panelIds') else "unmapped"
-        print(f"[Layout] Conversation #{idx+1} ({conv['sceneType']}, {panel_info}): " + " -> ".join(region_details), flush=True)
+        panel_info = (
+            f"panels={conv['panelIds']}" if conv.get("panelIds") else "unmapped"
+        )
+        print(
+            f"[Layout] Conversation #{idx+1} ({conv['sceneType']}, {panel_info}): "
+            + " -> ".join(region_details),
+            flush=True,
+        )
     print("[Layout] -------------------------------------", flush=True)
 
     # 4. Send enriched layout callback

@@ -4,13 +4,14 @@ import logging
 
 logger = logging.getLogger("translation")
 
+
 def merge_ocr_regions(regions: list, reading_direction: str = "rtl") -> list:
     """Merge OCR line-level detections into logical speech balloon groups.
-    
+
     Args:
         regions: List of OCR region dicts with x, y, width, height, text keys
         reading_direction: 'rtl' or 'ltr'
-    
+
     Returns:
         Merged region list with concatenated text and union bounding boxes.
     """
@@ -142,18 +143,22 @@ def merge_ocr_regions(regions: list, reading_direction: str = "rtl") -> list:
         langs = [regions[idx]["detectedLanguage"] for idx in comp]
         most_common_lang = max(set(langs), key=langs.count)
 
-        merged_regions.append({
-            "text": joined_text,
-            "detectedLanguage": most_common_lang,
-            "confidence": float(avg_conf),
-            "rotation": 0.0,
-            "x": x_min,
-            "y": y_min,
-            "width": x_max - x_min,
-            "height": y_max - y_min,
-            "panelId": None,
-            "bubbleReadingOrder": 0,
-        })
+        merged_regions.append(
+            {
+                "text": joined_text,
+                "detectedLanguage": most_common_lang,
+                "confidence": float(avg_conf),
+                "rotation": 0.0,
+                "x": x_min,
+                "y": y_min,
+                "width": x_max - x_min,
+                "height": y_max - y_min,
+                "panelId": None,
+                "bubbleReadingOrder": 0,
+            }
+        )
 
-    logger.info(f"[OCR] Merged {n} regions into {len(merged_regions)} regions (threshold={threshold_ratio})")
+    logger.info(
+        f"[OCR] Merged {n} regions into {len(merged_regions)} regions (threshold={threshold_ratio})"
+    )
     return merged_regions

@@ -17,15 +17,18 @@ QA_JSON_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "regionId": {"type": "string"},
-                    "qaStatus": {"type": "string", "enum": ["passed", "failed", "direct_fix"]},
+                    "qaStatus": {
+                        "type": "string",
+                        "enum": ["passed", "failed", "direct_fix"],
+                    },
                     "qaScore": {"type": "number", "minimum": 0.0, "maximum": 1.0},
                     "qaFeedback": {"type": "string"},
                     "directFix": {
                         "type": "object",
                         "properties": {
                             "correctedText": {"type": "string"},
-                            "suggestedFontSize": {"type": "number"}
-                        }
+                            "suggestedFontSize": {"type": "number"},
+                        },
                     },
                     "escalation": {
                         "type": "object",
@@ -33,16 +36,17 @@ QA_JSON_SCHEMA = {
                             "ocrBad": {"type": "boolean"},
                             "correctedSourceText": {"type": "string"},
                             "orderBad": {"type": "boolean"},
-                            "suggestedReadingOrderIndex": {"type": "number"}
-                        }
-                    }
+                            "suggestedReadingOrderIndex": {"type": "number"},
+                        },
+                    },
                 },
-                "required": ["regionId", "qaStatus", "qaScore", "qaFeedback"]
-            }
+                "required": ["regionId", "qaStatus", "qaScore", "qaFeedback"],
+            },
         }
     },
-    "required": ["results"]
+    "required": ["results"],
 }
+
 
 def process_qa(job_data):
     image_id = job_data["imageId"]
@@ -85,7 +89,9 @@ def process_qa(job_data):
         combined_width = w1 + w2
         combined_height = max(h1, h2)
 
-        combined_img = Image.new("RGB", (combined_width, combined_height), (255, 255, 255))
+        combined_img = Image.new(
+            "RGB", (combined_width, combined_height), (255, 255, 255)
+        )
         combined_img.paste(img1, (0, 0))
         combined_img.paste(img2, (w1, 0))
 
@@ -100,18 +106,20 @@ def process_qa(job_data):
     # Build region metadata list to seed the VLM
     regions_metadata = []
     for r in ocr_regions:
-        regions_metadata.append({
-            "regionId": r["id"],
-            "ocrText": r["text"],
-            "ocrScore": r.get("ocrScore") or r.get("confidence") or 1.0,
-            "translatedText": r.get("translatedText") or "",
-            "translationScore": r.get("translationScore") or 1.0,
-            "x": r["bboxX"],
-            "y": r["bboxY"],
-            "w": r["bboxW"],
-            "h": r["bboxH"],
-            "readingOrder": r.get("bubbleReadingOrder") or 0
-        })
+        regions_metadata.append(
+            {
+                "regionId": r["id"],
+                "ocrText": r["text"],
+                "ocrScore": r.get("ocrScore") or r.get("confidence") or 1.0,
+                "translatedText": r.get("translatedText") or "",
+                "translationScore": r.get("translationScore") or 1.0,
+                "x": r["bboxX"],
+                "y": r["bboxY"],
+                "w": r["bboxW"],
+                "h": r["bboxH"],
+                "readingOrder": r.get("bubbleReadingOrder") or 0,
+            }
+        )
 
     prompt = f"""You are an expert manga typesetting QA reviewer.
 Analyze the combined image. The left half is the original manga page (Japanese), and the right half is the rendered typeset English page.
@@ -153,7 +161,12 @@ You MUST return a JSON object containing a "results" key with an array of object
         vlm_model = os.environ.get("PREFERRED_VLM_MODEL", "google/gemini-2.5-flash")
         try:
             qa_response = try_cloud_ai_vision(
-                "openrouter", openrouter_key, vlm_model, prompt, combined_base64, QA_JSON_SCHEMA
+                "openrouter",
+                openrouter_key,
+                vlm_model,
+                prompt,
+                combined_base64,
+                QA_JSON_SCHEMA,
             )
         except Exception as e:
             print(f"[QA] VLM QA via OpenRouter failed: {e}", flush=True)
@@ -168,10 +181,17 @@ You MUST return a JSON object containing a "results" key with an array of object
             print(f"[QA] VLM QA via Gemini failed: {e}", flush=True)
 
     if not qa_response and nvidia_key:
-        nvidia_vlm_model = os.environ.get("NVIDIA_VLM_MODEL", "nvidia/nemotron-nano-12b-v2-vl")
+        nvidia_vlm_model = os.environ.get(
+            "NVIDIA_VLM_MODEL", "nvidia/nemotron-nano-12b-v2-vl"
+        )
         try:
             qa_response = try_cloud_ai_vision(
-                "nvidia", nvidia_key, nvidia_vlm_model, prompt, combined_base64, QA_JSON_SCHEMA
+                "nvidia",
+                nvidia_key,
+                nvidia_vlm_model,
+                prompt,
+                combined_base64,
+                QA_JSON_SCHEMA,
             )
         except Exception as e:
             print(f"[QA] VLM QA via Nvidia failed: {e}", flush=True)
@@ -200,23 +220,25 @@ You MUST return a JSON object containing a "results" key with an array of object
             parsed = json.loads(cleaned)
             results = parsed.get("results") or []
         except Exception as e:
-            print(f"[QA] Failed to parse VLM response: {e}. Raw response: {qa_response}", flush=True)
+            print(
+                f"[QA] Failed to parse VLM response: {e}. Raw response: {qa_response}",
+                flush=True,
+            )
 
     if not results:
         print("[QA] Falling back to default PASS for all regions.", flush=True)
         for r in ocr_regions:
-            results.append({
-                "regionId": r["id"],
-                "qaStatus": "passed",
-                "qaScore": 1.0,
-                "qaFeedback": "Auto-passed fallback"
-            })
+            results.append(
+                {
+                    "regionId": r["id"],
+                    "qaStatus": "passed",
+                    "qaScore": 1.0,
+                    "qaFeedback": "Auto-passed fallback",
+                }
+            )
 
     # Call backend
-    callback_payload = {
-        "imageId": image_id,
-        "qaResults": results
-    }
+    callback_payload = {"imageId": image_id, "qaResults": results}
     try:
         res = requests.post(
             f"{CALLBACK_URL}/qa", json=callback_payload, headers=BACKEND_HEADERS
