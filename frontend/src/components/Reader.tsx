@@ -2032,7 +2032,9 @@ export const Reader: React.FC<ReaderProps> = ({
                                   />
                                 );
                               }
-                            } catch(e) {}
+                            } catch {
+                              // Ignore parsing errors
+                            }
                             return null;
                           })() : (
                             element.boxShape === 'elliptical' ? (

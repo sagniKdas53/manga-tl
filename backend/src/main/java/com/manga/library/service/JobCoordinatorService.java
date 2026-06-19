@@ -314,17 +314,24 @@ public class JobCoordinatorService {
 
     // 4. Enqueue translation job
     boolean isReaderMode = false;
-    Series series = pageRepository.findByImageId(imageId)
-        .map(Page::getChapter)
-        .map(Chapter::getSeries)
-        .orElse(null);
-    if (series != null && series.getSourceLanguage() != null && series.getTargetLanguage() != null) {
-      isReaderMode = series.getSourceLanguage().trim().equalsIgnoreCase(series.getTargetLanguage().trim());
+    Series series =
+        pageRepository
+            .findByImageId(imageId)
+            .map(Page::getChapter)
+            .map(Chapter::getSeries)
+            .orElse(null);
+    if (series != null
+        && series.getSourceLanguage() != null
+        && series.getTargetLanguage() != null) {
+      isReaderMode =
+          series.getSourceLanguage().trim().equalsIgnoreCase(series.getTargetLanguage().trim());
     }
 
     if (isReaderMode) {
-      log.info("Reader mode detected (source=target={}) for image {}. Skipping translation, render, and QA.", 
-          series.getSourceLanguage(), imageId);
+      log.info(
+          "Reader mode detected (source=target={}) for image {}. Skipping translation, render, and QA.",
+          series.getSourceLanguage(),
+          imageId);
       return;
     }
 
@@ -344,19 +351,25 @@ public class JobCoordinatorService {
             .findById(imageId)
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
-    Series series = pageRepository.findByImageId(imageId)
-        .map(Page::getChapter)
-        .map(Chapter::getSeries)
-        .orElse(null);
-    String targetLang = (series != null && series.getTargetLanguage() != null)
-        ? series.getTargetLanguage().trim().toLowerCase()
-        : "en";
+    Series series =
+        pageRepository
+            .findByImageId(imageId)
+            .map(Page::getChapter)
+            .map(Chapter::getSeries)
+            .orElse(null);
+    String targetLang =
+        (series != null && series.getTargetLanguage() != null)
+            ? series.getTargetLanguage().trim().toLowerCase()
+            : "en";
 
     // Find or create translation layer for this image (language targetLang)
     final String finalTargetLang = targetLang;
     Layer translationLayer =
         layerRepository.findByImageId(imageId).stream()
-            .filter(l -> "translation".equals(l.getType()) && finalTargetLang.equals(l.getTargetLanguage()))
+            .filter(
+                l ->
+                    "translation".equals(l.getType())
+                        && finalTargetLang.equals(l.getTargetLanguage()))
             .findFirst()
             .orElseGet(
                 () -> {
@@ -410,22 +423,30 @@ public class JobCoordinatorService {
                     // Find or create LayerElement
                     LayerElement element = elementMap.get(regionId);
                     if (element == null) {
-                      double ex = region.getSafeTextX() != null
-                          ? region.getSafeTextX().doubleValue()
-                          : (region.getBubbleX() != null
-                              ? region.getBubbleX().doubleValue()
-                              : region.getBboxX().doubleValue());
-                      double ey = region.getSafeTextY() != null
-                          ? region.getSafeTextY().doubleValue()
-                          : (region.getBubbleY() != null
-                              ? region.getBubbleY().doubleValue()
-                              : region.getBboxY().doubleValue());
-                      int ew = region.getSafeTextW() != null
-                          ? region.getSafeTextW()
-                          : (region.getBubbleW() != null ? region.getBubbleW() : region.getBboxW());
-                      int eh = region.getSafeTextH() != null
-                          ? region.getSafeTextH()
-                          : (region.getBubbleH() != null ? region.getBubbleH() : region.getBboxH());
+                      double ex =
+                          region.getSafeTextX() != null
+                              ? region.getSafeTextX().doubleValue()
+                              : region.getBubbleX() != null
+                                  ? region.getBubbleX().doubleValue()
+                                  : region.getBboxX().doubleValue();
+                      double ey =
+                          region.getSafeTextY() != null
+                              ? region.getSafeTextY().doubleValue()
+                              : region.getBubbleY() != null
+                                  ? region.getBubbleY().doubleValue()
+                                  : region.getBboxY().doubleValue();
+                      int ew =
+                          region.getSafeTextW() != null
+                              ? region.getSafeTextW()
+                              : region.getBubbleW() != null
+                                  ? region.getBubbleW()
+                                  : region.getBboxW();
+                      int eh =
+                          region.getSafeTextH() != null
+                              ? region.getSafeTextH()
+                              : region.getBubbleH() != null
+                                  ? region.getBubbleH()
+                                  : region.getBboxH();
 
                       element =
                           LayerElement.builder()
