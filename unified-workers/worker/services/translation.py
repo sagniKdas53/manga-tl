@@ -3,11 +3,22 @@ import re
 import json
 import time
 import uuid
+import logging
 import requests
 
 from worker.config import logger
 from worker.utils.text import contains_japanese, clean_translated_text
 from worker.utils.rate_limit import enforce_rate_limit, estimate_cost
+
+LANG_MAP = {
+    "ja": "Japanese",
+    "en": "English",
+    "ko": "Korean",
+    "zh-tw": "Traditional Chinese",
+    "zh-cn": "Simplified Chinese",
+    "zh": "Chinese",
+    "auto": "Auto-Detect"
+}
 
 TRANSLATION_JSON_SCHEMA = {
     "type": "object",
@@ -398,6 +409,9 @@ def try_cloud_ai(
         logger.info(
             f"{req_prefix}Sending request to Cloud LLM provider '{provider}' using model '{model}'..."
         )
+        if logger.isEnabledFor(logging.TRACE):
+            logger.trace(f"{req_prefix}[TRACE] Request URL: {url}")
+            logger.trace(f"{req_prefix}[TRACE] Request Headers: {headers}")
         start = time.perf_counter()
         res = requests.post(
             url,
@@ -409,6 +423,9 @@ def try_cloud_ai(
         logger.info(
             f"{req_prefix}Provider={provider} " f"Model={model} " f"Time={elapsed:.2f}s"
         )
+        if logger.isEnabledFor(logging.TRACE):
+            logger.trace(f"{req_prefix}[TRACE] Response Status: {res.status_code}")
+            logger.trace(f"{req_prefix}[TRACE] Response Headers: {dict(res.headers)}")
 
         response_text = res.text
         logger.debug(f"{req_prefix}Raw Model Output:\n{response_text}")
@@ -563,12 +580,18 @@ def try_cloud_ai_vision(
         logger.info(
             f"{req_prefix}Sending vision request to provider '{provider}' using model '{model}'..."
         )
+        if logger.isEnabledFor(logging.TRACE):
+            logger.trace(f"{req_prefix}[TRACE] Vision Request URL: {url}")
+            logger.trace(f"{req_prefix}[TRACE] Vision Request Headers: {headers}")
         start = time.perf_counter()
         res = requests.post(url, json=payload, headers=headers, timeout=45)
         elapsed = time.perf_counter() - start
         logger.info(
             f"{req_prefix}Provider={provider} " f"Model={model} " f"Time={elapsed:.2f}s"
         )
+        if logger.isEnabledFor(logging.TRACE):
+            logger.trace(f"{req_prefix}[TRACE] Vision Response Status: {res.status_code}")
+            logger.trace(f"{req_prefix}[TRACE] Vision Response Headers: {dict(res.headers)}")
 
         response_text = res.text
         logger.debug(f"{req_prefix}Raw Model Output:\n{response_text}")
@@ -690,6 +713,9 @@ def try_local_ai(prompt, text, response_schema=None, request_id=None):
             from worker.utils.lock import acquire_lock
 
             with acquire_lock("local-llm"):
+                if logger.isEnabledFor(logging.TRACE):
+                    logger.trace(f"{req_prefix}[TRACE] Local Request URL: {endpoint}")
+                    logger.trace(f"{req_prefix}[TRACE] Local Request Headers: {payload}")
                 start = time.perf_counter()
                 res = requests.post(
                     endpoint,
@@ -703,6 +729,9 @@ def try_local_ai(prompt, text, response_schema=None, request_id=None):
                 f"Model={model} "
                 f"Time={elapsed:.2f}s"
             )
+            if logger.isEnabledFor(logging.TRACE):
+                logger.trace(f"{req_prefix}[TRACE] Local Response Status: {res.status_code}")
+                logger.trace(f"{req_prefix}[TRACE] Local Response Headers: {dict(res.headers)}")
 
             response_text = res.text
             logger.debug(f"{req_prefix}Raw Model Output:\n{response_text}")
@@ -755,6 +784,9 @@ def try_deepl(text, target_lang="en", request_id=None):
             "Content-Type": "application/json",
         }
         payload = {"text": [text], "target_lang": target_lang.upper()}
+        if logger.isEnabledFor(logging.TRACE):
+            logger.trace(f"{req_prefix}[TRACE] DeepL Request URL: {url}")
+            logger.trace(f"{req_prefix}[TRACE] DeepL Request Headers: {headers}")
 
         start = time.perf_counter()
         res = requests.post(url, json=payload, headers=headers, timeout=8)
@@ -762,6 +794,9 @@ def try_deepl(text, target_lang="en", request_id=None):
         logger.info(
             f"{req_prefix}Provider=deepl " f"Model=deepl " f"Time={elapsed:.2f}s"
         )
+        if logger.isEnabledFor(logging.TRACE):
+            logger.trace(f"{req_prefix}[TRACE] DeepL Response Status: {res.status_code}")
+            logger.trace(f"{req_prefix}[TRACE] DeepL Response Headers: {dict(res.headers)}")
 
         if res.status_code == 200:
             res_json = res.json()
@@ -791,6 +826,10 @@ def try_google_translate(text, source_lang="auto", target_lang="en", request_id=
         start = time.perf_counter()
         res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
         elapsed = time.perf_counter() - start
+        if logger.isEnabledFor(logging.TRACE):
+            logger.trace(f"{req_prefix}[TRACE] Google Translate Request URL: {url}")
+            logger.trace(f"{req_prefix}[TRACE] Google Translate Response Status: {res.status_code}")
+            logger.trace(f"{req_prefix}[TRACE] Google Translate Response Headers: {dict(res.headers)}")
         logger.info(
             f"{req_prefix}Provider=google_translate "
             f"Model=free_api "
@@ -832,7 +871,9 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
     )
     deepl_key = os.environ.get("DEEPL_API_KEY", os.environ.get("DEEPL_KEY", "")).strip()
 
-    prompt = f"Translate the following text to natural English, maintaining its tone and context. Respond ONLY with the translated text. Do not include any tags, notes, or explanations.\n\nText: {text}"
+    src_name = LANG_MAP.get(source_lang.lower(), source_lang)
+    tgt_name = LANG_MAP.get(target_lang.lower(), target_lang)
+    prompt = f"Translate the following text to natural {tgt_name}, maintaining its tone and context. Respond ONLY with the translated text. Do not include any tags, notes, or explanations.\n\nText: {text}"
 
     # Log Strategy
     logger.info(f"{req_prefix}Translation Strategy:")
@@ -845,6 +886,10 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
             strategy_idx += 1
         elif provider == "gemini":
             logger.info(f"{req_prefix}{strategy_idx}. Gemini 2.5 Flash (Direct)")
+            strategy_idx += 1
+        elif provider == "openai":
+            openai_model = os.environ.get("PREFERRED_MODEL", "gpt-4o-mini")
+            logger.info(f"{req_prefix}{strategy_idx}. {openai_model} (Direct OpenAI)")
             strategy_idx += 1
 
         if provider == "nvidia":
@@ -900,6 +945,19 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
             preferred = os.environ.get("PREFERRED_MODEL", "gemini-2.5-flash")
             translated = try_cloud_ai(
                 "gemini", gemini_key, preferred, prompt, request_id=request_id
+            )
+            if translated:
+                cleaned = clean_translated_text(translated)
+                if is_valid_translation(text, cleaned, request_id=request_id):
+                    return cleaned
+        elif provider == "openai":
+            openai_model = os.environ.get("PREFERRED_MODEL", "gpt-4o-mini")
+            translated = try_cloud_ai(
+                "openai",
+                api_key,
+                openai_model,
+                prompt,
+                request_id=request_id,
             )
             if translated:
                 cleaned = clean_translated_text(translated)
@@ -967,7 +1025,7 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
 
 
 def translate_batch_llm(
-    unmatched_regions, context_str="", response_schema=None, request_id=None
+    unmatched_regions, context_str="", response_schema=None, request_id=None, source_lang="ja", target_lang="en"
 ):
     if not request_id:
         request_id = str(uuid.uuid4())[:8]
@@ -993,10 +1051,13 @@ def translate_batch_llm(
     logger.debug(f"{req_prefix}Batch Input:\n{bubbles_json}")
     logger.info(f"{req_prefix}Prompt={PROMPT_VERSION}")
 
+    src_name = LANG_MAP.get(source_lang.lower(), source_lang)
+    tgt_name = LANG_MAP.get(target_lang.lower(), target_lang)
+
     prompt = f"""{context_str}These text regions appear in reading order.
 Each region has a "regionType" field indicating its category (speech/narration/sfx/caption/sign).
 Regions with the same "conversationGroup" are part of the same dialogue exchange.
-Translate each region according to its type and maintain conversational coherence within groups.
+Translate each region from {src_name} to natural {tgt_name} according to its type and maintain conversational coherence within groups.
 
 Preserve:
 - tone
@@ -1007,7 +1068,7 @@ Preserve:
 Region type handling:
 - "speech": Translate as natural dialogue.
 - "narration": Translate as third-person narrative prose.
-- "sfx": Transliterate the sound effect AND provide an English equivalent in parentheses (e.g. "DOKAA (WHAM)").
+- "sfx": Transliterate the sound effect AND provide a {tgt_name} equivalent in parentheses (e.g. "DOKAA (WHAM)").
 - "caption": Translate as editorial/scene-setting text.
 - "sign": Translate literally, noting it's environmental text.
 
@@ -1018,7 +1079,7 @@ If a region has "previousTranslation" and "qaFeedback" fields, it means the prev
 You MUST return a JSON object containing a "translations" key with an array of objects.
 Each object in the array MUST have the following keys:
 - "id" (the original string ID)
-- "translation" (your English translation)
+- "translation" (your {tgt_name} translation)
 - "translationNotes" (brief explanation of translation decisions or register choices)
 - "emotion" (detected speaker emotion, e.g. "earnest", "angry", "playful")
 - "tone" (detected tone, e.g. "formal", "sarcastic", "casual")
@@ -1119,6 +1180,40 @@ Input:
                     return res
             except Exception as e:
                 logger.error(f"{req_prefix}Gemini Direct batch translation failed: {e}")
+
+        elif provider == "openai":
+            preferred = os.environ.get("PREFERRED_MODEL", "gpt-4o-mini")
+            logger.info(f"{req_prefix}Batch: Trying OpenAI ({preferred}) Direct...")
+            try:
+                res = try_cloud_ai(
+                    "openai",
+                    api_key,
+                    preferred,
+                    prompt,
+                    response_schema,
+                    request_id=request_id,
+                )
+                if res:
+                    return res
+            except Exception as e:
+                logger.error(f"{req_prefix}OpenAI Direct batch translation failed: {e}")
+
+        elif provider == "anthropic":
+            preferred = os.environ.get("PREFERRED_MODEL", "claude-3-5-sonnet-20241022")
+            logger.info(f"{req_prefix}Batch: Trying Anthropic ({preferred}) Direct...")
+            try:
+                res = try_cloud_ai(
+                    "anthropic",
+                    anthropic_key,
+                    preferred,
+                    prompt,
+                    response_schema,
+                    request_id=request_id,
+                )
+                if res:
+                    return res
+            except Exception as e:
+                logger.error(f"{req_prefix}Anthropic Direct batch translation failed: {e}")
 
         # Try Nvidia NIM
         if provider == "nvidia":
@@ -1221,7 +1316,7 @@ def try_local_vlm_vision(
 
 
 def translate_vlm_vision(
-    img_bytes, unmatched_regions, context_str="", response_schema=None, request_id=None
+    img_bytes, unmatched_regions, context_str="", response_schema=None, request_id=None, source_lang="ja", target_lang="en"
 ):
     if not img_bytes:
         return None
@@ -1247,6 +1342,9 @@ def translate_vlm_vision(
             entry["qaFeedback"] = r.get("qaFeedback")
         bubbles_input.append(entry)
 
+    src_name = LANG_MAP.get(source_lang.lower(), source_lang)
+    tgt_name = LANG_MAP.get(target_lang.lower(), target_lang)
+
     prompt = f"""{context_str}These OCR regions were extracted from this manga page using automated OCR.
 
 IMPORTANT — Before translating:
@@ -1258,7 +1356,7 @@ IMPORTANT — Before translating:
 3. If a region's "regionType" is "sfx", look at the visual style of the text (bold,
    angular, wavy) to inform your transliteration style.
 
-Translate each region into natural manga English.
+Translate each region from {src_name} into natural manga {tgt_name}.
 Preserve:
 - tone
 - emotional state
@@ -1268,7 +1366,7 @@ Preserve:
 Region type handling:
 - "speech": Translate as natural dialogue.
 - "narration": Translate as third-person narrative prose.
-- "sfx": Transliterate the sound effect AND provide an English equivalent in parentheses (e.g. "DOKAA (WHAM)").
+- "sfx": Transliterate the sound effect AND provide a {tgt_name} equivalent in parentheses (e.g. "DOKAA (WHAM)").
 - "caption": Translate as editorial/scene-setting text.
 - "sign": Translate literally, noting it's environmental text.
 
@@ -1279,7 +1377,7 @@ If a region has "previousTranslation" and "qaFeedback" fields, it means the prev
 You MUST return a JSON object containing a "translations" key with an array of objects.
 Each object in the array MUST have the following keys:
 - "id" (the original string ID)
-- "translation" (your English translation)
+- "translation" (your {tgt_name} translation)
 - "translationNotes" (brief explanation of translation decisions or register choices)
 - "emotion" (detected speaker emotion, e.g. "earnest", "angry", "playful")
 - "tone" (detected tone, e.g. "formal", "sarcastic", "casual")

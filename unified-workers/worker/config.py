@@ -4,9 +4,17 @@ import redis
 from minio import Minio
 
 # Configure structured logging
+logging.TRACE = 5
+logging.addLevelName(logging.TRACE, "TRACE")
+def trace(self, message, *args, **kws):
+    if self.isEnabledFor(logging.TRACE):
+        self._log(logging.TRACE, message, args, **kws)
+logging.Logger.trace = trace
+
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+level = logging.TRACE if LOG_LEVEL == "TRACE" else getattr(logging, LOG_LEVEL)
 logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL), format="%(asctime)s [%(levelname)s] %(message)s"
+    level=level, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 logger = logging.getLogger("translation")
 

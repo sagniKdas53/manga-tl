@@ -35,6 +35,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [newSeriesTitle, setNewSeriesTitle] = useState('');
   const [newSeriesCoverUrl, setNewSeriesCoverUrl] = useState('');
   const [newSeriesLang, setNewSeriesLang] = useState('ja');
+  const [newSeriesTargetLang, setNewSeriesTargetLang] = useState('en');
   const [newSeriesDirection, setNewSeriesDirection] = useState('rtl');
 
   // Local states for chapter create/edit modal
@@ -74,7 +75,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const handleEditSeriesClick = () => {
     setNewSeriesTitle(selectedSeries.title);
     setNewSeriesCoverUrl(selectedSeries.coverImageUrl || '');
-    setNewSeriesLang(selectedSeries.originalLanguage);
+    setNewSeriesLang(selectedSeries.sourceLanguage || selectedSeries.originalLanguage || 'ja');
+    setNewSeriesTargetLang(selectedSeries.targetLanguage || 'en');
     setNewSeriesDirection(selectedSeries.readingDirection);
     setShowSeriesModal(true);
   };
@@ -91,6 +93,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         body: JSON.stringify({
           title: newSeriesTitle,
           originalLanguage: newSeriesLang,
+          sourceLanguage: newSeriesLang,
+          targetLanguage: newSeriesTargetLang,
           readingDirection: newSeriesDirection,
           coverImageUrl: newSeriesCoverUrl || null
         })
@@ -265,7 +269,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             <div className="meta-row">
               <span className="meta-label">Language:</span>
               <span className="meta-value">
-                <span className="meta-badge-nhentai">{selectedSeries.originalLanguage}</span>
+                <span className="meta-badge-nhentai">
+                  {selectedSeries.sourceLanguage || selectedSeries.originalLanguage || 'ja'} → {selectedSeries.targetLanguage || 'en'}
+                  {(selectedSeries.sourceLanguage || selectedSeries.originalLanguage || 'ja') === (selectedSeries.targetLanguage || 'en') ? ' (Reader Mode)' : ''}
+                </span>
               </span>
             </div>
             <div className="meta-row">
@@ -387,13 +394,23 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Original Language</label>
+                <label className="form-label">Source Language</label>
                 <select className="form-input" value={newSeriesLang} onChange={e => setNewSeriesLang(e.target.value)}>
                   <option value="ja">Japanese (ja)</option>
                   <option value="zh-TW">Traditional Chinese (zh-TW)</option>
                   <option value="zh-CN">Simplified Chinese (zh-CN)</option>
                   <option value="ko">Korean (ko)</option>
                   <option value="en">English (en)</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Target Language</label>
+                <select className="form-input" value={newSeriesTargetLang} onChange={e => setNewSeriesTargetLang(e.target.value)}>
+                  <option value="en">English (en)</option>
+                  <option value="ja">Japanese (ja)</option>
+                  <option value="zh-TW">Traditional Chinese (zh-TW)</option>
+                  <option value="zh-CN">Simplified Chinese (zh-CN)</option>
+                  <option value="ko">Korean (ko)</option>
                 </select>
               </div>
               <div className="form-group">

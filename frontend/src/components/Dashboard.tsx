@@ -25,6 +25,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [newSeriesTitle, setNewSeriesTitle] = useState('');
   const [newSeriesCoverUrl, setNewSeriesCoverUrl] = useState('');
   const [newSeriesLang, setNewSeriesLang] = useState('ja');
+  const [newSeriesTargetLang, setNewSeriesTargetLang] = useState('en');
   const [newSeriesDirection, setNewSeriesDirection] = useState('rtl');
 
   // Confirm modal state
@@ -49,7 +50,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setEditingSeries(s);
     setNewSeriesTitle(s.title);
     setNewSeriesCoverUrl(s.coverImageUrl || '');
-    setNewSeriesLang(s.originalLanguage);
+    setNewSeriesLang(s.sourceLanguage || s.originalLanguage || 'ja');
+    setNewSeriesTargetLang(s.targetLanguage || 'en');
     setNewSeriesDirection(s.readingDirection);
     setShowSeriesModal(true);
   };
@@ -59,6 +61,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setNewSeriesTitle('');
     setNewSeriesCoverUrl('');
     setNewSeriesLang('ja');
+    setNewSeriesTargetLang('en');
     setNewSeriesDirection('rtl');
     setShowSeriesModal(true);
   };
@@ -68,6 +71,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setEditingSeries(null);
     setNewSeriesTitle('');
     setNewSeriesCoverUrl('');
+    setNewSeriesLang('ja');
+    setNewSeriesTargetLang('en');
   };
 
   const handleCreateSeries = async (e: React.FormEvent) => {
@@ -86,6 +91,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         body: JSON.stringify({
           title: newSeriesTitle,
           originalLanguage: newSeriesLang,
+          sourceLanguage: newSeriesLang,
+          targetLanguage: newSeriesTargetLang,
           readingDirection: newSeriesDirection,
           coverImageUrl: newSeriesCoverUrl || null
         })
@@ -180,7 +187,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="manga-card-content">
               <h3>{s.title}</h3>
               <div className="manga-meta">
-                <span className="meta-badge">{s.originalLanguage}</span>
+                <span className="meta-badge">
+                  {s.sourceLanguage || s.originalLanguage || 'ja'} → {s.targetLanguage || 'en'}
+                  {(s.sourceLanguage || s.originalLanguage || 'ja') === (s.targetLanguage || 'en') ? ' (Reader Mode)' : ''}
+                </span>
                 <span className="meta-badge">{s.readingDirection}</span>
               </div>
             </div>
@@ -217,13 +227,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Original Language</label>
+                <label className="form-label">Source Language</label>
                 <select className="form-input" value={newSeriesLang} onChange={e => setNewSeriesLang(e.target.value)}>
                   <option value="ja">Japanese (ja)</option>
                   <option value="zh-TW">Traditional Chinese (zh-TW)</option>
                   <option value="zh-CN">Simplified Chinese (zh-CN)</option>
                   <option value="ko">Korean (ko)</option>
                   <option value="en">English (en)</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Target Language</label>
+                <select className="form-input" value={newSeriesTargetLang} onChange={e => setNewSeriesTargetLang(e.target.value)}>
+                  <option value="en">English (en)</option>
+                  <option value="ja">Japanese (ja)</option>
+                  <option value="zh-TW">Traditional Chinese (zh-TW)</option>
+                  <option value="zh-CN">Simplified Chinese (zh-CN)</option>
+                  <option value="ko">Korean (ko)</option>
                 </select>
               </div>
               <div className="form-group">

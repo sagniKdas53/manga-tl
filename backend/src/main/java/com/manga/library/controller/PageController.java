@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class PageController {
 
+  private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
@@ -338,11 +339,23 @@ public class PageController {
                 .findById(imageId)
                 .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
+        UUID seriesId = pageRepository.findByImageId(imageId)
+            .map(Page::getChapter)
+            .map(Chapter::getSeries)
+            .map(Series::getId)
+            .orElse(null);
+        String targetLang = "en";
+        if (seriesId != null) {
+          targetLang = seriesRepository.findById(seriesId)
+              .map(Series::getTargetLanguage)
+              .orElse("en");
+        }
+
         Layer defaultLayer =
             Layer.builder()
                 .image(image)
                 .type("translation")
-                .targetLanguage("en")
+                .targetLanguage(targetLang)
                 .visible(true)
                 .zOrder(2)
                 .build();

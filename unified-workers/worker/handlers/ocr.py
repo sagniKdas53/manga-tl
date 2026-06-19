@@ -3,9 +3,10 @@ import cv2
 import numpy as np
 import requests
 from PIL import Image
+import logging
 from functools import cmp_to_key
 
-from worker.config import CALLBACK_URL, BACKEND_HEADERS
+from worker.config import CALLBACK_URL, BACKEND_HEADERS, logger
 from worker.model_manager import model_manager
 from worker.utils.image import downscale_for_ocr, calculate_overlap_area, download_image
 from worker.utils.text import detect_language
@@ -126,6 +127,10 @@ def process_ocr(job_data):
     # Defaults preserve the original behaviour (Japanese RTL) when not supplied.
     source_language = (job_data.get("sourceLanguage") or "ja").strip().lower()
     reading_direction = (job_data.get("readingDirection") or "rtl").strip().lower()
+    
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"[OCR] Inputs: job_data={job_data}")
+        
     print(
         f"[OCR] Processing image: {image_id} (lang={source_language}, direction={reading_direction})",
         flush=True,
@@ -367,6 +372,8 @@ def process_ocr(job_data):
                 "readingDirection": reading_direction,
                 "regions": ordered_regions,
             }
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"[OCR] Outputs: callback_payload={callback_payload}")
             try:
                 res = requests.post(
                     f"{CALLBACK_URL}/ocr",
