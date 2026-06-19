@@ -85,6 +85,10 @@ public class LayerElement {
   @Builder.Default
   private String boxShape = "rectangular";
 
+  @Column(name = "mask_polygon")
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+  private String maskPolygon;
+
   @com.fasterxml.jackson.annotation.JsonProperty("layerId")
   public UUID getLayerIdSerialized() {
     return layer != null ? layer.getId() : null;

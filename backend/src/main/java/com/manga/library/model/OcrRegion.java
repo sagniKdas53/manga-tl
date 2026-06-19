@@ -102,6 +102,28 @@ public class OcrRegion {
   @Builder.Default
   private String qaStatus = "pending";
 
+  @Column(name = "bubble_id")
+  private String bubbleId;
+
+  @Column(name = "detection_confidence")
+  private Double detectionConfidence;
+
+  @Column(name = "mask_polygon")
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+  private String maskPolygon;
+
+  @Column(name = "safe_text_x")
+  private Integer safeTextX;
+
+  @Column(name = "safe_text_y")
+  private Integer safeTextY;
+
+  @Column(name = "safe_text_w")
+  private Integer safeTextW;
+
+  @Column(name = "safe_text_h")
+  private Integer safeTextH;
+
   public UUID getPanelId() {
     return panel != null ? panel.getId() : null;
   }

@@ -21,4 +21,5 @@ public class LayerElementDto {
   private String fontWeight;
   private String fontStyle;
   private String boxShape;
+  private String maskPolygon;
 }

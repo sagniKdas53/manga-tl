@@ -63,6 +63,7 @@ public class LayerController {
                 if (dto.getFontWeight() != null) element.setFontWeight(dto.getFontWeight());
                 if (dto.getFontStyle() != null) element.setFontStyle(dto.getFontStyle());
                 if (dto.getBoxShape() != null) element.setBoxShape(dto.getBoxShape());
+                if (dto.getMaskPolygon() != null) element.setMaskPolygon(dto.getMaskPolygon());
 
                 element.setIsManuallyEdited(true);
                 element.setEditedAt(OffsetDateTime.now());
@@ -185,6 +186,7 @@ public class LayerController {
                       .fontWeight(dto.getFontWeight() != null ? dto.getFontWeight() : "normal")
                       .fontStyle(dto.getFontStyle() != null ? dto.getFontStyle() : "normal")
                       .boxShape(dto.getBoxShape() != null ? dto.getBoxShape() : "rectangular")
+                      .maskPolygon(dto.getMaskPolygon())
                       .build();
               LayerElement saved = layerElementRepository.save(el);
               return ResponseEntity.ok(saved);
@@ -228,6 +230,7 @@ public class LayerController {
     map.put("fontWeight", el.getFontWeight());
     map.put("fontStyle", el.getFontStyle());
     map.put("boxShape", el.getBoxShape());
+    map.put("maskPolygon", el.getMaskPolygon());
     return map;
   }
 }

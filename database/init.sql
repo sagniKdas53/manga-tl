@@ -119,7 +119,14 @@ CREATE TABLE IF NOT EXISTS ocr_regions (
     translation_score FLOAT,
     qa_score FLOAT,
     qa_feedback TEXT,
-    qa_status TEXT DEFAULT 'pending'
+    qa_status TEXT DEFAULT 'pending',
+    bubble_id TEXT,
+    detection_confidence FLOAT,
+    mask_polygon JSONB,
+    safe_text_x INT,
+    safe_text_y INT,
+    safe_text_w INT,
+    safe_text_h INT
 );
 
 -- Conversations
@@ -201,7 +208,8 @@ CREATE TABLE IF NOT EXISTS layer_elements (
     text_color TEXT,
     font_weight TEXT DEFAULT 'normal',
     font_style TEXT DEFAULT 'normal',
-    box_shape TEXT DEFAULT 'rectangular'
+    box_shape TEXT DEFAULT 'rectangular',
+    mask_polygon JSONB
 );
 
 -- Layer Edit History

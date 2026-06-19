@@ -27,5 +27,12 @@ public class OcrCallbackDto {
     private Integer bubbleY;
     private Integer bubbleWidth;
     private Integer bubbleHeight;
+    private String bubbleId;
+    private Double detectionConfidence;
+    private String maskPolygon;
+    private Integer safeTextX;
+    private Integer safeTextY;
+    private Integer safeTextW;
+    private Integer safeTextH;
   }
 }
