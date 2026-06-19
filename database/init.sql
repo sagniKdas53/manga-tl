@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS series (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title TEXT NOT NULL,
     original_language TEXT NOT NULL, -- ja, zh, ko, en etc.
+    source_language TEXT,
+    target_language TEXT,
     reading_direction TEXT NOT NULL DEFAULT 'rtl', -- rtl, ltr, ttb
     metadata_json JSONB,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,

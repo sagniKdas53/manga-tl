@@ -12,6 +12,8 @@ export interface Series {
   originalLanguage: string;
   readingDirection: string;
   coverImageUrl?: string | null;
+  sourceLanguage?: string;
+  targetLanguage?: string;
 }
 
 export interface Chapter {
@@ -62,6 +64,9 @@ export interface OcrRegion {
   bubbleW?: number | null;
   bubbleH?: number | null;
   backgroundColor?: string | null;
+  qaStatus?: 'passed' | 'failed' | 'direct_fix' | null;
+  qaScore?: number | null;
+  qaFeedback?: string | null;
 }
 
 export interface ConversationRegion {

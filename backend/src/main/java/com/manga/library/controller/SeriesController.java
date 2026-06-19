@@ -48,6 +48,8 @@ public class SeriesController {
     dto.setId(s.getId());
     dto.setTitle(s.getTitle());
     dto.setOriginalLanguage(s.getOriginalLanguage());
+    dto.setSourceLanguage(s.getSourceLanguage());
+    dto.setTargetLanguage(s.getTargetLanguage());
     dto.setReadingDirection(s.getReadingDirection());
     if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
       dto.setCoverImageUrl(s.getCoverImageUrl());
@@ -76,6 +78,8 @@ public class SeriesController {
     dto.setId(s.getId());
     dto.setTitle(s.getTitle());
     dto.setOriginalLanguage(s.getOriginalLanguage());
+    dto.setSourceLanguage(s.getSourceLanguage());
+    dto.setTargetLanguage(s.getTargetLanguage());
     dto.setReadingDirection(s.getReadingDirection());
     if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
       dto.setCoverImageUrl(s.getCoverImageUrl());
@@ -92,10 +96,14 @@ public class SeriesController {
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<SeriesDto> createSeries(
       @RequestBody SeriesDto dto, @AuthenticationPrincipal User user) {
+    String sourceLang = dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage();
+    String targetLang = dto.getTargetLanguage() != null ? dto.getTargetLanguage() : "en";
     Series series =
         Series.builder()
             .title(dto.getTitle())
-            .originalLanguage(dto.getOriginalLanguage())
+            .originalLanguage(sourceLang != null ? sourceLang : "ja")
+            .sourceLanguage(sourceLang != null ? sourceLang : "ja")
+            .targetLanguage(targetLang)
             .readingDirection(dto.getReadingDirection())
             .coverImageUrl(dto.getCoverImageUrl())
             .createdBy(user)
@@ -244,7 +252,11 @@ public class SeriesController {
         .map(
             s -> {
               s.setTitle(dto.getTitle());
-              s.setOriginalLanguage(dto.getOriginalLanguage());
+              String sourceLang = dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage();
+              String targetLang = dto.getTargetLanguage() != null ? dto.getTargetLanguage() : "en";
+              s.setOriginalLanguage(sourceLang != null ? sourceLang : "ja");
+              s.setSourceLanguage(sourceLang != null ? sourceLang : "ja");
+              s.setTargetLanguage(targetLang);
               s.setReadingDirection(dto.getReadingDirection());
               s.setCoverImageUrl(dto.getCoverImageUrl());
               Objects.requireNonNull(s, "series cannot be null");

@@ -121,6 +121,8 @@ def process_qa(job_data):
             }
         )
 
+    logger.debug(f"[QA] VLM QA input metadata (regions_metadata):\n{json.dumps(regions_metadata, ensure_ascii=False, indent=2)}")
+
     prompt = f"""You are an expert manga typesetting QA reviewer.
 Analyze the combined image. The left half is the original manga page (Japanese), and the right half is the rendered typeset English page.
 
@@ -134,9 +136,11 @@ For each region in the provided metadata, evaluate and check if:
 5. The reading order/bubble sequence is incorrect (flag with orderBad=true and provide suggestedReadingOrderIndex).
 
 Status categories:
-- "passed": No correction needed.
-- "direct_fix": Small/cosmetic adjustment (e.g. slight text wrap tweak or minor font size reduction) that you can prescribe directly. You must supply "directFix" object with correctedText or suggestedFontSize.
+- "passed": No correction needed. You MUST still provide a detailed explanation/reasoning in "qaFeedback" explaining why the region passed (e.g., text fitting is perfect, translation is highly accurate, layout looks clean).
+- "direct_fix": Small/cosmetic adjustment (e.g. slight text wrap tweak or minor font size reduction) that you can prescribe directly. You must supply "directFix" object with correctedText or suggestedFontSize. You MUST also provide detailed reasoning in "qaFeedback".
 - "failed": Major translation error or layout issue requiring a translation/typesetting re-run. Specify "qaFeedback" with detailed correction notes.
+
+IMPORTANT: For EVERY region (including "passed" regions), you MUST provide a detailed explanation/reasoning in "qaFeedback" explaining your evaluation.
 
 Region Metadata:
 {json.dumps(regions_metadata, ensure_ascii=False, indent=2)}
@@ -236,6 +240,8 @@ You MUST return a JSON object containing a "results" key with an array of object
                     "qaFeedback": "Auto-passed fallback",
                 }
             )
+
+    logger.debug(f"[QA] VLM QA results output:\n{json.dumps(results, ensure_ascii=False, indent=2)}")
 
     # Call backend
     callback_payload = {"imageId": image_id, "qaResults": results}

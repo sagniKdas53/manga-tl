@@ -26,6 +26,12 @@ public class Series {
   @Column(name = "original_language", nullable = false)
   private String originalLanguage;
 
+  @Column(name = "source_language")
+  private String sourceLanguage;
+
+  @Column(name = "target_language")
+  private String targetLanguage;
+
   @Column(name = "reading_direction", nullable = false)
   private String readingDirection; // rtl | ltr | ttb
 
@@ -47,5 +53,21 @@ public class Series {
   @PrePersist
   protected void onCreate() {
     createdAt = OffsetDateTime.now();
+    if (sourceLanguage == null) {
+      sourceLanguage = originalLanguage != null ? originalLanguage : "ja";
+    }
+    if (targetLanguage == null) {
+      targetLanguage = "en";
+    }
+  }
+
+  @PostLoad
+  protected void onLoad() {
+    if (sourceLanguage == null) {
+      sourceLanguage = originalLanguage != null ? originalLanguage : "ja";
+    }
+    if (targetLanguage == null) {
+      targetLanguage = "en";
+    }
   }
 }

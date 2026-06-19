@@ -1,5 +1,6 @@
 import os
 import uuid
+import logging
 import requests
 from worker.config import logger, CALLBACK_URL, BACKEND_HEADERS
 from worker.utils.image import download_image
@@ -21,7 +22,13 @@ def process_translation(job_data):
     request_id = str(uuid.uuid4())[:8]
     req_prefix = f"[{request_id}] "
 
-    logger.info(f"{req_prefix}Processing translation for image: {image_id}")
+    source_lang = job_data.get("sourceLanguage", "ja").strip().lower()
+    target_lang = job_data.get("targetLanguage", "en").strip().lower()
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"{req_prefix}Translation Inputs: job_data={job_data}")
+
+    logger.info(f"{req_prefix}Processing translation for image: {image_id} ({source_lang} -> {target_lang})")
 
     try:
         backend_url = CALLBACK_URL.replace("/jobs/callback", f"/images/{image_id}")
@@ -115,6 +122,8 @@ def process_translation(job_data):
                         context_str,
                         TRANSLATION_JSON_SCHEMA,
                         request_id=request_id,
+                        source_lang=source_lang,
+                        target_lang=target_lang,
                     )
                     chunk_mapping = parse_and_validate_batch(vlm_res, chunk)
                 except Exception as e:
@@ -133,6 +142,8 @@ def process_translation(job_data):
                         context_str,
                         TRANSLATION_JSON_SCHEMA,
                         request_id=request_id,
+                        source_lang=source_lang,
+                        target_lang=target_lang,
                     )
                     chunk_mapping = parse_and_validate_batch(batch_res, chunk)
                 except Exception as e:
@@ -187,6 +198,8 @@ def process_translation(job_data):
                         context_str,
                         TRANSLATION_JSON_SCHEMA,
                         request_id=request_id,
+                        source_lang=source_lang,
+                        target_lang=target_lang,
                     )
                     r_chunk_mapping = parse_and_validate_batch(retry_res, r_chunk)
                 except Exception as e:
@@ -227,7 +240,7 @@ def process_translation(job_data):
                     lang = r["detectedLanguage"]
 
                     translated = translate_text(
-                        text, source_lang=lang, request_id=request_id
+                        text, source_lang=source_lang, target_lang=target_lang, request_id=request_id
                     )
                     if translated and is_valid_translation(
                         text, translated, request_id=request_id
@@ -283,6 +296,8 @@ def process_translation(job_data):
         )
 
     callback_payload = {"imageId": image_id, "translations": translations}
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"{req_prefix}Translation Outputs: callback_payload={callback_payload}")
     try:
         res = requests.post(
             f"{CALLBACK_URL}/translation",

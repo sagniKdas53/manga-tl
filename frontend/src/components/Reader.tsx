@@ -2183,6 +2183,47 @@ export const Reader: React.FC<ReaderProps> = ({
                         <div style={{ wordBreak: 'break-word', lineHeight: '1.4', maxHeight: '120px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
                           {showTranslations ? (getCombinedText(activeItem, true) || 'No translation yet.') : getCombinedText(activeItem, false)}
                         </div>
+
+                        {activeItem.regions[0]?.qaStatus && (
+                          <div style={{
+                            marginTop: '4px',
+                            padding: '8px',
+                            borderRadius: '4px',
+                            border: '1px solid var(--border-color)',
+                            backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                            fontSize: '11px',
+                            lineHeight: '1.3'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontWeight: '600', color: 'var(--text-dim)' }}>VLM QA Status</span>
+                              <span style={{
+                                textTransform: 'uppercase',
+                                fontWeight: '700',
+                                padding: '2px 6px',
+                                borderRadius: '3px',
+                                fontSize: '9px',
+                                color: '#fff',
+                                backgroundColor: activeItem.regions[0].qaStatus === 'passed'
+                                  ? 'rgba(46, 204, 113, 0.85)' // Green for passed
+                                  : activeItem.regions[0].qaStatus === 'failed'
+                                    ? 'rgba(231, 76, 60, 0.85)' // Red for failed
+                                    : 'rgba(230, 126, 34, 0.85)' // Orange/yellow for direct_fix
+                              }}>
+                                {activeItem.regions[0].qaStatus.replace('_', ' ')}
+                              </span>
+                            </div>
+                            {activeItem.regions[0].qaScore !== undefined && activeItem.regions[0].qaScore !== null && (
+                              <div style={{ color: 'var(--text-muted)', marginBottom: '4px', fontSize: '10px' }}>
+                                Confidence Score: {(activeItem.regions[0].qaScore * 100).toFixed(0)}%
+                              </div>
+                            )}
+                            {activeItem.regions[0].qaFeedback && (
+                              <div style={{ color: 'var(--text-main)', fontStyle: 'italic', wordBreak: 'break-word', marginTop: '4px' }}>
+                                "{activeItem.regions[0].qaFeedback}"
+                              </div>
+                            )}
+                          </div>
+                        )}
                         
                         <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
