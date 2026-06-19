@@ -71,7 +71,7 @@ This document tracks the translation platform checklist, restructured and priori
 
 ### Phase 6: Configurable Translation Engine & QA Validation (Medium Priority)
 
-- [ ] **Bidirectional Translation & Reader Configs**
+- [x] **Bidirectional Translation & Reader Configs**
   - **Context:** The pipeline needs customizable translation source/target pairs and non-translation pipelines.
   - **Action:**
     - Add `sourceLanguage` and `targetLanguage` parameters to the series configuration.
@@ -79,11 +79,11 @@ This document tracks the translation platform checklist, restructured and priori
       - `JP --> EN`: Standard translation and typesetting workflow.
       - `EN --> EN` (Reader mode): Generate thumbnails and run OCR for future indexing/summaries, skipping translation.
       - `KR --> JP`: Experimental VLM/LLM translation.
-- [ ] **Universal Thumbnail Generation**
+- [x] **Universal Thumbnail Generation**
   - **Context:** Gallery page load times are sluggish using full-resolution images.
   - **Action:**
     - Ensure thumbnails are generated on upload for every page, regardless of the series config.
-- [ ] **Verbose VLM QA & Debug Logging**
+- [x] **Verbose VLM QA & Debug Logging**
   - **Context:** VLM QA passes all images without verbose output, making validation difficult. We also need deep trace logs of all API calls.
   - **Action:**
     - Make VLM QA rejection/approval reasoning verbose and visible.
@@ -94,9 +94,9 @@ This document tracks the translation platform checklist, restructured and priori
       - Force poor translations using intentionally dumb models.
       - Input low-quality source images (messed-up OCR).
       - Upload a Korean (KR) page to a Japanese (JP) series to test mismatch handling.
-- [ ] **High-Quality/Paid Translation API Integration**
+- [x] **High-Quality/Paid Translation API Integration**
   - **Action:** Research and integrate a paid/premium translation API endpoint for better output quality.
-- [ ] **Hardware & Remote ML Deployment Testing**
+- [x] **Hardware & Remote ML Deployment Testing**
   - **Action:**
     - Deploy and test the Python worker locally on a Raspberry Pi 5.
     - Configure and verify remote Ollama connections on the Chromebox.
