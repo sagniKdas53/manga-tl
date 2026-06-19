@@ -3,6 +3,7 @@ import time
 
 LAST_REQUEST_TIME = 0.0
 
+
 def enforce_rate_limit():
     global LAST_REQUEST_TIME
     rate_limit_env = os.environ.get("RATE_LIMIT", "").strip()

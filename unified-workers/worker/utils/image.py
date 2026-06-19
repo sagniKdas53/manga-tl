@@ -1,5 +1,6 @@
 import cv2
 
+
 def downscale_for_ocr(img, max_dim=1024):
     """
     Reduce memory consumption before OCR.
@@ -40,12 +41,14 @@ def download_image(image_info):
     if presigned_url:
         import requests
         from worker.config import logger
+
         logger.info("Downloading image via presigned GET URL")
         res = requests.get(presigned_url)
         res.raise_for_status()
         return res.content
     else:
         from worker.config import minio_client, logger
+
         storage_path = image_info["storagePath"]
         logger.info(f"Downloading image from local MinIO path: {storage_path}")
         response = minio_client.get_object("manga-library", storage_path)

@@ -6,8 +6,7 @@ from minio import Minio
 # Configure structured logging
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL),
-    format="%(asctime)s [%(levelname)s] %(message)s"
+    level=getattr(logging, LOG_LEVEL), format="%(asctime)s [%(levelname)s] %(message)s"
 )
 logger = logging.getLogger("translation")
 

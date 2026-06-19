@@ -53,6 +53,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 
 def start_health_server(port: int):
     """Start the health check HTTP server on a daemon thread."""
+
     def run_server():
         try:
             server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)

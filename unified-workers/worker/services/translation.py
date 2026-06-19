@@ -22,7 +22,11 @@ TRANSLATION_JSON_SCHEMA = {
                     "translationNotes": {"type": "string"},
                     "emotion": {"type": "string"},
                     "tone": {"type": "string"},
-                    "translationScore": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    "translationScore": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                    },
                 },
                 "required": ["id", "translation"],
             },
@@ -110,7 +114,8 @@ def is_valid_translation(source, translated, request_id=None):
     # 1. CJK leak detection — Japanese/Chinese in "English" translation
     if contains_japanese(source_stripped):
         import re
-        cjk_chars = re.findall(r'[\u3040-\u9FFF\uF900-\uFAFF]', translated_stripped)
+
+        cjk_chars = re.findall(r"[\u3040-\u9FFF\uF900-\uFAFF]", translated_stripped)
         cjk_ratio = len(cjk_chars) / max(len(translated_stripped), 1)
         if cjk_ratio > 0.15:
             logger.warning(
@@ -234,7 +239,15 @@ def validate_translation_response(parsed_json):
                 isinstance(k, str) and isinstance(v, str)
                 for k, v in parsed_json.items()
             ):
-                return {k: {"translatedText": v, "translationNotes": "", "emotion": "", "tone": ""} for k, v in parsed_json.items()}
+                return {
+                    k: {
+                        "translatedText": v,
+                        "translationNotes": "",
+                        "emotion": "",
+                        "tone": "",
+                    }
+                    for k, v in parsed_json.items()
+                }
     elif isinstance(parsed_json, list):
         items = parsed_json
 
@@ -259,7 +272,7 @@ def validate_translation_response(parsed_json):
                 "translationNotes": item.get("translationNotes", ""),
                 "emotion": item.get("emotion", ""),
                 "tone": item.get("tone", ""),
-                "translationScore": float(item.get("translationScore", 1.0))
+                "translationScore": float(item.get("translationScore", 1.0)),
             }
 
     return validated if validated else None
@@ -622,7 +635,9 @@ def try_local_ai(prompt, text, response_schema=None, request_id=None):
     model = os.environ.get("LOCAL_LLM_MODEL", "gemma3:4b")
 
     if local_endpoint:
-        if not local_endpoint.endswith("/v1/chat/completions") and not local_endpoint.endswith("/api/v1/chat"):
+        if not local_endpoint.endswith(
+            "/v1/chat/completions"
+        ) and not local_endpoint.endswith("/api/v1/chat"):
             if local_endpoint.endswith("/"):
                 local_endpoint += "v1/chat/completions"
             else:
@@ -673,6 +688,7 @@ def try_local_ai(prompt, text, response_schema=None, request_id=None):
                         payload["response_format"] = {"type": "json_object"}
 
             from worker.utils.lock import acquire_lock
+
             with acquire_lock("local-llm"):
                 start = time.perf_counter()
                 res = requests.post(
@@ -950,7 +966,9 @@ def translate_text(text, source_lang="auto", target_lang="en", request_id=None):
     return None
 
 
-def translate_batch_llm(unmatched_regions, context_str="", response_schema=None, request_id=None):
+def translate_batch_llm(
+    unmatched_regions, context_str="", response_schema=None, request_id=None
+):
     if not request_id:
         request_id = str(uuid.uuid4())[:8]
     req_prefix = f"[{request_id}] "
@@ -1134,7 +1152,10 @@ Input:
     except Exception as e:
         logger.error(f"{req_prefix}Local LLM batch translation failed: {e}")
 
-def try_local_vlm_vision(model, prompt, base64_image, response_schema=None, request_id=None):
+
+def try_local_vlm_vision(
+    model, prompt, base64_image, response_schema=None, request_id=None
+):
     req_prefix = f"[{request_id}] " if request_id else ""
     local_provider = os.environ.get("LOCAL_LLM_PROVIDER", "ollama").lower().strip()
     local_endpoint = os.environ.get("LOCAL_LLM_ENDPOINT", "").strip()
@@ -1144,7 +1165,9 @@ def try_local_vlm_vision(model, prompt, base64_image, response_schema=None, requ
         else:
             local_endpoint = "http://host.docker.internal:1234/v1/chat/completions"
 
-    if not local_endpoint.endswith("/v1/chat/completions") and not local_endpoint.endswith("/api/v1/chat"):
+    if not local_endpoint.endswith(
+        "/v1/chat/completions"
+    ) and not local_endpoint.endswith("/api/v1/chat"):
         if local_endpoint.endswith("/"):
             local_endpoint += "v1/chat/completions"
         else:
@@ -1159,38 +1182,39 @@ def try_local_vlm_vision(model, prompt, base64_image, response_schema=None, requ
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        },
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
                     },
                 ],
             }
         ],
     }
-    
+
     if response_schema:
         if local_provider == "ollama":
             payload["format"] = "json"
         else:
-            payload["response_format"] = {
-                "type": "json_object"
-            }
+            payload["response_format"] = {"type": "json_object"}
 
     from worker.utils.lock import acquire_lock
+
     try:
         with acquire_lock("local-llm"):
-            logger.info(f"{req_prefix}Sending local VLM request to {local_endpoint} using model {model}...")
+            logger.info(
+                f"{req_prefix}Sending local VLM request to {local_endpoint} using model {model}..."
+            )
             start = time.perf_counter()
             response = requests.post(local_endpoint, json=payload, timeout=90)
             elapsed = time.perf_counter() - start
             logger.info(f"{req_prefix}Local VLM query completed in {elapsed:.2f}s")
-            
+
             if response.status_code == 200:
                 res_json = response.json()
                 choice = res_json["choices"][0]["message"]["content"]
                 return choice
             else:
-                logger.error(f"{req_prefix}Local VLM API returned status {response.status_code}: {response.text}")
+                logger.error(
+                    f"{req_prefix}Local VLM API returned status {response.status_code}: {response.text}"
+                )
     except Exception as e:
         logger.error(f"{req_prefix}Error during local VLM query: {e}")
     return None
@@ -1204,6 +1228,7 @@ def translate_vlm_vision(
     req_prefix = f"[{request_id}] " if request_id else ""
 
     import base64
+
     base64_image = base64.b64encode(img_bytes).decode("utf-8")
 
     bubbles_input = []
@@ -1332,7 +1357,10 @@ Input:
 
     if (provider == "nvidia" or nvidia_key) and nvidia_key:
         logger.info(f"{req_prefix}VLM: Trying vision model via Nvidia...")
-        nvidia_vlm_model = os.environ.get("NVIDIA_VLM_MODEL", "").strip() or os.environ.get("PREFERRED_VLM_MODEL", "").strip()
+        nvidia_vlm_model = (
+            os.environ.get("NVIDIA_VLM_MODEL", "").strip()
+            or os.environ.get("PREFERRED_VLM_MODEL", "").strip()
+        )
         if not nvidia_vlm_model:
             nvidia_vlm_model = "nvidia/nemotron-nano-12b-v2-vl"
         try:
@@ -1419,7 +1447,7 @@ def build_context_string(image_info):
     context_str = ""
     if not image_info:
         return context_str
-        
+
     series_meta = image_info.get("seriesMetadata")
     if series_meta:
         context_str += f"Series Title: {series_meta.get('title')}\n"
@@ -1432,11 +1460,11 @@ def build_context_string(image_info):
                 context_str += f"Roster & Editorial Style Guidelines:\n{json.dumps(meta, ensure_ascii=False, indent=2)}\n"
             except Exception:
                 context_str += f"Roster & Editorial Style Guidelines:\n{series_meta.get('metadataJson')}\n"
-                
+
     chapter_sum = image_info.get("chapterSummary")
     if chapter_sum:
         context_str += f"Previous Chapter Summary:\n{chapter_sum}\n"
-        
+
     prev_text = image_info.get("previousPageText")
     if prev_text:
         if isinstance(prev_text, str) and "|" in prev_text:
@@ -1445,7 +1473,7 @@ def build_context_string(image_info):
             context_str += f"Previous Page Dialogue (in reading order):\n{formatted}\n"
         else:
             context_str += f"Previous Page Text/Dialogue Context:\n{prev_text}\n"
-        
+
     if context_str:
         return f"Narrative and Style Context:\n{context_str}\n---\n"
     return ""

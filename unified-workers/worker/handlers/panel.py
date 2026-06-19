@@ -3,6 +3,7 @@ from worker.config import CALLBACK_URL, BACKEND_HEADERS
 from worker.services.panel_detection import detect_panels
 from worker.utils.image import download_image
 
+
 def process_panel_detection(job_data):
     image_id = job_data["imageId"]
     reading_direction = (job_data.get("readingDirection") or "rtl").strip().lower()

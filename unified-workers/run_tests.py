@@ -1,5 +1,8 @@
 import sys
-from tests.test_ocr_shaping_color import test_detect_background_color, test_detect_bubble_contour
+from tests.test_ocr_shaping_color import (
+    test_detect_background_color,
+    test_detect_bubble_contour,
+)
 
 print("Running test_detect_background_color...")
 try:

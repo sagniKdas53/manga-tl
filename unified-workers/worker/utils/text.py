@@ -1,5 +1,6 @@
 import re
 
+
 def detect_language(text):
     # Regex ranges for CJK
     # Japanese Hiragana/Katakana
