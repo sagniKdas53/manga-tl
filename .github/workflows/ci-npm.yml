@@ -2,7 +2,7 @@ name: CI - Frontend
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main"]
     paths:
       - "frontend/package.json"
       - "frontend/package-lock.json"

@@ -2,7 +2,7 @@ name: CI - Backend
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main"]
     paths:
       - "backend/pom.xml"
       - "backend/src/**"
