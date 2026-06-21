@@ -10,6 +10,7 @@ on:
       - "frontend/public/**"
       - "frontend/index.html"
       - "frontend/vite.config.*"
+      - "frontend/Dockerfile"
       - ".github/workflows/ci-npm.yml"
   pull_request:
     paths:
@@ -19,6 +20,7 @@ on:
       - "frontend/public/**"
       - "frontend/index.html"
       - "frontend/vite.config.*"
+      - "frontend/Dockerfile"
       - ".github/workflows/ci-npm.yml"
 
 jobs:
