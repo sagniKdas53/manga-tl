@@ -6,11 +6,13 @@ on:
     paths:
       - "backend/pom.xml"
       - "backend/src/**"
+      - "backend/Dockerfile"
       - ".github/workflows/ci-maven.yml"
   pull_request:
     paths:
       - "backend/pom.xml"
       - "backend/src/**"
+      - "backend/Dockerfile"
       - ".github/workflows/ci-maven.yml"
 
 jobs:
