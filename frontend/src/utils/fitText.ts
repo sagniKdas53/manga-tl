@@ -15,6 +15,8 @@ export const fitTextInBox = (
   boxX: number = 0,
   boxY: number = 0,
   maskPolygon?: string | null,
+  fontWeight: string = 'bold',
+  fontStyle: string = 'normal',
 ): FitResult => {
   const cleanText = (text || "").replace(/\r\n/g, "\n");
   const canvas = document.createElement("canvas");
@@ -36,7 +38,7 @@ export const fitTextInBox = (
   }
 
   const wrapText = (txt: string, fSize: number): { lines: string[]; lineCenters: number[] } => {
-    ctx.font = `bold ${fSize}px "${fontFamily}", sans-serif`;
+    ctx.font = `${fontWeight} ${fontStyle === 'italic' ? 'italic ' : ''}${fSize}px "${fontFamily}", sans-serif`;
     const paragraphs = txt.split("\n");
 
     // 1. Polygon-aware wrapping

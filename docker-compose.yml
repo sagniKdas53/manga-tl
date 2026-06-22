@@ -135,6 +135,8 @@ services:
       - LOCAL_LLM_ENDPOINT=${LOCAL_LLM_ENDPOINT:-http://ollama:11434/v1/chat/completions}
       - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
       - LOCAL_VLM_MODEL=${LOCAL_VLM_MODEL:-}
+      - QA_MODE=${QA_MODE:-auto}
+      - RENDER_CACHE_DIR=/app/rendered_cache
       # Finally the remote workers, to distibute load to shouldn't this be added to the back-end
       - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-1}
       - HF_HUB_OFFLINE=1
@@ -152,6 +154,7 @@ services:
       - ./data/worker/paddleocr:/root/.paddleocr
       - ./data/worker/paddlex:/root/.paddlex
       - ./data/worker/easyocr:/root/.EasyOCR
+      - ./data/worker/rendered_cache:/app/rendered_cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
