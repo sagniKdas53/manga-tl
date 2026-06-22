@@ -46,13 +46,62 @@ The platform is designed as a distributed service coordinated via a Valkey job q
 *   Groups separate text line-level OCR detections into logical speech bubbles before panel mapping.
 *   Uses a configurable vertical/horizontal proximity algorithm (`OCR_MERGE_THRESHOLD`) which groups text boxes vertically (or horizontally) relative to the average line size.
 
-### 2. Multi-Tiered Translation Pipeline
-*   **VLM vision pass**: Contextual visual-dialogue mapping using image inputs (Gemini 1.5/2.5, OpenRouter, NVIDIA NIM).
-*   **NVIDIA NIM VLM support**: Native support for free developer/evaluation endpoints at `integrate.api.nvidia.com`. Optimized for:
-    *   **Translation**: `google/gemma-3n-e4b-it` & `google/gemma-3n-e2b-it`
-    *   **Vision-Language (VLM)**: `nvidia/nemotron-nano-12b-v2-vl` & `microsoft/phi-4-multimodal-instruct`
-*   **LLM batch & fallback**: Runs DeepSeek/Nemotron in batches, falling back to DeepL and Google Translate for resilient translations.
-*   **Selective VLM Mode**: Auto-detects and triggers the visual translation tier dynamically if `VLM_MODEL` / `NVIDIA_VLM_MODEL` environment variables are populated.
+### 2. Multi-Tiered Translation Strategy & Fallback Control
+
+The worker executes translation tasks sequentially through a tiered hierarchy, attempting higher-quality models first and falling back if errors occur:
+
+$$\text{Cloud LLM/VLM} \longrightarrow \text{Local LLM (Ollama/LMStudio)} \longrightarrow \text{DeepL Fallback} \longrightarrow \text{Google Translate (Free API)}$$
+
+#### 🔑 Model & Provider Selection
+The worker supports multiple cloud and local model providers for both textual and visual (multimodal) translation tasks:
+*   **Gemini (Direct)**: Configured using `MODEL_PROVIDER=gemini` and `GEMINI_API_KEY`.
+*   **OpenRouter**: Configured using `MODEL_PROVIDER=openrouter` and `OPENROUTER_API_KEY`.
+*   **Nvidia NIM**: Configured using `MODEL_PROVIDER=nvidia` and `NVIDIA_API_KEY`. Supports:
+    *   *Translation*: `google/gemma-3n-e4b-it` & `google/gemma-3n-e2b-it`
+    *   *Vision-Language (VLM)*: `nvidia/nemotron-nano-12b-v2-vl` & `microsoft/phi-4-multimodal-instruct`
+*   **Anthropic**: Configured using `MODEL_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`.
+*   **OpenAI**: Configured using `MODEL_PROVIDER=openai` and `API_KEY`.
+
+> [!IMPORTANT]
+> **Free Tier Recommendations (Gemini)**
+> When operating on the **Google AI Studio Free Tier**, it is highly recommended to select the **Flash** models:
+> *   **Gemini 1.5/2.5 Flash**: Offers **15 Requests Per Minute (RPM)** and **1,500 Requests Per Day (RPD)**.
+> *   **Gemini 1.5 Pro**: Restricts usage to **2 RPM** and **50 RPD**.
+> 
+> Because a single manga page typically contains 10–20 dialogue bubbles, utilizing the Pro model on the Free Tier will trigger rate limits (`429`) within the very first page of typesetting or translation.
+
+#### 🎛️ Pipeline Bypass Environment Controls
+You can enable or disable different fallback layers in [.env](file:///home/sagnik/Projects/docker-composes/manga-library/.env) using the following environment variables:
+
+| Environment Variable | Description |
+| :--- | :--- |
+| `DISABLE_LOCAL_LLM` | Set to `true` to skip all Local LLM/VLM (Ollama/LMStudio) lookups. Useful if local models are unconfigured or slow. |
+| `DISABLE_DEEPL_TRANSLATE` | Set to `true` to skip DeepL fallback translation. |
+| `DISABLE_GOOGLE_TRANSLATE` | Set to `true` to skip the free web-scraping Google Translate fallback. |
+
+*Note: If all enabled translation layers fail, the region is marked failed, but the queue job will continue processing.*
+
+#### ⏳ Provider Rate Limiting & Cooldowns
+To respect remote API limitations and avoid bombarding servers with request storms, the worker enforces two mechanisms:
+1.  **Rate Limiting Delay**: The `RATE_LIMIT` environment variable (e.g., `RATE_LIMIT=30` representing 30 requests per minute) calculates a minimum delay (e.g., 2.0 seconds) enforced between consecutive requests using `time.sleep()`.
+2.  **429 Provider Cooldown**: If a remote provider returns a `429 (Too Many Requests)` status code:
+    *   The worker initiates a **60-second cooldown** for that specific provider.
+    *   Subsequent requests within that 60-second window immediately bypass the provider and trigger fallback tiers.
+    *   This prevents a loop of 10–20 individual region requests from spamming a rate-limited endpoint.
+
+#### 🔍 QA Mode Auto-Detection & Fallbacks
+When `QA_MODE=auto` (default) is configured in your environment, the worker evaluates available capabilities at startup to determine the most suitable QA pipeline:
+*   **VLM Mode (`vlm`)**: Activated if `PREFERRED_VLM_MODEL` is set, or if `LOCAL_VLM_MODEL` is set (and `DISABLE_LOCAL_LLM` is false). Performs side-by-side visual comparison (original vs typeset image).
+*   **LLM Mode (`llm`)**: Activated if VLM is unavailable, but a `MODEL_PROVIDER` is selected or a local LLM model is configured (and `DISABLE_LOCAL_LLM` is false). Performs text-only semantic translation review.
+*   **None Mode (`none`)**: Bypasses the QA check entirely, auto-passing all text regions.
+
+> [!TIP]
+> **Fail-Safe Behavior**
+> If VLM or LLM evaluation runs but fails (due to API key errors, rate limits, or bad JSON formats), the QA worker will catch the error and fallback to **automatically passing all regions**:
+> ```
+> [QA] Falling back to default PASS for all regions.
+> ```
+> This prevents the backend typesetting pipeline from freezing or hanging when AI components fail.
 
 ### 3. Typesetting & Layout Fitting
 *   Offscreen canvas engine computes typography wrappers to center text on white masks inside bubbles.
