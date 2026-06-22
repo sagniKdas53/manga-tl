@@ -100,7 +100,7 @@ export const fitTextInBox = (
           const words = para.split(" ");
           for (const word of words) {
             const span = getLineSpan(lineIndex);
-            const allowedW = (span.right - span.left) * 0.92;
+            const allowedW = (span.right - span.left) * 0.95;
             const wordWidth = ctx.measureText(word).width;
 
             if (wordWidth > allowedW) {
@@ -115,7 +115,7 @@ export const fitTextInBox = (
               for (const char of word) {
                 const testPart = currentWordPart + char;
                 const nextSpan = getLineSpan(lineIndex);
-                const nextAllowedW = (nextSpan.right - nextSpan.left) * 0.92;
+                const nextAllowedW = (nextSpan.right - nextSpan.left) * 0.95;
                 if (ctx.measureText(testPart).width > nextAllowedW && currentWordPart) {
                   tentativeLines.push(currentWordPart);
                   tentativeCenters.push((nextSpan.left + nextSpan.right) / 2);
@@ -254,7 +254,7 @@ export const fitTextInBox = (
         const dy = (idx + 0.5 - N / 2) * lineHeight;
         const ratio = dy / halfH;
         if (Math.abs(ratio) >= 1.0) return 0;
-        return 2.0 * halfW * Math.sqrt(1.0 - ratio * ratio) * 0.92;
+        return 2.0 * halfW * Math.sqrt(1.0 - ratio * ratio) * 0.95;
       };
 
       for (const para of paragraphs) {
@@ -349,24 +349,33 @@ export const fitTextInBox = (
     return { lines: fallbackLines, lineCenters: fallbackLines.map(() => boxX + maxWidth / 2) };
   };
 
-  let fontSize = defaultFontSize;
-  let wrapResult = wrapText(cleanText, fontSize);
+  const maxStartSize = Math.min(Math.floor(maxHeight / 2), Math.floor(maxWidth / 3), 72);
+  const startSize = Math.max(maxStartSize, defaultFontSize);
+
+  let low = 6;
+  let high = startSize;
+  let bestFs = 6;
+  let bestRes = wrapText(cleanText, 6);
   const lineHeightMultiplier = 1.2;
 
-  while (fontSize > 6) {
-    const totalHeight = wrapResult.lines.length * fontSize * lineHeightMultiplier;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const wrapResult = wrapText(cleanText, mid);
+    const totalHeight = wrapResult.lines.length * mid * lineHeightMultiplier;
     if (totalHeight <= maxHeight) {
-      return { fontSize, lines: wrapResult.lines, overflow: false, lineCenters: wrapResult.lineCenters };
+      bestFs = mid;
+      bestRes = wrapResult;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
     }
-    fontSize--;
-    wrapResult = wrapText(cleanText, fontSize);
   }
 
-  const totalHeight = wrapResult.lines.length * fontSize * lineHeightMultiplier;
+  const totalHeight = bestRes.lines.length * bestFs * lineHeightMultiplier;
   return {
-    fontSize: 6,
-    lines: wrapResult.lines,
+    fontSize: bestFs,
+    lines: bestRes.lines,
     overflow: totalHeight > maxHeight,
-    lineCenters: wrapResult.lineCenters,
+    lineCenters: bestRes.lineCenters,
   };
 };

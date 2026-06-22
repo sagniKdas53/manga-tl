@@ -980,8 +980,13 @@ export const Reader: React.FC<ReaderProps> = ({
         }
 
         // Draw text
+        let displayText = el.text || '';
+        if (el.boxShape === 'elliptical') {
+          displayText = displayText.toUpperCase();
+        }
+
         const fit = fitTextInBox(
-          el.text || '',
+          displayText,
           width - 8,
           height - 8,
           el.font || 'Comic Neue',
@@ -1101,8 +1106,12 @@ export const Reader: React.FC<ReaderProps> = ({
         if (!el.visible) return;
         const width = el.maxWidth || 100;
         const height = el.maxHeight || 100;
+        let displayText = el.text || '';
+        if (el.boxShape === 'elliptical') {
+          displayText = displayText.toUpperCase();
+        }
         const fit = fitTextInBox(
-          el.text || '',
+          displayText,
           width - 8,
           height - 8,
           el.font || 'Comic Neue',
@@ -2784,6 +2793,7 @@ export const Reader: React.FC<ReaderProps> = ({
                      >
                        <option value="Comic Neue">Comic Neue</option>
                        <option value="Bangers">Bangers</option>
+                       <option value="Luckiest Guy">Luckiest Guy</option>
                        <option value="Arial">Arial</option>
                        <option value="Courier New">Courier New</option>
                      </select>
