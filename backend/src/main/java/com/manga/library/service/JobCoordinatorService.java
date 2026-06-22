@@ -397,14 +397,15 @@ public class JobCoordinatorService {
     }
     int nextZOrder = maxZ + 1;
 
-    Layer translationLayer = Layer.builder()
-        .image(image)
-        .type("translation")
-        .targetLanguage(finalTargetLang)
-        .visible(true)
-        .zOrder(nextZOrder)
-        .build();
-    translationLayer = layerRepository.save(translationLayer);
+    final Layer translationLayer = layerRepository.save(
+        Layer.builder()
+            .image(image)
+            .type("translation")
+            .targetLanguage(finalTargetLang)
+            .visible(true)
+            .zOrder(nextZOrder)
+            .build()
+    );
 
     if (translations != null) {
       // Find all existing elements for this layer
