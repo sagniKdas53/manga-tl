@@ -459,6 +459,8 @@ public class JobCoordinatorService {
                               .maxHeight(eh)
                               .visible(true)
                               .autoSize(true)
+                              .font("Comic Neue")
+                              .fontWeight("bold")
                               .backgroundColor(region.getBackgroundColor())
                               .textColor(getContrastingTextColor(region.getBackgroundColor()))
                               .boxShape(

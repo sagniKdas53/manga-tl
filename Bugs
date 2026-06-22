@@ -1,0 +1,9 @@
+# Bugs
+
+- The VLM is till used in docker and produces terrible transaltions, fix it so that we only use VLM for QA if provided, make the rpeompt so that it's an expert translator and provide the original and rendered image and ask for feedback
+- If an image is sent for Redo Page OCR, a new OCR layer is created as expected, but the translations are appended to the existing tranlsation layer
+- If an imgge is sent for Redo Transaltion, a new translation layer is not added, intead the old one is replaced.
+- The free resize mode doesn't work any more on the front-end (which is a bit of an issue if I want to do some final touch ups)
+- The font size is not getting changed when the value is cahnged on the front-end
+- The Translated text is breaking out of it's bounding box, see sample1 v6 both the OCR and the Typeset versions show this
+- Save the rendered versions in the worker to a cache or mount so that it can be reviewed.
