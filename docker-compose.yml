@@ -126,15 +126,19 @@ services:
       # This is the main controller which controls which LLM's are used
       - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
       - API_KEY=${API_KEY}
-      - PREFERRED_MODEL=${PREFERRED_MODEL:-google/gemma-3n-e4b-it}
+      - PREFERRED_MODEL=${PREFERRED_MODEL:-deepseek-ai/deepseek-v4-pro}
       - PREFERRED_VLM_MODEL=${PREFERRED_VLM_MODEL:-nvidia/nemotron-nano-12b-v2-vl}
       - RATE_LIMIT=${RATE_LIMIT:-10}
+      - DISABLE_DEEPL_TRANSLATE=${DISABLE_DEEPL_TRANSLATE:-false}
+      - DEEPL_API_KEY=${DEEPL_API_KEY}
+      - DISABLE_GOOGLE_TRANSLATE=${DISABLE_GOOGLE_TRANSLATE:-false}
       # These are the local fallbacks if cloud is not available and these are configured then use these
       # LOCAL_LLM_ENDPOINT and OLLAMA_REMOTE_URL do the same thing so just keep LOCAL_LLM_ENDPOINT
+      - DISABLE_LOCAL_LLM=${DISABLE_LOCAL_LLM:-false}
       - LOCAL_LLM_PROVIDER=${LOCAL_LLM_PROVIDER:-ollama}
       - LOCAL_LLM_ENDPOINT=${LOCAL_LLM_ENDPOINT:-http://ollama:11434/v1/chat/completions}
       - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
-      - LOCAL_VLM_MODEL=${LOCAL_VLM_MODEL:-}
+      - LOCAL_VLM_MODEL=${LOCAL_VLM_MODEL:-qwen2.5-vl-3b-instruct}
       - QA_MODE=${QA_MODE:-auto}
       - RENDER_CACHE_DIR=/app/rendered_cache
       # Finally the remote workers, to distibute load to shouldn't this be added to the back-end
