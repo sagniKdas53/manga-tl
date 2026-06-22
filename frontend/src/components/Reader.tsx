@@ -465,8 +465,11 @@ export const Reader: React.FC<ReaderProps> = ({
           visible: element.visible,
           overflow: element.overflow,
           backgroundColor: element.backgroundColor,
+          textColor: element.textColor,
           fontWeight: element.fontWeight || 'normal',
-          fontStyle: element.fontStyle || 'normal'
+          fontStyle: element.fontStyle || 'normal',
+          boxShape: element.boxShape,
+          maskPolygon: element.maskPolygon,
         })
       });
 
@@ -994,10 +997,12 @@ export const Reader: React.FC<ReaderProps> = ({
           (el.boxShape === 'elliptical' ? 'elliptical' : 'rectangular'),
           el.x + 4,
           el.y + 4,
-          el.maskPolygon
+          el.maskPolygon,
+          el.fontWeight || 'bold',
+          el.fontStyle || 'normal'
         );
         const fSize = fit.fontSize;
-        ctx.font = `bold ${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
+        ctx.font = `${el.fontWeight || 'bold'} ${el.fontStyle === 'italic' ? 'italic ' : ''}${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
         ctx.fillStyle = el.textColor || '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1119,7 +1124,9 @@ export const Reader: React.FC<ReaderProps> = ({
           (el.boxShape === 'elliptical' ? 'elliptical' : 'rectangular'),
           el.x + 4,
           el.y + 4,
-          el.maskPolygon
+          el.maskPolygon,
+          el.fontWeight || 'bold',
+          el.fontStyle || 'normal'
         );
         const fSize = fit.fontSize;
         textCtx.save();
@@ -1130,7 +1137,7 @@ export const Reader: React.FC<ReaderProps> = ({
           textCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
           textCtx.translate(-cx, -cy);
         }
-        textCtx.font = `bold ${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
+        textCtx.font = `${el.fontWeight || 'bold'} ${el.fontStyle === 'italic' ? 'italic ' : ''}${fSize}px "${el.font || 'Comic Neue'}", sans-serif`;
         textCtx.fillStyle = el.textColor || '#000000';
         textCtx.textAlign = 'center';
         textCtx.textBaseline = 'middle';
@@ -1234,6 +1241,11 @@ export const Reader: React.FC<ReaderProps> = ({
   // --- PANNING / DRAGGING WORKSPACE ---
   const handleMouseDownCanvas = (e: React.MouseEvent) => {
     if (e.button !== 0) return; // Only left click
+    if (draggedElement) return;
+    if (freeResizeMode) {
+      const target = e.target as Element;
+      if (target.closest('.svg-overlay')) return;
+    }
     if (
       (e.target as HTMLElement).closest('.svg-ocr-box') || 
       (e.target as HTMLElement).closest('.svg-conv-box') || 
@@ -1995,7 +2007,9 @@ export const Reader: React.FC<ReaderProps> = ({
                       (element.boxShape === 'elliptical' ? 'elliptical' : 'rectangular'),
                       element.x,
                       element.y,
-                      element.maskPolygon
+                      element.maskPolygon,
+                      element.fontWeight || 'bold',
+                      element.fontStyle || 'normal'
                     );
 
                     if (element.autoSize) {
@@ -2805,7 +2819,7 @@ export const Reader: React.FC<ReaderProps> = ({
                        className="form-input"
                        style={{ padding: '6px 10px', fontSize: '13px' }}
                        value={selectedItem.size || 16}
-                       onChange={e => handleUpdateSelectedElement({ size: parseFloat(e.target.value) || 12 })}
+                       onChange={e => handleUpdateSelectedElement({ size: parseFloat(e.target.value) || 12, autoSize: false })}
                      />
                    </div>
                  </div>

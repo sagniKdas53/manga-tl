@@ -160,6 +160,14 @@ public class JobCoordinatorService {
     ocrRegionRepository.deleteByImageId(imageId);
     conversationRepository.deleteByImageId(imageId);
 
+    // Delete existing layers and their elements for clean OCR redo
+    List<Layer> existingLayers = layerRepository.findByImageId(imageId);
+    for (Layer layer : existingLayers) {
+      List<LayerElement> elements = layerElementRepository.findByLayerId(layer.getId());
+      layerElementRepository.deleteAllInBatch(elements);
+    }
+    layerRepository.deleteAllInBatch(existingLayers);
+
     // Fetch panels to map regions to panels
     List<Panel> panels = panelRepository.findByImageId(imageId);
 
@@ -362,28 +370,41 @@ public class JobCoordinatorService {
             ? series.getTargetLanguage().trim().toLowerCase()
             : "en";
 
-    // Find or create translation layer for this image (language targetLang)
+    // Find existing translation layers for this image and language
     final String finalTargetLang = targetLang;
-    Layer translationLayer =
-        layerRepository.findByImageId(imageId).stream()
-            .filter(
-                l ->
-                    "translation".equals(l.getType())
-                        && finalTargetLang.equals(l.getTargetLanguage()))
-            .findFirst()
-            .orElseGet(
-                () -> {
-                  Layer l =
-                      Layer.builder()
-                          .image(image)
-                          .type("translation")
-                          .targetLanguage(finalTargetLang)
-                          .visible(true)
-                          .zOrder(2)
-                          .build();
-                  Objects.requireNonNull(l, "layer cannot be null");
-                  return layerRepository.save(l);
-                });
+    List<Layer> existingTranslationLayers = new ArrayList<>();
+    for (Layer l : layerRepository.findByImageId(imageId)) {
+      if ("translation".equalsIgnoreCase(l.getType()) && finalTargetLang.equalsIgnoreCase(l.getTargetLanguage())) {
+        existingTranslationLayers.add(l);
+      }
+    }
+
+    boolean isRedo = !existingTranslationLayers.isEmpty();
+    if (isRedo) {
+      // Hide old translation layers
+      for (Layer old : existingTranslationLayers) {
+        old.setVisible(false);
+        layerRepository.save(old);
+      }
+    }
+
+    // Always create a new translation layer
+    int maxZ = 1;
+    for (Layer l : existingTranslationLayers) {
+      if (l.getZOrder() > maxZ) {
+        maxZ = l.getZOrder();
+      }
+    }
+    int nextZOrder = maxZ + 1;
+
+    Layer translationLayer = Layer.builder()
+        .image(image)
+        .type("translation")
+        .targetLanguage(finalTargetLang)
+        .visible(true)
+        .zOrder(nextZOrder)
+        .build();
+    translationLayer = layerRepository.save(translationLayer);
 
     if (translations != null) {
       // Find all existing elements for this layer

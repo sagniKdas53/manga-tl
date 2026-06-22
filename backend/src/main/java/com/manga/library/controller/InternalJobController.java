@@ -243,8 +243,18 @@ public class InternalJobController {
                   region.setDetectedLanguage((String) payload.get("detectedLanguage"));
                 }
                 if (payload.containsKey("translatedText")) {
-                  region.setTranslatedText((String) payload.get("translatedText"));
+                  String translatedText = (String) payload.get("translatedText");
+                  region.setTranslatedText(translatedText);
                   region.setTranslationFailed(false);
+
+                  // Update active translation layer element
+                  List<LayerElement> elements = layerElementRepository.findByRegionId(id);
+                  for (LayerElement el : elements) {
+                    if (el.getLayer() != null && "translation".equalsIgnoreCase(el.getLayer().getType()) && Boolean.TRUE.equals(el.getLayer().getVisible())) {
+                      el.setText(translatedText);
+                      layerElementRepository.save(el);
+                    }
+                  }
                 }
                 if (payload.containsKey("translationFailed")) {
                   Object val = payload.get("translationFailed");
