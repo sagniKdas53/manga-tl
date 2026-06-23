@@ -321,6 +321,7 @@ public class PageController {
   @Transactional
   public ResponseEntity<List<Map<String, Object>>> getImageLayers(@PathVariable UUID imageId) {
     List<Layer> layers = new ArrayList<>(layerRepository.findByImageId(imageId));
+    layers.sort(Comparator.comparingInt(Layer::getZOrder));
 
     // Auto-initialize default translation layer if it doesn't exist but we have translations
     boolean hasTranslationLayer = layers.stream().anyMatch(l -> "translation".equals(l.getType()));

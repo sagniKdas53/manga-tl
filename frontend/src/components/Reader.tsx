@@ -101,6 +101,7 @@ export const Reader: React.FC<ReaderProps> = ({
     const saved = localStorage.getItem('manga_clean_view');
     return saved === null ? false : saved === 'true';
   });
+  const [manuallyShownOcrLayers, setManuallyShownOcrLayers] = useState<Set<string>>(new Set());
   const [undoStack, setUndoStack] = useState<LayerElement[]>([]);
   const [redoStack, setRedoStack] = useState<LayerElement[]>([]);
 
@@ -165,6 +166,10 @@ export const Reader: React.FC<ReaderProps> = ({
 
   useEffect(() => {
     localStorage.setItem('manga_clean_view', cleanScanlationView.toString());
+  }, [cleanScanlationView]);
+
+  useEffect(() => {
+    setManuallyShownOcrLayers(new Set());
   }, [cleanScanlationView]);
 
   useEffect(() => {
@@ -258,15 +263,45 @@ export const Reader: React.FC<ReaderProps> = ({
       .join('\n');
   }, []);
 
+  const visibleOcrRegionIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    layers.forEach(lData => {
+      if (lData.layer.type === 'ocr' && lData.layer.visible) {
+        lData.elements.forEach(el => {
+          if (el.regionId) ids.add(el.regionId);
+        });
+      }
+    });
+    return ids;
+  }, [layers]);
+
+  const filteredOcrRegions = React.useMemo(() => {
+    const hasOcrLayer = layers.some(lData => lData.layer.type === 'ocr');
+    if (!hasOcrLayer) return ocrRegions;
+    return ocrRegions.filter(r => visibleOcrRegionIds.has(r.id));
+  }, [ocrRegions, layers, visibleOcrRegionIds]);
+
+  const filteredConversations = React.useMemo(() => {
+    const hasOcrLayer = layers.some(lData => lData.layer.type === 'ocr');
+    if (!hasOcrLayer) return conversations;
+    return conversations.filter(conv => 
+      conv.regions.some(cr => visibleOcrRegionIds.has(cr.regionId))
+    );
+  }, [conversations, layers, visibleOcrRegionIds]);
+
+  const sortedLayers = React.useMemo(() => {
+    return [...layers].sort((a, b) => a.layer.zOrder - b.layer.zOrder);
+  }, [layers]);
+
   // Compute union bounding box for conversations
   const conversationsWithRegions = React.useMemo(() => {
-    if (!groupByConversation || conversations.length === 0) {
+    if (!groupByConversation || filteredConversations.length === 0) {
       return [];
     }
 
-    return conversations.map(conv => {
+    return filteredConversations.map(conv => {
       const regionsInConv = conv.regions
-        .map(cr => ocrRegions.find(r => r.id === cr.regionId))
+        .map(cr => filteredOcrRegions.find(r => r.id === cr.regionId))
         .filter((r): r is OcrRegion => !!r);
       
       let bboxX = 0, bboxY = 0, bboxW = 0, bboxH = 0;
@@ -291,12 +326,12 @@ export const Reader: React.FC<ReaderProps> = ({
         approved: regionsInConv.length > 0 && regionsInConv.every(r => r.approved),
       };
     }).filter(c => c.regions.length > 0);
-  }, [conversations, ocrRegions, groupByConversation]);
+  }, [filteredConversations, filteredOcrRegions, groupByConversation]);
 
   // Unified list of renderable items (conversations or standalone regions)
   const renderItems = React.useMemo(() => {
-    if (!groupByConversation || conversations.length === 0) {
-      return ocrRegions.map(r => ({
+    if (!groupByConversation || filteredConversations.length === 0) {
+      return filteredOcrRegions.map(r => ({
         id: `region-${r.id}`,
         isConversation: false,
         regions: [r],
@@ -310,7 +345,7 @@ export const Reader: React.FC<ReaderProps> = ({
       }));
     }
 
-    const groupedRegionIds = new Set(conversations.flatMap(c => c.regions.map(r => r.regionId)));
+    const groupedRegionIds = new Set(filteredConversations.flatMap(c => c.regions.map(r => r.regionId)));
 
     const convItems = conversationsWithRegions.map(conv => ({
       id: `conv-${conv.id}`,
@@ -325,7 +360,7 @@ export const Reader: React.FC<ReaderProps> = ({
       conversationData: conv
     }));
 
-    const ungroupedItems = ocrRegions
+    const ungroupedItems = filteredOcrRegions
       .filter(r => !groupedRegionIds.has(r.id))
       .map(r => ({
         id: `region-${r.id}`,
@@ -341,7 +376,7 @@ export const Reader: React.FC<ReaderProps> = ({
       }));
 
     return [...convItems, ...ungroupedItems];
-  }, [groupByConversation, ocrRegions, conversations, conversationsWithRegions]);
+  }, [groupByConversation, filteredOcrRegions, filteredConversations, conversationsWithRegions]);
 
   // Dynamic calculation of the absolute zoom percentage
   const displayedZoom = React.useMemo(() => {
@@ -429,11 +464,14 @@ export const Reader: React.FC<ReaderProps> = ({
     });
   }, [pageNumber]);
 
-  // Reset free resize mode on selectedItem changes
+  // Reset free resize mode on selectedItem ID changes
+  const prevSelectedItemIdRef = useRef<string | number | null>(null);
   useEffect(() => {
-    Promise.resolve().then(() => {
+    const currentId = selectedItem?.id || null;
+    if (currentId !== prevSelectedItemIdRef.current) {
+      prevSelectedItemIdRef.current = currentId;
       setFreeResizeMode(false);
-    });
+    }
   }, [selectedItem]);
 
   // History Undo/Redo operations
@@ -882,11 +920,19 @@ export const Reader: React.FC<ReaderProps> = ({
   const handleToggleLayerVisibility = (layerId: string) => {
     setLayers(prev => prev.map(l => {
       if (l.layer.id === layerId) {
+        const nextVisible = !l.layer.visible;
+        if (nextVisible && cleanScanlationView && l.layer.type === 'ocr') {
+          setManuallyShownOcrLayers(prevShown => {
+            const nextShown = new Set(prevShown);
+            nextShown.add(layerId);
+            return nextShown;
+          });
+        }
         return {
           ...l,
           layer: {
             ...l.layer,
-            visible: !l.layer.visible
+            visible: nextVisible
           }
         };
       }
@@ -936,9 +982,11 @@ export const Reader: React.FC<ReaderProps> = ({
     // Draw the base page image
     ctx.drawImage(img, 0, 0, W, H);
 
+    const hasTranslation = layers.some(ld => ld.layer.type === 'translation');
     // Draw visible layer elements
-    layers.forEach(lData => {
-      if (!lData.layer.visible) return;
+    sortedLayers.forEach(lData => {
+      const isOcrHidden = cleanScanlationView && hasTranslation && lData.layer.type === 'ocr' && !manuallyShownOcrLayers.has(lData.layer.id);
+      if (!lData.layer.visible || isOcrHidden) return;
       lData.elements.forEach(el => {
         if (!el.visible) return;
         const width = el.maxWidth || 100;
@@ -1240,12 +1288,9 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // --- PANNING / DRAGGING WORKSPACE ---
   const handleMouseDownCanvas = (e: React.MouseEvent) => {
+    if (freeResizeMode) return;
     if (e.button !== 0) return; // Only left click
     if (draggedElement) return;
-    if (freeResizeMode) {
-      const target = e.target as Element;
-      if (target.closest('.svg-overlay')) return;
-    }
     if (
       (e.target as HTMLElement).closest('.svg-ocr-box') || 
       (e.target as HTMLElement).closest('.svg-conv-box') || 
@@ -1935,7 +1980,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       }}
                       onMouseEnter={() => handleMouseEnterItem(item)}
                       onMouseLeave={handleMouseLeaveItem}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: 'pointer', pointerEvents: freeResizeMode ? 'none' : 'auto' }}
                     >
                       <rect 
                         x={item.bboxX}
@@ -1987,8 +2032,10 @@ export const Reader: React.FC<ReaderProps> = ({
                   );
                 })}
 
-                {layers.map((lData) => {
-                  if (!lData.layer.visible) return null;
+                {sortedLayers.map((lData) => {
+                  const hasTranslation = layers.some(ld => ld.layer.type === 'translation');
+                  const isOcrHidden = cleanScanlationView && hasTranslation && lData.layer.type === 'ocr' && !manuallyShownOcrLayers.has(lData.layer.id);
+                  if (!lData.layer.visible || isOcrHidden) return null;
                   return lData.elements.map((element) => {
                     if (!element.visible) return null;
 
@@ -2037,6 +2084,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedItem({ ...element, isLayerElement: true });
+                          setActiveLayerId(element.layerId);
                         }}
                         style={{ cursor: 'pointer' }}
                       >
@@ -2103,8 +2151,9 @@ export const Reader: React.FC<ReaderProps> = ({
                             y={element.y}
                             width={width}
                             height={height}
-                            fill="transparent"
-                            style={{ cursor: freeResizeMode && isSelected ? 'move' : 'pointer' }}
+                            fill="white"
+                            fillOpacity={0}
+                            style={{ cursor: freeResizeMode && isSelected ? 'move' : 'pointer', pointerEvents: 'auto' }}
                             onMouseDown={(e) => {
                               if (freeResizeMode && isSelected) {
                                 handleElementDragStart(e, element, 'move');
@@ -2120,10 +2169,12 @@ export const Reader: React.FC<ReaderProps> = ({
                             y={element.y - 2}
                             width={width + 4}
                             height={height + 4}
-                            fill="transparent"
+                            fill="white"
+                            fillOpacity={0}
                             stroke="#ef4444"
                             strokeWidth="1.5"
                             strokeDasharray="2 2"
+                            style={{ pointerEvents: 'none' }}
                           />
                         )}
 
@@ -2132,50 +2183,50 @@ export const Reader: React.FC<ReaderProps> = ({
                           <>
                             {/* Top-Left Handle */}
                             <rect
-                              x={element.x - 4}
-                              y={element.y - 4}
-                              width={8}
-                              height={8}
+                              x={element.x - 6}
+                              y={element.y - 6}
+                              width={12}
+                              height={12}
                               fill="var(--primary)"
                               stroke="#ffffff"
                               strokeWidth={1.5}
-                              style={{ cursor: 'nwse-resize' }}
+                              style={{ cursor: 'nwse-resize', pointerEvents: 'auto' }}
                               onMouseDown={(e) => handleElementDragStart(e, element, 'resize-tl')}
                             />
                             {/* Top-Right Handle */}
                             <rect
-                              x={element.x + width - 4}
-                              y={element.y - 4}
-                              width={8}
-                              height={8}
+                              x={element.x + width - 6}
+                              y={element.y - 6}
+                              width={12}
+                              height={12}
                               fill="var(--primary)"
                               stroke="#ffffff"
                               strokeWidth={1.5}
-                              style={{ cursor: 'nesw-resize' }}
+                              style={{ cursor: 'nesw-resize', pointerEvents: 'auto' }}
                               onMouseDown={(e) => handleElementDragStart(e, element, 'resize-tr')}
                             />
                             {/* Bottom-Left Handle */}
                             <rect
-                              x={element.x - 4}
-                              y={element.y + height - 4}
-                              width={8}
-                              height={8}
+                              x={element.x - 6}
+                              y={element.y + height - 6}
+                              width={12}
+                              height={12}
                               fill="var(--primary)"
                               stroke="#ffffff"
                               strokeWidth={1.5}
-                              style={{ cursor: 'nesw-resize' }}
+                              style={{ cursor: 'nesw-resize', pointerEvents: 'auto' }}
                               onMouseDown={(e) => handleElementDragStart(e, element, 'resize-bl')}
                             />
                             {/* Bottom-Right Handle */}
                             <rect
-                              x={element.x + width - 4}
-                              y={element.y + height - 4}
-                              width={8}
-                              height={8}
+                              x={element.x + width - 6}
+                              y={element.y + height - 6}
+                              width={12}
+                              height={12}
                               fill="var(--primary)"
                               stroke="#ffffff"
                               strokeWidth={1.5}
-                              style={{ cursor: 'nwse-resize' }}
+                              style={{ cursor: 'nwse-resize', pointerEvents: 'auto' }}
                               onMouseDown={(e) => handleElementDragStart(e, element, 'resize-br')}
                             />
                           </>
@@ -2511,40 +2562,49 @@ export const Reader: React.FC<ReaderProps> = ({
                      </div>
                    </div>
                    
-                   {layers.length === 0 ? (
-                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 0' }}>
-                       No active layers.
-                     </div>
-                   ) : (
-                     layers.map(lData => {
-                       const isActive = lData.layer.id === activeLayerId;
-                       return (
-                         <div 
-                           key={lData.layer.id} 
-                           className="overlay-toggle" 
-                           onClick={() => setActiveLayerId(lData.layer.id)}
-                           style={{ 
-                             padding: '6px 8px', 
-                             border: isActive ? '1px solid var(--primary)' : '1px solid var(--border-color)', 
-                             borderRadius: '6px', 
-                             marginBottom: '6px',
-                             backgroundColor: isActive ? 'var(--primary-glow)' : 'rgba(255,255,255,0.02)',
-                             cursor: 'pointer',
-                             boxShadow: isActive ? '0 0 8px var(--primary-glow)' : 'none'
-                           }}
-                         >
-                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                             <span style={{ fontSize: '12px', fontWeight: isActive ? 700 : 600, color: isActive ? 'var(--primary-hover)' : 'inherit' }}>
-                               {lData.layer.type === 'translation' 
-                                 ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || 'EN'})` 
-                                 : lData.layer.type === 'sfx'
-                                   ? 'SFX Layer'
-                                   : `Layer (${lData.layer.type})`}
-                             </span>
-                             <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>
-                               {lData.elements.length} elements
-                             </span>
-                           </div>
+                   {sortedLayers.length === 0 ? (
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 0' }}>
+                        No active layers.
+                      </div>
+                    ) : (
+                      [...sortedLayers].reverse().map((lData, idx) => {
+                        const isActive = lData.layer.id === activeLayerId;
+                        const stackNumber = sortedLayers.length - idx;
+                        let stackLabel = `#${stackNumber}`;
+                        if (idx === 0 && sortedLayers.length > 1) {
+                          stackLabel += ' (Top)';
+                        } else if (idx === sortedLayers.length - 1) {
+                          stackLabel += ' (Base)';
+                        }
+                        return (
+                          <div 
+                            key={lData.layer.id} 
+                            className="overlay-toggle" 
+                            onClick={() => setActiveLayerId(lData.layer.id)}
+                            style={{ 
+                              padding: '6px 8px', 
+                              border: isActive ? '1px solid var(--primary)' : '1px solid var(--border-color)', 
+                              borderRadius: '6px', 
+                              marginBottom: '6px',
+                              backgroundColor: isActive ? 'var(--primary-glow)' : 'rgba(255,255,255,0.02)',
+                              cursor: 'pointer',
+                              boxShadow: isActive ? '0 0 8px var(--primary-glow)' : 'none'
+                            }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span style={{ fontSize: '12px', fontWeight: isActive ? 700 : 600, color: isActive ? 'var(--primary-hover)' : 'inherit' }}>
+                                {stackLabel} {lData.layer.type === 'translation' 
+                                  ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || 'EN'})` 
+                                  : lData.layer.type === 'sfx'
+                                    ? 'SFX Layer'
+                                    : lData.layer.type === 'ocr'
+                                      ? 'OCR Layer'
+                                      : `Layer (${lData.layer.type})`}
+                              </span>
+                              <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>
+                                {lData.elements.length} elements
+                              </span>
+                            </div>            
                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={e => e.stopPropagation()}>
                              <button
                                onClick={() => handleToggleLayerVisibility(lData.layer.id)}

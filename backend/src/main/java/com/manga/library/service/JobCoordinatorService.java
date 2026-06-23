@@ -156,17 +156,19 @@ public class JobCoordinatorService {
             .findById(imageId)
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
-    // Delete existing regions and conversations
-    ocrRegionRepository.deleteByImageId(imageId);
-    conversationRepository.deleteByImageId(imageId);
-
-    // Delete existing layers and their elements for clean OCR redo
+    // Keep existing layers and regions for multi-pass history, but hide old OCR layers
     List<Layer> existingLayers = layerRepository.findByImageId(imageId);
+    int maxZ = 0;
     for (Layer layer : existingLayers) {
-      List<LayerElement> elements = layerElementRepository.findByLayerId(layer.getId());
-      layerElementRepository.deleteAllInBatch(elements);
+      if (layer.getZOrder() > maxZ) {
+        maxZ = layer.getZOrder();
+      }
+      if ("ocr".equalsIgnoreCase(layer.getType())) {
+        layer.setVisible(false);
+        layerRepository.save(layer);
+      }
     }
-    layerRepository.deleteAllInBatch(existingLayers);
+    int nextZOrder = maxZ + 1;
 
     // Fetch panels to map regions to panels
     List<Panel> panels = panelRepository.findByImageId(imageId);
@@ -212,7 +214,7 @@ public class JobCoordinatorService {
     List<OcrRegion> savedRegions = ocrRegionRepository.saveAll(regionsToSave);
 
     // Create default OCR overlay layer
-    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(1).build();
+    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(nextZOrder).build();
     Objects.requireNonNull(ocrLayer, "ocrLayer cannot be null");
     layerRepository.save(ocrLayer);
 
@@ -274,9 +276,7 @@ public class JobCoordinatorService {
       }
     }
 
-    // 2. Delete old conversations + conversation_regions for this image
-    conversationRegionRepository.deleteByImageId(imageId);
-    conversationRepository.deleteByImageId(imageId);
+    // 2. Do not delete old conversations to preserve multi-pass history
 
     // 3. Create new Conversation + ConversationRegion entries
     if (conversations != null) {

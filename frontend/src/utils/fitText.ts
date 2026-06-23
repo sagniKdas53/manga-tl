@@ -37,7 +37,7 @@ export const fitTextInBox = (
     }
   }
 
-  const wrapText = (txt: string, fSize: number): { lines: string[]; lineCenters: number[] } => {
+  const wrapText = (txt: string, fSize: number): { lines: string[]; lineCenters: number[]; failed: boolean } => {
     ctx.font = `${fontWeight} ${fontStyle === 'italic' ? 'italic ' : ''}${fSize}px "${fontFamily}", sans-serif`;
     const paragraphs = txt.split("\n");
 
@@ -161,7 +161,7 @@ export const fitTextInBox = (
         for (let N = 1; N <= maxPossibleLines; N++) {
           const wrapped = tryWrapForNLines(N);
           if (wrapped !== null) {
-            return wrapped;
+            return { ...wrapped, failed: false };
           }
         }
       }
@@ -192,12 +192,13 @@ export const fitTextInBox = (
           fallbackCenters.push(boxX + maxWidth / 2);
         }
       }
-      return { lines: fallbackLines, lineCenters: fallbackCenters };
+      return { lines: fallbackLines, lineCenters: fallbackCenters, failed: true };
     }
 
     // 2. Rectangular wrapping (non-elliptical fallback)
     if (shape !== "elliptical") {
       const resultLines: string[] = [];
+      let wordOverflow = false;
       for (const para of paragraphs) {
         if (!para) {
           resultLines.push("");
@@ -209,6 +210,7 @@ export const fitTextInBox = (
         for (const word of words) {
           const wordWidth = ctx.measureText(word).width;
           if (wordWidth > maxWidth) {
+            wordOverflow = true;
             if (currentLine) {
               resultLines.push(currentLine);
             }
@@ -239,7 +241,7 @@ export const fitTextInBox = (
         }
       }
       const lineCenters = resultLines.map(() => boxX + maxWidth / 2);
-      return { lines: resultLines, lineCenters };
+      return { lines: resultLines, lineCenters, failed: wordOverflow };
     }
 
     // 3. Elliptical wrapping (legacy elliptical)
@@ -324,7 +326,7 @@ export const fitTextInBox = (
       for (let N = 1; N <= maxPossibleLines; N++) {
         const wrapped = tryWrapForNLines(N);
         if (wrapped !== null) {
-          return { lines: wrapped, lineCenters: wrapped.map(() => boxX + maxWidth / 2) };
+          return { lines: wrapped, lineCenters: wrapped.map(() => boxX + maxWidth / 2), failed: false };
         }
       }
     }
@@ -348,7 +350,7 @@ export const fitTextInBox = (
       }
       if (currentLine) fallbackLines.push(currentLine);
     }
-    return { lines: fallbackLines, lineCenters: fallbackLines.map(() => boxX + maxWidth / 2) };
+    return { lines: fallbackLines, lineCenters: fallbackLines.map(() => boxX + maxWidth / 2), failed: true };
   };
 
   const maxStartSize = Math.min(Math.floor(maxHeight / 2), Math.floor(maxWidth / 3), 72);
@@ -364,7 +366,7 @@ export const fitTextInBox = (
     const mid = Math.floor((low + high) / 2);
     const wrapResult = wrapText(cleanText, mid);
     const totalHeight = wrapResult.lines.length * mid * lineHeightMultiplier;
-    if (totalHeight <= maxHeight) {
+    if (totalHeight <= maxHeight && !wrapResult.failed) {
       bestFs = mid;
       bestRes = wrapResult;
       low = mid + 1;
@@ -377,7 +379,7 @@ export const fitTextInBox = (
   return {
     fontSize: bestFs,
     lines: bestRes.lines,
-    overflow: totalHeight > maxHeight,
+    overflow: totalHeight > maxHeight || bestRes.failed,
     lineCenters: bestRes.lineCenters,
   };
 };
