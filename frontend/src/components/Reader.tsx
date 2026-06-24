@@ -168,9 +168,7 @@ export const Reader: React.FC<ReaderProps> = ({
     localStorage.setItem('manga_clean_view', cleanScanlationView.toString());
   }, [cleanScanlationView]);
 
-  useEffect(() => {
-    setManuallyShownOcrLayers(new Set());
-  }, [cleanScanlationView]);
+
 
   useEffect(() => {
     localStorage.setItem('manga_group_by_conversation', groupByConversation.toString());
@@ -1077,7 +1075,7 @@ export const Reader: React.FC<ReaderProps> = ({
       a.click();
       URL.revokeObjectURL(url);
     }, 'image/png');
-  }, [selectedPage, imageDims, layers]);
+  }, [selectedPage, imageDims, layers, sortedLayers, cleanScanlationView, manuallyShownOcrLayers]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
@@ -1768,7 +1766,10 @@ export const Reader: React.FC<ReaderProps> = ({
                   <input 
                     type="checkbox" 
                     checked={cleanScanlationView} 
-                    onChange={e => setCleanScanlationView(e.target.checked)} 
+                    onChange={e => {
+                      setCleanScanlationView(e.target.checked);
+                      setManuallyShownOcrLayers(new Set());
+                    }} 
                   />
                   <span className="slider"></span>
                 </label>
