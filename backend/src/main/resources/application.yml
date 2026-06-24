@@ -53,3 +53,8 @@ management:
 server:
   servlet:
     context-path: ${CONTEXT_PATH:/tlhub}
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.manga.library: ${LOG_LEVEL:INFO}
