@@ -11,3 +11,5 @@
 - [ ] Need to test the workers logs and each steps input output.
 - [ ] Currenlty if the provider is unavilailable the translation just returns blank translations along wiht the QA also just passing by default, we can implement it to be asynchoronus queue where we can say upload a chapter of 10 pages and it slowly chips away at it for some time, if say a call falied don't give up just add it back to the queue and increase the exponential backoff.
 - [ ] Make a demo using the Sample1 showcasing the progress from v1 to v8
+- [ ] Just like how immich checks for image hashes to see if an image has already been uploaded we can do something similar, check if the image has already been OCR'd and translated, if so just show the translated image directly, it will save space, time and prevent duplicate entries in the database.
+- [ ] Next save the models used for OCR and translation in the layer metadata so that we can compare models in future also make sure the project export zip has these data points too.
