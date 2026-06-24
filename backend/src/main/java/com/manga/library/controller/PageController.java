@@ -99,6 +99,42 @@ public class PageController {
               .findById(chapterId)
               .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
 
+      // Compute SHA-256 hash of the image
+      byte[] originalBytes = file.getBytes();
+      java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+      byte[] encodedhash = digest.digest(originalBytes);
+      StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
+      for (byte b : encodedhash) {
+        String hex = Integer.toHexString(0xff & b);
+        if (hex.length() == 1) {
+          hexString.append('0');
+        }
+        hexString.append(hex);
+      }
+      String fileHash = hexString.toString();
+
+      // Check for duplicate image
+      Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
+      if (existingImageOpt.isPresent()) {
+        Image existingImage = existingImageOpt.get();
+        log.info("Duplicate image detected by hash: {}. Linking to existing image {}", fileHash, existingImage.getId());
+
+        Page page = pageService.createPageWithExistingImage(chapter, existingImage, pageNumber, user);
+
+        // Check if target language layer exists
+        String targetLang = chapter.getSeries().getTargetLanguage() != null ? chapter.getSeries().getTargetLanguage().trim().toLowerCase() : "en";
+        boolean targetTranslationExists = layerRepository.findByImageId(existingImage.getId()).stream()
+            .anyMatch(l -> "translation".equalsIgnoreCase(l.getType()) && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
+
+        if (!targetTranslationExists) {
+          log.info("Target translation layer ({}) missing for existing image {}, queuing translation", targetLang, existingImage.getId());
+          jobCoordinatorService.triggerImageRedo(existingImage.getId(), "translation");
+        }
+
+        return ResponseEntity.ok(
+            new UploadResponse(page.getId(), existingImage.getId(), "duplicate"));
+      }
+
       // Generate unique paths
       String fileExtension = getFileExtension(file.getOriginalFilename());
       String uuid = UUID.randomUUID().toString();
@@ -110,7 +146,6 @@ public class PageController {
       // Generate and upload thumbnail
       String thumbnailStoragePath = null;
       try {
-        byte[] originalBytes = file.getBytes();
         byte[] thumbBytes = generateThumbnail(originalBytes);
         if (thumbBytes != null) {
           thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
@@ -129,6 +164,7 @@ public class PageController {
               storagePath,
               thumbnailStoragePath,
               pageNumber,
+              fileHash,
               user);
 
       // Trigger pipeline

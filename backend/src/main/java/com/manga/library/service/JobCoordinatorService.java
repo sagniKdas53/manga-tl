@@ -214,7 +214,16 @@ public class JobCoordinatorService {
     List<OcrRegion> savedRegions = ocrRegionRepository.saveAll(regionsToSave);
 
     // Create default OCR overlay layer
-    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(nextZOrder).build();
+    com.fasterxml.jackson.databind.node.ObjectNode metadata = objectMapper.createObjectNode();
+    metadata.put("provider", "OCR Worker");
+    metadata.put("model", dto.getModelIdentifier() != null ? dto.getModelIdentifier() : "unknown");
+    metadata.put("time", OffsetDateTime.now().toString());
+    metadata.put("confidence", dto.getConfidence() != null ? dto.getConfidence() : 1.0);
+    metadata.put("layer_name", "ocr");
+    metadata.put("layer_order", nextZOrder);
+    metadata.put("last_modified", OffsetDateTime.now().toString());
+
+    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(nextZOrder).metadataJson(metadata).build();
     Objects.requireNonNull(ocrLayer, "ocrLayer cannot be null");
     layerRepository.save(ocrLayer);
 
@@ -397,6 +406,28 @@ public class JobCoordinatorService {
     }
     int nextZOrder = maxZ + 1;
 
+    com.fasterxml.jackson.databind.node.ObjectNode metadata = objectMapper.createObjectNode();
+    String modelIdentifier = "unknown";
+    Double avgConfidence = 1.0;
+    if (translations != null && !translations.isEmpty()) {
+      if (translations.get(0).containsKey("modelIdentifier")) {
+         modelIdentifier = (String) translations.get(0).get("modelIdentifier");
+      }
+      if (translations.get(0).containsKey("confidence")) {
+         Object confObj = translations.get(0).get("confidence");
+         if (confObj instanceof Number) {
+            avgConfidence = ((Number) confObj).doubleValue();
+         }
+      }
+    }
+    metadata.put("provider", "Translation Worker");
+    metadata.put("model", modelIdentifier);
+    metadata.put("time", OffsetDateTime.now().toString());
+    metadata.put("confidence", avgConfidence);
+    metadata.put("layer_name", "translation");
+    metadata.put("layer_order", nextZOrder);
+    metadata.put("last_modified", OffsetDateTime.now().toString());
+
     final Layer translationLayer = layerRepository.save(
         Layer.builder()
             .image(image)
@@ -404,6 +435,7 @@ public class JobCoordinatorService {
             .targetLanguage(finalTargetLang)
             .visible(true)
             .zOrder(nextZOrder)
+            .metadataJson(metadata)
             .build()
     );
 

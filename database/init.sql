@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS layers (
     target_language TEXT,
     visible BOOLEAN DEFAULT TRUE,
     z_order INT NOT NULL DEFAULT 0,
+    metadata_json JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -149,6 +149,8 @@ services:
       - HF_HUB_DISABLE_SYMLINKS_WARNING=1
       - MANGA_OCR_USE_LOCAL=true
       - MANGA_OCR_MODEL_PATH=/root/.cache/huggingface
+      # Log Level
+      - LOG_LEVEL=DEBUG
     depends_on:
       - redis
       - minio

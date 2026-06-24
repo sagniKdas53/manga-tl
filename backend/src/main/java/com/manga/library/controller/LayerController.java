@@ -84,6 +84,13 @@ public class LayerController {
                   Objects.requireNonNull(history, "history cannot be null");
                   layerEditHistoryRepository.save(history);
                   log.info("Saved edit history for LayerElement {}", id);
+
+                  // Update last_modified on the parent Layer's metadata
+                  Layer parentLayer = element.getLayer();
+                  if (parentLayer != null && parentLayer.getMetadataJson() != null && parentLayer.getMetadataJson().isObject()) {
+                     ((com.fasterxml.jackson.databind.node.ObjectNode) parentLayer.getMetadataJson()).put("last_modified", OffsetDateTime.now().toString());
+                     layerRepository.save(parentLayer);
+                  }
                 }
 
                 LayerElement saved = layerElementRepository.save(element);
