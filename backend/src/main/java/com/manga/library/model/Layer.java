@@ -40,6 +40,10 @@ public class Layer {
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
 
+  @Column(name = "metadata_json", columnDefinition = "jsonb")
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+  private com.fasterxml.jackson.databind.JsonNode metadataJson;
+
   @PrePersist
   protected void onCreate() {
     createdAt = OffsetDateTime.now();

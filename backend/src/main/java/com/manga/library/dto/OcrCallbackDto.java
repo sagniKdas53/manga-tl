@@ -7,6 +7,8 @@ import lombok.Data;
 @Data
 public class OcrCallbackDto {
   private UUID imageId;
+  private String modelIdentifier;
+  private Double confidence;
   private List<OcrRegionData> regions;
 
   @Data

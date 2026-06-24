@@ -24,18 +24,31 @@ public class PageService {
       String storagePath,
       String thumbnailStoragePath,
       Integer pageNumber,
+      String hash,
       User user) {
     Image image =
         Image.builder()
             .filename(filename)
             .storagePath(storagePath)
             .thumbnailStoragePath(thumbnailStoragePath)
+            .hash(hash)
             .createdBy(user)
             .build();
     Objects.requireNonNull(image, "image cannot be null");
     image = imageRepository.save(image);
 
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(image).build();
+    Objects.requireNonNull(page, "page cannot be null");
+    return pageRepository.save(page);
+  }
+
+  @Transactional
+  public Page createPageWithExistingImage(
+      Chapter chapter,
+      Image existingImage,
+      Integer pageNumber,
+      User user) {
+    Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(existingImage).build();
     Objects.requireNonNull(page, "page cannot be null");
     return pageRepository.save(page);
   }
