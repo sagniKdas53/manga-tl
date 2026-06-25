@@ -126,7 +126,6 @@ services:
       # Models
       # This is the main controller which controls which LLM's are used
       - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
-      - API_KEY=${API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
@@ -159,7 +158,7 @@ services:
       - MANGA_OCR_USE_LOCAL=true
       - MANGA_OCR_MODEL_PATH=/root/.cache/huggingface
       # Log Level
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
     depends_on:
       - redis
       - minio
