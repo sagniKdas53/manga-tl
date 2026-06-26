@@ -6,6 +6,7 @@ import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
+import com.manga.library.service.SseService;
 import java.util.*;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class PageController {
   private final com.manga.library.service.PageService pageService;
   private final ConversationRepository conversationRepository;
   private final ConversationRegionRepository conversationRegionRepository;
+  private final SseService sseService;
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
@@ -129,6 +131,7 @@ public class PageController {
         if (!targetTranslationExists) {
           log.info("Target translation layer ({}) missing for existing image {}, queuing translation", targetLang, existingImage.getId());
           jobCoordinatorService.triggerImageRedo(existingImage.getId(), "translation");
+          sseService.mapImageToUser(existingImage.getId(), user.getId());
         }
 
         return ResponseEntity.ok(
@@ -169,6 +172,7 @@ public class PageController {
 
       // Trigger pipeline
       jobCoordinatorService.startPipeline(page.getImage().getId());
+      sseService.mapImageToUser(page.getImage().getId(), user.getId());
 
       return ResponseEntity.ok(
           new UploadResponse(page.getId(), page.getImage().getId(), "processing"));
@@ -528,10 +532,16 @@ public class PageController {
 
   @PostMapping("/ocr-regions/{id}/redo")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
-  public ResponseEntity<?> redoOcrRegion(@PathVariable UUID id, @RequestParam("type") String type) {
+  public ResponseEntity<?> redoOcrRegion(@PathVariable UUID id, @RequestParam("type") String type, @AuthenticationPrincipal User user) {
     log.info("Request to redo OCR region {} with type {}", id, type);
     try {
       jobCoordinatorService.triggerRedo(id, type);
+      
+      // Look up image ID to map it to the user
+      ocrRegionRepository.findById(id).ifPresent(region -> {
+        sseService.mapImageToUser(region.getImage().getId(), user.getId());
+      });
+      
       return ResponseEntity.ok(Map.of("status", "enqueued"));
     } catch (Exception e) {
       log.error("Failed to trigger region redo", e);
@@ -542,11 +552,12 @@ public class PageController {
   @PostMapping("/images/{imageId}/redo")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<?> redoImage(
-      @PathVariable UUID imageId, @RequestParam("type") String type) {
+      @PathVariable UUID imageId, @RequestParam("type") String type, @AuthenticationPrincipal User user) {
     log.info("Request to redo image {} with type {}", imageId, type);
     try {
       if ("ocr".equals(type) || "translation".equals(type) || "layout".equals(type)) {
         jobCoordinatorService.triggerImageRedo(imageId, type);
+        sseService.mapImageToUser(imageId, user.getId());
         return ResponseEntity.ok(Map.of("status", "enqueued"));
       } else {
         return ResponseEntity.badRequest().body("Invalid redo type");
