@@ -5,6 +5,7 @@ import { safeFetch, toSlug } from '../utils';
 import { fitTextInBox } from '../utils/fitText';
 import ConfirmModal from './ConfirmModal';
 import { ColorPicker } from './ColorPicker';
+import { useNotifications } from './NotificationContext';
 import JSZip from 'jszip';
 
 interface ReaderProps {
@@ -146,6 +147,24 @@ export const Reader: React.FC<ReaderProps> = ({
   const touchStartZoom = useRef<number>(1.0);
   const initialTouchPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
+  
+  const { notifications } = useNotifications();
+
+  // Listen for new notifications and refresh page if processing completed
+  useEffect(() => {
+    if (notifications.length > 0) {
+      const latest = notifications[0];
+      if (latest && selectedPage) {
+        const isCurrentImage = !latest.imageId || latest.imageId === selectedPage.imageId;
+        const isLayerUpdate = latest.title === 'OCR Completed' || latest.title === 'Translation Completed';
+        if (isCurrentImage && isLayerUpdate) {
+          console.log(`SSE event: Reloading page layers due to ${latest.title}`);
+          // Force refetch of page details by clearing the loaded image ID
+          setLoadedImageId(null);
+        }
+      }
+    }
+  }, [notifications.length > 0 ? notifications[0].id : null, selectedPage]);
 
   // Persistence effects
   useEffect(() => {

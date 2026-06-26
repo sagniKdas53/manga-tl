@@ -13,6 +13,8 @@ import { Dashboard } from './components/Dashboard';
 import { SeriesDetails } from './components/SeriesDetails';
 import { ChapterGallery } from './components/ChapterGallery';
 import { Reader } from './components/Reader';
+import { NotificationProvider } from './components/NotificationContext';
+import { NotificationCenter } from './components/NotificationCenter';
 import logoDark from './assets/logo-dark.svg';
 import logoLight from './assets/logo-light.svg';
 
@@ -211,172 +213,175 @@ function AppContent() {
   };
 
   return (
-    <div className="app-container">
-      {/* Navigation Bar */}
-      {!readerMatch && (
-        <nav className="nav-bar">
-          <div className="logo" onClick={() => user && navigate('/')} style={{ cursor: user ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <img 
-              src={theme === 'dark' ? logoDark : logoLight} 
-              alt="tl-hub logo" 
-              style={{ height: '32px', width: 'auto' }} 
-            />
-            <span style={{ fontWeight: 700 }}>tl-hub</span>
-          </div>
-          <div className="nav-actions">
-            {/* Theme Toggle Button */}
-            <button 
-              className="theme-toggle-btn"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-            >
-              {theme === 'dark' ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5"></circle>
-                  <line x1="12" y1="1" x2="12" y2="3"></line>
-                  <line x1="12" y1="21" x2="12" y2="23"></line>
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                  <line x1="1" y1="12" x2="3" y2="12"></line>
-                  <line x1="21" y1="12" x2="23" y2="12"></line>
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                </svg>
+    <NotificationProvider token={user?.token || null}>
+      <div className="app-container">
+        {/* Navigation Bar */}
+        {!readerMatch && (
+          <nav className="nav-bar">
+            <div className="logo" onClick={() => user && navigate('/')} style={{ cursor: user ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <img 
+                src={theme === 'dark' ? logoDark : logoLight} 
+                alt="tl-hub logo" 
+                style={{ height: '32px', width: 'auto' }} 
+              />
+              <span style={{ fontWeight: 700 }}>tl-hub</span>
+            </div>
+            <div className="nav-actions">
+              {/* Theme Toggle Button */}
+              <button 
+                className="theme-toggle-btn"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              >
+                {theme === 'dark' ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                  </svg>
+                )}
+              </button>
+              
+              {user && (
+                <>
+                  <NotificationCenter />
+                  <div className="user-badge">
+                    <span className="user-dot"></span>
+                    {user.displayName}
+                  </div>
+                  <button className="btn btn-secondary" onClick={handleLogout} style={{ padding: '6px 12px' }}>
+                    Sign Out
+                  </button>
+                </>
               )}
-            </button>
-            
-            {user && (
-              <>
-                <div className="user-badge">
-                  <span className="user-dot"></span>
-                  {user.displayName}
-                </div>
-                <button className="btn btn-secondary" onClick={handleLogout} style={{ padding: '6px 12px' }}>
-                  Sign Out
-                </button>
-              </>
-            )}
-          </div>
-        </nav>
-      )}
-
-      <Routes>
-        <Route path="/login" element={<Auth onLoginSuccess={setUser} />} />
-        <Route 
-          path="/" 
-          element={
-            user ? (
-              <Dashboard 
-                user={user} 
-                seriesList={seriesList} 
-                setSeriesList={setSeriesList} 
-                onSelectSeries={setSelectedSeries} 
-              />
-            ) : null
-          } 
-        />
-        <Route 
-          path="/series/:seriesId" 
-          element={
-            user ? (
-              <SeriesDetails 
-                user={user} 
-                selectedSeries={selectedSeries} 
-                setSelectedSeries={setSelectedSeries} 
-                chapters={chapters} 
-                setChapters={setChapters} 
-                onSelectChapter={setSelectedChapter} 
-                isLoadingDetails={isLoadingDetails} 
-              />
-            ) : null
-          } 
-        />
-        <Route 
-          path="/series/:seriesId/:slug" 
-          element={
-            user ? (
-              <SeriesDetails 
-                user={user} 
-                selectedSeries={selectedSeries} 
-                setSelectedSeries={setSelectedSeries} 
-                chapters={chapters} 
-                setChapters={setChapters} 
-                onSelectChapter={setSelectedChapter} 
-                isLoadingDetails={isLoadingDetails} 
-              />
-            ) : null
-          } 
-        />
-        <Route 
-          path="/chapters/:chapterId" 
-          element={
-            user ? (
-              <ChapterGallery 
-                user={user} 
-                selectedSeries={selectedSeries} 
-                selectedChapter={selectedChapter} 
-                setSelectedChapter={setSelectedChapter} 
-                pages={pages} 
-                setPages={setPages} 
-                onSelectPage={() => {}} 
-                isLoadingDetails={isLoadingDetails} 
-              />
-            ) : null
-          } 
-        />
-        <Route 
-          path="/chapters/:chapterId/:slug" 
-          element={
-            user ? (
-              <ChapterGallery 
-                user={user} 
-                selectedSeries={selectedSeries} 
-                selectedChapter={selectedChapter} 
-                setSelectedChapter={setSelectedChapter} 
-                pages={pages} 
-                setPages={setPages} 
-                onSelectPage={() => {}} 
-                isLoadingDetails={isLoadingDetails} 
-              />
-            ) : null
-          } 
-        />
-        <Route 
-          path="/chapters/:chapterId/reader/:pageNumber" 
-          element={
-            user ? (
-              <Reader 
-                user={user} 
-                selectedSeries={selectedSeries}
-                selectedChapter={selectedChapter} 
-                chapters={chapters}
-                pages={pages} 
-                theme={theme} 
-              />
-            ) : null
-          } 
-        />
-        <Route 
-          path="/chapters/:chapterId/:slug/reader/:pageNumber" 
-          element={
-            user ? (
-              <Reader 
-                user={user} 
-                selectedSeries={selectedSeries}
-                selectedChapter={selectedChapter} 
-                chapters={chapters}
-                pages={pages} 
-                theme={theme} 
-              />
-            ) : null
-          } 
-        />
-      </Routes>
-    </div>
+            </div>
+          </nav>
+        )}
+  
+        <Routes>
+          <Route path="/login" element={<Auth onLoginSuccess={setUser} />} />
+          <Route 
+            path="/" 
+            element={
+              user ? (
+                <Dashboard 
+                  user={user} 
+                  seriesList={seriesList} 
+                  setSeriesList={setSeriesList} 
+                  onSelectSeries={setSelectedSeries} 
+                />
+              ) : null
+            } 
+          />
+          <Route 
+            path="/series/:seriesId" 
+            element={
+              user ? (
+                <SeriesDetails 
+                  user={user} 
+                  selectedSeries={selectedSeries} 
+                  setSelectedSeries={setSelectedSeries} 
+                  chapters={chapters} 
+                  setChapters={setChapters} 
+                  onSelectChapter={setSelectedChapter} 
+                  isLoadingDetails={isLoadingDetails} 
+                />
+              ) : null
+            } 
+          />
+          <Route 
+            path="/series/:seriesId/:slug" 
+            element={
+              user ? (
+                <SeriesDetails 
+                  user={user} 
+                  selectedSeries={selectedSeries} 
+                  setSelectedSeries={setSelectedSeries} 
+                  chapters={chapters} 
+                  setChapters={setChapters} 
+                  onSelectChapter={setSelectedChapter} 
+                  isLoadingDetails={isLoadingDetails} 
+                />
+              ) : null
+            } 
+          />
+          <Route 
+            path="/chapters/:chapterId" 
+            element={
+              user ? (
+                <ChapterGallery 
+                  user={user} 
+                  selectedSeries={selectedSeries} 
+                  selectedChapter={selectedChapter} 
+                  setSelectedChapter={setSelectedChapter} 
+                  pages={pages} 
+                  setPages={setPages} 
+                  onSelectPage={() => {}} 
+                  isLoadingDetails={isLoadingDetails} 
+                />
+              ) : null
+            } 
+          />
+          <Route 
+            path="/chapters/:chapterId/:slug" 
+            element={
+              user ? (
+                <ChapterGallery 
+                  user={user} 
+                  selectedSeries={selectedSeries} 
+                  selectedChapter={selectedChapter} 
+                  setSelectedChapter={setSelectedChapter} 
+                  pages={pages} 
+                  setPages={setPages} 
+                  onSelectPage={() => {}} 
+                  isLoadingDetails={isLoadingDetails} 
+                />
+              ) : null
+            } 
+          />
+          <Route 
+            path="/chapters/:chapterId/reader/:pageNumber" 
+            element={
+              user ? (
+                <Reader 
+                  user={user} 
+                  selectedSeries={selectedSeries}
+                  selectedChapter={selectedChapter} 
+                  chapters={chapters}
+                  pages={pages} 
+                  theme={theme} 
+                />
+              ) : null
+            } 
+          />
+          <Route 
+            path="/chapters/:chapterId/:slug/reader/:pageNumber" 
+            element={
+              user ? (
+                <Reader 
+                  user={user} 
+                  selectedSeries={selectedSeries}
+                  selectedChapter={selectedChapter} 
+                  chapters={chapters}
+                  pages={pages} 
+                  theme={theme} 
+                />
+              ) : null
+            } 
+          />
+        </Routes>
+      </div>
+    </NotificationProvider>
   );
 }
 
