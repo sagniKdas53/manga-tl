@@ -1113,13 +1113,17 @@ export const Reader: React.FC<ReaderProps> = ({
     const origBlob = await new Promise<Blob>(res => origCanvas.toBlob(b => res(b!), 'image/png'));
     zip.file('original.png', origBlob);
 
-    // 2. mask.png  – white backdrop rects/polygons only, on transparent canvas
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = W;
-    maskCanvas.height = H;
-    const maskCtx = maskCanvas.getContext('2d')!;
-    layers.forEach(lData => {
-      if (!lData.layer.visible) return;
+    // 2. Render and save mask/translation image files for each layer
+    for (let i = 0; i < layers.length; i++) {
+      const lData = layers[i];
+      const layerId = lData.layer.id;
+
+      // Draw mask for this specific layer
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = W;
+      maskCanvas.height = H;
+      const maskCtx = maskCanvas.getContext('2d')!;
+
       lData.elements.forEach(el => {
         if (!el.visible) return;
         const width = el.maxWidth || 100;
@@ -1132,8 +1136,8 @@ export const Reader: React.FC<ReaderProps> = ({
               maskCtx.save();
               maskCtx.beginPath();
               maskCtx.moveTo(pts[0][0], pts[0][1]);
-              for (let i = 1; i < pts.length; i++) {
-                maskCtx.lineTo(pts[i][0], pts[i][1]);
+              for (let j = 1; j < pts.length; j++) {
+                maskCtx.lineTo(pts[j][0], pts[j][1]);
               }
               maskCtx.closePath();
               maskCtx.fillStyle = el.backgroundColor || '#ffffff';
@@ -1161,17 +1165,16 @@ export const Reader: React.FC<ReaderProps> = ({
           maskCtx.restore();
         }
       });
-    });
-    const maskBlob = await new Promise<Blob>(res => maskCanvas.toBlob(b => res(b!), 'image/png'));
-    zip.file('mask.png', maskBlob);
 
-    // 3. translation.png – text only, on transparent canvas
-    const textCanvas = document.createElement('canvas');
-    textCanvas.width = W;
-    textCanvas.height = H;
-    const textCtx = textCanvas.getContext('2d')!;
-    layers.forEach(lData => {
-      if (!lData.layer.visible || lData.layer.type !== 'translation') return;
+      const maskBlob = await new Promise<Blob>(res => maskCanvas.toBlob(b => res(b!), 'image/png'));
+      zip.file(`layer-${layerId}-mask.png`, maskBlob);
+
+      // Draw translation/text for this specific layer
+      const textCanvas = document.createElement('canvas');
+      textCanvas.width = W;
+      textCanvas.height = H;
+      const textCtx = textCanvas.getContext('2d')!;
+
       lData.elements.forEach(el => {
         if (!el.visible) return;
         const width = el.maxWidth || 100;
@@ -1180,6 +1183,7 @@ export const Reader: React.FC<ReaderProps> = ({
         if (el.boxShape === 'elliptical') {
           displayText = displayText.toUpperCase();
         }
+
         const fit = fitTextInBox(
           displayText,
           width - 8,
@@ -1208,17 +1212,18 @@ export const Reader: React.FC<ReaderProps> = ({
         textCtx.textBaseline = 'middle';
         const lineH = fSize * 1.2;
         const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
-        fit.lines.forEach((line, i) => {
-          const lineCenterX = (fit.lineCenters && fit.lineCenters[i] !== undefined)
-            ? fit.lineCenters[i]
+        fit.lines.forEach((line, j) => {
+          const lineCenterX = (fit.lineCenters && fit.lineCenters[j] !== undefined)
+            ? fit.lineCenters[j]
             : el.x + width / 2;
-          textCtx.fillText(line, lineCenterX, startY + i * lineH);
+          textCtx.fillText(line, lineCenterX, startY + j * lineH);
         });
         textCtx.restore();
       });
-    });
-    const textBlob = await new Promise<Blob>(res => textCanvas.toBlob(b => res(b!), 'image/png'));
-    zip.file('translation.png', textBlob);
+
+      const textBlob = await new Promise<Blob>(res => textCanvas.toBlob(b => res(b!), 'image/png'));
+      zip.file(`layer-${layerId}-translation.png`, textBlob);
+    }
 
     // 4. project.json
     const projectData = {
@@ -1250,6 +1255,7 @@ export const Reader: React.FC<ReaderProps> = ({
           fontWeight: el.fontWeight || 'normal',
           fontStyle: el.fontStyle || 'normal',
           boxShape: el.boxShape || 'rectangular',
+          maskPolygon: el.maskPolygon,
         })),
       })),
     };
