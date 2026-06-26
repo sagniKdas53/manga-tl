@@ -93,6 +93,10 @@ public class JobCoordinatorService {
                   if (series.getTargetLanguage() != null) {
                     job.put("targetLanguage", series.getTargetLanguage().trim().toLowerCase());
                   }
+                  job.put("pageNumber", page.getPageNumber());
+                  if (page.getChapter() != null) {
+                    job.put("chapterNumber", page.getChapter().getChapterNumber());
+                  }
                 }
               });
 
