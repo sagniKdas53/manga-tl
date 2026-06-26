@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useSSE } from '../utils/useSSE';
+import { getContextPath } from '../utils';
 
 export interface Notification {
   id: string;
@@ -30,7 +31,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
   // Connect to SSE stream
-  const { lastEvent } = useSSE('/api/notifications/stream', token);
+  const contextPath = getContextPath();
+  const { lastEvent } = useSSE(`${contextPath}/api/notifications/stream`, token);
 
   useEffect(() => {
     if (!lastEvent) return;
