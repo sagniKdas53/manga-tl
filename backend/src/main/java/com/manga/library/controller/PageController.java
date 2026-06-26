@@ -156,47 +156,117 @@ public class PageController {
 
           // Check duplicate image
           Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
+          Optional<Page> existingPageOpt =
+              pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
           Page page;
-          if (existingImageOpt.isPresent()) {
-            Image existingImage = existingImageOpt.get();
-            page =
-                pageService.createPageWithExistingImage(chapter, existingImage, pageNumber, user);
-          } else {
-            String uuid = UUID.randomUUID().toString();
-            String imgExt = pageService.getFileExtension(originalImageFilename);
-            String storagePath = "originals/" + uuid + imgExt;
-            String contentType = "image/png";
-            if (imgExt.equalsIgnoreCase(".jpg") || imgExt.equalsIgnoreCase(".jpeg")) {
-              contentType = "image/jpeg";
-            } else if (imgExt.equalsIgnoreCase(".webp")) {
-              contentType = "image/webp";
-            } else if (imgExt.equalsIgnoreCase(".gif")) {
-              contentType = "image/gif";
+          if (existingPageOpt.isPresent()) {
+            page = existingPageOpt.get();
+            Image oldImage = page.getImage();
+
+            // Clear existing elements and layers
+            List<LayerElement> elements = layerElementRepository.findByLayerImageId(oldImage.getId());
+            for (LayerElement el : elements) {
+              List<LayerEditHistory> history =
+                  layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
+              layerEditHistoryRepository.deleteAll(history);
+              layerElementRepository.delete(el);
             }
+            layerElementRepository.flush();
 
-            minioService.uploadFile(storagePath, originalImageBytes, contentType);
+            List<Layer> existingLayers = layerRepository.findByImageId(oldImage.getId());
+            for (Layer l : existingLayers) {
+              layerRepository.delete(l);
+            }
+            layerRepository.flush();
 
-            String thumbnailStoragePath = null;
-            try {
-              byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
-              if (thumbBytes != null) {
-                thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-                minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
+            // Check if we need to update/replace the image
+            if (!fileHash.equals(oldImage.getHash())) {
+              Image image;
+              if (existingImageOpt.isPresent()) {
+                image = existingImageOpt.get();
+              } else {
+                String uuid = UUID.randomUUID().toString();
+                String imgExt = pageService.getFileExtension(originalImageFilename);
+                String storagePath = "originals/" + uuid + imgExt;
+                String contentType = "image/png";
+                if (imgExt.equalsIgnoreCase(".jpg") || imgExt.equalsIgnoreCase(".jpeg")) {
+                  contentType = "image/jpeg";
+                } else if (imgExt.equalsIgnoreCase(".webp")) {
+                  contentType = "image/webp";
+                } else if (imgExt.equalsIgnoreCase(".gif")) {
+                  contentType = "image/gif";
+                }
+
+                minioService.uploadFile(storagePath, originalImageBytes, contentType);
+
+                String thumbnailStoragePath = null;
+                try {
+                  byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
+                  if (thumbBytes != null) {
+                    thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
+                    minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
+                  }
+                } catch (Exception e) {
+                  log.error("Failed to generate/upload thumbnail in ZIP import", e);
+                }
+
+                image = Image.builder()
+                    .filename(originalImageFilename)
+                    .storagePath(storagePath)
+                    .thumbnailStoragePath(thumbnailStoragePath)
+                    .hash(fileHash)
+                    .createdBy(user)
+                    .build();
+                image = imageRepository.save(image);
               }
-            } catch (Exception e) {
-              log.error("Failed to generate/upload thumbnail in ZIP import", e);
+              page.setImage(image);
+              page = pageRepository.save(page);
             }
+          } else {
+            if (existingImageOpt.isPresent()) {
+              Image existingImage = existingImageOpt.get();
+              page =
+                  pageService.createPageWithExistingImage(chapter, existingImage, pageNumber, user);
+            } else {
+              String uuid = UUID.randomUUID().toString();
+              String imgExt = pageService.getFileExtension(originalImageFilename);
+              String storagePath = "originals/" + uuid + imgExt;
+              String contentType = "image/png";
+              if (imgExt.equalsIgnoreCase(".jpg") || imgExt.equalsIgnoreCase(".jpeg")) {
+                contentType = "image/jpeg";
+              } else if (imgExt.equalsIgnoreCase(".webp")) {
+                contentType = "image/webp";
+              } else if (imgExt.equalsIgnoreCase(".gif")) {
+                contentType = "image/gif";
+              }
 
-            page =
-                pageService.createPageAndImage(
-                    chapter,
-                    originalImageFilename,
-                    storagePath,
-                    thumbnailStoragePath,
-                    pageNumber,
-                    fileHash,
-                    user);
+              minioService.uploadFile(storagePath, originalImageBytes, contentType);
+
+              String thumbnailStoragePath = null;
+              try {
+                byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
+                if (thumbBytes != null) {
+                  thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
+                  minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
+                }
+              } catch (Exception e) {
+                log.error("Failed to generate/upload thumbnail in ZIP import", e);
+              }
+
+              page =
+                  pageService.createPageAndImage(
+                      chapter,
+                      originalImageFilename,
+                      storagePath,
+                      thumbnailStoragePath,
+                      pageNumber,
+                      fileHash,
+                      user);
+            }
           }
+
+          int importedLayersCount = 0;
+          int importedElementsCount = 0;
 
           // Restore layers and elements
           com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(projectJsonBytes);
@@ -220,6 +290,7 @@ public class PageController {
                       .zOrder(zOrder)
                       .build();
               newLayer = layerRepository.save(newLayer);
+              importedLayersCount++;
 
               com.fasterxml.jackson.databind.JsonNode elementsNode = layerNode.get("elements");
               if (elementsNode != null && elementsNode.isArray()) {
@@ -250,10 +321,12 @@ public class PageController {
                       elNode.has("fontStyle") ? elNode.get("fontStyle").asText() : "normal";
                   String boxShape =
                       elNode.has("boxShape") ? elNode.get("boxShape").asText() : "rectangular";
-                  String maskPolygon =
-                      elNode.has("maskPolygon") && !elNode.get("maskPolygon").isNull()
-                          ? elNode.get("maskPolygon").toString()
-                          : null;
+
+                  String maskPolygon = null;
+                  if (elNode.has("maskPolygon") && !elNode.get("maskPolygon").isNull()) {
+                    com.fasterxml.jackson.databind.JsonNode mpNode = elNode.get("maskPolygon");
+                    maskPolygon = mpNode.isContainerNode() ? mpNode.toString() : mpNode.asText();
+                  }
 
                   LayerElement newEl =
                       LayerElement.builder()
@@ -277,10 +350,14 @@ public class PageController {
                           .maskPolygon(maskPolygon)
                           .build();
                   layerElementRepository.save(newEl);
+                  importedElementsCount++;
                 }
               }
             }
           }
+
+          log.info("Successfully restored page-level project ZIP: {} layers and {} elements imported.",
+              importedLayersCount, importedElementsCount);
 
           return ResponseEntity.ok(
               new UploadResponse(page.getId(), page.getImage().getId(), "imported"));
@@ -657,69 +734,7 @@ public class PageController {
     List<Layer> layers = new ArrayList<>(layerRepository.findByImageId(imageId));
     layers.sort(Comparator.comparingInt(Layer::getZOrder));
 
-    // Auto-initialize default translation layer if it doesn't exist but we have translations
-    boolean hasTranslationLayer = layers.stream().anyMatch(l -> "translation".equals(l.getType()));
-    if (!hasTranslationLayer) {
-      List<OcrRegion> ocrRegions = ocrRegionRepository.findByImageId(imageId);
-      boolean hasTranslations =
-          ocrRegions.stream()
-              .anyMatch(
-                  r -> r.getTranslatedText() != null && !r.getTranslatedText().trim().isEmpty());
-
-      if (hasTranslations) {
-        log.info("Auto-initializing default translation layer for image {}", imageId);
-        Objects.requireNonNull(imageId, "imageId cannot be null");
-        Image image =
-            imageRepository
-                .findById(imageId)
-                .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
-
-        UUID seriesId =
-            pageRepository
-                .findByImageId(imageId)
-                .map(Page::getChapter)
-                .map(Chapter::getSeries)
-                .map(Series::getId)
-                .orElse(null);
-        String targetLang = "en";
-        if (seriesId != null) {
-          targetLang =
-              seriesRepository.findById(seriesId).map(Series::getTargetLanguage).orElse("en");
-        }
-
-        Layer defaultLayer =
-            Layer.builder()
-                .image(image)
-                .type("translation")
-                .targetLanguage(targetLang)
-                .visible(true)
-                .zOrder(2)
-                .build();
-
-        Objects.requireNonNull(defaultLayer, "defaultLayer cannot be null");
-        defaultLayer = layerRepository.save(defaultLayer);
-        layers.add(defaultLayer);
-
-        for (OcrRegion region : ocrRegions) {
-          if (region.getTranslatedText() != null && !region.getTranslatedText().trim().isEmpty()) {
-            LayerElement element =
-                LayerElement.builder()
-                    .layer(defaultLayer)
-                    .region(region)
-                    .text(region.getTranslatedText())
-                    .x(region.getBboxX().doubleValue())
-                    .y(region.getBboxY().doubleValue())
-                    .maxWidth(region.getBboxW())
-                    .maxHeight(region.getBboxH())
-                    .visible(true)
-                    .autoSize(true)
-                    .build();
-            Objects.requireNonNull(element, "element cannot be null");
-            layerElementRepository.save(element);
-          }
-        }
-      }
-    }
+    // Auto-initialize default translation layer removed to prevent deleted layers from reappearing
 
     List<LayerElement> allElements = layerElementRepository.findByLayerImageId(imageId);
     Map<UUID, List<LayerElement>> elementsByLayer =
@@ -936,10 +951,10 @@ public class PageController {
       Page page;
       if (existingPageOpt.isPresent()) {
         page = existingPageOpt.get();
-        Image image = page.getImage();
+        Image oldImage = page.getImage();
 
         // Clear existing elements and layers
-        List<LayerElement> elements = layerElementRepository.findByLayerImageId(image.getId());
+        List<LayerElement> elements = layerElementRepository.findByLayerImageId(oldImage.getId());
         for (LayerElement el : elements) {
           List<LayerEditHistory> history =
               layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
@@ -948,11 +963,68 @@ public class PageController {
         }
         layerElementRepository.flush();
 
-        List<Layer> existingLayers = layerRepository.findByImageId(image.getId());
+        List<Layer> existingLayers = layerRepository.findByImageId(oldImage.getId());
         for (Layer l : existingLayers) {
           layerRepository.delete(l);
         }
         layerRepository.flush();
+
+        // Check if we need to update/replace the image
+        if (originalImageBytes != null) {
+          java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+          byte[] encodedhash = digest.digest(originalImageBytes);
+          StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
+          for (byte b : encodedhash) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) hexString.append('0');
+            hexString.append(hex);
+          }
+          String fileHash = hexString.toString();
+
+          if (!fileHash.equals(oldImage.getHash())) {
+            Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
+            Image image;
+            if (existingImageOpt.isPresent()) {
+              image = existingImageOpt.get();
+            } else {
+              String imgExt = pageService.getFileExtension(originalImageFilename);
+              String uuid = UUID.randomUUID().toString();
+              String storagePath = "originals/" + uuid + imgExt;
+              String contentType = "image/png";
+              if (imgExt.equalsIgnoreCase(".jpg") || imgExt.equalsIgnoreCase(".jpeg")) {
+                contentType = "image/jpeg";
+              } else if (imgExt.equalsIgnoreCase(".webp")) {
+                contentType = "image/webp";
+              } else if (imgExt.equalsIgnoreCase(".gif")) {
+                contentType = "image/gif";
+              }
+
+              minioService.uploadFile(storagePath, originalImageBytes, contentType);
+
+              String thumbnailStoragePath = null;
+              try {
+                byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
+                if (thumbBytes != null) {
+                  thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
+                  minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
+                }
+              } catch (Exception e) {
+                log.error("Failed to generate thumbnail for imported project", e);
+              }
+
+              image = Image.builder()
+                  .filename(originalImageFilename)
+                  .storagePath(storagePath)
+                  .thumbnailStoragePath(thumbnailStoragePath)
+                  .hash(fileHash)
+                  .createdBy(user)
+                  .build();
+              image = imageRepository.save(image);
+            }
+            page.setImage(image);
+            page = pageRepository.save(page);
+          }
+        }
       } else {
         if (originalImageBytes == null) {
           return ResponseEntity.badRequest().body(Map.of("message", "original.png missing in zip"));
@@ -1011,6 +1083,9 @@ public class PageController {
         }
       }
 
+      int importedLayersCount = 0;
+      int importedElementsCount = 0;
+
       // Restore layers and elements
       Image image = page.getImage();
       com.fasterxml.jackson.databind.JsonNode layersNode = root.get("layers");
@@ -1033,6 +1108,7 @@ public class PageController {
                   .zOrder(zOrder)
                   .build();
           newLayer = layerRepository.save(newLayer);
+          importedLayersCount++;
 
           com.fasterxml.jackson.databind.JsonNode elementsNode = layerNode.get("elements");
           if (elementsNode != null && elementsNode.isArray()) {
@@ -1062,10 +1138,12 @@ public class PageController {
                   elNode.has("fontStyle") ? elNode.get("fontStyle").asText() : "normal";
               String boxShape =
                   elNode.has("boxShape") ? elNode.get("boxShape").asText() : "rectangular";
-              String maskPolygon =
-                  elNode.has("maskPolygon") && !elNode.get("maskPolygon").isNull()
-                      ? elNode.get("maskPolygon").toString()
-                      : null;
+
+              String maskPolygon = null;
+              if (elNode.has("maskPolygon") && !elNode.get("maskPolygon").isNull()) {
+                com.fasterxml.jackson.databind.JsonNode mpNode = elNode.get("maskPolygon");
+                maskPolygon = mpNode.isContainerNode() ? mpNode.toString() : mpNode.asText();
+              }
 
               LayerElement newEl =
                   LayerElement.builder()
@@ -1089,10 +1167,14 @@ public class PageController {
                       .maskPolygon(maskPolygon)
                       .build();
               layerElementRepository.save(newEl);
+              importedElementsCount++;
             }
           }
         }
       }
+
+      log.info("Successfully imported project ZIP to chapter {}: {} layers and {} elements imported.",
+          chapterId, importedLayersCount, importedElementsCount);
 
       return ResponseEntity.ok(Map.of("status", "success", "pageId", page.getId().toString()));
     } catch (Exception e) {

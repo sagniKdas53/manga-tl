@@ -557,7 +557,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 <label className="form-label">ZIP / ePub Archive</label>
                 <input 
                   type="file" 
-                  accept=".zip,.epub" 
+                  accept=".zip,.epub,application/epub+zip,application/zip" 
                   className="form-input" 
                   onChange={e => setImportFile(e.target.files?.[0] || null)} 
                   required 

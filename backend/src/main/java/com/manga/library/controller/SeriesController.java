@@ -403,6 +403,8 @@ public class SeriesController {
       // 3. Import each page
       int pageNum = 1;
       for (ZipImageEntry imgEntry : imageEntries) {
+        log.info("Importing page {}/{} (filename: '{}') for chapter {} (Number {}) of seriesId {}",
+            pageNum, imageEntries.size(), imgEntry.getName(), chapter.getId(), chapter.getChapterNumber(), seriesId);
         byte[] originalBytes = imgEntry.getBytes();
 
         // SHA-256 hash
