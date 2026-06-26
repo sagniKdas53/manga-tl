@@ -45,6 +45,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [newChapterTitle, setNewChapterTitle] = useState('');
   const [chapterError, setChapterError] = useState('');
 
+  // Local states for chapter import modal
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importChapterNum, setImportChapterNum] = useState<number>(1);
+  const [importChapterTitle, setImportChapterTitle] = useState('');
+  const [importError, setImportError] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -161,6 +169,65 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setEditingChapter(null);
     setNewChapterTitle('');
     setChapterError('');
+  };
+
+  const handleImportChapterClick = () => {
+    const maxNum = chapters.reduce((max, c) => c.chapterNumber > max ? c.chapterNumber : max, 0);
+    setImportChapterNum(maxNum + 1);
+    setImportChapterTitle('');
+    setImportFile(null);
+    setImportError('');
+    setIsImporting(false);
+    setShowImportModal(true);
+  };
+
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importFile || !selectedSeries) return;
+    setImportError('');
+    setIsImporting(true);
+
+    const formData = new FormData();
+    formData.append('file', importFile);
+    formData.append('chapterNumber', importChapterNum.toString());
+    formData.append('title', importChapterTitle);
+
+    try {
+      const res = await safeFetch(`/api/series/${selectedSeries.id}/chapters/import`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data: Chapter = await res.json();
+        setChapters(prev => [...prev, data]);
+        setShowImportModal(false);
+      } else {
+        let errMsg = 'Failed to import chapter';
+        try {
+          const text = await res.text();
+          if (text) {
+            try {
+              const parsed = JSON.parse(text);
+              errMsg = parsed.message || parsed.error || errMsg;
+            } catch {
+              errMsg = text;
+            }
+          }
+        } catch (readErr) {
+          console.error(readErr);
+        }
+        setImportError(errMsg);
+      }
+    } catch (err) {
+      console.error('Error importing chapter:', err);
+      setImportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleCreateChapter = async (e: React.FormEvent) => {
@@ -294,6 +361,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
               Add Chapter
+            </button>
+            <button className="btn-nhentai btn-nhentai-secondary" onClick={handleImportChapterClick}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Import Chapter (ZIP/ePub)
             </button>
             <button className="btn-nhentai btn-nhentai-secondary" onClick={handleEditSeriesClick}>
               Edit Series
@@ -467,6 +542,58 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={handleCancelChapterModal}>Cancel</button>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
                   {editingChapter ? 'Save' : 'Add'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showImportModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass" style={{ padding: '32px', width: '100%', maxWidth: '400px' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '24px' }}>Import Chapter (ZIP/ePub)</h2>
+            <form onSubmit={handleImportSubmit}>
+              <div className="form-group">
+                <label className="form-label">ZIP / ePub Archive</label>
+                <input 
+                  type="file" 
+                  accept=".zip,.epub" 
+                  className="form-input" 
+                  onChange={e => setImportFile(e.target.files?.[0] || null)} 
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Chapter Number</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  className="form-input" 
+                  value={importChapterNum} 
+                  onChange={e => setImportChapterNum(parseFloat(e.target.value) || 0)} 
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Chapter Title</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={importChapterTitle} 
+                  onChange={e => setImportChapterTitle(e.target.value)} 
+                  placeholder="e.g. Chapter 1 - Imported Volume" 
+                />
+              </div>
+              {importError && (
+                <div style={{ color: 'var(--error, #ff4d4f)', fontSize: '13px', marginTop: '16px', textAlign: 'center' }}>
+                  {importError}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowImportModal(false)} disabled={isImporting}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} disabled={isImporting}>
+                  {isImporting ? <div className="spinner-mini"></div> : null}
+                  {isImporting ? 'Importing...' : 'Import'}
                 </button>
               </div>
             </form>

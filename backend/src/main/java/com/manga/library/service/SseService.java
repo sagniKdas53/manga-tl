@@ -30,14 +30,16 @@ public class SseService {
     emitters.put(userId, emitter);
 
     emitter.onCompletion(() -> emitters.remove(userId));
-    emitter.onTimeout(() -> {
-      emitter.complete();
-      emitters.remove(userId);
-    });
-    emitter.onError((e) -> {
-      emitter.completeWithError(e);
-      emitters.remove(userId);
-    });
+    emitter.onTimeout(
+        () -> {
+          emitter.complete();
+          emitters.remove(userId);
+        });
+    emitter.onError(
+        (e) -> {
+          emitter.completeWithError(e);
+          emitters.remove(userId);
+        });
 
     try {
       emitter.send(SseEmitter.event().name("connected").data("SSE Connection Established"));
@@ -71,7 +73,10 @@ public class SseService {
   }
 
   public void mapImageToUser(UUID imageId, UUID userId) {
-    redisTemplate.opsForValue().set(IMAGE_USER_MAPPING_PREFIX + imageId, userId.toString(), java.time.Duration.ofHours(24));
+    redisTemplate
+        .opsForValue()
+        .set(
+            IMAGE_USER_MAPPING_PREFIX + imageId, userId.toString(), java.time.Duration.ofHours(24));
   }
 
   public void emitNotificationForImage(UUID imageId, String type, String title, String message) {
@@ -79,7 +84,9 @@ public class SseService {
     if (userIdStr != null) {
       emitNotificationToUser(UUID.fromString(userIdStr), type, title, message, imageId);
     } else {
-      log.warn("Could not find owner user for image {} in Redis. Cannot send SSE notification.", imageId);
+      log.warn(
+          "Could not find owner user for image {} in Redis. Cannot send SSE notification.",
+          imageId);
     }
   }
 
@@ -87,7 +94,8 @@ public class SseService {
     emitNotificationToUser(userId, type, title, message, null);
   }
 
-  public void emitNotificationToUser(UUID userId, String type, String title, String message, UUID imageId) {
+  public void emitNotificationToUser(
+      UUID userId, String type, String title, String message, UUID imageId) {
     Map<String, Object> notification = new java.util.HashMap<>();
     notification.put("id", UUID.randomUUID().toString());
     notification.put("type", type);
@@ -110,7 +118,7 @@ public class SseService {
     if (emitter != null) {
       try {
         emitter.send(SseEmitter.event().name("notification").data(jsonPayload));
-        return; 
+        return;
       } catch (IOException e) {
         log.error("Failed to send live notification to user {}, removing emitter", userId, e);
         emitters.remove(userId);

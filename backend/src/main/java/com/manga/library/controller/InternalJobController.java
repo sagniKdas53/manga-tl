@@ -132,11 +132,16 @@ public class InternalJobController {
     log.info("Received panel callback for image: {}", dto.getImageId());
     try {
       jobCoordinatorService.handlePanelCallback(dto);
-      sseService.emitNotificationForImage(dto.getImageId(), "INFO", "Panels Extracted", "Successfully extracted panels for page.");
+      sseService.emitNotificationForImage(
+          dto.getImageId(), "INFO", "Panels Extracted", "Successfully extracted panels for page.");
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing panel callback", e);
-      sseService.emitNotificationForImage(dto.getImageId(), "ERROR", "Panel Extraction Failed", "An error occurred while extracting panels.");
+      sseService.emitNotificationForImage(
+          dto.getImageId(),
+          "ERROR",
+          "Panel Extraction Failed",
+          "An error occurred while extracting panels.");
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -146,11 +151,13 @@ public class InternalJobController {
     log.info("Received OCR callback for image: {}", dto.getImageId());
     try {
       jobCoordinatorService.handleOcrCallback(dto);
-      sseService.emitNotificationForImage(dto.getImageId(), "INFO", "OCR Completed", "Successfully completed OCR processing.");
+      sseService.emitNotificationForImage(
+          dto.getImageId(), "INFO", "OCR Completed", "Successfully completed OCR processing.");
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing OCR callback", e);
-      sseService.emitNotificationForImage(dto.getImageId(), "ERROR", "OCR Failed", "An error occurred during OCR processing.");
+      sseService.emitNotificationForImage(
+          dto.getImageId(), "ERROR", "OCR Failed", "An error occurred during OCR processing.");
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -194,11 +201,13 @@ public class InternalJobController {
         }
       }
       jobCoordinatorService.handleLayoutCallback(imageId, regionTypes, conversations);
-      sseService.emitNotificationForImage(imageId, "INFO", "Layout Analysis Completed", "Layout analysis successfully finished.");
+      sseService.emitNotificationForImage(
+          imageId, "INFO", "Layout Analysis Completed", "Layout analysis successfully finished.");
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing layout callback", e);
-      sseService.emitNotificationForImage(imageId, "ERROR", "Layout Analysis Failed", "An error occurred during layout analysis.");
+      sseService.emitNotificationForImage(
+          imageId, "ERROR", "Layout Analysis Failed", "An error occurred during layout analysis.");
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -226,11 +235,13 @@ public class InternalJobController {
         }
       }
       jobCoordinatorService.handleTranslationCallback(imageId, translations);
-      sseService.emitNotificationForImage(imageId, "INFO", "Translation Completed", "Translation successfully finished.");
+      sseService.emitNotificationForImage(
+          imageId, "INFO", "Translation Completed", "Translation successfully finished.");
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing translation callback", e);
-      sseService.emitNotificationForImage(imageId, "ERROR", "Translation Failed", "An error occurred during translation.");
+      sseService.emitNotificationForImage(
+          imageId, "ERROR", "Translation Failed", "An error occurred during translation.");
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -260,7 +271,9 @@ public class InternalJobController {
                   // Update active translation layer element
                   List<LayerElement> elements = layerElementRepository.findByRegionId(id);
                   for (LayerElement el : elements) {
-                    if (el.getLayer() != null && "translation".equalsIgnoreCase(el.getLayer().getType()) && Boolean.TRUE.equals(el.getLayer().getVisible())) {
+                    if (el.getLayer() != null
+                        && "translation".equalsIgnoreCase(el.getLayer().getType())
+                        && Boolean.TRUE.equals(el.getLayer().getVisible())) {
                       el.setText(translatedText);
                       layerElementRepository.save(el);
                     }
@@ -274,7 +287,11 @@ public class InternalJobController {
                   region.setConfidence(((Number) payload.get("confidence")).doubleValue());
                 }
                 ocrRegionRepository.save(region);
-                sseService.emitNotificationForImage(region.getImage().getId(), "INFO", "Region Redo", "Region processing successfully updated.");
+                sseService.emitNotificationForImage(
+                    region.getImage().getId(),
+                    "INFO",
+                    "Region Redo",
+                    "Region processing successfully updated.");
               });
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -290,11 +307,13 @@ public class InternalJobController {
     log.info("Received render callback for image: {}", imageId);
     try {
       jobCoordinatorService.handleRenderCallback(imageId);
-      sseService.emitNotificationForImage(imageId, "INFO", "Render Completed", "Successfully rendered typeset image.");
+      sseService.emitNotificationForImage(
+          imageId, "INFO", "Render Completed", "Successfully rendered typeset image.");
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing render callback", e);
-      sseService.emitNotificationForImage(imageId, "ERROR", "Render Failed", "An error occurred during rendering.");
+      sseService.emitNotificationForImage(
+          imageId, "ERROR", "Render Failed", "An error occurred during rendering.");
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -322,11 +341,13 @@ public class InternalJobController {
         }
       }
       jobCoordinatorService.handleQaCallback(imageId, qaResults);
-      sseService.emitNotificationForImage(imageId, "INFO", "QA Completed", "Quality assurance checks passed.");
+      sseService.emitNotificationForImage(
+          imageId, "INFO", "QA Completed", "Quality assurance checks passed.");
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing QA callback", e);
-      sseService.emitNotificationForImage(imageId, "WARNING", "QA Issue", "An issue occurred during QA checks.");
+      sseService.emitNotificationForImage(
+          imageId, "WARNING", "QA Issue", "An issue occurred during QA checks.");
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }

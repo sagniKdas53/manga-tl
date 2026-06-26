@@ -49,6 +49,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [isQueueExpanded, setIsQueueExpanded] = useState(true);
   const [snackbars, setSnackbars] = useState<SnackbarMessage[]>([]);
+  const [isImportingProject, setIsImportingProject] = useState(false);
 
   // Toast Helper
   const showToast = React.useCallback((text: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -329,6 +330,50 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     if (files) processUploadedFiles(files);
   };
 
+  const handleProjectImportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedChapter) return;
+
+    // Reset input value so onChange triggers again for same file if needed
+    e.target.value = '';
+
+    setIsImportingProject(true);
+    showToast('Importing project layers...', 'info');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await safeFetch(`/api/chapters/${selectedChapter.id}/import-project`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        },
+        body: formData
+      });
+
+      if (res.ok) {
+        showToast('Project imported successfully!', 'success');
+        // Refresh pages list
+        const pagesRes = await safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
+          headers: { 'Authorization': `Bearer ${user.token}` }
+        });
+        if (pagesRes.ok) {
+          const data: Page[] = await pagesRes.json();
+          setPages(data);
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.message || 'Failed to import project', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(err instanceof Error ? err.message : 'Error importing project', 'error');
+    } finally {
+      setIsImportingProject(false);
+    }
+  };
+
   if (isLoadingDetails || !selectedSeries || !selectedChapter) {
     return (
       <div className="dashboard-content text-center">
@@ -480,6 +525,13 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
               Refresh Gallery
             </button>
             <button 
+              className="btn btn-secondary" 
+              onClick={() => document.getElementById('project-import-upload')?.click()}
+              disabled={isImportingProject}
+            >
+              {isImportingProject ? 'Importing...' : 'Import Project (ZIP)'}
+            </button>
+            <button 
               className="btn btn-primary" 
               onClick={() => document.getElementById('file-upload')?.click()}
             >
@@ -497,6 +549,13 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         accept="image/*" 
         style={{ display: 'none' }} 
         onChange={handleFileUpload} 
+      />
+      <input 
+        id="project-import-upload" 
+        type="file" 
+        accept=".zip" 
+        style={{ display: 'none' }} 
+        onChange={handleProjectImportUpload} 
       />
 
       <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '22px' }}>Uploaded Pages ({pages.length})</h2>

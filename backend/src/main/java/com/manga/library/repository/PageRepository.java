@@ -11,6 +11,8 @@ public interface PageRepository extends JpaRepository<Page, UUID> {
 
   Optional<Page> findByImageId(UUID imageId);
 
+  Optional<Page> findByChapterIdAndPageNumber(UUID chapterId, Integer pageNumber);
+
   @org.springframework.data.jpa.repository.Query(
       "SELECT c.series.id, p.image.id "
           + "FROM Page p JOIN p.chapter c "
