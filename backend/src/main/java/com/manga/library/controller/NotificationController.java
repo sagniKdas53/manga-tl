@@ -29,14 +29,13 @@ public class NotificationController {
       throw new RuntimeException("Unauthorized");
     }
 
-    String email = auth.getName();
-    Optional<User> userOpt = userRepository.findByEmail(email);
-    if (userOpt.isEmpty()) {
+    Object principal = auth.getPrincipal();
+    if (!(principal instanceof User)) {
       throw new RuntimeException("User not found");
     }
 
-    User user = userOpt.get();
-    log.info("Client connected to SSE stream: {}", email);
+    User user = (User) principal;
+    log.info("Client connected to SSE stream: {}", user.getEmail());
     return sseService.subscribe(user.getId());
   }
 }
