@@ -1,7 +1,7 @@
 import React, { useState, useEffect, ReactNode } from 'react';
 import { useSSE } from '../utils/useSSE';
 import { getContextPath } from '../utils';
-import { Notification, NotificationContext } from './useNotifications';
+import { NotificationContext, type Notification } from './useNotifications';
 
 interface NotificationProviderProps {
   children: ReactNode;
