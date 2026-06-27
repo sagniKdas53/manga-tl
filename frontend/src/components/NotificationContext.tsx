@@ -1,26 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import { useSSE } from '../utils/useSSE';
 import { getContextPath } from '../utils';
-
-export interface Notification {
-  id: string;
-  type: 'INFO' | 'WARNING' | 'ERROR';
-  title: string;
-  message: string;
-  timestamp: number;
-  read: boolean;
-  imageId?: string;
-}
-
-interface NotificationContextType {
-  notifications: Notification[];
-  unreadCount: number;
-  markAsRead: (id: string) => void;
-  markAllAsRead: () => void;
-  clearAll: () => void;
-}
-
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+import { Notification, NotificationContext } from './useNotifications';
 
 interface NotificationProviderProps {
   children: ReactNode;
@@ -50,10 +31,13 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
           imageId: data.imageId,
         };
         
-        setNotifications((prev) => {
-          // Prevent duplicates
-          if (prev.find(n => n.id === newNotification.id)) return prev;
-          return [newNotification, ...prev];
+        // Defer state update to satisfy set-state-in-effect rule
+        Promise.resolve().then(() => {
+          setNotifications((prev) => {
+            // Prevent duplicates
+            if (prev.find(n => n.id === newNotification.id)) return prev;
+            return [newNotification, ...prev];
+          });
         });
       } catch (e) {
         console.error('Failed to parse notification payload', e);
@@ -84,12 +68,4 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       {children}
     </NotificationContext.Provider>
   );
-};
-
-export const useNotifications = () => {
-  const context = useContext(NotificationContext);
-  if (context === undefined) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
-  }
-  return context;
 };

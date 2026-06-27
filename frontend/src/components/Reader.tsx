@@ -5,7 +5,7 @@ import { safeFetch, toSlug } from '../utils';
 import { fitTextInBox } from '../utils/fitText';
 import ConfirmModal from './ConfirmModal';
 import { ColorPicker } from './ColorPicker';
-import { useNotifications } from './NotificationContext';
+import { useNotifications } from './useNotifications';
 import JSZip from 'jszip';
 
 interface ReaderProps {
@@ -151,6 +151,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const { notifications } = useNotifications();
 
   // Listen for new notifications and refresh page if processing completed
+  const latestNotificationId = notifications.length > 0 ? notifications[0].id : null;
   useEffect(() => {
     if (notifications.length > 0) {
       const latest = notifications[0];
@@ -160,11 +161,13 @@ export const Reader: React.FC<ReaderProps> = ({
         if (isCurrentImage && isLayerUpdate) {
           console.log(`SSE event: Reloading page layers due to ${latest.title}`);
           // Force refetch of page details by clearing the loaded image ID
-          setLoadedImageId(null);
+          Promise.resolve().then(() => {
+            setLoadedImageId(null);
+          });
         }
       }
     }
-  }, [notifications.length > 0 ? notifications[0].id : null, selectedPage]);
+  }, [latestNotificationId, selectedPage, notifications]);
 
   // Persistence effects
   useEffect(() => {

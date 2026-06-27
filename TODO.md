@@ -11,7 +11,7 @@
 
 - [ ] The free resize mode doesn't work on the front-end, say I select a translated box the element inspetor opens up now when I click on the Switch to free resize mode the button changes Free Resizing: Active but the box that desigantes the selection to be dragged across the image or resized to desired shape doesn't appear, clicking on the image just clears off the free resize mode.
   - [ ] For some reason this is not working at all
-- [ ] Almost perfect, need more testing (Relates to translated text breaking out of bounding box)
+- [x] Almost perfect, need more testing (Relates to translated text breaking out of bounding box)
 - [ ] **Model Picker in UI:** Add a model picker in the front-end interface to allow users to select the worker model (e.g., OCR or Translation model) dynamically when multiple providers are available.
 - [ ] **Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v8` and more.
 
@@ -23,7 +23,7 @@
 - [x] **Layer Metadata Tracking:** Store the specific model identifiers used for OCR and translation within the respective layer's metadata. This enables future model performance comparisons and must also be included in the project's export zip archive.
 - [x] **Worker Observability & Logging:** Implement comprehensive testing and monitoring for worker logs. Ensure that the input and output for each pipeline step (OCR, Translation, Rendering) are logged and that the intermediate rendered outputs are easily verifiable to monitor the worker's internal state.
 - [x] **Live Updates via SSE:** Implement live updates on the front-end using Server-Sent Events (SSE) in the Java backend. When you upload a page and have it open in the reader, an event should be broadcasted to the front-end when its OCR is ready so the layer is fetched and loaded on the canvas. When translation is done, the same happens. The same live updates should also happen for Redo of OCR and translations.
-- [ ] **Full zip/ePub import:** Support importing full epubs or zips to automatically set up projects and initialize pages.
-- [ ] **Layer Project Re-hydration:** Support importing previously exported translation projects to restore workspace and layers state.
+- [x] **Full zip/ePub import:** Support importing full epubs or zips to automatically set up projects and initialize pages.
+- [x] **Layer Project Re-hydration:** Support importing previously exported translation projects to restore workspace and layers state.
 - [ ] **Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
 - [ ] **Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
