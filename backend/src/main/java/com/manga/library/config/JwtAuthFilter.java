@@ -63,6 +63,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
       return headerAuth.substring(7);
     }
+    String queryToken = request.getParameter("token");
+    if (StringUtils.hasText(queryToken)) {
+      return queryToken;
+    }
     return null;
   }
 }

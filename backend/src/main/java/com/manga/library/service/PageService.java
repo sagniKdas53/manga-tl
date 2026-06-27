@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class PageService {
 
   private final ImageRepository imageRepository;
@@ -44,10 +45,7 @@ public class PageService {
 
   @Transactional
   public Page createPageWithExistingImage(
-      Chapter chapter,
-      Image existingImage,
-      Integer pageNumber,
-      User user) {
+      Chapter chapter, Image existingImage, Integer pageNumber, User user) {
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(existingImage).build();
     Objects.requireNonNull(page, "page cannot be null");
     return pageRepository.save(page);
@@ -91,5 +89,46 @@ public class PageService {
     pageRepository.flush();
 
     return pathsToDelete;
+  }
+
+  public byte[] generateThumbnail(byte[] originalBytes) {
+    try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(originalBytes)) {
+      java.awt.image.BufferedImage originalImage = javax.imageio.ImageIO.read(in);
+      if (originalImage == null) {
+        log.warn("Unsupported image format or failed to read image for thumbnail generation.");
+        return null;
+      }
+
+      int targetWidth = 300;
+      double ratio = (double) originalImage.getHeight() / originalImage.getWidth();
+      int targetHeight = (int) (targetWidth * ratio);
+      if (targetHeight <= 0) {
+        targetHeight = 1;
+      }
+
+      java.awt.image.BufferedImage thumbnail =
+          new java.awt.image.BufferedImage(
+              targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
+
+      java.awt.Graphics2D g = thumbnail.createGraphics();
+      g.setRenderingHint(
+          java.awt.RenderingHints.KEY_INTERPOLATION,
+          java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+      g.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
+      g.dispose();
+
+      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+      javax.imageio.ImageIO.write(thumbnail, "jpg", out);
+      return out.toByteArray();
+    } catch (Exception e) {
+      log.error("Failed to generate thumbnail", e);
+      return null;
+    }
+  }
+
+  public String getFileExtension(String filename) {
+    if (filename == null) return ".jpg";
+    int lastIndex = filename.lastIndexOf('.');
+    return lastIndex == -1 ? ".jpg" : filename.substring(lastIndex);
   }
 }

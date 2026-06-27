@@ -2,13 +2,11 @@ package com.manga.library.controller;
 
 import com.manga.library.dto.ChapterDto;
 import com.manga.library.dto.SeriesDto;
-import com.manga.library.model.Chapter;
-import com.manga.library.model.Page;
-import com.manga.library.model.Series;
-import com.manga.library.model.User;
-import com.manga.library.repository.ChapterRepository;
-import com.manga.library.repository.PageRepository;
-import com.manga.library.repository.SeriesRepository;
+import com.manga.library.dto.ZipImageEntry;
+import com.manga.library.model.*;
+import com.manga.library.repository.*;
+import com.manga.library.service.*;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -21,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/series")
@@ -31,6 +30,11 @@ public class SeriesController {
   private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
   private final PageRepository pageRepository;
+  private final ImageRepository imageRepository;
+  private final LayerRepository layerRepository;
+  private final PageService pageService;
+  private final MinioService minioService;
+  private final JobCoordinatorService jobCoordinatorService;
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
@@ -330,5 +334,179 @@ public class SeriesController {
       return ResponseEntity.ok().build();
     }
     return ResponseEntity.notFound().build();
+  }
+
+  @PostMapping("/{seriesId}/chapters/import")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  public ResponseEntity<?> importChapter(
+      @PathVariable UUID seriesId,
+      @RequestParam("file") MultipartFile file,
+      @RequestParam("chapterNumber") Double chapterNumber,
+      @RequestParam("title") String title,
+      @AuthenticationPrincipal User user) {
+    Objects.requireNonNull(seriesId, "seriesId cannot be null");
+    log.info("Importing chapter {} (num={}) for series {}", title, chapterNumber, seriesId);
+
+    try {
+      Series series =
+          seriesRepository
+              .findById(seriesId)
+              .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
+
+      if (chapterRepository.findBySeriesIdAndChapterNumber(seriesId, chapterNumber).isPresent()) {
+        return ResponseEntity.status(409)
+            .body(
+                Map.of("message", "Chapter " + chapterNumber + " already exists in this series."));
+      }
+
+      // 1. Create the Chapter
+      Chapter chapter =
+          Chapter.builder().series(series).chapterNumber(chapterNumber).title(title).build();
+      chapter = chapterRepository.save(chapter);
+
+      // 2. Read ZIP/ePub entries
+      List<ZipImageEntry> imageEntries = new ArrayList<>();
+      try (java.util.zip.ZipInputStream zis =
+          new java.util.zip.ZipInputStream(file.getInputStream())) {
+        java.util.zip.ZipEntry entry;
+        while ((entry = zis.getNextEntry()) != null) {
+          if (entry.isDirectory()) continue;
+          String name = entry.getName();
+          String lowerName = name.toLowerCase();
+          if (lowerName.contains("__macosx") || lowerName.contains("/.") || name.startsWith(".")) {
+            continue;
+          }
+          if (lowerName.endsWith(".png")
+              || lowerName.endsWith(".jpg")
+              || lowerName.endsWith(".jpeg")
+              || lowerName.endsWith(".webp")
+              || lowerName.endsWith(".gif")) {
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int len;
+            while ((len = zis.read(buffer)) > -1) {
+              baos.write(buffer, 0, len);
+            }
+            imageEntries.add(new ZipImageEntry(name, baos.toByteArray()));
+          }
+        }
+      }
+
+      if (imageEntries.isEmpty()) {
+        chapterRepository.delete(chapter);
+        return ResponseEntity.badRequest()
+            .body(Map.of("message", "Archive contains no valid image files."));
+      }
+
+      // Sort alphabetically by filename to maintain order
+      imageEntries.sort(Comparator.comparing(ZipImageEntry::getName));
+
+      // 3. Import each page
+      int pageNum = 1;
+      for (ZipImageEntry imgEntry : imageEntries) {
+        log.info(
+            "Importing page {}/{} (filename: '{}') for chapter {} (Number {}) of seriesId {}",
+            pageNum,
+            imageEntries.size(),
+            imgEntry.getName(),
+            chapter.getId(),
+            chapter.getChapterNumber(),
+            seriesId);
+        byte[] originalBytes = imgEntry.getBytes();
+
+        // SHA-256 hash
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        byte[] encodedhash = digest.digest(originalBytes);
+        StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
+        for (byte b : encodedhash) {
+          String hex = Integer.toHexString(0xff & b);
+          if (hex.length() == 1) hexString.append('0');
+          hexString.append(hex);
+        }
+        String fileHash = hexString.toString();
+
+        // Check duplicate
+        java.util.Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
+        if (existingImageOpt.isPresent()) {
+          Image existingImage = existingImageOpt.get();
+          pageService.createPageWithExistingImage(chapter, existingImage, pageNum, user);
+
+          // Check if target language layer exists
+          String targetLang =
+              series.getTargetLanguage() != null
+                  ? series.getTargetLanguage().trim().toLowerCase()
+                  : "en";
+          boolean targetTranslationExists =
+              layerRepository.findByImageId(existingImage.getId()).stream()
+                  .anyMatch(
+                      l ->
+                          "translation".equalsIgnoreCase(l.getType())
+                              && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
+
+          if (!targetTranslationExists) {
+            jobCoordinatorService.triggerImageRedo(existingImage.getId(), "translation");
+          }
+          pageNum++;
+          continue;
+        }
+
+        String fileExtension = pageService.getFileExtension(imgEntry.getName());
+        String uuid = UUID.randomUUID().toString();
+        String storagePath = "originals/" + uuid + fileExtension;
+        String contentType = "image/png";
+        if (fileExtension.equalsIgnoreCase(".jpg") || fileExtension.equalsIgnoreCase(".jpeg")) {
+          contentType = "image/jpeg";
+        } else if (fileExtension.equalsIgnoreCase(".webp")) {
+          contentType = "image/webp";
+        } else if (fileExtension.equalsIgnoreCase(".gif")) {
+          contentType = "image/gif";
+        }
+
+        // Upload to MinIO
+        minioService.uploadFile(storagePath, originalBytes, contentType);
+
+        // Generate thumbnail
+        String thumbnailStoragePath = null;
+        try {
+          byte[] thumbBytes = pageService.generateThumbnail(originalBytes);
+          if (thumbBytes != null) {
+            thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
+            minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
+          }
+        } catch (Exception e) {
+          log.error("Failed to generate/upload thumbnail in ZIP chapter import", e);
+        }
+
+        // Save records
+        Page page =
+            pageService.createPageAndImage(
+                chapter,
+                imgEntry.getName(),
+                storagePath,
+                thumbnailStoragePath,
+                pageNum,
+                fileHash,
+                user);
+
+        // Queue pipeline
+        jobCoordinatorService.startPipeline(page.getImage().getId());
+        pageNum++;
+      }
+
+      ChapterDto responseDto = new ChapterDto();
+      responseDto.setId(chapter.getId());
+      responseDto.setSeriesId(seriesId);
+      responseDto.setChapterNumber(chapter.getChapterNumber());
+      responseDto.setTitle(chapter.getTitle());
+      return ResponseEntity.ok(responseDto);
+
+    } catch (java.io.IOException
+        | java.security.NoSuchAlgorithmException
+        | java.security.InvalidKeyException
+        | io.minio.errors.MinioException
+        | RuntimeException e) {
+      log.error("Failed to import chapter", e);
+      return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
+    }
   }
 }

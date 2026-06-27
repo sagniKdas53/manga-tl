@@ -93,6 +93,10 @@ public class JobCoordinatorService {
                   if (series.getTargetLanguage() != null) {
                     job.put("targetLanguage", series.getTargetLanguage().trim().toLowerCase());
                   }
+                  job.put("pageNumber", page.getPageNumber());
+                  if (page.getChapter() != null) {
+                    job.put("chapterNumber", page.getChapter().getChapterNumber());
+                  }
                 }
               });
 
@@ -223,7 +227,14 @@ public class JobCoordinatorService {
     metadata.put("layer_order", nextZOrder);
     metadata.put("last_modified", OffsetDateTime.now().toString());
 
-    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(nextZOrder).metadataJson(metadata).build();
+    Layer ocrLayer =
+        Layer.builder()
+            .image(image)
+            .type("ocr")
+            .visible(true)
+            .zOrder(nextZOrder)
+            .metadataJson(metadata)
+            .build();
     Objects.requireNonNull(ocrLayer, "ocrLayer cannot be null");
     layerRepository.save(ocrLayer);
 
@@ -383,7 +394,8 @@ public class JobCoordinatorService {
     final String finalTargetLang = targetLang;
     List<Layer> existingTranslationLayers = new ArrayList<>();
     for (Layer l : layerRepository.findByImageId(imageId)) {
-      if ("translation".equalsIgnoreCase(l.getType()) && finalTargetLang.equalsIgnoreCase(l.getTargetLanguage())) {
+      if ("translation".equalsIgnoreCase(l.getType())
+          && finalTargetLang.equalsIgnoreCase(l.getTargetLanguage())) {
         existingTranslationLayers.add(l);
       }
     }
@@ -411,13 +423,13 @@ public class JobCoordinatorService {
     Double avgConfidence = 1.0;
     if (translations != null && !translations.isEmpty()) {
       if (translations.get(0).containsKey("modelIdentifier")) {
-         modelIdentifier = (String) translations.get(0).get("modelIdentifier");
+        modelIdentifier = (String) translations.get(0).get("modelIdentifier");
       }
       if (translations.get(0).containsKey("confidence")) {
-         Object confObj = translations.get(0).get("confidence");
-         if (confObj instanceof Number) {
-            avgConfidence = ((Number) confObj).doubleValue();
-         }
+        Object confObj = translations.get(0).get("confidence");
+        if (confObj instanceof Number) {
+          avgConfidence = ((Number) confObj).doubleValue();
+        }
       }
     }
     metadata.put("provider", "Translation Worker");
@@ -428,16 +440,16 @@ public class JobCoordinatorService {
     metadata.put("layer_order", nextZOrder);
     metadata.put("last_modified", OffsetDateTime.now().toString());
 
-    final Layer translationLayer = layerRepository.save(
-        Layer.builder()
-            .image(image)
-            .type("translation")
-            .targetLanguage(finalTargetLang)
-            .visible(true)
-            .zOrder(nextZOrder)
-            .metadataJson(metadata)
-            .build()
-    );
+    final Layer translationLayer =
+        layerRepository.save(
+            Layer.builder()
+                .image(image)
+                .type("translation")
+                .targetLanguage(finalTargetLang)
+                .visible(true)
+                .zOrder(nextZOrder)
+                .metadataJson(metadata)
+                .build());
 
     if (translations != null) {
       // Find all existing elements for this layer
