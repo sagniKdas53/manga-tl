@@ -77,8 +77,7 @@ public class PageController {
         byte[] projectJsonBytes = null;
         byte[] originalImageBytes = null;
         String originalImageFilename = null;
-        java.util.List<com.manga.library.dto.ZipImageEntry> imageEntries =
-            new java.util.ArrayList<>();
+        List<com.manga.library.dto.ZipImageEntry> imageEntries = new ArrayList<>();
 
         try (java.util.zip.ZipInputStream zis =
             new java.util.zip.ZipInputStream(file.getInputStream())) {
@@ -164,7 +163,8 @@ public class PageController {
             Image oldImage = page.getImage();
 
             // Clear existing elements and layers
-            List<LayerElement> elements = layerElementRepository.findByLayerImageId(oldImage.getId());
+            List<LayerElement> elements =
+                layerElementRepository.findByLayerImageId(oldImage.getId());
             for (LayerElement el : elements) {
               List<LayerEditHistory> history =
                   layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
@@ -210,13 +210,14 @@ public class PageController {
                   log.error("Failed to generate/upload thumbnail in ZIP import", e);
                 }
 
-                image = Image.builder()
-                    .filename(originalImageFilename)
-                    .storagePath(storagePath)
-                    .thumbnailStoragePath(thumbnailStoragePath)
-                    .hash(fileHash)
-                    .createdBy(user)
-                    .build();
+                image =
+                    Image.builder()
+                        .filename(originalImageFilename)
+                        .storagePath(storagePath)
+                        .thumbnailStoragePath(thumbnailStoragePath)
+                        .hash(fileHash)
+                        .createdBy(user)
+                        .build();
                 image = imageRepository.save(image);
               }
               page.setImage(image);
@@ -356,8 +357,10 @@ public class PageController {
             }
           }
 
-          log.info("Successfully restored page-level project ZIP: {} layers and {} elements imported.",
-              importedLayersCount, importedElementsCount);
+          log.info(
+              "Successfully restored page-level project ZIP: {} layers and {} elements imported.",
+              importedLayersCount,
+              importedElementsCount);
 
           return ResponseEntity.ok(
               new UploadResponse(page.getId(), page.getImage().getId(), "imported"));
@@ -547,7 +550,11 @@ public class PageController {
 
       return ResponseEntity.ok(
           new UploadResponse(page.getId(), page.getImage().getId(), "processing"));
-    } catch (Exception e) {
+    } catch (java.io.IOException
+        | java.security.NoSuchAlgorithmException
+        | java.security.InvalidKeyException
+        | io.minio.errors.MinioException
+        | RuntimeException e) {
       log.error("Failed to upload page", e);
       return ResponseEntity.internalServerError().build();
     }
@@ -917,23 +924,22 @@ public class PageController {
               baos.write(buffer, 0, len);
             }
             projectJsonBytes = baos.toByteArray();
-          } else if (lowerName.endsWith(".png")
-              || lowerName.endsWith(".jpg")
-              || lowerName.endsWith(".jpeg")
-              || lowerName.endsWith(".webp")
-              || lowerName.endsWith(".gif")) {
-            if ("original.png".equals(name)
-                || lowerName.contains("original")
-                || originalImageBytes == null) {
-              java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-              byte[] buffer = new byte[4096];
-              int len;
-              while ((len = zis.read(buffer)) > -1) {
-                baos.write(buffer, 0, len);
-              }
-              originalImageBytes = baos.toByteArray();
-              originalImageFilename = name;
+          } else if ((lowerName.endsWith(".png")
+                  || lowerName.endsWith(".jpg")
+                  || lowerName.endsWith(".jpeg")
+                  || lowerName.endsWith(".webp")
+                  || lowerName.endsWith(".gif"))
+              && ("original.png".equals(name)
+                  || lowerName.contains("original")
+                  || originalImageBytes == null)) {
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int len;
+            while ((len = zis.read(buffer)) > -1) {
+              baos.write(buffer, 0, len);
             }
+            originalImageBytes = baos.toByteArray();
+            originalImageFilename = name;
           }
         }
       }
@@ -1012,13 +1018,14 @@ public class PageController {
                 log.error("Failed to generate thumbnail for imported project", e);
               }
 
-              image = Image.builder()
-                  .filename(originalImageFilename)
-                  .storagePath(storagePath)
-                  .thumbnailStoragePath(thumbnailStoragePath)
-                  .hash(fileHash)
-                  .createdBy(user)
-                  .build();
+              image =
+                  Image.builder()
+                      .filename(originalImageFilename)
+                      .storagePath(storagePath)
+                      .thumbnailStoragePath(thumbnailStoragePath)
+                      .hash(fileHash)
+                      .createdBy(user)
+                      .build();
               image = imageRepository.save(image);
             }
             page.setImage(image);
@@ -1173,11 +1180,18 @@ public class PageController {
         }
       }
 
-      log.info("Successfully imported project ZIP to chapter {}: {} layers and {} elements imported.",
-          chapterId, importedLayersCount, importedElementsCount);
+      log.info(
+          "Successfully imported project ZIP to chapter {}: {} layers and {} elements imported.",
+          chapterId,
+          importedLayersCount,
+          importedElementsCount);
 
       return ResponseEntity.ok(Map.of("status", "success", "pageId", page.getId().toString()));
-    } catch (Exception e) {
+    } catch (java.io.IOException
+        | java.security.NoSuchAlgorithmException
+        | java.security.InvalidKeyException
+        | io.minio.errors.MinioException
+        | RuntimeException e) {
       log.error("Failed to import project zip", e);
       return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
     }

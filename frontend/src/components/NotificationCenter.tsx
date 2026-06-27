@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNotifications, type Notification } from './NotificationContext';
+import { useNotifications, type Notification } from './useNotifications';
 
 export const NotificationCenter: React.FC = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();

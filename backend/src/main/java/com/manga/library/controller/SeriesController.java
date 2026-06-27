@@ -6,6 +6,7 @@ import com.manga.library.dto.ZipImageEntry;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.*;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -364,7 +365,7 @@ public class SeriesController {
       chapter = chapterRepository.save(chapter);
 
       // 2. Read ZIP/ePub entries
-      java.util.List<ZipImageEntry> imageEntries = new java.util.ArrayList<>();
+      List<ZipImageEntry> imageEntries = new ArrayList<>();
       try (java.util.zip.ZipInputStream zis =
           new java.util.zip.ZipInputStream(file.getInputStream())) {
         java.util.zip.ZipEntry entry;
@@ -403,8 +404,14 @@ public class SeriesController {
       // 3. Import each page
       int pageNum = 1;
       for (ZipImageEntry imgEntry : imageEntries) {
-        log.info("Importing page {}/{} (filename: '{}') for chapter {} (Number {}) of seriesId {}",
-            pageNum, imageEntries.size(), imgEntry.getName(), chapter.getId(), chapter.getChapterNumber(), seriesId);
+        log.info(
+            "Importing page {}/{} (filename: '{}') for chapter {} (Number {}) of seriesId {}",
+            pageNum,
+            imageEntries.size(),
+            imgEntry.getName(),
+            chapter.getId(),
+            chapter.getChapterNumber(),
+            seriesId);
         byte[] originalBytes = imgEntry.getBytes();
 
         // SHA-256 hash
@@ -493,7 +500,11 @@ public class SeriesController {
       responseDto.setTitle(chapter.getTitle());
       return ResponseEntity.ok(responseDto);
 
-    } catch (Exception e) {
+    } catch (java.io.IOException
+        | java.security.NoSuchAlgorithmException
+        | java.security.InvalidKeyException
+        | io.minio.errors.MinioException
+        | RuntimeException e) {
       log.error("Failed to import chapter", e);
       return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
     }
