@@ -21,7 +21,7 @@ public class SseService {
   private final ObjectMapper objectMapper;
   private final ConcurrentHashMap<UUID, SseEmitter> emitters = new ConcurrentHashMap<>();
 
-  private static final String NOTIFICATION_KEY_PREFIX = "notifications:user:";
+  private static final String NOTIFICATION_PREFIX = "notifications:user:";
   private static final String IMAGE_USER_MAPPING_PREFIX = "job:owner:image:";
   private static final Long EMITTER_TIMEOUT = 3600000L; // 1 hour
 
@@ -54,7 +54,7 @@ public class SseService {
   }
 
   private void sendPendingNotifications(UUID userId, SseEmitter emitter) {
-    String key = NOTIFICATION_KEY_PREFIX + userId;
+    String key = NOTIFICATION_PREFIX + userId;
     Long size = redisTemplate.opsForList().size(key);
     if (size != null && size > 0) {
       List<String> pending = redisTemplate.opsForList().range(key, 0, -1);
@@ -125,7 +125,7 @@ public class SseService {
       }
     }
 
-    String key = NOTIFICATION_KEY_PREFIX + userId;
+    String key = NOTIFICATION_PREFIX + userId;
     redisTemplate.opsForList().rightPush(key, jsonPayload);
     redisTemplate.expire(key, java.time.Duration.ofDays(7));
   }

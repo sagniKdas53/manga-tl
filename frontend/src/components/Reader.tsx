@@ -222,8 +222,8 @@ export const Reader: React.FC<ReaderProps> = ({
   // Chapter navigation logic
   const sortedChapters = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
   const currentChapterIdx = sortedChapters.findIndex(c => c.id === selectedChapter?.id);
-  const prevChapter = currentChapterIdx > 0 ? sortedChapters[currentChapterIdx - 1] : null;
-  const nextChapter = currentChapterIdx !== -1 && currentChapterIdx < sortedChapters.length - 1 ? sortedChapters[currentChapterIdx + 1] : null;
+  const prevChapter = currentChapterIdx > 0 ? sortedChapters.at(currentChapterIdx - 1) || null : null;
+  const nextChapter = currentChapterIdx !== -1 && currentChapterIdx < sortedChapters.length - 1 ? sortedChapters.at(currentChapterIdx + 1) || null : null;
 
   const navigateToChapter = (chapter: Chapter) => {
     const slugPart = chapter.title ? `${toSlug(chapter.title)}/` : `chapter-${chapter.chapterNumber}/`;
@@ -546,7 +546,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0) return;
-    const previous = undoStack[undoStack.length - 1];
+    const previous = undoStack.at(-1);
+    if (!previous) return;
     setUndoStack(prev => prev.slice(0, -1));
 
     if (selectedItem && selectedItem.isLayerElement) {
@@ -570,7 +571,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
   const handleRedo = useCallback(async () => {
     if (redoStack.length === 0) return;
-    const next = redoStack[redoStack.length - 1];
+    const next = redoStack.at(-1);
+    if (!next) return;
     setRedoStack(prev => prev.slice(0, -1));
 
     if (selectedItem && selectedItem.isLayerElement) {
@@ -1028,9 +1030,15 @@ export const Reader: React.FC<ReaderProps> = ({
             const pts = JSON.parse(el.maskPolygon);
             if (Array.isArray(pts) && pts.length > 0) {
               ctx.beginPath();
-              ctx.moveTo(pts[0][0], pts[0][1]);
-              for (let i = 1; i < pts.length; i++) {
-                ctx.lineTo(pts[i][0], pts[i][1]);
+              const firstPt = pts.at(0);
+              if (Array.isArray(firstPt)) {
+                ctx.moveTo(firstPt.at(0) ?? 0, firstPt.at(1) ?? 0);
+                for (let i = 1; i < pts.length; i++) {
+                  const pt = pts.at(i);
+                  if (Array.isArray(pt)) {
+                    ctx.lineTo(pt.at(0) ?? 0, pt.at(1) ?? 0);
+                  }
+                }
               }
               ctx.closePath();
               ctx.fillStyle = el.backgroundColor || '#ffffff';
@@ -1077,8 +1085,8 @@ export const Reader: React.FC<ReaderProps> = ({
         const lineH = fSize * 1.2;
         const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
         fit.lines.forEach((line, i) => {
-          const lineCenterX = (fit.lineCenters && fit.lineCenters[i] !== undefined)
-            ? fit.lineCenters[i]
+          const lineCenterX = (fit.lineCenters && fit.lineCenters.at(i) !== undefined)
+            ? fit.lineCenters.at(i) ?? (el.x + width / 2)
             : el.x + width / 2;
           ctx.fillText(line, lineCenterX, startY + i * lineH);
         });
@@ -1117,8 +1125,7 @@ export const Reader: React.FC<ReaderProps> = ({
     zip.file('original.png', origBlob);
 
     // 2. Render and save mask/translation image files for each layer
-    for (let i = 0; i < layers.length; i++) {
-      const lData = layers[i];
+    for (const lData of layers) {
       const layerId = lData.layer.id;
 
       // Draw mask for this specific layer
@@ -1138,9 +1145,15 @@ export const Reader: React.FC<ReaderProps> = ({
             if (Array.isArray(pts) && pts.length > 0) {
               maskCtx.save();
               maskCtx.beginPath();
-              maskCtx.moveTo(pts[0][0], pts[0][1]);
-              for (let j = 1; j < pts.length; j++) {
-                maskCtx.lineTo(pts[j][0], pts[j][1]);
+              const firstPt = pts.at(0);
+              if (Array.isArray(firstPt)) {
+                maskCtx.moveTo(firstPt.at(0) ?? 0, firstPt.at(1) ?? 0);
+                for (let j = 1; j < pts.length; j++) {
+                  const pt = pts.at(j);
+                  if (Array.isArray(pt)) {
+                    maskCtx.lineTo(pt.at(0) ?? 0, pt.at(1) ?? 0);
+                  }
+                }
               }
               maskCtx.closePath();
               maskCtx.fillStyle = el.backgroundColor || '#ffffff';
@@ -1216,8 +1229,8 @@ export const Reader: React.FC<ReaderProps> = ({
         const lineH = fSize * 1.2;
         const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
         fit.lines.forEach((line, j) => {
-          const lineCenterX = (fit.lineCenters && fit.lineCenters[j] !== undefined)
-            ? fit.lineCenters[j]
+          const lineCenterX = (fit.lineCenters && fit.lineCenters.at(j) !== undefined)
+            ? fit.lineCenters.at(j) ?? (el.x + width / 2)
             : el.x + width / 2;
           textCtx.fillText(line, lineCenterX, startY + j * lineH);
         });
@@ -1534,7 +1547,7 @@ export const Reader: React.FC<ReaderProps> = ({
     
     const lines = editText.split('\n');
     const promises = activeItem.regions.map(async (region: OcrRegion, idx: number) => {
-      const newText = lines[idx] !== undefined ? lines[idx] : '';
+      const newText = lines.at(idx) !== undefined ? (lines.at(idx) ?? '') : '';
       
       setOcrRegions(prev => prev.map(r => {
         if (r.id === region.id) {
@@ -2284,8 +2297,8 @@ export const Reader: React.FC<ReaderProps> = ({
                             {element.maskPolygon ? (
                               <div style={{ position: 'relative', width: '100%', height: '100%' }}>
                                 {fit.lines.map((line, i) => {
-                                  const lineCenterX = (fit.lineCenters && fit.lineCenters[i] !== undefined)
-                                    ? fit.lineCenters[i]
+                                  const lineCenterX = (fit.lineCenters && fit.lineCenters.at(i) !== undefined)
+                                    ? fit.lineCenters.at(i) ?? (element.x + width / 2)
                                     : element.x + width / 2;
                                   const lineH = fontSize * 1.2;
                                   const startY = element.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;

@@ -57,8 +57,8 @@ export const fitTextInBox = (
 
           const intersects: number[] = [];
           for (let i = 0; i < polygonPoints!.length; i++) {
-            const p1 = polygonPoints![i];
-            const p2 = polygonPoints![(i + 1) % polygonPoints!.length];
+            const p1 = polygonPoints!.at(i)!;
+            const p2 = polygonPoints!.at((i + 1) % polygonPoints!.length)!;
             const [x1, y1] = p1;
             const [x2, y2] = p2;
             if ((y1 <= lineCenterY && y2 > lineCenterY) || (y2 <= lineCenterY && y1 > lineCenterY)) {
@@ -72,8 +72,8 @@ export const fitTextInBox = (
             let bestSpan = { left: boxX, right: boxX + maxWidth };
             let maxOverlapLen = 0;
             for (let i = 0; i < intersects.length - 1; i += 2) {
-              const segmentLeft = intersects[i];
-              const segmentRight = intersects[i + 1];
+              const segmentLeft = intersects.at(i)!;
+              const segmentRight = intersects.at(i + 1)!;
               const overlapLeft = Math.max(segmentLeft, boxX);
               const overlapRight = Math.min(segmentRight, boxX + maxWidth);
               const overlapLen = overlapRight - overlapLeft;
