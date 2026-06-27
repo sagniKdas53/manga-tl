@@ -58,6 +58,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     filterChain.doFilter(request, response);
   }
 
+  @Override
+  protected boolean shouldNotFilterAsyncDispatch() {
+    return false;
+  }
+
   private String parseJwt(HttpServletRequest request) {
     String headerAuth = request.getHeader("Authorization");
     if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
