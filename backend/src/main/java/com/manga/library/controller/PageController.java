@@ -950,7 +950,7 @@ public class PageController {
       }
 
       com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(projectJsonBytes);
-      int pageNumber = root.has("pageNumber") ? root.get("pageNumber").asInt() : 1;
+      int pageNumber = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId).size() + 1;
 
       Optional<Page> existingPageOpt =
           pageRepository.findByChapterIdAndPageNumber(chapterId, pageNumber);
