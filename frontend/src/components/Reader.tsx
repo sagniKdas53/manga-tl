@@ -7,6 +7,18 @@ import ConfirmModal from './ConfirmModal';
 import { ColorPicker } from './ColorPicker';
 import { useNotifications } from './useNotifications';
 import JSZip from 'jszip';
+import {
+  type Point,
+  type Polygon,
+  polygonBBox,
+  polygonCentroid,
+  rectToPolygon,
+  ellipseToPolygon,
+  rotatePolygon,
+  translatePolygon,
+  isVertexMoveValid,
+  isRotationValid,
+} from '../utils/polygonUtils';
 
 interface ReaderProps {
   user: User;
@@ -124,18 +136,49 @@ export const Reader: React.FC<ReaderProps> = ({
   // Pan & Drag States
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
-  const [freeResizeMode, setFreeResizeMode] = useState(false);
+  /** 'none' = normal read mode, 'drag' = move element, 'reshape' = vertex editing */
+  const [interactionMode, setInteractionMode] = useState<'none' | 'drag' | 'reshape'>('none');
   const dragStart = useRef({ x: 0, y: 0 });
   const [draggedElement, setDraggedElement] = useState<{
     id: string;
-    type: 'move' | 'resize-br' | 'resize-tr' | 'resize-bl' | 'resize-tl';
+    type: 'move';
     startX: number;
     startY: number;
     startElX: number;
     startElY: number;
     startElW: number;
     startElH: number;
+    /** Polygon vertices at drag start (for polygon-shaped elements) */
+    startPolygon: Polygon | null;
   } | null>(null);
+
+  /** Tracks a single polygon vertex being dragged in reshape mode */
+  const [draggedVertex, setDraggedVertex] = useState<{
+    elementId: string;
+    vertexIndex: number;
+    startMouseX: number;
+    startMouseY: number;
+    originalPolygon: Polygon;
+    originalX: number;
+    originalY: number;
+    originalW: number;
+    originalH: number;
+  } | null>(null);
+
+  /** Tracks the rotation handle being dragged in reshape mode */
+  const [rotationDrag, setRotationDrag] = useState<{
+    elementId: string;
+    startAngleDeg: number;
+    originalPolygon: Polygon;
+    centroid: Point;
+    originalX: number;
+    originalY: number;
+    originalW: number;
+    originalH: number;
+  } | null>(null);
+
+  /** Minimum polygon area in square SVG-coord pixels (~36px font, 2 chars) */
+  const MIN_POLYGON_AREA = 1296;
 
   // Touch & Zoom enhancements
   // Detected once at component initialization — never changes after mount
@@ -480,17 +523,17 @@ export const Reader: React.FC<ReaderProps> = ({
       setPopoverOpen(false);
       setUndoStack([]);
       setRedoStack([]);
-      setFreeResizeMode(false);
+      setInteractionMode('none');
     });
   }, [pageNumber]);
 
-  // Reset free resize mode on selectedItem ID changes
+  // Reset interaction mode on selectedItem ID changes
   const prevSelectedItemIdRef = useRef<string | number | null>(null);
   useEffect(() => {
     const currentId = selectedItem?.id || null;
     if (currentId !== prevSelectedItemIdRef.current) {
       prevSelectedItemIdRef.current = currentId;
-      setFreeResizeMode(false);
+      setInteractionMode('none');
     }
   }, [selectedItem]);
 
@@ -641,35 +684,41 @@ export const Reader: React.FC<ReaderProps> = ({
   };
 
   const handleElementDragStart = (
-    e: React.MouseEvent,
+    e: React.PointerEvent,
     element: LayerElement,
-    type: 'move' | 'resize-br' | 'resize-tr' | 'resize-bl' | 'resize-tl'
   ) => {
     e.stopPropagation();
     e.preventDefault();
-    const svg = e.currentTarget.closest('svg');
+    (e.target as Element).setPointerCapture(e.pointerId);
+    const svg = (e.target as Element).closest('svg') as SVGSVGElement | null;
     if (!svg) return;
     const point = svg.createSVGPoint();
     point.x = e.clientX;
     point.y = e.clientY;
     const svgPoint = point.matrixTransform(svg.getScreenCTM()!.inverse());
-    
+
+    let startPolygon: Polygon | null = null;
+    if (element.maskPolygon) {
+      try { startPolygon = JSON.parse(element.maskPolygon) as Polygon; } catch { /* ignore */ }
+    }
+
     setDraggedElement({
       id: element.id,
-      type,
+      type: 'move',
       startX: svgPoint.x,
       startY: svgPoint.y,
       startElX: element.x,
       startElY: element.y,
       startElW: element.maxWidth || 100,
       startElH: element.maxHeight || 100,
+      startPolygon,
     });
   };
 
   useEffect(() => {
     if (!draggedElement) return;
 
-    const handleWindowMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const svg = document.querySelector('.svg-overlay') as SVGSVGElement | null;
       if (!svg) return;
 
@@ -681,42 +730,20 @@ export const Reader: React.FC<ReaderProps> = ({
       const dx = svgPoint.x - draggedElement.startX;
       const dy = svgPoint.y - draggedElement.startY;
 
-      let newX = draggedElement.startElX;
-      let newY = draggedElement.startElY;
-      let newW = draggedElement.startElW;
-      let newH = draggedElement.startElH;
+      // Clamp position within image bounds
+      const newX = Math.max(0, Math.min(imageDims.w - draggedElement.startElW,
+        Math.round(draggedElement.startElX + dx)));
+      const newY = Math.max(0, Math.min(imageDims.h - draggedElement.startElH,
+        Math.round(draggedElement.startElY + dy)));
 
-      if (draggedElement.type === 'move') {
-        newX = Math.round(draggedElement.startElX + dx);
-        newY = Math.round(draggedElement.startElY + dy);
-      } else if (draggedElement.type === 'resize-br') {
-        newW = Math.max(10, Math.round(draggedElement.startElW + dx));
-        newH = Math.max(10, Math.round(draggedElement.startElH + dy));
-      } else if (draggedElement.type === 'resize-tr') {
-        newW = Math.max(10, Math.round(draggedElement.startElW + dx));
-        const possibleH = Math.round(draggedElement.startElH - dy);
-        if (possibleH > 10) {
-          newH = possibleH;
-          newY = Math.round(draggedElement.startElY + dy);
-        }
-      } else if (draggedElement.type === 'resize-bl') {
-        const possibleW = Math.round(draggedElement.startElW - dx);
-        if (possibleW > 10) {
-          newW = possibleW;
-          newX = Math.round(draggedElement.startElX + dx);
-        }
-        newH = Math.max(10, Math.round(draggedElement.startElH + dy));
-      } else if (draggedElement.type === 'resize-tl') {
-        const possibleW = Math.round(draggedElement.startElW - dx);
-        const possibleH = Math.round(draggedElement.startElH - dy);
-        if (possibleW > 10) {
-          newW = possibleW;
-          newX = Math.round(draggedElement.startElX + dx);
-        }
-        if (possibleH > 10) {
-          newH = possibleH;
-          newY = Math.round(draggedElement.startElY + dy);
-        }
+      // Derive actual clamped deltas for polygon translation
+      const clampedDx = newX - draggedElement.startElX;
+      const clampedDy = newY - draggedElement.startElY;
+
+      let newMaskPolygon: string | null | undefined = undefined; // undefined = no change
+      if (draggedElement.startPolygon) {
+        const translated = translatePolygon(draggedElement.startPolygon, clampedDx, clampedDy);
+        newMaskPolygon = JSON.stringify(translated);
       }
 
       setSelectedItem(prev => {
@@ -725,8 +752,7 @@ export const Reader: React.FC<ReaderProps> = ({
             ...prev,
             x: newX,
             y: newY,
-            maxWidth: newW,
-            maxHeight: newH
+            ...(newMaskPolygon !== undefined ? { maskPolygon: newMaskPolygon } : {}),
           };
         }
         return prev;
@@ -741,8 +767,7 @@ export const Reader: React.FC<ReaderProps> = ({
               ...el,
               x: newX,
               y: newY,
-              maxWidth: newW,
-              maxHeight: newH
+              ...(newMaskPolygon !== undefined ? { maskPolygon: newMaskPolygon } : {}),
             } : el)
           };
         }
@@ -750,17 +775,14 @@ export const Reader: React.FC<ReaderProps> = ({
       }));
     };
 
-    const handleWindowMouseUp = async () => {
+    const handlePointerUp = async () => {
       if (!draggedElement) return;
 
       let updatedElement: LayerElement | undefined;
       setLayers(prevLayers => {
         for (const layer of prevLayers) {
           const found = layer.elements.find(el => el.id === draggedElement.id);
-          if (found) {
-            updatedElement = found;
-            break;
-          }
+          if (found) { updatedElement = found; break; }
         }
         return prevLayers;
       });
@@ -771,7 +793,10 @@ export const Reader: React.FC<ReaderProps> = ({
           x: draggedElement.startElX,
           y: draggedElement.startElY,
           maxWidth: draggedElement.startElW,
-          maxHeight: draggedElement.startElH
+          maxHeight: draggedElement.startElH,
+          maskPolygon: draggedElement.startPolygon
+            ? JSON.stringify(draggedElement.startPolygon)
+            : (updatedElement as LayerElement).maskPolygon,
         };
         pushToHistoryStack(originalElement);
         await handleSaveElementChanges(updatedElement, false);
@@ -780,13 +805,263 @@ export const Reader: React.FC<ReaderProps> = ({
       setDraggedElement(null);
     };
 
-    window.addEventListener('mousemove', handleWindowMouseMove);
-    window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
     return () => {
-      window.removeEventListener('mousemove', handleWindowMouseMove);
-      window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [draggedElement, layers, selectedItem, pushToHistoryStack, handleSaveElementChanges]);
+  }, [draggedElement, imageDims, pushToHistoryStack, handleSaveElementChanges]);
+
+  // ---------------------------------------------------------------------------
+  // RESHAPE MODE: Enter reshape (auto-generating polygon for rect/ellipse)
+  // ---------------------------------------------------------------------------
+
+  const handleEnterReshapeMode = useCallback((element: LayerElement) => {
+    if (!element.maskPolygon) {
+      // Auto-generate a polygon from the element's bounding box / shape
+      const x = element.x, y = element.y;
+      const w = element.maxWidth || 100, h = element.maxHeight || 100;
+      const rotation = element.rotation || 0;
+      let polygon: Polygon;
+      if (element.boxShape === 'elliptical') {
+        polygon = ellipseToPolygon(x + w / 2, y + h / 2, w / 2, h / 2, rotation, 12);
+      } else {
+        polygon = rectToPolygon(x, y, w, h, rotation);
+      }
+      // Bake rotation into polygon — the element's rotation field becomes 0
+      const newMaskPolygon = JSON.stringify(polygon.map(([px, py]) => [Math.round(px), Math.round(py)]));
+
+      // Capture state for undo before we mutate
+      pushToHistoryStack(element as LayerElement);
+
+      const updates: Partial<LayerElement> = {
+        maskPolygon: newMaskPolygon,
+        rotation: 0,
+      };
+      setSelectedItem(prev => prev ? { ...prev, ...updates } : prev);
+      setLayers(prev => prev.map(l => ({
+        ...l,
+        elements: l.elements.map(el => el.id === element.id ? { ...el, ...updates } : el),
+      })));
+      // Persist immediately
+      handleSaveElementChanges({ ...element, ...updates } as LayerElement, false);
+    }
+    setInteractionMode('reshape');
+  }, [pushToHistoryStack, handleSaveElementChanges]);
+
+  // ---------------------------------------------------------------------------
+  // RESHAPE MODE: Vertex drag
+  // ---------------------------------------------------------------------------
+
+  const handleVertexDragStart = (
+    e: React.PointerEvent,
+    element: LayerElement,
+    vertexIndex: number,
+    polygon: Polygon,
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    const svg = (e.target as Element).closest('svg') as SVGSVGElement | null;
+    if (!svg) return;
+    const point = svg.createSVGPoint();
+    point.x = e.clientX; point.y = e.clientY;
+    const svgPt = point.matrixTransform(svg.getScreenCTM()!.inverse());
+
+    setDraggedVertex({
+      elementId: element.id,
+      vertexIndex,
+      startMouseX: svgPt.x,
+      startMouseY: svgPt.y,
+      originalPolygon: polygon.map(p => [...p]) as Polygon,
+      originalX: element.x,
+      originalY: element.y,
+      originalW: element.maxWidth || 100,
+      originalH: element.maxHeight || 100,
+    });
+  };
+
+  useEffect(() => {
+    if (!draggedVertex) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const svg = document.querySelector('.svg-overlay') as SVGSVGElement | null;
+      if (!svg) return;
+      const point = svg.createSVGPoint();
+      point.x = e.clientX; point.y = e.clientY;
+      const svgPt = point.matrixTransform(svg.getScreenCTM()!.inverse());
+
+      // Clamp new vertex position within image bounds
+      const newPos: Point = [
+        Math.round(Math.max(0, Math.min(imageDims.w, svgPt.x))),
+        Math.round(Math.max(0, Math.min(imageDims.h, svgPt.y))),
+      ];
+
+      if (!isVertexMoveValid(
+        draggedVertex.originalPolygon,
+        draggedVertex.vertexIndex,
+        newPos,
+        imageDims,
+        MIN_POLYGON_AREA,
+      )) return; // Reject invalid moves silently
+
+      const newPoly = draggedVertex.originalPolygon.map((v, i) =>
+        i === draggedVertex.vertexIndex ? newPos : ([...v] as Point)
+      ) as Polygon;
+      const bbox = polygonBBox(newPoly);
+      const newMaskPolygon = JSON.stringify(newPoly);
+
+      setSelectedItem(prev =>
+        prev && prev.id === draggedVertex.elementId
+          ? { ...prev, maskPolygon: newMaskPolygon, x: bbox.x, y: bbox.y, maxWidth: bbox.w, maxHeight: bbox.h }
+          : prev
+      );
+      setLayers(prev => prev.map(l => ({
+        ...l,
+        elements: l.elements.map(el =>
+          el.id === draggedVertex.elementId
+            ? { ...el, maskPolygon: newMaskPolygon, x: bbox.x, y: bbox.y, maxWidth: bbox.w, maxHeight: bbox.h }
+            : el
+        ),
+      })));
+    };
+
+    const handlePointerUp = async () => {
+      // Find updated element
+      let updatedElement: LayerElement | undefined;
+      setLayers(prev => {
+        for (const l of prev) {
+          const found = l.elements.find(el => el.id === draggedVertex.elementId);
+          if (found) { updatedElement = found; break; }
+        }
+        return prev;
+      });
+
+      if (updatedElement) {
+        const origBbox = polygonBBox(draggedVertex.originalPolygon);
+        const originalElement: LayerElement = {
+          ...(updatedElement as LayerElement),
+          maskPolygon: JSON.stringify(draggedVertex.originalPolygon),
+          x: origBbox.x, y: origBbox.y,
+          maxWidth: origBbox.w, maxHeight: origBbox.h,
+        };
+        pushToHistoryStack(originalElement);
+        await handleSaveElementChanges(updatedElement, false);
+      }
+      setDraggedVertex(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [draggedVertex, imageDims, MIN_POLYGON_AREA, pushToHistoryStack, handleSaveElementChanges]);
+
+  // ---------------------------------------------------------------------------
+  // RESHAPE MODE: Rotation handle drag
+  // ---------------------------------------------------------------------------
+
+  const handleRotationDragStart = (
+    e: React.PointerEvent,
+    element: LayerElement,
+    polygon: Polygon,
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    const svg = (e.target as Element).closest('svg') as SVGSVGElement | null;
+    if (!svg) return;
+    const point = svg.createSVGPoint();
+    point.x = e.clientX; point.y = e.clientY;
+    const svgPt = point.matrixTransform(svg.getScreenCTM()!.inverse());
+
+    const centroid = polygonCentroid(polygon);
+    const startAngleDeg = Math.atan2(svgPt.y - centroid[1], svgPt.x - centroid[0]) * (180 / Math.PI);
+
+    setRotationDrag({
+      elementId: element.id,
+      startAngleDeg,
+      originalPolygon: polygon.map(p => [...p]) as Polygon,
+      centroid,
+      originalX: element.x,
+      originalY: element.y,
+      originalW: element.maxWidth || 100,
+      originalH: element.maxHeight || 100,
+    });
+  };
+
+  useEffect(() => {
+    if (!rotationDrag) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const svg = document.querySelector('.svg-overlay') as SVGSVGElement | null;
+      if (!svg) return;
+      const point = svg.createSVGPoint();
+      point.x = e.clientX; point.y = e.clientY;
+      const svgPt = point.matrixTransform(svg.getScreenCTM()!.inverse());
+
+      const currentAngleDeg = Math.atan2(
+        svgPt.y - rotationDrag.centroid[1],
+        svgPt.x - rotationDrag.centroid[0]
+      ) * (180 / Math.PI);
+      const deltaAngle = currentAngleDeg - rotationDrag.startAngleDeg;
+
+      const rotatedPoly = rotatePolygon(rotationDrag.originalPolygon, rotationDrag.centroid, deltaAngle);
+
+      if (!isRotationValid(rotatedPoly, imageDims)) return; // All verts must stay in image
+
+      const bbox = polygonBBox(rotatedPoly);
+      const newMaskPolygon = JSON.stringify(rotatedPoly.map(([px, py]) => [Math.round(px), Math.round(py)]));
+
+      setSelectedItem(prev =>
+        prev && prev.id === rotationDrag.elementId
+          ? { ...prev, maskPolygon: newMaskPolygon, x: bbox.x, y: bbox.y, maxWidth: bbox.w, maxHeight: bbox.h }
+          : prev
+      );
+      setLayers(prev => prev.map(l => ({
+        ...l,
+        elements: l.elements.map(el =>
+          el.id === rotationDrag.elementId
+            ? { ...el, maskPolygon: newMaskPolygon, x: bbox.x, y: bbox.y, maxWidth: bbox.w, maxHeight: bbox.h }
+            : el
+        ),
+      })));
+    };
+
+    const handlePointerUp = async () => {
+      let updatedElement: LayerElement | undefined;
+      setLayers(prev => {
+        for (const l of prev) {
+          const found = l.elements.find(el => el.id === rotationDrag.elementId);
+          if (found) { updatedElement = found; break; }
+        }
+        return prev;
+      });
+
+      if (updatedElement) {
+        const origBbox = polygonBBox(rotationDrag.originalPolygon);
+        const originalElement: LayerElement = {
+          ...(updatedElement as LayerElement),
+          maskPolygon: JSON.stringify(rotationDrag.originalPolygon),
+          x: origBbox.x, y: origBbox.y,
+          maxWidth: origBbox.w, maxHeight: origBbox.h,
+        };
+        pushToHistoryStack(originalElement);
+        await handleSaveElementChanges(updatedElement, false);
+      }
+      setRotationDrag(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [rotationDrag, imageDims, pushToHistoryStack, handleSaveElementChanges]);
 
   const handleCreateLayer = async (type: 'translation' | 'sfx') => {
     if (!selectedPage) return;
@@ -1327,7 +1602,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // --- PANNING / DRAGGING WORKSPACE ---
   const handleMouseDownCanvas = (e: React.MouseEvent) => {
-    if (freeResizeMode) return;
+    if (interactionMode !== 'none') return;
     if (e.button !== 0) return; // Only left click
     if (draggedElement) return;
     if (
@@ -2022,7 +2297,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       }}
                       onMouseEnter={() => handleMouseEnterItem(item)}
                       onMouseLeave={handleMouseLeaveItem}
-                      style={{ cursor: 'pointer', pointerEvents: freeResizeMode ? 'none' : 'auto' }}
+                      style={{ cursor: 'pointer', pointerEvents: interactionMode !== 'none' ? 'none' : 'auto' }}
                     >
                       <rect 
                         x={item.bboxX}
@@ -2186,7 +2461,7 @@ export const Reader: React.FC<ReaderProps> = ({
                           />
                         )}
 
-                        {/* Interactive overlay rect for drag moving */}
+                        {/* Interactive overlay rect for drag-to-position mode */}
                         {!cleanScanlationView && (
                           <rect
                             x={element.x}
@@ -2195,10 +2470,14 @@ export const Reader: React.FC<ReaderProps> = ({
                             height={height}
                             fill="white"
                             fillOpacity={0}
-                            style={{ cursor: freeResizeMode && isSelected ? 'move' : 'pointer', pointerEvents: 'auto' }}
-                            onMouseDown={(e) => {
-                              if (freeResizeMode && isSelected) {
-                                handleElementDragStart(e, element, 'move');
+                            style={{
+                              cursor: interactionMode === 'drag' && isSelected ? 'move' : 'pointer',
+                              pointerEvents: 'auto',
+                              touchAction: 'none',
+                            }}
+                            onPointerDown={(e) => {
+                              if (interactionMode === 'drag' && isSelected) {
+                                handleElementDragStart(e, element);
                               }
                             }}
                           />
@@ -2220,59 +2499,87 @@ export const Reader: React.FC<ReaderProps> = ({
                           />
                         )}
 
-                        {/* Drag and Resize Handles */}
-                        {isSelected && freeResizeMode && !cleanScanlationView && (
-                          <>
-                            {/* Top-Left Handle */}
-                            <rect
-                              x={element.x - 6}
-                              y={element.y - 6}
-                              width={12}
-                              height={12}
-                              fill="var(--primary)"
-                              stroke="#ffffff"
-                              strokeWidth={1.5}
-                              style={{ cursor: 'nwse-resize', pointerEvents: 'auto' }}
-                              onMouseDown={(e) => handleElementDragStart(e, element, 'resize-tl')}
-                            />
-                            {/* Top-Right Handle */}
-                            <rect
-                              x={element.x + width - 6}
-                              y={element.y - 6}
-                              width={12}
-                              height={12}
-                              fill="var(--primary)"
-                              stroke="#ffffff"
-                              strokeWidth={1.5}
-                              style={{ cursor: 'nesw-resize', pointerEvents: 'auto' }}
-                              onMouseDown={(e) => handleElementDragStart(e, element, 'resize-tr')}
-                            />
-                            {/* Bottom-Left Handle */}
-                            <rect
-                              x={element.x - 6}
-                              y={element.y + height - 6}
-                              width={12}
-                              height={12}
-                              fill="var(--primary)"
-                              stroke="#ffffff"
-                              strokeWidth={1.5}
-                              style={{ cursor: 'nesw-resize', pointerEvents: 'auto' }}
-                              onMouseDown={(e) => handleElementDragStart(e, element, 'resize-bl')}
-                            />
-                            {/* Bottom-Right Handle */}
-                            <rect
-                              x={element.x + width - 6}
-                              y={element.y + height - 6}
-                              width={12}
-                              height={12}
-                              fill="var(--primary)"
-                              stroke="#ffffff"
-                              strokeWidth={1.5}
-                              style={{ cursor: 'nwse-resize', pointerEvents: 'auto' }}
-                              onMouseDown={(e) => handleElementDragStart(e, element, 'resize-br')}
-                            />
-                          </>
-                        )}
+                        {/* Vertex + Rotation Handles (Reshape Mode) */}
+                        {isSelected && interactionMode === 'reshape' && !cleanScanlationView && (() => {
+                          const currentPolygon: Polygon | null = (() => {
+                            if (!element.maskPolygon) return null;
+                            try { return JSON.parse(element.maskPolygon) as Polygon; } catch { return null; }
+                          })();
+                          if (!currentPolygon || currentPolygon.length < 3) return null;
+
+                          const centroid = polygonCentroid(currentPolygon);
+                          const bbox = polygonBBox(currentPolygon);
+                          // Rotation handle sits 32px above the bbox top, at centroid X
+                          const rotHandleX = centroid[0];
+                          const rotHandleY = Math.max(10, bbox.y - 32);
+                          const vertexRadius = isTouchScreen ? 10 : 7;
+
+                          return (
+                            <>
+                              {/* Dashed polygon outline */}
+                              <polygon
+                                points={currentPolygon.map(p => `${p[0]},${p[1]}`).join(' ')}
+                                fill="none"
+                                stroke="var(--primary)"
+                                strokeWidth={2}
+                                strokeDasharray="6 3"
+                                style={{ pointerEvents: 'none' }}
+                              />
+
+                              {/* Vertex handles */}
+                              {currentPolygon.map(([px, py], vi) => (
+                                <circle
+                                  key={`vtx-${vi}`}
+                                  cx={px} cy={py}
+                                  r={vertexRadius}
+                                  fill="var(--primary)"
+                                  stroke="#ffffff"
+                                  strokeWidth={2}
+                                  style={{ cursor: 'grab', pointerEvents: 'auto', touchAction: 'none' }}
+                                  onPointerDown={(e) => handleVertexDragStart(e, element, vi, currentPolygon)}
+                                />
+                              ))}
+
+                              {/* Stem line to rotation handle */}
+                              <line
+                                x1={centroid[0]} y1={bbox.y}
+                                x2={rotHandleX} y2={rotHandleY}
+                                stroke="var(--primary)"
+                                strokeWidth={1.5}
+                                strokeDasharray="3 2"
+                                style={{ pointerEvents: 'none' }}
+                              />
+
+                              {/* Rotation handle circle */}
+                              <circle
+                                cx={rotHandleX} cy={rotHandleY}
+                                r={isTouchScreen ? 12 : 9}
+                                fill="var(--primary)"
+                                stroke="#ffffff"
+                                strokeWidth={2}
+                                style={{ cursor: 'grab', pointerEvents: 'auto', touchAction: 'none' }}
+                                onPointerDown={(e) => handleRotationDragStart(e, element, currentPolygon)}
+                              />
+                              {/* Rotation icon (arc arrow) */}
+                              <path
+                                d={`M${rotHandleX - 4},${rotHandleY - 1} A4,4 0 1,1 ${rotHandleX + 4},${rotHandleY - 1}`}
+                                fill="none"
+                                stroke="#ffffff"
+                                strokeWidth={1.5}
+                                strokeLinecap="round"
+                                style={{ pointerEvents: 'none' }}
+                              />
+                              <path
+                                d={`M${rotHandleX + 2},${rotHandleY - 3} L${rotHandleX + 5},${rotHandleY - 1}`}
+                                fill="none"
+                                stroke="#ffffff"
+                                strokeWidth={1.5}
+                                strokeLinecap="round"
+                                style={{ pointerEvents: 'none' }}
+                              />
+                            </>
+                          );
+                        })()}
 
                         <foreignObject
                           x={element.x}
@@ -2868,34 +3175,55 @@ export const Reader: React.FC<ReaderProps> = ({
                   </div>
                 </div>
 
-                {/* Free Resize Mode Toggle */}
-                <div style={{ margin: '4px 0' }}>
+                {/* Drag & Reshape Mode Buttons */}
+                <div style={{ margin: '4px 0', display: 'flex', gap: '6px' }}>
+                  {/* Drag to Position button */}
                   <button
                     type="button"
-                    className={`btn ${freeResizeMode ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '13px', padding: '10px' }}
-                    onClick={() => setFreeResizeMode(!freeResizeMode)}
+                    className={`btn ${interactionMode === 'drag' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', padding: '9px 6px' }}
+                    onClick={() => setInteractionMode(prev => prev === 'drag' ? 'none' : 'drag')}
+                    title="Drag the element to a new position on the image"
                   >
-                    {freeResizeMode ? (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        Free Resize: ACTIVE
-                      </>
-                    ) : (
-                      <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M15 3h6v6"></path>
-                          <path d="M9 21H3v-6"></path>
-                          <path d="M21 3l-7 7"></path>
-                          <path d="M3 21l7-7"></path>
-                        </svg>
-                        Switch to Free Resize Mode
-                      </>
-                    )}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="5 9 2 12 5 15" />
+                      <polyline points="9 5 12 2 15 5" />
+                      <polyline points="15 19 12 22 9 19" />
+                      <polyline points="19 9 22 12 19 15" />
+                      <line x1="2" y1="12" x2="22" y2="12" />
+                      <line x1="12" y1="2" x2="12" y2="22" />
+                    </svg>
+                    {interactionMode === 'drag' ? 'Dragging…' : 'Drag'}
+                  </button>
+
+                  {/* Reshape Vertices button */}
+                  <button
+                    type="button"
+                    className={`btn ${interactionMode === 'reshape' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', padding: '9px 6px' }}
+                    onClick={() => {
+                      if (interactionMode === 'reshape') {
+                        setInteractionMode('none');
+                      } else {
+                        handleEnterReshapeMode(selectedItem as LayerElement);
+                      }
+                    }}
+                    title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="5" cy="5" r="2.5" />
+                      <circle cx="19" cy="5" r="2.5" />
+                      <circle cx="19" cy="19" r="2.5" />
+                      <circle cx="5" cy="19" r="2.5" />
+                      <line x1="7.5" y1="5" x2="16.5" y2="5" />
+                      <line x1="19" y1="7.5" x2="19" y2="16.5" />
+                      <line x1="16.5" y1="19" x2="7.5" y2="19" />
+                      <line x1="5" y1="16.5" x2="5" y2="7.5" />
+                    </svg>
+                    {interactionMode === 'reshape' ? 'Reshaping…' : 'Reshape'}
                   </button>
                 </div>
+
 
                  {/* Font & Style settings */}
                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
