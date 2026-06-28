@@ -23,6 +23,9 @@ on:
       - "frontend/Dockerfile"
       - ".github/workflows/ci-npm.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Install, lint, and build frontend
