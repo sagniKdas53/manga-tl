@@ -131,8 +131,21 @@ public class LayerController {
             image -> {
               String type = (String) payload.getOrDefault("type", "translation");
               String targetLanguage = (String) payload.get("targetLanguage");
-              Boolean visible = (Boolean) payload.getOrDefault("visible", true);
-              Integer zOrder = (Integer) payload.getOrDefault("zOrder", 0);
+              
+              Boolean visible = true;
+              if (payload.get("visible") != null) {
+                  visible = (Boolean) payload.get("visible");
+              }
+              
+              Integer zOrder = 0;
+              if (payload.get("zOrder") != null) {
+                  Object raw = payload.get("zOrder");
+                  if (raw instanceof Integer) {
+                      zOrder = (Integer) raw;
+                  } else if (raw instanceof Number) {
+                      zOrder = ((Number) raw).intValue();
+                  }
+              }
 
               Layer layer =
                   Layer.builder()
