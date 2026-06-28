@@ -15,6 +15,9 @@ on:
       - "backend/Dockerfile"
       - ".github/workflows/ci-maven.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build and test backend
