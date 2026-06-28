@@ -167,6 +167,46 @@ public class LayerController {
         .orElse(ResponseEntity.notFound().build());
   }
 
+  /**
+   * Updates mutable properties of a Layer: {@code zOrder} and/or {@code visible}.
+   *
+   * <p>Accepts a JSON body with any subset of:
+   *
+   * <pre>{ "zOrder": 3, "visible": false }</pre>
+   *
+   * Only the keys present in the payload are applied — absent keys leave the current value
+   * unchanged. This enables safe partial updates from the clone and visibility-toggle flows.
+   */
+  @PutMapping("/layers/{id}")
+  @Transactional
+  @PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  public ResponseEntity<Layer> updateLayer(
+      @PathVariable UUID id, @RequestBody Map<String, Object> payload) {
+    Objects.requireNonNull(id, "id cannot be null");
+    log.info("Updating layer {} with payload keys: {}", id, payload.keySet());
+    return layerRepository
+        .findById(id)
+        .map(
+            layer -> {
+              if (payload.containsKey("zOrder")) {
+                Object raw = payload.get("zOrder");
+                if (raw instanceof Integer) {
+                  layer.setZOrder((Integer) raw);
+                } else if (raw instanceof Number) {
+                  layer.setZOrder(((Number) raw).intValue());
+                }
+              }
+              if (payload.containsKey("visible")) {
+                layer.setVisible(Boolean.TRUE.equals(payload.get("visible")));
+              }
+              Layer saved = layerRepository.save(layer);
+              log.info("Layer {} updated — zOrder={}, visible={}", id, saved.getZOrder(), saved.getVisible());
+              return ResponseEntity.ok(saved);
+            })
+        .orElse(ResponseEntity.notFound().build());
+  }
+
+
   @PostMapping("/layers/{layerId}/elements")
   @Transactional
   @PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")

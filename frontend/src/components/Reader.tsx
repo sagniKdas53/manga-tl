@@ -1214,10 +1214,14 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   };
 
-  const handleToggleLayerVisibility = (layerId: string) => {
+  const handleToggleLayerVisibility = async (layerId: string) => {
+    const layerData = layers.find(l => l.layer.id === layerId);
+    if (!layerData) return;
+    const nextVisible = !layerData.layer.visible;
+
+    // Optimistic local update
     setLayers(prev => prev.map(l => {
       if (l.layer.id === layerId) {
-        const nextVisible = !l.layer.visible;
         if (nextVisible && cleanScanlationView && l.layer.type === 'ocr') {
           setManuallyShownOcrLayers(prevShown => {
             const nextShown = new Set(prevShown);
@@ -1225,16 +1229,21 @@ export const Reader: React.FC<ReaderProps> = ({
             return nextShown;
           });
         }
-        return {
-          ...l,
-          layer: {
-            ...l.layer,
-            visible: nextVisible
-          }
-        };
+        return { ...l, layer: { ...l.layer, visible: nextVisible } };
       }
       return l;
     }));
+
+    // Persist to backend
+    try {
+      await safeFetch(`/api/layers/${layerId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+        body: JSON.stringify({ visible: nextVisible })
+      });
+    } catch (err) {
+      console.error('Failed to persist layer visibility toggle:', err);
+    }
   };
 
   const handleDeleteLayer = (layerId: string) => {
@@ -1261,6 +1270,107 @@ export const Reader: React.FC<ReaderProps> = ({
         }
       },
     });
+  };
+
+  /** Clones a layer: shifts all layers above it up by +1 zOrder, creates a copy at source+1,
+   *  clones all elements with fresh UUIDs, then hides the source as a backup. */
+  const handleCloneLayer = async (layerId: string) => {
+    const sourceLayerData = layers.find(l => l.layer.id === layerId);
+    if (!sourceLayerData || !selectedPage) return;
+
+    const sourceLayer = sourceLayerData.layer;
+    const sourceElements = sourceLayerData.elements;
+    const sourceZOrder = sourceLayer.zOrder;
+
+    try {
+      // Step 1+2: Shift all layers with zOrder > sourceZOrder up by +1
+      const layersAbove = layers.filter(l => l.layer.zOrder > sourceZOrder);
+      for (const lData of layersAbove) {
+        await safeFetch(`/api/layers/${lData.layer.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+          body: JSON.stringify({ zOrder: lData.layer.zOrder + 1 })
+        });
+      }
+
+      // Step 3: Create the new cloned layer at sourceZOrder + 1
+      const createRes = await safeFetch(`/api/images/${selectedPage.imageId}/layers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+        body: JSON.stringify({
+          type: sourceLayer.type,
+          targetLanguage: sourceLayer.targetLanguage,
+          visible: true,
+          zOrder: sourceZOrder + 1
+        })
+      });
+      if (!createRes.ok) throw new Error('Failed to create cloned layer');
+      const newLayer: Layer = await createRes.json();
+
+      // Step 4: Clone each element — POST without IDs so the DB assigns fresh UUIDs
+      const clonedElements: LayerElement[] = [];
+      for (const el of sourceElements) {
+        const cloneRes = await safeFetch(`/api/layers/${newLayer.id}/elements`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+          body: JSON.stringify({
+            text: el.text,
+            font: el.font,
+            size: el.size,
+            autoSize: el.autoSize,
+            maxWidth: el.maxWidth,
+            maxHeight: el.maxHeight,
+            wordWrap: el.wordWrap,
+            rotation: el.rotation,
+            x: el.x,
+            y: el.y,
+            visible: el.visible,
+            backgroundColor: el.backgroundColor,
+            textColor: el.textColor,
+            fontWeight: el.fontWeight,
+            fontStyle: el.fontStyle,
+            boxShape: el.boxShape,
+            maskPolygon: el.maskPolygon
+            // id and regionId intentionally omitted — fresh UUIDs, standalone copies
+          })
+        });
+        if (cloneRes.ok) {
+          const clonedEl: LayerElement = await cloneRes.json();
+          clonedElements.push({ ...clonedEl, isLayerElement: true } as LayerElement);
+        }
+      }
+
+      // Step 5: Hide source layer as a backup
+      await safeFetch(`/api/layers/${sourceLayer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+        body: JSON.stringify({ visible: false })
+      });
+
+      // Step 6: Refresh local UI state atomically
+      setLayers(prev => {
+        const updated = prev.map(l => {
+          if (l.layer.zOrder > sourceZOrder) {
+            // Shift layers above source up by +1 in local state
+            return { ...l, layer: { ...l.layer, zOrder: l.layer.zOrder + 1 } };
+          }
+          if (l.layer.id === sourceLayer.id) {
+            // Hide source layer
+            return { ...l, layer: { ...l.layer, visible: false } };
+          }
+          return l;
+        });
+        // Insert the new cloned layer
+        updated.push({ layer: { ...newLayer, isLayerElement: false } as unknown as Layer & { isLayerElement?: boolean }, elements: clonedElements });
+        return updated;
+      });
+
+      // Make the cloned layer active
+      setActiveLayerId(newLayer.id);
+    } catch (err) {
+      console.error('Clone layer failed:', err);
+      alert('Error cloning layer. Please try again.');
+    }
   };
 
   // --- EXPORT HANDLERS ---
@@ -2982,6 +3092,25 @@ export const Reader: React.FC<ReaderProps> = ({
                              </button>
  
                              <button
+                               onClick={() => handleCloneLayer(lData.layer.id)}
+                               style={{
+                                 background: 'none',
+                                 border: 'none',
+                                 color: 'var(--text-muted)',
+                                 cursor: 'pointer',
+                                 padding: '2px',
+                                 display: 'flex',
+                                 alignItems: 'center'
+                               }}
+                               title="Clone layer (copies above, hides original as backup)"
+                             >
+                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                               </svg>
+                             </button>
+
+                             <button
                                onClick={() => handleDeleteLayer(lData.layer.id)}
                                style={{
                                  background: 'none',
@@ -3175,53 +3304,87 @@ export const Reader: React.FC<ReaderProps> = ({
                   </div>
                 </div>
 
-                {/* Drag & Reshape Mode Buttons */}
+                {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
                 <div style={{ margin: '4px 0', display: 'flex', gap: '6px' }}>
-                  {/* Drag to Position button */}
-                  <button
-                    type="button"
-                    className={`btn ${interactionMode === 'drag' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', padding: '9px 6px' }}
-                    onClick={() => setInteractionMode(prev => prev === 'drag' ? 'none' : 'drag')}
-                    title="Drag the element to a new position on the image"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="5 9 2 12 5 15" />
-                      <polyline points="9 5 12 2 15 5" />
-                      <polyline points="15 19 12 22 9 19" />
-                      <polyline points="19 9 22 12 19 15" />
-                      <line x1="2" y1="12" x2="22" y2="12" />
-                      <line x1="12" y1="2" x2="12" y2="22" />
-                    </svg>
-                    {interactionMode === 'drag' ? 'Dragging…' : 'Drag'}
-                  </button>
+                  {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
+                  {interactionMode === 'reshape' ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', padding: '9px 6px' }}
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : ' — nothing to undo'}`}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="1 4 1 10 7 10" />
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                      </svg>
+                      Undo
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`btn ${interactionMode === 'drag' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', padding: '9px 6px' }}
+                      onClick={() => setInteractionMode(prev => prev === 'drag' ? 'none' : 'drag')}
+                      title="Drag the element to a new position on the image"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="5 9 2 12 5 15" />
+                        <polyline points="9 5 12 2 15 5" />
+                        <polyline points="15 19 12 22 9 19" />
+                        <polyline points="19 9 22 12 19 15" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <line x1="12" y1="2" x2="12" y2="22" />
+                      </svg>
+                      {interactionMode === 'drag' ? 'Dragging…' : 'Drag'}
+                    </button>
+                  )}
 
-                  {/* Reshape Vertices button */}
-                  <button
-                    type="button"
-                    className={`btn ${interactionMode === 'reshape' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', padding: '9px 6px' }}
-                    onClick={() => {
-                      if (interactionMode === 'reshape') {
-                        setInteractionMode('none');
-                      } else {
-                        handleEnterReshapeMode(selectedItem as LayerElement);
-                      }
-                    }}
-                    title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="5" cy="5" r="2.5" />
-                      <circle cx="19" cy="5" r="2.5" />
-                      <circle cx="19" cy="19" r="2.5" />
-                      <circle cx="5" cy="19" r="2.5" />
-                      <line x1="7.5" y1="5" x2="16.5" y2="5" />
-                      <line x1="19" y1="7.5" x2="19" y2="16.5" />
-                      <line x1="16.5" y1="19" x2="7.5" y2="19" />
-                      <line x1="5" y1="16.5" x2="5" y2="7.5" />
-                    </svg>
-                    {interactionMode === 'reshape' ? 'Reshaping…' : 'Reshape'}
-                  </button>
+                  {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
+                  {interactionMode === 'drag' ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', padding: '9px 6px' }}
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : ' — nothing to undo'}`}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="1 4 1 10 7 10" />
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                      </svg>
+                      Undo
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`btn ${interactionMode === 'reshape' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', padding: '9px 6px' }}
+                      onClick={() => {
+                        if (interactionMode === 'reshape') {
+                          setInteractionMode('none');
+                        } else {
+                          handleEnterReshapeMode(selectedItem as LayerElement);
+                        }
+                      }}
+                      title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="5" cy="5" r="2.5" />
+                        <circle cx="19" cy="5" r="2.5" />
+                        <circle cx="19" cy="19" r="2.5" />
+                        <circle cx="5" cy="19" r="2.5" />
+                        <line x1="7.5" y1="5" x2="16.5" y2="5" />
+                        <line x1="19" y1="7.5" x2="19" y2="16.5" />
+                        <line x1="16.5" y1="19" x2="7.5" y2="19" />
+                        <line x1="5" y1="16.5" x2="5" y2="7.5" />
+                      </svg>
+                      {interactionMode === 'reshape' ? 'Reshaping…' : 'Reshape'}
+                    </button>
+                  )}
                 </div>
 
 
