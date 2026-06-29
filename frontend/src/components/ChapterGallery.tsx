@@ -210,7 +210,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       const file = files.item(i);
       if (!file) continue;
 
-      const queueItemId = newItems[i].id;
+      const queueItem = newItems.at(i);
+      if (!queueItem) continue;
+      const queueItemId = queueItem.id;
       
       // Update status to uploading
       setUploadQueue(prev => prev.map(item => 

@@ -1390,7 +1390,8 @@ export const Reader: React.FC<ReaderProps> = ({
     try {
       // Step 1: Shift layers above source up by +1 and fix any gaps
       for (let i = 0; i < sorted.length; i++) {
-        const lData = sorted[i];
+        const lData = sorted.at(i);
+        if (!lData) continue;
         const targetZOrder = i > sourceIndex ? i + 1 : i;
         if (lData.layer.zOrder !== targetZOrder) {
           await safeFetch(`/api/layers/${lData.layer.id}`, {
