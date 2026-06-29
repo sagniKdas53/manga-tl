@@ -66,8 +66,18 @@ public class PipelineFlowIntegrationTest {
   private final Map<String, String> mockRedisValueStore = new HashMap<>();
   private final Map<String, List<String>> mockRedisListStore = new HashMap<>();
 
+  private final List<UUID> createdSeriesIds = new ArrayList<>();
+  private final List<UUID> createdChapterIds = new ArrayList<>();
+  private final List<UUID> createdPageIds = new ArrayList<>();
+  private final List<UUID> createdImageIds = new ArrayList<>();
+
   @BeforeEach
   public void setUp() throws Exception {
+    createdSeriesIds.clear();
+    createdChapterIds.clear();
+    createdPageIds.clear();
+    createdImageIds.clear();
+
     // Mock MinioService calls
     org.mockito.Mockito.when(minioService.uploadFile(org.mockito.Mockito.anyString(), org.mockito.Mockito.any(byte[].class), org.mockito.Mockito.anyString()))
         .thenReturn("mocked-path");
@@ -171,14 +181,36 @@ public class PipelineFlowIntegrationTest {
     ReflectionTestUtils.setField(jobCoordinatorService, "workerHealthUrl", originalUrl);
 
     // Clean up DB records created by the test
-    layerElementRepository.deleteAll();
-    layerRepository.deleteAll();
-    ocrRegionRepository.deleteAll();
-    panelRepository.deleteAll();
-    pageRepository.deleteAll();
-    imageRepository.deleteAll();
-    chapterRepository.deleteAll();
-    seriesRepository.deleteAll();
+    for (UUID imgId : createdImageIds) {
+      try {
+        List<LayerElement> elements = layerElementRepository.findByLayerImageId(imgId);
+        layerElementRepository.deleteAll(elements);
+      } catch (Exception e) {}
+      try {
+        List<Layer> layers = layerRepository.findByImageId(imgId);
+        layerRepository.deleteAll(layers);
+      } catch (Exception e) {}
+      try {
+        List<OcrRegion> ocrRegions = ocrRegionRepository.findByImageId(imgId);
+        ocrRegionRepository.deleteAll(ocrRegions);
+      } catch (Exception e) {}
+      try {
+        List<Panel> panels = panelRepository.findByImageId(imgId);
+        panelRepository.deleteAll(panels);
+      } catch (Exception e) {}
+    }
+    for (UUID pgId : createdPageIds) {
+      try { pageRepository.deleteById(pgId); } catch (Exception e) {}
+    }
+    for (UUID imgId : createdImageIds) {
+      try { imageRepository.deleteById(imgId); } catch (Exception e) {}
+    }
+    for (UUID chId : createdChapterIds) {
+      try { chapterRepository.deleteById(chId); } catch (Exception e) {}
+    }
+    for (UUID sId : createdSeriesIds) {
+      try { seriesRepository.deleteById(sId); } catch (Exception e) {}
+    }
   }
 
   @Test
@@ -202,6 +234,7 @@ public class PipelineFlowIntegrationTest {
 
     SeriesDto savedSeries = objectMapper.readValue(seriesResult.getResponse().getContentAsString(), SeriesDto.class);
     assertNotNull(savedSeries.getId());
+    createdSeriesIds.add(savedSeries.getId());
 
     // 2. Create Chapter 1
     ChapterDto ch1Dto = new ChapterDto();
@@ -219,6 +252,7 @@ public class PipelineFlowIntegrationTest {
 
     ChapterDto savedCh1 = objectMapper.readValue(ch1Result.getResponse().getContentAsString(), ChapterDto.class);
     assertNotNull(savedCh1.getId());
+    createdChapterIds.add(savedCh1.getId());
 
     // 3. Create Chapter 2 (for reordering check)
     ChapterDto ch2Dto = new ChapterDto();
@@ -235,6 +269,7 @@ public class PipelineFlowIntegrationTest {
         .andReturn();
 
     ChapterDto savedCh2 = objectMapper.readValue(ch2Result.getResponse().getContentAsString(), ChapterDto.class);
+    createdChapterIds.add(savedCh2.getId());
 
     // Reorder chapters (make Chapter Two -> Chapter 1.5)
     savedCh2.setChapterNumber(1.5);
@@ -275,6 +310,8 @@ public class PipelineFlowIntegrationTest {
     Map<?, ?> uploadResponse = objectMapper.readValue(pageResult.getResponse().getContentAsString(), Map.class);
     UUID imageId = UUID.fromString(uploadResponse.get("imageId").toString());
     UUID pageId = UUID.fromString(uploadResponse.get("pageId").toString());
+    createdImageIds.add(imageId);
+    createdPageIds.add(pageId);
 
     // 5. Test page reordering (Upload second page first to have >1 pages)
     MockMultipartFile mockFile2 = new MockMultipartFile(
@@ -294,6 +331,9 @@ public class PipelineFlowIntegrationTest {
         .andReturn();
     Map<?, ?> uploadResponse2 = objectMapper.readValue(pageResult2.getResponse().getContentAsString(), Map.class);
     UUID pageId2 = UUID.fromString(uploadResponse2.get("pageId").toString());
+    UUID imageId2 = UUID.fromString(uploadResponse2.get("imageId").toString());
+    createdPageIds.add(pageId2);
+    createdImageIds.add(imageId2);
 
     // Reorder pages: [pageId2, pageId]
     mockMvc
