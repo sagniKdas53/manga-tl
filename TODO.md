@@ -40,6 +40,6 @@
 - [x] **Live Updates via SSE:** Implement live updates on the front-end using Server-Sent Events (SSE) in the Java backend. When you upload a page and have it open in the reader, an event should be broadcasted to the front-end when its OCR is ready so the layer is fetched and loaded on the canvas. When translation is done, the same happens. The same live updates should also happen for Redo of OCR and translations.
 - [x] **Full zip/ePub import:** Support importing full epubs or zips to automatically set up projects and initialize pages.
 - [x] **Layer Project Re-hydration:** Support importing previously exported translation projects to restore workspace and layers state.
+- [x] **Redo-OCR and Redo-Translation:** Having some issues, like duplicate bubble  and order getting messed up will need to fix and test.
 - [ ] **Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
 - [ ] **Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
-- [ ] Redo-OCR and Redo-Translation are having some issues, like duplicate bubble.
