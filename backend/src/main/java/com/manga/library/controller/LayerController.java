@@ -147,6 +147,15 @@ public class LayerController {
                   }
               }
 
+              com.fasterxml.jackson.databind.JsonNode metadataJson = null;
+              if (payload.get("metadataJson") != null) {
+                  try {
+                      metadataJson = objectMapper.valueToTree(payload.get("metadataJson"));
+                  } catch (Exception e) {
+                      log.warn("Failed to parse metadataJson: {}", e.getMessage());
+                  }
+              }
+
               Layer layer =
                   Layer.builder()
                       .image(image)
@@ -154,6 +163,7 @@ public class LayerController {
                       .targetLanguage(targetLanguage)
                       .visible(visible)
                       .zOrder(zOrder)
+                      .metadataJson(metadataJson)
                       .build();
 
               Objects.requireNonNull(layer, "layer cannot be null");

@@ -1397,6 +1397,19 @@ export const Reader: React.FC<ReaderProps> = ({
         }
       }
 
+      // Compute new cloned layer name
+      const getLayerName = (l: Layer) => {
+        if (l.metadataJson?.layer_name) return l.metadataJson.layer_name;
+        if (l.type === 'translation') return `Translation (${l.targetLanguage?.toUpperCase() || 'EN'})`;
+        if (l.type === 'sfx') return 'SFX Layer';
+        if (l.type === 'ocr') return 'OCR Layer';
+        return `Layer (${l.type})`;
+      };
+      const originalName = getLayerName(sourceLayer);
+      const baseName = originalName.replace(/\s*\(Copy#\d+\)$/, '');
+      const copyCount = layers.filter(l => getLayerName(l.layer).startsWith(baseName)).length;
+      const newLayerName = `${baseName} (Copy#${copyCount})`;
+
       // Step 3: Create the new cloned layer at newZOrder
       const createRes = await safeFetch(`/api/images/${selectedPage.imageId}/layers`, {
         method: 'POST',
@@ -1405,7 +1418,8 @@ export const Reader: React.FC<ReaderProps> = ({
           type: sourceLayer.type,
           targetLanguage: sourceLayer.targetLanguage,
           visible: true,
-          zOrder: newZOrder
+          zOrder: newZOrder,
+          metadataJson: { layer_name: newLayerName }
         })
       });
       if (!createRes.ok) throw new Error('Failed to create cloned layer');
@@ -3173,13 +3187,13 @@ export const Reader: React.FC<ReaderProps> = ({
                           >
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                               <span style={{ fontSize: '12px', fontWeight: isActive ? 700 : 600, color: isActive ? 'var(--primary-hover)' : 'inherit' }}>
-                                {stackLabel} {lData.layer.type === 'translation' 
+                                {stackLabel} {lData.layer.metadataJson?.layer_name || (lData.layer.type === 'translation' 
                                   ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || 'EN'})` 
                                   : lData.layer.type === 'sfx'
                                     ? 'SFX Layer'
                                     : lData.layer.type === 'ocr'
                                       ? 'OCR Layer'
-                                      : `Layer (${lData.layer.type})`}
+                                      : `Layer (${lData.layer.type})`)}
                               </span>
                               <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>
                                 {lData.elements.length} elements
