@@ -62,7 +62,8 @@ public class InternalJobController {
                 }
               }
               if (latestOcrLayer != null) {
-                List<LayerElement> ocrElements = layerElementRepository.findByLayerId(latestOcrLayer.getId());
+                List<LayerElement> ocrElements =
+                    layerElementRepository.findByLayerId(latestOcrLayer.getId());
                 Set<UUID> activeRegionIds = new HashSet<>();
                 for (LayerElement el : ocrElements) {
                   if (el.getRegion() != null) {

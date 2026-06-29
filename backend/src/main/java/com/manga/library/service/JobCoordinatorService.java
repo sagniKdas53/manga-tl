@@ -5,7 +5,6 @@ import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
-import com.manga.library.service.SseService;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -225,15 +224,15 @@ public class JobCoordinatorService {
     metadata.put("model", dto.getModelIdentifier() != null ? dto.getModelIdentifier() : "unknown");
     metadata.put("time", OffsetDateTime.now().toString());
     metadata.put("confidence", dto.getConfidence() != null ? dto.getConfidence() : 1.0);
-    
+
     String ocrReason = redisTemplate.opsForValue().get("image:ocr:reason:" + imageId);
     if (ocrReason != null) {
-        metadata.put("layer_name", "OCR (" + ocrReason + ")");
-        redisTemplate.delete("image:ocr:reason:" + imageId);
+      metadata.put("layer_name", "OCR (" + ocrReason + ")");
+      redisTemplate.delete("image:ocr:reason:" + imageId);
     } else {
-        metadata.put("layer_name", "OCR");
+      metadata.put("layer_name", "OCR");
     }
-    
+
     metadata.put("layer_order", nextZOrder);
     metadata.put("last_modified", OffsetDateTime.now().toString());
 
@@ -447,15 +446,15 @@ public class JobCoordinatorService {
     metadata.put("model", modelIdentifier);
     metadata.put("time", OffsetDateTime.now().toString());
     metadata.put("confidence", avgConfidence);
-    
+
     String transReason = redisTemplate.opsForValue().get("image:translation:reason:" + imageId);
     if (transReason != null) {
-        metadata.put("layer_name", "Translation (" + transReason + ")");
-        redisTemplate.delete("image:translation:reason:" + imageId);
+      metadata.put("layer_name", "Translation (" + transReason + ")");
+      redisTemplate.delete("image:translation:reason:" + imageId);
     } else if (isRedo) {
-        metadata.put("layer_name", "Translation (retry)");
+      metadata.put("layer_name", "Translation (retry)");
     } else {
-        metadata.put("layer_name", "Translation");
+      metadata.put("layer_name", "Translation");
     }
 
     metadata.put("layer_order", nextZOrder);
@@ -617,16 +616,19 @@ public class JobCoordinatorService {
   public void triggerImageRedo(UUID imageId, String jobType) {
     log.info("Triggering image redo for image {} with job type {}", imageId, jobType);
     if ("ocr".equals(jobType)) {
-        redisTemplate.opsForValue().set("image:ocr:reason:" + imageId, "manual-re-ocr");
+      redisTemplate.opsForValue().set("image:ocr:reason:" + imageId, "manual-re-ocr");
     } else if ("translation".equals(jobType)) {
-        redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "manual-re-translate");
+      redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "manual-re-translate");
     }
     enqueueJob(jobType, imageId);
   }
 
   @Transactional
   public void handleQaReOcrCallback(UUID imageId, List<Map<String, Object>> results) {
-    log.info("Received QA Re-OCR callback for image: {} with {} results", imageId, results != null ? results.size() : 0);
+    log.info(
+        "Received QA Re-OCR callback for image: {} with {} results",
+        imageId,
+        results != null ? results.size() : 0);
     Objects.requireNonNull(imageId, "imageId cannot be null");
 
     if (results != null) {
@@ -634,16 +636,20 @@ public class JobCoordinatorService {
         try {
           UUID regionId = UUID.fromString((String) r.get("regionId"));
           String text = (String) r.get("text");
-          Double confidence = r.get("confidence") != null ? ((Number) r.get("confidence")).doubleValue() : null;
+          Double confidence =
+              r.get("confidence") != null ? ((Number) r.get("confidence")).doubleValue() : null;
           String detectedLanguage = (String) r.get("detectedLanguage");
 
-          ocrRegionRepository.findById(regionId).ifPresent(region -> {
-            region.setText(text);
-            region.setConfidence(confidence);
-            region.setDetectedLanguage(detectedLanguage);
-            region.setQaStatus("re_ocr_completed");
-            ocrRegionRepository.save(region);
-          });
+          ocrRegionRepository
+              .findById(regionId)
+              .ifPresent(
+                  region -> {
+                    region.setText(text);
+                    region.setConfidence(confidence);
+                    region.setDetectedLanguage(detectedLanguage);
+                    region.setQaStatus("re_ocr_completed");
+                    ocrRegionRepository.save(region);
+                  });
         } catch (Exception e) {
           log.error("Error processing QA Re-OCR result for region", e);
         }
@@ -711,7 +717,7 @@ public class JobCoordinatorService {
                       region.setQaStatus("fixed");
                     } else if ("failed".equalsIgnoreCase(qaStatus) && r.containsKey("escalation")) {
                       Map<?, ?> escalation = (Map<?, ?>) r.get("escalation");
-                      
+
                       if (Boolean.TRUE.equals(escalation.get("needsManualIntervention"))) {
                         region.setQaStatus("manual_review");
                       } else if (Boolean.TRUE.equals(escalation.get("needsReOcr"))) {
@@ -720,7 +726,7 @@ public class JobCoordinatorService {
                           && escalation.containsKey("correctedSourceText")) {
                         region.setText((String) escalation.get("correctedSourceText"));
                       }
-                      
+
                       if (Boolean.TRUE.equals(escalation.get("orderBad"))
                           && escalation.containsKey("suggestedReadingOrderIndex")) {
                         region.setBubbleReadingOrder(
@@ -731,10 +737,12 @@ public class JobCoordinatorService {
                   });
 
           if ("failed".equalsIgnoreCase(qaStatus)) {
-            if (r.containsKey("escalation") && Boolean.TRUE.equals(((Map<?, ?>) r.get("escalation")).get("needsManualIntervention"))) {
-               needsManualIntervention = true;
+            if (r.containsKey("escalation")
+                && Boolean.TRUE.equals(
+                    ((Map<?, ?>) r.get("escalation")).get("needsManualIntervention"))) {
+              needsManualIntervention = true;
             } else {
-               needsRetry = true;
+              needsRetry = true;
             }
           }
         } catch (Exception e) {
@@ -750,34 +758,42 @@ public class JobCoordinatorService {
     if (needsManualIntervention) {
       log.warn("QA requested manual intervention for image {}. Halting pipeline.", imageId);
       redisTemplate.delete(retryKey);
-      
+
       // Update translation layer name to indicate manual review needed
       List<Layer> layers = layerRepository.findByImageId(imageId);
       for (Layer layer : layers) {
         if ("translation".equalsIgnoreCase(layer.getType())) {
           try {
-            com.fasterxml.jackson.databind.node.ObjectNode metadata = 
+            com.fasterxml.jackson.databind.node.ObjectNode metadata =
                 layer.getMetadataJson() != null && layer.getMetadataJson().isObject()
-                ? (com.fasterxml.jackson.databind.node.ObjectNode) layer.getMetadataJson()
-                : objectMapper.createObjectNode();
-            
-            String currentName = metadata.has("layer_name") ? metadata.get("layer_name").asText() : "Translation";
+                    ? (com.fasterxml.jackson.databind.node.ObjectNode) layer.getMetadataJson()
+                    : objectMapper.createObjectNode();
+
+            String currentName =
+                metadata.has("layer_name") ? metadata.get("layer_name").asText() : "Translation";
             if (!currentName.contains("qa-manual-review-needed")) {
-               metadata.put("layer_name", currentName + " (qa-manual-review-needed)");
-               layer.setMetadataJson(metadata);
-               layerRepository.save(layer);
+              metadata.put("layer_name", currentName + " (qa-manual-review-needed)");
+              layer.setMetadataJson(metadata);
+              layerRepository.save(layer);
             }
           } catch (Exception e) {
-             log.error("Failed to update layer metadata for manual review", e);
+            log.error("Failed to update layer metadata for manual review", e);
           }
         }
       }
-      sseService.emitNotificationForImage(imageId, "WARNING", "Manual Review Needed", "QA pipeline halted because some regions require manual intervention.");
+      sseService.emitNotificationForImage(
+          imageId,
+          "WARNING",
+          "Manual Review Needed",
+          "QA pipeline halted because some regions require manual intervention.");
     } else if (needsRetry && retries < 2) {
       redisTemplate.opsForValue().set(retryKey, String.valueOf(retries + 1));
-      
+
       if (!regionsToReOcr.isEmpty()) {
-        log.info("QA failed for image {} with Re-OCR request. Retry {}/2. Enqueuing qa-re-ocr job...", imageId, retries + 1);
+        log.info(
+            "QA failed for image {} with Re-OCR request. Retry {}/2. Enqueuing qa-re-ocr job...",
+            imageId,
+            retries + 1);
         try {
           String jobId = UUID.randomUUID().toString();
           Map<String, Object> job = new HashMap<>();
@@ -796,7 +812,10 @@ public class JobCoordinatorService {
           log.error("Failed to enqueue qa-re-ocr job", e);
         }
       } else {
-        log.info("QA failed for image {}. Retry {}/2. Enqueuing translation job...", imageId, retries + 1);
+        log.info(
+            "QA failed for image {}. Retry {}/2. Enqueuing translation job...",
+            imageId,
+            retries + 1);
         redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "qa-re-translate");
         enqueueJob("translation", imageId);
       }
