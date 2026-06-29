@@ -20,8 +20,8 @@ export function polygonSignedArea(vertices: Polygon): number {
   let area = 0;
   const n = vertices.length;
   for (let i = 0; i < n; i++) {
-    const [x1, y1] = vertices[i];
-    const [x2, y2] = vertices[(i + 1) % n];
+    const [x1, y1] = vertices.at(i) as Point;
+    const [x2, y2] = vertices.at((i + 1) % n) as Point;
     area += x1 * y2 - x2 * y1;
   }
   return area / 2;
@@ -54,8 +54,8 @@ export function polygonCentroid(vertices: Polygon): Point {
   let signedArea = 0;
   const n = vertices.length;
   for (let i = 0; i < n; i++) {
-    const [x0, y0] = vertices[i];
-    const [x1, y1] = vertices[(i + 1) % n];
+    const [x0, y0] = vertices.at(i) as Point;
+    const [x1, y1] = vertices.at((i + 1) % n) as Point;
     const cross = x0 * y1 - x1 * y0;
     signedArea += cross;
     cx += (x0 + x1) * cross;
@@ -181,13 +181,13 @@ export function isSimplePolygon(vertices: Polygon): boolean {
   const n = vertices.length;
   if (n < 3) return false;
   for (let i = 0; i < n; i++) {
-    const a1 = vertices[i];
-    const a2 = vertices[(i + 1) % n];
+    const a1 = vertices.at(i) as Point;
+    const a2 = vertices.at((i + 1) % n) as Point;
     for (let j = i + 2; j < n; j++) {
       // Skip adjacent edge pairs that share an endpoint
       if (i === 0 && j === n - 1) continue;
-      const b1 = vertices[j];
-      const b2 = vertices[(j + 1) % n];
+      const b1 = vertices.at(j) as Point;
+      const b2 = vertices.at((j + 1) % n) as Point;
       if (segmentsIntersect(a1, a2, b1, b2)) return false;
     }
   }
