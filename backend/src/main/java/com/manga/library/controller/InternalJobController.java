@@ -29,6 +29,7 @@ public class InternalJobController {
   private final ChapterRepository chapterRepository;
   private final MinioService minioService;
   private final LayerElementRepository layerElementRepository;
+  private final LayerRepository layerRepository;
   private final SseService sseService;
 
   @GetMapping("/images/{imageId}")
@@ -45,7 +46,38 @@ public class InternalJobController {
               map.put("storagePath", image.getStoragePath());
               map.put("presignedUrl", minioService.generatePresignedUrl(image.getStoragePath()));
               map.put("panels", panelRepository.findByImageId(imageId));
-              map.put("ocrRegions", ocrRegionRepository.findByImageId(imageId));
+
+              // Only return OCR regions from the latest visible OCR layer
+              List<Layer> allLayers = layerRepository.findByImageId(imageId);
+              Layer latestOcrLayer = null;
+              for (Layer l : allLayers) {
+                if ("ocr".equalsIgnoreCase(l.getType()) && Boolean.TRUE.equals(l.getVisible())) {
+                  if (latestOcrLayer == null || l.getZOrder() > latestOcrLayer.getZOrder()) {
+                    latestOcrLayer = l;
+                  }
+                }
+              }
+              if (latestOcrLayer != null) {
+                List<LayerElement> ocrElements = layerElementRepository.findByLayerId(latestOcrLayer.getId());
+                Set<UUID> activeRegionIds = new HashSet<>();
+                for (LayerElement el : ocrElements) {
+                  if (el.getRegion() != null) {
+                    activeRegionIds.add(el.getRegion().getId());
+                  }
+                }
+                List<OcrRegion> allRegions = ocrRegionRepository.findByImageId(imageId);
+                List<OcrRegion> filteredRegions = new ArrayList<>();
+                for (OcrRegion r : allRegions) {
+                  if (activeRegionIds.contains(r.getId())) {
+                    filteredRegions.add(r);
+                  }
+                }
+                map.put("ocrRegions", filteredRegions);
+              } else {
+                // No visible OCR layer — return all regions for backwards compatibility
+                map.put("ocrRegions", ocrRegionRepository.findByImageId(imageId));
+              }
+
               map.put("layerElements", layerElementRepository.findByLayerImageId(imageId));
 
               // Query page history and series context for translation context assembly
