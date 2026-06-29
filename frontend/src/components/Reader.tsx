@@ -1445,9 +1445,10 @@ export const Reader: React.FC<ReaderProps> = ({
           }
           return { ...l, layer: { ...l.layer, zOrder: targetZOrder, visible } };
         });
-        // Insert the new cloned layer
+        // Insert the new cloned layer, then sort by zOrder so the UI renders at the
+        // correct position immediately (without needing a page refresh).
         updated.push({ layer: { ...newLayer, isLayerElement: false } as unknown as Layer & { isLayerElement?: boolean }, elements: clonedElements });
-        return updated;
+        return updated.sort((a, b) => a.layer.zOrder - b.layer.zOrder);
       });
 
       // Make the cloned layer active
@@ -3086,7 +3087,29 @@ export const Reader: React.FC<ReaderProps> = ({
                  <div className="panel-section">
                    <div className="panel-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                      <span>Layers</span>
-                     <div style={{ display: 'flex', gap: '4px' }}>
+                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                       {/* Up/Down reorder buttons — left group */}
+                       <button
+                         className="btn btn-secondary"
+                         title="Move active layer up (higher in stack)"
+                         disabled={!activeLayerId || sortedLayers.findIndex(l => l.layer.id === activeLayerId) === sortedLayers.length - 1}
+                         onClick={() => activeLayerId && handleMoveLayer(activeLayerId, 'up')}
+                         style={{ padding: '2px 6px', fontSize: '12px', opacity: (!activeLayerId || sortedLayers.findIndex(l => l.layer.id === activeLayerId) === sortedLayers.length - 1) ? 0.4 : 1 }}
+                       >
+                         ↑
+                       </button>
+                       <button
+                         className="btn btn-secondary"
+                         title="Move active layer down (lower in stack)"
+                         disabled={!activeLayerId || sortedLayers.findIndex(l => l.layer.id === activeLayerId) === 0}
+                         onClick={() => activeLayerId && handleMoveLayer(activeLayerId, 'down')}
+                         style={{ padding: '2px 6px', fontSize: '12px', opacity: (!activeLayerId || sortedLayers.findIndex(l => l.layer.id === activeLayerId) === 0) ? 0.4 : 1 }}
+                       >
+                         ↓
+                       </button>
+                       {/* Divider */}
+                       <div style={{ width: '1px', height: '14px', background: 'var(--border-color)', margin: '0 2px' }} />
+                       {/* Add layer buttons — right group */}
                        <button 
                          className="btn btn-secondary"
                          style={{ padding: '2px 6px', fontSize: '10px' }}
@@ -3114,12 +3137,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       [...sortedLayers].reverse().map((lData, idx) => {
                         const isActive = lData.layer.id === activeLayerId;
                         const stackNumber = sortedLayers.length - idx;
-                        let stackLabel = `#${stackNumber}`;
-                        if (idx === 0 && sortedLayers.length > 1) {
-                          stackLabel += ' (Top)';
-                        } else if (idx === sortedLayers.length - 1) {
-                          stackLabel += ' (Base)';
-                        }
+                        const stackLabel = `#${stackNumber}`;
                         return (
                           <div 
                             key={lData.layer.id} 
