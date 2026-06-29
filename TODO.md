@@ -13,12 +13,15 @@
   - [x] For some reason this is not working at all
 - [x] Almost perfect, need more testing (Relates to translated text breaking out of bounding box)
 - [x] Add a clone layer in front-end (Partially implemented)
-  - [ ] It works but the new layer get added at the top regardless of what the original layer's position were
-  - [ ] Like say there are 3 layers, 1 base the original OCR, 2 the translation, 3 a user generated layer to do some final touch up
-  - [ ] If I clone the layer two I expect it to be added as a layer over two, ie the clone becomes layer three and the existing layer 3 gets promoted to layer 4 (and so on)
-  - [ ] Now it's okay if it can't be done like that, in that case we would need a way to re-order the layers manually, I could use the shift key to re-order them (Shift Up to promote one, Shift Down to demote one)
+  - [x] It works but the new layer get added at the top regardless of what the original layer's position were
+  - [x] Like say there are 3 layers, 1 base the original OCR, 2 the translation, 3 a user generated layer to do some final touch up
+  - [x] If I clone the layer two I expect it to be added as a layer over two, ie the clone becomes layer three and the existing layer 3 gets promoted to layer 4 (and so on)
+  - [x] Now it's okay if it can't be done like that, in that case we would need a way to re-order the layers manually, I could use the shift key to re-order them (Shift Up to promote one, Shift Down to demote one) — ↑↓ buttons added to LAYERS header; Shift+↑/↓ keyboard shortcuts also work
 - [x] Undo button doesn't work for dragging a bubble but works perfectly for the reshaping flow, need to investiage and fix.
 - [ ] **Model Picker in UI:** Add a model picker in the front-end interface to allow users to select the worker model (e.g., OCR or Translation model) dynamically when multiple providers are available.
+  - [ ] Maybe add a settings options in the nav-bar
+- [ ] The delete confirmation boxes, don't respect the light mode theme, are laggy (on a tablet, which I tested on) and in general don't look good, find a way to fix these issues and if this proves too much of a challenge rever back the default web-browser confirm dialog box.
+- [ ] The toast doesn't respect the light mode theme and also is only used for upload completed notification, we can use it for translation completed notication as well.
 - [ ] **Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
 
 ## Backend & Worker Pipeline Improvements
