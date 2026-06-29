@@ -593,12 +593,18 @@ export const Reader: React.FC<ReaderProps> = ({
     if (!previous) return;
     setUndoStack(prev => prev.slice(0, -1));
 
-    if (selectedItem && selectedItem.isLayerElement) {
-      const currentElement = { ...selectedItem };
-      setRedoStack(prev => [...prev, currentElement as LayerElement]);
+    let currentElement: LayerElement | undefined;
+    setLayers(prevLayers => {
+      let found: LayerElement | undefined;
+      for (const l of prevLayers) {
+        const el = l.elements.find(e => e.id === previous.id);
+        if (el) { found = el; break; }
+      }
+      if (found) {
+        currentElement = { ...found };
+      }
 
-      setSelectedItem(previous as SelectedItemType);
-      setLayers(prevLayers => prevLayers.map(l => {
+      return prevLayers.map(l => {
         if (l.layer.id === previous.layerId) {
           return {
             ...l,
@@ -606,11 +612,17 @@ export const Reader: React.FC<ReaderProps> = ({
           };
         }
         return l;
-      }));
+      });
+    });
 
-      await handleSaveElementChanges(previous, false);
+    if (currentElement) {
+      setRedoStack(prev => [...prev, currentElement as LayerElement]);
     }
-  }, [undoStack, selectedItem, handleSaveElementChanges]);
+
+    setSelectedItem(prev => (prev && prev.id === previous.id) ? ({ ...previous, isLayerElement: true } as SelectedItemType) : prev);
+
+    await handleSaveElementChanges(previous, false);
+  }, [undoStack, handleSaveElementChanges]);
 
   const handleRedo = useCallback(async () => {
     if (redoStack.length === 0) return;
@@ -618,12 +630,18 @@ export const Reader: React.FC<ReaderProps> = ({
     if (!next) return;
     setRedoStack(prev => prev.slice(0, -1));
 
-    if (selectedItem && selectedItem.isLayerElement) {
-      const currentElement = { ...selectedItem };
-      setUndoStack(prev => [...prev, currentElement as LayerElement]);
+    let currentElement: LayerElement | undefined;
+    setLayers(prevLayers => {
+      let found: LayerElement | undefined;
+      for (const l of prevLayers) {
+        const el = l.elements.find(e => e.id === next.id);
+        if (el) { found = el; break; }
+      }
+      if (found) {
+        currentElement = { ...found };
+      }
 
-      setSelectedItem(next as SelectedItemType);
-      setLayers(prevLayers => prevLayers.map(l => {
+      return prevLayers.map(l => {
         if (l.layer.id === next.layerId) {
           return {
             ...l,
@@ -631,13 +649,61 @@ export const Reader: React.FC<ReaderProps> = ({
           };
         }
         return l;
-      }));
+      });
+    });
 
-      await handleSaveElementChanges(next, false);
+    if (currentElement) {
+      setUndoStack(prev => [...prev, currentElement as LayerElement]);
     }
-  }, [redoStack, selectedItem, handleSaveElementChanges]);
 
-  // Key Down Listener for undo/redo
+    setSelectedItem(prev => (prev && prev.id === next.id) ? ({ ...next, isLayerElement: true } as SelectedItemType) : prev);
+
+    await handleSaveElementChanges(next, false);
+  }, [redoStack, handleSaveElementChanges]);
+
+  const handleMoveLayer = useCallback(async (layerId: string, direction: 'up' | 'down') => {
+    if (!layerId) return;
+    
+    // Use a function state update to get the latest layers safely
+    setLayers(prev => {
+      if (prev.length <= 1) return prev;
+      
+      const sorted = [...prev].sort((a, b) => a.layer.zOrder - b.layer.zOrder);
+      const currentIndex = sorted.findIndex(l => l.layer.id === layerId);
+      if (currentIndex === -1) return prev;
+
+      if (direction === 'up' && currentIndex === sorted.length - 1) return prev;
+      if (direction === 'down' && currentIndex === 0) return prev;
+
+      const targetIndex = direction === 'up' ? currentIndex + 1 : currentIndex - 1;
+      
+      const newSorted = [...sorted];
+      [newSorted[currentIndex], newSorted[targetIndex]] = [newSorted[targetIndex], newSorted[currentIndex]];
+      
+      const updatedLayersData = newSorted.map((lData, index) => ({
+        ...lData,
+        layer: { ...lData.layer, zOrder: index }
+      }));
+      
+      const updates = updatedLayersData.filter(l => {
+        const old = prev.find(oldL => oldL.layer.id === l.layer.id);
+        return !old || old.layer.zOrder !== l.layer.zOrder;
+      });
+
+      // Fire async requests
+      updates.forEach(lData => {
+        safeFetch(`/api/layers/${lData.layer.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+          body: JSON.stringify({ zOrder: lData.layer.zOrder })
+        }).catch(err => console.error('Failed to update layer zOrder:', err));
+      });
+      
+      return updatedLayersData;
+    });
+  }, [user.token]);
+
+  // Key Down Listener for undo/redo and layer reordering
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -654,11 +720,17 @@ export const Reader: React.FC<ReaderProps> = ({
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
+      } else if (e.shiftKey && e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (activeLayerId) handleMoveLayer(activeLayerId, 'up');
+      } else if (e.shiftKey && e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (activeLayerId) handleMoveLayer(activeLayerId, 'down');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, activeLayerId, handleMoveLayer]);
 
   const handleUpdateSelectedElement = (updates: Partial<LayerElement>) => {
     setSelectedItem((prev: SelectedItemType) => {
@@ -778,29 +850,31 @@ export const Reader: React.FC<ReaderProps> = ({
     const handlePointerUp = async () => {
       if (!draggedElement) return;
 
-      let updatedElement: LayerElement | undefined;
       setLayers(prevLayers => {
+        let updatedElement: LayerElement | undefined;
         for (const layer of prevLayers) {
           const found = layer.elements.find(el => el.id === draggedElement.id);
           if (found) { updatedElement = found; break; }
         }
+
+        if (updatedElement) {
+          const originalElement: LayerElement = {
+            ...(updatedElement as LayerElement),
+            x: draggedElement.startElX,
+            y: draggedElement.startElY,
+            maxWidth: draggedElement.startElW,
+            maxHeight: draggedElement.startElH,
+            maskPolygon: draggedElement.startPolygon
+              ? JSON.stringify(draggedElement.startPolygon)
+              : (updatedElement as LayerElement).maskPolygon,
+          };
+          setTimeout(() => {
+            pushToHistoryStack(originalElement);
+            handleSaveElementChanges(updatedElement!, false);
+          }, 0);
+        }
         return prevLayers;
       });
-
-      if (updatedElement) {
-        const originalElement: LayerElement = {
-          ...(updatedElement as LayerElement),
-          x: draggedElement.startElX,
-          y: draggedElement.startElY,
-          maxWidth: draggedElement.startElW,
-          maxHeight: draggedElement.startElH,
-          maskPolygon: draggedElement.startPolygon
-            ? JSON.stringify(draggedElement.startPolygon)
-            : (updatedElement as LayerElement).maskPolygon,
-        };
-        pushToHistoryStack(originalElement);
-        await handleSaveElementChanges(updatedElement, false);
-      }
 
       setDraggedElement(null);
     };
@@ -929,26 +1003,28 @@ export const Reader: React.FC<ReaderProps> = ({
 
     const handlePointerUp = async () => {
       // Find updated element
-      let updatedElement: LayerElement | undefined;
       setLayers(prev => {
+        let updatedElement: LayerElement | undefined;
         for (const l of prev) {
           const found = l.elements.find(el => el.id === draggedVertex.elementId);
           if (found) { updatedElement = found; break; }
         }
+
+        if (updatedElement) {
+          const origBbox = polygonBBox(draggedVertex.originalPolygon);
+          const originalElement: LayerElement = {
+            ...(updatedElement as LayerElement),
+            maskPolygon: JSON.stringify(draggedVertex.originalPolygon),
+            x: origBbox.x, y: origBbox.y,
+            maxWidth: origBbox.w, maxHeight: origBbox.h,
+          };
+          setTimeout(() => {
+            pushToHistoryStack(originalElement);
+            handleSaveElementChanges(updatedElement!, false);
+          }, 0);
+        }
         return prev;
       });
-
-      if (updatedElement) {
-        const origBbox = polygonBBox(draggedVertex.originalPolygon);
-        const originalElement: LayerElement = {
-          ...(updatedElement as LayerElement),
-          maskPolygon: JSON.stringify(draggedVertex.originalPolygon),
-          x: origBbox.x, y: origBbox.y,
-          maxWidth: origBbox.w, maxHeight: origBbox.h,
-        };
-        pushToHistoryStack(originalElement);
-        await handleSaveElementChanges(updatedElement, false);
-      }
       setDraggedVertex(null);
     };
 
@@ -1032,26 +1108,28 @@ export const Reader: React.FC<ReaderProps> = ({
     };
 
     const handlePointerUp = async () => {
-      let updatedElement: LayerElement | undefined;
       setLayers(prev => {
+        let updatedElement: LayerElement | undefined;
         for (const l of prev) {
           const found = l.elements.find(el => el.id === rotationDrag.elementId);
           if (found) { updatedElement = found; break; }
         }
+
+        if (updatedElement) {
+          const origBbox = polygonBBox(rotationDrag.originalPolygon);
+          const originalElement: LayerElement = {
+            ...(updatedElement as LayerElement),
+            maskPolygon: JSON.stringify(rotationDrag.originalPolygon),
+            x: origBbox.x, y: origBbox.y,
+            maxWidth: origBbox.w, maxHeight: origBbox.h,
+          };
+          setTimeout(() => {
+            pushToHistoryStack(originalElement);
+            handleSaveElementChanges(updatedElement!, false);
+          }, 0);
+        }
         return prev;
       });
-
-      if (updatedElement) {
-        const origBbox = polygonBBox(rotationDrag.originalPolygon);
-        const originalElement: LayerElement = {
-          ...(updatedElement as LayerElement),
-          maskPolygon: JSON.stringify(rotationDrag.originalPolygon),
-          x: origBbox.x, y: origBbox.y,
-          maxWidth: origBbox.w, maxHeight: origBbox.h,
-        };
-        pushToHistoryStack(originalElement);
-        await handleSaveElementChanges(updatedElement, false);
-      }
       setRotationDrag(null);
     };
 
@@ -1278,22 +1356,30 @@ export const Reader: React.FC<ReaderProps> = ({
     const sourceLayerData = layers.find(l => l.layer.id === layerId);
     if (!sourceLayerData || !selectedPage) return;
 
+    // Use a strict sequential index for reliable zOrder shifting
+    const sorted = [...layers].sort((a, b) => a.layer.zOrder - b.layer.zOrder);
+    const sourceIndex = sorted.findIndex(l => l.layer.id === layerId);
+    if (sourceIndex === -1) return;
+
     const sourceLayer = sourceLayerData.layer;
     const sourceElements = sourceLayerData.elements;
-    const sourceZOrder = sourceLayer.zOrder;
+    const newZOrder = sourceIndex + 1;
 
     try {
-      // Step 1+2: Shift all layers with zOrder > sourceZOrder up by +1
-      const layersAbove = layers.filter(l => l.layer.zOrder > sourceZOrder);
-      for (const lData of layersAbove) {
-        await safeFetch(`/api/layers/${lData.layer.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
-          body: JSON.stringify({ zOrder: lData.layer.zOrder + 1 })
-        });
+      // Step 1: Shift layers above source up by +1 and fix any gaps
+      for (let i = 0; i < sorted.length; i++) {
+        const lData = sorted[i];
+        const targetZOrder = i > sourceIndex ? i + 1 : i;
+        if (lData.layer.zOrder !== targetZOrder) {
+          await safeFetch(`/api/layers/${lData.layer.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
+            body: JSON.stringify({ zOrder: targetZOrder })
+          });
+        }
       }
 
-      // Step 3: Create the new cloned layer at sourceZOrder + 1
+      // Step 3: Create the new cloned layer at newZOrder
       const createRes = await safeFetch(`/api/images/${selectedPage.imageId}/layers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user.token}` },
@@ -1301,7 +1387,7 @@ export const Reader: React.FC<ReaderProps> = ({
           type: sourceLayer.type,
           targetLanguage: sourceLayer.targetLanguage,
           visible: true,
-          zOrder: sourceZOrder + 1
+          zOrder: newZOrder
         })
       });
       if (!createRes.ok) throw new Error('Failed to create cloned layer');
@@ -1349,16 +1435,15 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // Step 6: Refresh local UI state atomically
       setLayers(prev => {
-        const updated = prev.map(l => {
-          if (l.layer.zOrder > sourceZOrder) {
-            // Shift layers above source up by +1 in local state
-            return { ...l, layer: { ...l.layer, zOrder: l.layer.zOrder + 1 } };
-          }
+        // Enforce same sorted sequential ordering in UI state
+        const currentSorted = [...prev].sort((a, b) => a.layer.zOrder - b.layer.zOrder);
+        const updated = currentSorted.map((l, i) => {
+          const targetZOrder = i > sourceIndex ? i + 1 : i;
+          let visible = l.layer.visible;
           if (l.layer.id === sourceLayer.id) {
-            // Hide source layer
-            return { ...l, layer: { ...l.layer, visible: false } };
+            visible = false; // Hide source layer
           }
-          return l;
+          return { ...l, layer: { ...l.layer, zOrder: targetZOrder, visible } };
         });
         // Insert the new cloned layer
         updated.push({ layer: { ...newLayer, isLayerElement: false } as unknown as Layer & { isLayerElement?: boolean }, elements: clonedElements });
