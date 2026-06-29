@@ -64,6 +64,19 @@ function TranslationToastWatcher() {
   return null;
 }
 
+function GlobalErrorListener() {
+  const { showError } = useToast();
+  useEffect(() => {
+    const handleApiError = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      showError(`API request failed: ${customEvent.detail.url}`, { duration: 6000 });
+    };
+    window.addEventListener('api-error', handleApiError);
+    return () => window.removeEventListener('api-error', handleApiError);
+  }, [showError]);
+  return null;
+}
+
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -261,6 +274,7 @@ function AppContent() {
   return (
     <NotificationProvider token={user?.token || null}>
       <ToastProvider>
+      <GlobalErrorListener />
       <TranslationToastWatcher />
       <div className="app-container">
         {/* Navigation Bar */}
