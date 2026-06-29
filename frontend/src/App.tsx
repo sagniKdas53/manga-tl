@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, matchPath } from 'react-router-dom';
 
 // Types
@@ -7,16 +7,62 @@ import type { User, Series, Chapter, Page } from './types';
 // Utils & overrides
 import { safeFetch, getContextPath } from './utils';
 
-// Components
-import { Auth } from './components/Auth';
-import { Dashboard } from './components/Dashboard';
-import { SeriesDetails } from './components/SeriesDetails';
-import { ChapterGallery } from './components/ChapterGallery';
-import { Reader } from './components/Reader';
+// Providers
 import { NotificationProvider } from './components/NotificationContext';
+import { ToastProvider, useToast } from './components/ToastContext';
+
+// Static import for NotificationCenter (always present in nav)
 import { NotificationCenter } from './components/NotificationCenter';
+import { useNotifications } from './components/useNotifications';
 import logoDark from './assets/logo-dark.svg';
 import logoLight from './assets/logo-light.svg';
+
+// Lazy-loaded route components
+const Auth = React.lazy(() => import('./components/Auth'));
+const Dashboard = React.lazy(() => import('./components/Dashboard'));
+const SeriesDetails = React.lazy(() => import('./components/SeriesDetails'));
+const ChapterGallery = React.lazy(() => import('./components/ChapterGallery'));
+const Reader = React.lazy(() => import('./components/Reader'));
+
+function LoadingSpinner() {
+  return (
+    <div className="dashboard-content text-center">
+      <div className="spinner"></div>
+    </div>
+  );
+}
+
+/** Watches the notification stream and fires a toast for translation-complete events,
+ *  but only when the user is NOT in the Reader (Reader refreshes its own data). */
+function TranslationToastWatcher() {
+  const { notifications } = useNotifications();
+  const { showToast } = useToast();
+  const location = useLocation();
+
+  const isInReader = !!(
+    matchPath({ path: '/chapters/:chapterId/reader/:pageNumber' }, location.pathname) ||
+    matchPath({ path: '/chapters/:chapterId/:slug/reader/:pageNumber' }, location.pathname)
+  );
+
+  // Track which notification ids we've already toasted
+  const seenRef = React.useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (isInReader) return;
+    for (const n of notifications) {
+      if (!seenRef.current.has(n.id)) {
+        seenRef.current.add(n.id);
+        // Only toast on the very first time we see it (i.e. it's new)
+        if (n.title?.toLowerCase().includes('translation') || n.message?.toLowerCase().includes('translation')) {
+          const type = n.type === 'ERROR' ? 'error' : n.type === 'WARNING' ? 'info' : 'success';
+          showToast(`${n.title}: ${n.message}`, type);
+        }
+      }
+    }
+  }, [notifications, isInReader, showToast]);
+
+  return null;
+}
 
 function AppContent() {
   const navigate = useNavigate();
@@ -214,6 +260,8 @@ function AppContent() {
 
   return (
     <NotificationProvider token={user?.token || null}>
+      <ToastProvider>
+      <TranslationToastWatcher />
       <div className="app-container">
         {/* Navigation Bar */}
         {!readerMatch && (
@@ -267,120 +315,123 @@ function AppContent() {
             </div>
           </nav>
         )}
-  
-        <Routes>
-          <Route path="/login" element={<Auth onLoginSuccess={setUser} />} />
-          <Route 
-            path="/" 
-            element={
-              user ? (
-                <Dashboard 
-                  user={user} 
-                  seriesList={seriesList} 
-                  setSeriesList={setSeriesList} 
-                  onSelectSeries={setSelectedSeries} 
-                />
-              ) : null
-            } 
-          />
-          <Route 
-            path="/series/:seriesId" 
-            element={
-              user ? (
-                <SeriesDetails 
-                  user={user} 
-                  selectedSeries={selectedSeries} 
-                  setSelectedSeries={setSelectedSeries} 
-                  chapters={chapters} 
-                  setChapters={setChapters} 
-                  onSelectChapter={setSelectedChapter} 
-                  isLoadingDetails={isLoadingDetails} 
-                />
-              ) : null
-            } 
-          />
-          <Route 
-            path="/series/:seriesId/:slug" 
-            element={
-              user ? (
-                <SeriesDetails 
-                  user={user} 
-                  selectedSeries={selectedSeries} 
-                  setSelectedSeries={setSelectedSeries} 
-                  chapters={chapters} 
-                  setChapters={setChapters} 
-                  onSelectChapter={setSelectedChapter} 
-                  isLoadingDetails={isLoadingDetails} 
-                />
-              ) : null
-            } 
-          />
-          <Route 
-            path="/chapters/:chapterId" 
-            element={
-              user ? (
-                <ChapterGallery 
-                  user={user} 
-                  selectedSeries={selectedSeries} 
-                  selectedChapter={selectedChapter} 
-                  setSelectedChapter={setSelectedChapter} 
-                  pages={pages} 
-                  setPages={setPages} 
-                  onSelectPage={() => {}} 
-                  isLoadingDetails={isLoadingDetails} 
-                />
-              ) : null
-            } 
-          />
-          <Route 
-            path="/chapters/:chapterId/:slug" 
-            element={
-              user ? (
-                <ChapterGallery 
-                  user={user} 
-                  selectedSeries={selectedSeries} 
-                  selectedChapter={selectedChapter} 
-                  setSelectedChapter={setSelectedChapter} 
-                  pages={pages} 
-                  setPages={setPages} 
-                  onSelectPage={() => {}} 
-                  isLoadingDetails={isLoadingDetails} 
-                />
-              ) : null
-            } 
-          />
-          <Route 
-            path="/chapters/:chapterId/reader/:pageNumber" 
-            element={
-              user ? (
-                <Reader 
-                  user={user} 
-                  selectedSeries={selectedSeries}
-                  selectedChapter={selectedChapter} 
-                  chapters={chapters}
-                  pages={pages} 
-                  theme={theme} 
-                />
-              ) : null
-            } 
-          />
-          <Route 
-            path="/chapters/:chapterId/:slug/reader/:pageNumber" 
-            element={
-              user ? (
-                <Reader 
-                  user={user} 
-                  selectedSeries={selectedSeries}
-                  selectedChapter={selectedChapter} 
-                  chapters={chapters}
-                  pages={pages} 
-                  theme={theme} 
-                />
-              ) : null
-            } 
-          />
-        </Routes>
+    
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            <Route path="/login" element={<Auth onLoginSuccess={setUser} />} />
+            <Route 
+              path="/" 
+              element={
+                user ? (
+                  <Dashboard 
+                    user={user} 
+                    seriesList={seriesList} 
+                    setSeriesList={setSeriesList} 
+                    onSelectSeries={setSelectedSeries} 
+                  />
+                ) : null
+              } 
+            />
+            <Route 
+              path="/series/:seriesId" 
+              element={
+                user ? (
+                  <SeriesDetails 
+                    user={user} 
+                    selectedSeries={selectedSeries} 
+                    setSelectedSeries={setSelectedSeries} 
+                    chapters={chapters} 
+                    setChapters={setChapters} 
+                    onSelectChapter={setSelectedChapter} 
+                    isLoadingDetails={isLoadingDetails} 
+                  />
+                ) : null
+              } 
+            />
+            <Route 
+              path="/series/:seriesId/:slug" 
+              element={
+                user ? (
+                  <SeriesDetails 
+                    user={user} 
+                    selectedSeries={selectedSeries} 
+                    setSelectedSeries={setSelectedSeries} 
+                    chapters={chapters} 
+                    setChapters={setChapters} 
+                    onSelectChapter={setSelectedChapter} 
+                    isLoadingDetails={isLoadingDetails} 
+                  />
+                ) : null
+              } 
+            />
+            <Route 
+              path="/chapters/:chapterId" 
+              element={
+                user ? (
+                  <ChapterGallery 
+                    user={user} 
+                    selectedSeries={selectedSeries} 
+                    selectedChapter={selectedChapter} 
+                    setSelectedChapter={setSelectedChapter} 
+                    pages={pages} 
+                    setPages={setPages} 
+                    onSelectPage={() => {}} 
+                    isLoadingDetails={isLoadingDetails} 
+                  />
+                ) : null
+              } 
+            />
+            <Route 
+              path="/chapters/:chapterId/:slug" 
+              element={
+                user ? (
+                  <ChapterGallery 
+                    user={user} 
+                    selectedSeries={selectedSeries} 
+                    selectedChapter={selectedChapter} 
+                    setSelectedChapter={setSelectedChapter} 
+                    pages={pages} 
+                    setPages={setPages} 
+                    onSelectPage={() => {}} 
+                    isLoadingDetails={isLoadingDetails} 
+                  />
+                ) : null
+              } 
+            />
+            <Route 
+              path="/chapters/:chapterId/reader/:pageNumber" 
+              element={
+                user ? (
+                  <Reader 
+                    user={user} 
+                    selectedSeries={selectedSeries}
+                    selectedChapter={selectedChapter} 
+                    chapters={chapters}
+                    pages={pages} 
+                    theme={theme} 
+                  />
+                ) : null
+              } 
+            />
+            <Route 
+              path="/chapters/:chapterId/:slug/reader/:pageNumber" 
+              element={
+                user ? (
+                  <Reader 
+                    user={user} 
+                    selectedSeries={selectedSeries}
+                    selectedChapter={selectedChapter} 
+                    chapters={chapters}
+                    pages={pages} 
+                    theme={theme} 
+                  />
+                ) : null
+              } 
+            />
+          </Routes>
+        </Suspense>
       </div>
+    </ToastProvider>
     </NotificationProvider>
   );
 }

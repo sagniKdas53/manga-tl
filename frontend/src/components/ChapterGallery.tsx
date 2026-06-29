@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { User, Series, Chapter, Page } from '../types';
 import { safeFetch, toSlug, getContextPath } from '../utils';
 import ConfirmModal from './ConfirmModal';
+import { useToast } from './ToastContext';
 
 interface UploadQueueItem {
   id: string;
@@ -12,11 +13,7 @@ interface UploadQueueItem {
   error?: string;
 }
 
-interface SnackbarMessage {
-  id: string;
-  text: string;
-  type: 'success' | 'error' | 'info';
-}
+
 
 interface ChapterGalleryProps {
   user: User;
@@ -48,17 +45,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [isQueueExpanded, setIsQueueExpanded] = useState(true);
-  const [snackbars, setSnackbars] = useState<SnackbarMessage[]>([]);
   const [isImportingProject, setIsImportingProject] = useState(false);
 
-  // Toast Helper
-  const showToast = React.useCallback((text: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setSnackbars(prev => [...prev, { id, text, type }]);
-    setTimeout(() => {
-      setSnackbars(prev => prev.filter(s => s.id !== id));
-    }, 4000);
-  }, []);
+  // Use global toast hook
+  const { showToast } = useToast();
 
   // XHR upload wrapper to report progress percentages
   const uploadFileWithProgress = React.useCallback((
@@ -708,45 +698,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         </div>
       )}
 
-      {/* Toast Notifications */}
-      <div style={{
-        position: 'fixed',
-        top: '24px',
-        right: '24px',
-        zIndex: 10001,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        pointerEvents: 'none'
-      }}>
-        {snackbars.map(s => (
-          <div 
-            key={s.id}
-            className="glass"
-            style={{
-              padding: '12px 20px',
-              borderRadius: '8px',
-              color: '#ffffff',
-              fontSize: '14px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-              borderLeft: `4px solid ${s.type === 'success' ? 'var(--success)' : s.type === 'error' ? 'var(--error)' : 'var(--primary)'}`,
-              background: 'var(--bg-surface)',
-              pointerEvents: 'auto',
-              minWidth: '260px',
-              animation: 'slideIn 0.2s ease-out'
-            }}
-          >
-            <span>
-              {s.type === 'success' ? '✓' : s.type === 'error' ? '✗' : 'ℹ'}
-            </span>
-            <span>{s.text}</span>
-          </div>
-        ))}
-      </div>
+      {/* Toasts rendered globally by ToastProvider in App.tsx */}
 
       {/* Floating Upload Queue Panel */}
       {showQueuePanel && (
@@ -871,11 +823,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.08); }
         }
-        @keyframes slideIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
       `}</style>
     </div>
   );
 };
+
+export default ChapterGallery;

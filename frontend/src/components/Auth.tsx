@@ -152,3 +152,5 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
     </div>
   );
 };
+
+export default Auth;
