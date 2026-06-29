@@ -18,7 +18,7 @@
   - [x] If I clone the layer two I expect it to be added as a layer over two, ie the clone becomes layer three and the existing layer 3 gets promoted to layer 4 (and so on)
   - [x] Now it's okay if it can't be done like that, in that case we would need a way to re-order the layers manually, I could use the shift key to re-order them (Shift Up to promote one, Shift Down to demote one) — ↑↓ buttons added to LAYERS header; Shift+↑/↓ keyboard shortcuts also work
 - [x] Undo button doesn't work for dragging a bubble but works perfectly for the reshaping flow, need to investiage and fix.
-- [ ] **Model Picker in UI:** See new section below.
+- [x] **Model Picker in UI:** See new section below.
 - [x] The delete confirmation boxes, don't respect the light mode theme, are laggy (on a tablet, which I tested on) and in general don't look good — **fixed**: now uses CSS variables, no blur, no cubic-bezier bounce.
 - [x] The toast doesn't respect the light mode theme and also is only used for upload completed notification — **fixed**: global ToastProvider uses `var(--text-main)` and fires translation SSE toasts outside Reader.
 - [ ] **Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
@@ -42,3 +42,4 @@
 - [x] **Layer Project Re-hydration:** Support importing previously exported translation projects to restore workspace and layers state.
 - [ ] **Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
 - [ ] **Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
+- [ ] Redo-OCR and Redo-Translation are having some issues, like duplicate bubble.

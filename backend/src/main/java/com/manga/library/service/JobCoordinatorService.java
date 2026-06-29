@@ -419,9 +419,10 @@ public class JobCoordinatorService {
       }
     }
 
-    // Always create a new translation layer
-    int maxZ = 1;
-    for (Layer l : existingTranslationLayers) {
+    // Compute z-order from ALL layers (not just translation), so it's always at the top
+    List<Layer> allLayers = layerRepository.findByImageId(imageId);
+    int maxZ = 0;
+    for (Layer l : allLayers) {
       if (l.getZOrder() > maxZ) {
         maxZ = l.getZOrder();
       }
