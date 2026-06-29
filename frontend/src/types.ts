@@ -93,6 +93,7 @@ export interface Layer {
   targetLanguage?: string | null;
   visible: boolean;
   zOrder: number;
+  metadataJson?: any | null;
   createdAt: string;
 }
 

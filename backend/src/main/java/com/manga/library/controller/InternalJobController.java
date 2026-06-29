@@ -246,6 +246,40 @@ public class InternalJobController {
     }
   }
 
+  @PostMapping("/jobs/callback/qa-re-ocr")
+  public ResponseEntity<?> qaReOcrCallback(@RequestBody Map<String, Object> payload) {
+    UUID imageId = UUID.fromString((String) payload.get("imageId"));
+    Objects.requireNonNull(imageId, "imageId cannot be null");
+    log.info("Received QA Re-OCR callback for image: {}", imageId);
+    try {
+      List<?> rawResults = (List<?>) payload.get("results");
+      List<Map<String, Object>> results = new ArrayList<>();
+      if (rawResults != null) {
+        for (Object item : rawResults) {
+          if (item instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) item;
+            Map<String, Object> typedMap = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+              if (entry.getKey() instanceof String) {
+                typedMap.put((String) entry.getKey(), entry.getValue());
+              }
+            }
+            results.add(typedMap);
+          }
+        }
+      }
+      jobCoordinatorService.handleQaReOcrCallback(imageId, results);
+      sseService.emitNotificationForImage(
+          imageId, "INFO", "QA Re-OCR Completed", "QA Re-OCR successfully finished.");
+      return ResponseEntity.ok().build();
+    } catch (Exception e) {
+      log.error("Error processing QA Re-OCR callback", e);
+      sseService.emitNotificationForImage(
+          imageId, "ERROR", "QA Re-OCR Failed", "An error occurred during QA Re-OCR.");
+      return ResponseEntity.internalServerError().body(e.getMessage());
+    }
+  }
+
   @PostMapping("/ocr-regions/{id}/callback")
   public ResponseEntity<?> regionCallback(
       @PathVariable UUID id, @RequestBody Map<String, Object> payload) {
