@@ -17,7 +17,7 @@
   - [ ] Like say there are 3 layers, 1 base the original OCR, 2 the translation, 3 a user generated layer to do some final touch up
   - [ ] If I clone the layer two I expect it to be added as a layer over two, ie the clone becomes layer three and the existing layer 3 gets promoted to layer 4 (and so on)
   - [ ] Now it's okay if it can't be done like that, in that case we would need a way to re-order the layers manually, I could use the shift key to re-order them (Shift Up to promote one, Shift Down to demote one)
-- [ ] Undo button doesn't work for dragging a bubble but works perfectly for the reshaping flow, need to investiage and fix.
+- [x] Undo button doesn't work for dragging a bubble but works perfectly for the reshaping flow, need to investiage and fix.
 - [ ] **Model Picker in UI:** Add a model picker in the front-end interface to allow users to select the worker model (e.g., OCR or Translation model) dynamically when multiple providers are available.
 - [ ] **Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
 
