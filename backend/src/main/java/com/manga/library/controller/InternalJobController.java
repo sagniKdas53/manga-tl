@@ -47,6 +47,10 @@ public class InternalJobController {
               map.put("presignedUrl", minioService.generatePresignedUrl(image.getStoragePath()));
               map.put("panels", panelRepository.findByImageId(imageId));
 
+              // Load OCR regions FIRST (as real entities) before any LayerElement
+              // queries that would create lazy proxies in the persistence context
+              List<OcrRegion> allOcrRegions = ocrRegionRepository.findByImageId(imageId);
+
               // Only return OCR regions from the latest visible OCR layer
               List<Layer> allLayers = layerRepository.findByImageId(imageId);
               Layer latestOcrLayer = null;
@@ -65,9 +69,8 @@ public class InternalJobController {
                     activeRegionIds.add(el.getRegion().getId());
                   }
                 }
-                List<OcrRegion> allRegions = ocrRegionRepository.findByImageId(imageId);
                 List<OcrRegion> filteredRegions = new ArrayList<>();
-                for (OcrRegion r : allRegions) {
+                for (OcrRegion r : allOcrRegions) {
                   if (activeRegionIds.contains(r.getId())) {
                     filteredRegions.add(r);
                   }
@@ -75,7 +78,7 @@ public class InternalJobController {
                 map.put("ocrRegions", filteredRegions);
               } else {
                 // No visible OCR layer — return all regions for backwards compatibility
-                map.put("ocrRegions", ocrRegionRepository.findByImageId(imageId));
+                map.put("ocrRegions", allOcrRegions);
               }
 
               map.put("layerElements", layerElementRepository.findByLayerImageId(imageId));
