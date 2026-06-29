@@ -18,11 +18,17 @@
   - [x] If I clone the layer two I expect it to be added as a layer over two, ie the clone becomes layer three and the existing layer 3 gets promoted to layer 4 (and so on)
   - [x] Now it's okay if it can't be done like that, in that case we would need a way to re-order the layers manually, I could use the shift key to re-order them (Shift Up to promote one, Shift Down to demote one) — ↑↓ buttons added to LAYERS header; Shift+↑/↓ keyboard shortcuts also work
 - [x] Undo button doesn't work for dragging a bubble but works perfectly for the reshaping flow, need to investiage and fix.
-- [ ] **Model Picker in UI:** Add a model picker in the front-end interface to allow users to select the worker model (e.g., OCR or Translation model) dynamically when multiple providers are available.
-  - [ ] Maybe add a settings options in the nav-bar
-- [ ] The delete confirmation boxes, don't respect the light mode theme, are laggy (on a tablet, which I tested on) and in general don't look good, find a way to fix these issues and if this proves too much of a challenge rever back the default web-browser confirm dialog box.
-- [ ] The toast doesn't respect the light mode theme and also is only used for upload completed notification, we can use it for translation completed notication as well.
+- [ ] **Model Picker in UI:** See new section below.
+- [x] The delete confirmation boxes, don't respect the light mode theme, are laggy (on a tablet, which I tested on) and in general don't look good — **fixed**: now uses CSS variables, no blur, no cubic-bezier bounce.
+- [x] The toast doesn't respect the light mode theme and also is only used for upload completed notification — **fixed**: global ToastProvider uses `var(--text-main)` and fires translation SSE toasts outside Reader.
 - [ ] **Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
+
+## Model Picker / Runtime Settings
+
+- [ ] **Backend:** New `/api/settings` endpoint to expose and update model configuration at runtime (provider, preferred LLM/VLM, OCR engine). Support both global defaults and per-user overrides.
+- [ ] **Worker:** Config reload mechanism (e.g., polling the settings API or a Redis pub-sub channel) so the worker picks up changes without a full restart.
+- [ ] **Frontend:** Settings panel in the navbar (gear icon) showing active provider + model dropdowns. Persists selection via the API.
+- [ ] **Per-user vs global:** Decide on scope — global settings controlled by admin, with optional per-user overrides stored in user profile.
 
 ## Backend & Worker Pipeline Improvements
 

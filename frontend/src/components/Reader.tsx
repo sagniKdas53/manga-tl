@@ -4,6 +4,7 @@ import type { User, Chapter, Page, Panel, OcrRegion, Conversation, Layer, LayerE
 import { safeFetch, toSlug } from '../utils';
 import { fitTextInBox } from '../utils/fitText';
 import ConfirmModal from './ConfirmModal';
+import InfoModal from './InfoModal';
 import { ColorPicker } from './ColorPicker';
 import { useNotifications } from './useNotifications';
 import JSZip from 'jszip';
@@ -306,6 +307,23 @@ export const Reader: React.FC<ReaderProps> = ({
   });
 
   const closeConfirm = () => setConfirmModal(prev => ({ ...prev, isOpen: false }));
+
+  // Info modal state (replaces browser alert)
+  const [infoModal, setInfoModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  const showInfo = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') =>
+    setInfoModal({ isOpen: true, title, message, type });
+  const closeInfo = () => setInfoModal(prev => ({ ...prev, isOpen: false }));
 
   // Image ref for export
   const imgRef = useRef<HTMLImageElement>(null);
@@ -2092,7 +2110,7 @@ export const Reader: React.FC<ReaderProps> = ({
         if (attempts > 20) {
           clearInterval(interval);
           setIsRedoing(false);
-          alert('Redo timed out. Please try again.');
+          showInfo('Redo Timed Out', 'The redo operation timed out. Please try again.', 'error');
           return;
         }
 
@@ -2136,7 +2154,7 @@ export const Reader: React.FC<ReaderProps> = ({
     } catch (err) {
       console.error('Error redoing region:', err);
       setIsRedoing(false);
-      alert('Failed to start redo job.');
+      showInfo('Redo Failed', 'Failed to start redo job.', 'error');
     }
   };
 
@@ -2149,13 +2167,13 @@ export const Reader: React.FC<ReaderProps> = ({
         headers: { 'Authorization': `Bearer ${user.token}` }
       });
       if (res.ok) {
-        alert('Page OCR & Translation redo job enqueued successfully.');
+        showInfo('Job Enqueued', 'Page OCR & Translation redo job enqueued successfully.', 'success');
       } else {
-        alert('Failed to enqueue Page OCR redo job.');
+        showInfo('Enqueue Failed', 'Failed to enqueue Page OCR redo job.', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Error triggering redo job.');
+      showInfo('Error', 'An error occurred while triggering the redo job.', 'error');
     } finally {
       setIsRedoingPageOcr(false);
     }
@@ -2170,13 +2188,13 @@ export const Reader: React.FC<ReaderProps> = ({
         headers: { 'Authorization': `Bearer ${user.token}` }
       });
       if (res.ok) {
-        alert('Page Translation redo job enqueued successfully.');
+        showInfo('Job Enqueued', 'Page Translation redo job enqueued successfully.', 'success');
       } else {
-        alert('Failed to enqueue Page Translation redo job.');
+        showInfo('Enqueue Failed', 'Failed to enqueue Page Translation redo job.', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Error triggering redo job.');
+      showInfo('Error', 'An error occurred while triggering the redo job.', 'error');
     } finally {
       setIsRedoingPageTranslation(false);
     }
@@ -3733,6 +3751,15 @@ export const Reader: React.FC<ReaderProps> = ({
         onConfirm={confirmModal.onConfirm}
         onCancel={closeConfirm}
       />
+      <InfoModal
+        isOpen={infoModal.isOpen}
+        title={infoModal.title}
+        message={infoModal.message}
+        type={infoModal.type}
+        onClose={closeInfo}
+      />
     </div>
   );
 };
+
+export default Reader;

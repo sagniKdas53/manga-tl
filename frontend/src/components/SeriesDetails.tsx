@@ -612,3 +612,5 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     </div>
   );
 };
+
+export default SeriesDetails;
