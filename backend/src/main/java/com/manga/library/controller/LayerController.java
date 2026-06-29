@@ -131,29 +131,29 @@ public class LayerController {
             image -> {
               String type = (String) payload.getOrDefault("type", "translation");
               String targetLanguage = (String) payload.get("targetLanguage");
-              
+
               Boolean visible = true;
               if (payload.get("visible") != null) {
-                  visible = (Boolean) payload.get("visible");
+                visible = (Boolean) payload.get("visible");
               }
-              
+
               Integer zOrder = 0;
               if (payload.get("zOrder") != null) {
-                  Object raw = payload.get("zOrder");
-                  if (raw instanceof Integer) {
-                      zOrder = (Integer) raw;
-                  } else if (raw instanceof Number) {
-                      zOrder = ((Number) raw).intValue();
-                  }
+                Object raw = payload.get("zOrder");
+                if (raw instanceof Integer) {
+                  zOrder = (Integer) raw;
+                } else if (raw instanceof Number) {
+                  zOrder = ((Number) raw).intValue();
+                }
               }
 
               com.fasterxml.jackson.databind.JsonNode metadataJson = null;
               if (payload.get("metadataJson") != null) {
-                  try {
-                      metadataJson = objectMapper.valueToTree(payload.get("metadataJson"));
-                  } catch (Exception e) {
-                      log.warn("Failed to parse metadataJson: {}", e.getMessage());
-                  }
+                try {
+                  metadataJson = objectMapper.valueToTree(payload.get("metadataJson"));
+                } catch (Exception e) {
+                  log.warn("Failed to parse metadataJson: {}", e.getMessage());
+                }
               }
 
               Layer layer =
@@ -223,12 +223,15 @@ public class LayerController {
                 layer.setVisible(Boolean.TRUE.equals(payload.get("visible")));
               }
               Layer saved = layerRepository.save(layer);
-              log.info("Layer {} updated — zOrder={}, visible={}", id, saved.getZOrder(), saved.getVisible());
+              log.info(
+                  "Layer {} updated — zOrder={}, visible={}",
+                  id,
+                  saved.getZOrder(),
+                  saved.getVisible());
               return ResponseEntity.ok(saved);
             })
         .orElse(ResponseEntity.notFound().build());
   }
-
 
   @PostMapping("/layers/{layerId}/elements")
   @Transactional
