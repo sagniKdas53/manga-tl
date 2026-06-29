@@ -69,16 +69,20 @@ public class InternalJobController {
                     activeRegionIds.add(el.getRegion().getId());
                   }
                 }
-                List<OcrRegion> filteredRegions = new ArrayList<>();
+                List<com.manga.library.dto.OcrRegionDto> filteredRegions = new ArrayList<>();
                 for (OcrRegion r : allOcrRegions) {
                   if (activeRegionIds.contains(r.getId())) {
-                    filteredRegions.add(r);
+                    filteredRegions.add(com.manga.library.dto.OcrRegionDto.fromEntity(r));
                   }
                 }
                 map.put("ocrRegions", filteredRegions);
               } else {
                 // No visible OCR layer — return all regions for backwards compatibility
-                map.put("ocrRegions", allOcrRegions);
+                List<com.manga.library.dto.OcrRegionDto> allRegionDtos = new ArrayList<>();
+                for (OcrRegion r : allOcrRegions) {
+                  allRegionDtos.add(com.manga.library.dto.OcrRegionDto.fromEntity(r));
+                }
+                map.put("ocrRegions", allRegionDtos);
               }
 
               map.put("layerElements", layerElementRepository.findByLayerImageId(imageId));
