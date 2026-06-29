@@ -7,6 +7,7 @@ import ConfirmModal from './ConfirmModal';
 import InfoModal from './InfoModal';
 import { ColorPicker } from './ColorPicker';
 import { useNotifications } from './useNotifications';
+import { useToast } from './ToastContext';
 import JSZip from 'jszip';
 import {
   type Point,
@@ -193,6 +194,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const hasMoved = useRef(false);
   
   const { notifications } = useNotifications();
+  const { showToast, showSuccess, showError } = useToast();
 
   // Listen for new notifications and refresh page if processing completed
   const latestNotificationId = notifications.length > 0 ? notifications[0].id : null;
@@ -597,13 +599,15 @@ export const Reader: React.FC<ReaderProps> = ({
       }
 
       if (showAlert) {
-        alert('Element updated successfully!');
+        showToast('Element updated successfully!', 'success');
       }
     } catch (err) {
       console.error(err);
-      alert('Error updating element on server.');
+      showError('Error updating element on server.', {
+        action: { label: 'Retry', onClick: () => handleSaveElementChanges(element, showAlert) }
+      });
     }
-  }, [user.token]);
+  }, [user.token, showToast]);
 
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0) return;
@@ -2083,11 +2087,20 @@ export const Reader: React.FC<ReaderProps> = ({
         }
       } catch (err) {
         console.error('Error saving region edit:', err);
+        throw err;
       }
     });
 
     setIsEditingRegion(false);
-    await Promise.all(promises);
+    const results = await Promise.allSettled(promises);
+    const hasErrors = results.some(r => r.status === 'rejected');
+    if (hasErrors) {
+      showError('Error saving region edit.', {
+        action: { label: 'Retry', onClick: () => handleSaveEdit() }
+      });
+    } else {
+      showSuccess('Saved text changes!');
+    }
 
     // Refresh conversations state from backend
     if (selectedPage) {

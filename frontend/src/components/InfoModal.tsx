@@ -84,11 +84,8 @@ const InfoModal: React.FC<InfoModalProps> = ({
     >
       <div
         onClick={e => e.stopPropagation()}
+        className="glass"
         style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '16px',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04) inset',
           padding: '28px 32px',
           minWidth: '360px',
           maxWidth: '480px',

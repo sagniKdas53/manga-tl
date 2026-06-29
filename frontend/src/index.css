@@ -56,8 +56,8 @@
   /* Light Theme overrides */
   --bg-base: #f8fafc;
   --bg-surface: #ffffff;
-  --bg-card: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(15, 23, 42, 0.08);
+  --bg-card: rgba(255, 255, 255, 0.95);
+  --border-color: rgba(15, 23, 42, 0.12);
   
   --primary: #7c3aed;
   --primary-hover: #6d28d9;
@@ -70,10 +70,10 @@
   --text-muted: #475569;
   --text-dim: #64748b;
   
-  --bg-nav: rgba(255, 255, 255, 0.85);
-  --bg-overlay-glass: rgba(255, 255, 255, 0.75);
-  --bg-hover: rgba(15, 23, 42, 0.04);
-  --bg-hover-more: rgba(15, 23, 42, 0.07);
+  --bg-nav: rgba(255, 255, 255, 0.95);
+  --bg-overlay-glass: rgba(255, 255, 255, 0.92);
+  --bg-hover: rgba(15, 23, 42, 0.06);
+  --bg-hover-more: rgba(15, 23, 42, 0.09);
   --bg-input: rgba(15, 23, 42, 0.02);
   --bg-input-focus: rgba(15, 23, 42, 0.05);
   --bg-card-content: rgba(255, 255, 255, 0.9);

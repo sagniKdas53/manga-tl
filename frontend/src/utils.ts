@@ -19,22 +19,56 @@ export const getContextPath = (): string => {
 
 // Override global fetch to prepend the dynamic context path / subfolder base URL to API requests
 const originalFetch = window.fetch;
-window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   let targetUrl = input;
   const context = getContextPath();
   if (typeof targetUrl === 'string' && targetUrl.startsWith('/api')) {
     targetUrl = context + targetUrl;
     console.log(`[Fetch Override] Rewrote API request: ${input} -> ${targetUrl} (detected context: ${context})`);
   }
-  return originalFetch(targetUrl, init).then(response => {
-    if (response.status === 401 || response.status === 403) {
-      if (localStorage.getItem('manga_user')) {
-        localStorage.removeItem('manga_user');
-        window.location.pathname = context + '/login'; // Safely redirects without Open Redirect warning
+
+  const MAX_RETRIES = 2;
+  let delay = 1000;
+
+  for (let i = 0; i <= MAX_RETRIES; i++) {
+    try {
+      const response = await originalFetch(targetUrl, init);
+      if (response.status === 401 || response.status === 403) {
+        if (localStorage.getItem('manga_user')) {
+          localStorage.removeItem('manga_user');
+          window.location.pathname = context + '/login'; // Safely redirects without Open Redirect warning
+        }
       }
+
+      if (!response.ok && response.status >= 500 && i < MAX_RETRIES) {
+        console.warn(`[Fetch Retry] 5xx error on ${targetUrl}, retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2;
+        continue;
+      }
+
+      if (!response.ok && i === MAX_RETRIES) {
+        window.dispatchEvent(new CustomEvent('api-error', { 
+          detail: { url: targetUrl, status: response.status }
+        }));
+      }
+
+      return response;
+    } catch (error) {
+      if (i < MAX_RETRIES) {
+        console.warn(`[Fetch Retry] Network error on ${targetUrl}, retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2;
+        continue;
+      }
+      window.dispatchEvent(new CustomEvent('api-error', { 
+        detail: { url: targetUrl, error: error instanceof Error ? error.message : 'Network error' } 
+      }));
+      throw error;
     }
-    return response;
-  });
+  }
+
+  throw new Error("Unreachable");
 };
 
 // Export the configured fetch function
