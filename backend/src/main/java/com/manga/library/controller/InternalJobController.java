@@ -89,9 +89,7 @@ public class InternalJobController {
               map.put("layerElements", layerElementRepository.findByLayerImageId(imageId));
 
               // Query page history and series context for translation context assembly
-              pageRepository
-                  .findByImageId(imageId)
-                  .stream()
+              pageRepository.findByImageId(imageId).stream()
                   .findFirst()
                   .ifPresent(
                       page -> {

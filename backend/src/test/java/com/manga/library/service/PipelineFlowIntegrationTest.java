@@ -2,7 +2,6 @@ package com.manga.library.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +30,6 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -55,8 +53,7 @@ public class PipelineFlowIntegrationTest {
   @org.springframework.boot.test.mock.mockito.MockBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
-  @org.springframework.boot.test.mock.mockito.MockBean
-  private MinioService minioService;
+  @org.springframework.boot.test.mock.mockito.MockBean private MinioService minioService;
 
   private HttpServer testServer;
   private int testPort;
@@ -79,9 +76,16 @@ public class PipelineFlowIntegrationTest {
     createdImageIds.clear();
 
     // Mock MinioService calls
-    org.mockito.Mockito.when(minioService.uploadFile(org.mockito.Mockito.anyString(), org.mockito.Mockito.any(byte[].class), org.mockito.Mockito.anyString()))
+    org.mockito.Mockito.when(
+            minioService.uploadFile(
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.any(byte[].class),
+                org.mockito.Mockito.anyString()))
         .thenReturn("mocked-path");
-    org.mockito.Mockito.when(minioService.uploadFile(org.mockito.Mockito.anyString(), org.mockito.Mockito.any(org.springframework.web.multipart.MultipartFile.class)))
+    org.mockito.Mockito.when(
+            minioService.uploadFile(
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.any(org.springframework.web.multipart.MultipartFile.class)))
         .thenReturn("mocked-path");
     org.mockito.Mockito.when(minioService.generatePresignedUrl(org.mockito.Mockito.anyString()))
         .thenReturn("http://mock-minio/presigned-url");
@@ -105,9 +109,7 @@ public class PipelineFlowIntegrationTest {
         });
     testServer.start();
     ReflectionTestUtils.setField(
-        jobCoordinatorService,
-        "workerHealthUrl",
-        "http://localhost:" + testPort + "/health");
+        jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/health");
 
     // Setup mock redisTemplate operations
     mockRedisValueStore.clear();
@@ -185,31 +187,47 @@ public class PipelineFlowIntegrationTest {
       try {
         List<LayerElement> elements = layerElementRepository.findByLayerImageId(imgId);
         layerElementRepository.deleteAll(elements);
-      } catch (Exception e) {}
+      } catch (Exception e) {
+      }
       try {
         List<Layer> layers = layerRepository.findByImageId(imgId);
         layerRepository.deleteAll(layers);
-      } catch (Exception e) {}
+      } catch (Exception e) {
+      }
       try {
         List<OcrRegion> ocrRegions = ocrRegionRepository.findByImageId(imgId);
         ocrRegionRepository.deleteAll(ocrRegions);
-      } catch (Exception e) {}
+      } catch (Exception e) {
+      }
       try {
         List<Panel> panels = panelRepository.findByImageId(imgId);
         panelRepository.deleteAll(panels);
-      } catch (Exception e) {}
+      } catch (Exception e) {
+      }
     }
     for (UUID pgId : createdPageIds) {
-      try { pageRepository.deleteById(pgId); } catch (Exception e) {}
+      try {
+        pageRepository.deleteById(pgId);
+      } catch (Exception e) {
+      }
     }
     for (UUID imgId : createdImageIds) {
-      try { imageRepository.deleteById(imgId); } catch (Exception e) {}
+      try {
+        imageRepository.deleteById(imgId);
+      } catch (Exception e) {
+      }
     }
     for (UUID chId : createdChapterIds) {
-      try { chapterRepository.deleteById(chId); } catch (Exception e) {}
+      try {
+        chapterRepository.deleteById(chId);
+      } catch (Exception e) {
+      }
     }
     for (UUID sId : createdSeriesIds) {
-      try { seriesRepository.deleteById(sId); } catch (Exception e) {}
+      try {
+        seriesRepository.deleteById(sId);
+      } catch (Exception e) {
+      }
     }
   }
 
@@ -223,16 +241,18 @@ public class PipelineFlowIntegrationTest {
     seriesDto.setTargetLanguage("en");
     seriesDto.setReadingDirection("rtl");
 
-    MvcResult seriesResult = mockMvc
-        .perform(
-            post("/api/series")
-                .header("Authorization", adminToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(seriesDto)))
-        .andExpect(status().isOk())
-        .andReturn();
+    MvcResult seriesResult =
+        mockMvc
+            .perform(
+                post("/api/series")
+                    .header("Authorization", adminToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(seriesDto)))
+            .andExpect(status().isOk())
+            .andReturn();
 
-    SeriesDto savedSeries = objectMapper.readValue(seriesResult.getResponse().getContentAsString(), SeriesDto.class);
+    SeriesDto savedSeries =
+        objectMapper.readValue(seriesResult.getResponse().getContentAsString(), SeriesDto.class);
     assertNotNull(savedSeries.getId());
     createdSeriesIds.add(savedSeries.getId());
 
@@ -241,16 +261,18 @@ public class PipelineFlowIntegrationTest {
     ch1Dto.setChapterNumber(1.0);
     ch1Dto.setTitle("Chapter One");
 
-    MvcResult ch1Result = mockMvc
-        .perform(
-            post("/api/series/" + savedSeries.getId() + "/chapters")
-                .header("Authorization", adminToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(ch1Dto)))
-        .andExpect(status().isOk())
-        .andReturn();
+    MvcResult ch1Result =
+        mockMvc
+            .perform(
+                post("/api/series/" + savedSeries.getId() + "/chapters")
+                    .header("Authorization", adminToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(ch1Dto)))
+            .andExpect(status().isOk())
+            .andReturn();
 
-    ChapterDto savedCh1 = objectMapper.readValue(ch1Result.getResponse().getContentAsString(), ChapterDto.class);
+    ChapterDto savedCh1 =
+        objectMapper.readValue(ch1Result.getResponse().getContentAsString(), ChapterDto.class);
     assertNotNull(savedCh1.getId());
     createdChapterIds.add(savedCh1.getId());
 
@@ -259,16 +281,18 @@ public class PipelineFlowIntegrationTest {
     ch2Dto.setChapterNumber(2.0);
     ch2Dto.setTitle("Chapter Two");
 
-    MvcResult ch2Result = mockMvc
-        .perform(
-            post("/api/series/" + savedSeries.getId() + "/chapters")
-                .header("Authorization", adminToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(ch2Dto)))
-        .andExpect(status().isOk())
-        .andReturn();
+    MvcResult ch2Result =
+        mockMvc
+            .perform(
+                post("/api/series/" + savedSeries.getId() + "/chapters")
+                    .header("Authorization", adminToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(ch2Dto)))
+            .andExpect(status().isOk())
+            .andReturn();
 
-    ChapterDto savedCh2 = objectMapper.readValue(ch2Result.getResponse().getContentAsString(), ChapterDto.class);
+    ChapterDto savedCh2 =
+        objectMapper.readValue(ch2Result.getResponse().getContentAsString(), ChapterDto.class);
     createdChapterIds.add(savedCh2.getId());
 
     // Reorder chapters (make Chapter Two -> Chapter 1.5)
@@ -285,51 +309,47 @@ public class PipelineFlowIntegrationTest {
     assertEquals(1.5, chapterInDb.getChapterNumber());
 
     // 4. Upload Page (Image)
-    MockMultipartFile mockFile = new MockMultipartFile(
-        "file",
-        "page01.png",
-        "image/png",
-        "mock-image-bytes".getBytes()
-    );
+    MockMultipartFile mockFile =
+        new MockMultipartFile("file", "page01.png", "image/png", "mock-image-bytes".getBytes());
 
-    MvcResult pageResult = mockMvc
-        .perform(
-            multipart("/api/images")
-                .file(mockFile)
-                .param("chapterId", savedCh1.getId().toString())
-                .param("pageNumber", "1")
-                .header("Authorization", adminToken))
-        .andExpect(status().isOk())
-        .andReturn();
+    MvcResult pageResult =
+        mockMvc
+            .perform(
+                multipart("/api/images")
+                    .file(mockFile)
+                    .param("chapterId", savedCh1.getId().toString())
+                    .param("pageNumber", "1")
+                    .header("Authorization", adminToken))
+            .andExpect(status().isOk())
+            .andReturn();
 
     // Verify startPipeline enqueued a panel-detection job
     assertTrue(mockRedisListStore.containsKey("queue:panel-detection"));
     assertEquals(1, mockRedisListStore.get("queue:panel-detection").size());
 
     // Extract image ID from response
-    Map<?, ?> uploadResponse = objectMapper.readValue(pageResult.getResponse().getContentAsString(), Map.class);
+    Map<?, ?> uploadResponse =
+        objectMapper.readValue(pageResult.getResponse().getContentAsString(), Map.class);
     UUID imageId = UUID.fromString(uploadResponse.get("imageId").toString());
     UUID pageId = UUID.fromString(uploadResponse.get("pageId").toString());
     createdImageIds.add(imageId);
     createdPageIds.add(pageId);
 
     // 5. Test page reordering (Upload second page first to have >1 pages)
-    MockMultipartFile mockFile2 = new MockMultipartFile(
-        "file",
-        "page02.png",
-        "image/png",
-        "mock-image-bytes-2".getBytes()
-    );
-    MvcResult pageResult2 = mockMvc
-        .perform(
-            multipart("/api/images")
-                .file(mockFile2)
-                .param("chapterId", savedCh1.getId().toString())
-                .param("pageNumber", "2")
-                .header("Authorization", adminToken))
-        .andExpect(status().isOk())
-        .andReturn();
-    Map<?, ?> uploadResponse2 = objectMapper.readValue(pageResult2.getResponse().getContentAsString(), Map.class);
+    MockMultipartFile mockFile2 =
+        new MockMultipartFile("file", "page02.png", "image/png", "mock-image-bytes-2".getBytes());
+    MvcResult pageResult2 =
+        mockMvc
+            .perform(
+                multipart("/api/images")
+                    .file(mockFile2)
+                    .param("chapterId", savedCh1.getId().toString())
+                    .param("pageNumber", "2")
+                    .header("Authorization", adminToken))
+            .andExpect(status().isOk())
+            .andReturn();
+    Map<?, ?> uploadResponse2 =
+        objectMapper.readValue(pageResult2.getResponse().getContentAsString(), Map.class);
     UUID pageId2 = UUID.fromString(uploadResponse2.get("pageId").toString());
     UUID imageId2 = UUID.fromString(uploadResponse2.get("imageId").toString());
     createdPageIds.add(pageId2);
@@ -341,7 +361,9 @@ public class PipelineFlowIntegrationTest {
             put("/api/chapters/" + savedCh1.getId() + "/pages/reorder")
                 .header("Authorization", adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(List.of(pageId2.toString(), pageId.toString()))))
+                .content(
+                    objectMapper.writeValueAsString(
+                        List.of(pageId2.toString(), pageId.toString()))))
         .andExpect(status().isOk());
 
     Page dbPage1 = pageRepository.findById(pageId).orElseThrow();
@@ -414,8 +436,11 @@ public class PipelineFlowIntegrationTest {
 
     Map<String, Object> layoutCallback = new HashMap<>();
     layoutCallback.put("imageId", imageId.toString());
-    layoutCallback.put("regionTypes", List.of(Map.of("regionId", regionId.toString(), "regionType", "speech")));
-    layoutCallback.put("conversations", List.of(Map.of("sceneType", "dialogue", "regionIds", List.of(regionId.toString()))));
+    layoutCallback.put(
+        "regionTypes", List.of(Map.of("regionId", regionId.toString(), "regionType", "speech")));
+    layoutCallback.put(
+        "conversations",
+        List.of(Map.of("sceneType", "dialogue", "regionIds", List.of(regionId.toString()))));
 
     mockMvc
         .perform(
@@ -524,28 +549,34 @@ public class PipelineFlowIntegrationTest {
     assertEquals(2, ocrLayerCount);
 
     // Verify only the latest OCR layer is visible
-    Layer latestOcrLayer = layers.stream()
-        .filter(l -> "ocr".equalsIgnoreCase(l.getType()) && l.getVisible())
-        .findFirst()
-        .orElse(null);
+    Layer latestOcrLayer =
+        layers.stream()
+            .filter(l -> "ocr".equalsIgnoreCase(l.getType()) && l.getVisible())
+            .findFirst()
+            .orElse(null);
     assertNotNull(latestOcrLayer);
 
-    Layer oldOcrLayer = layers.stream()
-        .filter(l -> "ocr".equalsIgnoreCase(l.getType()) && !l.getVisible())
-        .findFirst()
-        .orElse(null);
+    Layer oldOcrLayer =
+        layers.stream()
+            .filter(l -> "ocr".equalsIgnoreCase(l.getType()) && !l.getVisible())
+            .findFirst()
+            .orElse(null);
     assertNotNull(oldOcrLayer);
     assertTrue(latestOcrLayer.getZOrder() > oldOcrLayer.getZOrder());
 
     // Check GET /api/internal/images/{imageId} returns only latest visible layer regions
-    MvcResult finalInfoResult = mockMvc
-        .perform(
-            get("/api/internal/images/" + imageId)
-                .header("Authorization", adminToken))
-        .andExpect(status().isOk())
-        .andReturn();
+    MvcResult finalInfoResult =
+        mockMvc
+            .perform(get("/api/internal/images/" + imageId).header("Authorization", adminToken))
+            .andExpect(status().isOk())
+            .andReturn();
 
-    Map<?, ?> finalInfo = objectMapper.readValue(finalInfoResult.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8), Map.class);
+    Map<?, ?> finalInfo =
+        objectMapper.readValue(
+            finalInfoResult
+                .getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8),
+            Map.class);
     List<?> finalOcrRegions = (List<?>) finalInfo.get("ocrRegions");
     assertEquals(1, finalOcrRegions.size());
     Map<?, ?> activeRegion = (Map<?, ?>) finalOcrRegions.get(0);
@@ -555,54 +586,49 @@ public class PipelineFlowIntegrationTest {
   @Test
   public void testClonedOcrLayerRegionPreservationAndVisibility() throws Exception {
     // 1. Create a mock Image
-    Image image = Image.builder()
-        .filename("test-clone.png")
-        .storagePath("originals/test-clone.png")
-        .hash("test-clone-hash")
-        .build();
+    Image image =
+        Image.builder()
+            .filename("test-clone.png")
+            .storagePath("originals/test-clone.png")
+            .hash("test-clone-hash")
+            .build();
     image = imageRepository.save(image);
     createdImageIds.add(image.getId());
 
     // 2. Create OCR Region
-    OcrRegion ocrRegion = OcrRegion.builder()
-        .image(image)
-        .text("Original Text")
-        .detectedLanguage("ja")
-        .bboxX(10)
-        .bboxY(10)
-        .bboxW(100)
-        .bboxH(50)
-        .build();
+    OcrRegion ocrRegion =
+        OcrRegion.builder()
+            .image(image)
+            .text("Original Text")
+            .detectedLanguage("ja")
+            .bboxX(10)
+            .bboxY(10)
+            .bboxW(100)
+            .bboxH(50)
+            .build();
     ocrRegion = ocrRegionRepository.save(ocrRegion);
 
     // 3. Create Layer (OCR)
-    Layer ocrLayer = Layer.builder()
-        .image(image)
-        .type("ocr")
-        .visible(true)
-        .zOrder(0)
-        .build();
+    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(0).build();
     ocrLayer = layerRepository.save(ocrLayer);
 
     // 4. Create Layer Element with Region
-    LayerElement element = LayerElement.builder()
-        .layer(ocrLayer)
-        .region(ocrRegion)
-        .text("Original Text")
-        .x(10.0)
-        .y(10.0)
-        .build();
+    LayerElement element =
+        LayerElement.builder()
+            .layer(ocrLayer)
+            .region(ocrRegion)
+            .text("Original Text")
+            .x(10.0)
+            .y(10.0)
+            .build();
     element = layerElementRepository.save(element);
 
-    // 5. Test frontend cloning behaviour via API /api/images/{imageId}/layers and /api/layers/{layerId}/elements
-    // We clone the layer. Since the frontend would call the create layer endpoint and then POST each element, we simulate this.
+    // 5. Test frontend cloning behaviour via API /api/images/{imageId}/layers and
+    // /api/layers/{layerId}/elements
+    // We clone the layer. Since the frontend would call the create layer endpoint and then POST
+    // each element, we simulate this.
     // Create new layer (the clone)
-    Layer clonedLayer = Layer.builder()
-        .image(image)
-        .type("ocr")
-        .visible(true)
-        .zOrder(1)
-        .build();
+    Layer clonedLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(1).build();
     clonedLayer = layerRepository.save(clonedLayer);
 
     // Create cloned layer element, passing regionId in the DTO
@@ -612,26 +638,35 @@ public class PipelineFlowIntegrationTest {
     dto.setY(element.getY());
     dto.setRegionId(ocrRegion.getId()); // regionId passed in the DTO
 
-    MvcResult cloneResult = mockMvc.perform(
-        post("/api/layers/" + clonedLayer.getId() + "/elements")
-            .header("Authorization", adminToken)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(dto)))
-        .andExpect(status().isOk())
-        .andReturn();
+    MvcResult cloneResult =
+        mockMvc
+            .perform(
+                post("/api/layers/" + clonedLayer.getId() + "/elements")
+                    .header("Authorization", adminToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(dto)))
+            .andExpect(status().isOk())
+            .andReturn();
 
-    Map<?, ?> clonedElement = objectMapper.readValue(cloneResult.getResponse().getContentAsString(), Map.class);
+    Map<?, ?> clonedElement =
+        objectMapper.readValue(cloneResult.getResponse().getContentAsString(), Map.class);
     assertNotNull(clonedElement.get("regionId"));
     assertEquals(ocrRegion.getId().toString(), clonedElement.get("regionId"));
 
     // 6. Test GET /api/internal/images/{imageId} with cloned layer
-    MvcResult internalInfoResult = mockMvc.perform(
-        get("/api/internal/images/" + image.getId())
-            .header("Authorization", adminToken))
-        .andExpect(status().isOk())
-        .andReturn();
+    MvcResult internalInfoResult =
+        mockMvc
+            .perform(
+                get("/api/internal/images/" + image.getId()).header("Authorization", adminToken))
+            .andExpect(status().isOk())
+            .andReturn();
 
-    Map<?, ?> info = objectMapper.readValue(internalInfoResult.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8), Map.class);
+    Map<?, ?> info =
+        objectMapper.readValue(
+            internalInfoResult
+                .getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8),
+            Map.class);
     List<?> ocrRegions = (List<?>) info.get("ocrRegions");
     assertEquals(1, ocrRegions.size());
 
@@ -639,14 +674,21 @@ public class PipelineFlowIntegrationTest {
     clonedLayer.setVisible(false);
     layerRepository.save(clonedLayer);
 
-    // Verify GET /api/internal/images/{imageId} STILL returns the region because it finds the latest OCR layer regardless of visibility
-    MvcResult hiddenInfoResult = mockMvc.perform(
-        get("/api/internal/images/" + image.getId())
-            .header("Authorization", adminToken))
-        .andExpect(status().isOk())
-        .andReturn();
+    // Verify GET /api/internal/images/{imageId} STILL returns the region because it finds the
+    // latest OCR layer regardless of visibility
+    MvcResult hiddenInfoResult =
+        mockMvc
+            .perform(
+                get("/api/internal/images/" + image.getId()).header("Authorization", adminToken))
+            .andExpect(status().isOk())
+            .andReturn();
 
-    Map<?, ?> hiddenInfo = objectMapper.readValue(hiddenInfoResult.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8), Map.class);
+    Map<?, ?> hiddenInfo =
+        objectMapper.readValue(
+            hiddenInfoResult
+                .getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8),
+            Map.class);
     List<?> hiddenOcrRegions = (List<?>) hiddenInfo.get("ocrRegions");
     assertEquals(1, hiddenOcrRegions.size());
   }

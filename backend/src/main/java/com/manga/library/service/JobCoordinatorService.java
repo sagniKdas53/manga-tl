@@ -79,9 +79,7 @@ public class JobCoordinatorService {
       job.put("maxAttempts", 3);
       job.put("createdAt", OffsetDateTime.now().toString());
 
-      pageRepository
-          .findByImageId(imageId)
-          .stream()
+      pageRepository.findByImageId(imageId).stream()
           .findFirst()
           .ifPresent(
               page -> {
@@ -354,9 +352,7 @@ public class JobCoordinatorService {
     // 4. Enqueue translation job
     boolean isReaderMode = false;
     Series series =
-        pageRepository
-            .findByImageId(imageId)
-            .stream()
+        pageRepository.findByImageId(imageId).stream()
             .findFirst()
             .map(Page::getChapter)
             .map(Chapter::getSeries)
@@ -393,9 +389,7 @@ public class JobCoordinatorService {
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     Series series =
-        pageRepository
-            .findByImageId(imageId)
-            .stream()
+        pageRepository.findByImageId(imageId).stream()
             .findFirst()
             .map(Page::getChapter)
             .map(Chapter::getSeries)

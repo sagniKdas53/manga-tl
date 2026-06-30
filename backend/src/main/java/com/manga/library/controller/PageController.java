@@ -335,7 +335,7 @@ public class PageController {
                       UUID regionId = UUID.fromString(elNode.get("regionId").asText());
                       region = ocrRegionRepository.findById(regionId).orElse(null);
                     } catch (Exception e) {
-                      // ignore
+                      log.warn("Invalid regionId format or missing region: {}", elNode.get("regionId").asText(), e);
                     }
                   }
 
@@ -1169,7 +1169,7 @@ public class PageController {
                   UUID regionId = UUID.fromString(elNode.get("regionId").asText());
                   region = ocrRegionRepository.findById(regionId).orElse(null);
                 } catch (Exception e) {
-                  // ignore
+                  log.warn("Invalid regionId format or missing region: {}", elNode.get("regionId").asText(), e);
                 }
               }
 
