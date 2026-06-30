@@ -551,4 +551,103 @@ public class PipelineFlowIntegrationTest {
     Map<?, ?> activeRegion = (Map<?, ?>) finalOcrRegions.get(0);
     assertEquals("こんにちは、世界", activeRegion.get("text"));
   }
+
+  @Test
+  public void testClonedOcrLayerRegionPreservationAndVisibility() throws Exception {
+    // 1. Create a mock Image
+    Image image = Image.builder()
+        .filename("test-clone.png")
+        .storagePath("originals/test-clone.png")
+        .hash("test-clone-hash")
+        .build();
+    image = imageRepository.save(image);
+    createdImageIds.add(image.getId());
+
+    // 2. Create OCR Region
+    OcrRegion ocrRegion = OcrRegion.builder()
+        .image(image)
+        .text("Original Text")
+        .detectedLanguage("ja")
+        .bboxX(10)
+        .bboxY(10)
+        .bboxW(100)
+        .bboxH(50)
+        .build();
+    ocrRegion = ocrRegionRepository.save(ocrRegion);
+
+    // 3. Create Layer (OCR)
+    Layer ocrLayer = Layer.builder()
+        .image(image)
+        .type("ocr")
+        .visible(true)
+        .zOrder(0)
+        .build();
+    ocrLayer = layerRepository.save(ocrLayer);
+
+    // 4. Create Layer Element with Region
+    LayerElement element = LayerElement.builder()
+        .layer(ocrLayer)
+        .region(ocrRegion)
+        .text("Original Text")
+        .x(10.0)
+        .y(10.0)
+        .build();
+    element = layerElementRepository.save(element);
+
+    // 5. Test frontend cloning behaviour via API /api/images/{imageId}/layers and /api/layers/{layerId}/elements
+    // We clone the layer. Since the frontend would call the create layer endpoint and then POST each element, we simulate this.
+    // Create new layer (the clone)
+    Layer clonedLayer = Layer.builder()
+        .image(image)
+        .type("ocr")
+        .visible(true)
+        .zOrder(1)
+        .build();
+    clonedLayer = layerRepository.save(clonedLayer);
+
+    // Create cloned layer element, passing regionId in the DTO
+    com.manga.library.dto.LayerElementDto dto = new com.manga.library.dto.LayerElementDto();
+    dto.setText(element.getText());
+    dto.setX(element.getX());
+    dto.setY(element.getY());
+    dto.setRegionId(ocrRegion.getId()); // regionId passed in the DTO
+
+    MvcResult cloneResult = mockMvc.perform(
+        post("/api/layers/" + clonedLayer.getId() + "/elements")
+            .header("Authorization", adminToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isOk())
+        .andReturn();
+
+    Map<?, ?> clonedElement = objectMapper.readValue(cloneResult.getResponse().getContentAsString(), Map.class);
+    assertNotNull(clonedElement.get("regionId"));
+    assertEquals(ocrRegion.getId().toString(), clonedElement.get("regionId"));
+
+    // 6. Test GET /api/internal/images/{imageId} with cloned layer
+    MvcResult internalInfoResult = mockMvc.perform(
+        get("/api/internal/images/" + image.getId())
+            .header("Authorization", adminToken))
+        .andExpect(status().isOk())
+        .andReturn();
+
+    Map<?, ?> info = objectMapper.readValue(internalInfoResult.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8), Map.class);
+    List<?> ocrRegions = (List<?>) info.get("ocrRegions");
+    assertEquals(1, ocrRegions.size());
+
+    // 7. Toggle visibility of the cloned OCR layer to hidden
+    clonedLayer.setVisible(false);
+    layerRepository.save(clonedLayer);
+
+    // Verify GET /api/internal/images/{imageId} STILL returns the region because it finds the latest OCR layer regardless of visibility
+    MvcResult hiddenInfoResult = mockMvc.perform(
+        get("/api/internal/images/" + image.getId())
+            .header("Authorization", adminToken))
+        .andExpect(status().isOk())
+        .andReturn();
+
+    Map<?, ?> hiddenInfo = objectMapper.readValue(hiddenInfoResult.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8), Map.class);
+    List<?> hiddenOcrRegions = (List<?>) hiddenInfo.get("ocrRegions");
+    assertEquals(1, hiddenOcrRegions.size());
+  }
 }

@@ -1453,8 +1453,9 @@ export const Reader: React.FC<ReaderProps> = ({
             fontWeight: el.fontWeight,
             fontStyle: el.fontStyle,
             boxShape: el.boxShape,
-            maskPolygon: el.maskPolygon
-            // id and regionId intentionally omitted — fresh UUIDs, standalone copies
+            maskPolygon: el.maskPolygon,
+            regionId: el.regionId
+            // id intentionally omitted — fresh UUIDs, standalone copies
           })
         });
         if (cloneRes.ok) {
@@ -1780,6 +1781,7 @@ export const Reader: React.FC<ReaderProps> = ({
           fontStyle: el.fontStyle || 'normal',
           boxShape: el.boxShape || 'rectangular',
           maskPolygon: el.maskPolygon,
+          regionId: el.regionId,
         })),
       })),
     };

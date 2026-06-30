@@ -25,6 +25,7 @@ public class LayerController {
   private final LayerEditHistoryRepository layerEditHistoryRepository;
   private final ImageRepository imageRepository;
   private final ObjectMapper objectMapper;
+  private final OcrRegionRepository ocrRegionRepository;
 
   @PutMapping("/layer-elements/{id}")
   @Transactional
@@ -64,6 +65,10 @@ public class LayerController {
                 if (dto.getFontStyle() != null) element.setFontStyle(dto.getFontStyle());
                 if (dto.getBoxShape() != null) element.setBoxShape(dto.getBoxShape());
                 if (dto.getMaskPolygon() != null) element.setMaskPolygon(dto.getMaskPolygon());
+                if (dto.getRegionId() != null) {
+                  OcrRegion region = ocrRegionRepository.findById(dto.getRegionId()).orElse(null);
+                  element.setRegion(region);
+                }
 
                 element.setIsManuallyEdited(true);
                 element.setEditedAt(OffsetDateTime.now());
@@ -244,9 +249,14 @@ public class LayerController {
         .findById(layerId)
         .map(
             layer -> {
+              OcrRegion region = null;
+              if (dto.getRegionId() != null) {
+                region = ocrRegionRepository.findById(dto.getRegionId()).orElse(null);
+              }
               LayerElement el =
                   LayerElement.builder()
                       .layer(layer)
+                      .region(region)
                       .text(dto.getText() != null ? dto.getText() : "")
                       .font(dto.getFont() != null ? dto.getFont() : "Comic Neue")
                       .size(dto.getSize() != null ? dto.getSize() : 16.0)
@@ -307,6 +317,7 @@ public class LayerController {
     map.put("fontStyle", el.getFontStyle());
     map.put("boxShape", el.getBoxShape());
     map.put("maskPolygon", el.getMaskPolygon());
+    map.put("regionId", el.getRegion() != null ? el.getRegion().getId() : null);
     return map;
   }
 }
