@@ -137,6 +137,7 @@ services:
       - QA_LLM_MODEL=${QA_LLM_MODEL}
       - QA_VLM_MODEL=${QA_VLM_MODEL}
       - RATE_LIMIT=${RATE_LIMIT:-10}
+      - DISABLE_LOCAL_OCR=${DISABLE_LOCAL_OCR:-false}
       - DISABLE_DEEPL_TRANSLATE=${DISABLE_DEEPL_TRANSLATE:-false}
       - DEEPL_API_KEY=${DEEPL_API_KEY}
       - DISABLE_GOOGLE_TRANSLATE=${DISABLE_GOOGLE_TRANSLATE:-false}
@@ -158,7 +159,7 @@ services:
       - MANGA_OCR_USE_LOCAL=true
       - MANGA_OCR_MODEL_PATH=/root/.cache/huggingface
       # Log Level
-      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - LOG_LEVEL=${LOG_LEVEL_WORKER:-DEBUG}
     depends_on:
       - redis
       - minio

@@ -61,6 +61,8 @@ MODELS_TO_TEST = [
     {"name": "qwen/qwen3-vl-32b-instruct", "provider": "openrouter", "cost_per_m": 0.60},
     {"name": "qwen/qwen3-vl-235b-a22b-instruct", "provider": "openrouter", "cost_per_m": 2.50},
     {"name": "qwen/qwen-2.5-vl-72b-instruct", "provider": "openrouter", "cost_per_m": 1.20},
+    {"name": "google/gemini-3.5-flash", "provider": "openrouter", "cost_per_m": 0.075},
+    {"name": "google/gemini-3.1-flash-lite", "provider": "openrouter", "cost_per_m": 0.075},
 ]
 
 def call_vlm_ocr(image_crop, model_info, language):
