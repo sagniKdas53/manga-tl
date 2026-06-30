@@ -59,6 +59,57 @@ interface RenderItem {
 
 type SelectedItemType = (RenderItem & LayerElement) | RenderItem | LayerElement | null;
 
+async function saveElementChanges(
+  element: LayerElement,
+  showAlert: boolean = true,
+  token: string,
+  showToast: (message: string, type?: 'success' | 'error' | 'info' | 'warning') => void,
+  showError: (message: string, options?: { action?: { label: string; onClick: () => void } }) => void
+) {
+  try {
+    const res = await safeFetch(`/api/layer-elements/${element.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        text: element.text,
+        font: element.font,
+        size: element.size,
+        autoSize: element.autoSize,
+        maxWidth: element.maxWidth,
+        maxHeight: element.maxHeight,
+        wordWrap: element.wordWrap,
+        rotation: element.rotation,
+        x: element.x,
+        y: element.y,
+        visible: element.visible,
+        overflow: element.overflow,
+        backgroundColor: element.backgroundColor,
+        textColor: element.textColor,
+        fontWeight: element.fontWeight || 'normal',
+        fontStyle: element.fontStyle || 'normal',
+        boxShape: element.boxShape,
+        maskPolygon: element.maskPolygon,
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to update element on server');
+    }
+
+    if (showAlert) {
+      showToast('Element updated successfully!', 'success');
+    }
+  } catch (err) {
+    console.error(err);
+    showError('Error updating element on server.', {
+      action: { label: 'Retry', onClick: () => saveElementChanges(element, showAlert, token, showToast, showError) }
+    });
+  }
+}
+
 export const Reader: React.FC<ReaderProps> = ({
   user,
   selectedSeries,
@@ -564,50 +615,12 @@ export const Reader: React.FC<ReaderProps> = ({
   }, []);
 
   // Declared before handleUndo/handleRedo so the callbacks can reference it
-  const handleSaveElementChanges = useCallback(async (element: LayerElement, showAlert: boolean = true) => {
-    try {
-      const res = await safeFetch(`/api/layer-elements/${element.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`
-        },
-        body: JSON.stringify({
-          text: element.text,
-          font: element.font,
-          size: element.size,
-          autoSize: element.autoSize,
-          maxWidth: element.maxWidth,
-          maxHeight: element.maxHeight,
-          wordWrap: element.wordWrap,
-          rotation: element.rotation,
-          x: element.x,
-          y: element.y,
-          visible: element.visible,
-          overflow: element.overflow,
-          backgroundColor: element.backgroundColor,
-          textColor: element.textColor,
-          fontWeight: element.fontWeight || 'normal',
-          fontStyle: element.fontStyle || 'normal',
-          boxShape: element.boxShape,
-          maskPolygon: element.maskPolygon,
-        })
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to update element on server');
-      }
-
-      if (showAlert) {
-        showToast('Element updated successfully!', 'success');
-      }
-    } catch (err) {
-      console.error(err);
-      showError('Error updating element on server.', {
-        action: { label: 'Retry', onClick: () => handleSaveElementChanges(element, showAlert) }
-      });
-    }
-  }, [user.token, showToast]);
+  const handleSaveElementChanges = useCallback(
+    async (element: LayerElement, showAlert: boolean = true) => {
+      await saveElementChanges(element, showAlert, user.token, showToast, showError);
+    },
+    [user.token, showToast, showError]
+  );
 
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0) return;
