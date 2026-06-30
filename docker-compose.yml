@@ -125,21 +125,17 @@ services:
       - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-1.0}
       # Models
       # This is the main controller which controls which LLM's are used
-      - MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_PROVIDER=${MODEL_PROVIDER}
       - PREFERRED_LLM_MODEL=${PREFERRED_LLM_MODEL}
       - PREFERRED_VLM_MODEL=${PREFERRED_VLM_MODEL}
-      # - PREFERRED_LLM_MODEL=${PREFERRED_LLM_MODEL:-deepseek-ai/deepseek-v4-pro}
-      # - PREFERRED_VLM_MODEL=${PREFERRED_VLM_MODEL:-nvidia/nemotron-nano-12b-v2-vl}
       - QA_MODEL_PROVIDER=${QA_MODEL_PROVIDER}
       - QA_LLM_MODEL=${QA_LLM_MODEL}
       - QA_VLM_MODEL=${QA_VLM_MODEL}
-      # - QA_LLM_MODEL=${QA_LLM_MODEL:-deepseek-ai/deepseek-v4-flash}
-      # - QA_VLM_MODEL=${QA_VLM_MODEL:-nvidia/nemotron-nano-12b-v2-vl}
       - RATE_LIMIT=${RATE_LIMIT:-10}
       - DISABLE_DEEPL_TRANSLATE=${DISABLE_DEEPL_TRANSLATE:-false}
       - DEEPL_API_KEY=${DEEPL_API_KEY}
