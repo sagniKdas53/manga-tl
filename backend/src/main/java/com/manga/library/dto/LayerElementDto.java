@@ -22,4 +22,5 @@ public class LayerElementDto {
   private String fontStyle;
   private String boxShape;
   private String maskPolygon;
+  private java.util.UUID regionId;
 }

@@ -329,9 +329,20 @@ public class PageController {
                     maskPolygon = mpNode.isContainerNode() ? mpNode.toString() : mpNode.asText();
                   }
 
+                  OcrRegion region = null;
+                  if (elNode.has("regionId") && !elNode.get("regionId").isNull()) {
+                    try {
+                      UUID regionId = UUID.fromString(elNode.get("regionId").asText());
+                      region = ocrRegionRepository.findById(regionId).orElse(null);
+                    } catch (Exception e) {
+                      // ignore
+                    }
+                  }
+
                   LayerElement newEl =
                       LayerElement.builder()
                           .layer(newLayer)
+                          .region(region)
                           .text(text)
                           .font(font)
                           .size(size)
@@ -1152,9 +1163,20 @@ public class PageController {
                 maskPolygon = mpNode.isContainerNode() ? mpNode.toString() : mpNode.asText();
               }
 
+              OcrRegion region = null;
+              if (elNode.has("regionId") && !elNode.get("regionId").isNull()) {
+                try {
+                  UUID regionId = UUID.fromString(elNode.get("regionId").asText());
+                  region = ocrRegionRepository.findById(regionId).orElse(null);
+                } catch (Exception e) {
+                  // ignore
+                }
+              }
+
               LayerElement newEl =
                   LayerElement.builder()
                       .layer(newLayer)
+                      .region(region)
                       .text(text)
                       .font(font)
                       .size(size)

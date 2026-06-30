@@ -51,11 +51,11 @@ public class InternalJobController {
               // queries that would create lazy proxies in the persistence context
               List<OcrRegion> allOcrRegions = ocrRegionRepository.findByImageId(imageId);
 
-              // Only return OCR regions from the latest visible OCR layer
+              // Only return OCR regions from the latest OCR layer
               List<Layer> allLayers = layerRepository.findByImageId(imageId);
               Layer latestOcrLayer = null;
               for (Layer l : allLayers) {
-                if ("ocr".equalsIgnoreCase(l.getType()) && Boolean.TRUE.equals(l.getVisible())) {
+                if ("ocr".equalsIgnoreCase(l.getType())) {
                   if (latestOcrLayer == null || l.getZOrder() > latestOcrLayer.getZOrder()) {
                     latestOcrLayer = l;
                   }
