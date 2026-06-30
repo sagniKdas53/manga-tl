@@ -91,6 +91,8 @@ public class InternalJobController {
               // Query page history and series context for translation context assembly
               pageRepository
                   .findByImageId(imageId)
+                  .stream()
+                  .findFirst()
                   .ifPresent(
                       page -> {
                         Chapter chapter = page.getChapter();

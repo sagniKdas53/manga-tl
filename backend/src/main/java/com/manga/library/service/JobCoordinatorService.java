@@ -81,6 +81,8 @@ public class JobCoordinatorService {
 
       pageRepository
           .findByImageId(imageId)
+          .stream()
+          .findFirst()
           .ifPresent(
               page -> {
                 if (page.getChapter() != null && page.getChapter().getSeries() != null) {
@@ -354,6 +356,8 @@ public class JobCoordinatorService {
     Series series =
         pageRepository
             .findByImageId(imageId)
+            .stream()
+            .findFirst()
             .map(Page::getChapter)
             .map(Chapter::getSeries)
             .orElse(null);
@@ -391,6 +395,8 @@ public class JobCoordinatorService {
     Series series =
         pageRepository
             .findByImageId(imageId)
+            .stream()
+            .findFirst()
             .map(Page::getChapter)
             .map(Chapter::getSeries)
             .orElse(null);
