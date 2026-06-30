@@ -7,7 +7,7 @@
 - [x] The layers are great they organize the elemets well and stack well on each other (one improvemnt I can think of is numbering the layers in the oder they are stacked), they are like very easy to switch over, if I say click on the OCR mask then the element inspector for the OCR region in the OCR layer opens up but then I fi click on the translated mask the same happens for the other layer it's as if they are all active in the same place (I suspect the inablity of the front-end to determine the active alayer if there is any such thing is the primary reason why free resize doesn't work it just doesn't know which layer to create box in which can then be moved and resized as needed)
 - [x] The Translated text is breaking out of it's bounding box, see sample1 v7 both the OCR (atleast has the correct mask) and the Typeset version (the mask is onlyon the bubbles but the text overflows)
 
-## Frontend Issues & Improvements
+## [DONE] Frontend Issues & Improvements
 
 - [x] The free resize mode doesn't work on the front-end, say I select a translated box the element inspetor opens up now when I click on the Switch to free resize mode the button changes Free Resizing: Active but the box that desigantes the selection to be dragged across the image or resized to desired shape doesn't appear, clicking on the image just clears off the free resize mode.
   - [x] For some reason this is not working at all
@@ -21,7 +21,6 @@
 - [x] **Model Picker in UI:** See new section below.
 - [x] The delete confirmation boxes, don't respect the light mode theme, are laggy (on a tablet, which I tested on) and in general don't look good — **fixed**: now uses CSS variables, no blur, no cubic-bezier bounce.
 - [x] The toast doesn't respect the light mode theme and also is only used for upload completed notification — **fixed**: global ToastProvider uses `var(--text-main)` and fires translation SSE toasts outside Reader.
-- [ ] **Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
 
 ## Model Picker / Runtime Settings
 
@@ -30,7 +29,7 @@
 - [ ] **Frontend:** Settings panel in the navbar (gear icon) showing active provider + model dropdowns. Persists selection via the API.
 - [ ] **Per-user vs global:** Decide on scope — global settings controlled by admin, with optional per-user overrides stored in user profile.
 
-## Backend & Worker Pipeline Improvements
+## [DONE] Backend & Worker Pipeline Improvements
 
 - [x] **Async Job Queue with Retry & Backoff:** Refactor the translation and OCR pipeline into an asynchronous job queue (e.g., BullMQ, Celery). If a provider is unavailable or an API call fails, prevent it from returning blank translations and erroneously passing QA. Instead, requeue the job with an exponential backoff strategy to ensure reliability over long periods.
 - [x] **Image Deduplication via Hashing:** Implement image hashing (similar to Immich) to detect if an uploaded image has already been OCR'd and translated. If a matching hash exists, link to the existing processed image/data. This optimization will save database space, significantly reduce processing time, and prevent duplicate API costs.
@@ -42,5 +41,36 @@
 - [x] **Layer Project Re-hydration:** Support importing previously exported translation projects to restore workspace and layers state.
 - [x] **Redo-OCR:** Having some issues, like duplicate bubble  and order getting messed up will need to fix and test.
 - [x] **Redo-Translation:** Not working at all right now (needs investigating), basically just creates a blank layer with no elements, redo-ing ocr though works and it even creates a new TL layer for the new OCR layer.
+
+## Testing & Quality Assurance
+
+- [ ] Test intentional bad translation using a very dumb translation model to verify QA model capabilities.
+- [ ] Test with very bad quality images to observe OCR failure handling.
+- [ ] Test uploading a KR image to a JP series to observe system behavior.
+- [ ] Fix worker tests failing due to missing Redis instance (either mock the redis server or spin one up for tests).
+
+## Series Configuration
+
+- [ ] Add source and target languages to series configuration.
+  - [ ] `JP --> EN` (original use case).
+  - [ ] `EN --> EN` (create thumbnails, perform OCR for later search/summarization, no translation needed).
+  - [ ] `KR --> JP` (experimental LLM translation).
+- [ ] Add a model picker at the series level using series config.
+
+## Frontend Issues & Improvements
+
+- [ ] Incorporate QA feedback into the front-end by outlining the OCR and/or translation bubble in red margins for layers that failed QA (manual intervention needed).
+- [ ] Make notifications and toasts more informative (include specific image, chapter, or series instead of just the step that was done).
+- [ ] Deleting the first image of first chapter of a series causes the series to be thumbnail less, which the chapter successfully identifies and uses the now first page inside it, the series doesn't (this also implies that if the first chapter is deleted a similar issue will occur)
+- [ ] **Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
+
+## Backend & Worker Pipeline Improvements
+
+- [ ] Store QA feedback as metadata in the layers.
+- [ ] If a layer fails QA, store the region that failed and the reason in the layer metadata.
+- [ ] Investigate using OpenRouter for OCR models to speed up processing via cloud (keeping the local system as a fallback).
+- [ ] Add support for exporting whole rendered chapters as a zip/ePub.
+- [ ] Add a `meta-data.json` to the chapter export zip containing data about all pages (order, layer counts, active layer, manual-qa-needed, manual-changes-done, OCR/TL models used, cost of page, cost of chapter).
+- [ ] Log and keep track of costs if paid models are used (save this as metadata in layers too).
 - [ ] **Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
 - [ ] **Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
