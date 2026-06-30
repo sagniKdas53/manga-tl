@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface PageRepository extends JpaRepository<Page, UUID> {
   List<Page> findByChapterIdOrderByPageNumberAsc(UUID chapterId);
 
-  Optional<Page> findByImageId(UUID imageId);
+  List<Page> findByImageId(UUID imageId);
 
   Optional<Page> findByChapterIdAndPageNumber(UUID chapterId, Integer pageNumber);
 
