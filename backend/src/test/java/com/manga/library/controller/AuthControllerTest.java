@@ -1,0 +1,149 @@
+package com.manga.library.controller;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manga.library.config.JwtAuthFilter;
+import com.manga.library.config.JwtUtils;
+import com.manga.library.dto.LoginRequest;
+import com.manga.library.dto.RegisterRequest;
+import com.manga.library.model.User;
+import com.manga.library.repository.UserRepository;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(AuthController.class)
+@AutoConfigureMockMvc(addFilters = false)
+public class AuthControllerTest {
+
+  @Autowired private MockMvc mockMvc;
+
+  @Autowired private ObjectMapper objectMapper;
+
+  @MockBean private UserRepository userRepository;
+
+  @MockBean private PasswordEncoder passwordEncoder;
+
+  @MockBean private JwtUtils jwtUtils;
+
+  @MockBean private JwtAuthFilter jwtAuthFilter;
+
+  @Test
+  public void testIsSetupRequired_True() throws Exception {
+    when(userRepository.count()).thenReturn(0L);
+
+    mockMvc
+        .perform(get("/api/auth/setup-required"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.setupRequired").value(true));
+  }
+
+  @Test
+  public void testIsSetupRequired_False() throws Exception {
+    when(userRepository.count()).thenReturn(10L);
+
+    mockMvc
+        .perform(get("/api/auth/setup-required"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.setupRequired").value(false));
+  }
+
+  @Test
+  public void testRegister_AdminOnFirstRegistration() throws Exception {
+    when(userRepository.count()).thenReturn(0L);
+    when(userRepository.findByEmail("admin@test.com")).thenReturn(Optional.empty());
+    when(passwordEncoder.encode("password")).thenReturn("hashed_password");
+    when(jwtUtils.generateToken("admin@test.com")).thenReturn("mocked_token");
+
+    RegisterRequest request = new RegisterRequest();
+    request.setEmail("admin@test.com");
+    request.setPassword("password");
+    request.setDisplayName("Admin User");
+
+    mockMvc
+        .perform(
+            post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.token").value("mocked_token"))
+        .andExpect(jsonPath("$.role").value("admin"));
+
+    verify(userRepository, times(1)).save(any(User.class));
+  }
+
+  @Test
+  public void testRegister_EmailAlreadyExists() throws Exception {
+    User existingUser = User.builder().email("test@test.com").build();
+    when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(existingUser));
+
+    RegisterRequest request = new RegisterRequest();
+    request.setEmail("test@test.com");
+    request.setPassword("password");
+    request.setDisplayName("Test User");
+
+    mockMvc
+        .perform(
+            post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  public void testLogin_Success() throws Exception {
+    User user =
+        User.builder()
+            .email("test@test.com")
+            .passwordHash("hashed_password")
+            .displayName("Test User")
+            .role("viewer")
+            .build();
+
+    when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+    when(passwordEncoder.matches("password", "hashed_password")).thenReturn(true);
+    when(jwtUtils.generateToken("test@test.com")).thenReturn("mocked_token");
+
+    LoginRequest request = new LoginRequest();
+    request.setEmail("test@test.com");
+    request.setPassword("password");
+
+    mockMvc
+        .perform(
+            post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.token").value("mocked_token"))
+        .andExpect(jsonPath("$.email").value("test@test.com"))
+        .andExpect(jsonPath("$.role").value("viewer"));
+  }
+
+  @Test
+  public void testLogin_InvalidCredentials() throws Exception {
+    when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.empty());
+
+    LoginRequest request = new LoginRequest();
+    request.setEmail("test@test.com");
+    request.setPassword("password");
+
+    mockMvc
+        .perform(
+            post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isUnauthorized());
+  }
+}
