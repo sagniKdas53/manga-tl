@@ -67,18 +67,24 @@
 
 ## Frontend Issues & Improvements
 
-- [x] Incorporate QA feedback into the front-end by outlining the OCR and/or translation bubble in red margins for layers that failed QA (manual intervention needed).
+- [ ] Incorporate QA feedback into the front-end by outlining the OCR and/or translation bubble in red margins for layers that failed QA (manual intervention needed).
 - [x] Make notifications and toasts more informative (include specific image, chapter, or series instead of just the step that was done).
 - [x] Deleting the first image of first chapter of a series causes the series to be thumbnail less, which the chapter successfully identifies and uses the now first page inside it, the series doesn't (this also implies that if the first chapter is deleted a similar issue will occur)
 - [ ] **[LOW PRIORITY] Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
+- [ ] The export chapter as zip should have been placed in the chapter view not inside the reader.
+- [ ] The SSE is broken, most images say `Could not find owner user for image {{uuid}} in Redis. Cannot send SSE notification`
 
 ## Backend & Worker Pipeline Improvements
 
-- [x] Store QA feedback as metadata in the layers.
-- [x] If a layer fails QA, store the region that failed and the reason in the layer metadata.
+- [ ] Store QA feedback as metadata in the layers.
+- [ ] If a layer fails QA, store the region that failed and the reason in the layer metadata.
 - [x] Investigate using OpenRouter for OCR models to speed up processing via cloud (keeping the local system as a fallback).
-- [x] Add support for exporting whole rendered chapters as a zip/ePub.
-- [x] Add a `meta-data.json` to the chapter export zip containing data about all pages (order, layer counts, active layer, manual-qa-needed, manual-changes-done, OCR/TL models used, cost of page, cost of chapter).
-- [x] Log and keep track of costs if paid models are used (save this as metadata in layers too).
+  - [ ] It is fast but not as good as the PP-OCR-V5 used locally like it keeps missing dialog and text if they are not in dailog boxes.
+  - [ ] Also need to investiagte if the nemotron-ocr-v2 can be used over nvidia api's for extremely fast and reliable ocr [sample](unified-workers/nemotron-ocr-v2.py)
+- [ ] Add support for exporting whole rendered chapters as a zip/ePub.
+- [ ] Add a `meta-data.json` to the chapter export zip containing data about all pages (order, layer counts, active layer, manual-qa-needed, manual-changes-done, OCR/TL models used, cost of page's, cost of chapter if paid models are used).
+- [ ] Log and keep track of costs if paid models are used (save this as metadata at image level if possible at layer level for both OCR and TL and QA as well).
+- [ ] All the cost estimations show `Estimated cost: $0.00000` when it clearly isn't
+- [ ] The real bottleneck was local OCR model, but if we are using cloud OCR we can defenitly parallelize a bit.
 - [ ] **[LOW PRIORITY] Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
 - [ ] **[LOW PRIORITY] Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
