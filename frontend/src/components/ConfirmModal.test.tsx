@@ -13,7 +13,12 @@ describe("ConfirmModal", () => {
   };
 
   it("does not render when isOpen is false", () => {
-    const { container } = render(<ConfirmModal {...defaultProps} isOpen={false} />);
+    const { container } = render(
+      <ConfirmModal
+        {...defaultProps}
+        isOpen={false}
+      />,
+    );
     expect(container.firstChild).toBeNull();
   });
 

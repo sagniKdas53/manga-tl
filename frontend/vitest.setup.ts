@@ -14,7 +14,7 @@ const localStorageMock = (() => {
       delete store[key];
     },
     length: 0,
-    key: (index: number) => null,
+    key: () => null,
   };
 })();
 
@@ -43,4 +43,3 @@ Object.defineProperty(window, "ResizeObserver", {
   value: ResizeObserverMock,
   writable: true,
 });
-

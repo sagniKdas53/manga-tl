@@ -38,9 +38,7 @@ public class LayerControllerTest {
     UUID layerId = UUID.randomUUID();
     when(layerRepository.findById(layerId)).thenReturn(Optional.empty());
 
-    mockMvc
-        .perform(delete("/api/layers/" + layerId))
-        .andExpect(status().isNotFound());
+    mockMvc.perform(delete("/api/layers/" + layerId)).andExpect(status().isNotFound());
   }
 
   @Test
@@ -49,9 +47,7 @@ public class LayerControllerTest {
     Layer layer = Layer.builder().id(layerId).build();
     when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
 
-    mockMvc
-        .perform(delete("/api/layers/" + layerId))
-        .andExpect(status().isOk());
+    mockMvc.perform(delete("/api/layers/" + layerId)).andExpect(status().isOk());
 
     verify(layerRepository, times(1)).delete(layer);
   }

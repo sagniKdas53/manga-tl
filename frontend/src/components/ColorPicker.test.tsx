@@ -13,7 +13,7 @@ describe("ColorPicker", () => {
         value="#ff0000"
         onChange={onChange}
         onLaunchEyeDropper={onLaunchEyeDropper}
-      />
+      />,
     );
     expect(screen.getByText("Text Color")).toBeInTheDocument();
     const input = screen.getByDisplayValue("#ff0000");
@@ -29,7 +29,7 @@ describe("ColorPicker", () => {
         value="#000000"
         onChange={onChange}
         onLaunchEyeDropper={onLaunchEyeDropper}
-      />
+      />,
     );
     const input = screen.getByDisplayValue("#000000");
     fireEvent.change(input, { target: { value: "#111111" } });
@@ -45,7 +45,7 @@ describe("ColorPicker", () => {
         value="#000000"
         onChange={onChange}
         onLaunchEyeDropper={onLaunchEyeDropper}
-      />
+      />,
     );
     const button = screen.getByTitle("Color Dropper");
     fireEvent.click(button);
@@ -61,9 +61,9 @@ describe("ColorPicker", () => {
         value="#000000"
         onChange={onChange}
         onLaunchEyeDropper={onLaunchEyeDropper}
-      />
+      />,
     );
-    
+
     // Popover is initially closed, presets are not visible
     expect(screen.queryByTitle("Red")).not.toBeInTheDocument();
 

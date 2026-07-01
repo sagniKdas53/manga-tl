@@ -32,7 +32,10 @@ public class ForwardControllerTest {
   public void testForwardApiPath() throws Exception {
     mockMvc
         .perform(get("/api/some-api-route"))
-        .andExpect(status().isOk()) // Since it's a forward, the status returned by perform might be OK, but forwardedUrl is /error
+        .andExpect(
+            status()
+                .isOk()) // Since it's a forward, the status returned by perform might be OK, but
+        // forwardedUrl is /error
         .andExpect(forwardedUrl("/error"));
   }
 }

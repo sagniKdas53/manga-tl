@@ -44,9 +44,7 @@ public class SeriesControllerTest {
     UUID seriesId = UUID.randomUUID();
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.empty());
 
-    mockMvc
-        .perform(get("/api/series/" + seriesId))
-        .andExpect(status().isNotFound());
+    mockMvc.perform(get("/api/series/" + seriesId)).andExpect(status().isNotFound());
   }
 
   @Test
@@ -55,9 +53,7 @@ public class SeriesControllerTest {
     Series series = Series.builder().id(seriesId).title("Test Series").build();
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
 
-    mockMvc
-        .perform(get("/api/series/" + seriesId))
-        .andExpect(status().isOk());
+    mockMvc.perform(get("/api/series/" + seriesId)).andExpect(status().isOk());
   }
 
   @Test
@@ -66,9 +62,7 @@ public class SeriesControllerTest {
     when(seriesRepository.findAll()).thenReturn(java.util.List.of(series));
     when(pageRepository.findDefaultCoverImageIds()).thenReturn(new java.util.ArrayList<>());
 
-    mockMvc
-        .perform(get("/api/series"))
-        .andExpect(status().isOk());
+    mockMvc.perform(get("/api/series")).andExpect(status().isOk());
   }
 
   @Test
@@ -76,7 +70,8 @@ public class SeriesControllerTest {
     Series series = Series.builder().id(UUID.randomUUID()).title("New Series").build();
     when(seriesRepository.save(any(Series.class))).thenReturn(series);
 
-    String json = "{\"title\":\"New Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
+    String json =
+        "{\"title\":\"New Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
     mockMvc
         .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/series")
@@ -92,10 +87,12 @@ public class SeriesControllerTest {
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(seriesRepository.save(any(Series.class))).thenReturn(series);
 
-    String json = "{\"title\":\"Updated Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
+    String json =
+        "{\"title\":\"Updated Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
     mockMvc
         .perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/series/" + seriesId)
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/series/" + seriesId)
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content(json))
         .andExpect(status().isOk());
@@ -108,7 +105,8 @@ public class SeriesControllerTest {
 
     mockMvc
         .perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/series/" + seriesId))
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                "/api/series/" + seriesId))
         .andExpect(status().isOk());
   }
 }
