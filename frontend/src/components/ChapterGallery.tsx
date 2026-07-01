@@ -411,16 +411,32 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     }
   };
 
-  const handleExportChapterZip = useCallback(() => {
+  const handleExportChapterZip = useCallback(async () => {
     if (!selectedChapter) return;
-    const url = `${getContextPath()}/api/series/chapters/${selectedChapter.id}/export?format=zip`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }, [selectedChapter]);
+    try {
+      showToast("Preparing chapter export...", "info");
+      const res = await safeFetch(`/api/series/chapters/${selectedChapter.id}/export?format=zip`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      
+      if (!res.ok) {
+        throw new Error("Failed to export chapter zip");
+      }
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `chapter-${selectedChapter.chapterNumber}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      showToast("Error exporting chapter", "error");
+    }
+  }, [selectedChapter, user.token, showToast]);
 
   if (isLoadingDetails || !selectedSeries || !selectedChapter) {
     return (
