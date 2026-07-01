@@ -624,13 +624,13 @@ public class SeriesController {
             }
             // If we have ocr layer, find its model too
             for (Layer l : imageLayers) {
-              if ("ocr".equalsIgnoreCase(l.getType())) {
-                if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
-                  com.fasterxml.jackson.databind.node.ObjectNode ocrMeta = 
-                      (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
-                  if (ocrMeta.has("model")) {
-                    models.put("ocr", ocrMeta.get("model").asText());
-                  }
+              if ("ocr".equalsIgnoreCase(l.getType())
+                  && l.getMetadataJson() != null
+                  && l.getMetadataJson().isObject()) {
+                com.fasterxml.jackson.databind.node.ObjectNode ocrMeta = 
+                    (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
+                if (ocrMeta.has("model")) {
+                  models.put("ocr", ocrMeta.get("model").asText());
                 }
               }
             }
