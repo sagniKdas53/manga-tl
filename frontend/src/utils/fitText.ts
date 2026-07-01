@@ -11,25 +11,34 @@ export const fitTextInBox = (
   maxHeight: number,
   fontFamily: string,
   defaultFontSize: number = 16,
-  shape: 'rectangular' | 'elliptical' = 'rectangular',
+  shape: "rectangular" | "elliptical" = "rectangular",
   boxX: number = 0,
   boxY: number = 0,
   maskPolygon?: string | null,
-  fontWeight: string = 'bold',
-  fontStyle: string = 'normal',
+  fontWeight: string = "bold",
+  fontStyle: string = "normal",
 ): FitResult => {
   const cleanText = (text || "").replace(/\r\n/g, "\n");
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    return { fontSize: defaultFontSize, lines: [cleanText], overflow: false, lineCenters: [boxX + maxWidth / 2] };
+    return {
+      fontSize: defaultFontSize,
+      lines: [cleanText],
+      overflow: false,
+      lineCenters: [boxX + maxWidth / 2],
+    };
   }
 
   let polygonPoints: [number, number][] | null = null;
   if (maskPolygon) {
     try {
-      const parsed = typeof maskPolygon === 'string' ? JSON.parse(maskPolygon) : maskPolygon;
-      if (Array.isArray(parsed) && parsed.every(p => Array.isArray(p) && p.length === 2)) {
+      const parsed =
+        typeof maskPolygon === "string" ? JSON.parse(maskPolygon) : maskPolygon;
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((p) => Array.isArray(p) && p.length === 2)
+      ) {
         polygonPoints = parsed as [number, number][];
       }
     } catch (e) {
@@ -37,14 +46,19 @@ export const fitTextInBox = (
     }
   }
 
-  const wrapText = (txt: string, fSize: number): { lines: string[]; lineCenters: number[]; failed: boolean } => {
-    ctx.font = `${fontWeight} ${fontStyle === 'italic' ? 'italic ' : ''}${fSize}px "${fontFamily}", sans-serif`;
+  const wrapText = (
+    txt: string,
+    fSize: number,
+  ): { lines: string[]; lineCenters: number[]; failed: boolean } => {
+    ctx.font = `${fontWeight} ${fontStyle === "italic" ? "italic " : ""}${fSize}px "${fontFamily}", sans-serif`;
     const paragraphs = txt.split("\n");
 
     // 1. Polygon-aware wrapping
     if (polygonPoints && polygonPoints.length > 0) {
       const lineHeight = fSize * 1.2;
-      const tryWrapForNLines = (N: number): { lines: string[]; lineCenters: number[] } | null => {
+      const tryWrapForNLines = (
+        N: number,
+      ): { lines: string[]; lineCenters: number[] } | null => {
         const tentativeLines: string[] = [];
         const tentativeCenters: number[] = [];
         let currentLine = "";
@@ -61,7 +75,10 @@ export const fitTextInBox = (
             const p2 = polygonPoints!.at((i + 1) % polygonPoints!.length)!;
             const [x1, y1] = p1;
             const [x2, y2] = p2;
-            if ((y1 <= lineCenterY && y2 > lineCenterY) || (y2 <= lineCenterY && y1 > lineCenterY)) {
+            if (
+              (y1 <= lineCenterY && y2 > lineCenterY) ||
+              (y2 <= lineCenterY && y1 > lineCenterY)
+            ) {
               const ix = x1 + ((lineCenterY - y1) * (x2 - x1)) / (y2 - y1);
               intersects.push(ix);
             }
@@ -118,7 +135,10 @@ export const fitTextInBox = (
                 const testPart = currentWordPart + char;
                 const nextSpan = getLineSpan(lineIndex);
                 const nextAllowedW = (nextSpan.right - nextSpan.left) * 0.95;
-                if (ctx.measureText(testPart).width > nextAllowedW && currentWordPart) {
+                if (
+                  ctx.measureText(testPart).width > nextAllowedW &&
+                  currentWordPart
+                ) {
                   tentativeLines.push(currentWordPart);
                   tentativeCenters.push((nextSpan.left + nextSpan.right) / 2);
                   currentWordPart = char;
@@ -149,11 +169,17 @@ export const fitTextInBox = (
             tentativeCenters.push((span.left + span.right) / 2);
             currentLine = "";
             lineIndex++;
-            if (lineIndex >= N && paragraphs.indexOf(para) < paragraphs.length - 1) return null;
+            if (
+              lineIndex >= N &&
+              paragraphs.indexOf(para) < paragraphs.length - 1
+            )
+              return null;
           }
         }
 
-        return tentativeLines.length <= N ? { lines: tentativeLines, lineCenters: tentativeCenters } : null;
+        return tentativeLines.length <= N
+          ? { lines: tentativeLines, lineCenters: tentativeCenters }
+          : null;
       };
 
       const maxPossibleLines = Math.floor(maxHeight / lineHeight);
@@ -192,7 +218,11 @@ export const fitTextInBox = (
           fallbackCenters.push(boxX + maxWidth / 2);
         }
       }
-      return { lines: fallbackLines, lineCenters: fallbackCenters, failed: true };
+      return {
+        lines: fallbackLines,
+        lineCenters: fallbackCenters,
+        failed: true,
+      };
     }
 
     // 2. Rectangular wrapping (non-elliptical fallback)
@@ -217,7 +247,10 @@ export const fitTextInBox = (
             let currentWordPart = "";
             for (const char of word) {
               const testPart = currentWordPart + char;
-              if (ctx.measureText(testPart).width > maxWidth && currentWordPart) {
+              if (
+                ctx.measureText(testPart).width > maxWidth &&
+                currentWordPart
+              ) {
                 resultLines.push(currentWordPart);
                 currentWordPart = char;
               } else {
@@ -287,7 +320,10 @@ export const fitTextInBox = (
             for (const char of word) {
               const testPart = currentWordPart + char;
               const currentAllowedW = getLineAllowedWidth(lineIndex);
-              if (ctx.measureText(testPart).width > currentAllowedW && currentWordPart) {
+              if (
+                ctx.measureText(testPart).width > currentAllowedW &&
+                currentWordPart
+              ) {
                 tentativeLines.push(currentWordPart);
                 currentWordPart = char;
                 lineIndex++;
@@ -314,7 +350,11 @@ export const fitTextInBox = (
           tentativeLines.push(currentLine);
           currentLine = "";
           lineIndex++;
-          if (lineIndex >= N && paragraphs.indexOf(para) < paragraphs.length - 1) return null;
+          if (
+            lineIndex >= N &&
+            paragraphs.indexOf(para) < paragraphs.length - 1
+          )
+            return null;
         }
       }
 
@@ -326,7 +366,11 @@ export const fitTextInBox = (
       for (let N = 1; N <= maxPossibleLines; N++) {
         const wrapped = tryWrapForNLines(N);
         if (wrapped !== null) {
-          return { lines: wrapped, lineCenters: wrapped.map(() => boxX + maxWidth / 2), failed: false };
+          return {
+            lines: wrapped,
+            lineCenters: wrapped.map(() => boxX + maxWidth / 2),
+            failed: false,
+          };
         }
       }
     }
@@ -350,10 +394,18 @@ export const fitTextInBox = (
       }
       if (currentLine) fallbackLines.push(currentLine);
     }
-    return { lines: fallbackLines, lineCenters: fallbackLines.map(() => boxX + maxWidth / 2), failed: true };
+    return {
+      lines: fallbackLines,
+      lineCenters: fallbackLines.map(() => boxX + maxWidth / 2),
+      failed: true,
+    };
   };
 
-  const maxStartSize = Math.min(Math.floor(maxHeight / 2), Math.floor(maxWidth / 3), 72);
+  const maxStartSize = Math.min(
+    Math.floor(maxHeight / 2),
+    Math.floor(maxWidth / 3),
+    72,
+  );
   const startSize = Math.max(maxStartSize, defaultFontSize);
 
   let low = 6;

@@ -33,9 +33,17 @@ export function polygonArea(vertices: Polygon): number {
 }
 
 /** Axis-aligned bounding box of a polygon. */
-export function polygonBBox(vertices: Polygon): { x: number; y: number; w: number; h: number } {
+export function polygonBBox(vertices: Polygon): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
   if (vertices.length === 0) return { x: 0, y: 0, w: 0, h: 0 };
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const [x, y] of vertices) {
     if (x < minX) minX = x;
     if (y < minY) minY = y;
@@ -77,25 +85,34 @@ export function polygonCentroid(vertices: Polygon): Point {
 // ---------------------------------------------------------------------------
 
 /** Rotate a single point around a centre by angleDeg degrees. */
-export function rotatePoint(point: Point, center: Point, angleDeg: number): Point {
+export function rotatePoint(
+  point: Point,
+  center: Point,
+  angleDeg: number,
+): Point {
   const rad = (angleDeg * Math.PI) / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
   const dx = point[0] - center[0];
   const dy = point[1] - center[1];
-  return [
-    center[0] + dx * cos - dy * sin,
-    center[1] + dx * sin + dy * cos,
-  ];
+  return [center[0] + dx * cos - dy * sin, center[1] + dx * sin + dy * cos];
 }
 
 /** Rotate all polygon vertices around a centre by angleDeg degrees. */
-export function rotatePolygon(vertices: Polygon, center: Point, angleDeg: number): Polygon {
-  return vertices.map(p => rotatePoint(p, center, angleDeg));
+export function rotatePolygon(
+  vertices: Polygon,
+  center: Point,
+  angleDeg: number,
+): Polygon {
+  return vertices.map((p) => rotatePoint(p, center, angleDeg));
 }
 
 /** Translate all polygon vertices by (dx, dy). */
-export function translatePolygon(vertices: Polygon, dx: number, dy: number): Polygon {
+export function translatePolygon(
+  vertices: Polygon,
+  dx: number,
+  dy: number,
+): Polygon {
   return vertices.map(([x, y]) => [x + dx, y + dy] as Point);
 }
 
@@ -108,14 +125,20 @@ export function translatePolygon(vertices: Polygon, dx: number, dy: number): Pol
  * Vertices are TL → TR → BR → BL (clockwise in SVG coordinate space).
  * If rotation is provided (degrees), the rectangle is rotated around its centre.
  */
-export function rectToPolygon(x: number, y: number, w: number, h: number, rotationDeg = 0): Polygon {
+export function rectToPolygon(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  rotationDeg = 0,
+): Polygon {
   const cx = x + w / 2;
   const cy = y + h / 2;
   const raw: Polygon = [
-    [x,     y    ],
-    [x + w, y    ],
+    [x, y],
+    [x + w, y],
     [x + w, y + h],
-    [x,     y + h],
+    [x, y + h],
   ];
   if (rotationDeg === 0) return raw;
   return rotatePolygon(raw, [cx, cy], rotationDeg);
@@ -131,8 +154,10 @@ export function rectToPolygon(x: number, y: number, w: number, h: number, rotati
  * @param segments - number of vertices (default 12)
  */
 export function ellipseToPolygon(
-  cx: number, cy: number,
-  rx: number, ry: number,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
   rotationDeg = 0,
   segments = 12,
 ): Polygon {
@@ -155,12 +180,21 @@ export function ellipseToPolygon(
  * Returns true if two line segments (a1→a2) and (b1→b2) have a proper
  * crossing intersection (excludes shared endpoints).
  */
-export function segmentsIntersect(a1: Point, a2: Point, b1: Point, b2: Point): boolean {
-  const [ax1, ay1] = a1, [ax2, ay2] = a2;
-  const [bx1, by1] = b1, [bx2, by2] = b2;
+export function segmentsIntersect(
+  a1: Point,
+  a2: Point,
+  b1: Point,
+  b2: Point,
+): boolean {
+  const [ax1, ay1] = a1,
+    [ax2, ay2] = a2;
+  const [bx1, by1] = b1,
+    [bx2, by2] = b2;
 
-  const dax = ax2 - ax1, day = ay2 - ay1;
-  const dbx = bx2 - bx1, dby = by2 - by1;
+  const dax = ax2 - ax1,
+    day = ay2 - ay1;
+  const dbx = bx2 - bx1,
+    dby = by2 - by1;
 
   const denom = dax * dby - day * dbx;
   if (Math.abs(denom) < 1e-10) return false; // Parallel
@@ -222,16 +256,19 @@ export function isVertexMoveValid(
 ): boolean {
   // 1. Image bounds check on the new vertex
   const [nx, ny] = newPos;
-  if (nx < 0 || nx > imageBounds.w || ny < 0 || ny > imageBounds.h) return false;
+  if (nx < 0 || nx > imageBounds.w || ny < 0 || ny > imageBounds.h)
+    return false;
 
-  const testPoly = vertices.map((v, i) => (i === index ? newPos : v)) as Polygon;
+  const testPoly = vertices.map((v, i) =>
+    i === index ? newPos : v,
+  ) as Polygon;
 
   // 2. Simple (non-self-intersecting)
   if (!isSimplePolygon(testPoly)) return false;
 
   // 3. Winding order preserved
   const origSign = Math.sign(polygonSignedArea(vertices));
-  const newSign  = Math.sign(polygonSignedArea(testPoly));
+  const newSign = Math.sign(polygonSignedArea(testPoly));
   if (origSign !== 0 && newSign !== 0 && origSign !== newSign) return false;
 
   // 4. Minimum area

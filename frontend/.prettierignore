@@ -1,0 +1,10 @@
+# Ignore build outputs
+dist/
+build/
+
+# Ignore dependencies
+node_modules/
+
+# Ignore lockfiles and system files
+package-lock.json
+.DS_Store

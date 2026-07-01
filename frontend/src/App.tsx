@@ -1,28 +1,35 @@
-import React, { useState, useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation, matchPath } from 'react-router-dom';
+import React, { useState, useEffect, Suspense } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useNavigate,
+  useLocation,
+  matchPath,
+} from "react-router-dom";
 
 // Types
-import type { User, Series, Chapter, Page } from './types';
+import type { User, Series, Chapter, Page } from "./types";
 
 // Utils & overrides
-import { safeFetch, getContextPath } from './utils';
+import { safeFetch, getContextPath } from "./utils";
 
 // Providers
-import { NotificationProvider } from './components/NotificationContext';
-import { ToastProvider, useToast } from './components/ToastContext';
+import { NotificationProvider } from "./components/NotificationContext";
+import { ToastProvider, useToast } from "./components/ToastContext";
 
 // Static import for NotificationCenter (always present in nav)
-import { NotificationCenter } from './components/NotificationCenter';
-import { useNotifications } from './components/useNotifications';
-import logoDark from './assets/logo-dark.svg';
-import logoLight from './assets/logo-light.svg';
+import { NotificationCenter } from "./components/NotificationCenter";
+import { useNotifications } from "./components/useNotifications";
+import logoDark from "./assets/logo-dark.svg";
+import logoLight from "./assets/logo-light.svg";
 
 // Lazy-loaded route components
-const Auth = React.lazy(() => import('./components/Auth'));
-const Dashboard = React.lazy(() => import('./components/Dashboard'));
-const SeriesDetails = React.lazy(() => import('./components/SeriesDetails'));
-const ChapterGallery = React.lazy(() => import('./components/ChapterGallery'));
-const Reader = React.lazy(() => import('./components/Reader'));
+const Auth = React.lazy(() => import("./components/Auth"));
+const Dashboard = React.lazy(() => import("./components/Dashboard"));
+const SeriesDetails = React.lazy(() => import("./components/SeriesDetails"));
+const ChapterGallery = React.lazy(() => import("./components/ChapterGallery"));
+const Reader = React.lazy(() => import("./components/Reader"));
 
 function LoadingSpinner() {
   return (
@@ -40,8 +47,14 @@ function TranslationToastWatcher() {
   const location = useLocation();
 
   const isInReader = !!(
-    matchPath({ path: '/chapters/:chapterId/reader/:pageNumber' }, location.pathname) ||
-    matchPath({ path: '/chapters/:chapterId/:slug/reader/:pageNumber' }, location.pathname)
+    matchPath(
+      { path: "/chapters/:chapterId/reader/:pageNumber" },
+      location.pathname,
+    ) ||
+    matchPath(
+      { path: "/chapters/:chapterId/:slug/reader/:pageNumber" },
+      location.pathname,
+    )
   );
 
   // Track which notification ids we've already toasted
@@ -53,8 +66,16 @@ function TranslationToastWatcher() {
       if (!seenRef.current.has(n.id)) {
         seenRef.current.add(n.id);
         // Only toast on the very first time we see it (i.e. it's new)
-        if (n.title?.toLowerCase().includes('translation') || n.message?.toLowerCase().includes('translation')) {
-          const type = n.type === 'ERROR' ? 'error' : n.type === 'WARNING' ? 'info' : 'success';
+        if (
+          n.title?.toLowerCase().includes("translation") ||
+          n.message?.toLowerCase().includes("translation")
+        ) {
+          const type =
+            n.type === "ERROR"
+              ? "error"
+              : n.type === "WARNING"
+                ? "info"
+                : "success";
           showToast(`${n.title}: ${n.message}`, type);
         }
       }
@@ -69,10 +90,12 @@ function GlobalErrorListener() {
   useEffect(() => {
     const handleApiError = (e: Event) => {
       const customEvent = e as CustomEvent;
-      showError(`API request failed: ${customEvent.detail.url}`, { duration: 6000 });
+      showError(`API request failed: ${customEvent.detail.url}`, {
+        duration: 6000,
+      });
     };
-    window.addEventListener('api-error', handleApiError);
-    return () => window.removeEventListener('api-error', handleApiError);
+    window.addEventListener("api-error", handleApiError);
+    return () => window.removeEventListener("api-error", handleApiError);
   }, [showError]);
   return null;
 }
@@ -82,28 +105,39 @@ function AppContent() {
   const location = useLocation();
 
   // Match URL params for deep routing
-  const seriesMatch = matchPath({ path: "/series/:seriesId/*" }, location.pathname) || matchPath({ path: "/series/:seriesId" }, location.pathname);
-  const chapterMatch = matchPath({ path: "/chapters/:chapterId/*" }, location.pathname) || matchPath({ path: "/chapters/:chapterId" }, location.pathname);
-  
-  const readerMatch = matchPath({ path: "/chapters/:chapterId/:slug/reader/:pageNumber" }, location.pathname)
-    || matchPath({ path: "/chapters/:chapterId/reader/:pageNumber" }, location.pathname);
+  const seriesMatch =
+    matchPath({ path: "/series/:seriesId/*" }, location.pathname) ||
+    matchPath({ path: "/series/:seriesId" }, location.pathname);
+  const chapterMatch =
+    matchPath({ path: "/chapters/:chapterId/*" }, location.pathname) ||
+    matchPath({ path: "/chapters/:chapterId" }, location.pathname);
+
+  const readerMatch =
+    matchPath(
+      { path: "/chapters/:chapterId/:slug/reader/:pageNumber" },
+      location.pathname,
+    ) ||
+    matchPath(
+      { path: "/chapters/:chapterId/reader/:pageNumber" },
+      location.pathname,
+    );
 
   const seriesId = seriesMatch?.params.seriesId;
   const chapterId = chapterMatch?.params.chapterId;
 
   // Authentication state initialized directly from localStorage to satisfy linter and prevent cascading renders
   const [user, setUser] = useState<User | null>(() => {
-    const storedUser = localStorage.getItem('manga_user');
+    const storedUser = localStorage.getItem("manga_user");
     if (storedUser) {
       try {
         return JSON.parse(storedUser);
       } catch {
-        localStorage.removeItem('manga_user');
+        localStorage.removeItem("manga_user");
       }
     }
     return null;
   });
-  
+
   // Domain States
   const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
@@ -113,45 +147,45 @@ function AppContent() {
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   // Theme State & Persistence
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('manga_theme');
-    return saved === 'light' ? 'light' : 'dark';
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = localStorage.getItem("manga_theme");
+    return saved === "light" ? "light" : "dark";
   });
 
   useEffect(() => {
-    if (theme === 'light') {
-      document.documentElement.classList.add('light');
+    if (theme === "light") {
+      document.documentElement.classList.add("light");
     } else {
-      document.documentElement.classList.remove('light');
+      document.documentElement.classList.remove("light");
     }
-    localStorage.setItem('manga_theme', theme);
+    localStorage.setItem("manga_theme", theme);
   }, [theme]);
 
   // Load user session redirect
   useEffect(() => {
-    if (!user && location.pathname !== '/login') {
-      navigate('/login', { replace: true });
-    } else if (user && location.pathname === '/login') {
-      navigate('/', { replace: true });
+    if (!user && location.pathname !== "/login") {
+      navigate("/login", { replace: true });
+    } else if (user && location.pathname === "/login") {
+      navigate("/", { replace: true });
     }
   }, [user, location.pathname, navigate]);
 
   // Fetch Series List (Dashboard)
   useEffect(() => {
-    if (user && location.pathname === '/') {
-      safeFetch('/api/series', {
-        headers: { 'Authorization': `Bearer ${user.token}` }
+    if (user && location.pathname === "/") {
+      safeFetch("/api/series", {
+        headers: { Authorization: `Bearer ${user.token}` },
       })
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch series list");
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) {
-          setSeriesList(data);
-        }
-      })
-      .catch(err => console.error("Error fetching series:", err));
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch series list");
+          return res.json();
+        })
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setSeriesList(data);
+          }
+        })
+        .catch((err) => console.error("Error fetching series:", err));
     }
   }, [user, location.pathname]);
 
@@ -165,35 +199,35 @@ function AppContent() {
         });
 
         safeFetch(`/api/series/${seriesId}`, {
-          headers: { 'Authorization': `Bearer ${user.token}` }
+          headers: { Authorization: `Bearer ${user.token}` },
         })
-        .then(res => {
-          if (!res.ok) throw new Error("Series not found");
-          return res.json();
-        })
-        .then(data => {
-          setSelectedSeries(data);
-          setIsLoadingDetails(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setIsLoadingDetails(false);
-        });
+          .then((res) => {
+            if (!res.ok) throw new Error("Series not found");
+            return res.json();
+          })
+          .then((data) => {
+            setSelectedSeries(data);
+            setIsLoadingDetails(false);
+          })
+          .catch((err) => {
+            console.error(err);
+            setIsLoadingDetails(false);
+          });
       }
 
       safeFetch(`/api/series/${seriesId}/chapters`, {
-        headers: { 'Authorization': `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${user.token}` },
       })
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch chapters");
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) {
-          setChapters(data);
-        }
-      })
-      .catch(err => console.error("Error fetching chapters:", err));
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch chapters");
+          return res.json();
+        })
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setChapters(data);
+          }
+        })
+        .catch((err) => console.error("Error fetching chapters:", err));
     }
   }, [seriesId, user, selectedSeries]);
 
@@ -206,45 +240,45 @@ function AppContent() {
         });
 
         safeFetch(`/api/series/chapters/${chapterId}`, {
-          headers: { 'Authorization': `Bearer ${user.token}` }
+          headers: { Authorization: `Bearer ${user.token}` },
         })
-        .then(res => {
-          if (!res.ok) throw new Error("Chapter not found");
-          return res.json();
-        })
-        .then(chapterData => {
-          setSelectedChapter(chapterData);
-          return safeFetch(`/api/series/${chapterData.seriesId}`, {
-            headers: { 'Authorization': `Bearer ${user.token}` }
+          .then((res) => {
+            if (!res.ok) throw new Error("Chapter not found");
+            return res.json();
+          })
+          .then((chapterData) => {
+            setSelectedChapter(chapterData);
+            return safeFetch(`/api/series/${chapterData.seriesId}`, {
+              headers: { Authorization: `Bearer ${user.token}` },
+            });
+          })
+          .then((res) => {
+            if (!res.ok) throw new Error("Series not found");
+            return res.json();
+          })
+          .then((seriesData) => {
+            setSelectedSeries(seriesData);
+            setIsLoadingDetails(false);
+          })
+          .catch((err) => {
+            console.error(err);
+            setIsLoadingDetails(false);
           });
-        })
-        .then(res => {
-          if (!res.ok) throw new Error("Series not found");
-          return res.json();
-        })
-        .then(seriesData => {
-          setSelectedSeries(seriesData);
-          setIsLoadingDetails(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setIsLoadingDetails(false);
-        });
       }
 
       safeFetch(`/api/chapters/${chapterId}/pages`, {
-        headers: { 'Authorization': `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${user.token}` },
       })
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch pages");
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) {
-          setPages(data);
-        }
-      })
-      .catch(err => console.error("Error fetching pages:", err));
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch pages");
+          return res.json();
+        })
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setPages(data);
+          }
+        })
+        .catch((err) => console.error("Error fetching pages:", err));
     }
   }, [chapterId, user, selectedChapter]);
 
@@ -252,206 +286,291 @@ function AppContent() {
   useEffect(() => {
     if (readerMatch) return;
 
-    if (location.pathname === '/' || location.pathname === '/login') {
-      document.title = 'tl-hub - Home';
+    if (location.pathname === "/" || location.pathname === "/login") {
+      document.title = "tl-hub - Home";
     } else if (seriesId && selectedSeries) {
       document.title = `tl-hub - ${selectedSeries.title}`;
     } else if (chapterId && selectedChapter) {
-      const seriesTitle = selectedSeries ? selectedSeries.title : 'Series';
+      const seriesTitle = selectedSeries ? selectedSeries.title : "Series";
       document.title = `tl-hub - ${seriesTitle} - Ch. ${selectedChapter.chapterNumber}`;
     } else {
-      document.title = 'tl-hub';
+      document.title = "tl-hub";
     }
-  }, [location.pathname, seriesId, chapterId, selectedSeries, selectedChapter, readerMatch]);
+  }, [
+    location.pathname,
+    seriesId,
+    chapterId,
+    selectedSeries,
+    selectedChapter,
+    readerMatch,
+  ]);
 
   // Handle Logout
   const handleLogout = () => {
-    localStorage.removeItem('manga_user');
+    localStorage.removeItem("manga_user");
     setUser(null);
-    navigate('/login');
+    navigate("/login");
   };
 
   return (
     <NotificationProvider token={user?.token || null}>
       <ToastProvider>
-      <GlobalErrorListener />
-      <TranslationToastWatcher />
-      <div className="app-container">
-        {/* Navigation Bar */}
-        {!readerMatch && (
-          <nav className="nav-bar">
-            <div className="logo" onClick={() => user && navigate('/')} style={{ cursor: user ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <img 
-                src={theme === 'dark' ? logoDark : logoLight} 
-                alt="tl-hub logo" 
-                style={{ height: '32px', width: 'auto' }} 
-              />
-              <span style={{ fontWeight: 700 }}>tl-hub</span>
-            </div>
-            <div className="nav-actions">
-              {/* Theme Toggle Button */}
-              <button 
-                className="theme-toggle-btn"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+        <GlobalErrorListener />
+        <TranslationToastWatcher />
+        <div className="app-container">
+          {/* Navigation Bar */}
+          {!readerMatch && (
+            <nav className="nav-bar">
+              <div
+                className="logo"
+                onClick={() => user && navigate("/")}
+                style={{
+                  cursor: user ? "pointer" : "default",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
               >
-                {theme === 'dark' ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="5"></circle>
-                    <line x1="12" y1="1" x2="12" y2="3"></line>
-                    <line x1="12" y1="21" x2="12" y2="23"></line>
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                    <line x1="1" y1="12" x2="3" y2="12"></line>
-                    <line x1="21" y1="12" x2="23" y2="12"></line>
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                  </svg>
+                <img
+                  src={theme === "dark" ? logoDark : logoLight}
+                  alt="tl-hub logo"
+                  style={{ height: "32px", width: "auto" }}
+                />
+                <span style={{ fontWeight: 700 }}>tl-hub</span>
+              </div>
+              <div className="nav-actions">
+                {/* Theme Toggle Button */}
+                <button
+                  className="theme-toggle-btn"
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+                >
+                  {theme === "dark" ? (
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="5"
+                      ></circle>
+                      <line
+                        x1="12"
+                        y1="1"
+                        x2="12"
+                        y2="3"
+                      ></line>
+                      <line
+                        x1="12"
+                        y1="21"
+                        x2="12"
+                        y2="23"
+                      ></line>
+                      <line
+                        x1="4.22"
+                        y1="4.22"
+                        x2="5.64"
+                        y2="5.64"
+                      ></line>
+                      <line
+                        x1="18.36"
+                        y1="18.36"
+                        x2="19.78"
+                        y2="19.78"
+                      ></line>
+                      <line
+                        x1="1"
+                        y1="12"
+                        x2="3"
+                        y2="12"
+                      ></line>
+                      <line
+                        x1="21"
+                        y1="12"
+                        x2="23"
+                        y2="12"
+                      ></line>
+                      <line
+                        x1="4.22"
+                        y1="19.78"
+                        x2="5.64"
+                        y2="18.36"
+                      ></line>
+                      <line
+                        x1="18.36"
+                        y1="5.64"
+                        x2="19.78"
+                        y2="4.22"
+                      ></line>
+                    </svg>
+                  ) : (
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                  )}
+                </button>
+
+                {user && (
+                  <>
+                    <NotificationCenter />
+                    <div className="user-badge">
+                      <span className="user-dot"></span>
+                      {user.displayName}
+                    </div>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleLogout}
+                      style={{ padding: "6px 12px" }}
+                    >
+                      Sign Out
+                    </button>
+                  </>
                 )}
-              </button>
-              
-              {user && (
-                <>
-                  <NotificationCenter />
-                  <div className="user-badge">
-                    <span className="user-dot"></span>
-                    {user.displayName}
-                  </div>
-                  <button className="btn btn-secondary" onClick={handleLogout} style={{ padding: '6px 12px' }}>
-                    Sign Out
-                  </button>
-                </>
-              )}
-            </div>
-          </nav>
-        )}
-    
-        <Suspense fallback={<LoadingSpinner />}>
-          <Routes>
-            <Route path="/login" element={<Auth onLoginSuccess={setUser} />} />
-            <Route 
-              path="/" 
-              element={
-                user ? (
-                  <Dashboard 
-                    user={user} 
-                    seriesList={seriesList} 
-                    setSeriesList={setSeriesList} 
-                    onSelectSeries={setSelectedSeries} 
-                  />
-                ) : null
-              } 
-            />
-            <Route 
-              path="/series/:seriesId" 
-              element={
-                user ? (
-                  <SeriesDetails 
-                    user={user} 
-                    selectedSeries={selectedSeries} 
-                    setSelectedSeries={setSelectedSeries} 
-                    chapters={chapters} 
-                    setChapters={setChapters} 
-                    onSelectChapter={setSelectedChapter} 
-                    isLoadingDetails={isLoadingDetails} 
-                  />
-                ) : null
-              } 
-            />
-            <Route 
-              path="/series/:seriesId/:slug" 
-              element={
-                user ? (
-                  <SeriesDetails 
-                    user={user} 
-                    selectedSeries={selectedSeries} 
-                    setSelectedSeries={setSelectedSeries} 
-                    chapters={chapters} 
-                    setChapters={setChapters} 
-                    onSelectChapter={setSelectedChapter} 
-                    isLoadingDetails={isLoadingDetails} 
-                  />
-                ) : null
-              } 
-            />
-            <Route 
-              path="/chapters/:chapterId" 
-              element={
-                user ? (
-                  <ChapterGallery 
-                    user={user} 
-                    selectedSeries={selectedSeries} 
-                    selectedChapter={selectedChapter} 
-                    setSelectedChapter={setSelectedChapter} 
-                    pages={pages} 
-                    setPages={setPages} 
-                    onSelectPage={() => {}} 
-                    isLoadingDetails={isLoadingDetails} 
-                  />
-                ) : null
-              } 
-            />
-            <Route 
-              path="/chapters/:chapterId/:slug" 
-              element={
-                user ? (
-                  <ChapterGallery 
-                    user={user} 
-                    selectedSeries={selectedSeries} 
-                    selectedChapter={selectedChapter} 
-                    setSelectedChapter={setSelectedChapter} 
-                    pages={pages} 
-                    setPages={setPages} 
-                    onSelectPage={() => {}} 
-                    isLoadingDetails={isLoadingDetails} 
-                  />
-                ) : null
-              } 
-            />
-            <Route 
-              path="/chapters/:chapterId/reader/:pageNumber" 
-              element={
-                user ? (
-                  <Reader 
-                    user={user} 
-                    selectedSeries={selectedSeries}
-                    selectedChapter={selectedChapter} 
-                    chapters={chapters}
-                    pages={pages} 
-                    theme={theme} 
-                  />
-                ) : null
-              } 
-            />
-            <Route 
-              path="/chapters/:chapterId/:slug/reader/:pageNumber" 
-              element={
-                user ? (
-                  <Reader 
-                    user={user} 
-                    selectedSeries={selectedSeries}
-                    selectedChapter={selectedChapter} 
-                    chapters={chapters}
-                    pages={pages} 
-                    theme={theme} 
-                  />
-                ) : null
-              } 
-            />
-          </Routes>
-        </Suspense>
-      </div>
-    </ToastProvider>
+              </div>
+            </nav>
+          )}
+
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route
+                path="/login"
+                element={<Auth onLoginSuccess={setUser} />}
+              />
+              <Route
+                path="/"
+                element={
+                  user ? (
+                    <Dashboard
+                      user={user}
+                      seriesList={seriesList}
+                      setSeriesList={setSeriesList}
+                      onSelectSeries={setSelectedSeries}
+                    />
+                  ) : null
+                }
+              />
+              <Route
+                path="/series/:seriesId"
+                element={
+                  user ? (
+                    <SeriesDetails
+                      user={user}
+                      selectedSeries={selectedSeries}
+                      setSelectedSeries={setSelectedSeries}
+                      chapters={chapters}
+                      setChapters={setChapters}
+                      onSelectChapter={setSelectedChapter}
+                      isLoadingDetails={isLoadingDetails}
+                    />
+                  ) : null
+                }
+              />
+              <Route
+                path="/series/:seriesId/:slug"
+                element={
+                  user ? (
+                    <SeriesDetails
+                      user={user}
+                      selectedSeries={selectedSeries}
+                      setSelectedSeries={setSelectedSeries}
+                      chapters={chapters}
+                      setChapters={setChapters}
+                      onSelectChapter={setSelectedChapter}
+                      isLoadingDetails={isLoadingDetails}
+                    />
+                  ) : null
+                }
+              />
+              <Route
+                path="/chapters/:chapterId"
+                element={
+                  user ? (
+                    <ChapterGallery
+                      user={user}
+                      selectedSeries={selectedSeries}
+                      selectedChapter={selectedChapter}
+                      setSelectedChapter={setSelectedChapter}
+                      pages={pages}
+                      setPages={setPages}
+                      onSelectPage={() => {}}
+                      isLoadingDetails={isLoadingDetails}
+                    />
+                  ) : null
+                }
+              />
+              <Route
+                path="/chapters/:chapterId/:slug"
+                element={
+                  user ? (
+                    <ChapterGallery
+                      user={user}
+                      selectedSeries={selectedSeries}
+                      selectedChapter={selectedChapter}
+                      setSelectedChapter={setSelectedChapter}
+                      pages={pages}
+                      setPages={setPages}
+                      onSelectPage={() => {}}
+                      isLoadingDetails={isLoadingDetails}
+                    />
+                  ) : null
+                }
+              />
+              <Route
+                path="/chapters/:chapterId/reader/:pageNumber"
+                element={
+                  user ? (
+                    <Reader
+                      user={user}
+                      selectedSeries={selectedSeries}
+                      selectedChapter={selectedChapter}
+                      chapters={chapters}
+                      pages={pages}
+                      theme={theme}
+                    />
+                  ) : null
+                }
+              />
+              <Route
+                path="/chapters/:chapterId/:slug/reader/:pageNumber"
+                element={
+                  user ? (
+                    <Reader
+                      user={user}
+                      selectedSeries={selectedSeries}
+                      selectedChapter={selectedChapter}
+                      chapters={chapters}
+                      pages={pages}
+                      theme={theme}
+                    />
+                  ) : null
+                }
+              />
+            </Routes>
+          </Suspense>
+        </div>
+      </ToastProvider>
     </NotificationProvider>
   );
 }
 
 function App() {
-  const cleanBaseName = getContextPath() || '/';
+  const cleanBaseName = getContextPath() || "/";
 
   return (
     <BrowserRouter basename={cleanBaseName}>
