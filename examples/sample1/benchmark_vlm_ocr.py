@@ -50,6 +50,11 @@ PROVIDERS = {
         "url": "https://api.openai.com/v1/chat/completions",
         "key_env": "OPENAI_API_KEY",
         "headers": lambda key: {"Authorization": f"Bearer {key}"}
+    },
+    "nvidia_ocr": {
+        "url": "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2",
+        "key_env": "NVIDIA_OCR_API_KEY",
+        "headers": lambda key: {"Authorization": f"Bearer {key}", "Accept": "application/json"}
     }
 }
 
@@ -63,6 +68,7 @@ MODELS_TO_TEST = [
     {"name": "qwen/qwen-2.5-vl-72b-instruct", "provider": "openrouter", "cost_per_m": 1.20},
     {"name": "google/gemini-3.5-flash", "provider": "openrouter", "cost_per_m": 0.075},
     {"name": "google/gemini-3.1-flash-lite", "provider": "openrouter", "cost_per_m": 0.075},
+    {"name": "nvidia/nemotron-ocr-v2", "provider": "nvidia_ocr", "cost_per_m": 0},
 ]
 
 def call_vlm_ocr(image_crop, model_info, language):
@@ -95,21 +101,26 @@ Do not translate.
 Do not explain.
 Do not infer missing characters."""
 
-    payload = {
-        "model": model_name,
-        "messages": [
-            {
-                "role": "user", 
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                ]
-            }
-        ]
-    }
-    
-    if provider_name == "nvidia":
-        payload["response_format"] = {"type": "json_object"}
+    if provider_name == "nvidia_ocr":
+        payload = {
+            "input": [{"type": "image_url", "url": f"data:image/jpeg;base64,{base64_image}"}]
+        }
+    else:
+        payload = {
+            "model": model_name,
+            "messages": [
+                {
+                    "role": "user", 
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ]
+                }
+            ]
+        }
+        if provider_name == "nvidia":
+            payload["response_format"] = {"type": "json_object"}
+
     # For openrouter, forcing json_object might cause 400 on brand new models
     # We will rely on the prompt instructions.
 
@@ -121,22 +132,36 @@ Do not infer missing characters."""
         response = requests.post(provider_cfg["url"], headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         
-        # Clean markdown formatting if present
-        content = content.strip()
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.startswith("```"):
-            content = content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
+        if provider_name == "nvidia_ocr":
+            text_lines = []
+            for dt in data.get("data", []):
+                for det in dt.get("text_detections", []):
+                    text_lines.append(det.get("text_prediction", {}).get("text", ""))
+            parsed = {
+                "text": "\n".join(text_lines).strip(),
+                "language": "",
+                "writing_direction": ""
+            }
+            prompt_tokens = 0
+            completion_tokens = 0
+        else:
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             
-        parsed = json.loads(content.strip())
-        
-        usage = data.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
+            # Clean markdown formatting if present
+            content = content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+                
+            parsed = json.loads(content.strip())
+            
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
         
         return {
             "result": parsed,
@@ -184,7 +209,7 @@ def draw_results(image, results, output_path, model_name, stats=None):
             
             text = res.get('text', '')
             if not text:
-                continue
+                text = "[No Text Detected]"
                 
             # Draw text above the box with a small background for visibility
             text_bbox = draw.textbbox((0, 0), text, font=font)
@@ -262,11 +287,84 @@ def main():
         total_input_tokens = 0
         total_output_tokens = 0
         
-        for i, bubble in enumerate(bubbles):
-            x, y, w, h = [int(v) for v in bubble['bbox']]
-            # Add slight padding
-            px, py = max(0, x-10), max(0, y-10)
-            pw, ph = min(img.shape[1]-px, w+20), min(img.shape[0]-py, h+20)
+        if model_info["provider"] == "nvidia_ocr":
+            print("  -> Running full image OCR for nemotron-ocr-v2...")
+            import base64, requests
+            start_time = time.time()
+            scale = 1.0
+            while True:
+                resized = cv2.resize(img, (0,0), fx=scale, fy=scale)
+                _, buffer = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                b64 = base64.b64encode(buffer).decode('utf-8')
+                if len(b64) < 175000:
+                    break
+                scale -= 0.1
+            
+            provider_cfg = PROVIDERS["nvidia_ocr"]
+            api_key = os.environ.get(provider_cfg["key_env"])
+            headers = provider_cfg["headers"](api_key)
+            headers["Content-Type"] = "application/json"
+            payload = {'input': [{'type': 'image_url', 'url': f'data:image/jpeg;base64,{b64}'}]}
+            
+            try:
+                resp = requests.post(provider_cfg["url"], headers=headers, json=payload, timeout=30)
+                resp.raise_for_status()
+                data = resp.json()
+                
+                full_text_detections = []
+                for dt in data.get("data", []):
+                    for det in dt.get("text_detections", []):
+                        pts = det.get("bounding_box", {}).get("points", [])
+                        text = det.get("text_prediction", {}).get("text", "")
+                        if pts and text:
+                            min_x = min(p["x"] for p in pts)
+                            max_x = max(p["x"] for p in pts)
+                            min_y = min(p["y"] for p in pts)
+                            max_y = max(p["y"] for p in pts)
+                            full_text_detections.append({
+                                "text": text,
+                                "nx1": min_x, "ny1": min_y, "nx2": max_x, "ny2": max_y
+                            })
+                
+                total_time = time.time() - start_time
+                print(f"  -> Full image OCR took {total_time:.2f}s. Detected {len(full_text_detections)} text regions.")
+                
+                for i, bubble in enumerate(bubbles):
+                    x, y, w, h = [int(v) for v in bubble['bbox']]
+                    px, py = max(0, x-10), max(0, y-10)
+                    pw, ph = min(img.shape[1]-px, w+20), min(img.shape[0]-py, h+20)
+                    
+                    bnx1, bny1 = px / img.shape[1], py / img.shape[0]
+                    bnx2, bny2 = (px + pw) / img.shape[1], (py + ph) / img.shape[0]
+                    
+                    intersecting_texts = []
+                    for det in full_text_detections:
+                        ix1 = max(bnx1, det["nx1"])
+                        iy1 = max(bny1, det["ny1"])
+                        ix2 = min(bnx2, det["nx2"])
+                        iy2 = min(bny2, det["ny2"])
+                        if ix1 < ix2 and iy1 < iy2:
+                            intersecting_texts.append(det["text"])
+                    
+                    final_text = "\n".join(intersecting_texts).strip()
+                    if not final_text:
+                        final_text = "[No Text Detected]"
+                        
+                    print(f"  -> Bubble {i+1}/{len(bubbles)} Text: {final_text}")
+                    results.append({
+                        "bbox": [px, py, pw, ph],
+                        "text": final_text,
+                        "language": "",
+                        "dir": ""
+                    })
+            except Exception as e:
+                print(f"    Error: {str(e)}")
+        else:
+            for i, bubble in enumerate(bubbles):
+                x, y, w, h = [int(v) for v in bubble['bbox']]
+                # Add slight padding
+                px, py = max(0, x-10), max(0, y-10)
+                pw, ph = min(img.shape[1]-px, w+20), min(img.shape[0]-py, h+20)
             
             crop = img[py:py+ph, px:px+pw]
             
