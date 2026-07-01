@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { User, Series, Chapter, Page } from "../types";
 import { safeFetch, toSlug, getContextPath } from "../utils";
@@ -411,6 +411,17 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     }
   };
 
+  const handleExportChapterZip = useCallback(() => {
+    if (!selectedChapter) return;
+    const url = `${getContextPath()}/api/series/chapters/${selectedChapter.id}/export?format=zip`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [selectedChapter]);
+
   if (isLoadingDetails || !selectedSeries || !selectedChapter) {
     return (
       <div className="dashboard-content text-center">
@@ -594,6 +605,12 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
               disabled={isImportingProject}
             >
               {isImportingProject ? "Importing..." : "Import Project (ZIP)"}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={handleExportChapterZip}
+            >
+              Export Chapter (ZIP)
             </button>
             <button
               className="btn btn-primary"

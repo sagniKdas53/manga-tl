@@ -56,10 +56,9 @@ public class InternalJobController {
               List<Layer> allLayers = layerRepository.findByImageId(imageId);
               Layer latestOcrLayer = null;
               for (Layer l : allLayers) {
-                if ("ocr".equalsIgnoreCase(l.getType())) {
-                  if (latestOcrLayer == null || l.getZOrder() > latestOcrLayer.getZOrder()) {
-                    latestOcrLayer = l;
-                  }
+                if ("ocr".equalsIgnoreCase(l.getType())
+                    && (latestOcrLayer == null || l.getZOrder() > latestOcrLayer.getZOrder())) {
+                  latestOcrLayer = l;
                 }
               }
               if (latestOcrLayer != null) {

@@ -2148,18 +2148,6 @@ export const Reader: React.FC<ReaderProps> = ({
     URL.revokeObjectURL(url);
   }, [selectedPage, imageDims, layers]);
 
-  const handleExportChapterZip = useCallback(() => {
-    const chapterId = selectedChapter?.id || selectedPage?.chapterId;
-    if (!chapterId) return;
-    const url = `/api/series/chapters/${chapterId}/export?format=zip`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }, [selectedChapter, selectedPage]);
-
   // --- STABLE NAVIGATOR CALLBACK ---
   const navigateToPage = useCallback(
     (num: number) => {
@@ -4429,20 +4417,6 @@ export const Reader: React.FC<ReaderProps> = ({
                     }}
                   >
                     Export Project (ZIP)
-                  </button>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleExportChapterZip}
-                    style={{
-                      width: "100%",
-                      marginTop: "8px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    Export Chapter (ZIP)
                   </button>
                 </div>
               </>
