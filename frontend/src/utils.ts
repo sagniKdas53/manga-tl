@@ -1,30 +1,35 @@
 // Helper to dynamically resolve the context path from the browser address bar
 export const getContextPath = (): string => {
   const path = window.location.pathname;
-  
+
   // Check known routes to extract context path prefix
-  for (const route of ['/login', '/series', '/chapters']) {
+  for (const route of ["/login", "/series", "/chapters"]) {
     if (path.includes(route)) {
       let cp = path.substring(0, path.indexOf(route));
-      if (cp.endsWith('/')) cp = cp.slice(0, -1);
+      if (cp.endsWith("/")) cp = cp.slice(0, -1);
       return cp;
     }
   }
-  
+
   // If not on a sub-route, we must be at the base context path root (e.g. "/tlhub/" or "/my/manga/")
   let cp = path;
-  if (cp.endsWith('/')) cp = cp.slice(0, -1);
+  if (cp.endsWith("/")) cp = cp.slice(0, -1);
   return cp;
 };
 
 // Override global fetch to prepend the dynamic context path / subfolder base URL to API requests
 const originalFetch = window.fetch;
-window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+window.fetch = async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> => {
   let targetUrl = input;
   const context = getContextPath();
-  if (typeof targetUrl === 'string' && targetUrl.startsWith('/api')) {
+  if (typeof targetUrl === "string" && targetUrl.startsWith("/api")) {
     targetUrl = context + targetUrl;
-    console.log(`[Fetch Override] Rewrote API request: ${input} -> ${targetUrl} (detected context: ${context})`);
+    console.log(
+      `[Fetch Override] Rewrote API request: ${input} -> ${targetUrl} (detected context: ${context})`,
+    );
   }
 
   const MAX_RETRIES = 2;
@@ -34,36 +39,47 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     try {
       const response = await originalFetch(targetUrl, init);
       if (response.status === 401 || response.status === 403) {
-        if (localStorage.getItem('manga_user')) {
-          localStorage.removeItem('manga_user');
-          window.location.pathname = context + '/login'; // Safely redirects without Open Redirect warning
+        if (localStorage.getItem("manga_user")) {
+          localStorage.removeItem("manga_user");
+          window.location.pathname = context + "/login"; // Safely redirects without Open Redirect warning
         }
       }
 
       if (!response.ok && response.status >= 500 && i < MAX_RETRIES) {
-        console.warn(`[Fetch Retry] 5xx error on ${targetUrl}, retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay));
+        console.warn(
+          `[Fetch Retry] 5xx error on ${targetUrl}, retrying in ${delay}ms...`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
         delay *= 2;
         continue;
       }
 
       if (!response.ok && i === MAX_RETRIES) {
-        window.dispatchEvent(new CustomEvent('api-error', { 
-          detail: { url: targetUrl, status: response.status }
-        }));
+        window.dispatchEvent(
+          new CustomEvent("api-error", {
+            detail: { url: targetUrl, status: response.status },
+          }),
+        );
       }
 
       return response;
     } catch (error) {
       if (i < MAX_RETRIES) {
-        console.warn(`[Fetch Retry] Network error on ${targetUrl}, retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay));
+        console.warn(
+          `[Fetch Retry] Network error on ${targetUrl}, retrying in ${delay}ms...`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
         delay *= 2;
         continue;
       }
-      window.dispatchEvent(new CustomEvent('api-error', { 
-        detail: { url: targetUrl, error: error instanceof Error ? error.message : 'Network error' } 
-      }));
+      window.dispatchEvent(
+        new CustomEvent("api-error", {
+          detail: {
+            url: targetUrl,
+            error: error instanceof Error ? error.message : "Network error",
+          },
+        }),
+      );
       throw error;
     }
   }
@@ -76,11 +92,11 @@ export const safeFetch = window.fetch;
 
 // Slug helper function: Strips unicode punctuation & url-unsafe chars, preserves unicode letters
 export function toSlug(text: string): string {
-  if (!text) return 'manga';
+  if (!text) return "manga";
   const cleaned = text
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s\-._~]/gu, '') // Fixed: removed unnecessary escape characters to satisfy linting
+    .replace(/[^\p{L}\p{N}\s\-._~]/gu, "") // Fixed: removed unnecessary escape characters to satisfy linting
     .trim()
-    .replace(/[-\s]+/g, '-'); // replace spaces/hyphens with single hyphen
-  return cleaned || 'manga';
+    .replace(/[-\s]+/g, "-"); // replace spaces/hyphens with single hyphen
+  return cleaned || "manga";
 }

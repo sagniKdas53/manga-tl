@@ -1,8 +1,8 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext } from "react";
 
 export interface Notification {
   id: string;
-  type: 'INFO' | 'WARNING' | 'ERROR';
+  type: "INFO" | "WARNING" | "ERROR";
   title: string;
   message: string;
   timestamp: number;
@@ -18,12 +18,16 @@ export interface NotificationContextType {
   clearAll: () => void;
 }
 
-export const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+export const NotificationContext = createContext<
+  NotificationContextType | undefined
+>(undefined);
 
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (context === undefined) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
+    throw new Error(
+      "useNotifications must be used within a NotificationProvider",
+    );
   }
   return context;
 };
