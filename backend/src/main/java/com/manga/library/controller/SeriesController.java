@@ -540,7 +540,7 @@ public class SeriesController {
         
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
     if (pages == null || pages.isEmpty()) {
-      return ResponseEntity.badRequest().body("No pages in chapter".getBytes());
+      return ResponseEntity.badRequest().body("No pages in chapter".getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     try (java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
@@ -565,11 +565,11 @@ public class SeriesController {
         try (java.io.InputStream is = minioService.downloadFile("rendered/" + imageId + ".png")) {
           imageBytes = is.readAllBytes();
           hasRendered = true;
-        } catch (Exception e) {
+        } catch (io.minio.errors.MinioException | java.io.IOException | java.security.NoSuchAlgorithmException | java.security.InvalidKeyException e) {
           // fallback to original image
           try (java.io.InputStream is = minioService.downloadFile(page.getImage().getStoragePath())) {
             imageBytes = is.readAllBytes();
-          } catch (Exception ex) {
+          } catch (io.minio.errors.MinioException | java.io.IOException | java.security.NoSuchAlgorithmException | java.security.InvalidKeyException ex) {
             log.error("Failed to download original/rendered image for page " + page.getId(), ex);
           }
         }
@@ -712,9 +712,9 @@ public class SeriesController {
           .header("Content-Type", "application/zip")
           .body(zipBytes);
 
-    } catch (Exception e) {
+    } catch (java.io.IOException | RuntimeException e) {
       log.error("Failed to export chapter zip " + chapterId, e);
-      return ResponseEntity.internalServerError().body(("Error during export: " + e.getMessage()).getBytes());
+      return ResponseEntity.internalServerError().body(("Error during export: " + e.getMessage()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
   }
 }

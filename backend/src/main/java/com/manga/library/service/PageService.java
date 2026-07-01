@@ -69,9 +69,9 @@ public class PageService {
       pathsToDelete.add(image.getThumbnailStoragePath());
     }
     UUID chapterId = page.getChapter().getId();
-    UUID imageId = image != null ? image.getId() : null;
+    UUID imageId = image.getId();
 
-    if (page.getChapter() != null && page.getChapter().getSeries() != null && imageId != null) {
+    if (page.getChapter() != null && page.getChapter().getSeries() != null) {
       Series series = page.getChapter().getSeries();
       if (series.getCoverImageUrl() != null && series.getCoverImageUrl().contains(imageId.toString())) {
         series.setCoverImageUrl(null);
