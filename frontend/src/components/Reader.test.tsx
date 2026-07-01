@@ -32,7 +32,7 @@ describe("Reader Component", () => {
   const mockChapter = { id: "c1", seriesId: "s1", chapterNumber: 1, title: "Chapter 1", status: "PENDING", pagesCount: 1 };
   const mockPage = { id: "p1", chapterId: "c1", pageNumber: 1, imageId: "img1", status: "PENDING", imagePath: "/path/to/img", processingProgress: 0 };
 
-  it("renders reader component basic controls", () => {
+  it("renders reader component basic controls", async () => {
     render(
       <Reader
         user={mockUser}
@@ -43,7 +43,22 @@ describe("Reader Component", () => {
         theme="dark"
       />
     );
-    // Checking if reader renders navigation buttons or control items
-    expect(screen.getByText(/Test Series/)).toBeInTheDocument();
+    // Use findByText to wait for asynchronous state updates
+    expect(await screen.findByText(/Test Series/)).toBeInTheDocument();
+  });
+
+  it("handles basic interactions", async () => {
+    const { container } = render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />
+    );
+    // Wait for the component to settle
+    await screen.findByText(/Test Series/);
   });
 });

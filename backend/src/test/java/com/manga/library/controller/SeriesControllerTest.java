@@ -59,4 +59,56 @@ public class SeriesControllerTest {
         .perform(get("/api/series/" + seriesId))
         .andExpect(status().isOk());
   }
+
+  @Test
+  public void testListSeries_Success() throws Exception {
+    Series series = Series.builder().id(UUID.randomUUID()).title("Test Series").build();
+    when(seriesRepository.findAll()).thenReturn(java.util.List.of(series));
+    when(pageRepository.findDefaultCoverImageIds()).thenReturn(new java.util.ArrayList<>());
+
+    mockMvc
+        .perform(get("/api/series"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testCreateSeries_Success() throws Exception {
+    Series series = Series.builder().id(UUID.randomUUID()).title("New Series").build();
+    when(seriesRepository.save(any(Series.class))).thenReturn(series);
+
+    String json = "{\"title\":\"New Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/series")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(json))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testUpdateSeries_Success() throws Exception {
+    UUID seriesId = UUID.randomUUID();
+    Series series = Series.builder().id(seriesId).title("Old Series").build();
+    when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
+    when(seriesRepository.save(any(Series.class))).thenReturn(series);
+
+    String json = "{\"title\":\"Updated Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/series/" + seriesId)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(json))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testDeleteSeries_Success() throws Exception {
+    UUID seriesId = UUID.randomUUID();
+    when(seriesRepository.existsById(seriesId)).thenReturn(true);
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/series/" + seriesId))
+        .andExpect(status().isOk());
+  }
 }

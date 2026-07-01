@@ -29,4 +29,4 @@ jobs:
         
     - name: Run tests with pytest
       run: |
-        pytest tests/ --cov=. --cov-report=xml
+        pytest tests/ --cov=. --cov-report=xml --cov-report=html
