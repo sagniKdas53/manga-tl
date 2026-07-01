@@ -5,9 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.config.JwtAuthFilter;
-import com.manga.library.dto.PageDto;
 import com.manga.library.model.Chapter;
 import com.manga.library.model.Image;
 import com.manga.library.model.Page;
@@ -24,7 +22,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PageController.class)
@@ -58,12 +55,7 @@ public class PageControllerTest {
 
     Image image = Image.builder().id(imageId).filename("test.png").build();
     Chapter chapter = Chapter.builder().id(chapterId).build();
-    Page page = Page.builder()
-        .id(pageId)
-        .pageNumber(1)
-        .image(image)
-        .chapter(chapter)
-        .build();
+    Page page = Page.builder().id(pageId).pageNumber(1).image(image).chapter(chapter).build();
 
     when(pageRepository.findById(pageId)).thenReturn(Optional.of(page));
 
@@ -81,9 +73,7 @@ public class PageControllerTest {
     UUID pageId = UUID.randomUUID();
     when(pageRepository.findById(pageId)).thenReturn(Optional.empty());
 
-    mockMvc
-        .perform(get("/api/pages/" + pageId))
-        .andExpect(status().isNotFound());
+    mockMvc.perform(get("/api/pages/" + pageId)).andExpect(status().isNotFound());
   }
 
   @Test
@@ -94,12 +84,7 @@ public class PageControllerTest {
 
     Image image = Image.builder().id(imageId).filename("test.png").build();
     Chapter chapter = Chapter.builder().id(chapterId).build();
-    Page page = Page.builder()
-        .id(pageId)
-        .pageNumber(1)
-        .image(image)
-        .chapter(chapter)
-        .build();
+    Page page = Page.builder().id(pageId).pageNumber(1).image(image).chapter(chapter).build();
 
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
         .thenReturn(Collections.singletonList(page));

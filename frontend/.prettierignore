@@ -8,3 +8,4 @@ node_modules/
 # Ignore lockfiles and system files
 package-lock.json
 .DS_Store
+coverage/

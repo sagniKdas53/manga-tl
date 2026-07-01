@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.manga.library.model.*;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -23,20 +22,17 @@ public class PageRepositoryTest {
 
   @Test
   public void testFindByChapterIdOrderByPageNumberAsc() {
-    Series series = Series.builder()
-        .title("Test Series Rep")
-        .originalLanguage("ja")
-        .sourceLanguage("ja")
-        .targetLanguage("en")
-        .readingDirection("rtl")
-        .build();
+    Series series =
+        Series.builder()
+            .title("Test Series Rep")
+            .originalLanguage("ja")
+            .sourceLanguage("ja")
+            .targetLanguage("en")
+            .readingDirection("rtl")
+            .build();
     series = seriesRepository.save(series);
 
-    Chapter chapter = Chapter.builder()
-        .chapterNumber(1.0)
-        .title("Ch 1")
-        .series(series)
-        .build();
+    Chapter chapter = Chapter.builder().chapterNumber(1.0).title("Ch 1").series(series).build();
     chapter = chapterRepository.save(chapter);
 
     Image img1 = Image.builder().filename("img1.png").storagePath("p1").hash("h1").build();

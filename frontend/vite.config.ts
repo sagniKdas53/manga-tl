@@ -24,4 +24,3 @@ export default defineConfig({
     setupFiles: "./vitest.setup.ts",
   },
 });
-

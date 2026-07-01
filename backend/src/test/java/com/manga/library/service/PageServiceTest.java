@@ -7,7 +7,6 @@ import static org.mockito.Mockito.*;
 import com.manga.library.model.*;
 import com.manga.library.repository.ImageRepository;
 import com.manga.library.repository.PageRepository;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,8 +37,9 @@ public class PageServiceTest {
     when(imageRepository.save(any(Image.class))).thenReturn(image);
     when(pageRepository.save(any(Page.class))).thenReturn(page);
 
-    Page result = pageService.createPageAndImage(
-        chapter, "file.png", "path/file.png", "thumb/file.png", 1, "hash123", user);
+    Page result =
+        pageService.createPageAndImage(
+            chapter, "file.png", "path/file.png", "thumb/file.png", 1, "hash123", user);
 
     assertNotNull(result);
     verify(imageRepository, times(1)).save(any(Image.class));

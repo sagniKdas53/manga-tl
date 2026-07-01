@@ -50,9 +50,7 @@ public class InternalJobControllerTest {
     UUID imageId = UUID.randomUUID();
     when(imageRepository.findById(imageId)).thenReturn(Optional.empty());
 
-    mockMvc
-        .perform(get("/api/internal/images/" + imageId))
-        .andExpect(status().isNotFound());
+    mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isNotFound());
   }
 
   @Test
