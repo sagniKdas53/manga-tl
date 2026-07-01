@@ -213,7 +213,7 @@ public class JobCoordinatorServiceTest {
     qaResult.put("qaScore", 0.95);
     qaResult.put("qaFeedback", "All good");
 
-    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult));
+    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult), null);
 
     OcrRegion updatedRegion = ocrRegionRepository.findById(region.getId()).orElseThrow();
     assertEquals("passed", updatedRegion.getQaStatus());
@@ -277,7 +277,7 @@ public class JobCoordinatorServiceTest {
     directFix.put("suggestedFontSize", 10.0);
     qaResult.put("directFix", directFix);
 
-    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult));
+    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult), null);
 
     OcrRegion updatedRegion = ocrRegionRepository.findById(region.getId()).orElseThrow();
     assertEquals("fixed", updatedRegion.getQaStatus());
@@ -328,7 +328,7 @@ public class JobCoordinatorServiceTest {
     String queueName = "queue:translation";
     redisTemplate.delete(queueName);
 
-    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult));
+    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult), null);
 
     OcrRegion updatedRegion = ocrRegionRepository.findById(region.getId()).orElseThrow();
     assertEquals("failed", updatedRegion.getQaStatus());
@@ -385,7 +385,7 @@ public class JobCoordinatorServiceTest {
     String queueName = "queue:translation";
     redisTemplate.delete(queueName);
 
-    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult));
+    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult), null);
 
     OcrRegion updatedRegion = ocrRegionRepository.findById(region.getId()).orElseThrow();
     assertEquals("failed", updatedRegion.getQaStatus());
@@ -436,7 +436,7 @@ public class JobCoordinatorServiceTest {
     escalation.put("suggestedReadingOrderIndex", 3);
     qaResult.put("escalation", escalation);
 
-    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult));
+    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult), null);
 
     OcrRegion updatedRegion = ocrRegionRepository.findById(region.getId()).orElseThrow();
     assertEquals("failed", updatedRegion.getQaStatus());
@@ -474,7 +474,7 @@ public class JobCoordinatorServiceTest {
     translation.put("translationFailed", false);
     translation.put("translationScore", 0.98);
 
-    jobCoordinatorService.handleTranslationCallback(image.getId(), List.of(translation));
+    jobCoordinatorService.handleTranslationCallback(image.getId(), List.of(translation), null);
 
     // Verify OcrRegion updated
     OcrRegion updatedRegion = ocrRegionRepository.findById(region.getId()).orElseThrow();
