@@ -73,18 +73,21 @@
 - [ ] **[LOW PRIORITY] Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
 - [ ] The export chapter as zip should have been placed in the chapter view not inside the reader.
 - [ ] The SSE is broken, most images say `Could not find owner user for image {{uuid}} in Redis. Cannot send SSE notification`
+- [ ] The exported chapter has only the back-end rendered images, they are not as high quality as the front-end images, need to rectify this.
 
 ## Backend & Worker Pipeline Improvements
 
 - [ ] Store QA feedback as metadata in the layers.
 - [ ] If a layer fails QA, store the region that failed and the reason in the layer metadata.
 - [x] Investigate using OpenRouter for OCR models to speed up processing via cloud (keeping the local system as a fallback).
-  - [ ] It is fast but not as good as the PP-OCR-V5 used locally like it keeps missing dialog and text if they are not in dailog boxes.
-  - [ ] Also need to investiagte if the nemotron-ocr-v2 can be used over nvidia api's for extremely fast and reliable ocr [sample](unified-workers/nemotron-ocr-v2.py)
+  - [ ] qwen/qwen3-vl-8b-instruct is fast but not as good as the PP-OCR-V5 used locally like it keeps missing dialog and text if they are not in dailog boxes.
+  - [ ] Should also check the other models from benchmarks
+  - [x] Also need to investiagte if the nemotron-ocr-v2 can be used over nvidia api's for extremely fast and reliable ocr, no it's nither fast nor reliable
 - [ ] Add support for exporting whole rendered chapters as a zip/ePub.
 - [ ] Add a `meta-data.json` to the chapter export zip containing data about all pages (order, layer counts, active layer, manual-qa-needed, manual-changes-done, OCR/TL models used, cost of page's, cost of chapter if paid models are used).
 - [ ] Log and keep track of costs if paid models are used (save this as metadata at image level if possible at layer level for both OCR and TL and QA as well).
 - [ ] All the cost estimations show `Estimated cost: $0.00000` when it clearly isn't
 - [ ] The real bottleneck was local OCR model, but if we are using cloud OCR we can defenitly parallelize a bit.
+- [ ] We can build a slim worker image that doesn't have all the OCR things and just uses the cloud OCR
 - [ ] **[LOW PRIORITY] Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
 - [ ] **[LOW PRIORITY] Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.

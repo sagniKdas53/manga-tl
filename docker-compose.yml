@@ -20,6 +20,24 @@ services:
       timeout: 5s
       retries: 5
 
+  db-backup:
+    image: prodrigestivill/postgres-backup-local:15
+    container_name: manga-db-backup
+    restart: unless-stopped
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=${POSTGRES_DB:-manga_library}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - SCHEDULE=@daily
+      - BACKUP_KEEP_DAYS=7
+    volumes:
+      - ./data/backups:/backups
+    depends_on:
+      - db
+    networks:
+      - manga-net
+
   redis:
     image: valkey/valkey:8-alpine
     container_name: manga-valkey
