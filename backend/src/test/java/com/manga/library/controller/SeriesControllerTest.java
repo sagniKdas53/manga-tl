@@ -8,6 +8,7 @@ import com.manga.library.config.JwtAuthFilter;
 import com.manga.library.model.Series;
 import com.manga.library.repository.ChapterRepository;
 import com.manga.library.repository.ImageRepository;
+import com.manga.library.repository.LayerElementRepository;
 import com.manga.library.repository.LayerRepository;
 import com.manga.library.repository.PageRepository;
 import com.manga.library.repository.SeriesRepository;
@@ -34,6 +35,7 @@ public class SeriesControllerTest {
   @MockBean private PageRepository pageRepository;
   @MockBean private ImageRepository imageRepository;
   @MockBean private LayerRepository layerRepository;
+  @MockBean private LayerElementRepository layerElementRepository;
   @MockBean private PageService pageService;
   @MockBean private MinioService minioService;
   @MockBean private JobCoordinatorService jobCoordinatorService;

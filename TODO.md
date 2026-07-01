@@ -24,10 +24,18 @@
 
 ## Model Picker / Runtime Settings
 
-- [ ] **Backend:** New `/api/settings` endpoint to expose and update model configuration at runtime (provider, preferred LLM/VLM, OCR engine). Support both global defaults and per-user overrides.
-- [ ] **Worker:** Config reload mechanism (e.g., polling the settings API or a Redis pub-sub channel) so the worker picks up changes without a full restart.
-- [ ] **Frontend:** Settings panel in the navbar (gear icon) showing active provider + model dropdowns. Persists selection via the API.
-- [ ] **Per-user vs global:** Decide on scope — global settings controlled by admin, with optional per-user overrides stored in user profile.
+- [ ] **Backend:** New `/api/settings` endpoint to expose and update model configuration at runtime.
+  - [ ] Support setting OCR provider: Local, Cloud (This should be enough as can just gray out the local option if the image doesn't include OCR deps or is disabled by the env var)
+  - [ ] Now that we have cloud OCR as well maybe we should rename the env variables to have three parts, OCR_MODEL_PROVIDER and it's dependant OCR_VLM_MODEL or OCR_VLM_MODEL_LIST
+  - [ ] Next have a TL_MODEL_PROVIDER and it's dependant PREFERRED_LLM_MODEL or PREFERRED_LLM_MODEL_LIST
+  - [ ] Lastly QA_MODEL_PROVIDER which will have two dependant variables QA_LLM_MODEL and QA_VLM_MODEL and their list forms to provide options
+  - [ ] We will set the defaults at conatiner level using env vars, these can then be loaded to the back-end to be passed onto the worker and front-end
+- [ ] **Backend:** Update the chapter and series meta-data api's to support chapter level model selctions, so that say we are doing a rough draft for a chapter we can use the free or very cheap model to do a draft and then maybe we want high quality for another chapter we can just configure it use paid fast models.
+- [ ] **Worker:** These different types of models, at various stages can be passed onto the worker as a part of the job meta-data, this would also help use populate the layer meta-data as we will know which job is using what to produce a layer or render
+- [ ] We can pass on the defaults as a safty fallback incase the models passed for a job are not available or wrong.
+- [ ] **Frontend:** Settings panel in the navbar (gear icon) showing active provider's + model dropdowns. This initilzes the defaults for the user form the data passed on by the back-end but can also post the user preferences back to the back-end to presist
+  - [ ] Need to add additioanl fields in the add and edit series and chapter's dialog boxes so that we can quickly configure the models for a series or chapter.
+  - [ ] Also show the OCR type used, models and provider's used for the series and chapter in their cards so that we know at a glance whats configured.
 
 ## [DONE] Backend & Worker Pipeline Improvements
 

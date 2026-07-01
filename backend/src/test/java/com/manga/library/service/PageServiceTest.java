@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.manga.library.model.*;
 import com.manga.library.repository.ImageRepository;
 import com.manga.library.repository.PageRepository;
+import com.manga.library.repository.SeriesRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,12 +20,13 @@ public class PageServiceTest {
 
   @Mock private ImageRepository imageRepository;
   @Mock private PageRepository pageRepository;
+  @Mock private SeriesRepository seriesRepository;
 
   private PageService pageService;
 
   @BeforeEach
   public void setUp() {
-    pageService = new PageService(imageRepository, pageRepository);
+    pageService = new PageService(imageRepository, pageRepository, seriesRepository);
   }
 
   @Test

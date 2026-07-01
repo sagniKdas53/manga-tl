@@ -42,6 +42,7 @@ public class InternalJobControllerTest {
   @MockBean private MinioService minioService;
   @MockBean private LayerElementRepository layerElementRepository;
   @MockBean private LayerRepository layerRepository;
+  @MockBean private SeriesRepository seriesRepository;
   @MockBean private SseService sseService;
   @MockBean private JwtAuthFilter jwtAuthFilter;
 
