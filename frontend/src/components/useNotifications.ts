@@ -8,6 +8,12 @@ export interface Notification {
   timestamp: number;
   read: boolean;
   imageId?: string;
+  context?: {
+    seriesTitle?: string;
+    chapterNumber?: string;
+    chapterTitle?: string;
+    pageNumber?: string;
+  };
 }
 
 export interface NotificationContextType {

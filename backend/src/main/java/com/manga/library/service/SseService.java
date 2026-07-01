@@ -80,9 +80,13 @@ public class SseService {
   }
 
   public void emitNotificationForImage(UUID imageId, String type, String title, String message) {
+    emitNotificationForImage(imageId, type, title, message, null);
+  }
+
+  public void emitNotificationForImage(UUID imageId, String type, String title, String message, Map<String, String> context) {
     String userIdStr = redisTemplate.opsForValue().get(IMAGE_USER_MAPPING_PREFIX + imageId);
     if (userIdStr != null) {
-      emitNotificationToUser(UUID.fromString(userIdStr), type, title, message, imageId);
+      emitNotificationToUser(UUID.fromString(userIdStr), type, title, message, imageId, context);
     } else {
       log.warn(
           "Could not find owner user for image {} in Redis. Cannot send SSE notification.",
@@ -91,11 +95,16 @@ public class SseService {
   }
 
   public void emitNotificationToUser(UUID userId, String type, String title, String message) {
-    emitNotificationToUser(userId, type, title, message, null);
+    emitNotificationToUser(userId, type, title, message, null, null);
   }
 
   public void emitNotificationToUser(
       UUID userId, String type, String title, String message, UUID imageId) {
+    emitNotificationToUser(userId, type, title, message, imageId, null);
+  }
+
+  public void emitNotificationToUser(
+      UUID userId, String type, String title, String message, UUID imageId, Map<String, String> context) {
     Map<String, Object> notification = new java.util.HashMap<>();
     notification.put("id", UUID.randomUUID().toString());
     notification.put("type", type);
@@ -104,6 +113,9 @@ public class SseService {
     notification.put("timestamp", System.currentTimeMillis());
     if (imageId != null) {
       notification.put("imageId", imageId.toString());
+    }
+    if (context != null) {
+      notification.put("context", context);
     }
 
     String jsonPayload;

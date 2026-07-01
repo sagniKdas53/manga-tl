@@ -62,15 +62,15 @@
 - [ ] Incorporate QA feedback into the front-end by outlining the OCR and/or translation bubble in red margins for layers that failed QA (manual intervention needed).
 - [ ] Make notifications and toasts more informative (include specific image, chapter, or series instead of just the step that was done).
 - [ ] Deleting the first image of first chapter of a series causes the series to be thumbnail less, which the chapter successfully identifies and uses the now first page inside it, the series doesn't (this also implies that if the first chapter is deleted a similar issue will occur)
-- [ ] **Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
+- [ ] **[LOW PRIORITY] Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
 
 ## Backend & Worker Pipeline Improvements
 
 - [ ] Store QA feedback as metadata in the layers.
 - [ ] If a layer fails QA, store the region that failed and the reason in the layer metadata.
-- [ ] Investigate using OpenRouter for OCR models to speed up processing via cloud (keeping the local system as a fallback).
+- [x] Investigate using OpenRouter for OCR models to speed up processing via cloud (keeping the local system as a fallback).
 - [ ] Add support for exporting whole rendered chapters as a zip/ePub.
 - [ ] Add a `meta-data.json` to the chapter export zip containing data about all pages (order, layer counts, active layer, manual-qa-needed, manual-changes-done, OCR/TL models used, cost of page, cost of chapter).
 - [ ] Log and keep track of costs if paid models are used (save this as metadata in layers too).
-- [ ] **Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
-- [ ] **Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
+- [ ] **[LOW PRIORITY] Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
+- [ ] **[LOW PRIORITY] Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
