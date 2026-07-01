@@ -200,6 +200,23 @@ export const NotificationCenter: React.FC = () => {
                     >
                       {n.message}
                     </div>
+                    {n.context && (
+                      <div
+                        style={{
+                          fontSize: "10px",
+                          color: "var(--primary, var(--text-muted))",
+                          opacity: 0.8,
+                          marginBottom: "4px",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {[
+                          n.context.seriesTitle,
+                          n.context.chapterNumber ? `Ch.${n.context.chapterNumber}` : null,
+                          n.context.pageNumber ? `Page ${n.context.pageNumber}` : null
+                        ].filter(Boolean).join(" › ")}
+                      </div>
+                    )}
                     <div style={{ fontSize: "10px", color: "var(--text-dim)" }}>
                       {new Date(n.timestamp).toLocaleTimeString()}
                     </div>

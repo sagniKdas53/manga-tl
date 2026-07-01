@@ -17,6 +17,7 @@ public class PageService {
 
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
+  private final SeriesRepository seriesRepository;
 
   @Transactional
   public Page createPageAndImage(
@@ -68,6 +69,15 @@ public class PageService {
       pathsToDelete.add(image.getThumbnailStoragePath());
     }
     UUID chapterId = page.getChapter().getId();
+    UUID imageId = image != null ? image.getId() : null;
+
+    if (page.getChapter() != null && page.getChapter().getSeries() != null && imageId != null) {
+      Series series = page.getChapter().getSeries();
+      if (series.getCoverImageUrl() != null && series.getCoverImageUrl().contains(imageId.toString())) {
+        series.setCoverImageUrl(null);
+        seriesRepository.save(series);
+      }
+    }
 
     // 1. Delete page first
     pageRepository.delete(page);

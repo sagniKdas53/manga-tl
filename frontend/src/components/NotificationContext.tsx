@@ -35,6 +35,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
           timestamp: data.timestamp,
           read: false,
           imageId: data.imageId,
+          context: data.context,
         };
 
         // Defer state update to satisfy set-state-in-effect rule

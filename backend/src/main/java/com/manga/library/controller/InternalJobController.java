@@ -27,6 +27,7 @@ public class InternalJobController {
   private final ConversationRegionRepository conversationRegionRepository;
   private final PageRepository pageRepository;
   private final ChapterRepository chapterRepository;
+  private final SeriesRepository seriesRepository;
   private final MinioService minioService;
   private final LayerElementRepository layerElementRepository;
   private final LayerRepository layerRepository;
@@ -170,10 +171,11 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/panel")
   public ResponseEntity<?> panelCallback(@RequestBody PanelCallbackDto dto) {
     log.info("Received panel callback for image: {}", dto.getImageId());
+    Map<String, String> ctx = resolveNotificationContext(dto.getImageId());
     try {
       jobCoordinatorService.handlePanelCallback(dto);
       sseService.emitNotificationForImage(
-          dto.getImageId(), "INFO", "Panels Extracted", "Successfully extracted panels for page.");
+          dto.getImageId(), "INFO", "Panels Extracted", formatMessage("Successfully extracted panels for page.", ctx), ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing panel callback", e);
@@ -181,7 +183,8 @@ public class InternalJobController {
           dto.getImageId(),
           "ERROR",
           "Panel Extraction Failed",
-          "An error occurred while extracting panels.");
+          formatMessage("An error occurred while extracting panels.", ctx),
+          ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -189,15 +192,16 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/ocr")
   public ResponseEntity<?> ocrCallback(@RequestBody OcrCallbackDto dto) {
     log.info("Received OCR callback for image: {}", dto.getImageId());
+    Map<String, String> ctx = resolveNotificationContext(dto.getImageId());
     try {
       jobCoordinatorService.handleOcrCallback(dto);
       sseService.emitNotificationForImage(
-          dto.getImageId(), "INFO", "OCR Completed", "Successfully completed OCR processing.");
+          dto.getImageId(), "INFO", "OCR Completed", formatMessage("Successfully completed OCR processing.", ctx), ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing OCR callback", e);
       sseService.emitNotificationForImage(
-          dto.getImageId(), "ERROR", "OCR Failed", "An error occurred during OCR processing.");
+          dto.getImageId(), "ERROR", "OCR Failed", formatMessage("An error occurred during OCR processing.", ctx), ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -207,6 +211,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received layout callback for image: {}", imageId);
+    Map<String, String> ctx = resolveNotificationContext(imageId);
     try {
       List<?> rawRegionTypes = (List<?>) payload.get("regionTypes");
       List<Map<String, String>> regionTypes = new ArrayList<>();
@@ -242,12 +247,12 @@ public class InternalJobController {
       }
       jobCoordinatorService.handleLayoutCallback(imageId, regionTypes, conversations);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "Layout Analysis Completed", "Layout analysis successfully finished.");
+          imageId, "INFO", "Layout Analysis Completed", formatMessage("Layout analysis successfully finished.", ctx), ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing layout callback", e);
       sseService.emitNotificationForImage(
-          imageId, "ERROR", "Layout Analysis Failed", "An error occurred during layout analysis.");
+          imageId, "ERROR", "Layout Analysis Failed", formatMessage("An error occurred during layout analysis.", ctx), ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -257,6 +262,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received translation callback for image: {}", imageId);
+    Map<String, String> ctx = resolveNotificationContext(imageId);
     try {
       List<?> rawTranslations = (List<?>) payload.get("translations");
       List<Map<String, Object>> translations = new ArrayList<>();
@@ -274,14 +280,18 @@ public class InternalJobController {
           }
         }
       }
-      jobCoordinatorService.handleTranslationCallback(imageId, translations);
+      Map<String, Object> cost = null;
+      if (payload.containsKey("cost") && payload.get("cost") instanceof Map) {
+        cost = (Map<String, Object>) payload.get("cost");
+      }
+      jobCoordinatorService.handleTranslationCallback(imageId, translations, cost);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "Translation Completed", "Translation successfully finished.");
+          imageId, "INFO", "Translation Completed", formatMessage("Translation successfully finished.", ctx), ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing translation callback", e);
       sseService.emitNotificationForImage(
-          imageId, "ERROR", "Translation Failed", "An error occurred during translation.");
+          imageId, "ERROR", "Translation Failed", formatMessage("An error occurred during translation.", ctx), ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -291,6 +301,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received QA Re-OCR callback for image: {}", imageId);
+    Map<String, String> ctx = resolveNotificationContext(imageId);
     try {
       List<?> rawResults = (List<?>) payload.get("results");
       List<Map<String, Object>> results = new ArrayList<>();
@@ -310,12 +321,12 @@ public class InternalJobController {
       }
       jobCoordinatorService.handleQaReOcrCallback(imageId, results);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "QA Re-OCR Completed", "QA Re-OCR successfully finished.");
+          imageId, "INFO", "QA Re-OCR Completed", formatMessage("QA Re-OCR successfully finished.", ctx), ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing QA Re-OCR callback", e);
       sseService.emitNotificationForImage(
-          imageId, "ERROR", "QA Re-OCR Failed", "An error occurred during QA Re-OCR.");
+          imageId, "ERROR", "QA Re-OCR Failed", formatMessage("An error occurred during QA Re-OCR.", ctx), ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -331,6 +342,8 @@ public class InternalJobController {
           .ifPresent(
               region -> {
                 Objects.requireNonNull(region, "region cannot be null");
+                UUID imageId = region.getImage().getId();
+                Map<String, String> ctx = resolveNotificationContext(imageId);
                 if (payload.containsKey("text")) {
                   region.setText((String) payload.get("text"));
                 }
@@ -362,10 +375,11 @@ public class InternalJobController {
                 }
                 ocrRegionRepository.save(region);
                 sseService.emitNotificationForImage(
-                    region.getImage().getId(),
+                    imageId,
                     "INFO",
                     "Region Redo",
-                    "Region processing successfully updated.");
+                    formatMessage("Region processing successfully updated.", ctx),
+                    ctx);
               });
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -379,15 +393,16 @@ public class InternalJobController {
     UUID imageId = UUID.fromString(payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received render callback for image: {}", imageId);
+    Map<String, String> ctx = resolveNotificationContext(imageId);
     try {
       jobCoordinatorService.handleRenderCallback(imageId);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "Render Completed", "Successfully rendered typeset image.");
+          imageId, "INFO", "Render Completed", formatMessage("Successfully rendered typeset image.", ctx), ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing render callback", e);
       sseService.emitNotificationForImage(
-          imageId, "ERROR", "Render Failed", "An error occurred during rendering.");
+          imageId, "ERROR", "Render Failed", formatMessage("An error occurred during rendering.", ctx), ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -397,6 +412,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received QA callback for image: {}", imageId);
+    Map<String, String> ctx = resolveNotificationContext(imageId);
     try {
       List<?> rawResults = (List<?>) payload.get("qaResults");
       List<Map<String, Object>> qaResults = new ArrayList<>();
@@ -414,15 +430,64 @@ public class InternalJobController {
           }
         }
       }
-      jobCoordinatorService.handleQaCallback(imageId, qaResults);
+      Map<String, Object> cost = null;
+      if (payload.containsKey("cost") && payload.get("cost") instanceof Map) {
+        cost = (Map<String, Object>) payload.get("cost");
+      }
+      jobCoordinatorService.handleQaCallback(imageId, qaResults, cost);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "QA Completed", "Quality assurance checks passed.");
+          imageId, "INFO", "QA Completed", formatMessage("Quality assurance checks passed.", ctx), ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing QA callback", e);
       sseService.emitNotificationForImage(
-          imageId, "WARNING", "QA Issue", "An issue occurred during QA checks.");
+          imageId, "WARNING", "QA Issue", formatMessage("An issue occurred during QA checks.", ctx), ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
+  }
+
+  private Map<String, String> resolveNotificationContext(UUID imageId) {
+    Map<String, String> context = new HashMap<>();
+    if (imageId == null) return context;
+    try {
+      List<Page> pages = pageRepository.findByImageId(imageId);
+      if (pages != null && !pages.isEmpty()) {
+        Page page = pages.get(0);
+        context.put("pageNumber", String.valueOf(page.getPageNumber()));
+        if (page.getChapter() != null) {
+          Chapter chapter = page.getChapter();
+          context.put("chapterNumber", String.valueOf(chapter.getChapterNumber()));
+          context.put("chapterTitle", chapter.getTitle() != null ? chapter.getTitle() : "");
+          if (chapter.getSeries() != null) {
+            Series series = chapter.getSeries();
+            context.put("seriesTitle", series.getTitle() != null ? series.getTitle() : "");
+          }
+        }
+      }
+    } catch (Exception e) {
+      log.debug("Failed to resolve notification context for image " + imageId, e);
+    }
+    return context;
+  }
+
+  private String formatMessage(String baseText, Map<String, String> ctx) {
+    if (ctx == null || ctx.isEmpty()) return baseText;
+    String series = ctx.getOrDefault("seriesTitle", "");
+    String chNum = ctx.getOrDefault("chapterNumber", "");
+    String pNum = ctx.getOrDefault("pageNumber", "");
+    
+    StringBuilder sb = new StringBuilder(baseText);
+    sb.append(" (");
+    if (!series.isEmpty()) {
+      sb.append(series).append(" ");
+    }
+    if (!chNum.isEmpty()) {
+      sb.append("Ch.").append(chNum).append(" ");
+    }
+    if (!pNum.isEmpty()) {
+      sb.append("p.").append(pNum);
+    }
+    sb.append(")");
+    return sb.toString().replace(" )", ")").trim();
   }
 }

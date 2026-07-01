@@ -2148,6 +2148,18 @@ export const Reader: React.FC<ReaderProps> = ({
     URL.revokeObjectURL(url);
   }, [selectedPage, imageDims, layers]);
 
+  const handleExportChapterZip = useCallback(() => {
+    const chapterId = selectedChapter?.id || selectedPage?.chapterId;
+    if (!chapterId) return;
+    const url = `/api/series/chapters/${chapterId}/export?format=zip`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [selectedChapter, selectedPage]);
+
   // --- STABLE NAVIGATOR CALLBACK ---
   const navigateToPage = useCallback(
     (num: number) => {
@@ -3073,6 +3085,13 @@ export const Reader: React.FC<ReaderProps> = ({
                   renderItems.map((item) => {
                     const isSelected = selectedItem?.id === item.id;
                     const isApproved = item.approved;
+                    const qaStatus = item.regions.find(r => r.qaStatus === "failed" || r.qaStatus === "manual_review") 
+                      ? "failed" 
+                      : item.regions.find(r => r.qaStatus === "direct_fix") 
+                        ? "direct_fix" 
+                        : item.regions.find(r => r.qaStatus === "passed") 
+                          ? "passed" 
+                          : null;
                     return (
                       <g
                         key={item.id}
@@ -3115,14 +3134,19 @@ export const Reader: React.FC<ReaderProps> = ({
                               ? item.isConversation
                                 ? "var(--conversation)"
                                 : "var(--primary)"
-                              : isApproved
-                                ? item.isConversation
-                                  ? "var(--conversation)"
-                                  : "var(--primary)"
-                                : item.isConversation
-                                  ? "var(--conversation)"
-                                  : "var(--success)",
-                            strokeWidth: isSelected || isApproved ? 2.5 : 1.5,
+                              : qaStatus === "failed"
+                                ? "#ef4444"
+                                : qaStatus === "direct_fix"
+                                  ? "#f59e0b"
+                                  : isApproved
+                                    ? item.isConversation
+                                      ? "var(--conversation)"
+                                      : "var(--primary)"
+                                    : item.isConversation
+                                      ? "var(--conversation)"
+                                      : "var(--success)",
+                            strokeWidth: isSelected || isApproved ? 2.5 : qaStatus === "failed" ? 2.5 : 1.5,
+                            strokeDasharray: !isSelected && qaStatus === "failed" ? "4 2" : undefined,
                           }}
                         />
                         <g
@@ -3137,13 +3161,17 @@ export const Reader: React.FC<ReaderProps> = ({
                                 ? item.isConversation
                                   ? "var(--conversation)"
                                   : "var(--primary)"
-                                : isApproved
-                                  ? item.isConversation
-                                    ? "var(--conversation)"
-                                    : "var(--primary)"
-                                  : item.isConversation
-                                    ? "var(--conversation)"
-                                    : "var(--success)"
+                                : qaStatus === "failed"
+                                  ? "#ef4444"
+                                  : qaStatus === "direct_fix"
+                                    ? "#f59e0b"
+                                    : isApproved
+                                      ? item.isConversation
+                                        ? "var(--conversation)"
+                                        : "var(--primary)"
+                                      : item.isConversation
+                                        ? "var(--conversation)"
+                                        : "var(--success)"
                             }
                           />
                           <text
@@ -3183,6 +3211,9 @@ export const Reader: React.FC<ReaderProps> = ({
                     const isSelected =
                       selectedItem?.id === element.id &&
                       selectedItem?.isLayerElement;
+
+                    const relatedRegion = element.regionId ? filteredOcrRegions.find(r => r.id === element.regionId) : null;
+                    const elQaStatus = relatedRegion ? relatedRegion.qaStatus : null;
 
                     // Run text fitting
                     let fontSize: number;
@@ -3294,10 +3325,14 @@ export const Reader: React.FC<ReaderProps> = ({
                             stroke={
                               isSelected
                                 ? "var(--primary)"
-                                : "rgba(139, 92, 246, 0.4)"
+                                : elQaStatus === "failed" || elQaStatus === "manual_review"
+                                  ? "#ef4444"
+                                  : elQaStatus === "direct_fix"
+                                    ? "#f59e0b"
+                                    : "rgba(139, 92, 246, 0.4)"
                             }
-                            strokeWidth={isSelected ? 2 : 1}
-                            strokeDasharray={isSelected ? "none" : "4 4"}
+                            strokeWidth={isSelected ? 2 : (elQaStatus === "failed" || elQaStatus === "manual_review") ? 2 : 1}
+                            strokeDasharray={isSelected ? "none" : (elQaStatus === "failed" || elQaStatus === "manual_review") ? "none" : "4 4"}
                           />
                         )}
 
@@ -4394,6 +4429,20 @@ export const Reader: React.FC<ReaderProps> = ({
                     }}
                   >
                     Export Project (ZIP)
+                  </button>
+                  <button
+                    className="btn btn-secondary sidebar-action-btn"
+                    onClick={handleExportChapterZip}
+                    style={{
+                      width: "100%",
+                      marginTop: "8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    Export Chapter (ZIP)
                   </button>
                 </div>
               </>

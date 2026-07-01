@@ -32,9 +32,11 @@ public class SeriesController {
   private final PageRepository pageRepository;
   private final ImageRepository imageRepository;
   private final LayerRepository layerRepository;
+  private final LayerElementRepository layerElementRepository;
   private final PageService pageService;
   private final MinioService minioService;
   private final JobCoordinatorService jobCoordinatorService;
+  private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
@@ -329,11 +331,28 @@ public class SeriesController {
   @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
   public ResponseEntity<Void> deleteChapter(@PathVariable UUID chapterId) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
-    if (chapterRepository.existsById(chapterId)) {
-      chapterRepository.deleteById(chapterId);
-      return ResponseEntity.ok().build();
-    }
-    return ResponseEntity.notFound().build();
+    return chapterRepository.findById(chapterId)
+        .map(chapter -> {
+          Series series = chapter.getSeries();
+          if (series != null && series.getCoverImageUrl() != null) {
+            List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
+            if (pages != null) {
+              for (Page page : pages) {
+                if (page.getImage() != null) {
+                  String imageIdStr = page.getImage().getId().toString();
+                  if (series.getCoverImageUrl().contains(imageIdStr)) {
+                    series.setCoverImageUrl(null);
+                    seriesRepository.save(series);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          chapterRepository.delete(chapter);
+          return ResponseEntity.ok().<Void>build();
+        })
+        .orElse(ResponseEntity.notFound().build());
   }
 
   @PostMapping("/{seriesId}/chapters/import")
@@ -507,6 +526,195 @@ public class SeriesController {
         | RuntimeException e) {
       log.error("Failed to import chapter", e);
       return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
+    }
+  }
+
+  @GetMapping("/chapters/{chapterId}/export")
+  public ResponseEntity<byte[]> exportChapter(
+      @PathVariable UUID chapterId,
+      @RequestParam(name = "format", defaultValue = "zip") String format) {
+    Objects.requireNonNull(chapterId, "chapterId cannot be null");
+    
+    Chapter chapter = chapterRepository.findById(chapterId)
+        .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
+        
+    List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
+    if (pages == null || pages.isEmpty()) {
+      return ResponseEntity.badRequest().body("No pages in chapter".getBytes());
+    }
+
+    try (java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+         java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos)) {
+
+      // Prepare metadata list
+      List<Map<String, Object>> pageMetadataList = new ArrayList<>();
+      double chapterTotalCostVal = 0.0;
+      boolean chapterHasCost = false;
+
+      for (int i = 0; i < pages.size(); i++) {
+        Page page = pages.get(i);
+        UUID imageId = page.getImage().getId();
+        String filename = page.getImage().getFilename();
+        if (filename == null || filename.trim().isEmpty()) {
+          filename = "page_" + page.getPageNumber() + ".png";
+        }
+        
+        // Find if rendered file exists, otherwise fall back to original
+        byte[] imageBytes = null;
+        boolean hasRendered = false;
+        try (java.io.InputStream is = minioService.downloadFile("rendered/" + imageId + ".png")) {
+          imageBytes = is.readAllBytes();
+          hasRendered = true;
+        } catch (Exception e) {
+          // fallback to original image
+          try (java.io.InputStream is = minioService.downloadFile(page.getImage().getStoragePath())) {
+            imageBytes = is.readAllBytes();
+          } catch (Exception ex) {
+            log.error("Failed to download original/rendered image for page " + page.getId(), ex);
+          }
+        }
+
+        if (imageBytes != null) {
+          // Determine extension from filename, or default to png
+          String ext = "png";
+          if (filename.contains(".")) {
+            ext = filename.substring(filename.lastIndexOf('.') + 1);
+          }
+          String zipEntryName = String.format("%03d.%s", page.getPageNumber(), ext);
+          zos.putNextEntry(new java.util.zip.ZipEntry(zipEntryName));
+          zos.write(imageBytes);
+          zos.closeEntry();
+        }
+
+        // Collect metadata info
+        Map<String, Object> pageMeta = new HashMap<>();
+        pageMeta.put("pageNumber", page.getPageNumber());
+        pageMeta.put("imageId", imageId.toString());
+        pageMeta.put("originalFilename", page.getImage().getFilename());
+        pageMeta.put("hasRendered", hasRendered);
+
+        List<Layer> imageLayers = layerRepository.findByImageId(imageId);
+        pageMeta.put("layerCount", imageLayers.size());
+
+        // Find active/visible translation layer
+        Layer activeLayer = null;
+        for (Layer l : imageLayers) {
+          if ("translation".equalsIgnoreCase(l.getType()) && Boolean.TRUE.equals(l.getVisible())) {
+            activeLayer = l;
+            break;
+          }
+        }
+
+        if (activeLayer != null) {
+          Map<String, Object> activeLayerMeta = new HashMap<>();
+          activeLayerMeta.put("id", activeLayer.getId().toString());
+          activeLayerMeta.put("type", activeLayer.getType());
+          activeLayerMeta.put("language", activeLayer.getTargetLanguage());
+          pageMeta.put("activeLayer", activeLayerMeta);
+
+          // Models used
+          if (activeLayer.getMetadataJson() != null && activeLayer.getMetadataJson().isObject()) {
+            com.fasterxml.jackson.databind.node.ObjectNode metaNode = 
+                (com.fasterxml.jackson.databind.node.ObjectNode) activeLayer.getMetadataJson();
+            
+            // ocr / translation models used
+            Map<String, String> models = new HashMap<>();
+            if (metaNode.has("model")) {
+              models.put("translation", metaNode.get("model").asText());
+            }
+            // If we have ocr layer, find its model too
+            for (Layer l : imageLayers) {
+              if ("ocr".equalsIgnoreCase(l.getType())) {
+                if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
+                  com.fasterxml.jackson.databind.node.ObjectNode ocrMeta = 
+                      (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
+                  if (ocrMeta.has("model")) {
+                    models.put("ocr", ocrMeta.get("model").asText());
+                  }
+                }
+              }
+            }
+            pageMeta.put("modelsUsed", models);
+
+            // Cost
+            if (metaNode.has("cost")) {
+              com.fasterxml.jackson.databind.JsonNode costNode = metaNode.get("cost");
+              if (costNode.has("estimated_cost")) {
+                double estCost = costNode.get("estimated_cost").asDouble();
+                Map<String, Object> costMap = new HashMap<>();
+                costMap.put("estimated_cost", estCost);
+                costMap.put("currency", costNode.has("currency") ? costNode.get("currency").asText() : "USD");
+                pageMeta.put("cost", costMap);
+
+                chapterTotalCostVal += estCost;
+                chapterHasCost = true;
+              }
+            }
+
+            // QA review / manual edit
+            boolean manualQaNeeded = false;
+            if (metaNode.has("qa") && metaNode.get("qa").has("status")) {
+              String qaStatus = metaNode.get("qa").get("status").asText();
+              manualQaNeeded = "manual_review".equalsIgnoreCase(qaStatus);
+            }
+            pageMeta.put("manualQaNeeded", manualQaNeeded);
+          }
+
+          // Check if manual changes done
+          boolean manualChangesDone = false;
+          List<LayerElement> elements = layerElementRepository.findByLayerId(activeLayer.getId());
+          if (elements != null) {
+            for (LayerElement el : elements) {
+              if (Boolean.TRUE.equals(el.getIsManuallyEdited())) {
+                manualChangesDone = true;
+                break;
+              }
+            }
+          }
+          pageMeta.put("manualChangesDone", manualChangesDone);
+        } else {
+          pageMeta.put("manualChangesDone", false);
+          pageMeta.put("manualQaNeeded", false);
+        }
+
+        pageMetadataList.add(pageMeta);
+      }
+
+      // Compile final metadata.json
+      Map<String, Object> finalMeta = new HashMap<>();
+      finalMeta.put("chapterNumber", chapter.getChapterNumber());
+      finalMeta.put("chapterTitle", chapter.getTitle() != null ? chapter.getTitle() : "");
+      finalMeta.put("seriesTitle", chapter.getSeries() != null ? chapter.getSeries().getTitle() : "");
+      finalMeta.put("totalPages", pages.size());
+      finalMeta.put("exportTimestamp", java.time.OffsetDateTime.now().toString());
+      finalMeta.put("pages", pageMetadataList);
+
+      if (chapterHasCost) {
+        Map<String, Object> totalCostMap = new HashMap<>();
+        totalCostMap.put("estimated_cost", chapterTotalCostVal);
+        totalCostMap.put("currency", "USD");
+        finalMeta.put("chapterTotalCost", totalCostMap);
+      }
+
+      String metaJsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(finalMeta);
+      zos.putNextEntry(new java.util.zip.ZipEntry("meta-data.json"));
+      zos.write(metaJsonString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      zos.closeEntry();
+
+      zos.finish();
+      byte[] zipBytes = baos.toByteArray();
+
+      String chapterName = chapter.getTitle() != null ? chapter.getTitle().replaceAll("[^a-zA-Z0-9.-]", "_") : "Chapter";
+      String zipFileName = String.format("chapter_%s_%s.zip", chapter.getChapterNumber(), chapterName);
+
+      return ResponseEntity.ok()
+          .header("Content-Disposition", "attachment; filename=\"" + zipFileName + "\"")
+          .header("Content-Type", "application/zip")
+          .body(zipBytes);
+
+    } catch (Exception e) {
+      log.error("Failed to export chapter zip " + chapterId, e);
+      return ResponseEntity.internalServerError().body(("Error during export: " + e.getMessage()).getBytes());
     }
   }
 }

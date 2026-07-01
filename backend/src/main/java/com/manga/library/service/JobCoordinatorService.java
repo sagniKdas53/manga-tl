@@ -376,7 +376,7 @@ public class JobCoordinatorService {
   }
 
   @Transactional
-  public void handleTranslationCallback(UUID imageId, List<Map<String, Object>> translations) {
+  public void handleTranslationCallback(UUID imageId, List<Map<String, Object>> translations, Map<String, Object> cost) {
     log.info(
         "Received Translation callback for image: {} with {} translations",
         imageId,
@@ -459,6 +459,10 @@ public class JobCoordinatorService {
 
     metadata.put("layer_order", nextZOrder);
     metadata.put("last_modified", OffsetDateTime.now().toString());
+
+    if (cost != null) {
+      metadata.set("cost", objectMapper.valueToTree(cost));
+    }
 
     final Layer translationLayer =
         layerRepository.save(
@@ -669,7 +673,7 @@ public class JobCoordinatorService {
   }
 
   @Transactional
-  public void handleQaCallback(UUID imageId, List<Map<String, Object>> qaResults) {
+  public void handleQaCallback(UUID imageId, List<Map<String, Object>> qaResults, Map<String, Object> cost) {
     log.info(
         "Received QA callback for image: {} with {} results",
         imageId,
@@ -679,6 +683,10 @@ public class JobCoordinatorService {
     boolean needsRetry = false;
     boolean needsManualIntervention = false;
     List<String> regionsToReOcr = new ArrayList<>();
+
+    final List<Map<String, Object>> failedRegionsList = new ArrayList<>();
+    final int[] stats = new int[5]; // 0: total, 1: passed, 2: failed, 3: direct_fix/fixed, 4: manual_review
+    final double[] scoreStats = new double[2]; // 0: sum, 1: count
 
     if (qaResults != null) {
       for (Map<String, Object> r : qaResults) {
@@ -734,6 +742,35 @@ public class JobCoordinatorService {
                       }
                     }
                     ocrRegionRepository.save(region);
+
+                    stats[0]++;
+                    String finalStatus = region.getQaStatus();
+                    if ("passed".equalsIgnoreCase(finalStatus)) {
+                      stats[1]++;
+                    } else if ("failed".equalsIgnoreCase(finalStatus)) {
+                      stats[2]++;
+                    } else if ("fixed".equalsIgnoreCase(finalStatus) || "direct_fix".equalsIgnoreCase(finalStatus)) {
+                      stats[3]++;
+                    } else if ("manual_review".equalsIgnoreCase(finalStatus)) {
+                      stats[4]++;
+                    }
+                    if (qaScore != null) {
+                      scoreStats[0] += qaScore;
+                      scoreStats[1]++;
+                    }
+
+                    if (!"passed".equalsIgnoreCase(finalStatus)) {
+                      Map<String, Object> failedInfo = new HashMap<>();
+                      failedInfo.put("regionId", regionId.toString());
+                      failedInfo.put("bubbleReadingOrder", region.getBubbleReadingOrder());
+                      failedInfo.put("qaStatus", finalStatus);
+                      failedInfo.put("qaScore", qaScore);
+                      failedInfo.put("qaFeedback", qaFeedback);
+                      if (r.containsKey("escalation")) {
+                        failedInfo.put("escalation", r.get("escalation"));
+                      }
+                      failedRegionsList.add(failedInfo);
+                    }
                   });
 
           if ("failed".equalsIgnoreCase(qaStatus)) {
@@ -755,32 +792,69 @@ public class JobCoordinatorService {
     String retryValStr = redisTemplate.opsForValue().get(retryKey);
     int retries = retryValStr != null ? Integer.parseInt(retryValStr) : 0;
 
-    if (needsManualIntervention) {
-      log.warn("QA requested manual intervention for image {}. Halting pipeline.", imageId);
-      redisTemplate.delete(retryKey);
-
-      // Update translation layer name to indicate manual review needed
+    // Save QA info into translation layer metadata_json
+    try {
       List<Layer> layers = layerRepository.findByImageId(imageId);
       for (Layer layer : layers) {
         if ("translation".equalsIgnoreCase(layer.getType())) {
-          try {
-            com.fasterxml.jackson.databind.node.ObjectNode metadata =
-                layer.getMetadataJson() != null && layer.getMetadataJson().isObject()
-                    ? (com.fasterxml.jackson.databind.node.ObjectNode) layer.getMetadataJson()
-                    : objectMapper.createObjectNode();
+          com.fasterxml.jackson.databind.node.ObjectNode metadata =
+              layer.getMetadataJson() != null && layer.getMetadataJson().isObject()
+                  ? (com.fasterxml.jackson.databind.node.ObjectNode) layer.getMetadataJson()
+                  : objectMapper.createObjectNode();
 
+          com.fasterxml.jackson.databind.node.ObjectNode qaNode = objectMapper.createObjectNode();
+          
+          String status = "passed";
+          if (needsManualIntervention || stats[4] > 0) {
+            status = "manual_review";
+          } else if (stats[2] > 0) {
+            status = needsRetry ? "partial_pass" : "failed";
+          } else if (stats[3] > 0) {
+            status = "partial_pass";
+          }
+          
+          qaNode.put("status", status);
+          qaNode.put("total_regions", stats[0]);
+          qaNode.put("passed", stats[1]);
+          qaNode.put("failed", stats[2]);
+          qaNode.put("direct_fix", stats[3]);
+          qaNode.put("manual_review", stats[4]);
+          qaNode.put("avg_score", scoreStats[1] > 0 ? (scoreStats[0] / scoreStats[1]) : 0.0);
+          qaNode.put("last_qa_at", OffsetDateTime.now().toString());
+          qaNode.put("retries_used", retries);
+
+          com.fasterxml.jackson.databind.node.ArrayNode failedRegionsNode = objectMapper.createArrayNode();
+          for (Map<String, Object> failedRegion : failedRegionsList) {
+            failedRegionsNode.add(objectMapper.valueToTree(failedRegion));
+          }
+          qaNode.set("failed_regions", failedRegionsNode);
+
+          if (cost != null) {
+            qaNode.set("cost", objectMapper.valueToTree(cost));
+          }
+
+          metadata.set("qa", qaNode);
+          
+          // Legacy layer_name logic for manual review
+          if (needsManualIntervention) {
             String currentName =
                 metadata.has("layer_name") ? metadata.get("layer_name").asText() : "Translation";
             if (!currentName.contains("qa-manual-review-needed")) {
               metadata.put("layer_name", currentName + " (qa-manual-review-needed)");
-              layer.setMetadataJson(metadata);
-              layerRepository.save(layer);
             }
-          } catch (Exception e) {
-            log.error("Failed to update layer metadata for manual review", e);
           }
+
+          layer.setMetadataJson(metadata);
+          layerRepository.save(layer);
         }
       }
+    } catch (Exception e) {
+      log.error("Failed to update layer metadata with QA results", e);
+    }
+
+    if (needsManualIntervention) {
+      log.warn("QA requested manual intervention for image {}. Halting pipeline.", imageId);
+      redisTemplate.delete(retryKey);
       sseService.emitNotificationForImage(
           imageId,
           "WARNING",
