@@ -14,3 +14,4 @@ docs
 AGENTS.md
 CLAUDE.md
 .antigravitycli/*
+frontend/coverage
