@@ -187,6 +187,8 @@ def draw_results(image, results, output_path, model_name, stats=None):
         
         # Attempt to find a standard CJK font on Linux
         font_paths = [
+            "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
+            "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
             "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
