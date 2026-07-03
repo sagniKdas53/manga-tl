@@ -64,7 +64,7 @@
 
 ### Reliability & Crash Recovery
 
-- [ ] **Persist job queue in Postgres** — Currently Redis-only (`RedisPriorityQueue`). If Redis restarts, queued jobs are lost. Save queue state to Postgres so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
+- [ ] **Persist job queue in Postgres** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/ restarts, queued jobs are lost. Save queue state to Postgres so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
 - [ ] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
 
 ### Cost Tracking
