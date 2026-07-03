@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import com.manga.library.repository.ImageRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +20,7 @@ public class SseService {
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
+  private final ImageRepository imageRepository;
   private final ConcurrentHashMap<UUID, SseEmitter> emitters = new ConcurrentHashMap<>();
 
   private static final String NOTIFICATION_PREFIX = "notifications:user:";
@@ -88,9 +90,16 @@ public class SseService {
     if (userIdStr != null) {
       emitNotificationToUser(UUID.fromString(userIdStr), type, title, message, imageId, context);
     } else {
-      log.warn(
-          "Could not find owner user for image {} in Redis. Cannot send SSE notification.",
-          imageId);
+      imageRepository.findById(imageId).ifPresentOrElse(
+          image -> {
+            if (image.getCreatedBy() != null) {
+              UUID uId = image.getCreatedBy().getId();
+              emitNotificationToUser(uId, type, title, message, imageId, context);
+              mapImageToUser(imageId, uId);
+            }
+          },
+          () -> log.warn("Could not find owner user for image {} in Redis or DB. Cannot send SSE notification.", imageId)
+      );
     }
   }
 
