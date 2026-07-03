@@ -99,12 +99,12 @@ Benchmark executed on the 3 detected regions of `/app/original.jpeg` (`Sample1` 
 
 | Engine | Target Model | Total Time (s) | Avg Time / Region (s) | Transcription Quality |
 | :--- | :--- | :---: | :---: | :--- |
-| **paddleocr_v6_mobile** | PP-OCRv6 Small | **3.10s** | **1.03s** | Excellent/Good |
-| **mangaocr** | ViT-Transformer | **3.34s** | **1.11s** | Excellent (Best Japanese accuracy, minor bubble 3 noise) |
-| **easyocr** | CRAFT / ResNet | **4.13s** | **1.38s** | Very Poor (Garbage characters) |
-| **paddleocr_v5_mobile** | PP-OCRv5 Mobile | **4.99s** | **1.66s** | Moderate |
-| **paddleocr_v6_server** | PP-OCRv6 Medium | **13.07s** | **4.36s** | High Precision / Excellent |
-| **paddleocr_v5_server** | PP-OCRv5 Server | **21.69s** | **7.23s** | High Precision / Moderate |
+| **mangaocr** | ViT-Transformer | **2.90s** | **0.97s** | Excellent (Best Japanese accuracy, minor bubble 3 noise) |
+| **easyocr** | CRAFT / ResNet | **3.42s** | **1.14s** | Very Poor (Garbage characters) |
+| **paddleocr_v6_mobile** | PP-OCRv6 Small | **3.53s** | **1.18s** | Excellent/Good |
+| **paddleocr_v5_mobile** | PP-OCRv5 Mobile | **4.30s** | **1.43s** | Moderate |
+| **paddleocr_v6_server** | PP-OCRv6 Medium | **12.85s** | **4.28s** | High Precision / Excellent |
+| **paddleocr_v5_server** | PP-OCRv5 Server | **19.85s** | **6.62s** | High Precision / Moderate |
 
 ---
 
