@@ -31,6 +31,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - SCHEDULE=@daily
       - BACKUP_KEEP_DAYS=7
+      - BACKUP_ON_START=true
     volumes:
       - ./data/backups:/backups
     depends_on:
@@ -178,6 +179,9 @@ services:
       - MANGA_OCR_MODEL_PATH=/root/.cache/huggingface
       # Log Level
       - LOG_LEVEL=${LOG_LEVEL_WORKER:-DEBUG}
+      - PADDLEOCR_DET_MODEL=${PADDLEOCR_DET_MODEL:-PP-OCRv5_mobile_det}
+      - PADDLEOCR_REC_MODEL=${PADDLEOCR_REC_MODEL:-PP-OCRv5_mobile_rec}
+      - PADDLEOCR_DEVICE=${PADDLEOCR_DEVICE:-cpu}
     depends_on:
       - redis
       - minio

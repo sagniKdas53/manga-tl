@@ -54,7 +54,7 @@ docker compose exec worker python benchmark_local_ocr.py --image page_02.png --l
   * Korean: `ko`, `korean`
   * Traditional Chinese: `zh`, `zh-tw`, `chinese`
   * Simplified Chinese: `zh-cn`
-* **`--engine`**: Specific engine to test: `paddleocr`, `mangaocr`, or `easyocr`. If omitted, all three will be benchmarked sequentially.
+* **`--engine`**: Specific engine to test: `paddleocr_v5_mobile`, `paddleocr_v5_server`, `paddleocr_v6_mobile`, `paddleocr_v6_server`, `mangaocr`, or `easyocr`. If omitted, all six will be benchmarked sequentially.
 
 ---
 
@@ -64,27 +64,74 @@ The benchmark script generates annotated images with red text bounding boxes and
 To export them to your local host's `examples/sample1/` directory:
 
 ```bash
-# Export PaddleOCR demo output
-docker cp manga-worker:/app/demo_output_local_paddleocr.jpg examples/sample1/demo_output_local_paddleocr.jpg
+# Export PaddleOCR demo outputs
+docker cp manga-worker:/app/demo_output_local_paddleocr_v5_mobile.jpg examples/sample1/
+docker cp manga-worker:/app/demo_output_local_paddleocr_v5_server.jpg examples/sample1/
+docker cp manga-worker:/app/demo_output_local_paddleocr_v6_mobile.jpg examples/sample1/
+docker cp manga-worker:/app/demo_output_local_paddleocr_v6_server.jpg examples/sample1/
 
 # Export MangaOCR demo output
-docker cp manga-worker:/app/demo_output_local_mangaocr.jpg examples/sample1/demo_output_local_mangaocr.jpg
+docker cp manga-worker:/app/demo_output_local_mangaocr.jpg examples/sample1/
 
 # Export EasyOCR demo output
-docker cp manga-worker:/app/demo_output_local_easyocr.jpg examples/sample1/demo_output_local_easyocr.jpg
+docker cp manga-worker:/app/demo_output_local_easyocr.jpg examples/sample1/
 ```
 
 ---
 
 ## Local OCR Engines Overview
 
-1. **PaddleOCR (PP-OCRv5 Mobile)**:
-   * Runs text detection and recognition on the **entire downscaled image** once (following the worker's design).
-   * Spatially maps text regions to YOLO speech bubbles.
-   * Highly robust for full page scans and layouts.
+1. **PaddleOCR (v5/v6 Mobile and Server)**:
+   * **PP-OCRv6 Server (Medium)**: Highly accurate, server-grade model (34.5M parameters) using a `PPLCNetV4` backbone. Runs ~21% faster than `PP-OCRv5 Server`.
+   * **PP-OCRv6 Mobile (Small)**: Extremely fast edge-optimized model (7.7M parameters) which outperforms MangaOCR in latency on CPU.
+   * **PP-OCRv5 Server/Mobile**: Legacy v5 models.
 2. **MangaOCR (ViT/Transformer)**:
-   * Runs crop-based recognition on individual YOLO speech bubbles.
+   * Runs crop-based recognition on individual speech bubbles.
    * Provides the highest quality Japanese transcriptions inside speech bubbles.
 3. **EasyOCR (CPU-based)**:
-   * Runs crop-based recognition on speech bubbles.
-   * Serves as a secondary fallback.
+   * Runs crop-based OCR on speech bubble crops. Serves as a secondary fallback (has poor performance on vertical Japanese/manga fonts).
+
+---
+
+## Benchmark Findings (Sample1)
+
+Benchmark executed on the 3 detected regions of `/app/original.jpeg` (`Sample1` manga page) on CPU:
+
+| Engine | Target Model | Total Time (s) | Avg Time / Region (s) | Transcription Quality |
+| :--- | :--- | :---: | :---: | :--- |
+| **paddleocr_v6_mobile** | PP-OCRv6 Small | **3.10s** | **1.03s** | Excellent/Good |
+| **mangaocr** | ViT-Transformer | **3.34s** | **1.11s** | Excellent (Best Japanese accuracy, minor bubble 3 noise) |
+| **easyocr** | CRAFT / ResNet | **4.13s** | **1.38s** | Very Poor (Garbage characters) |
+| **paddleocr_v5_mobile** | PP-OCRv5 Mobile | **4.99s** | **1.66s** | Moderate |
+| **paddleocr_v6_server** | PP-OCRv6 Medium | **13.07s** | **4.36s** | High Precision / Excellent |
+| **paddleocr_v5_server** | PP-OCRv5 Server | **21.69s** | **7.23s** | High Precision / Moderate |
+
+---
+
+## VLM OCR Benchmark (Consolidated Text Detection)
+
+With our improved text detection pipeline, **both** speech bubbles (YOLO-detected) and background direct text regions (PaddleOCR-detected + clustered via proximity) are consolidated and processed. 
+
+Running **Gemini 3.5 Flash** (via OpenRouter) on the 3 consolidated regions of the `Sample1` manga page yields:
+
+* **Speech Bubbles Processed:** 3/3
+* **Background Direct Text Regions Processed:** 0/0
+* **Total Regions:** 3
+* **Total Time:** 7.40s
+* **Average Time per Region:** 2.47s
+* **Accuracy:** **100% transcription** of speech bubble dialogue!
+
+### Running the VLM Benchmark
+
+To execute the VLM benchmark script:
+```bash
+# Copy benchmark script and target image to container
+docker cp examples/sample1/benchmark_vlm_ocr.py manga-worker:/app/benchmark_vlm_ocr.py
+docker cp examples/sample1/original.jpeg manga-worker:/app/original.jpeg
+
+# Run the benchmark
+docker compose exec worker python benchmark_vlm_ocr.py --image original.jpeg --lang Japanese --model gemini-3.5-flash
+
+# Export the results image back to host
+docker cp manga-worker:/app/demo_output_google_gemini-3.5-flash.jpg examples/sample1/
+```

@@ -87,7 +87,14 @@ LANG_TO_EASY = {
 }
 
 # Engines to benchmark (in the order they are tried by the worker)
-ENGINES = ["paddleocr", "mangaocr", "easyocr"]
+ENGINES = [
+    "paddleocr_v5_mobile",
+    "paddleocr_v5_server",
+    "paddleocr_v6_mobile",
+    "paddleocr_v6_server",
+    "mangaocr",
+    "easyocr",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +129,7 @@ def parse_paddle_ocr_results(raw_results):
 import traceback
 
 
-def init_paddleocr(paddle_lang):
+def init_paddleocr(paddle_lang, det_model=None, rec_model=None):
     """Initialize and return a PaddleOCR reader, or None on failure."""
     try:
         from paddleocr import PaddleOCR
@@ -130,12 +137,17 @@ def init_paddleocr(paddle_lang):
         print("  [PaddleOCR] paddleocr package not installed.")
         return None
     try:
-        print(f"  [PaddleOCR] Initializing (lang={paddle_lang})...")
+        if det_model is None:
+            det_model = os.environ.get("PADDLEOCR_DET_MODEL", "PP-OCRv5_mobile_det").strip()
+        if rec_model is None:
+            rec_model = os.environ.get("PADDLEOCR_REC_MODEL", "PP-OCRv5_mobile_rec").strip()
+        ocr_device = os.environ.get("PADDLEOCR_DEVICE", "cpu").strip().lower()
+        print(f"  [PaddleOCR] Initializing (Det: {det_model}, Rec: {rec_model}, Device: {ocr_device}, lang={paddle_lang})...")
         reader = PaddleOCR(
             lang=paddle_lang,
-            device="cpu",
-            text_detection_model_name="PP-OCRv5_mobile_det",
-            text_recognition_model_name="PP-OCRv5_mobile_rec",
+            device=ocr_device,
+            text_detection_model_name=det_model,
+            text_recognition_model_name=rec_model,
             use_textline_orientation=False,
             use_doc_unwarping=False,
             use_doc_orientation_classify=False,
@@ -412,8 +424,14 @@ def main():
         error_count = 0
 
         # --- Initialize reader ONCE for all bubbles ---
-        if engine == "paddleocr":
-            reader = init_paddleocr(paddle_lang)
+        if engine == "paddleocr_v5_mobile":
+            reader = init_paddleocr(paddle_lang, "PP-OCRv5_mobile_det", "PP-OCRv5_mobile_rec")
+        elif engine == "paddleocr_v5_server":
+            reader = init_paddleocr(paddle_lang, "PP-OCRv5_server_det", "PP-OCRv5_server_rec")
+        elif engine == "paddleocr_v6_mobile":
+            reader = init_paddleocr(paddle_lang, "PP-OCRv6_small_det", "PP-OCRv6_small_rec")
+        elif engine == "paddleocr_v6_server":
+            reader = init_paddleocr(paddle_lang, "PP-OCRv6_medium_det", "PP-OCRv6_medium_rec")
         elif engine == "mangaocr":
             reader = init_mangaocr()
         elif engine == "easyocr":
@@ -433,7 +451,7 @@ def main():
             })
             continue
 
-        if engine == "paddleocr":
+        if engine.startswith("paddleocr"):
             # Follow worker's example: run PaddleOCR on the full image once!
             t0 = time.time()
             img_scaled, ocr_upscale = downscale_for_ocr(img, max_dim=1024)

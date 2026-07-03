@@ -21,6 +21,7 @@
 - [x] **Model Picker in UI:** See new section below.
 - [x] The delete confirmation boxes, don't respect the light mode theme, are laggy (on a tablet, which I tested on) and in general don't look good — **fixed**: now uses CSS variables, no blur, no cubic-bezier bounce.
 - [x] The toast doesn't respect the light mode theme and also is only used for upload completed notification — **fixed**: global ToastProvider uses `var(--text-main)` and fires translation SSE toasts outside Reader.
+- [ ] **[LOW PRIORITY] Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
 
 ## Model Picker / Runtime Settings
 
@@ -49,6 +50,8 @@
 - [x] **Layer Project Re-hydration:** Support importing previously exported translation projects to restore workspace and layers state.
 - [x] **Redo-OCR:** Having some issues, like duplicate bubble  and order getting messed up will need to fix and test.
 - [x] **Redo-Translation:** Not working at all right now (needs investigating), basically just creates a blank layer with no elements, redo-ing ocr though works and it even creates a new TL layer for the new OCR layer.
+- [ ] **[LOW PRIORITY] Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
+- [ ] **[LOW PRIORITY] Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
 
 ## Testing & Quality Assurance
 
@@ -70,10 +73,10 @@
 - [ ] Incorporate QA feedback into the front-end by outlining the OCR and/or translation bubble in red margins for layers that failed QA (manual intervention needed).
 - [x] Make notifications and toasts more informative (include specific image, chapter, or series instead of just the step that was done).
 - [x] Deleting the first image of first chapter of a series causes the series to be thumbnail less, which the chapter successfully identifies and uses the now first page inside it, the series doesn't (this also implies that if the first chapter is deleted a similar issue will occur)
-- [ ] **[LOW PRIORITY] Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
 - [ ] The export chapter as zip should have been placed in the chapter view not inside the reader.
 - [ ] The SSE is broken, most images say `Could not find owner user for image {{uuid}} in Redis. Cannot send SSE notification`
 - [ ] The exported chapter has only the back-end rendered images, they are not as high quality as the front-end images, need to rectify this.
+- [ ] Add a way to manually select regions on the image to OCR or translate like we do for edits
 
 ## Backend & Worker Pipeline Improvements
 
@@ -89,5 +92,9 @@
 - [ ] All the cost estimations show `Estimated cost: $0.00000` when it clearly isn't
 - [ ] The real bottleneck was local OCR model, but if we are using cloud OCR we can defenitly parallelize a bit.
 - [ ] We can build a slim worker image that doesn't have all the OCR things and just uses the cloud OCR
-- [ ] **[LOW PRIORITY] Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
-- [ ] **[LOW PRIORITY] Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
+- [ ] Make it so that if the back-end or worker crashes we can resume from before where it crashed i.e.: Save the queue in db (postgres not redis)
+- [ ] Try out PP-OCRv5 server and PP-OCRv6
+- [ ] It seems like deleting a page doesn't actually delete in the minio, becuse I deleted a
+- [ ] The exported chapter's rendered page doesn't look anything like the exported images in the front-end there is a huge discrepeancy
+- [ ] Also need to investiage if any manual changes made to 
+- [ ] Investiage if we can make remote workers dedicated to a specific task like say a wroker that I can spin up on aws EC2 or a mini pc on my lan and assign it to do the heavy lifting of running the local OCR models (as I am not able to find a provider that serves PP-OCRv5/v6 over the API)
