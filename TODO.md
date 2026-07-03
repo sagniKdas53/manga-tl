@@ -6,10 +6,6 @@
 
 ## 🔴 Active Bugs
 
-### Cost Estimation Always Shows $0
-
-- [ ] **Fix `CostEstimationService.java`** — `getModelCostPerToken()` returns `0.0` for all models hitting the `default` case. Populate the cost table for OpenRouter, Gemini, and other providers. Also fix `estimateTokens()` which uses rough character counting.
-
 ### Export Quality Discrepancy
 
 - [ ] **Backend-rendered pages don't match frontend** — `RenderingService.py` uses Pillow/PIL, frontend uses HTML5 Canvas with CSS text. The two diverge significantly. Options:
@@ -118,6 +114,7 @@
 - [x] Fix SSE user-image mapping expiry — fallback to DB on Redis miss
 - [x] Clean up all Minio artifacts on page delete — added rendered image cleanup
 - [x] Increase JWT access token TTL — updated to 24 hours in application.yml
+- [x] Fix `CostEstimationService.java` — implemented dynamic cost estimation for OpenRouter API with filesystem and Redis caching, legacy code obsolete
 
 ### Backend Features (Done)
 
