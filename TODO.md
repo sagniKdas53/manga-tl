@@ -1,100 +1,139 @@
-# Bugs / TODO
+# TODO — Manga Library
 
-## Completed Issues
+> Last reviewed: 2026-07-04 | All completed items archived below.
 
-- [x] If an image is sent for Redo Page OCR a new OCR layer is not created instead the old one is getting replaced, the translation for that page is also getting deleted and updated in it's respective TL later, no new layer for TL too (this is not what I wanted, as the previous one might be needed for RnD/QA, I wanted the original pass's data to be preserved and insted a new pass being done)
-- [x] For images that have been translated the OCR layer shouldn't be shown (i.e. Just have it's visibality turned off temporarliy) if the Clean Scanlation button is toggled on (same applies for export page as Image option, unless the user toggles if on manully the let them do what they want)
-- [x] The layers are great they organize the elemets well and stack well on each other (one improvemnt I can think of is numbering the layers in the oder they are stacked), they are like very easy to switch over, if I say click on the OCR mask then the element inspector for the OCR region in the OCR layer opens up but then I fi click on the translated mask the same happens for the other layer it's as if they are all active in the same place (I suspect the inablity of the front-end to determine the active alayer if there is any such thing is the primary reason why free resize doesn't work it just doesn't know which layer to create box in which can then be moved and resized as needed)
-- [x] The Translated text is breaking out of it's bounding box, see sample1 v7 both the OCR (atleast has the correct mask) and the Typeset version (the mask is onlyon the bubbles but the text overflows)
+---
 
-## [DONE] Frontend Issues & Improvements
+## 🔴 Active Bugs
 
-- [x] The free resize mode doesn't work on the front-end, say I select a translated box the element inspetor opens up now when I click on the Switch to free resize mode the button changes Free Resizing: Active but the box that desigantes the selection to be dragged across the image or resized to desired shape doesn't appear, clicking on the image just clears off the free resize mode.
-  - [x] For some reason this is not working at all
-- [x] Almost perfect, need more testing (Relates to translated text breaking out of bounding box)
-- [x] Add a clone layer in front-end (Partially implemented)
-  - [x] It works but the new layer get added at the top regardless of what the original layer's position were
-  - [x] Like say there are 3 layers, 1 base the original OCR, 2 the translation, 3 a user generated layer to do some final touch up
-  - [x] If I clone the layer two I expect it to be added as a layer over two, ie the clone becomes layer three and the existing layer 3 gets promoted to layer 4 (and so on)
-  - [x] Now it's okay if it can't be done like that, in that case we would need a way to re-order the layers manually, I could use the shift key to re-order them (Shift Up to promote one, Shift Down to demote one) — ↑↓ buttons added to LAYERS header; Shift+↑/↓ keyboard shortcuts also work
-- [x] Undo button doesn't work for dragging a bubble but works perfectly for the reshaping flow, need to investiage and fix.
-- [x] **Model Picker in UI:** See new section below.
-- [x] The delete confirmation boxes, don't respect the light mode theme, are laggy (on a tablet, which I tested on) and in general don't look good — **fixed**: now uses CSS variables, no blur, no cubic-bezier bounce.
-- [x] The toast doesn't respect the light mode theme and also is only used for upload completed notification — **fixed**: global ToastProvider uses `var(--text-main)` and fires translation SSE toasts outside Reader.
-- [ ] **[LOW PRIORITY] Progress Gallery:** Create a gallery using `Sample1`, visually showcasing the progression of capabilities and output quality from `v1` to `v10` and more.
+### Cost Estimation Always Shows $0
 
-## Model Picker / Runtime Settings
+- [ ] **Fix `CostEstimationService.java`** — `getModelCostPerToken()` returns `0.0` for all models hitting the `default` case. Populate the cost table for OpenRouter, Gemini, and other providers. Also fix `estimateTokens()` which uses rough character counting.
 
-- [ ] **Backend:** New `/api/settings` endpoint to expose and update model configuration at runtime.
-  - [ ] Support setting OCR provider: Local, Cloud (This should be enough as can just gray out the local option if the image doesn't include OCR deps or is disabled by the env var)
-  - [ ] Now that we have cloud OCR as well maybe we should rename the env variables to have three parts, OCR_MODEL_PROVIDER and it's dependant OCR_VLM_MODEL or OCR_VLM_MODEL_LIST
-  - [ ] Next have a TL_MODEL_PROVIDER and it's dependant PREFERRED_LLM_MODEL or PREFERRED_LLM_MODEL_LIST
-  - [ ] Lastly QA_MODEL_PROVIDER which will have two dependant variables QA_LLM_MODEL and QA_VLM_MODEL and their list forms to provide options
-  - [ ] We will set the defaults at conatiner level using env vars, these can then be loaded to the back-end to be passed onto the worker and front-end
-- [ ] **Backend:** Update the chapter and series meta-data api's to support chapter level model selctions, so that say we are doing a rough draft for a chapter we can use the free or very cheap model to do a draft and then maybe we want high quality for another chapter we can just configure it use paid fast models.
-- [ ] **Worker:** These different types of models, at various stages can be passed onto the worker as a part of the job meta-data, this would also help use populate the layer meta-data as we will know which job is using what to produce a layer or render
-- [ ] We can pass on the defaults as a safty fallback incase the models passed for a job are not available or wrong.
-- [ ] **Frontend:** Settings panel in the navbar (gear icon) showing active provider's + model dropdowns. This initilzes the defaults for the user form the data passed on by the back-end but can also post the user preferences back to the back-end to presist
-  - [ ] Need to add additioanl fields in the add and edit series and chapter's dialog boxes so that we can quickly configure the models for a series or chapter.
-  - [ ] Also show the OCR type used, models and provider's used for the series and chapter in their cards so that we know at a glance whats configured.
+### Export Quality Discrepancy
 
-## [DONE] Backend & Worker Pipeline Improvements
+- [ ] **Backend-rendered pages don't match frontend** — `RenderingService.py` uses Pillow/PIL, frontend uses HTML5 Canvas with CSS text. The two diverge significantly. Options:
+  - Use a headless browser (Playwright) in the worker for pixel-perfect rendering
+  - Or accept backend rendering as "draft" and add a frontend "export as seen" button that captures the canvas
+- [ ] **Verify manual layer edits are included in export** — Export reads from DB, so only *saved* edits are included. Ensure the frontend auto-saves or warns before export.
 
-- [x] **Async Job Queue with Retry & Backoff:** Refactor the translation and OCR pipeline into an asynchronous job queue (e.g., BullMQ, Celery). If a provider is unavailable or an API call fails, prevent it from returning blank translations and erroneously passing QA. Instead, requeue the job with an exponential backoff strategy to ensure reliability over long periods.
-- [x] **Image Deduplication via Hashing:** Implement image hashing (similar to Immich) to detect if an uploaded image has already been OCR'd and translated. If a matching hash exists, link to the existing processed image/data. This optimization will save database space, significantly reduce processing time, and prevent duplicate API costs.
-- [x] **Unified LLM Provider Integration:** Integrate a popular LLM abstraction library (like `LiteLLM` or `LangChain`) that automatically maps provider names to correct API URLs and seamlessly handles multiple API keys (configured via secrets or `.env` files).
-- [x] **Layer Metadata Tracking:** Store the specific model identifiers used for OCR and translation within the respective layer's metadata. This enables future model performance comparisons and must also be included in the project's export zip archive.
-- [x] **Worker Observability & Logging:** Implement comprehensive testing and monitoring for worker logs. Ensure that the input and output for each pipeline step (OCR, Translation, Rendering) are logged and that the intermediate rendered outputs are easily verifiable to monitor the worker's internal state.
-- [x] **Live Updates via SSE:** Implement live updates on the front-end using Server-Sent Events (SSE) in the Java backend. When you upload a page and have it open in the reader, an event should be broadcasted to the front-end when its OCR is ready so the layer is fetched and loaded on the canvas. When translation is done, the same happens. The same live updates should also happen for Redo of OCR and translations.
-- [x] **Full zip/ePub import:** Support importing full epubs or zips to automatically set up projects and initialize pages.
-- [x] **Layer Project Re-hydration:** Support importing previously exported translation projects to restore workspace and layers state.
-- [x] **Redo-OCR:** Having some issues, like duplicate bubble  and order getting messed up will need to fix and test.
-- [x] **Redo-Translation:** Not working at all right now (needs investigating), basically just creates a blank layer with no elements, redo-ing ocr though works and it even creates a new TL layer for the new OCR layer.
-- [ ] **[LOW PRIORITY] Chapter & Series Summarization:** Background worker aggregates translated dialogue and generates summaries of chapters and series using the AI backend.
-- [ ] **[LOW PRIORITY] Cross-Page Character Memory Tracking:** Feed speaker profiles to the translation engine prompts to avoid name/gender drift across chapter pages.
+---
 
-## Testing & Quality Assurance
+## 🟡 High Priority Features
 
-- [ ] Test intentional bad translation using a very dumb translation model to verify QA model capabilities.
-- [ ] Test with very bad quality images to observe OCR failure handling.
-- [ ] Test uploading a KR image to a JP series to observe system behavior.
-- [ ] Fix worker tests failing due to missing Redis instance (either mock the redis server or spin one up for tests).
+### Model Picker / Runtime Settings
+>
+> This is a cross-cutting feature spanning backend, worker, and frontend.
 
-## Series Configuration
+- [ ] **Backend: `/api/settings` endpoint** — Expose and update model configuration at runtime.
+  - [ ] Refactor env vars into three groups:
+    - `OCR_MODEL_PROVIDER` + `OCR_VLM_MODEL` / `OCR_VLM_MODEL_LIST`
+    - `TL_MODEL_PROVIDER` + `PREFERRED_LLM_MODEL` / `PREFERRED_LLM_MODEL_LIST`
+    - `QA_MODEL_PROVIDER` + `QA_LLM_MODEL` / `QA_VLM_MODEL` (+ list variants)
+  - [ ] Load defaults from env vars, allow runtime override via API
+  - [ ] Support `OCR_PROVIDER: local | cloud` (gray out local if image lacks OCR deps)
+- [ ] **Backend: Per-chapter/series model selection** — Add model config fields to `Chapter` and `Series` entities. Update APIs so a rough draft chapter can use cheap models and a final chapter uses premium models.
+- [ ] **Worker: Accept model config per-job** — Infrastructure exists (`ocrProvider`, `preferredModel` in job payload) but values come from global env vars only. Wire up per-chapter settings. Use defaults as safety fallback for invalid/unavailable models.
+- [ ] **Frontend: Settings panel** — Gear icon in navbar showing active providers + model dropdowns. Initialize from backend defaults, POST user preferences to persist.
+  - [ ] Add model selection fields to Add/Edit Series and Chapter dialogs
+  - [ ] Show configured OCR type, models, and providers on Series/Chapter cards
 
-- [ ] Add source and target languages to series configuration.
-  - [ ] `JP --> EN` (original use case).
-  - [ ] `EN --> EN` (create thumbnails, perform OCR for later search/summarization, no translation needed).
-  - [ ] `KR --> JP` (experimental LLM translation).
-- [ ] Add a model picker at the series level using series config.
+### QA Feedback Integration
 
-## Frontend Issues & Improvements
+- [ ] **Frontend: Red-outline bubbles that failed QA** — `QaResult` data exists in the DB (`qa_results` table with `region_index`, `issue_type`, `severity`). Surface this in the reader canvas by outlining failed OCR/TL regions with red margins.
+- [ ] **Backend: Embed QA summary in layer metadata** — Currently QA results are in a separate table. Consider denormalizing a summary (pass/fail count, critical issues) into the layer metadata JSON for faster frontend access.
 
-- [ ] Incorporate QA feedback into the front-end by outlining the OCR and/or translation bubble in red margins for layers that failed QA (manual intervention needed).
-- [x] Make notifications and toasts more informative (include specific image, chapter, or series instead of just the step that was done).
-- [x] Deleting the first image of first chapter of a series causes the series to be thumbnail less, which the chapter successfully identifies and uses the now first page inside it, the series doesn't (this also implies that if the first chapter is deleted a similar issue will occur)
-- [ ] The export chapter as zip should have been placed in the chapter view not inside the reader.
-- [ ] The SSE is broken, most images say `Could not find owner user for image {{uuid}} in Redis. Cannot send SSE notification`
-- [ ] The exported chapter has only the back-end rendered images, they are not as high quality as the front-end images, need to rectify this.
-- [ ] Add a way to manually select regions on the image to OCR or translate like we do for edits
+### Export Improvements
 
-## Backend & Worker Pipeline Improvements
+- [ ] **Move export button to Chapter view** — Currently only accessible inside the Reader (`ReaderToolbar.jsx`). Add export controls to `ChapterPage.jsx` so users can export without opening the reader.
+- [ ] **Add `meta-data.json` to chapter export ZIP** — Include: page order, layer counts, active layer per page, QA status, manual changes flag, OCR/TL models used, per-page and total cost.
+- [ ] **Full ePub export** — Extend `ChapterExportService.java` (which currently does ZIP only) to support ePub packaging.
 
-- [ ] Store QA feedback as metadata in the layers.
-- [ ] If a layer fails QA, store the region that failed and the reason in the layer metadata.
-- [x] Investigate using OpenRouter for OCR models to speed up processing via cloud (keeping the local system as a fallback).
-  - [ ] qwen/qwen3-vl-8b-instruct is fast but not as good as the PP-OCR-V5 used locally like it keeps missing dialog and text if they are not in dailog boxes.
-  - [ ] Should also check the other models from benchmarks
-  - [x] Also need to investiagte if the nemotron-ocr-v2 can be used over nvidia api's for extremely fast and reliable ocr, no it's nither fast nor reliable
-- [ ] Add support for exporting whole rendered chapters as a zip/ePub.
-- [ ] Add a `meta-data.json` to the chapter export zip containing data about all pages (order, layer counts, active layer, manual-qa-needed, manual-changes-done, OCR/TL models used, cost of page's, cost of chapter if paid models are used).
-- [ ] Log and keep track of costs if paid models are used (save this as metadata at image level if possible at layer level for both OCR and TL and QA as well).
-- [ ] All the cost estimations show `Estimated cost: $0.00000` when it clearly isn't
-- [ ] The real bottleneck was local OCR model, but if we are using cloud OCR we can defenitly parallelize a bit.
-- [ ] We can build a slim worker image that doesn't have all the OCR things and just uses the cloud OCR
-- [ ] Make it so that if the back-end or worker crashes we can resume from before where it crashed i.e.: Save the queue in db (postgres not redis)
-- [ ] Try out PP-OCRv5 server and PP-OCRv6
-- [ ] It seems like deleting a page doesn't actually delete in the minio, becuse I deleted a
-- [ ] The exported chapter's rendered page doesn't look anything like the exported images in the front-end there is a huge discrepeancy
-- [ ] Also need to investiage if any manual changes made to 
-- [ ] Investiage if we can make remote workers dedicated to a specific task like say a wroker that I can spin up on aws EC2 or a mini pc on my lan and assign it to do the heavy lifting of running the local OCR models (as I am not able to find a provider that serves PP-OCRv5/v6 over the API)
+### Manual Region Selection
+
+- [ ] **Add draw-to-OCR / draw-to-translate workflow** — Let users draw a rectangle on the image canvas, then trigger OCR or translation for just that region. Requires:
+  - Frontend: new tool mode in canvas (similar to free resize but for region capture)
+  - Backend: new endpoint accepting image ID + bounding box coordinates
+  - Worker: crop-and-process pipeline for the selected region
+
+---
+
+## 🟢 Medium Priority Improvements
+
+### Cloud OCR Optimization
+
+- [ ] **Parallelize cloud OCR processing** — Currently sequential. When using cloud OCR (OpenRouter VLM), process multiple pages concurrently with configurable parallelism (e.g., 3-5 concurrent requests).
+- [ ] **Benchmark alternative cloud OCR models** — `qwen/qwen3-vl-8b-instruct` is fast but misses non-dialog text. Test other models from VLM benchmarks for accuracy vs speed tradeoffs.
+- [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without PaddleOCR and local model dependencies for cloud-only deployments. Significantly reduces image size and build time.
+
+### Reliability & Crash Recovery
+
+- [ ] **Persist job queue in Postgres** — Currently Redis-only (`RedisPriorityQueue`). If Redis restarts, queued jobs are lost. Save queue state to Postgres so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
+- [ ] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
+
+### Cost Tracking
+
+- [ ] **Track actual API costs per layer** — Once cost estimation is fixed, log real costs (tokens × price) at the layer level for both OCR and TL/QA. Surface per-chapter and per-series totals in the UI.
+
+### Distributed Workers
+
+- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on AWS EC2 or LAN mini-PCs for heavy local OCR (PP-OCRv5/v6). Requires worker registration, task routing by capability, and health checking.
+
+---
+
+## 🔵 Low Priority / Nice-to-Have
+
+- [ ] **Progress Gallery** — Create a visual showcase using `Sample1` showing output quality progression from v1 → v10+.
+- [ ] **Chapter & Series Summarization** — Background worker aggregates translated dialogue and generates chapter/series summaries via AI.
+- [ ] **Cross-Page Character Memory** — Feed speaker profiles to translation prompts to prevent name/gender drift across pages.
+
+---
+
+## 🧪 Testing & QA
+
+- [ ] Test intentional bad translations with a weak model to verify QA detection capabilities.
+- [ ] Test with very low quality images to observe OCR failure handling and error reporting.
+- [ ] Test uploading a KR (Korean) image to a JP (Japanese) series to observe language mismatch behavior.
+- [ ] Fix worker tests failing due to missing Redis — either mock Redis or add a `docker-compose.test.yml` that spins one up.
+
+---
+
+## ✅ Completed (Archive)
+
+<details>
+<summary>Click to expand completed items</summary>
+
+### Bugs (Fixed)
+
+- [x] Redo Page OCR was replacing old layer instead of creating new pass — fixed, preserves original
+- [x] OCR layer visible when Clean Scanlation toggled — fixed, layer hidden appropriately
+- [x] Layer stacking and numbering — fixed, layers numbered in stack order
+- [x] Translated text breaking out of bounding box — fixed
+- [x] Free resize mode not working — fixed
+- [x] Clone layer added at wrong position — fixed, clone inserts above source layer; reorder via ↑↓ buttons and Shift+↑/↓
+- [x] Undo doesn't work for bubble dragging — fixed
+- [x] Delete confirmation dialogs don't respect light theme — fixed, uses CSS variables
+- [x] Toast doesn't respect light theme — fixed, global ToastProvider with theme-aware styling
+- [x] Deleting first image leaves series thumbnailless — fixed
+- [x] Fix SSE user-image mapping expiry — fallback to DB on Redis miss
+- [x] Clean up all Minio artifacts on page delete — added rendered image cleanup
+- [x] Increase JWT access token TTL — updated to 24 hours in application.yml
+
+### Backend Features (Done)
+
+- [x] Async job queue with retry & exponential backoff
+- [x] Image deduplication via hashing
+- [x] Unified LLM provider integration (LiteLLM)
+- [x] Layer metadata tracks OCR/TL model identifiers
+- [x] Worker observability & structured logging
+- [x] Live updates via SSE (implemented, but has the Redis mapping bug above)
+- [x] Full ZIP/ePub import for project setup
+- [x] Layer project re-hydration from exported archives
+- [x] Redo-OCR — fixed duplicate bubbles and ordering
+- [x] Redo-Translation — fixed blank layer creation
+- [x] PP-OCRv5/v6 server integration
+- [x] OpenRouter cloud OCR investigation (works but quality varies by model)
+- [x] Nemotron OCR v2 investigated — neither fast nor reliable, rejected
+- [x] Notifications/toasts made more informative (include image/chapter/series context)
+
+</details>

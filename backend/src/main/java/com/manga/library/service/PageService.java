@@ -68,6 +68,9 @@ public class PageService {
     if (image.getThumbnailStoragePath() != null) {
       pathsToDelete.add(image.getThumbnailStoragePath());
     }
+    if (image.getId() != null) {
+      pathsToDelete.add("rendered/" + image.getId() + ".png");
+    }
     UUID chapterId = page.getChapter().getId();
     UUID imageId = image.getId();
 
