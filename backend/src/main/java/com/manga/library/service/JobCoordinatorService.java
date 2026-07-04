@@ -376,7 +376,8 @@ public class JobCoordinatorService {
   }
 
   @Transactional
-  public void handleTranslationCallback(UUID imageId, List<Map<String, Object>> translations, Map<String, Object> cost) {
+  public void handleTranslationCallback(
+      UUID imageId, List<Map<String, Object>> translations, Map<String, Object> cost) {
     log.info(
         "Received Translation callback for image: {} with {} translations",
         imageId,
@@ -673,7 +674,8 @@ public class JobCoordinatorService {
   }
 
   @Transactional
-  public void handleQaCallback(UUID imageId, List<Map<String, Object>> qaResults, Map<String, Object> cost) {
+  public void handleQaCallback(
+      UUID imageId, List<Map<String, Object>> qaResults, Map<String, Object> cost) {
     log.info(
         "Received QA callback for image: {} with {} results",
         imageId,
@@ -685,7 +687,8 @@ public class JobCoordinatorService {
     List<String> regionsToReOcr = new ArrayList<>();
 
     final List<Map<String, Object>> failedRegionsList = new ArrayList<>();
-    final int[] stats = new int[5]; // 0: total, 1: passed, 2: failed, 3: direct_fix/fixed, 4: manual_review
+    final int[] stats =
+        new int[5]; // 0: total, 1: passed, 2: failed, 3: direct_fix/fixed, 4: manual_review
     final double[] scoreStats = new double[2]; // 0: sum, 1: count
 
     if (qaResults != null) {
@@ -749,7 +752,8 @@ public class JobCoordinatorService {
                       stats[1]++;
                     } else if ("failed".equalsIgnoreCase(finalStatus)) {
                       stats[2]++;
-                    } else if ("fixed".equalsIgnoreCase(finalStatus) || "direct_fix".equalsIgnoreCase(finalStatus)) {
+                    } else if ("fixed".equalsIgnoreCase(finalStatus)
+                        || "direct_fix".equalsIgnoreCase(finalStatus)) {
                       stats[3]++;
                     } else if ("manual_review".equalsIgnoreCase(finalStatus)) {
                       stats[4]++;
@@ -803,7 +807,7 @@ public class JobCoordinatorService {
                   : objectMapper.createObjectNode();
 
           com.fasterxml.jackson.databind.node.ObjectNode qaNode = objectMapper.createObjectNode();
-          
+
           String status = "passed";
           if (needsManualIntervention || stats[4] > 0) {
             status = "manual_review";
@@ -812,7 +816,7 @@ public class JobCoordinatorService {
           } else if (stats[3] > 0) {
             status = "partial_pass";
           }
-          
+
           qaNode.put("status", status);
           qaNode.put("total_regions", stats[0]);
           qaNode.put("passed", stats[1]);
@@ -823,7 +827,8 @@ public class JobCoordinatorService {
           qaNode.put("last_qa_at", OffsetDateTime.now().toString());
           qaNode.put("retries_used", retries);
 
-          com.fasterxml.jackson.databind.node.ArrayNode failedRegionsNode = objectMapper.createArrayNode();
+          com.fasterxml.jackson.databind.node.ArrayNode failedRegionsNode =
+              objectMapper.createArrayNode();
           for (Map<String, Object> failedRegion : failedRegionsList) {
             failedRegionsNode.add(objectMapper.valueToTree(failedRegion));
           }
@@ -834,7 +839,7 @@ public class JobCoordinatorService {
           }
 
           metadata.set("qa", qaNode);
-          
+
           // Legacy layer_name logic for manual review
           if (needsManualIntervention) {
             String currentName =

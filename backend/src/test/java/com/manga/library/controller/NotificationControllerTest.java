@@ -14,7 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -35,7 +34,8 @@ public class NotificationControllerTest {
         org.junit.jupiter.api.Assertions.assertThrows(
             Exception.class, () -> mockMvc.perform(get("/api/notifications/stream")));
     org.junit.jupiter.api.Assertions.assertTrue(exception.getCause() instanceof RuntimeException);
-    org.junit.jupiter.api.Assertions.assertEquals("Unauthorized", exception.getCause().getMessage());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        "Unauthorized", exception.getCause().getMessage());
   }
 
   @Test
