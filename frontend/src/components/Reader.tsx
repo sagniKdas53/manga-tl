@@ -3073,12 +3073,16 @@ export const Reader: React.FC<ReaderProps> = ({
                   renderItems.map((item) => {
                     const isSelected = selectedItem?.id === item.id;
                     const isApproved = item.approved;
-                    const qaStatus = item.regions.find(r => r.qaStatus === "failed" || r.qaStatus === "manual_review") 
-                      ? "failed" 
-                      : item.regions.find(r => r.qaStatus === "direct_fix") 
-                        ? "direct_fix" 
-                        : item.regions.find(r => r.qaStatus === "passed") 
-                          ? "passed" 
+                    const qaStatus = item.regions.find(
+                      (r) =>
+                        r.qaStatus === "failed" ||
+                        r.qaStatus === "manual_review",
+                    )
+                      ? "failed"
+                      : item.regions.find((r) => r.qaStatus === "direct_fix")
+                        ? "direct_fix"
+                        : item.regions.find((r) => r.qaStatus === "passed")
+                          ? "passed"
                           : null;
                     return (
                       <g
@@ -3133,8 +3137,16 @@ export const Reader: React.FC<ReaderProps> = ({
                                     : item.isConversation
                                       ? "var(--conversation)"
                                       : "var(--success)",
-                            strokeWidth: isSelected || isApproved ? 2.5 : qaStatus === "failed" ? 2.5 : 1.5,
-                            strokeDasharray: !isSelected && qaStatus === "failed" ? "4 2" : undefined,
+                            strokeWidth:
+                              isSelected || isApproved
+                                ? 2.5
+                                : qaStatus === "failed"
+                                  ? 2.5
+                                  : 1.5,
+                            strokeDasharray:
+                              !isSelected && qaStatus === "failed"
+                                ? "4 2"
+                                : undefined,
                           }}
                         />
                         <g
@@ -3200,8 +3212,14 @@ export const Reader: React.FC<ReaderProps> = ({
                       selectedItem?.id === element.id &&
                       selectedItem?.isLayerElement;
 
-                    const relatedRegion = element.regionId ? filteredOcrRegions.find(r => r.id === element.regionId) : null;
-                    const elQaStatus = relatedRegion ? relatedRegion.qaStatus : null;
+                    const relatedRegion = element.regionId
+                      ? filteredOcrRegions.find(
+                          (r) => r.id === element.regionId,
+                        )
+                      : null;
+                    const elQaStatus = relatedRegion
+                      ? relatedRegion.qaStatus
+                      : null;
 
                     // Run text fitting
                     let fontSize: number;
@@ -3313,14 +3331,29 @@ export const Reader: React.FC<ReaderProps> = ({
                             stroke={
                               isSelected
                                 ? "var(--primary)"
-                                : elQaStatus === "failed" || elQaStatus === "manual_review"
+                                : elQaStatus === "failed" ||
+                                    elQaStatus === "manual_review"
                                   ? "#ef4444"
                                   : elQaStatus === "direct_fix"
                                     ? "#f59e0b"
                                     : "rgba(139, 92, 246, 0.4)"
                             }
-                            strokeWidth={isSelected ? 2 : (elQaStatus === "failed" || elQaStatus === "manual_review") ? 2 : 1}
-                            strokeDasharray={isSelected ? "none" : (elQaStatus === "failed" || elQaStatus === "manual_review") ? "none" : "4 4"}
+                            strokeWidth={
+                              isSelected
+                                ? 2
+                                : elQaStatus === "failed" ||
+                                    elQaStatus === "manual_review"
+                                  ? 2
+                                  : 1
+                            }
+                            strokeDasharray={
+                              isSelected
+                                ? "none"
+                                : elQaStatus === "failed" ||
+                                    elQaStatus === "manual_review"
+                                  ? "none"
+                                  : "4 4"
+                            }
                           />
                         )}
 

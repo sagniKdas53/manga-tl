@@ -174,7 +174,11 @@ public class InternalJobController {
     try {
       jobCoordinatorService.handlePanelCallback(dto);
       sseService.emitNotificationForImage(
-          dto.getImageId(), "INFO", "Panels Extracted", formatMessage("Successfully extracted panels for page.", ctx), ctx);
+          dto.getImageId(),
+          "INFO",
+          "Panels Extracted",
+          formatMessage("Successfully extracted panels for page.", ctx),
+          ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing panel callback", e);
@@ -195,12 +199,20 @@ public class InternalJobController {
     try {
       jobCoordinatorService.handleOcrCallback(dto);
       sseService.emitNotificationForImage(
-          dto.getImageId(), "INFO", "OCR Completed", formatMessage("Successfully completed OCR processing.", ctx), ctx);
+          dto.getImageId(),
+          "INFO",
+          "OCR Completed",
+          formatMessage("Successfully completed OCR processing.", ctx),
+          ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing OCR callback", e);
       sseService.emitNotificationForImage(
-          dto.getImageId(), "ERROR", "OCR Failed", formatMessage("An error occurred during OCR processing.", ctx), ctx);
+          dto.getImageId(),
+          "ERROR",
+          "OCR Failed",
+          formatMessage("An error occurred during OCR processing.", ctx),
+          ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -246,12 +258,20 @@ public class InternalJobController {
       }
       jobCoordinatorService.handleLayoutCallback(imageId, regionTypes, conversations);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "Layout Analysis Completed", formatMessage("Layout analysis successfully finished.", ctx), ctx);
+          imageId,
+          "INFO",
+          "Layout Analysis Completed",
+          formatMessage("Layout analysis successfully finished.", ctx),
+          ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing layout callback", e);
       sseService.emitNotificationForImage(
-          imageId, "ERROR", "Layout Analysis Failed", formatMessage("An error occurred during layout analysis.", ctx), ctx);
+          imageId,
+          "ERROR",
+          "Layout Analysis Failed",
+          formatMessage("An error occurred during layout analysis.", ctx),
+          ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -285,12 +305,20 @@ public class InternalJobController {
       }
       jobCoordinatorService.handleTranslationCallback(imageId, translations, cost);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "Translation Completed", formatMessage("Translation successfully finished.", ctx), ctx);
+          imageId,
+          "INFO",
+          "Translation Completed",
+          formatMessage("Translation successfully finished.", ctx),
+          ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing translation callback", e);
       sseService.emitNotificationForImage(
-          imageId, "ERROR", "Translation Failed", formatMessage("An error occurred during translation.", ctx), ctx);
+          imageId,
+          "ERROR",
+          "Translation Failed",
+          formatMessage("An error occurred during translation.", ctx),
+          ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -320,12 +348,20 @@ public class InternalJobController {
       }
       jobCoordinatorService.handleQaReOcrCallback(imageId, results);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "QA Re-OCR Completed", formatMessage("QA Re-OCR successfully finished.", ctx), ctx);
+          imageId,
+          "INFO",
+          "QA Re-OCR Completed",
+          formatMessage("QA Re-OCR successfully finished.", ctx),
+          ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing QA Re-OCR callback", e);
       sseService.emitNotificationForImage(
-          imageId, "ERROR", "QA Re-OCR Failed", formatMessage("An error occurred during QA Re-OCR.", ctx), ctx);
+          imageId,
+          "ERROR",
+          "QA Re-OCR Failed",
+          formatMessage("An error occurred during QA Re-OCR.", ctx),
+          ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -396,12 +432,20 @@ public class InternalJobController {
     try {
       jobCoordinatorService.handleRenderCallback(imageId);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "Render Completed", formatMessage("Successfully rendered typeset image.", ctx), ctx);
+          imageId,
+          "INFO",
+          "Render Completed",
+          formatMessage("Successfully rendered typeset image.", ctx),
+          ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing render callback", e);
       sseService.emitNotificationForImage(
-          imageId, "ERROR", "Render Failed", formatMessage("An error occurred during rendering.", ctx), ctx);
+          imageId,
+          "ERROR",
+          "Render Failed",
+          formatMessage("An error occurred during rendering.", ctx),
+          ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -435,12 +479,20 @@ public class InternalJobController {
       }
       jobCoordinatorService.handleQaCallback(imageId, qaResults, cost);
       sseService.emitNotificationForImage(
-          imageId, "INFO", "QA Completed", formatMessage("Quality assurance checks passed.", ctx), ctx);
+          imageId,
+          "INFO",
+          "QA Completed",
+          formatMessage("Quality assurance checks passed.", ctx),
+          ctx);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing QA callback", e);
       sseService.emitNotificationForImage(
-          imageId, "WARNING", "QA Issue", formatMessage("An issue occurred during QA checks.", ctx), ctx);
+          imageId,
+          "WARNING",
+          "QA Issue",
+          formatMessage("An issue occurred during QA checks.", ctx),
+          ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -474,7 +526,7 @@ public class InternalJobController {
     String series = ctx.getOrDefault("seriesTitle", "");
     String chNum = ctx.getOrDefault("chapterNumber", "");
     String pNum = ctx.getOrDefault("pageNumber", "");
-    
+
     StringBuilder sb = new StringBuilder(baseText);
     sb.append(" (");
     if (!series.isEmpty()) {

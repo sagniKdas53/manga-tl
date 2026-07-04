@@ -76,7 +76,8 @@ public class PageService {
 
     if (page.getChapter() != null && page.getChapter().getSeries() != null) {
       Series series = page.getChapter().getSeries();
-      if (series.getCoverImageUrl() != null && series.getCoverImageUrl().contains(imageId.toString())) {
+      if (series.getCoverImageUrl() != null
+          && series.getCoverImageUrl().contains(imageId.toString())) {
         series.setCoverImageUrl(null);
         seriesRepository.save(series);
       }

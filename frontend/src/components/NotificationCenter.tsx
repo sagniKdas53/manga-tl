@@ -212,9 +212,15 @@ export const NotificationCenter: React.FC = () => {
                       >
                         {[
                           n.context.seriesTitle,
-                          n.context.chapterNumber ? `Ch.${n.context.chapterNumber}` : null,
-                          n.context.pageNumber ? `Page ${n.context.pageNumber}` : null
-                        ].filter(Boolean).join(" › ")}
+                          n.context.chapterNumber
+                            ? `Ch.${n.context.chapterNumber}`
+                            : null,
+                          n.context.pageNumber
+                            ? `Page ${n.context.pageNumber}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" › ")}
                       </div>
                     )}
                     <div style={{ fontSize: "10px", color: "var(--text-dim)" }}>

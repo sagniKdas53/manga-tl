@@ -415,14 +415,17 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     if (!selectedChapter) return;
     try {
       showToast("Preparing chapter export...", "info");
-      const res = await safeFetch(`/api/series/chapters/${selectedChapter.id}/export?format=zip`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      
+      const res = await safeFetch(
+        `/api/series/chapters/${selectedChapter.id}/export?format=zip`,
+        {
+          headers: { Authorization: `Bearer ${user.token}` },
+        },
+      );
+
       if (!res.ok) {
         throw new Error("Failed to export chapter zip");
       }
-      
+
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");

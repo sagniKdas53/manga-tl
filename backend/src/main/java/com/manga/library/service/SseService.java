@@ -1,6 +1,7 @@
 package com.manga.library.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manga.library.repository.ImageRepository;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -11,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import com.manga.library.repository.ImageRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -85,21 +85,26 @@ public class SseService {
     emitNotificationForImage(imageId, type, title, message, null);
   }
 
-  public void emitNotificationForImage(UUID imageId, String type, String title, String message, Map<String, String> context) {
+  public void emitNotificationForImage(
+      UUID imageId, String type, String title, String message, Map<String, String> context) {
     String userIdStr = redisTemplate.opsForValue().get(IMAGE_USER_MAPPING_PREFIX + imageId);
     if (userIdStr != null) {
       emitNotificationToUser(UUID.fromString(userIdStr), type, title, message, imageId, context);
     } else {
-      imageRepository.findById(imageId).ifPresentOrElse(
-          image -> {
-            if (image.getCreatedBy() != null) {
-              UUID uId = image.getCreatedBy().getId();
-              emitNotificationToUser(uId, type, title, message, imageId, context);
-              mapImageToUser(imageId, uId);
-            }
-          },
-          () -> log.warn("Could not find owner user for image {} in Redis or DB. Cannot send SSE notification.", imageId)
-      );
+      imageRepository
+          .findById(imageId)
+          .ifPresentOrElse(
+              image -> {
+                if (image.getCreatedBy() != null) {
+                  UUID uId = image.getCreatedBy().getId();
+                  emitNotificationToUser(uId, type, title, message, imageId, context);
+                  mapImageToUser(imageId, uId);
+                }
+              },
+              () ->
+                  log.warn(
+                      "Could not find owner user for image {} in Redis or DB. Cannot send SSE notification.",
+                      imageId));
     }
   }
 
@@ -113,7 +118,12 @@ public class SseService {
   }
 
   public void emitNotificationToUser(
-      UUID userId, String type, String title, String message, UUID imageId, Map<String, String> context) {
+      UUID userId,
+      String type,
+      String title,
+      String message,
+      UUID imageId,
+      Map<String, String> context) {
     Map<String, Object> notification = new java.util.HashMap<>();
     notification.put("id", UUID.randomUUID().toString());
     notification.put("type", type);
