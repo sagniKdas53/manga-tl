@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Reader } from "./Reader";
 
 // Mock external modules
@@ -21,10 +21,11 @@ vi.mock("./ToastContext", () => ({
   }),
 }));
 
+const mockSafeFetch = vi.fn(() =>
+  Promise.resolve({ ok: true, json: () => Promise.resolve([]) }),
+);
 vi.mock("../utils", () => ({
-  safeFetch: vi.fn(() =>
-    Promise.resolve({ ok: true, json: () => Promise.resolve([]) }),
-  ),
+  safeFetch: (...args: any[]) => mockSafeFetch(...args),
   toSlug: (s: string) => s.toLowerCase(),
 }));
 
@@ -62,6 +63,15 @@ describe("Reader Component", () => {
     processingProgress: 0,
   };
 
+  beforeEach(() => {
+    localStorage.clear();
+    mockSafeFetch.mockReset();
+    mockSafeFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
+  });
+
   it("renders reader component basic controls", async () => {
     render(
       <Reader
@@ -77,7 +87,39 @@ describe("Reader Component", () => {
     expect(await screen.findByText(/Test Series/)).toBeInTheDocument();
   });
 
-  it("handles basic interactions", async () => {
+  it("handles sidebar toggles and page navigation clicks", async () => {
+    const mockPages = [
+      mockPage,
+      { ...mockPage, id: "p2", pageNumber: 2 },
+    ];
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={mockPages}
+        theme="dark"
+      />,
+    );
+
+    // Wait for render
+    await screen.findByText(/Test Series/);
+
+    // By default both sidebars are true (visible)
+    expect(screen.getByText("Navigation")).toBeInTheDocument();
+
+    // Click left sidebar toggle to hide it
+    const leftSidebarToggle = screen.getByTitle(/Toggle Global Controls/i);
+    fireEvent.click(leftSidebarToggle);
+    expect(screen.queryByText("Navigation")).not.toBeInTheDocument();
+
+    // Click right sidebar toggle
+    const rightSidebarToggle = screen.getByTitle(/Toggle Property Inspector/i);
+    fireEvent.click(rightSidebarToggle);
+  });
+
+  it("handles toolbar buttons and editor actions", async () => {
     render(
       <Reader
         user={mockUser}
@@ -88,7 +130,32 @@ describe("Reader Component", () => {
         theme="dark"
       />,
     );
-    // Wait for the component to settle
+
     await screen.findByText(/Test Series/);
+
+    // Click fit mode buttons
+    fireEvent.click(screen.getByRole("button", { name: "Page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Width" }));
+    fireEvent.click(screen.getByRole("button", { name: "Height" }));
+
+    // Click Redo actions
+    mockSafeFetch.mockResolvedValueOnce({ ok: true });
+    fireEvent.click(screen.getByText("Redo Page OCR"));
+
+    mockSafeFetch.mockResolvedValueOnce({ ok: true });
+    fireEvent.click(screen.getByText("Redo Page Translation"));
+
+    // Click layer creation buttons
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ id: "l1", type: "translation", name: "TL Layer" }),
+    });
+    fireEvent.click(screen.getByTitle("Add Translation Layer"));
+
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ id: "l2", type: "sfx", name: "SFX Layer" }),
+    });
+    fireEvent.click(screen.getByTitle("Add SFX Layer"));
   });
 });
