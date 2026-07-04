@@ -171,11 +171,13 @@ services:
       - RENDER_CACHE_DIR=/app/rendered_cache
       # Finally the remote workers, to distibute load to shouldn't this be added to the back-end
       - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-1}
-      # - HF_HUB_OFFLINE=1
-      # - PADDLEX_OFFLINE_MODE=1
-      # - PADDLE_DISABLE_TELEMETRY=1
       - HF_HUB_DISABLE_SYMLINKS_WARNING=1
-      # - MANGA_OCR_USE_LOCAL=true
+      # Comment these out if you want to seed the models or re-download them
+      - HF_HUB_OFFLINE=1
+      - PADDLEX_OFFLINE_MODE=1
+      - PADDLE_DISABLE_TELEMETRY=1
+      # This is for the Manga OCR
+      - MANGA_OCR_USE_LOCAL=true
       - MANGA_OCR_MODEL_PATH=/root/.cache/huggingface
       # Log Level
       - LOG_LEVEL=${LOG_LEVEL_WORKER:-DEBUG}
