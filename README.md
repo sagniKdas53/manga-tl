@@ -38,7 +38,23 @@ The platform is designed as a distributed service coordinated via a Valkey job q
 4. **Job Pipeline**: Valkey coordinates workers through specialized job queues (panel detection, OCR, layout analysis, translation, and rendering). An optional database-driven queue is supported for brokerless deployments.
 5. **ML Workers**: A unified Python runner executing a multi-tier OCR (PaddleOCR + EasyOCR + MangaOCR) and AI Translation pipeline.
 
+### 🔄 Job Pipeline Flow
+
+The translation pipeline flows sequentially from panel detection to final quality checks:
+
+1. **Panel Detection**: Segments panels on the page.
+2. **OCR (PaddleOCR + YOLO)**:
+   * **Text Detection**: Runs PaddleOCR on the entire page to detect raw text line fragments.
+   * **Bubble Detection**: Runs the YOLO bubble segmentation model (or fallback OpenCV contour search) to identify bubble coordinates/polygons.
+   * **Mapping**: Maps raw text line fragments to detected bubbles using coordinate overlap.
+   * **MangaOCR Refinement**: Runs high-accuracy MangaOCR on each cropped bubble area to refine text recognition.
+3. **Layout Analysis**: Groups text blocks into logical reading orders.
+4. **Translation**: Sequences dialogue through cloud or local LLM fallback chains.
+5. **Typesetting & Rendering**: Draws background masks (using bubble polygons) and lays out the translated text inside the bubbles.
+6. **Visual QA**: AI checks visual and semantic quality, flagging any issues.
+
 ---
+
 
 ## 🚀 Key Features
 
