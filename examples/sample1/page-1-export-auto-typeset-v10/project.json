@@ -1,20 +1,20 @@
 {
   "pageNumber": 1,
-  "imageId": "ac8050d3-afbd-4636-b620-798ae1e0feb0",
+  "imageId": "e9bed3c5-63ba-41fd-8c8b-b67040323f13",
   "dimensions": {
     "width": 832,
     "height": 1248
   },
-  "exportedAt": "2026-07-04T09:32:09.774Z",
+  "exportedAt": "2026-07-04T11:10:05.399Z",
   "layers": [
     {
-      "id": "b7601849-8d7c-4597-86e6-5a7579eb3b86",
+      "id": "c95d6279-a200-4ff4-bda2-1472e4a71516",
       "type": "ocr",
       "targetLanguage": null,
       "visible": true,
       "elements": [
         {
-          "id": "ee245e78-cdeb-4775-afd2-f930b52bd0bc",
+          "id": "880555fd-017d-4e3d-b657-27b13ea1f93c",
           "text": "お兄ちゃん…本当にやるの？",
           "font": "Comic Neue",
           "size": null,
@@ -32,10 +32,10 @@
           "fontStyle": "normal",
           "boxShape": "rectangular",
           "maskPolygon": null,
-          "regionId": "266cb916-d904-49a6-871d-4213bb9ac2e1"
+          "regionId": "437b2238-40e8-49d6-ace3-f47f7013c016"
         },
         {
-          "id": "cba5be83-b890-4269-a4a1-a06babebf2a0",
+          "id": "bc8ea595-4849-4681-8d6b-fa9776ed6071",
           "text": "ああ、着替えたら向こうの岩場に集合な",
           "font": "Comic Neue",
           "size": null,
@@ -53,10 +53,10 @@
           "fontStyle": "normal",
           "boxShape": "rectangular",
           "maskPolygon": null,
-          "regionId": "f581d094-9d4c-4dd5-a425-46c12833c97d"
+          "regionId": "9a4f75b4-dfe9-490b-bccb-cd46de8621b7"
         },
         {
-          "id": "73c85e48-9776-4bff-b4de-3dc7d44248a1",
+          "id": "099e0242-5cb3-464a-90bd-4745c03bb8f0",
           "text": "こんなチャンスめったに無い…楽しみだろ？",
           "font": "Comic Neue",
           "size": null,
@@ -74,10 +74,10 @@
           "fontStyle": "normal",
           "boxShape": "rectangular",
           "maskPolygon": null,
-          "regionId": "b020c78a-e2ce-46e5-b615-e44e1c060b7e"
+          "regionId": "015c18a0-fc60-4f29-ac33-c3070a898fa7"
         },
         {
-          "id": "5e1db25e-74a0-4333-a5fd-7564a5849a91",
+          "id": "b8bb5471-bff5-4264-a40a-e5231cd65c6d",
           "text": "母さん達にはテキトーに言っとくから",
           "font": "Comic Neue",
           "size": null,
@@ -95,110 +95,18 @@
           "fontStyle": "normal",
           "boxShape": "rectangular",
           "maskPolygon": null,
-          "regionId": "18546ead-b143-4c27-a505-cb003b6e3645"
+          "regionId": "57eea1a6-3a21-4a0b-9e6f-f9a3f905912a"
         }
       ]
     },
     {
-      "id": "d4d6287f-cd12-40f4-91ab-260684398382",
-      "type": "translation",
-      "targetLanguage": "en",
-      "visible": false,
-      "elements": [
-        {
-          "id": "6dbedf6d-8477-4b9a-984c-de46a6ac7da4",
-          "text": "Big bro... are we really doing this?",
-          "font": "Comic Neue",
-          "size": null,
-          "autoSize": true,
-          "x": 642,
-          "y": 145,
-          "maxWidth": 74,
-          "maxHeight": 213,
-          "rotation": 0,
-          "visible": true,
-          "wordWrap": true,
-          "backgroundColor": "#ffffff",
-          "textColor": "#000000",
-          "fontWeight": "bold",
-          "fontStyle": "normal",
-          "boxShape": "elliptical",
-          "maskPolygon": null,
-          "regionId": "266cb916-d904-49a6-871d-4213bb9ac2e1"
-        },
-        {
-          "id": "6f504c33-a3e8-47bb-92a7-5043f1ffb28c",
-          "text": "Yeah. Get changed, then meet me over by the rocks.",
-          "font": "Comic Neue",
-          "size": null,
-          "autoSize": true,
-          "x": 586,
-          "y": 542,
-          "maxWidth": 111,
-          "maxHeight": 225,
-          "rotation": 0,
-          "visible": true,
-          "wordWrap": true,
-          "backgroundColor": "#ffffff",
-          "textColor": "#000000",
-          "fontWeight": "bold",
-          "fontStyle": "normal",
-          "boxShape": "elliptical",
-          "maskPolygon": null,
-          "regionId": "f581d094-9d4c-4dd5-a425-46c12833c97d"
-        },
-        {
-          "id": "6a4b3715-3cb5-4c11-a3e2-f8b795bf8bcb",
-          "text": "A chance like this doesn't come often... you're looking forward to it, right?",
-          "font": "Comic Neue",
-          "size": null,
-          "autoSize": true,
-          "x": 496,
-          "y": 798,
-          "maxWidth": 112,
-          "maxHeight": 198,
-          "rotation": 0,
-          "visible": true,
-          "wordWrap": true,
-          "backgroundColor": "#ffffff",
-          "textColor": "#000000",
-          "fontWeight": "bold",
-          "fontStyle": "normal",
-          "boxShape": "elliptical",
-          "maskPolygon": null,
-          "regionId": "b020c78a-e2ce-46e5-b615-e44e1c060b7e"
-        },
-        {
-          "id": "a0457dea-c4bb-480e-aeb2-b565fb4bed28",
-          "text": "I'll make something up for Mom and the others.",
-          "font": "Comic Neue",
-          "size": null,
-          "autoSize": true,
-          "x": 43,
-          "y": 972,
-          "maxWidth": 113,
-          "maxHeight": 178,
-          "rotation": 0,
-          "visible": true,
-          "wordWrap": true,
-          "backgroundColor": "#ffffff",
-          "textColor": "#000000",
-          "fontWeight": "bold",
-          "fontStyle": "normal",
-          "boxShape": "elliptical",
-          "maskPolygon": null,
-          "regionId": "18546ead-b143-4c27-a505-cb003b6e3645"
-        }
-      ]
-    },
-    {
-      "id": "bdfec68f-5fca-4b27-8ee1-d4fe0874a692",
+      "id": "21bafbd3-647a-4c86-81b0-0ff1b2f47593",
       "type": "translation",
       "targetLanguage": "en",
       "visible": true,
       "elements": [
         {
-          "id": "249ec0d9-198f-4054-a247-e47823001f0c",
+          "id": "2f351903-77ca-405e-a704-e37375e522a4",
           "text": "Bro... are you really gonna do it?",
           "font": "Comic Neue",
           "size": null,
@@ -216,11 +124,11 @@
           "fontStyle": "normal",
           "boxShape": "elliptical",
           "maskPolygon": null,
-          "regionId": "266cb916-d904-49a6-871d-4213bb9ac2e1"
+          "regionId": "437b2238-40e8-49d6-ace3-f47f7013c016"
         },
         {
-          "id": "9ac9c44c-142f-44e8-8d50-c94b4d2e21af",
-          "text": "Yeah, get changed and meet at the rocks.",
+          "id": "3d420364-7d47-484a-aa3f-8ba91ed16174",
+          "text": "Yep. Get changed and meet me at the rocks over there.",
           "font": "Comic Neue",
           "size": null,
           "autoSize": true,
@@ -237,11 +145,11 @@
           "fontStyle": "normal",
           "boxShape": "elliptical",
           "maskPolygon": null,
-          "regionId": "f581d094-9d4c-4dd5-a425-46c12833c97d"
+          "regionId": "9a4f75b4-dfe9-490b-bccb-cd46de8621b7"
         },
         {
-          "id": "928ece6a-5b09-499e-93bf-ac5cfdce5dae",
-          "text": "We won't get a shot like this again... excited?",
+          "id": "933a39a9-e26a-4f4e-b714-ea85c8e34620",
+          "text": "We don't get a chance like this often... Fun, right?",
           "font": "Comic Neue",
           "size": null,
           "autoSize": true,
@@ -258,11 +166,11 @@
           "fontStyle": "normal",
           "boxShape": "elliptical",
           "maskPolygon": null,
-          "regionId": "b020c78a-e2ce-46e5-b615-e44e1c060b7e"
+          "regionId": "015c18a0-fc60-4f29-ac33-c3070a898fa7"
         },
         {
-          "id": "0bffcb21-823b-4ea0-b4a5-4c8dce698211",
-          "text": "I'll cover for us with Mom.",
+          "id": "980272f4-722c-40cd-947c-8908398def1f",
+          "text": "I'll just make something up for Mom and them.",
           "font": "Comic Neue",
           "size": null,
           "autoSize": true,
@@ -279,7 +187,7 @@
           "fontStyle": "normal",
           "boxShape": "elliptical",
           "maskPolygon": null,
-          "regionId": "18546ead-b143-4c27-a505-cb003b6e3645"
+          "regionId": "57eea1a6-3a21-4a0b-9e6f-f9a3f905912a"
         }
       ]
     }
