@@ -3,25 +3,12 @@
 > Last reviewed: 2026-07-04 | All completed items archived below.
 
 ---
-
 ## 🔴 Active Bugs
-
-### Bubble polygon detection is broken
-
-- [ ] After upgrading to PP-OCRv6_medium_rec, the bubble polygon detection to shape the mask and make the text fix in it is broken.
-- [ ] Every text block is being masked by an elliptical mask not the previously used polygonal mask that fit the bubbles fully
-- [ ] Checkout the differences between v9 and v10,v11 for the sample 1 for the clear regression in bubble masking
-- [ ] v11 shows some improvement, but the masking is still not as good as it used to be (maybe explore the git history to find out what went wrong)
-
-### Bubble grouping also seems worse
-
-- [ ] After upgrading the PP-OCRv6_medium_rec the bubble grouping also seems worse
-- [ ] Need to look at how the code was structured before the upgrades, the text detection is really good now but the grouping and masking is worse.
-- [ ] Look at the git history for changes in bubble grouping and masking, revert the changes related to it if possible. If not, try to fix it by exploring the code.
 
 ### Cost calculation seems wrong
 
 - [ ] The cost stored in costs.json seems to be wrong, it should be saved as per million tokens and then calculated dynamically based on the job
+- [ ] Also we are not printing the estimayed cost after every job that uses a cloud model
 
 ### Export Quality Discrepancy
 
@@ -71,7 +58,7 @@
 
 ---
 
-## 🟢 Medium Priority Improvements
+## 🟡 Medium Priority Improvements
 
 ### Cloud OCR Optimization
 
@@ -118,6 +105,8 @@
 
 ### Bugs (Fixed)
 
+- [x] Bubble polygon detection and masking regressions after v9 — fixed, YOLO bubble masks successfully merged and propagated
+- [x] Bubble grouping issues after upgrading OCR — fixed, tunedVertical/horizontal proximity algorithm threshold
 - [x] Redo Page OCR was replacing old layer instead of creating new pass — fixed, preserves original
 - [x] OCR layer visible when Clean Scanlation toggled — fixed, layer hidden appropriately
 - [x] Layer stacking and numbering — fixed, layers numbered in stack order
@@ -150,4 +139,11 @@
 - [x] Nemotron OCR v2 investigated — neither fast nor reliable, rejected
 - [x] Notifications/toasts made more informative (include image/chapter/series context)
 
+### Worker Enhancements & Improvements (Done)
+
+- [x] Fail translation job/verify YOLO on start instead of falling back to OpenCV silently when yolo11 model is missing
+- [x] Remove MangaOCR and EasyOCR dependencies to optimize worker footprint and memory
+- [x] Update default local OCR models to PP-OCRv6 medium
+- [x] Document OCR_MERGE_THRESHOLD in README.md for tuning bubble grouping
+- [x] Implement proper model seeding on worker startup before accepting jobs
 </details>

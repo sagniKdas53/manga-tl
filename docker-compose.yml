@@ -176,13 +176,10 @@ services:
       # - HF_HUB_OFFLINE=1
       # - PADDLEX_OFFLINE_MODE=1
       # - PADDLE_DISABLE_TELEMETRY=1
-      # This is for the Manga OCR
-      - MANGA_OCR_USE_LOCAL=true
-      - MANGA_OCR_MODEL_PATH=/root/.cache/huggingface
       # Log Level
       - LOG_LEVEL=${LOG_LEVEL_WORKER:-DEBUG}
-      - PADDLEOCR_DET_MODEL=${PADDLEOCR_DET_MODEL:-PP-OCRv5_mobile_det}
-      - PADDLEOCR_REC_MODEL=${PADDLEOCR_REC_MODEL:-PP-OCRv5_mobile_rec}
+      - PADDLEOCR_DET_MODEL=${PADDLEOCR_DET_MODEL:-PP-OCRv6_medium_det}
+      - PADDLEOCR_REC_MODEL=${PADDLEOCR_REC_MODEL:-PP-OCRv6_medium_rec}
       - PADDLEOCR_DEVICE=${PADDLEOCR_DEVICE:-cpu}
     depends_on:
       - redis
@@ -191,7 +188,6 @@ services:
     volumes:
       - ./data/worker/huggingface:/root/.cache/huggingface
       - ./data/worker/paddlex:/root/.paddlex
-      - ./data/worker/easyocr:/root/.EasyOCR
       - ./data/worker/rendered_cache:/app/rendered_cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -203,7 +199,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 60s
 
 networks:
   manga-net:

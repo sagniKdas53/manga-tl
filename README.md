@@ -36,7 +36,7 @@ The platform is designed as a distributed service coordinated via a Valkey job q
 2. **Backend**: Spring Boot, Java, PostgreSQL, Hibernate, MinIO SDK.
 3. **Database & Storage**: PostgreSQL for metadata, layers, and edit history; MinIO S3 for raw/processed images and generated masks.
 4. **Job Pipeline**: Valkey coordinates workers through specialized job queues (panel detection, OCR, layout analysis, translation, and rendering). An optional database-driven queue is supported for brokerless deployments.
-5. **ML Workers**: A unified Python runner executing a multi-tier OCR (PaddleOCR + EasyOCR + MangaOCR) and AI Translation pipeline.
+5. **ML Workers**: A unified Python runner executing local OCR (PaddleOCR + YOLO bubble detector) and AI Translation pipelines.
 
 ### 🔄 Job Pipeline Flow
 
@@ -45,9 +45,8 @@ The translation pipeline flows sequentially from panel detection to final qualit
 1. **Panel Detection**: Segments panels on the page.
 2. **OCR (PaddleOCR + YOLO)**:
    * **Text Detection**: Runs PaddleOCR on the entire page to detect raw text line fragments.
-   * **Bubble Detection**: Runs the YOLO bubble segmentation model (or fallback OpenCV contour search) to identify bubble coordinates/polygons.
+   * **Bubble Detection**: Runs the YOLO bubble segmentation model to identify bubble coordinates/polygons.
    * **Mapping**: Maps raw text line fragments to detected bubbles using coordinate overlap.
-   * **MangaOCR Refinement**: Runs high-accuracy MangaOCR on each cropped bubble area to refine text recognition.
 3. **Layout Analysis**: Groups text blocks into logical reading orders.
 4. **Translation**: Sequences dialogue through cloud or local LLM fallback chains.
 5. **Typesetting & Rendering**: Draws background masks (using bubble polygons) and lays out the translated text inside the bubbles.
@@ -62,10 +61,14 @@ The translation pipeline flows sequentially from panel detection to final qualit
 
 * Groups separate text line-level OCR detections into logical speech bubbles before panel mapping.
 * Uses a configurable vertical/horizontal proximity algorithm (`OCR_MERGE_THRESHOLD`) which groups text boxes vertically (or horizontally) relative to the average line size.
+  * **Tuning `OCR_MERGE_THRESHOLD`**:
+    * **Increase the value (e.g., to `1.0` or `1.5`)**: If text fragments inside the same bubble are being split into separate bubbles incorrectly (under-grouping).
+    * **Decrease the value (e.g., to `0.3` or `0.4`)**: If separate bubbles or adjacent columns of text are being merged together incorrectly (over-grouping).
+    * **Default value**: Set to `1.0` in `docker-compose.yml`, falling back to `0.5` if unconfigured.
 
 ### 1.5. Cloud OCR & Local OCR Engines
 
-* By default, the system utilizes local OCR engines (PaddleOCR + EasyOCR + MangaOCR) to detect and extract text.
+* By default, the system utilizes local OCR engines (PaddleOCR + YOLO bubble detector) to detect and extract text.
 * However, you can disable local OCR by setting `DISABLE_LOCAL_OCR=true` in the `.env` file.
 * If local OCR is disabled, the system will use Cloud Vision-Language Models (VLMs) for the OCR path instead.
 * *Note: The VLM translation path has been removed, as VLMs are not recommended for translation work due to their lower BLEU scores compared to text-only LLMs. VLMs are now strictly used for OCR and visual quality assurance.*
