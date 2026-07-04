@@ -15,6 +15,7 @@ import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import com.manga.library.repository.ImageRepository;
 
 @ExtendWith(MockitoExtension.class)
 public class SseServiceTest {
@@ -22,13 +23,14 @@ public class SseServiceTest {
   @Mock private StringRedisTemplate redisTemplate;
   @Mock private ListOperations<String, String> listOps;
   @Mock private ValueOperations<String, String> valOps;
+  @Mock private ImageRepository imageRepository;
 
   private ObjectMapper objectMapper = new ObjectMapper();
   private SseService sseService;
 
   @BeforeEach
   public void setUp() {
-    sseService = new SseService(redisTemplate, objectMapper);
+    sseService = new SseService(redisTemplate, objectMapper, imageRepository);
   }
 
   @Test
