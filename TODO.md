@@ -8,7 +8,7 @@
 
 ### Bubble polygon detection is broken
 
-- [ ] After upgrading to PP-OCRv6_medium_rec, the bubble polygon detection is broken.
+- [ ] After upgrading to PP-OCRv6_medium_rec, the bubble polygon detection to shape the mask and make the text fix in it is broken.
 - [ ] Every text block is being masked by an elliptical mask not the previously used polygonal mask that fit the bubbles fully
 
 ### Bubble grouping also seems worse
