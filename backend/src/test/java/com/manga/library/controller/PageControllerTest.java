@@ -2,12 +2,17 @@ package com.manga.library.controller;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.http.MediaType;
 
 import com.manga.library.config.JwtAuthFilter;
 import com.manga.library.model.Chapter;
 import com.manga.library.model.Image;
+import com.manga.library.model.OcrRegion;
 import com.manga.library.model.Page;
 import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
@@ -95,4 +100,78 @@ public class PageControllerTest {
         .andExpect(jsonPath("$[0].id").value(pageId.toString()))
         .andExpect(jsonPath("$[0].pageNumber").value(1));
   }
+
+  @Test
+  public void testDeletePage_Success() throws Exception {
+    UUID pageId = UUID.randomUUID();
+    when(pageService.deletePageDb(pageId)).thenReturn(java.util.Collections.emptyList());
+
+    mockMvc
+        .perform(delete("/api/pages/" + pageId))
+        .andExpect(status().isOk());
+
+    verify(pageService, times(1)).deletePageDb(pageId);
+  }
+
+  @Test
+  public void testReorderPages_Success() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    UUID p1 = UUID.randomUUID();
+    UUID p2 = UUID.randomUUID();
+    
+    Page page1 = Page.builder().id(p1).pageNumber(1).build();
+    Page page2 = Page.builder().id(p2).pageNumber(2).build();
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(java.util.Arrays.asList(page1, page2));
+
+    mockMvc
+        .perform(put("/api/chapters/" + chapterId + "/pages/reorder")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("[\"" + p1 + "\", \"" + p2 + "\"]"))
+        .andExpect(status().isOk());
+
+    verify(pageRepository, atLeastOnce()).save(any(Page.class));
+  }
+
+  @Test
+  public void testGetImageDetails_Success() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Image image = Image.builder().id(imageId).filename("test.png").build();
+
+    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+    when(panelRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+    when(ocrRegionRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+    when(conversationRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+
+    mockMvc
+        .perform(get("/api/images/" + imageId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.image.id").value(imageId.toString()));
+  }
+
+  @Test
+  public void testGetImageLayers_Success() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    when(layerRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+
+    mockMvc
+        .perform(get("/api/images/" + imageId + "/layers"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testRedoOcrRegion_Success() throws Exception {
+    UUID id = UUID.randomUUID();
+
+    doNothing().when(jobCoordinatorService).triggerRedo(id, "translation");
+
+    mockMvc
+        .perform(post("/api/ocr-regions/" + id + "/redo")
+            .param("type", "translation"))
+        .andExpect(status().isOk());
+
+    verify(jobCoordinatorService, times(1)).triggerRedo(id, "translation");
+  }
+
 }

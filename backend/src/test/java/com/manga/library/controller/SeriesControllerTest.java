@@ -111,4 +111,60 @@ public class SeriesControllerTest {
                 "/api/series/" + seriesId))
         .andExpect(status().isOk());
   }
+
+  @Test
+  public void testCreateChapter_Success() throws Exception {
+    UUID seriesId = UUID.randomUUID();
+    Series series = Series.builder().id(seriesId).title("Test Series").build();
+    com.manga.library.model.Chapter chapter =
+        com.manga.library.model.Chapter.builder().id(UUID.randomUUID()).chapterNumber(1.0).title("Ch 1").build();
+
+    when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
+    when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
+
+    String json = "{\"chapterNumber\":1.0,\"title\":\"Ch 1\"}";
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/series/" + seriesId + "/chapters")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(json))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testUpdateChapter_Success() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    UUID seriesId = UUID.randomUUID();
+    Series series = Series.builder().id(seriesId).build();
+    com.manga.library.model.Chapter chapter =
+        com.manga.library.model.Chapter.builder().id(chapterId).series(series).chapterNumber(1.0).title("Old Title").build();
+
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
+
+    String json = "{\"chapterNumber\":2.0,\"title\":\"New Title\"}";
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/series/chapters/" + chapterId)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(json))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testDeleteChapter_Success() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    com.manga.library.model.Chapter chapter =
+        com.manga.library.model.Chapter.builder().id(chapterId).build();
+
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId)).thenReturn(null);
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/series/chapters/" + chapterId))
+        .andExpect(status().isOk());
+
+    verify(chapterRepository, times(1)).delete(chapter);
+  }
 }

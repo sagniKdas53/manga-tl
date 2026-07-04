@@ -357,6 +357,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             {/* Saturation / Brightness SV Square */}
             <div
               ref={svRef}
+              data-testid="sv-picker"
               onMouseDown={handleSvMouseDown}
               onTouchStart={handleSvMouseDown}
               style={{
@@ -413,6 +414,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             {/* Rainbow Hue Slider Bar */}
             <div
               ref={hueRef}
+              data-testid="hue-slider"
               onMouseDown={handleHueMouseDown}
               onTouchStart={handleHueMouseDown}
               style={{

@@ -76,4 +76,51 @@ describe("ColorPicker", () => {
     fireEvent.click(redPreset);
     expect(onChange).toHaveBeenCalledWith("#ef4444");
   });
+
+  it("allows dragging on the SV square and hue slider", () => {
+    const onChange = vi.fn();
+    const onLaunchEyeDropper = vi.fn();
+    render(
+      <ColorPicker
+        label="Text Color"
+        value="#ff0000"
+        onChange={onChange}
+        onLaunchEyeDropper={onLaunchEyeDropper}
+      />,
+    );
+
+    // Open popover
+    const toggle = screen.getByTitle("Open Color Wheel / Palette");
+    fireEvent.click(toggle);
+
+    // Mock getBoundingClientRect for SV square
+    const svPicker = screen.getByTestId("sv-picker");
+    svPicker.getBoundingClientRect = () => ({
+      width: 100,
+      height: 100,
+      left: 0,
+      top: 0,
+      right: 100,
+      bottom: 100,
+    } as DOMRect);
+
+    // Trigger mousedown to simulate clicking middle of SV square (50, 50)
+    fireEvent.mouseDown(svPicker, { clientX: 50, clientY: 50 });
+    expect(onChange).toHaveBeenCalled();
+
+    // Mock getBoundingClientRect for Hue slider
+    const hueSlider = screen.getByTestId("hue-slider");
+    hueSlider.getBoundingClientRect = () => ({
+      width: 100,
+      height: 12,
+      left: 0,
+      top: 0,
+      right: 100,
+      bottom: 12,
+    } as DOMRect);
+
+    // Trigger mousedown to simulate clicking middle of Hue slider (50)
+    fireEvent.mouseDown(hueSlider, { clientX: 50 });
+    expect(onChange).toHaveBeenCalled();
+  });
 });

@@ -2,10 +2,18 @@ package com.manga.library.controller;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.http.MediaType;
+import java.util.Collections;
+import com.manga.library.model.Image;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.manga.library.config.JwtAuthFilter;
 import com.manga.library.model.Layer;
+import com.manga.library.model.LayerElement;
 import com.manga.library.repository.ImageRepository;
 import com.manga.library.repository.LayerEditHistoryRepository;
 import com.manga.library.repository.LayerElementRepository;
@@ -50,5 +58,32 @@ public class LayerControllerTest {
     mockMvc.perform(delete("/api/layers/" + layerId)).andExpect(status().isOk());
 
     verify(layerRepository, times(1)).delete(layer);
+  }
+
+  @Test
+  public void testGetLayerElementHistory_Success() throws Exception {
+    UUID elementId = UUID.randomUUID();
+    when(layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(elementId))
+        .thenReturn(Collections.emptyList());
+
+    mockMvc
+        .perform(get("/api/layer-elements/" + elementId + "/history"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testCreateLayer_Success() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Image image = Image.builder().id(imageId).filename("test.png").build();
+    Layer layer = Layer.builder().id(UUID.randomUUID()).image(image).type("translation").build();
+
+    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+    when(layerRepository.save(any(Layer.class))).thenReturn(layer);
+
+    mockMvc
+        .perform(post("/api/images/" + imageId + "/layers")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"type\": \"translation\"}"))
+        .andExpect(status().isOk());
   }
 }
