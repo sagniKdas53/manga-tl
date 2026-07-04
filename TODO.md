@@ -10,12 +10,14 @@
 
 - [ ] After upgrading to PP-OCRv6_medium_rec, the bubble polygon detection to shape the mask and make the text fix in it is broken.
 - [ ] Every text block is being masked by an elliptical mask not the previously used polygonal mask that fit the bubbles fully
+- [ ] Checkout the differences between v9 and v10,v11 for the sample 1 for the clear regression in bubble masking
+- [ ] v11 shows some improvement, but the masking is still not as good as it used to be (maybe explore the git history to find out what went wrong)
 
 ### Bubble grouping also seems worse
 
 - [ ] After upgrading the PP-OCRv6_medium_rec the bubble grouping also seems worse
 - [ ] Need to look at how the code was structured before the upgrades, the text detection is really good now but the grouping and masking is worse.
-- [ ] This is a trade off and I think it's a not good trade off, need to find a way to balance both.
+- [ ] Look at the git history for changes in bubble grouping and masking, revert the changes related to it if possible. If not, try to fix it by exploring the code.
 
 ### Cost calculation seems wrong
 
