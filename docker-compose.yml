@@ -173,9 +173,9 @@ services:
       - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-1}
       - HF_HUB_DISABLE_SYMLINKS_WARNING=1
       # Comment these out if you want to seed the models or re-download them
-      - HF_HUB_OFFLINE=1
-      - PADDLEX_OFFLINE_MODE=1
-      - PADDLE_DISABLE_TELEMETRY=1
+      # - HF_HUB_OFFLINE=1
+      # - PADDLEX_OFFLINE_MODE=1
+      # - PADDLE_DISABLE_TELEMETRY=1
       # This is for the Manga OCR
       - MANGA_OCR_USE_LOCAL=true
       - MANGA_OCR_MODEL_PATH=/root/.cache/huggingface
@@ -190,7 +190,6 @@ services:
       - backend
     volumes:
       - ./data/worker/huggingface:/root/.cache/huggingface
-      - ./data/worker/paddleocr:/root/.paddleocr
       - ./data/worker/paddlex:/root/.paddlex
       - ./data/worker/easyocr:/root/.EasyOCR
       - ./data/worker/rendered_cache:/app/rendered_cache
