@@ -31,7 +31,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - SCHEDULE=@daily
       - BACKUP_KEEP_DAYS=7
-      - BACKUP_ON_START=true
+      - BACKUP_ON_START=TRUE
     volumes:
       - ./data/backups:/backups
     depends_on:
@@ -165,7 +165,7 @@ services:
       - DISABLE_LOCAL_LLM=${DISABLE_LOCAL_LLM:-false}
       - LOCAL_LLM_PROVIDER=${LOCAL_LLM_PROVIDER:-ollama}
       - LOCAL_LLM_ENDPOINT=${LOCAL_LLM_ENDPOINT:-http://ollama:11434/v1/chat/completions}
-      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma3:4b}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gemma4:e4b}
       - LOCAL_VLM_MODEL=${LOCAL_VLM_MODEL:-qwen2.5-vl-3b-instruct}
       - QA_MODE=${QA_MODE:-auto}
       - RENDER_CACHE_DIR=/app/rendered_cache
@@ -203,37 +203,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-  #
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: manga-ollama
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./data/ollama:/root/.ollama
-  #     - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: [ gpu ]
-  #   networks:
-  #     - manga-net
-  #
-  # ollama-init:
-  #   image: ollama/ollama:latest
-  #   container_name: manga-ollama-init
-  #   environment:
-  #     - OLLAMA_HOST=ollama:11434
-  #   volumes:
-  #     - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
-  #     - ./ollama/init.sh:/init.sh
-  #   entrypoint: [ "sh", "/init.sh" ]
-  #   depends_on:
-  #     - ollama
-  #   networks:
-  #     - manga-net
 
 networks:
   manga-net:

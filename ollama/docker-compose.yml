@@ -1,0 +1,29 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: manga-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ../data/ollama:/root/.ollama
+      - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: manga-ollama-init
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    volumes:
+      - /home/sagnik/lm-studio/lmstudio-community:/lm-studio-models
+      - ./init.sh:/init.sh
+    entrypoint: [ "sh", "/init.sh" ]
+    depends_on:
+      - ollama
