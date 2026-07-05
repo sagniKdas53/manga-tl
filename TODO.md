@@ -2,7 +2,6 @@
 
 > Last reviewed: 2026-07-04 | All completed items archived below.
 
----
 ## 🔴 Active Bugs
 
 ### Cost calculation seems wrong
@@ -32,6 +31,7 @@
     - `QA_MODEL_PROVIDER` + `QA_LLM_MODEL` / `QA_VLM_MODEL` (+ list variants)
   - [ ] Load defaults from env vars, allow runtime override via API
   - [ ] Support `OCR_PROVIDER: local | cloud` (gray out local if image lacks OCR deps)
+  - [ ] **Model list / model picker** — `OCR_VLM_MODEL_LIST`, `TL_LLM_MODEL_LIST`, `QA_LLM_MODEL_LIST`, `QA_VLM_MODEL_LIST` are already declared as env var stubs. When the model picker UI is built, populate these lists from the API and treat position 0 as the current default. At that point, the single-model vars (`TL_LLM_MODEL`, `OCR_VLM_MODEL`, etc.) can be deprecated in favour of the list.
 - [ ] **Backend: Per-chapter/series model selection** — Add model config fields to `Chapter` and `Series` entities. Update APIs so a rough draft chapter can use cheap models and a final chapter uses premium models.
 - [ ] **Worker: Accept model config per-job** — Infrastructure exists (`ocrProvider`, `preferredModel` in job payload) but values come from global env vars only. Wire up per-chapter settings. Use defaults as safety fallback for invalid/unavailable models.
 - [ ] **Frontend: Settings panel** — Gear icon in navbar showing active providers + model dropdowns. Initialize from backend defaults, POST user preferences to persist.
@@ -146,4 +146,5 @@
 - [x] Update default local OCR models to PP-OCRv6 medium
 - [x] Document OCR_MERGE_THRESHOLD in README.md for tuning bubble grouping
 - [x] Implement proper model seeding on worker startup before accepting jobs
+
 </details>
