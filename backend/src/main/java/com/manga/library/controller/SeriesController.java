@@ -608,6 +608,110 @@ public class SeriesController {
         List<Layer> imageLayers = layerRepository.findByImageId(imageId);
         pageMeta.put("layerCount", imageLayers.size());
 
+        List<Map<String, Object>> layersMetaList = new ArrayList<>();
+        double pageTotalCostVal = 0.0;
+        boolean pageHasCost = false;
+
+        // Models used map (for backward compatibility if anything reads pages.modelsUsed)
+        Map<String, String> modelsUsed = new HashMap<>();
+
+        for (Layer l : imageLayers) {
+          Map<String, Object> layerMeta = new HashMap<>();
+          layerMeta.put("id", l.getId().toString());
+          layerMeta.put("type", l.getType());
+          layerMeta.put("visible", l.getVisible() != null ? l.getVisible() : true);
+          if (l.getTargetLanguage() != null) {
+            layerMeta.put("targetLanguage", l.getTargetLanguage());
+          }
+
+          double layerCostVal = 0.0;
+          boolean layerHasCost = false;
+          String modelName = null;
+
+          if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
+            com.fasterxml.jackson.databind.node.ObjectNode metaNode =
+                (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
+
+            // Extract model name
+            if (metaNode.has("model")) {
+              modelName = metaNode.get("model").asText();
+              layerMeta.put("model", modelName);
+              modelsUsed.put(l.getType().toLowerCase(), modelName);
+            }
+
+            // Extract layer-level direct cost (e.g. translation)
+            if (metaNode.has("cost")) {
+              com.fasterxml.jackson.databind.JsonNode costNode = metaNode.get("cost");
+              if (costNode.has("estimated_cost")) {
+                double estCost = costNode.get("estimated_cost").asDouble();
+                layerCostVal += estCost;
+                layerHasCost = true;
+                pageTotalCostVal += estCost;
+                pageHasCost = true;
+              }
+            }
+
+            // Extract QA results if present on this layer
+            if (metaNode.has("qa")) {
+              com.fasterxml.jackson.databind.JsonNode qaNode = metaNode.get("qa");
+              Map<String, Object> qaMeta = new HashMap<>();
+              if (qaNode.has("status")) qaMeta.put("status", qaNode.get("status").asText());
+              if (qaNode.has("total_regions")) qaMeta.put("total_regions", qaNode.get("total_regions").asInt());
+              if (qaNode.has("passed")) qaMeta.put("passed", qaNode.get("passed").asInt());
+              if (qaNode.has("failed")) qaMeta.put("failed", qaNode.get("failed").asInt());
+              if (qaNode.has("avg_score")) qaMeta.put("avg_score", qaNode.get("avg_score").asDouble());
+
+              // Extract QA cost if nested
+              if (qaNode.has("cost")) {
+                com.fasterxml.jackson.databind.JsonNode qaCostNode = qaNode.get("cost");
+                if (qaCostNode.has("estimated_cost")) {
+                  double qaEstCost = qaCostNode.get("estimated_cost").asDouble();
+                  layerCostVal += qaEstCost;
+                  layerHasCost = true;
+                  pageTotalCostVal += qaEstCost;
+                  pageHasCost = true;
+
+                  Map<String, Object> qaCostMap = new HashMap<>();
+                  qaCostMap.put("estimated_cost", qaEstCost);
+                  qaCostMap.put("display", formatCost(qaEstCost));
+                  qaCostMap.put("currency", "USD");
+                  qaMeta.put("cost", qaCostMap);
+                }
+              }
+              layerMeta.put("qa", qaMeta);
+            }
+          }
+
+          // Build cost map for layer
+          Map<String, Object> layerCostMap = new HashMap<>();
+          layerCostMap.put("estimated_cost", layerCostVal);
+          layerCostMap.put("display", formatCost(layerCostVal));
+          layerCostMap.put("currency", "USD");
+          layerMeta.put("cost", layerCostMap);
+
+          layersMetaList.add(layerMeta);
+        }
+
+        pageMeta.put("layers", layersMetaList);
+        pageMeta.put("modelsUsed", modelsUsed);
+
+        if (pageHasCost) {
+          Map<String, Object> pageCostMap = new HashMap<>();
+          pageCostMap.put("estimated_cost", pageTotalCostVal);
+          pageCostMap.put("display", formatCost(pageTotalCostVal));
+          pageCostMap.put("currency", "USD");
+          pageMeta.put("totalCost", pageCostMap);
+
+          chapterTotalCostVal += pageTotalCostVal;
+          chapterHasCost = true;
+        } else {
+          Map<String, Object> pageCostMap = new HashMap<>();
+          pageCostMap.put("estimated_cost", 0.0);
+          pageCostMap.put("display", "$0.00");
+          pageCostMap.put("currency", "USD");
+          pageMeta.put("totalCost", pageCostMap);
+        }
+
         // Find active/visible translation layer
         Layer activeLayer = null;
         for (Layer l : imageLayers) {
@@ -624,55 +728,17 @@ public class SeriesController {
           activeLayerMeta.put("language", activeLayer.getTargetLanguage());
           pageMeta.put("activeLayer", activeLayerMeta);
 
-          // Models used
+          // QA review / manual edit
+          boolean manualQaNeeded = false;
           if (activeLayer.getMetadataJson() != null && activeLayer.getMetadataJson().isObject()) {
             com.fasterxml.jackson.databind.node.ObjectNode metaNode =
                 (com.fasterxml.jackson.databind.node.ObjectNode) activeLayer.getMetadataJson();
-
-            // ocr / translation models used
-            Map<String, String> models = new HashMap<>();
-            if (metaNode.has("model")) {
-              models.put("translation", metaNode.get("model").asText());
-            }
-            // If we have ocr layer, find its model too
-            for (Layer l : imageLayers) {
-              if ("ocr".equalsIgnoreCase(l.getType())
-                  && l.getMetadataJson() != null
-                  && l.getMetadataJson().isObject()) {
-                com.fasterxml.jackson.databind.node.ObjectNode ocrMeta =
-                    (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
-                if (ocrMeta.has("model")) {
-                  models.put("ocr", ocrMeta.get("model").asText());
-                }
-              }
-            }
-            pageMeta.put("modelsUsed", models);
-
-            // Cost
-            if (metaNode.has("cost")) {
-              com.fasterxml.jackson.databind.JsonNode costNode = metaNode.get("cost");
-              if (costNode.has("estimated_cost")) {
-                double estCost = costNode.get("estimated_cost").asDouble();
-                Map<String, Object> costMap = new HashMap<>();
-                costMap.put("estimated_cost", estCost);
-                costMap.put(
-                    "currency",
-                    costNode.has("currency") ? costNode.get("currency").asText() : "USD");
-                pageMeta.put("cost", costMap);
-
-                chapterTotalCostVal += estCost;
-                chapterHasCost = true;
-              }
-            }
-
-            // QA review / manual edit
-            boolean manualQaNeeded = false;
             if (metaNode.has("qa") && metaNode.get("qa").has("status")) {
               String qaStatus = metaNode.get("qa").get("status").asText();
               manualQaNeeded = "manual_review".equalsIgnoreCase(qaStatus);
             }
-            pageMeta.put("manualQaNeeded", manualQaNeeded);
           }
+          pageMeta.put("manualQaNeeded", manualQaNeeded);
 
           // Check if manual changes done
           boolean manualChangesDone = false;
@@ -707,6 +773,13 @@ public class SeriesController {
       if (chapterHasCost) {
         Map<String, Object> totalCostMap = new HashMap<>();
         totalCostMap.put("estimated_cost", chapterTotalCostVal);
+        totalCostMap.put("display", formatCost(chapterTotalCostVal));
+        totalCostMap.put("currency", "USD");
+        finalMeta.put("chapterTotalCost", totalCostMap);
+      } else {
+        Map<String, Object> totalCostMap = new HashMap<>();
+        totalCostMap.put("estimated_cost", 0.0);
+        totalCostMap.put("display", "$0.00");
         totalCostMap.put("currency", "USD");
         finalMeta.put("chapterTotalCost", totalCostMap);
       }
@@ -739,5 +812,12 @@ public class SeriesController {
               ("Error during export: " + e.getMessage())
                   .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
+  }
+
+  private String formatCost(double cost) {
+    if (cost == 0.0) return "$0.00";
+    if (cost >= 0.01) return String.format("$%.4f", cost);
+    if (cost >= 0.0001) return String.format("$%.6f", cost);
+    return String.format("$%.2e", cost);
   }
 }

@@ -11,7 +11,7 @@ import type {
   LayerElement,
   Series,
 } from "../types";
-import { safeFetch, toSlug } from "../utils";
+import { safeFetch, toSlug, formatCost } from "../utils";
 import { fitTextInBox } from "../utils/fitText";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
@@ -2234,40 +2234,92 @@ export const Reader: React.FC<ReaderProps> = ({
       }
 
       // 4. project.json
+      let totalCostVal = 0.0;
+      let hasPageCost = false;
+      layers.forEach((lData) => {
+        const meta = lData.layer.metadataJson;
+        if (meta && typeof meta === "object") {
+          if (meta.cost && typeof meta.cost === "object" && typeof meta.cost.estimated_cost === "number") {
+            totalCostVal += meta.cost.estimated_cost;
+            hasPageCost = true;
+          }
+          if (meta.qa && typeof meta.qa === "object" && meta.qa.cost && typeof meta.qa.cost === "object" && typeof meta.qa.cost.estimated_cost === "number") {
+            totalCostVal += meta.qa.cost.estimated_cost;
+            hasPageCost = true;
+          }
+        }
+      });
+
       const projectData = {
         pageNumber: selectedPage.pageNumber,
         imageId: selectedPage.imageId,
         dimensions: { width: W, height: H },
+        totalCost: {
+          estimated_cost: totalCostVal,
+          display: formatCost(totalCostVal),
+          currency: "USD",
+        },
         exportedAt: new Date().toISOString(),
-        layers: layers.map((lData) => ({
-          id: lData.layer.id,
-          type: lData.layer.type,
-          targetLanguage: lData.layer.targetLanguage,
-          visible: lData.layer.visible,
-          zOrder: lData.layer.zOrder,
-          metadataJson: lData.layer.metadataJson,
-          elements: lData.elements.map((el) => ({
-            id: el.id,
-            text: el.text,
-            font: el.font || "Comic Neue",
-            size: el.size,
-            autoSize: el.autoSize,
-            x: el.x,
-            y: el.y,
-            maxWidth: el.maxWidth,
-            maxHeight: el.maxHeight,
-            rotation: el.rotation,
-            visible: el.visible,
-            wordWrap: el.wordWrap,
-            backgroundColor: el.backgroundColor,
-            textColor: el.textColor,
-            fontWeight: el.fontWeight || "normal",
-            fontStyle: el.fontStyle || "normal",
-            boxShape: el.boxShape || "rectangular",
-            maskPolygon: el.maskPolygon,
-            regionId: el.regionId,
-          })),
-        })),
+        layers: layers.map((lData) => {
+          let layerCostVal = 0.0;
+          let layerHasCost = false;
+          const meta = lData.layer.metadataJson;
+          let qaMeta = undefined;
+
+          if (meta && typeof meta === "object") {
+            if (meta.cost && typeof meta.cost === "object" && typeof meta.cost.estimated_cost === "number") {
+              layerCostVal += meta.cost.estimated_cost;
+              layerHasCost = true;
+            }
+            if (meta.qa && typeof meta.qa === "object") {
+              qaMeta = { ...meta.qa };
+              if (meta.qa.cost && typeof meta.qa.cost === "object" && typeof meta.qa.cost.estimated_cost === "number") {
+                layerCostVal += meta.qa.cost.estimated_cost;
+                layerHasCost = true;
+                qaMeta.cost = {
+                  ...meta.qa.cost,
+                  display: formatCost(meta.qa.cost.estimated_cost),
+                };
+              }
+            }
+          }
+
+          return {
+            id: lData.layer.id,
+            type: lData.layer.type,
+            targetLanguage: lData.layer.targetLanguage,
+            visible: lData.layer.visible,
+            zOrder: lData.layer.zOrder,
+            metadataJson: lData.layer.metadataJson,
+            cost: {
+              estimated_cost: layerCostVal,
+              display: formatCost(layerCostVal),
+              currency: "USD",
+            },
+            qa: qaMeta,
+            elements: lData.elements.map((el) => ({
+              id: el.id,
+              text: el.text,
+              font: el.font || "Comic Neue",
+              size: el.size,
+              autoSize: el.autoSize,
+              x: el.x,
+              y: el.y,
+              maxWidth: el.maxWidth,
+              maxHeight: el.maxHeight,
+              rotation: el.rotation,
+              visible: el.visible,
+              wordWrap: el.wordWrap,
+              backgroundColor: el.backgroundColor,
+              textColor: el.textColor,
+              fontWeight: el.fontWeight || "normal",
+              fontStyle: el.fontStyle || "normal",
+              boxShape: el.boxShape || "rectangular",
+              maskPolygon: el.maskPolygon,
+              regionId: el.regionId,
+            })),
+          };
+        }),
       };
       zip.file("project.json", JSON.stringify(projectData, null, 2));
 
