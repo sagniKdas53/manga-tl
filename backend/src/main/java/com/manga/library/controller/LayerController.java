@@ -34,7 +34,8 @@ public class LayerController {
       @PathVariable UUID id, @RequestBody LayerElementDto dto, @AuthenticationPrincipal User user) {
 
     Objects.requireNonNull(id, "id cannot be null");
-    log.info("Updating LayerElement {} by user {}", id, user.getEmail());
+    String userEmail = user != null ? user.getEmail() : "anonymous";
+    log.info("Updating LayerElement {} by user {}", id, userEmail);
 
     return layerElementRepository
         .findById(id)

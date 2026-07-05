@@ -182,4 +182,199 @@ describe("Dashboard Component", () => {
       });
     });
   });
+
+  it("cancels series modal without saving", () => {
+    render(
+      <Dashboard
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+
+    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    fireEvent.click(newBtn);
+
+    const cancelBtn = screen.getByRole("button", { name: /cancel/i });
+    fireEvent.click(cancelBtn);
+
+    expect(screen.queryByText("Create New Series")).not.toBeInTheDocument();
+  });
+
+  it("handles error when creating a series", async () => {
+    mockSafeFetch.mockRejectedValueOnce(new Error("Network Error"));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <Dashboard
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+
+    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    fireEvent.click(newBtn);
+
+    const titleInput = screen.getByPlaceholderText("e.g. My Hero Academia");
+    fireEvent.change(titleInput, { target: { value: "Bleach" } });
+
+    const submitBtn = screen.getByRole("button", { name: /create/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith("Error saving series:", expect.any(Error));
+    });
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("deletes a series successfully", async () => {
+    mockSafeFetch.mockResolvedValueOnce({ ok: true });
+
+    render(
+      <Dashboard
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+
+    const deleteBtn = screen.getAllByTitle("Delete Series")[0];
+    fireEvent.click(deleteBtn);
+
+    expect(screen.getByText("Delete Series", { selector: 'h3' })).toBeInTheDocument();
+
+    const confirmBtns = screen.getAllByRole("button", { name: "Delete Series" });
+    const confirmBtn = confirmBtns[confirmBtns.length - 1];
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/s1", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer token123` },
+      });
+      expect(mockSetSeriesList).toHaveBeenCalled();
+    });
+  });
+
+  it("shows alert when deleting series fails", async () => {
+    mockSafeFetch.mockResolvedValueOnce({ ok: false });
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+
+    render(
+      <Dashboard
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+
+    const deleteBtn = screen.getAllByTitle("Delete Series")[0];
+    fireEvent.click(deleteBtn);
+
+    const confirmBtns = screen.getAllByRole("button", { name: "Delete Series" });
+    const confirmBtn = confirmBtns[confirmBtns.length - 1];
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith("Failed to delete series");
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  it("handles error when deleting a series", async () => {
+    mockSafeFetch.mockRejectedValueOnce(new Error("Network Error"));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <Dashboard
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+
+    const deleteBtn = screen.getAllByTitle("Delete Series")[0];
+    fireEvent.click(deleteBtn);
+
+    const confirmBtns = screen.getAllByRole("button", { name: "Delete Series" });
+    const confirmBtn = confirmBtns[confirmBtns.length - 1];
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith("Error deleting series:", expect.any(Error));
+    });
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("creates a new series with cover url, language, and reading direction changed", async () => {
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          id: "s4",
+          title: "New Manga",
+          readingDirection: "ltr",
+          sourceLanguage: "ko",
+          targetLanguage: "zh-TW",
+        }),
+    });
+
+    render(
+      <Dashboard
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+
+    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    fireEvent.click(newBtn);
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. My Hero Academia"), { target: { value: "New Manga" } });
+    fireEvent.change(screen.getByPlaceholderText("Leave empty for default cover"), { target: { value: "http://example.com/cover.jpg" } });
+
+    // Change selects
+    const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
+    const sourceSelect = selects[0];
+    fireEvent.change(sourceSelect, { target: { value: "ko" } });
+
+    const targetSelect = selects[1];
+    fireEvent.change(targetSelect, { target: { value: "zh-TW" } });
+
+    const directionSelect = selects[2];
+    fireEvent.change(directionSelect, { target: { value: "ltr" } });
+
+    const submitBtn = screen.getByRole("button", { name: /create/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer token123`,
+        },
+        body: JSON.stringify({
+          title: "New Manga",
+          originalLanguage: "ko",
+          sourceLanguage: "ko",
+          targetLanguage: "zh-TW",
+          readingDirection: "ltr",
+          coverImageUrl: "http://example.com/cover.jpg",
+        }),
+      });
+      expect(mockSetSeriesList).toHaveBeenCalled();
+    });
+  });
 });
+

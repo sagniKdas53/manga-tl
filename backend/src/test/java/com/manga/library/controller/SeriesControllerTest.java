@@ -163,6 +163,31 @@ public class SeriesControllerTest {
   }
 
   @Test
+  public void testListChapters_Success() throws Exception {
+    UUID seriesId = UUID.randomUUID();
+    when(seriesRepository.existsById(seriesId)).thenReturn(true);
+    when(chapterRepository.findBySeriesId(seriesId))
+        .thenReturn(java.util.Collections.emptyList());
+
+    mockMvc
+        .perform(get("/api/series/" + seriesId + "/chapters"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testGetChapter_Success() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    Series series = Series.builder().id(UUID.randomUUID()).build();
+    com.manga.library.model.Chapter chapter =
+        com.manga.library.model.Chapter.builder().id(chapterId).series(series).build();
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+
+    mockMvc
+        .perform(get("/api/series/chapters/" + chapterId))
+        .andExpect(status().isOk());
+  }
+
+  @Test
   public void testDeleteChapter_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     com.manga.library.model.Chapter chapter =
@@ -178,5 +203,83 @@ public class SeriesControllerTest {
         .andExpect(status().isOk());
 
     verify(chapterRepository, times(1)).delete(chapter);
+  }
+
+  @Test
+  public void testImportChapter_Success() throws Exception {
+    UUID seriesId = UUID.randomUUID();
+    Series series = Series.builder().id(seriesId).title("Test Series").build();
+    com.manga.library.model.Chapter chapter =
+        com.manga.library.model.Chapter.builder()
+            .id(UUID.randomUUID())
+            .chapterNumber(1.0)
+            .title("Ch 1")
+            .build();
+
+    when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
+    when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
+
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos);
+    zos.putNextEntry(new java.util.zip.ZipEntry("page1.png"));
+    zos.write("dummy image content".getBytes());
+    zos.closeEntry();
+    zos.finish();
+
+    org.springframework.mock.web.MockMultipartFile file = new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.zip", "application/zip", baos.toByteArray());
+
+    when(pageService.getFileExtension(anyString())).thenReturn(".png");
+    
+    com.manga.library.model.Image image = com.manga.library.model.Image.builder().id(UUID.randomUUID()).build();
+    com.manga.library.model.Page page = com.manga.library.model.Page.builder().id(UUID.randomUUID()).image(image).build();
+    when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any())).thenReturn(page);
+    
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/series/" + seriesId + "/chapters/import")
+                .file(file)
+                .param("chapterNumber", "1.0")
+                .param("title", "Ch 1"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testExportChapter_Success() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    com.manga.library.model.Chapter chapter =
+        com.manga.library.model.Chapter.builder()
+            .id(chapterId)
+            .chapterNumber(1.0)
+            .title("Ch 1")
+            .build();
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    
+    com.manga.library.model.Image img = com.manga.library.model.Image.builder()
+        .id(UUID.randomUUID())
+        .filename("page1.png")
+        .storagePath("orig/page1.png")
+        .build();
+    com.manga.library.model.Page page = com.manga.library.model.Page.builder()
+        .id(UUID.randomUUID())
+        .pageNumber(1)
+        .image(img)
+        .build();
+        
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId)).thenReturn(java.util.List.of(page));
+    when(minioService.downloadFile(anyString())).thenReturn(new java.io.ByteArrayInputStream("dummy".getBytes()));
+
+    com.manga.library.model.Layer activeLayer = com.manga.library.model.Layer.builder()
+        .id(UUID.randomUUID())
+        .type("translation")
+        .visible(true)
+        .build();
+    when(layerRepository.findByImageId(any())).thenReturn(java.util.List.of(activeLayer));
+    when(layerElementRepository.findByLayerId(any())).thenReturn(java.util.Collections.emptyList());
+
+    mockMvc
+        .perform(get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
+        .andExpect(status().isOk());
   }
 }

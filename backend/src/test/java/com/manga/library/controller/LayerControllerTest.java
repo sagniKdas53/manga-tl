@@ -84,4 +84,64 @@ public class LayerControllerTest {
                 .content("{\"type\": \"translation\"}"))
         .andExpect(status().isOk());
   }
+
+  @Test
+  public void testUpdateLayerElement_Success() throws Exception {
+    UUID elementId = UUID.randomUUID();
+    com.manga.library.model.LayerElement element = com.manga.library.model.LayerElement.builder().id(elementId).text("old text").build();
+    when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
+    when(layerElementRepository.save(any())).thenReturn(element);
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/layer-elements/" + elementId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\": \"new text\"}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testUpdateLayer_Success() throws Exception {
+    UUID layerId = UUID.randomUUID();
+    Layer layer = Layer.builder().id(layerId).zOrder(1).visible(true).build();
+    when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
+    when(layerRepository.save(any(Layer.class))).thenReturn(layer);
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/layers/" + layerId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"zOrder\": 2, \"visible\": false}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testCreateLayerElement_Success() throws Exception {
+    UUID layerId = UUID.randomUUID();
+    Layer layer = Layer.builder().id(layerId).build();
+    when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
+
+    com.manga.library.model.LayerElement element = com.manga.library.model.LayerElement.builder().id(UUID.randomUUID()).layer(layer).build();
+    when(layerElementRepository.save(any())).thenReturn(element);
+
+    mockMvc
+        .perform(
+            post("/api/layers/" + layerId + "/elements")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\": \"hello\"}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testDeleteLayerElement_Success() throws Exception {
+    UUID elementId = UUID.randomUUID();
+    com.manga.library.model.LayerElement element = com.manga.library.model.LayerElement.builder().id(elementId).build();
+    when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
+
+    mockMvc
+        .perform(delete("/api/layer-elements/" + elementId))
+        .andExpect(status().isOk());
+
+    verify(layerElementRepository, times(1)).delete(element);
+  }
 }

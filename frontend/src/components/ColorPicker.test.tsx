@@ -108,6 +108,11 @@ describe("ColorPicker", () => {
     // Trigger mousedown to simulate clicking middle of SV square (50, 50)
     fireEvent.mouseDown(svPicker, { clientX: 50, clientY: 50 });
     expect(onChange).toHaveBeenCalled();
+    
+    fireEvent.mouseMove(window, { clientX: 80, clientY: 20 });
+    expect(onChange).toHaveBeenCalled();
+    
+    fireEvent.mouseUp(window);
 
     // Mock getBoundingClientRect for Hue slider
     const hueSlider = screen.getByTestId("hue-slider");
@@ -124,5 +129,93 @@ describe("ColorPicker", () => {
     // Trigger mousedown to simulate clicking middle of Hue slider (50)
     fireEvent.mouseDown(hueSlider, { clientX: 50 });
     expect(onChange).toHaveBeenCalled();
+    
+    fireEvent.mouseMove(window, { clientX: 75 });
+    expect(onChange).toHaveBeenCalled();
+    
+    fireEvent.mouseUp(window);
+  });
+
+  it("allows touch dragging on the SV square and hue slider", () => {
+    const onChange = vi.fn();
+    const onLaunchEyeDropper = vi.fn();
+    render(
+      <ColorPicker
+        label="Text Color"
+        value="#ff0000"
+        onChange={onChange}
+        onLaunchEyeDropper={onLaunchEyeDropper}
+      />,
+    );
+
+    // Open popover
+    const toggle = screen.getByTitle("Open Color Wheel / Palette");
+    fireEvent.click(toggle);
+
+    const svPicker = screen.getByTestId("sv-picker");
+    svPicker.getBoundingClientRect = () =>
+      ({ width: 100, height: 100, left: 0, top: 0, right: 100, bottom: 100 }) as DOMRect;
+
+    fireEvent.touchStart(svPicker, { touches: [{ clientX: 50, clientY: 50 }] });
+    expect(onChange).toHaveBeenCalled();
+
+    fireEvent.touchMove(window, { touches: [{ clientX: 80, clientY: 20 }] });
+    expect(onChange).toHaveBeenCalled();
+
+    fireEvent.touchEnd(window);
+
+    const hueSlider = screen.getByTestId("hue-slider");
+    hueSlider.getBoundingClientRect = () =>
+      ({ width: 100, height: 12, left: 0, top: 0, right: 100, bottom: 12 }) as DOMRect;
+
+    fireEvent.touchStart(hueSlider, { touches: [{ clientX: 50 }] });
+    expect(onChange).toHaveBeenCalled();
+
+    fireEvent.touchMove(window, { touches: [{ clientX: 75 }] });
+    expect(onChange).toHaveBeenCalled();
+
+    fireEvent.touchEnd(window);
+  });
+  
+  it("normalizes short hex and missing hash", () => {
+    const onChange = vi.fn();
+    render(
+      <ColorPicker
+        label="Text Color"
+        value="#f00"
+        onChange={onChange}
+        onLaunchEyeDropper={vi.fn()}
+      />,
+    );
+    const input = screen.getByDisplayValue("#f00");
+    fireEvent.change(input, { target: { value: "111" } });
+    expect(onChange).toHaveBeenCalledWith("#111");
+    
+    fireEvent.change(input, { target: { value: "transparent" } });
+    expect(onChange).toHaveBeenCalledWith("transparent");
+    
+    fireEvent.change(input, { target: { value: "" } });
+    expect(onChange).toHaveBeenCalledWith(null);
+  });
+  
+  it("allows transparent presets if enabled", () => {
+    const onChange = vi.fn();
+    render(
+      <ColorPicker
+        label="Text Color"
+        value="transparent"
+        onChange={onChange}
+        onLaunchEyeDropper={vi.fn()}
+        allowTransparent={true}
+      />,
+    );
+    // Open popover
+    const toggle = screen.getByTitle("Open Color Wheel / Palette");
+    fireEvent.click(toggle);
+
+    // Click transparent preset
+    const transPreset = screen.getByTitle("Transparent");
+    fireEvent.click(transPreset);
+    expect(onChange).toHaveBeenCalledWith(null);
   });
 });
