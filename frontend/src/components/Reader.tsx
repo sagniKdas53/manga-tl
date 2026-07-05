@@ -281,6 +281,15 @@ export const Reader: React.FC<ReaderProps> = ({
   const { notifications } = useNotifications();
   const { showToast, showSuccess, showError } = useToast();
 
+  const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
+  const autoSaveTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(autoSaveTimersRef.current).forEach(clearTimeout);
+    };
+  }, []);
+
   // Listen for new notifications and refresh page if processing completed
   const latestNotificationId =
     notifications.length > 0 ? notifications[0].id : null;
@@ -693,6 +702,11 @@ export const Reader: React.FC<ReaderProps> = ({
   // Declared before handleUndo/handleRedo so the callbacks can reference it
   const handleSaveElementChanges = useCallback(
     async (element: LayerElement, showAlert: boolean = true) => {
+      const id = element.id;
+      if (autoSaveTimersRef.current[id]) {
+        clearTimeout(autoSaveTimersRef.current[id]);
+        delete autoSaveTimersRef.current[id];
+      }
       await saveElementChanges(
         element,
         showAlert,
@@ -700,9 +714,76 @@ export const Reader: React.FC<ReaderProps> = ({
         showToast,
         showError,
       );
+      setDirtyElements((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     },
     [user.token, showToast, showError],
   );
+
+  const triggerAutoSave = useCallback((element: LayerElement) => {
+    const id = element.id;
+    setDirtyElements((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+
+    if (autoSaveTimersRef.current[id]) {
+      clearTimeout(autoSaveTimersRef.current[id]);
+    }
+
+    autoSaveTimersRef.current[id] = setTimeout(async () => {
+      try {
+        await saveElementChanges(element, false, user.token, showToast, showError);
+        setDirtyElements((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      } catch (err) {
+        console.error("Auto-save failed for element:", id, err);
+      } finally {
+        delete autoSaveTimersRef.current[id];
+      }
+    }, 1500);
+  }, [user.token, showToast, showError]);
+
+  const saveAllPendingChanges = useCallback(async (): Promise<void> => {
+    const pendingIds = Object.keys(autoSaveTimersRef.current);
+    if (pendingIds.length === 0) return;
+
+    const elementsToSave: LayerElement[] = [];
+    layers.forEach((l) => {
+      l.elements.forEach((el) => {
+        if (pendingIds.includes(el.id)) {
+          elementsToSave.push(el);
+        }
+      });
+    });
+
+    const promises = elementsToSave.map(async (el) => {
+      const id = el.id;
+      if (autoSaveTimersRef.current[id]) {
+        clearTimeout(autoSaveTimersRef.current[id]);
+        delete autoSaveTimersRef.current[id];
+      }
+      try {
+        await saveElementChanges(el, false, user.token, showToast, showError);
+      } catch (err) {
+        console.error("Failed to save pending changes for element", id, err);
+        throw err;
+      }
+    });
+
+    await Promise.all(promises);
+    setDirtyElements(new Set());
+  }, [layers, user.token, showToast, showError]);
 
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0) return;
@@ -887,16 +968,16 @@ export const Reader: React.FC<ReaderProps> = ({
       // Push previous state to undo stack
       pushToHistoryStack(prev as LayerElement);
 
-      const updated = { ...prev, ...updates };
+      const updated = { ...prev, ...updates } as LayerElement;
 
       setLayers((prevLayers) =>
         prevLayers.map((l) => {
-          if (l.layer.id === (updated as LayerElement).layerId) {
+          if (l.layer.id === updated.layerId) {
             return {
               ...l,
               elements: l.elements.map((el) =>
-                el.id === (updated as LayerElement).id
-                  ? (updated as LayerElement)
+                el.id === updated.id
+                  ? updated
                   : el,
               ),
             };
@@ -904,6 +985,8 @@ export const Reader: React.FC<ReaderProps> = ({
           return l;
         }),
       );
+
+      triggerAutoSave(updated);
 
       return updated as SelectedItemType;
     });
@@ -1816,133 +1899,162 @@ export const Reader: React.FC<ReaderProps> = ({
   // --- EXPORT HANDLERS ---
   const handleExportPng = useCallback(() => {
     if (!selectedPage || !imgRef.current) return;
-    const img = imgRef.current;
-    const W = imageDims.w;
-    const H = imageDims.h;
 
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const doExport = () => {
+      const img = imgRef.current!;
+      const W = imageDims.w;
+      const H = imageDims.h;
 
-    // Draw the base page image
-    ctx.drawImage(img, 0, 0, W, H);
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-    const hasTranslation = layers.some((ld) => ld.layer.type === "translation");
-    // Draw visible layer elements
-    sortedLayers.forEach((lData) => {
-      const isOcrHidden =
-        cleanScanlationView &&
-        hasTranslation &&
-        lData.layer.type === "ocr" &&
-        !manuallyShownOcrLayers.has(lData.layer.id);
-      if (!lData.layer.visible || isOcrHidden) return;
-      lData.elements.forEach((el) => {
-        if (!el.visible) return;
-        const width = el.maxWidth || 100;
-        const height = el.maxHeight || 100;
+      // Draw the base page image
+      ctx.drawImage(img, 0, 0, W, H);
 
-        ctx.save();
-        if (!el.maskPolygon) {
-          // Apply rotation around element center only if not absolute maskPolygon
-          const cx = el.x + width / 2;
-          const cy = el.y + height / 2;
-          ctx.translate(cx, cy);
-          ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
-          ctx.translate(-cx, -cy);
-        }
+      const hasTranslation = layers.some((ld) => ld.layer.type === "translation");
+      // Draw visible layer elements
+      sortedLayers.forEach((lData) => {
+        const isOcrHidden =
+          cleanScanlationView &&
+          hasTranslation &&
+          lData.layer.type === "ocr" &&
+          !manuallyShownOcrLayers.has(lData.layer.id);
+        if (!lData.layer.visible || isOcrHidden) return;
+        lData.elements.forEach((el) => {
+          if (!el.visible) return;
+          const width = el.maxWidth || 100;
+          const height = el.maxHeight || 100;
 
-        // Mask backdrop
-        if (el.maskPolygon) {
-          try {
-            const pts = JSON.parse(el.maskPolygon);
-            if (Array.isArray(pts) && pts.length > 0) {
-              ctx.beginPath();
-              const firstPt = pts.at(0);
-              if (Array.isArray(firstPt)) {
-                ctx.moveTo(firstPt.at(0) ?? 0, firstPt.at(1) ?? 0);
-                for (let i = 1; i < pts.length; i++) {
-                  const pt = pts.at(i);
-                  if (Array.isArray(pt)) {
-                    ctx.lineTo(pt.at(0) ?? 0, pt.at(1) ?? 0);
+          ctx.save();
+          if (!el.maskPolygon) {
+            // Apply rotation around element center only if not absolute maskPolygon
+            const cx = el.x + width / 2;
+            const cy = el.y + height / 2;
+            ctx.translate(cx, cy);
+            ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
+            ctx.translate(-cx, -cy);
+          }
+
+          // Mask backdrop
+          if (el.maskPolygon) {
+            try {
+              const pts = JSON.parse(el.maskPolygon);
+              if (Array.isArray(pts) && pts.length > 0) {
+                ctx.beginPath();
+                const firstPt = pts.at(0);
+                if (Array.isArray(firstPt)) {
+                  ctx.moveTo(firstPt.at(0) ?? 0, firstPt.at(1) ?? 0);
+                  for (let i = 1; i < pts.length; i++) {
+                    const pt = pts.at(i);
+                    if (Array.isArray(pt)) {
+                      ctx.lineTo(pt.at(0) ?? 0, pt.at(1) ?? 0);
+                    }
                   }
                 }
+                ctx.closePath();
+                ctx.fillStyle = el.backgroundColor || "#ffffff";
+                ctx.fill();
               }
-              ctx.closePath();
-              ctx.fillStyle = el.backgroundColor || "#ffffff";
-              ctx.fill();
+            } catch (e) {
+              console.error("Failed to draw canvas maskPolygon", e);
             }
-          } catch (e) {
-            console.error("Failed to draw canvas maskPolygon", e);
-          }
-        } else {
-          ctx.fillStyle = el.backgroundColor || "#ffffff";
-          if (el.boxShape === "elliptical") {
-            ctx.beginPath();
-            ctx.ellipse(
-              el.x + width / 2,
-              el.y + height / 2,
-              width / 2,
-              height / 2,
-              0,
-              0,
-              2 * Math.PI,
-            );
-            ctx.fill();
           } else {
-            ctx.fillRect(el.x, el.y, width, height);
+            ctx.fillStyle = el.backgroundColor || "#ffffff";
+            if (el.boxShape === "elliptical") {
+              ctx.beginPath();
+              ctx.ellipse(
+                el.x + width / 2,
+                el.y + height / 2,
+                width / 2,
+                height / 2,
+                0,
+                0,
+                2 * Math.PI,
+              );
+              ctx.fill();
+            } else {
+              ctx.fillRect(el.x, el.y, width, height);
+            }
           }
-        }
 
-        // Draw text
-        let displayText = el.text || "";
-        if (el.boxShape === "elliptical") {
-          displayText = displayText.toUpperCase();
-        }
+          // Draw text
+          let displayText = el.text || "";
+          if (el.boxShape === "elliptical") {
+            displayText = displayText.toUpperCase();
+          }
 
-        const fit = fitTextInBox(
-          displayText,
-          width - 8,
-          height - 8,
-          el.font || "Comic Neue",
-          el.size || 16,
-          el.boxShape === "elliptical" ? "elliptical" : "rectangular",
-          el.x + 4,
-          el.y + 4,
-          el.maskPolygon,
-          el.fontWeight || "bold",
-          el.fontStyle || "normal",
-        );
-        const fSize = fit.fontSize;
-        ctx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
-        ctx.fillStyle = el.textColor || "#000000";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        const lineH = fSize * 1.2;
-        const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
-        fit.lines.forEach((line, i) => {
-          const lineCenterX =
-            fit.lineCenters && fit.lineCenters.at(i) !== undefined
-              ? (fit.lineCenters.at(i) ?? el.x + width / 2)
-              : el.x + width / 2;
-          ctx.fillText(line, lineCenterX, startY + i * lineH);
+          const fit = fitTextInBox(
+            displayText,
+            width - 8,
+            height - 8,
+            el.font || "Comic Neue",
+            el.size || 16,
+            el.boxShape === "elliptical" ? "elliptical" : "rectangular",
+            el.x + 4,
+            el.y + 4,
+            el.maskPolygon,
+            el.fontWeight || "bold",
+            el.fontStyle || "normal",
+          );
+          const fSize = fit.fontSize;
+          ctx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
+          ctx.fillStyle = el.textColor || "#000000";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const lineH = fSize * 1.2;
+          const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
+          fit.lines.forEach((line, i) => {
+            const lineCenterX =
+              fit.lineCenters && fit.lineCenters.at(i) !== undefined
+                ? (fit.lineCenters.at(i) ?? el.x + width / 2)
+                : el.x + width / 2;
+            ctx.fillText(line, lineCenterX, startY + i * lineH);
+          });
+
+          ctx.restore();
         });
-
-        ctx.restore();
       });
-    });
 
-    // Trigger download
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `page-${selectedPage.pageNumber}-export.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }, "image/png");
+      // Trigger download
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `page-${selectedPage.pageNumber}-export.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, "image/png");
+    };
+
+    if (dirtyElements.size > 0) {
+      setConfirmModal({
+        isOpen: true,
+        title: "Unsaved Changes",
+        message: "You have unsaved edits. Would you like to save them before exporting?",
+        confirmText: "Save & Export",
+        cancelText: "Export Anyway",
+        isDangerous: false,
+        onConfirm: async () => {
+          closeConfirm();
+          try {
+            await saveAllPendingChanges();
+            doExport();
+          } catch (err) {
+            console.error("Failed to save changes before export:", err);
+          }
+        },
+        onCancel: () => {
+          closeConfirm();
+          doExport();
+        },
+      });
+    } else {
+      doExport();
+    }
   }, [
     selectedPage,
     imageDims,
@@ -1950,203 +2062,235 @@ export const Reader: React.FC<ReaderProps> = ({
     sortedLayers,
     cleanScanlationView,
     manuallyShownOcrLayers,
+    dirtyElements,
+    saveAllPendingChanges,
   ]);
 
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
-    const img = imgRef.current;
-    const W = imageDims.w;
-    const H = imageDims.h;
 
-    const zip = new JSZip();
+    const doExport = async () => {
+      const img = imgRef.current!;
+      const W = imageDims.w;
+      const H = imageDims.h;
 
-    // 1. original.png
-    const origCanvas = document.createElement("canvas");
-    origCanvas.width = W;
-    origCanvas.height = H;
-    const origCtx = origCanvas.getContext("2d")!;
-    origCtx.drawImage(img, 0, 0, W, H);
-    const origBlob = await new Promise<Blob>((res) =>
-      origCanvas.toBlob((b) => res(b!), "image/png"),
-    );
-    zip.file("original.png", origBlob);
+      const zip = new JSZip();
 
-    // 2. Render and save mask/translation image files for each layer
-    for (const lData of layers) {
-      const layerId = lData.layer.id;
+      // 1. original.png
+      const origCanvas = document.createElement("canvas");
+      origCanvas.width = W;
+      origCanvas.height = H;
+      const origCtx = origCanvas.getContext("2d")!;
+      origCtx.drawImage(img, 0, 0, W, H);
+      const origBlob = await new Promise<Blob>((res) =>
+        origCanvas.toBlob((b) => res(b!), "image/png"),
+      );
+      zip.file("original.png", origBlob);
 
-      // Draw mask for this specific layer
-      const maskCanvas = document.createElement("canvas");
-      maskCanvas.width = W;
-      maskCanvas.height = H;
-      const maskCtx = maskCanvas.getContext("2d")!;
+      // 2. Render and save mask/translation image files for each layer
+      for (const lData of layers) {
+        const layerId = lData.layer.id;
 
-      lData.elements.forEach((el) => {
-        if (!el.visible) return;
-        const width = el.maxWidth || 100;
-        const height = el.maxHeight || 100;
+        // Draw mask for this specific layer
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = W;
+        maskCanvas.height = H;
+        const maskCtx = maskCanvas.getContext("2d")!;
 
-        if (el.maskPolygon) {
-          try {
-            const pts = JSON.parse(el.maskPolygon);
-            if (Array.isArray(pts) && pts.length > 0) {
-              maskCtx.save();
-              maskCtx.beginPath();
-              const firstPt = pts.at(0);
-              if (Array.isArray(firstPt)) {
-                maskCtx.moveTo(firstPt.at(0) ?? 0, firstPt.at(1) ?? 0);
-                for (let j = 1; j < pts.length; j++) {
-                  const pt = pts.at(j);
-                  if (Array.isArray(pt)) {
-                    maskCtx.lineTo(pt.at(0) ?? 0, pt.at(1) ?? 0);
+        lData.elements.forEach((el) => {
+          if (!el.visible) return;
+          const width = el.maxWidth || 100;
+          const height = el.maxHeight || 100;
+
+          if (el.maskPolygon) {
+            try {
+              const pts = JSON.parse(el.maskPolygon);
+              if (Array.isArray(pts) && pts.length > 0) {
+                maskCtx.save();
+                maskCtx.beginPath();
+                const firstPt = pts.at(0);
+                if (Array.isArray(firstPt)) {
+                  maskCtx.moveTo(firstPt.at(0) ?? 0, firstPt.at(1) ?? 0);
+                  for (let j = 1; j < pts.length; j++) {
+                    const pt = pts.at(j);
+                    if (Array.isArray(pt)) {
+                      maskCtx.lineTo(pt.at(0) ?? 0, pt.at(1) ?? 0);
+                    }
                   }
                 }
+                maskCtx.closePath();
+                maskCtx.fillStyle = el.backgroundColor || "#ffffff";
+                maskCtx.fill();
+                maskCtx.restore();
               }
-              maskCtx.closePath();
-              maskCtx.fillStyle = el.backgroundColor || "#ffffff";
-              maskCtx.fill();
-              maskCtx.restore();
+            } catch (e) {
+              console.error("Failed to draw canvas maskPolygon in zip export", e);
             }
-          } catch (e) {
-            console.error("Failed to draw canvas maskPolygon in zip export", e);
-          }
-        } else {
-          maskCtx.save();
-          const cx = el.x + width / 2;
-          const cy = el.y + height / 2;
-          maskCtx.translate(cx, cy);
-          maskCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
-          maskCtx.translate(-cx, -cy);
-          maskCtx.fillStyle = el.backgroundColor || "#ffffff";
-          if (el.boxShape === "elliptical") {
-            maskCtx.beginPath();
-            maskCtx.ellipse(
-              el.x + width / 2,
-              el.y + height / 2,
-              width / 2,
-              height / 2,
-              0,
-              0,
-              2 * Math.PI,
-            );
-            maskCtx.fill();
           } else {
-            maskCtx.fillRect(el.x, el.y, width, height);
+            maskCtx.save();
+            const cx = el.x + width / 2;
+            const cy = el.y + height / 2;
+            maskCtx.translate(cx, cy);
+            maskCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
+            maskCtx.translate(-cx, -cy);
+            maskCtx.fillStyle = el.backgroundColor || "#ffffff";
+            if (el.boxShape === "elliptical") {
+              maskCtx.beginPath();
+              maskCtx.ellipse(
+                el.x + width / 2,
+                el.y + height / 2,
+                width / 2,
+                height / 2,
+                0,
+                0,
+                2 * Math.PI,
+              );
+              maskCtx.fill();
+            } else {
+              maskCtx.fillRect(el.x, el.y, width, height);
+            }
+            maskCtx.restore();
           }
-          maskCtx.restore();
-        }
-      });
-
-      const maskBlob = await new Promise<Blob>((res) =>
-        maskCanvas.toBlob((b) => res(b!), "image/png"),
-      );
-      zip.file(`layer-${layerId}-mask.png`, maskBlob);
-
-      // Draw translation/text for this specific layer
-      const textCanvas = document.createElement("canvas");
-      textCanvas.width = W;
-      textCanvas.height = H;
-      const textCtx = textCanvas.getContext("2d")!;
-
-      lData.elements.forEach((el) => {
-        if (!el.visible) return;
-        const width = el.maxWidth || 100;
-        const height = el.maxHeight || 100;
-        let displayText = el.text || "";
-        if (el.boxShape === "elliptical") {
-          displayText = displayText.toUpperCase();
-        }
-
-        const fit = fitTextInBox(
-          displayText,
-          width - 8,
-          height - 8,
-          el.font || "Comic Neue",
-          el.size || 16,
-          el.boxShape === "elliptical" ? "elliptical" : "rectangular",
-          el.x + 4,
-          el.y + 4,
-          el.maskPolygon,
-          el.fontWeight || "bold",
-          el.fontStyle || "normal",
-        );
-        const fSize = fit.fontSize;
-        textCtx.save();
-        if (!el.maskPolygon) {
-          const cx = el.x + width / 2;
-          const cy = el.y + height / 2;
-          textCtx.translate(cx, cy);
-          textCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
-          textCtx.translate(-cx, -cy);
-        }
-        textCtx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
-        textCtx.fillStyle = el.textColor || "#000000";
-        textCtx.textAlign = "center";
-        textCtx.textBaseline = "middle";
-        const lineH = fSize * 1.2;
-        const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
-        fit.lines.forEach((line, j) => {
-          const lineCenterX =
-            fit.lineCenters && fit.lineCenters.at(j) !== undefined
-              ? (fit.lineCenters.at(j) ?? el.x + width / 2)
-              : el.x + width / 2;
-          textCtx.fillText(line, lineCenterX, startY + j * lineH);
         });
-        textCtx.restore();
-      });
 
-      const textBlob = await new Promise<Blob>((res) =>
-        textCanvas.toBlob((b) => res(b!), "image/png"),
-      );
-      zip.file(`layer-${layerId}-translation.png`, textBlob);
-    }
+        const maskBlob = await new Promise<Blob>((res) =>
+          maskCanvas.toBlob((b) => res(b!), "image/png"),
+        );
+        zip.file(`layer-${layerId}-mask.png`, maskBlob);
 
-    // 4. project.json
-    const projectData = {
-      pageNumber: selectedPage.pageNumber,
-      imageId: selectedPage.imageId,
-      dimensions: { width: W, height: H },
-      exportedAt: new Date().toISOString(),
-      layers: layers.map((lData) => ({
-        id: lData.layer.id,
-        type: lData.layer.type,
-        targetLanguage: lData.layer.targetLanguage,
-        visible: lData.layer.visible,
-        zOrder: lData.layer.zOrder,
-        elements: lData.elements.map((el) => ({
-          id: el.id,
-          text: el.text,
-          font: el.font || "Comic Neue",
-          size: el.size,
-          autoSize: el.autoSize,
-          x: el.x,
-          y: el.y,
-          maxWidth: el.maxWidth,
-          maxHeight: el.maxHeight,
-          rotation: el.rotation,
-          visible: el.visible,
-          wordWrap: el.wordWrap,
-          backgroundColor: el.backgroundColor,
-          textColor: el.textColor,
-          fontWeight: el.fontWeight || "normal",
-          fontStyle: el.fontStyle || "normal",
-          boxShape: el.boxShape || "rectangular",
-          maskPolygon: el.maskPolygon,
-          regionId: el.regionId,
+        // Draw translation/text for this specific layer
+        const textCanvas = document.createElement("canvas");
+        textCanvas.width = W;
+        textCanvas.height = H;
+        const textCtx = textCanvas.getContext("2d")!;
+
+        lData.elements.forEach((el) => {
+          if (!el.visible) return;
+          const width = el.maxWidth || 100;
+          const height = el.maxHeight || 100;
+          let displayText = el.text || "";
+          if (el.boxShape === "elliptical") {
+            displayText = displayText.toUpperCase();
+          }
+
+          const fit = fitTextInBox(
+            displayText,
+            width - 8,
+            height - 8,
+            el.font || "Comic Neue",
+            el.size || 16,
+            el.boxShape === "elliptical" ? "elliptical" : "rectangular",
+            el.x + 4,
+            el.y + 4,
+            el.maskPolygon,
+            el.fontWeight || "bold",
+            el.fontStyle || "normal",
+          );
+          const fSize = fit.fontSize;
+          textCtx.save();
+          if (!el.maskPolygon) {
+            const cx = el.x + width / 2;
+            const cy = el.y + height / 2;
+            textCtx.translate(cx, cy);
+            textCtx.rotate(((el.rotation || 0) * Math.PI) / 180);
+            textCtx.translate(-cx, -cy);
+          }
+          textCtx.font = `${el.fontWeight || "bold"} ${el.fontStyle === "italic" ? "italic " : ""}${fSize}px "${el.font || "Comic Neue"}", sans-serif`;
+          textCtx.fillStyle = el.textColor || "#000000";
+          textCtx.textAlign = "center";
+          textCtx.textBaseline = "middle";
+          const lineH = fSize * 1.2;
+          const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
+          fit.lines.forEach((line, j) => {
+            const lineCenterX =
+              fit.lineCenters && fit.lineCenters.at(j) !== undefined
+                ? (fit.lineCenters.at(j) ?? el.x + width / 2)
+                : el.x + width / 2;
+            textCtx.fillText(line, lineCenterX, startY + j * lineH);
+          });
+          textCtx.restore();
+        });
+
+        const textBlob = await new Promise<Blob>((res) =>
+          textCanvas.toBlob((b) => res(b!), "image/png"),
+        );
+        zip.file(`layer-${layerId}-translation.png`, textBlob);
+      }
+
+      // 4. project.json
+      const projectData = {
+        pageNumber: selectedPage.pageNumber,
+        imageId: selectedPage.imageId,
+        dimensions: { width: W, height: H },
+        exportedAt: new Date().toISOString(),
+        layers: layers.map((lData) => ({
+          id: lData.layer.id,
+          type: lData.layer.type,
+          targetLanguage: lData.layer.targetLanguage,
+          visible: lData.layer.visible,
+          zOrder: lData.layer.zOrder,
+          metadataJson: lData.layer.metadataJson,
+          elements: lData.elements.map((el) => ({
+            id: el.id,
+            text: el.text,
+            font: el.font || "Comic Neue",
+            size: el.size,
+            autoSize: el.autoSize,
+            x: el.x,
+            y: el.y,
+            maxWidth: el.maxWidth,
+            maxHeight: el.maxHeight,
+            rotation: el.rotation,
+            visible: el.visible,
+            wordWrap: el.wordWrap,
+            backgroundColor: el.backgroundColor,
+            textColor: el.textColor,
+            fontWeight: el.fontWeight || "normal",
+            fontStyle: el.fontStyle || "normal",
+            boxShape: el.boxShape || "rectangular",
+            maskPolygon: el.maskPolygon,
+            regionId: el.regionId,
+          })),
         })),
-      })),
-    };
-    zip.file("project.json", JSON.stringify(projectData, null, 2));
+      };
+      zip.file("project.json", JSON.stringify(projectData, null, 2));
 
-    // Generate and download zip
-    const zipBlob = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(zipBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `page-${selectedPage.pageNumber}-layers.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [selectedPage, imageDims, layers]);
+      // Generate and download zip
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `page-${selectedPage.pageNumber}-layers.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    if (dirtyElements.size > 0) {
+      setConfirmModal({
+        isOpen: true,
+        title: "Unsaved Changes",
+        message: "You have unsaved edits. Would you like to save them before exporting?",
+        confirmText: "Save & Export",
+        cancelText: "Export Anyway",
+        isDangerous: false,
+        onConfirm: async () => {
+          closeConfirm();
+          try {
+            await saveAllPendingChanges();
+            await doExport();
+          } catch (err) {
+            console.error("Failed to save changes before export:", err);
+          }
+        },
+        onCancel: async () => {
+          closeConfirm();
+          await doExport();
+        },
+      });
+    } else {
+      await doExport();
+    }
+  }, [selectedPage, imageDims, layers, dirtyElements, saveAllPendingChanges]);
 
   // --- STABLE NAVIGATOR CALLBACK ---
   const navigateToPage = useCallback(
@@ -5209,10 +5353,28 @@ export const Reader: React.FC<ReaderProps> = ({
                 <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
                   <button
                     className="btn btn-primary"
-                    style={{ flex: 1, padding: "8px" }}
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      position: "relative",
+                      border: dirtyElements.has(selectedItem.id) ? "1px solid var(--warning, #eab308)" : undefined,
+                    }}
                     onClick={() => handleSaveElementChanges(selectedItem)}
                   >
                     Save
+                    {dirtyElements.has(selectedItem.id) && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "6px",
+                          right: "6px",
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          background: "var(--error, #ef4444)",
+                        }}
+                      />
+                    )}
                   </button>
                   <button
                     className="btn btn-secondary"

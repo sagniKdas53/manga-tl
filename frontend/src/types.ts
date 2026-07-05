@@ -122,6 +122,9 @@ export interface LayerElement {
   fontStyle?: string | null;
   boxShape?: string | null;
   maskPolygon?: string | null;
+  layerType?: string | null;
+  layerVisible?: boolean | null;
+  layerMetadata?: Record<string, unknown> | null;
 }
 
 export interface LayerEditHistory {
