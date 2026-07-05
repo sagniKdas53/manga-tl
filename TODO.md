@@ -4,19 +4,6 @@
 
 ## 🔴 Active Bugs
 
-### Cost calculation seems wrong
-
-- [ ] The cost stored in costs.json seems to be wrong, it should be saved as per million tokens and then calculated dynamically based on the job
-- [ ] Also we are not printing the estimayed cost after every job that uses a cloud model
-
-### Export Quality Discrepancy (This also affects the VLM QA, I think)
-
-- [x] **Backend-rendered pages don't match frontend** — `RenderingService.py` uses Pillow/PIL, frontend uses HTML5 Canvas with CSS text. The two diverge significantly. Options:
-  - Use a headless browser (Playwright) in the worker for pixel-perfect rendering
-  - Or accept backend rendering as "draft" and add a frontend "export as seen" button that captures the canvas
-- [x] **Verify manual layer edits are included in export** — Export reads from DB, so only *saved* edits are included. Ensure the frontend auto-saves or warns before export.
-
----
 
 ## 🟡 High Priority Features
 
@@ -38,14 +25,9 @@
   - [ ] Add model selection fields to Add/Edit Series and Chapter dialogs
   - [ ] Show configured OCR type, models, and providers on Series/Chapter cards
 
-### QA Feedback Integration
-
-- [x] **Frontend: Red-outline bubbles that failed QA** — `QaResult` data exists in the DB (`qa_results` table with `region_index`, `issue_type`, `severity`). Surface this in the reader canvas by outlining failed OCR/TL regions with red margins.
-- [x] **Backend: Embed QA summary in layer metadata** — Currently QA results are in a separate table. Consider denormalizing a summary (pass/fail count, critical issues) into the layer metadata JSON for faster frontend access.
 
 ### Export Improvements
 
-- [ ] **Move export button to Chapter view** — Currently only accessible inside the Reader (`ReaderToolbar.jsx`). Add export controls to `ChapterPage.jsx` so users can export without opening the reader.
 - [ ] **Add `meta-data.json` to chapter export ZIP** — Include: page order, layer counts, active layer per page, QA status, manual changes flag, OCR/TL models used, per-page and total cost.
 - [ ] **Full ePub export** — Extend `ChapterExportService.java` (which currently does ZIP only) to support ePub packaging.
 
@@ -110,6 +92,11 @@
 
 ### Bugs (Fixed)
 
+- [x] **Backend-rendered pages don't match frontend** — `RenderingService.py` uses Pillow/PIL, frontend uses HTML5 Canvas with CSS text. The two diverge significantly. Options:
+  - Use a headless browser (Playwright) in the worker for pixel-perfect rendering
+  - Or accept backend rendering as "draft" and add a frontend "export as seen" button that captures the canvas
+- [x] **Verify manual layer edits are included in export** — Export reads from DB, so only *saved* edits are included. Ensure the frontend auto-saves or warns before export.
+- [x] Cost calculation seems wrong — fixed costs.json per million tokens and printing estimated cost
 - [x] Bubble polygon detection and masking regressions after v9 — fixed, YOLO bubble masks successfully merged and propagated
 - [x] Bubble grouping issues after upgrading OCR — fixed, tunedVertical/horizontal proximity algorithm threshold
 - [x] Redo Page OCR was replacing old layer instead of creating new pass — fixed, preserves original
@@ -129,6 +116,9 @@
 
 ### Backend Features (Done)
 
+- [x] **Frontend: Red-outline bubbles that failed QA** — `QaResult` data exists in the DB (`qa_results` table with `region_index`, `issue_type`, `severity`). Surface this in the reader canvas by outlining failed OCR/TL regions with red margins.
+- [x] **Backend: Embed QA summary in layer metadata** — Currently QA results are in a separate table. Consider denormalizing a summary (pass/fail count, critical issues) into the layer metadata JSON for faster frontend access.
+- [x] **Move export button to Chapter view** — Currently only accessible inside the Reader (`ReaderToolbar.jsx`). Add export controls to `ChapterPage.jsx` so users can export without opening the reader.
 - [x] Async job queue with retry & exponential backoff
 - [x] Image deduplication via hashing
 - [x] Unified LLM provider integration (LiteLLM)
