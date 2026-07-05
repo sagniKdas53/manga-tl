@@ -64,4 +64,26 @@ public class SseServiceTest {
 
     verify(redisTemplate, never()).opsForList();
   }
+  @Test
+  public void testEmitNotificationForImage_UserFound() {
+    UUID imageId = UUID.randomUUID();
+    UUID userId = UUID.randomUUID();
+    when(redisTemplate.opsForValue()).thenReturn(valOps);
+    when(valOps.get("job:owner:image:" + imageId)).thenReturn(userId.toString());
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+
+    sseService.emitNotificationForImage(imageId, "type", "title", "msg");
+
+    verify(listOps, times(1)).rightPush(eq("notifications:user:" + userId), anyString());
+  }
+
+  @Test
+  public void testEmitNotification() {
+    UUID userId = UUID.randomUUID();
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+
+    sseService.emitNotificationToUser(userId, "type", "title", "msg", UUID.randomUUID());
+
+    verify(listOps, times(1)).rightPush(eq("notifications:user:" + userId), anyString());
+  }
 }

@@ -32,8 +32,8 @@ export default defineConfig({
         "src/components/Reader.tsx",
         "vitest.setup.ts",
         "**/*.test.{ts,tsx}",
-        "dist/**"
-      ]
-    }
+        "dist/**",
+      ],
+    },
   },
 });

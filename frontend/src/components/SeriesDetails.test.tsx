@@ -201,4 +201,195 @@ describe("SeriesDetails Component", () => {
       expect(mockSetSelectedSeries).toHaveBeenCalled();
     });
   });
+
+  it("handles deleting a series", async () => {
+    mockSafeFetch.mockResolvedValueOnce({ ok: true });
+
+    render(
+      <SeriesDetails
+        user={mockUser}
+        selectedSeries={mockSeries}
+        setSelectedSeries={mockSetSelectedSeries}
+        chapters={mockChapters}
+        setChapters={mockSetChapters}
+        onSelectChapter={mockOnSelectChapter}
+        isLoadingDetails={false}
+      />,
+    );
+
+    const deleteBtn = screen.getByRole("button", { name: /delete series/i });
+    fireEvent.click(deleteBtn);
+
+    const confirmBtns = screen.getAllByRole("button", { name: "Delete Series" });
+    const confirmBtn = confirmBtns[confirmBtns.length - 1]; // The modal button
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/s1", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer token123` },
+      });
+      expect(mockNavigate).toHaveBeenCalledWith("/");
+      expect(mockSetSelectedSeries).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it("handles deleting a chapter", async () => {
+    mockSafeFetch.mockResolvedValueOnce({ ok: true });
+
+    render(
+      <SeriesDetails
+        user={mockUser}
+        selectedSeries={mockSeries}
+        setSelectedSeries={mockSetSelectedSeries}
+        chapters={mockChapters}
+        setChapters={mockSetChapters}
+        onSelectChapter={mockOnSelectChapter}
+        isLoadingDetails={false}
+      />,
+    );
+
+    const deleteBtn = screen.getAllByTitle("Delete Chapter")[0];
+    fireEvent.click(deleteBtn);
+
+    const confirmBtns = screen.getAllByRole("button", { name: "Delete Chapter" });
+    const confirmBtn = confirmBtns[confirmBtns.length - 1]; // The last one is the one in the modal
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/chapters/c1", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer token123` },
+      });
+      expect(mockSetChapters).toHaveBeenCalled();
+    });
+  });
+
+  it("handles editing a chapter", async () => {
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          id: "c1",
+          seriesId: "s1",
+          chapterNumber: 1,
+          title: "Romance Dawn Updated",
+        }),
+    });
+
+    render(
+      <SeriesDetails
+        user={mockUser}
+        selectedSeries={mockSeries}
+        setSelectedSeries={mockSetSelectedSeries}
+        chapters={mockChapters}
+        setChapters={mockSetChapters}
+        onSelectChapter={mockOnSelectChapter}
+        isLoadingDetails={false}
+      />,
+    );
+
+    const editBtn = screen.getAllByTitle("Edit Chapter")[0];
+    fireEvent.click(editBtn);
+
+    expect(screen.getByRole("heading", { name: "Edit Chapter" })).toBeInTheDocument();
+
+    const titleInput = screen.getByDisplayValue("Romance Dawn");
+    fireEvent.change(titleInput, { target: { value: "Romance Dawn Updated" } });
+
+    // Ensure we get the correct 'Save' button in case there are multiple
+    const saveBtn = screen.getByRole("button", { name: "Save" });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/chapters/c1", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer token123`,
+        },
+        body: JSON.stringify({
+          chapterNumber: 1,
+          title: "Romance Dawn Updated",
+        }),
+      });
+      expect(mockSetChapters).toHaveBeenCalled();
+    });
+  });
+
+  it("handles importing a chapter", async () => {
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          id: "c3",
+          seriesId: "s1",
+          chapterNumber: 3,
+          title: "Imported Chapter",
+        }),
+    });
+
+    render(
+      <SeriesDetails
+        user={mockUser}
+        selectedSeries={mockSeries}
+        setSelectedSeries={mockSetSelectedSeries}
+        chapters={mockChapters}
+        setChapters={mockSetChapters}
+        onSelectChapter={mockOnSelectChapter}
+        isLoadingDetails={false}
+      />,
+    );
+
+    const importBtn = screen.getByRole("button", { name: /import chapter \(zip\/epub\)/i });
+    fireEvent.click(importBtn);
+
+    expect(screen.getByRole("heading", { name: "Import Chapter (ZIP/ePub)" })).toBeInTheDocument();
+
+    // Use document.querySelector or something if getByLabelText fails, actually there's no id so we can use placeholder or type="file"
+    // Since there's only one file input, let's find it by type
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["dummy content"], "chapter.zip", { type: "application/zip" });
+    
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    // The other labels also lack 'htmlFor'
+    const inputs = screen.getAllByRole("textbox");
+    const titleInput = inputs.find(i => (i as HTMLInputElement).placeholder.includes("Imported Volume")) as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: "Imported Chapter" } });
+
+    const submitBtn = screen.getByRole("button", { name: "Import" });
+    const form = submitBtn.closest("form") as HTMLFormElement;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/s1/chapters/import", expect.objectContaining({
+        method: "POST",
+      }));
+      expect(mockSetChapters).toHaveBeenCalled();
+    });
+  });
+
+  it("cancels series editing", () => {
+    render(
+      <SeriesDetails
+        user={mockUser}
+        selectedSeries={mockSeries}
+        setSelectedSeries={mockSetSelectedSeries}
+        chapters={mockChapters}
+        setChapters={mockSetChapters}
+        onSelectChapter={mockOnSelectChapter}
+        isLoadingDetails={false}
+      />,
+    );
+
+    const editBtn = screen.getByRole("button", { name: /edit series/i });
+    fireEvent.click(editBtn);
+
+    const cancelBtn = screen.getByRole("button", { name: "Cancel" });
+    fireEvent.click(cancelBtn);
+
+    expect(screen.queryByRole("heading", { name: "Edit Series" })).not.toBeInTheDocument();
+  });
 });
+

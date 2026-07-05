@@ -520,7 +520,7 @@ public class PageController {
               targetLang,
               existingImage.getId());
           jobCoordinatorService.triggerImageRedo(existingImage.getId(), "translation");
-          sseService.mapImageToUser(existingImage.getId(), user.getId());
+          if (user != null) sseService.mapImageToUser(existingImage.getId(), user.getId());
         }
 
         return ResponseEntity.ok(
@@ -560,7 +560,7 @@ public class PageController {
 
       // Trigger pipeline
       jobCoordinatorService.startPipeline(page.getImage().getId());
-      sseService.mapImageToUser(page.getImage().getId(), user.getId());
+      if (user != null) sseService.mapImageToUser(page.getImage().getId(), user.getId());
 
       return ResponseEntity.ok(
           new UploadResponse(page.getId(), page.getImage().getId(), "processing"));
@@ -875,7 +875,9 @@ public class PageController {
           .findById(id)
           .ifPresent(
               region -> {
-                sseService.mapImageToUser(region.getImage().getId(), user.getId());
+                if (user != null) {
+                  sseService.mapImageToUser(region.getImage().getId(), user.getId());
+                }
               });
 
       return ResponseEntity.ok(Map.of("status", "enqueued"));
@@ -895,7 +897,9 @@ public class PageController {
     try {
       if ("ocr".equals(type) || "translation".equals(type) || "layout".equals(type)) {
         jobCoordinatorService.triggerImageRedo(imageId, type);
-        sseService.mapImageToUser(imageId, user.getId());
+        if (user != null) {
+          sseService.mapImageToUser(imageId, user.getId());
+        }
         return ResponseEntity.ok(Map.of("status", "enqueued"));
       } else {
         return ResponseEntity.badRequest().body("Invalid redo type");

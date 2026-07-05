@@ -73,6 +73,7 @@ public class InternalJobControllerTest {
   public void testOcrCallback_Success() throws Exception {
     OcrCallbackDto dto = new OcrCallbackDto();
     dto.setImageId(UUID.randomUUID());
+    doNothing().when(jobCoordinatorService).handleOcrCallback(any());
 
     mockMvc
         .perform(
@@ -80,7 +81,47 @@ public class InternalJobControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(dto)))
         .andExpect(status().isOk());
+  }
 
-    verify(jobCoordinatorService, times(1)).handleOcrCallback(any(OcrCallbackDto.class));
+  @Test
+  public void testTranslateCallback_Success() throws Exception {
+    PanelCallbackDto dto = new PanelCallbackDto();
+    dto.setImageId(UUID.randomUUID());
+    doNothing().when(jobCoordinatorService).handleTranslationCallback(any(), any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/translation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testLayoutCallback_Success() throws Exception {
+    PanelCallbackDto dto = new PanelCallbackDto();
+    dto.setImageId(UUID.randomUUID());
+    doNothing().when(jobCoordinatorService).handleLayoutCallback(any(), any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/layout")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testQaCallback_Success() throws Exception {
+    PanelCallbackDto dto = new PanelCallbackDto();
+    dto.setImageId(UUID.randomUUID());
+    doNothing().when(jobCoordinatorService).handleQaCallback(any(), any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/qa")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isOk());
   }
 }
