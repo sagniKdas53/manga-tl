@@ -4,7 +4,6 @@
 
 ## 🔴 Active Bugs
 
-
 ## 🟡 High Priority Features
 
 ### Model Picker / Runtime Settings
@@ -24,7 +23,6 @@
 - [ ] **Frontend: Settings panel** — Gear icon in navbar showing active providers + model dropdowns. Initialize from backend defaults, POST user preferences to persist.
   - [ ] Add model selection fields to Add/Edit Series and Chapter dialogs
   - [ ] Show configured OCR type, models, and providers on Series/Chapter cards
-
 
 ### Export Improvements
 
@@ -47,15 +45,17 @@
 
 ## 🟡 Medium Priority Improvements
 
-### Cloud OCR Optimization
+### Cloud Optimization
 
-- [ ] **Parallelize cloud OCR processing** — Currently sequential. When using cloud OCR (OpenRouter VLM), process multiple pages concurrently with configurable parallelism (e.g., 3-5 concurrent requests).
-- [ ] **Benchmark alternative cloud OCR models** — `qwen/qwen3-vl-8b-instruct` is fast but misses non-dialog text. Test other models from VLM benchmarks for accuracy vs speed tradeoffs.
+- [ ] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck.
+  - [ ] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
+  - [ ] Add an environemnt variable which controls the degree of paralleism, default to 1 (i.e. No parallelism) but can be configured to support it
+  - [ ] This should still respect the rate-limits of the API
 - [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without PaddleOCR and local model dependencies for cloud-only deployments. Significantly reduces image size and build time.
 
 ### Reliability & Crash Recovery
 
-- [ ] **Persist job queue in Postgres** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/ restarts, queued jobs are lost. Save queue state to Postgres so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
+- [ ] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/ restarts, queued jobs are lost. Save queue state to Postgres so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
 - [ ] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
 
 ### Cost Tracking
@@ -64,7 +64,7 @@
 
 ### Distributed Workers
 
-- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on AWS EC2 or LAN mini-PCs for heavy local OCR (PP-OCRv5/v6). Requires worker registration, task routing by capability, and health checking.
+- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on AWS EC2 or LAN devices for heavy local OCR (PP-OCRv6). Requires worker registration, task routing by capability, and health checking.
 
 ---
 
@@ -96,6 +96,7 @@
   - Use a headless browser (Playwright) in the worker for pixel-perfect rendering
   - Or accept backend rendering as "draft" and add a frontend "export as seen" button that captures the canvas
 - [x] **Verify manual layer edits are included in export** — Export reads from DB, so only *saved* edits are included. Ensure the frontend auto-saves or warns before export.
+- [x] **Benchmark alternative cloud OCR models** — `qwen/qwen3-vl-8b-instruct` is fast but misses non-dialog text. Test other models from VLM benchmarks for accuracy vs speed tradeoffs.
 - [x] Cost calculation seems wrong — fixed costs.json per million tokens and printing estimated cost
 - [x] Bubble polygon detection and masking regressions after v9 — fixed, YOLO bubble masks successfully merged and propagated
 - [x] Bubble grouping issues after upgrading OCR — fixed, tunedVertical/horizontal proximity algorithm threshold
