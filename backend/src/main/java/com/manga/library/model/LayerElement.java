@@ -98,4 +98,19 @@ public class LayerElement {
   public UUID getRegionIdSerialized() {
     return region != null ? region.getId() : null;
   }
+
+  @com.fasterxml.jackson.annotation.JsonProperty("layerType")
+  public String getLayerTypeSerialized() {
+    return layer != null ? layer.getType() : null;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonProperty("layerVisible")
+  public Boolean getLayerVisibleSerialized() {
+    return layer != null ? layer.getVisible() : null;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonProperty("layerMetadata")
+  public com.fasterxml.jackson.databind.JsonNode getLayerMetadataSerialized() {
+    return layer != null ? layer.getMetadataJson() : null;
+  }
 }

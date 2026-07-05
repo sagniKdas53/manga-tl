@@ -17,3 +17,5 @@ CLAUDE.md
 .antigravitycli/*
 secrets/
 frontend/coverage
+examples/Backend-renderer-discrepancy-p2
+examples/Backend-renderer-discrepency
