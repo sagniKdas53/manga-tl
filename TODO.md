@@ -9,7 +9,7 @@
 - [ ] The cost stored in costs.json seems to be wrong, it should be saved as per million tokens and then calculated dynamically based on the job
 - [ ] Also we are not printing the estimayed cost after every job that uses a cloud model
 
-### Export Quality Discrepancy
+### Export Quality Discrepancy (This also affects the VLM QA, I think)
 
 - [ ] **Backend-rendered pages don't match frontend** — `RenderingService.py` uses Pillow/PIL, frontend uses HTML5 Canvas with CSS text. The two diverge significantly. Options:
   - Use a headless browser (Playwright) in the worker for pixel-perfect rendering
