@@ -120,9 +120,11 @@ Do not infer missing characters."""
         }
         if provider_name == "nvidia":
             payload["response_format"] = {"type": "json_object"}
+        elif provider_name == "openrouter":
+            payload["response_format"] = {"type": "json_object"}
+            payload["plugins"] = [{"id": "response-healing"}]
 
-    # For openrouter, forcing json_object might cause 400 on brand new models
-    # We will rely on the prompt instructions.
+    # We use json_object for OpenRouter with the response-healing plugin
 
     headers = provider_cfg["headers"](api_key)
     headers["Content-Type"] = "application/json"
