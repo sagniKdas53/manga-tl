@@ -49,6 +49,11 @@
 - [ ] **Add `meta-data.json` to chapter export ZIP** — Include: page order, layer counts, active layer per page, QA status, manual changes flag, OCR/TL models used, per-page and total cost.
 - [ ] **Full ePub export** — Extend `ChapterExportService.java` (which currently does ZIP only) to support ePub packaging.
 
+### Import issues, with ePub and zips
+
+- [ ] Currently we can only import zips, add support for ePub import.
+- [ ] Also need to fix the issue where imported zips have their pages suffled, they need to be displayed in the order they appear in the zip
+
 ### Manual Region Selection
 
 - [ ] **Add draw-to-OCR / draw-to-translate workflow** — Let users draw a rectangle on the image canvas, then trigger OCR or translation for just that region. Requires:
