@@ -25,7 +25,7 @@ const mockSafeFetch = vi.fn(() =>
   Promise.resolve({ ok: true, json: () => Promise.resolve([]) }),
 );
 vi.mock("../utils", () => ({
-  safeFetch: (...args: any[]) => mockSafeFetch(...args),
+  safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
   toSlug: (s: string) => s.toLowerCase(),
 }));
 
@@ -88,10 +88,7 @@ describe("Reader Component", () => {
   });
 
   it("handles sidebar toggles and page navigation clicks", async () => {
-    const mockPages = [
-      mockPage,
-      { ...mockPage, id: "p2", pageNumber: 2 },
-    ];
+    const mockPages = [mockPage, { ...mockPage, id: "p2", pageNumber: 2 }];
     render(
       <Reader
         user={mockUser}
@@ -148,7 +145,8 @@ describe("Reader Component", () => {
     // Click layer creation buttons
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ id: "l1", type: "translation", name: "TL Layer" }),
+      json: () =>
+        Promise.resolve({ id: "l1", type: "translation", name: "TL Layer" }),
     });
     fireEvent.click(screen.getByTitle("Add Translation Layer"));
 

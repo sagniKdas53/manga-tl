@@ -4,21 +4,17 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import org.springframework.http.MediaType;
-import java.util.Collections;
-import com.manga.library.model.Image;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.manga.library.config.JwtAuthFilter;
+import com.manga.library.model.Image;
 import com.manga.library.model.Layer;
-import com.manga.library.model.LayerElement;
 import com.manga.library.repository.ImageRepository;
 import com.manga.library.repository.LayerEditHistoryRepository;
 import com.manga.library.repository.LayerElementRepository;
 import com.manga.library.repository.LayerRepository;
 import com.manga.library.repository.OcrRegionRepository;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -26,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(LayerController.class)
@@ -81,9 +78,10 @@ public class LayerControllerTest {
     when(layerRepository.save(any(Layer.class))).thenReturn(layer);
 
     mockMvc
-        .perform(post("/api/images/" + imageId + "/layers")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"type\": \"translation\"}"))
+        .perform(
+            post("/api/images/" + imageId + "/layers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"type\": \"translation\"}"))
         .andExpect(status().isOk());
   }
 }

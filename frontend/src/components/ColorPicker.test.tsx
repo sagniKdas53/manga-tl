@@ -95,14 +95,15 @@ describe("ColorPicker", () => {
 
     // Mock getBoundingClientRect for SV square
     const svPicker = screen.getByTestId("sv-picker");
-    svPicker.getBoundingClientRect = () => ({
-      width: 100,
-      height: 100,
-      left: 0,
-      top: 0,
-      right: 100,
-      bottom: 100,
-    } as DOMRect);
+    svPicker.getBoundingClientRect = () =>
+      ({
+        width: 100,
+        height: 100,
+        left: 0,
+        top: 0,
+        right: 100,
+        bottom: 100,
+      }) as DOMRect;
 
     // Trigger mousedown to simulate clicking middle of SV square (50, 50)
     fireEvent.mouseDown(svPicker, { clientX: 50, clientY: 50 });
@@ -110,14 +111,15 @@ describe("ColorPicker", () => {
 
     // Mock getBoundingClientRect for Hue slider
     const hueSlider = screen.getByTestId("hue-slider");
-    hueSlider.getBoundingClientRect = () => ({
-      width: 100,
-      height: 12,
-      left: 0,
-      top: 0,
-      right: 100,
-      bottom: 12,
-    } as DOMRect);
+    hueSlider.getBoundingClientRect = () =>
+      ({
+        width: 100,
+        height: 12,
+        left: 0,
+        top: 0,
+        right: 100,
+        bottom: 12,
+      }) as DOMRect;
 
     // Trigger mousedown to simulate clicking middle of Hue slider (50)
     fireEvent.mouseDown(hueSlider, { clientX: 50 });
