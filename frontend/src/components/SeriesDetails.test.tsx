@@ -220,7 +220,9 @@ describe("SeriesDetails Component", () => {
     const deleteBtn = screen.getByRole("button", { name: /delete series/i });
     fireEvent.click(deleteBtn);
 
-    const confirmBtns = screen.getAllByRole("button", { name: "Delete Series" });
+    const confirmBtns = screen.getAllByRole("button", {
+      name: "Delete Series",
+    });
     const confirmBtn = confirmBtns[confirmBtns.length - 1]; // The modal button
     fireEvent.click(confirmBtn);
 
@@ -252,7 +254,9 @@ describe("SeriesDetails Component", () => {
     const deleteBtn = screen.getAllByTitle("Delete Chapter")[0];
     fireEvent.click(deleteBtn);
 
-    const confirmBtns = screen.getAllByRole("button", { name: "Delete Chapter" });
+    const confirmBtns = screen.getAllByRole("button", {
+      name: "Delete Chapter",
+    });
     const confirmBtn = confirmBtns[confirmBtns.length - 1]; // The last one is the one in the modal
     fireEvent.click(confirmBtn);
 
@@ -292,7 +296,9 @@ describe("SeriesDetails Component", () => {
     const editBtn = screen.getAllByTitle("Edit Chapter")[0];
     fireEvent.click(editBtn);
 
-    expect(screen.getByRole("heading", { name: "Edit Chapter" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Edit Chapter" }),
+    ).toBeInTheDocument();
 
     const titleInput = screen.getByDisplayValue("Romance Dawn");
     fireEvent.change(titleInput, { target: { value: "Romance Dawn Updated" } });
@@ -341,21 +347,31 @@ describe("SeriesDetails Component", () => {
       />,
     );
 
-    const importBtn = screen.getByRole("button", { name: /import chapter \(zip\/epub\)/i });
+    const importBtn = screen.getByRole("button", {
+      name: /import chapter \(zip\/epub\)/i,
+    });
     fireEvent.click(importBtn);
 
-    expect(screen.getByRole("heading", { name: "Import Chapter (ZIP/ePub)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Import Chapter (ZIP/ePub)" }),
+    ).toBeInTheDocument();
 
     // Use document.querySelector or something if getByLabelText fails, actually there's no id so we can use placeholder or type="file"
     // Since there's only one file input, let's find it by type
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(["dummy content"], "chapter.zip", { type: "application/zip" });
-    
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File(["dummy content"], "chapter.zip", {
+      type: "application/zip",
+    });
+
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     // The other labels also lack 'htmlFor'
     const inputs = screen.getAllByRole("textbox");
-    const titleInput = inputs.find(i => (i as HTMLInputElement).placeholder.includes("Imported Volume")) as HTMLInputElement;
+    const titleInput = inputs.find((i) =>
+      (i as HTMLInputElement).placeholder.includes("Imported Volume"),
+    ) as HTMLInputElement;
     fireEvent.change(titleInput, { target: { value: "Imported Chapter" } });
 
     const submitBtn = screen.getByRole("button", { name: "Import" });
@@ -363,9 +379,12 @@ describe("SeriesDetails Component", () => {
     fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/s1/chapters/import", expect.objectContaining({
-        method: "POST",
-      }));
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/series/s1/chapters/import",
+        expect.objectContaining({
+          method: "POST",
+        }),
+      );
       expect(mockSetChapters).toHaveBeenCalled();
     });
   });
@@ -389,7 +408,8 @@ describe("SeriesDetails Component", () => {
     const cancelBtn = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelBtn);
 
-    expect(screen.queryByRole("heading", { name: "Edit Series" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Edit Series" }),
+    ).not.toBeInTheDocument();
   });
 });
-

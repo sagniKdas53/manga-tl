@@ -75,13 +75,16 @@ public class PageServiceTest {
   public void testDeletePageDb_Success() {
     UUID pageId = UUID.randomUUID();
     UUID chapterId = UUID.randomUUID();
-    Series series = Series.builder().id(UUID.randomUUID()).coverImageUrl("some_url/" + pageId).build();
+    Series series =
+        Series.builder().id(UUID.randomUUID()).coverImageUrl("some_url/" + pageId).build();
     Chapter chapter = Chapter.builder().id(chapterId).series(series).build();
-    Image image = Image.builder().id(pageId).storagePath("path").thumbnailStoragePath("thumb").build();
+    Image image =
+        Image.builder().id(pageId).storagePath("path").thumbnailStoragePath("thumb").build();
     Page page = Page.builder().id(pageId).chapter(chapter).image(image).build();
 
     when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.of(page));
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId)).thenReturn(java.util.Collections.emptyList());
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(java.util.Collections.emptyList());
 
     java.util.List<String> paths = pageService.deletePageDb(pageId);
 
@@ -94,10 +97,11 @@ public class PageServiceTest {
 
   @Test
   public void testGenerateThumbnail_Success() throws Exception {
-    java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(10, 10, java.awt.image.BufferedImage.TYPE_INT_RGB);
+    java.awt.image.BufferedImage img =
+        new java.awt.image.BufferedImage(10, 10, java.awt.image.BufferedImage.TYPE_INT_RGB);
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     javax.imageio.ImageIO.write(img, "png", baos);
-    
+
     byte[] thumbnail = pageService.generateThumbnail(baos.toByteArray());
     assertNotNull(thumbnail);
   }

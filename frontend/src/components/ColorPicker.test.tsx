@@ -108,10 +108,10 @@ describe("ColorPicker", () => {
     // Trigger mousedown to simulate clicking middle of SV square (50, 50)
     fireEvent.mouseDown(svPicker, { clientX: 50, clientY: 50 });
     expect(onChange).toHaveBeenCalled();
-    
+
     fireEvent.mouseMove(window, { clientX: 80, clientY: 20 });
     expect(onChange).toHaveBeenCalled();
-    
+
     fireEvent.mouseUp(window);
 
     // Mock getBoundingClientRect for Hue slider
@@ -129,10 +129,10 @@ describe("ColorPicker", () => {
     // Trigger mousedown to simulate clicking middle of Hue slider (50)
     fireEvent.mouseDown(hueSlider, { clientX: 50 });
     expect(onChange).toHaveBeenCalled();
-    
+
     fireEvent.mouseMove(window, { clientX: 75 });
     expect(onChange).toHaveBeenCalled();
-    
+
     fireEvent.mouseUp(window);
   });
 
@@ -154,7 +154,14 @@ describe("ColorPicker", () => {
 
     const svPicker = screen.getByTestId("sv-picker");
     svPicker.getBoundingClientRect = () =>
-      ({ width: 100, height: 100, left: 0, top: 0, right: 100, bottom: 100 }) as DOMRect;
+      ({
+        width: 100,
+        height: 100,
+        left: 0,
+        top: 0,
+        right: 100,
+        bottom: 100,
+      }) as DOMRect;
 
     fireEvent.touchStart(svPicker, { touches: [{ clientX: 50, clientY: 50 }] });
     expect(onChange).toHaveBeenCalled();
@@ -166,7 +173,14 @@ describe("ColorPicker", () => {
 
     const hueSlider = screen.getByTestId("hue-slider");
     hueSlider.getBoundingClientRect = () =>
-      ({ width: 100, height: 12, left: 0, top: 0, right: 100, bottom: 12 }) as DOMRect;
+      ({
+        width: 100,
+        height: 12,
+        left: 0,
+        top: 0,
+        right: 100,
+        bottom: 12,
+      }) as DOMRect;
 
     fireEvent.touchStart(hueSlider, { touches: [{ clientX: 50 }] });
     expect(onChange).toHaveBeenCalled();
@@ -176,7 +190,7 @@ describe("ColorPicker", () => {
 
     fireEvent.touchEnd(window);
   });
-  
+
   it("normalizes short hex and missing hash", () => {
     const onChange = vi.fn();
     render(
@@ -190,14 +204,14 @@ describe("ColorPicker", () => {
     const input = screen.getByDisplayValue("#f00");
     fireEvent.change(input, { target: { value: "111" } });
     expect(onChange).toHaveBeenCalledWith("#111");
-    
+
     fireEvent.change(input, { target: { value: "transparent" } });
     expect(onChange).toHaveBeenCalledWith("transparent");
-    
+
     fireEvent.change(input, { target: { value: "" } });
     expect(onChange).toHaveBeenCalledWith(null);
   });
-  
+
   it("allows transparent presets if enabled", () => {
     const onChange = vi.fn();
     render(
