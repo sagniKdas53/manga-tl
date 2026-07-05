@@ -10,7 +10,7 @@ vi.mock("react-router-dom", () => ({
 
 const mockSafeFetch = vi.fn();
 vi.mock("../utils", () => ({
-  safeFetch: (...args: any[]) => mockSafeFetch(...args),
+  safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
 }));
 
 describe("Auth Component", () => {
@@ -29,7 +29,9 @@ describe("Auth Component", () => {
   it("renders login form by default", () => {
     render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
     expect(screen.getByText("Welcome Back")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("admin@manga.local")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("admin@manga.local"),
+    ).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("John Doe")).not.toBeInTheDocument();
   });
 
@@ -48,11 +50,17 @@ describe("Auth Component", () => {
   it("submits login details successfully", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ id: "u1", username: "user", email: "user@test.com", token: "tok" }),
+      json: () =>
+        Promise.resolve({
+          id: "u1",
+          username: "user",
+          email: "user@test.com",
+          token: "tok",
+        }),
     });
 
     render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
-    
+
     fireEvent.change(screen.getByPlaceholderText("admin@manga.local"), {
       target: { value: "user@test.com" },
     });
@@ -67,7 +75,10 @@ describe("Auth Component", () => {
       expect(mockSafeFetch).toHaveBeenCalledWith("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "user@test.com", password: "password123" }),
+        body: JSON.stringify({
+          email: "user@test.com",
+          password: "password123",
+        }),
       });
       expect(mockOnLoginSuccess).toHaveBeenCalled();
       expect(mockNavigate).toHaveBeenCalledWith("/");

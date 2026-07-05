@@ -285,8 +285,9 @@ export const Reader: React.FC<ReaderProps> = ({
   const autoSaveTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   useEffect(() => {
+    const timers = autoSaveTimersRef.current;
     return () => {
-      Object.values(autoSaveTimersRef.current).forEach(clearTimeout);
+      Object.values(timers).forEach(clearTimeout);
     };
   }, []);
 
@@ -724,35 +725,44 @@ export const Reader: React.FC<ReaderProps> = ({
     [user.token, showToast, showError],
   );
 
-  const triggerAutoSave = useCallback((element: LayerElement) => {
-    const id = element.id;
-    setDirtyElements((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
+  const triggerAutoSave = useCallback(
+    (element: LayerElement) => {
+      const id = element.id;
+      setDirtyElements((prev) => {
+        if (prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
 
-    if (autoSaveTimersRef.current[id]) {
-      clearTimeout(autoSaveTimersRef.current[id]);
-    }
-
-    autoSaveTimersRef.current[id] = setTimeout(async () => {
-      try {
-        await saveElementChanges(element, false, user.token, showToast, showError);
-        setDirtyElements((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      } catch (err) {
-        console.error("Auto-save failed for element:", id, err);
-      } finally {
-        delete autoSaveTimersRef.current[id];
+      if (autoSaveTimersRef.current[id]) {
+        clearTimeout(autoSaveTimersRef.current[id]);
       }
-    }, 1500);
-  }, [user.token, showToast, showError]);
+
+      autoSaveTimersRef.current[id] = setTimeout(async () => {
+        try {
+          await saveElementChanges(
+            element,
+            false,
+            user.token,
+            showToast,
+            showError,
+          );
+          setDirtyElements((prev) => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        } catch (err) {
+          console.error("Auto-save failed for element:", id, err);
+        } finally {
+          delete autoSaveTimersRef.current[id];
+        }
+      }, 1500);
+    },
+    [user.token, showToast, showError],
+  );
 
   const saveAllPendingChanges = useCallback(async (): Promise<void> => {
     const pendingIds = Object.keys(autoSaveTimersRef.current);
@@ -976,9 +986,7 @@ export const Reader: React.FC<ReaderProps> = ({
             return {
               ...l,
               elements: l.elements.map((el) =>
-                el.id === updated.id
-                  ? updated
-                  : el,
+                el.id === updated.id ? updated : el,
               ),
             };
           }
@@ -1914,7 +1922,9 @@ export const Reader: React.FC<ReaderProps> = ({
       // Draw the base page image
       ctx.drawImage(img, 0, 0, W, H);
 
-      const hasTranslation = layers.some((ld) => ld.layer.type === "translation");
+      const hasTranslation = layers.some(
+        (ld) => ld.layer.type === "translation",
+      );
       // Draw visible layer elements
       sortedLayers.forEach((lData) => {
         const isOcrHidden =
@@ -2005,7 +2015,8 @@ export const Reader: React.FC<ReaderProps> = ({
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           const lineH = fSize * 1.2;
-          const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
+          const startY =
+            el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
           fit.lines.forEach((line, i) => {
             const lineCenterX =
               fit.lineCenters && fit.lineCenters.at(i) !== undefined
@@ -2034,7 +2045,8 @@ export const Reader: React.FC<ReaderProps> = ({
       setConfirmModal({
         isOpen: true,
         title: "Unsaved Changes",
-        message: "You have unsaved edits. Would you like to save them before exporting?",
+        message:
+          "You have unsaved edits. Would you like to save them before exporting?",
         confirmText: "Save & Export",
         cancelText: "Export Anyway",
         isDangerous: false,
@@ -2124,7 +2136,10 @@ export const Reader: React.FC<ReaderProps> = ({
                 maskCtx.restore();
               }
             } catch (e) {
-              console.error("Failed to draw canvas maskPolygon in zip export", e);
+              console.error(
+                "Failed to draw canvas maskPolygon in zip export",
+                e,
+              );
             }
           } else {
             maskCtx.save();
@@ -2200,7 +2215,8 @@ export const Reader: React.FC<ReaderProps> = ({
           textCtx.textAlign = "center";
           textCtx.textBaseline = "middle";
           const lineH = fSize * 1.2;
-          const startY = el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
+          const startY =
+            el.y + height / 2 - ((fit.lines.length - 1) * lineH) / 2;
           fit.lines.forEach((line, j) => {
             const lineCenterX =
               fit.lineCenters && fit.lineCenters.at(j) !== undefined
@@ -2269,7 +2285,8 @@ export const Reader: React.FC<ReaderProps> = ({
       setConfirmModal({
         isOpen: true,
         title: "Unsaved Changes",
-        message: "You have unsaved edits. Would you like to save them before exporting?",
+        message:
+          "You have unsaved edits. Would you like to save them before exporting?",
         confirmText: "Save & Export",
         cancelText: "Export Anyway",
         isDangerous: false,
@@ -5357,7 +5374,9 @@ export const Reader: React.FC<ReaderProps> = ({
                       flex: 1,
                       padding: "8px",
                       position: "relative",
-                      border: dirtyElements.has(selectedItem.id) ? "1px solid var(--warning, #eab308)" : undefined,
+                      border: dirtyElements.has(selectedItem.id)
+                        ? "1px solid var(--warning, #eab308)"
+                        : undefined,
                     }}
                     onClick={() => handleSaveElementChanges(selectedItem)}
                   >

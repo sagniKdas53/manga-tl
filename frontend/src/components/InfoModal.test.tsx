@@ -28,11 +28,21 @@ describe("InfoModal", () => {
     expect(screen.getByText("Info Message Detail")).toBeInTheDocument();
 
     // Rerender as success
-    rerender(<InfoModal {...defaultProps} type="success" />);
+    rerender(
+      <InfoModal
+        {...defaultProps}
+        type="success"
+      />,
+    );
     expect(screen.getByText("Info Title")).toBeInTheDocument();
 
     // Rerender as error
-    rerender(<InfoModal {...defaultProps} type="error" />);
+    rerender(
+      <InfoModal
+        {...defaultProps}
+        type="error"
+      />,
+    );
     expect(screen.getByText("Info Title")).toBeInTheDocument();
   });
 
@@ -51,7 +61,7 @@ describe("InfoModal", () => {
 
   it("closes on clicking backdrop overlay but not modal body", () => {
     const { container } = render(<InfoModal {...defaultProps} />);
-    
+
     // Backdrop is the outer div (first child)
     const backdrop = container.firstChild as HTMLElement;
     fireEvent.click(backdrop);

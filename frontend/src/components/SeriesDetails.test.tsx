@@ -10,7 +10,7 @@ vi.mock("react-router-dom", () => ({
 
 const mockSafeFetch = vi.fn();
 vi.mock("../utils", () => ({
-  safeFetch: (...args: any[]) => mockSafeFetch(...args),
+  safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
   toSlug: (s: string) => s.toLowerCase().replace(/\s+/g, "-"),
 }));
 
@@ -87,7 +87,9 @@ describe("SeriesDetails Component", () => {
       />,
     );
 
-    const chapterCard = screen.getByText("Romance Dawn").closest(".chapter-card-nhentai");
+    const chapterCard = screen
+      .getByText("Romance Dawn")
+      .closest(".chapter-card-nhentai");
     expect(chapterCard).not.toBeNull();
     fireEvent.click(chapterCard!);
 
@@ -122,7 +124,9 @@ describe("SeriesDetails Component", () => {
     const addBtn = screen.getByRole("button", { name: /add chapter/i });
     fireEvent.click(addBtn);
 
-    expect(screen.getByRole("heading", { name: "Add Chapter" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Add Chapter" }),
+    ).toBeInTheDocument();
 
     const titleInput = screen.getByPlaceholderText("e.g. The Beginning");
     fireEvent.change(titleInput, { target: { value: "The Man Luffy" } });
@@ -149,7 +153,8 @@ describe("SeriesDetails Component", () => {
   it("opens edit series modal and submits updates", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ ...mockSeries, title: "One Piece Changed" }),
+      json: () =>
+        Promise.resolve({ ...mockSeries, title: "One Piece Changed" }),
     });
 
     render(
@@ -167,7 +172,9 @@ describe("SeriesDetails Component", () => {
     const editBtn = screen.getByRole("button", { name: /edit series/i });
     fireEvent.click(editBtn);
 
-    expect(screen.getByRole("heading", { name: "Edit Series" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Edit Series" }),
+    ).toBeInTheDocument();
 
     const titleInput = screen.getByDisplayValue("One Piece");
     fireEvent.change(titleInput, { target: { value: "One Piece Changed" } });

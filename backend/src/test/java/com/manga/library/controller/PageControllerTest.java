@@ -1,18 +1,16 @@
 package com.manga.library.controller;
 
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import org.springframework.http.MediaType;
 
 import com.manga.library.config.JwtAuthFilter;
 import com.manga.library.model.Chapter;
 import com.manga.library.model.Image;
-import com.manga.library.model.OcrRegion;
 import com.manga.library.model.Page;
 import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
@@ -27,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PageController.class)
@@ -106,9 +105,7 @@ public class PageControllerTest {
     UUID pageId = UUID.randomUUID();
     when(pageService.deletePageDb(pageId)).thenReturn(java.util.Collections.emptyList());
 
-    mockMvc
-        .perform(delete("/api/pages/" + pageId))
-        .andExpect(status().isOk());
+    mockMvc.perform(delete("/api/pages/" + pageId)).andExpect(status().isOk());
 
     verify(pageService, times(1)).deletePageDb(pageId);
   }
@@ -118,7 +115,7 @@ public class PageControllerTest {
     UUID chapterId = UUID.randomUUID();
     UUID p1 = UUID.randomUUID();
     UUID p2 = UUID.randomUUID();
-    
+
     Page page1 = Page.builder().id(p1).pageNumber(1).build();
     Page page2 = Page.builder().id(p2).pageNumber(2).build();
 
@@ -126,9 +123,10 @@ public class PageControllerTest {
         .thenReturn(java.util.Arrays.asList(page1, page2));
 
     mockMvc
-        .perform(put("/api/chapters/" + chapterId + "/pages/reorder")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("[\"" + p1 + "\", \"" + p2 + "\"]"))
+        .perform(
+            put("/api/chapters/" + chapterId + "/pages/reorder")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("[\"" + p1 + "\", \"" + p2 + "\"]"))
         .andExpect(status().isOk());
 
     verify(pageRepository, atLeastOnce()).save(any(Page.class));
@@ -155,9 +153,7 @@ public class PageControllerTest {
     UUID imageId = UUID.randomUUID();
     when(layerRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
 
-    mockMvc
-        .perform(get("/api/images/" + imageId + "/layers"))
-        .andExpect(status().isOk());
+    mockMvc.perform(get("/api/images/" + imageId + "/layers")).andExpect(status().isOk());
   }
 
   @Test
@@ -167,11 +163,9 @@ public class PageControllerTest {
     doNothing().when(jobCoordinatorService).triggerRedo(id, "translation");
 
     mockMvc
-        .perform(post("/api/ocr-regions/" + id + "/redo")
-            .param("type", "translation"))
+        .perform(post("/api/ocr-regions/" + id + "/redo").param("type", "translation"))
         .andExpect(status().isOk());
 
     verify(jobCoordinatorService, times(1)).triggerRedo(id, "translation");
   }
-
 }

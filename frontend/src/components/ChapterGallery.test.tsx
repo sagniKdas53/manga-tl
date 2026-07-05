@@ -10,7 +10,7 @@ vi.mock("react-router-dom", () => ({
 
 const mockSafeFetch = vi.fn();
 vi.mock("../utils", () => ({
-  safeFetch: (...args: any[]) => mockSafeFetch(...args),
+  safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
   toSlug: (s: string) => s.toLowerCase().replace(/\s+/g, "-"),
   getContextPath: () => "",
 }));
@@ -110,13 +110,16 @@ describe("ChapterGallery Component", () => {
     fireEvent.click(thumbnail);
 
     expect(mockOnSelectPage).toHaveBeenCalledWith(mockPages[0]);
-    expect(mockNavigate).toHaveBeenCalledWith("/chapters/c1/romance-dawn/reader/1");
+    expect(mockNavigate).toHaveBeenCalledWith(
+      "/chapters/c1/romance-dawn/reader/1",
+    );
   });
 
   it("opens edit chapter name modal and saves updates", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ ...mockChapter, title: "Romance Dawn Updated" }),
+      json: () =>
+        Promise.resolve({ ...mockChapter, title: "Romance Dawn Updated" }),
     });
 
     render(
@@ -135,7 +138,9 @@ describe("ChapterGallery Component", () => {
     const editBtn = screen.getByTitle("Edit Chapter Name & Number");
     fireEvent.click(editBtn);
 
-    expect(screen.getByRole("heading", { name: "Edit Chapter" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Edit Chapter" }),
+    ).toBeInTheDocument();
 
     const titleInput = screen.getByDisplayValue("Romance Dawn");
     fireEvent.change(titleInput, { target: { value: "Romance Dawn Updated" } });

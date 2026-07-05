@@ -2,9 +2,16 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useSSE } from "./useSSE";
 
+interface MockEventSource {
+  triggerOpen: () => void;
+  triggerError: (err: unknown) => void;
+  trigger: (event: string, data: unknown) => void;
+  close: import("vitest").Mock;
+}
+
 describe("useSSE", () => {
-  let mockEventSourceInstances: any[] = [];
-  let originalEventSource: any;
+  let mockEventSourceInstances: MockEventSource[] = [];
+  let originalEventSource: typeof EventSource;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -13,18 +20,20 @@ describe("useSSE", () => {
 
     // Mock EventSource
     global.EventSource = vi.fn().mockImplementation(function (url: string) {
-      const listeners: Record<string, Function[]> = {};
+      const listeners: Record<string, ((...args: unknown[]) => void)[]> = {};
       const instance = {
         url,
         close: vi.fn(),
-        addEventListener: vi.fn((event: string, cb: Function) => {
-          listeners[event] = listeners[event] || [];
-          listeners[event].push(cb);
-        }),
-        onerror: null as any,
-        onopen: null as any,
+        addEventListener: vi.fn(
+          (event: string, cb: (...args: unknown[]) => void) => {
+            listeners[event] = listeners[event] || [];
+            listeners[event].push(cb);
+          },
+        ),
+        onerror: null as ((err: unknown) => void) | null,
+        onopen: null as (() => void) | null,
         // Helper to trigger events inside tests
-        trigger: (event: string, data: any) => {
+        trigger: (event: string, data: unknown) => {
           if (listeners[event]) {
             listeners[event].forEach((cb) => cb({ data }));
           }
@@ -32,13 +41,13 @@ describe("useSSE", () => {
         triggerOpen: () => {
           if (instance.onopen) instance.onopen();
         },
-        triggerError: (err: any) => {
+        triggerError: (err: unknown) => {
           if (instance.onerror) instance.onerror(err);
         },
       };
-      mockEventSourceInstances.push(instance);
+      mockEventSourceInstances.push(instance as unknown as MockEventSource);
       return instance;
-    }) as any;
+    }) as unknown as typeof EventSource;
   });
 
   afterEach(() => {
@@ -71,12 +80,18 @@ describe("useSSE", () => {
     act(() => {
       instance.trigger("connected", "welcome");
     });
-    expect(result.current.lastEvent).toEqual({ type: "connected", data: "welcome" });
+    expect(result.current.lastEvent).toEqual({
+      type: "connected",
+      data: "welcome",
+    });
 
     act(() => {
       instance.trigger("notification", "new_notification");
     });
-    expect(result.current.lastEvent).toEqual({ type: "notification", data: "new_notification" });
+    expect(result.current.lastEvent).toEqual({
+      type: "notification",
+      data: "new_notification",
+    });
   });
 
   it("handles connection error and attempts reconnection", () => {

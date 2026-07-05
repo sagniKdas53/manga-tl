@@ -10,7 +10,7 @@ vi.mock("react-router-dom", () => ({
 
 const mockSafeFetch = vi.fn();
 vi.mock("../utils", () => ({
-  safeFetch: (...args: any[]) => mockSafeFetch(...args),
+  safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
   toSlug: (s: string) => s.toLowerCase().replace(/\s+/g, "-"),
 }));
 
@@ -139,7 +139,8 @@ describe("Dashboard Component", () => {
   it("opens edit series modal and performs changes", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ ...initialSeries[0], title: "One Piece Updated" }),
+      json: () =>
+        Promise.resolve({ ...initialSeries[0], title: "One Piece Updated" }),
     });
 
     render(
