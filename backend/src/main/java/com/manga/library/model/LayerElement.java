@@ -106,7 +106,7 @@ public class LayerElement {
 
   @com.fasterxml.jackson.annotation.JsonProperty("layerVisible")
   public Boolean getLayerVisibleSerialized() {
-    return layer != null ? layer.getVisible() : null;
+    return layer != null ? layer.getVisible() : Boolean.FALSE;
   }
 
   @com.fasterxml.jackson.annotation.JsonProperty("layerMetadata")
