@@ -64,6 +64,7 @@ public class SseServiceTest {
 
     verify(redisTemplate, never()).opsForList();
   }
+
   @Test
   public void testEmitNotificationForImage_UserFound() {
     UUID imageId = UUID.randomUUID();

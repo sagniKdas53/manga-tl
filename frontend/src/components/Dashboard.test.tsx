@@ -204,7 +204,9 @@ describe("Dashboard Component", () => {
 
   it("handles error when creating a series", async () => {
     mockSafeFetch.mockRejectedValueOnce(new Error("Network Error"));
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
 
     render(
       <Dashboard
@@ -225,7 +227,10 @@ describe("Dashboard Component", () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith("Error saving series:", expect.any(Error));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Error saving series:",
+        expect.any(Error),
+      );
     });
 
     consoleErrorSpy.mockRestore();
@@ -246,9 +251,13 @@ describe("Dashboard Component", () => {
     const deleteBtn = screen.getAllByTitle("Delete Series")[0];
     fireEvent.click(deleteBtn);
 
-    expect(screen.getByText("Delete Series", { selector: 'h3' })).toBeInTheDocument();
+    expect(
+      screen.getByText("Delete Series", { selector: "h3" }),
+    ).toBeInTheDocument();
 
-    const confirmBtns = screen.getAllByRole("button", { name: "Delete Series" });
+    const confirmBtns = screen.getAllByRole("button", {
+      name: "Delete Series",
+    });
     const confirmBtn = confirmBtns[confirmBtns.length - 1];
     fireEvent.click(confirmBtn);
 
@@ -277,7 +286,9 @@ describe("Dashboard Component", () => {
     const deleteBtn = screen.getAllByTitle("Delete Series")[0];
     fireEvent.click(deleteBtn);
 
-    const confirmBtns = screen.getAllByRole("button", { name: "Delete Series" });
+    const confirmBtns = screen.getAllByRole("button", {
+      name: "Delete Series",
+    });
     const confirmBtn = confirmBtns[confirmBtns.length - 1];
     fireEvent.click(confirmBtn);
 
@@ -290,7 +301,9 @@ describe("Dashboard Component", () => {
 
   it("handles error when deleting a series", async () => {
     mockSafeFetch.mockRejectedValueOnce(new Error("Network Error"));
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
 
     render(
       <Dashboard
@@ -304,12 +317,17 @@ describe("Dashboard Component", () => {
     const deleteBtn = screen.getAllByTitle("Delete Series")[0];
     fireEvent.click(deleteBtn);
 
-    const confirmBtns = screen.getAllByRole("button", { name: "Delete Series" });
+    const confirmBtns = screen.getAllByRole("button", {
+      name: "Delete Series",
+    });
     const confirmBtn = confirmBtns[confirmBtns.length - 1];
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith("Error deleting series:", expect.any(Error));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Error deleting series:",
+        expect.any(Error),
+      );
     });
 
     consoleErrorSpy.mockRestore();
@@ -340,8 +358,13 @@ describe("Dashboard Component", () => {
     const newBtn = screen.getByRole("button", { name: /\+ new series/i });
     fireEvent.click(newBtn);
 
-    fireEvent.change(screen.getByPlaceholderText("e.g. My Hero Academia"), { target: { value: "New Manga" } });
-    fireEvent.change(screen.getByPlaceholderText("Leave empty for default cover"), { target: { value: "http://example.com/cover.jpg" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. My Hero Academia"), {
+      target: { value: "New Manga" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Leave empty for default cover"),
+      { target: { value: "http://example.com/cover.jpg" } },
+    );
 
     // Change selects
     const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
@@ -377,4 +400,3 @@ describe("Dashboard Component", () => {
     });
   });
 });
-

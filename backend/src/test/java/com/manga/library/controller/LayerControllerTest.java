@@ -88,13 +88,15 @@ public class LayerControllerTest {
   @Test
   public void testUpdateLayerElement_Success() throws Exception {
     UUID elementId = UUID.randomUUID();
-    com.manga.library.model.LayerElement element = com.manga.library.model.LayerElement.builder().id(elementId).text("old text").build();
+    com.manga.library.model.LayerElement element =
+        com.manga.library.model.LayerElement.builder().id(elementId).text("old text").build();
     when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
     when(layerElementRepository.save(any())).thenReturn(element);
 
     mockMvc
         .perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/layer-elements/" + elementId)
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/layer-elements/" + elementId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\": \"new text\"}"))
         .andExpect(status().isOk());
@@ -109,7 +111,8 @@ public class LayerControllerTest {
 
     mockMvc
         .perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/layers/" + layerId)
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/layers/" + layerId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"zOrder\": 2, \"visible\": false}"))
         .andExpect(status().isOk());
@@ -121,7 +124,8 @@ public class LayerControllerTest {
     Layer layer = Layer.builder().id(layerId).build();
     when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
 
-    com.manga.library.model.LayerElement element = com.manga.library.model.LayerElement.builder().id(UUID.randomUUID()).layer(layer).build();
+    com.manga.library.model.LayerElement element =
+        com.manga.library.model.LayerElement.builder().id(UUID.randomUUID()).layer(layer).build();
     when(layerElementRepository.save(any())).thenReturn(element);
 
     mockMvc
@@ -135,12 +139,11 @@ public class LayerControllerTest {
   @Test
   public void testDeleteLayerElement_Success() throws Exception {
     UUID elementId = UUID.randomUUID();
-    com.manga.library.model.LayerElement element = com.manga.library.model.LayerElement.builder().id(elementId).build();
+    com.manga.library.model.LayerElement element =
+        com.manga.library.model.LayerElement.builder().id(elementId).build();
     when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
 
-    mockMvc
-        .perform(delete("/api/layer-elements/" + elementId))
-        .andExpect(status().isOk());
+    mockMvc.perform(delete("/api/layer-elements/" + elementId)).andExpect(status().isOk());
 
     verify(layerElementRepository, times(1)).delete(element);
   }

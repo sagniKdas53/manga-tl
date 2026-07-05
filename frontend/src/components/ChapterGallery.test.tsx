@@ -167,7 +167,10 @@ describe("ChapterGallery Component", () => {
   it("handles deleting a page", async () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: true });
     // For the refresh fetch
-    mockSafeFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
 
     render(
       <ChapterGallery
@@ -190,9 +193,12 @@ describe("ChapterGallery Component", () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/pages/p1", expect.objectContaining({
-        method: "DELETE",
-      }));
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/pages/p1",
+        expect.objectContaining({
+          method: "DELETE",
+        }),
+      );
       expect(mockSetPages).toHaveBeenCalled();
     });
   });
@@ -220,7 +226,10 @@ describe("ChapterGallery Component", () => {
     fireEvent.click(refreshBtn);
 
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/chapters/c1/pages", expect.any(Object));
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/chapters/c1/pages",
+        expect.any(Object),
+      );
       expect(mockSetPages).toHaveBeenCalled();
     });
   });
@@ -228,7 +237,8 @@ describe("ChapterGallery Component", () => {
   it("handles exporting chapter zip", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
-      blob: () => Promise.resolve(new Blob(["dummy"], { type: "application/zip" })),
+      blob: () =>
+        Promise.resolve(new Blob(["dummy"], { type: "application/zip" })),
     });
 
     global.URL.createObjectURL = vi.fn(() => "blob:http://localhost/dummy");
@@ -247,11 +257,16 @@ describe("ChapterGallery Component", () => {
       />,
     );
 
-    const exportBtn = screen.getByRole("button", { name: "Export Chapter (ZIP)" });
+    const exportBtn = screen.getByRole("button", {
+      name: "Export Chapter (ZIP)",
+    });
     fireEvent.click(exportBtn);
 
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/chapters/c1/export?format=zip", expect.any(Object));
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/series/chapters/c1/export?format=zip",
+        expect.any(Object),
+      );
       expect(global.URL.createObjectURL).toHaveBeenCalled();
     });
   });
@@ -283,17 +298,23 @@ describe("ChapterGallery Component", () => {
 
     await waitFor(() => {
       expect(mockSetPages).toHaveBeenCalled();
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/chapters/c1/pages/reorder", expect.objectContaining({
-        method: "PUT",
-        body: JSON.stringify(["p2", "p1"]),
-      }));
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/chapters/c1/pages/reorder",
+        expect.objectContaining({
+          method: "PUT",
+          body: JSON.stringify(["p2", "p1"]),
+        }),
+      );
     });
   });
 
   it("handles project import", async () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: true }); // for import
-    mockSafeFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }); // for pages refresh
-    
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+    }); // for pages refresh
+
     render(
       <ChapterGallery
         user={mockUser}
@@ -304,27 +325,36 @@ describe("ChapterGallery Component", () => {
         setPages={mockSetPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
-      />
+      />,
     );
-    const projInput = document.querySelector("#project-import-upload") as HTMLInputElement;
+    const projInput = document.querySelector(
+      "#project-import-upload",
+    ) as HTMLInputElement;
     const file = new File(["1"], "proj.zip", { type: "application/zip" });
     fireEvent.change(projInput, { target: { files: [file] } });
-    
+
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/chapters/c1/import-project", expect.objectContaining({ method: "POST" }));
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/chapters/c1/import-project",
+        expect.objectContaining({ method: "POST" }),
+      );
     });
   });
 
   it("handles uploading multiple pages with progress", async () => {
-    const sendMock = vi.fn(function(this: any) {
+    const sendMock = vi.fn(function (this: XMLHttpRequest) {
       if (this.upload && this.upload.onprogress) {
-        this.upload.onprogress({ lengthComputable: true, loaded: 50, total: 100 });
+        this.upload.onprogress({
+          lengthComputable: true,
+          loaded: 50,
+          total: 100,
+        });
       }
       this.status = 200;
       if (this.onload) this.onload();
     });
-    
-    const XHRMock = vi.fn().mockImplementation(function(this: any) {
+
+    const XHRMock = vi.fn().mockImplementation(function (this: XMLHttpRequest) {
       this.open = vi.fn();
       this.send = sendMock;
       this.setRequestHeader = vi.fn();
@@ -332,11 +362,14 @@ describe("ChapterGallery Component", () => {
       this.status = 200;
       this.onload = null;
     });
-    
-    vi.stubGlobal('XMLHttpRequest', XHRMock);
-    
-    mockSafeFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }); // for pages refresh
-    
+
+    vi.stubGlobal("XMLHttpRequest", XHRMock);
+
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+    }); // for pages refresh
+
     render(
       <ChapterGallery
         user={mockUser}
@@ -347,25 +380,30 @@ describe("ChapterGallery Component", () => {
         setPages={mockSetPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
-      />
+      />,
     );
-    
-    const fileInput = document.querySelector("#file-upload") as HTMLInputElement;
+
+    const fileInput = document.querySelector(
+      "#file-upload",
+    ) as HTMLInputElement;
     const files = [
-      new File(["1"], "page1.jpg", { type: "image/jpeg" })
-    ] as any;
+      new File(["1"], "page1.jpg", { type: "image/jpeg" }),
+    ] as unknown as FileList;
     files.item = (i: number) => files[i];
-    
+
     fireEvent.change(fileInput, { target: { files } });
-    
+
     // Check that xhr.send was called
     await waitFor(() => {
       expect(sendMock).toHaveBeenCalled();
     });
-    
+
     // Wait for pages refresh
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/chapters/c1/pages", expect.any(Object));
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/chapters/c1/pages",
+        expect.any(Object),
+      );
     });
   });
 
