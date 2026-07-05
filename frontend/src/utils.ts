@@ -100,3 +100,12 @@ export function toSlug(text: string): string {
     .replace(/[-\s]+/g, "-"); // replace spaces/hyphens with single hyphen
   return cleaned || "manga";
 }
+
+// Formats cost in a human-friendly format (e.g. $0.00, $0.0045, $0.000001, $2.30e-7)
+export function formatCost(cost: number | null | undefined): string {
+  if (cost == null) return "N/A";
+  if (cost === 0) return "$0.00";
+  if (cost >= 0.01) return `$${cost.toFixed(4)}`;
+  if (cost >= 0.0001) return `$${cost.toFixed(6)}`;
+  return `$${cost.toExponential(2)}`;
+}

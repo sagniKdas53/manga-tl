@@ -26,7 +26,6 @@
 
 ### Export Improvements
 
-- [ ] **Add `meta-data.json` to chapter export ZIP** — Include: page order, layer counts, active layer per page, QA status, manual changes flag, OCR/TL models used, per-page and total cost.
 - [ ] **Full ePub export** — Extend `ChapterExportService.java` (which currently does ZIP only) to support ePub packaging.
 
 ### Import issues, with ePub and zips
@@ -60,7 +59,20 @@
 
 ### Cost Tracking
 
-- [ ] **Track actual API costs per layer** — Once cost estimation is fixed, log real costs (tokens × price) at the layer level for both OCR and TL/QA. Surface per-chapter and per-series totals in the UI.
+- [ ] **Cost tracking** - Even when using paid models most job still print `manga-worker     | 2026-07-05 15:45:06,357 [INFO] [QA] VLM QA job estimated cost: $0.00000 (Tokens: in=2268, out=320)`
+- [ ] The costs.json is indded populated but not useful at all
+  - [ ] `{"google/gemini-3.1-flash-lite":{"prompt":2.5e-7,"completion":0.0000015,"timestamp":1783171687.58696},"deepseek/deepseek-v4-pro":{"prompt":0.0000013888466666666668,"completion":0.0000027747600000000003,"timestamp":1783171687.58696},"qwen/qwen3-vl-8b-instruct":{"prompt":1.835e-7,"completion":6.025e-7,"timestamp":1783171687.58696},"deepseek/deepseek-v4-flash":{"prompt":1.2800625e-7,"completion":2.572e-7,"timestamp":1783171687.58696}}`
+- [ ] **Track actual API costs per layer** — Once cost estimation is fixed, log real costs (tokens × price) at the layer level for both OCR and TL and QA
+- [ ] **Add the costs per layer to `project.json` of each page** —
+  - [ ] Current layer schema `{"id":"46416817-aefb-40fe-bd7b-22694d977a75","type":"ocr","targetLanguage":null,"visible":true,"metadataJson":{"time":"2026-07-05T15:42:56.831839968Z","model":"MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)","provider":"OCR Worker","confidence":0.9005396515130997,"layer_name":"OCR","layer_order":1,"last_modified":"2026-07-05T15:42:56.833707446Z"},"elements":[{"id":"3fdce379-4c9a-4c4d-865e-a3772a7a83bc","text":"ほら止まポチ!！","font":"Comic Neue","size":null,"autoSize":true,"x":992,"y":20,"maxWidth":124,"maxHeight":234,"rotation":0,"visible":true,"wordWrap":true,"backgroundColor":null,"textColor":null,"fontWeight":"normal","fontStyle":"normal","boxShape":"rectangular","maskPolygon":null,"regionId":"b85eeb0b-a277-4ccf-a237-16ae22b10ffc"},{"id":"b91885bc-871b-49d4-91b2-d7b1267291a6","text":"一月後","font":"Comic Neue","size":null,"autoSize":true,"x":321,"y":0,"maxWidth":183,"maxHeight":68,"rotation":0,"visible":true,"wordWrap":true,"backgroundColor":null,"textColor":null,"fontWeight":"normal","fontStyle":"normal","boxShape":"rectangular","maskPolygon":null,"regionId":"6ccde764-b91e-40e3-ab44-f5660b036901"},{"id":"430c6652-2a8b-4610-8cf5-fe9e31d4d9c4","text":"7","font":"Comic Neue","size":null,"autoSize":true,"x":1072,"y":353,"maxWidth":88,"maxHeight":86,"rotation":0,"visible":true,"wordWrap":true,"backgroundColor":null,"textColor":null,"fontWeight":"normal","fontStyle":"normal","boxShape":"rectangular","maskPolygon":null,"regionId":"b76c04d1-9da0-44fc-bed8-eb8dc4345e6f"},{"id":"60e00cc7-9578-4d24-b11c-c6fee5c0feaf","text":"どうしょう…アタシ本当に…一生このチビのパッド！？","font":"Comic Neue","size":null,"autoSize":true,"x":40,"y":649,"maxWidth":156,"maxHeight":296,"rotation":0,"visible":true,"wordWrap":true,"backgroundColor":null,"textColor":null,"fontWeight":"normal","fontStyle":"normal","boxShape":"rectangular","maskPolygon":null,"regionId":"963c2851-a3c4-421e-abdf-89c4fdd030fd"}]}`
+  - [ ] Also need to add QA feedback recieved for layers to the layers it was generated for
+  - [ ] Add to each each layer it's estimated cost, during export we can expect project json to be something like this
+  - [ ] `{"pageNumber":1,"imageId":"106e431e-b4fe-4874-8b47-c43bbda47dd8","dimensions":{"width":1190,"height":983},"totalCost":"sum-of-cost-of-all-layers","exportedAt":"2026-07-05T16:05:19.307Z","layers":["layers","here"]}`
+  - [ ] **Update the `meta-data.json` in chapter export ZIP**
+    - [ ] Current page schema `{"pageNumber":1,"imageId":"106e431e-b4fe-4874-8b47-c43bbda47dd8","modelsUsed":{"translation":"openrouter/deepseek/deepseek-v4-pro","ocr":"MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)"},"cost":{"estimated_cost":7.3102666400000006e-9,"currency":"USD"},"layerCount":2,"hasRendered":true,"activeLayer":{"language":"en","id":"29c72545-b2c2-47b6-8f57-fbdd0242dac9","type":"translation"},"manualChangesDone":false,"manualQaNeeded":false,"originalFilename":"bd1bae9ef130939f1a5cc4263797fe0b.jpg"}`
+    - [ ] Should include the ideally the entire `project.json` with the correct cost, visibility.
+    - [ ] The `meta-data.json` has current structure as `{"pages":["pages","json","here"],"chapterTotalCost":{"estimated_cost":1.5578991566666667e-8,"currency":"USD"},"totalPages":3,"exportTimestamp":"2026-07-05T16:12:46.895557125Z","chapterNumber":2,"chapterTitle":"Chapter2","seriesTitle":"Test"}`
+    - [ ] Once everything is wired in correctly, I believe it should be more more useful and eventually be used to display cost on the frone-end (Long term goal, not right now)
 
 ### Distributed Workers
 
