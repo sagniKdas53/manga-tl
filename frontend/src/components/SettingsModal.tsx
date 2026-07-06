@@ -168,7 +168,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.ocrProvider || ""}
                 onChange={(e) => handleChange("ocrProvider", e.target.value)}
               >
-                {OCR_PROVIDERS.map((p) => (
+                {OCR_PROVIDERS.filter((p) => p !== "local" || !settings.disableLocalOcr).map((p) => (
                   <option
                     key={p}
                     value={p}
@@ -195,18 +195,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <select
                 id="ocrModel"
                 className="glass-input"
-                value={settings.ocrModel || ""}
+                value={settings.ocrProvider === "local" ? (settings.localOcrModel || "local") : (settings.ocrModel || "")}
                 onChange={(e) => handleChange("ocrModel", e.target.value)}
+                disabled={settings.ocrProvider === "local"}
+                style={settings.ocrProvider === "local" ? { opacity: 0.6, cursor: "not-allowed" } : {}}
               >
-                <option value="">-- Default / Inherit Env --</option>
-                {settings.ocrVlmModelList.map((m) => (
-                  <option
-                    key={m}
-                    value={m}
-                  >
-                    {m}
+                {settings.ocrProvider === "local" ? (
+                  <option value={settings.localOcrModel || "local"}>
+                    {settings.localOcrModel || "Local Worker Model"}
                   </option>
-                ))}
+                ) : (
+                  <>
+                    <option value="">-- Default / Inherit Env --</option>
+                    {settings.ocrVlmModelList.map((m) => (
+                      <option
+                        key={m}
+                        value={m}
+                      >
+                        {m}
+                      </option>
+                    ))}
+                  </>
+                )}
               </select>
             </div>
 

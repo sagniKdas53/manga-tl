@@ -151,11 +151,19 @@ export interface LayerEditHistory {
 }
 
 export interface SystemSettingsDto {
-  ocrProvider: string;
   ocrVlmModelList: string[];
-  tlProvider: string;
   tlLlmModelList: string[];
-  qaProvider: string;
   qaLlmModelList: string[];
   qaVlmModelList: string[];
+
+  ocrProvider: string;
+  ocrModel: string;
+  tlProvider: string;
+  tlModel: string;
+  qaProvider: string;
+  qaLlmModel: string;
+  qaVlmModel: string;
+
+  disableLocalOcr?: boolean;
+  localOcrModel?: string;
 }
