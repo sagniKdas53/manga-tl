@@ -83,15 +83,16 @@ public class SystemSettingsService {
   }
 
   public String getSettingValue(String key, String defaultValue) {
-    return systemSettingsRepository.findById(key)
+    return systemSettingsRepository
+        .findById(key)
         .map(SystemSetting::getSettingValue)
         .orElse(defaultValue);
   }
 
   private void saveSetting(String key, String value) {
     if (value == null) return;
-    SystemSetting setting = systemSettingsRepository.findById(key)
-        .orElse(new SystemSetting(key, value, null));
+    SystemSetting setting =
+        systemSettingsRepository.findById(key).orElse(new SystemSetting(key, value, null));
     setting.setSettingValue(value);
     systemSettingsRepository.save(setting);
   }

@@ -99,15 +99,47 @@ public class JobCoordinatorService {
                   job.put("pageNumber", page.getPageNumber());
                   job.put("chapterNumber", chapter.getChapterNumber());
 
-                  com.manga.library.dto.SystemSettingsDto settings = systemSettingsService.getSettings();
+                  com.manga.library.dto.SystemSettingsDto settings =
+                      systemSettingsService.getSettings();
 
-                  job.put("ocrProvider", resolveModel(chapter.getOcrProvider(), series.getOcrProvider(), settings.getOcrProvider()));
-                  job.put("ocrModel", resolveModel(chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
-                  job.put("tlProvider", resolveModel(chapter.getTlProvider(), series.getTlProvider(), settings.getTlProvider()));
-                  job.put("tlModel", resolveModel(chapter.getTlModel(), series.getTlModel(), settings.getTlModel()));
-                  job.put("qaProvider", resolveModel(chapter.getQaProvider(), series.getQaProvider(), settings.getQaProvider()));
-                  job.put("qaLlmModel", resolveModel(chapter.getQaLlmModel(), series.getQaLlmModel(), settings.getQaLlmModel()));
-                  job.put("qaVlmModel", resolveModel(chapter.getQaVlmModel(), series.getQaVlmModel(), settings.getQaVlmModel()));
+                  job.put(
+                      "ocrProvider",
+                      resolveModel(
+                          chapter.getOcrProvider(),
+                          series.getOcrProvider(),
+                          settings.getOcrProvider()));
+                  job.put(
+                      "ocrModel",
+                      resolveModel(
+                          chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
+                  job.put(
+                      "tlProvider",
+                      resolveModel(
+                          chapter.getTlProvider(),
+                          series.getTlProvider(),
+                          settings.getTlProvider()));
+                  job.put(
+                      "tlModel",
+                      resolveModel(
+                          chapter.getTlModel(), series.getTlModel(), settings.getTlModel()));
+                  job.put(
+                      "qaProvider",
+                      resolveModel(
+                          chapter.getQaProvider(),
+                          series.getQaProvider(),
+                          settings.getQaProvider()));
+                  job.put(
+                      "qaLlmModel",
+                      resolveModel(
+                          chapter.getQaLlmModel(),
+                          series.getQaLlmModel(),
+                          settings.getQaLlmModel()));
+                  job.put(
+                      "qaVlmModel",
+                      resolveModel(
+                          chapter.getQaVlmModel(),
+                          series.getQaVlmModel(),
+                          settings.getQaVlmModel()));
                 }
               });
 
@@ -123,8 +155,14 @@ public class JobCoordinatorService {
   }
 
   private String resolveModel(String chapterVal, String seriesVal, String globalVal) {
-    if (chapterVal != null && !chapterVal.trim().isEmpty() && !chapterVal.equals("inherit") && !chapterVal.equals("default")) return chapterVal;
-    if (seriesVal != null && !seriesVal.trim().isEmpty() && !seriesVal.equals("inherit") && !seriesVal.equals("default")) return seriesVal;
+    if (chapterVal != null
+        && !chapterVal.trim().isEmpty()
+        && !chapterVal.equals("inherit")
+        && !chapterVal.equals("default")) return chapterVal;
+    if (seriesVal != null
+        && !seriesVal.trim().isEmpty()
+        && !seriesVal.equals("inherit")
+        && !seriesVal.equals("default")) return seriesVal;
     return globalVal;
   }
 

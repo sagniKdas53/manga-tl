@@ -619,13 +619,12 @@ public class SeriesController {
           Map<String, Object> layerMeta = new HashMap<>();
           layerMeta.put("id", l.getId().toString());
           layerMeta.put("type", l.getType());
-          layerMeta.put("visible", l.getVisible() != null ? l.getVisible() : true);
+          layerMeta.put("visible", l.getVisible() == null || l.getVisible());
           if (l.getTargetLanguage() != null) {
             layerMeta.put("targetLanguage", l.getTargetLanguage());
           }
 
           double layerCostVal = 0.0;
-          boolean layerHasCost = false;
           String modelName = null;
 
           if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
@@ -645,7 +644,6 @@ public class SeriesController {
               if (costNode.has("estimated_cost")) {
                 double estCost = costNode.get("estimated_cost").asDouble();
                 layerCostVal += estCost;
-                layerHasCost = true;
                 pageTotalCostVal += estCost;
                 pageHasCost = true;
               }
@@ -656,10 +654,12 @@ public class SeriesController {
               com.fasterxml.jackson.databind.JsonNode qaNode = metaNode.get("qa");
               Map<String, Object> qaMeta = new HashMap<>();
               if (qaNode.has("status")) qaMeta.put("status", qaNode.get("status").asText());
-              if (qaNode.has("total_regions")) qaMeta.put("total_regions", qaNode.get("total_regions").asInt());
+              if (qaNode.has("total_regions"))
+                qaMeta.put("total_regions", qaNode.get("total_regions").asInt());
               if (qaNode.has("passed")) qaMeta.put("passed", qaNode.get("passed").asInt());
               if (qaNode.has("failed")) qaMeta.put("failed", qaNode.get("failed").asInt());
-              if (qaNode.has("avg_score")) qaMeta.put("avg_score", qaNode.get("avg_score").asDouble());
+              if (qaNode.has("avg_score"))
+                qaMeta.put("avg_score", qaNode.get("avg_score").asDouble());
 
               // Extract QA cost if nested
               if (qaNode.has("cost")) {
@@ -667,7 +667,6 @@ public class SeriesController {
                 if (qaCostNode.has("estimated_cost")) {
                   double qaEstCost = qaCostNode.get("estimated_cost").asDouble();
                   layerCostVal += qaEstCost;
-                  layerHasCost = true;
                   pageTotalCostVal += qaEstCost;
                   pageHasCost = true;
 

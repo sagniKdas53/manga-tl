@@ -286,4 +286,49 @@ public class SeriesControllerTest {
         .perform(get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
         .andExpect(status().isOk());
   }
+
+  @Test
+  public void testExportChapter_NoPages() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    com.manga.library.model.Chapter chapter =
+        com.manga.library.model.Chapter.builder().id(chapterId).build();
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(java.util.Collections.emptyList());
+
+    mockMvc
+        .perform(get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  public void testDeleteChapter_NotFound() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.empty());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                "/api/series/chapters/" + chapterId))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testImportChapter_Failure() throws Exception {
+    UUID seriesId = UUID.randomUUID();
+    when(seriesRepository.findById(seriesId)).thenThrow(new RuntimeException("db error"));
+
+    org.springframework.mock.web.MockMultipartFile file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.zip", "application/zip", "dummy zip".getBytes());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/series/" + seriesId + "/chapters/import")
+                .file(file)
+                .param("chapterNumber", "1.0")
+                .param("title", "Ch 1"))
+        .andExpect(status().isInternalServerError());
+  }
 }

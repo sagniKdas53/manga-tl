@@ -46,8 +46,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       safeFetch("/api/settings", {
         headers: { Authorization: `Bearer ${user.token}` },
       })
-        .then(res => res.ok ? res.json() : null)
-        .then(data => setSettings(data))
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => setSettings(data))
         .catch(console.error);
     }
   }, [showSeriesModal, settings, user.token]);
@@ -380,8 +380,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <option value="ttb">Top to Bottom (Webtoons)</option>
                 </select>
               </div>
-              
-              <div style={{ marginTop: "16px", padding: "16px", background: "var(--bg-hover)", borderRadius: "8px" }}>
+
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "16px",
+                  background: "var(--bg-hover)",
+                  borderRadius: "8px",
+                }}
+              >
                 <div
                   onClick={() => setShowModelOverrides(!showModelOverrides)}
                   style={{
@@ -392,64 +399,236 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     userSelect: "none",
                   }}
                 >
-                  <h4 style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>Model Overrides (Optional)</h4>
+                  <h4 style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>
+                    Model Overrides (Optional)
+                  </h4>
                   <span style={{ fontSize: "12px", opacity: 0.6 }}>
                     {showModelOverrides ? "▲" : "▼"}
                   </span>
                 </div>
-                
+
                 {showModelOverrides && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "12px" }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>OCR Provider</label>
-                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newOcrProvider} onChange={(e) => setNewOcrProvider(e.target.value)}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "12px",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        OCR Provider
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newOcrProvider}
+                        onChange={(e) => setNewOcrProvider(e.target.value)}
+                      >
                         <option value="">-- Inherit --</option>
-                        {["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                        {[
+                          "local",
+                          "openrouter",
+                          "gemini",
+                          "nvidia",
+                          "ollama",
+                          "lmstudio",
+                        ].map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>OCR VLM Model</label>
-                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newOcrModel} onChange={(e) => setNewOcrModel(e.target.value)}>
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        OCR VLM Model
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newOcrModel}
+                        onChange={(e) => setNewOcrModel(e.target.value)}
+                      >
                         <option value="">-- Inherit --</option>
-                        {settings?.ocrVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                        {settings?.ocrVlmModelList.map((m) => (
+                          <option
+                            key={m}
+                            value={m}
+                          >
+                            {m}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>TL Provider</label>
-                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newTlProvider} onChange={(e) => setNewTlProvider(e.target.value)}>
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        TL Provider
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newTlProvider}
+                        onChange={(e) => setNewTlProvider(e.target.value)}
+                      >
                         <option value="">-- Inherit --</option>
-                        {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                        {[
+                          "openrouter",
+                          "gemini",
+                          "nvidia",
+                          "openai",
+                          "anthropic",
+                          "ollama",
+                          "lmstudio",
+                        ].map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>TL LLM Model</label>
-                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newTlModel} onChange={(e) => setNewTlModel(e.target.value)}>
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        TL LLM Model
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newTlModel}
+                        onChange={(e) => setNewTlModel(e.target.value)}
+                      >
                         <option value="">-- Inherit --</option>
-                        {settings?.tlLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                        {settings?.tlLlmModelList.map((m) => (
+                          <option
+                            key={m}
+                            value={m}
+                          >
+                            {m}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>QA Provider</label>
-                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newQaProvider} onChange={(e) => setNewQaProvider(e.target.value)}>
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA Provider
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newQaProvider}
+                        onChange={(e) => setNewQaProvider(e.target.value)}
+                      >
                         <option value="">-- Inherit --</option>
-                        {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                        {[
+                          "openrouter",
+                          "gemini",
+                          "nvidia",
+                          "openai",
+                          "anthropic",
+                          "ollama",
+                          "lmstudio",
+                        ].map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>QA LLM Model</label>
-                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newQaLlmModel} onChange={(e) => setNewQaLlmModel(e.target.value)}>
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA LLM Model
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newQaLlmModel}
+                        onChange={(e) => setNewQaLlmModel(e.target.value)}
+                      >
                         <option value="">-- Inherit --</option>
-                        {settings?.qaLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                        {settings?.qaLlmModelList.map((m) => (
+                          <option
+                            key={m}
+                            value={m}
+                          >
+                            {m}
+                          </option>
+                        ))}
                       </select>
                     </div>
-                    
-                    <div className="form-group" style={{ marginBottom: 0, gridColumn: "1 / -1" }}>
-                      <label className="form-label" style={{ fontSize: "12px" }}>QA VLM Model</label>
-                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newQaVlmModel} onChange={(e) => setNewQaVlmModel(e.target.value)}>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0, gridColumn: "1 / -1" }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA VLM Model
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newQaVlmModel}
+                        onChange={(e) => setNewQaVlmModel(e.target.value)}
+                      >
                         <option value="">-- Inherit --</option>
-                        {settings?.qaVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                        {settings?.qaVlmModelList.map((m) => (
+                          <option
+                            key={m}
+                            value={m}
+                          >
+                            {m}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
