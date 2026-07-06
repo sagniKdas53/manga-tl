@@ -10,7 +10,24 @@ vi.mock("react-router-dom", () => ({
 
 const mockSafeFetch = vi.fn();
 vi.mock("../utils", () => ({
-  safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
+  safeFetch: (url: string, ...args: unknown[]) => {
+    if (typeof url === "string" && url.includes("/api/settings")) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ocrProvider: "local",
+            ocrVlmModelList: ["model-ocr-1"],
+            tlProvider: "openrouter",
+            tlLlmModelList: ["model-tl-1"],
+            qaProvider: "openrouter",
+            qaLlmModelList: ["model-qa-llm-1"],
+            qaVlmModelList: ["model-qa-vlm-1"],
+          }),
+      });
+    }
+    return mockSafeFetch(url, ...args);
+  },
   toSlug: (s: string) => s.toLowerCase().replace(/\s+/g, "-"),
   getContextPath: () => "",
 }));
@@ -158,6 +175,13 @@ describe("ChapterGallery Component", () => {
         body: JSON.stringify({
           chapterNumber: 1,
           title: "Romance Dawn Updated",
+          ocrProvider: null,
+          ocrModel: null,
+          tlProvider: null,
+          tlModel: null,
+          qaProvider: null,
+          qaLlmModel: null,
+          qaVlmModel: null,
         }),
       });
       expect(mockSetSelectedChapter).toHaveBeenCalled();

@@ -128,6 +128,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [editError, setEditError] = useState("");
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
+  const [showModelOverrides, setShowModelOverrides] = useState(false);
 
   // Model overrides for Chapter
   const [editChapOcrProvider, setEditChapOcrProvider] = useState("");
@@ -161,6 +162,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       setEditChapQaProvider(selectedChapter.qaProvider || "");
       setEditChapQaLlmModel(selectedChapter.qaLlmModel || "");
       setEditChapQaVlmModel(selectedChapter.qaVlmModel || "");
+      setShowModelOverrides(false);
       setShowEditModal(true);
     }
   };
@@ -907,62 +909,78 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
               </div>
 
               <div style={{ marginTop: "16px", padding: "16px", background: "var(--bg-hover)", borderRadius: "8px" }}>
-                <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", opacity: 0.8 }}>Model Overrides (Optional)</h4>
-                
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: "12px" }}>OCR Provider</label>
-                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapOcrProvider} onChange={(e) => setEditChapOcrProvider(e.target.value)}>
-                      <option value="">-- Inherit --</option>
-                      {["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: "12px" }}>OCR VLM Model</label>
-                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapOcrModel} onChange={(e) => setEditChapOcrModel(e.target.value)}>
-                      <option value="">-- Inherit --</option>
-                      {settings?.ocrVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: "12px" }}>TL Provider</label>
-                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapTlProvider} onChange={(e) => setEditChapTlProvider(e.target.value)}>
-                      <option value="">-- Inherit --</option>
-                      {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: "12px" }}>TL LLM Model</label>
-                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapTlModel} onChange={(e) => setEditChapTlModel(e.target.value)}>
-                      <option value="">-- Inherit --</option>
-                      {settings?.tlLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: "12px" }}>QA Provider</label>
-                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapQaProvider} onChange={(e) => setEditChapQaProvider(e.target.value)}>
-                      <option value="">-- Inherit --</option>
-                      {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: "12px" }}>QA LLM Model</label>
-                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapQaLlmModel} onChange={(e) => setEditChapQaLlmModel(e.target.value)}>
-                      <option value="">-- Inherit --</option>
-                      {settings?.qaLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                  
-                  <div className="form-group" style={{ marginBottom: 0, gridColumn: "1 / -1" }}>
-                    <label className="form-label" style={{ fontSize: "12px" }}>QA VLM Model</label>
-                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapQaVlmModel} onChange={(e) => setEditChapQaVlmModel(e.target.value)}>
-                      <option value="">-- Inherit --</option>
-                      {settings?.qaVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
+                <div
+                  onClick={() => setShowModelOverrides(!showModelOverrides)}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
+                  <h4 style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>Model Overrides (Optional)</h4>
+                  <span style={{ fontSize: "12px", opacity: 0.6 }}>
+                    {showModelOverrides ? "▲" : "▼"}
+                  </span>
                 </div>
+                
+                {showModelOverrides && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "12px" }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: "12px" }}>OCR Provider</label>
+                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapOcrProvider} onChange={(e) => setEditChapOcrProvider(e.target.value)}>
+                        <option value="">-- Inherit --</option>
+                        {["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: "12px" }}>OCR VLM Model</label>
+                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapOcrModel} onChange={(e) => setEditChapOcrModel(e.target.value)}>
+                        <option value="">-- Inherit --</option>
+                        {settings?.ocrVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: "12px" }}>TL Provider</label>
+                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapTlProvider} onChange={(e) => setEditChapTlProvider(e.target.value)}>
+                        <option value="">-- Inherit --</option>
+                        {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: "12px" }}>TL LLM Model</label>
+                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapTlModel} onChange={(e) => setEditChapTlModel(e.target.value)}>
+                        <option value="">-- Inherit --</option>
+                        {settings?.tlLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: "12px" }}>QA Provider</label>
+                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapQaProvider} onChange={(e) => setEditChapQaProvider(e.target.value)}>
+                        <option value="">-- Inherit --</option>
+                        {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: "12px" }}>QA LLM Model</label>
+                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapQaLlmModel} onChange={(e) => setEditChapQaLlmModel(e.target.value)}>
+                        <option value="">-- Inherit --</option>
+                        {settings?.qaLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    
+                    <div className="form-group" style={{ marginBottom: 0, gridColumn: "1 / -1" }}>
+                      <label className="form-label" style={{ fontSize: "12px" }}>QA VLM Model</label>
+                      <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={editChapQaVlmModel} onChange={(e) => setEditChapQaVlmModel(e.target.value)}>
+                        <option value="">-- Inherit --</option>
+                        {settings?.qaVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
               {editError && (
                 <div

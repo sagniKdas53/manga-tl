@@ -6,12 +6,13 @@ import { useToast } from "./ToastContext";
 export interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  token?: string;
 }
 
 const PROVIDERS = ["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"];
 const OCR_PROVIDERS = ["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"];
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, token }) => {
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -20,7 +21,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
-      safeFetch("/api/settings")
+      safeFetch("/api/settings", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
         .then((res) => {
           if (!res.ok) throw new Error("Failed to fetch settings");
           return res.json();
@@ -35,7 +38,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           setLoading(false);
         });
     }
-  }, [isOpen]);
+  }, [isOpen, token]);
 
   if (!isOpen) return null;
 
@@ -43,9 +46,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     if (!settings) return;
     setSaving(true);
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const res = await safeFetch("/api/settings", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(settings),
       });
       if (!res.ok) throw new Error("Failed to save settings");
