@@ -88,4 +88,37 @@ public class MinioServiceTest {
     minioService.deleteFile("path/to/file.png");
     verify(minioClient, times(1)).removeObject(any(RemoveObjectArgs.class));
   }
+
+  @Test
+  public void testInit_Exception() throws Exception {
+    when(minioClient.bucketExists(any(BucketExistsArgs.class)))
+        .thenThrow(new RuntimeException("MinIO down"));
+    assertDoesNotThrow(() -> minioService.init());
+  }
+
+  @Test
+  public void testGeneratePresignedUrl_Exception() throws Exception {
+    when(minioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
+        .thenThrow(new RuntimeException("Failed generating URL"));
+
+    String url = minioService.generatePresignedUrl("path/to/file.png");
+    assertNull(url);
+  }
+
+  @Test
+  public void testDeleteFile_Exception() throws Exception {
+    doThrow(new RuntimeException("Delete failed"))
+        .when(minioClient)
+        .removeObject(any(RemoveObjectArgs.class));
+    assertDoesNotThrow(() -> minioService.deleteFile("path/to/file.png"));
+  }
+
+  @Test
+  public void testGetFileStream() throws Exception {
+    GetObjectResponse mockResponse = mock(GetObjectResponse.class);
+    when(minioClient.getObject(any(GetObjectArgs.class))).thenReturn(mockResponse);
+
+    InputStream result = minioService.getFileStream("path/to/file.png");
+    assertSame(mockResponse, result);
+  }
 }

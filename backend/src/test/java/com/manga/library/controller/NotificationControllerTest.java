@@ -56,4 +56,25 @@ public class NotificationControllerTest {
       org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
   }
+
+  @Test
+  public void testStream_UserNotFound() throws Exception {
+    org.springframework.security.core.Authentication auth =
+        mock(org.springframework.security.core.Authentication.class);
+    when(auth.isAuthenticated()).thenReturn(true);
+    when(auth.getPrincipal()).thenReturn("not-a-user-object");
+    org.springframework.security.core.context.SecurityContextHolder.getContext()
+        .setAuthentication(auth);
+
+    try {
+      Exception exception =
+          org.junit.jupiter.api.Assertions.assertThrows(
+              Exception.class, () -> mockMvc.perform(get("/api/notifications/stream")));
+      org.junit.jupiter.api.Assertions.assertTrue(exception.getCause() instanceof RuntimeException);
+      org.junit.jupiter.api.Assertions.assertEquals(
+          "User not found", exception.getCause().getMessage());
+    } finally {
+      org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+  }
 }

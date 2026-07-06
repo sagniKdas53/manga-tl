@@ -270,4 +270,126 @@ public class InternalJobControllerTest {
                 .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isOk());
   }
+
+  @Test
+  public void testLayoutCallback_Failure() throws Exception {
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("imageId", UUID.randomUUID().toString());
+    doThrow(new RuntimeException("error"))
+        .when(jobCoordinatorService)
+        .handleLayoutCallback(any(), any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/layout")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testTranslationCallback_Failure() throws Exception {
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("imageId", UUID.randomUUID().toString());
+    doThrow(new RuntimeException("error"))
+        .when(jobCoordinatorService)
+        .handleTranslationCallback(any(), any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/translation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testQaReOcrCallback_Failure() throws Exception {
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("imageId", UUID.randomUUID().toString());
+    doThrow(new RuntimeException("error"))
+        .when(jobCoordinatorService)
+        .handleQaReOcrCallback(any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/qa-re-ocr")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testRegionCallback_Failure() throws Exception {
+    UUID regionId = UUID.randomUUID();
+    when(ocrRegionRepository.findById(regionId)).thenThrow(new RuntimeException("error"));
+
+    mockMvc
+        .perform(
+            post("/api/internal/ocr-regions/" + regionId + "/callback")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testRenderCallback_Failure() throws Exception {
+    Map<String, String> payload = new HashMap<>();
+    payload.put("imageId", UUID.randomUUID().toString());
+    doThrow(new RuntimeException("error")).when(jobCoordinatorService).handleRenderCallback(any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/render")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testQaCallback_Failure() throws Exception {
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("imageId", UUID.randomUUID().toString());
+    doThrow(new RuntimeException("error"))
+        .when(jobCoordinatorService)
+        .handleQaCallback(any(), any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/qa")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testResolveNotificationContext_Exception() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    when(pageRepository.findByImageId(imageId)).thenThrow(new RuntimeException("db error"));
+    PanelCallbackDto dto = new PanelCallbackDto();
+    dto.setImageId(imageId);
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/panel")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testGetImageInfo_PageOneNoChapter() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Image image = Image.builder().id(imageId).filename("test.png").build();
+    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+
+    Series series = Series.builder().id(UUID.randomUUID()).title("Series Title").build();
+    Chapter chapter =
+        Chapter.builder().id(UUID.randomUUID()).series(series).chapterNumber(1.0).build();
+    Page page =
+        Page.builder().id(UUID.randomUUID()).pageNumber(1).image(image).chapter(chapter).build();
+    when(pageRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(page));
+
+    mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isOk());
+  }
 }
