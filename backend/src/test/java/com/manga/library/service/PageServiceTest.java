@@ -105,4 +105,24 @@ public class PageServiceTest {
     byte[] thumbnail = pageService.generateThumbnail(baos.toByteArray());
     assertNotNull(thumbnail);
   }
+
+  @Test
+  public void testDeletePageDb_NotFound() {
+    UUID pageId = UUID.randomUUID();
+    when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.empty());
+
+    assertThrows(IllegalArgumentException.class, () -> pageService.deletePageDb(pageId));
+  }
+
+  @Test
+  public void testGenerateThumbnail_InvalidBytes() {
+    byte[] thumbnail = pageService.generateThumbnail("invalid image".getBytes());
+    assertNull(thumbnail);
+  }
+
+  @Test
+  public void testGenerateThumbnail_NullBytes() {
+    byte[] thumbnail = pageService.generateThumbnail(null);
+    assertNull(thumbnail);
+  }
 }

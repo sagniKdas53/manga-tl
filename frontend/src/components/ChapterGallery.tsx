@@ -1033,14 +1033,20 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
+                        ]
+                          .filter(
+                            (p) =>
+                              !["ollama", "lmstudio"].includes(p) ||
+                              !settings?.disableLocalLlm,
+                          )
+                          .map((p) => (
+                            <option
+                              key={p}
+                              value={p}
+                            >
+                              {p}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div
@@ -1096,14 +1102,20 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
+                        ]
+                          .filter(
+                            (p) =>
+                              !["ollama", "lmstudio"].includes(p) ||
+                              !settings?.disableLocalLlm,
+                          )
+                          .map((p) => (
+                            <option
+                              key={p}
+                              value={p}
+                            >
+                              {p}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div

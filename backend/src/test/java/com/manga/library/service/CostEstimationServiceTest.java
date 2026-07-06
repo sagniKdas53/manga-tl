@@ -256,4 +256,34 @@ public class CostEstimationServiceTest {
     File file = new File(tempDir.resolve("costs.json").toString());
     assertTrue(file.exists());
   }
+
+  @Test
+  public void testUpdateCaches_FileExists() throws Exception {
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(httpResponse);
+    when(httpResponse.statusCode()).thenReturn(200);
+    when(httpResponse.body())
+        .thenReturn(
+            "{\"data\":[{\"id\":\"google/gemini-3.1-flash-lite\",\"pricing\":{\"prompt\":0.00000025,\"completion\":0.00000150}}]}");
+
+    Path cacheFile = tempDir.resolve("costs.json");
+    String cacheContent = "{\"old-model\":{\"prompt\":0.1,\"completion\":0.2}}";
+    Files.writeString(cacheFile, cacheContent);
+
+    costEstimationService.updateModelCosts(List.of("google/gemini-3.1-flash-lite"));
+
+    File file = new File(cacheFile.toString());
+    assertTrue(file.exists());
+    Map<?, ?> map = objectMapper.readValue(file, Map.class);
+    assertTrue(map.containsKey("old-model"));
+    assertTrue(map.containsKey("google/gemini-3.1-flash-lite"));
+  }
+
+  @Test
+  public void testSaveJobCost_Exception() {
+    when(redisTemplate.opsForList()).thenThrow(new RuntimeException("Redis error"));
+    assertDoesNotThrow(
+        () -> costEstimationService.estimateCost("google/gemini-2.5-flash", 10, 10, "ollama"));
+  }
 }

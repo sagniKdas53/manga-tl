@@ -230,4 +230,69 @@ public class LayerControllerTest {
 
     mockMvc.perform(delete("/api/layer-elements/" + elementId)).andExpect(status().isNotFound());
   }
+
+  @Test
+  public void testUpdateLayerElement_WithParentLayerMetadata() throws Exception {
+    UUID elementId = UUID.randomUUID();
+    com.fasterxml.jackson.databind.node.ObjectNode metadata =
+        new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+    metadata.put("foo", "bar");
+
+    Layer parentLayer = Layer.builder().id(UUID.randomUUID()).metadataJson(metadata).build();
+    com.manga.library.model.LayerElement element =
+        com.manga.library.model.LayerElement.builder()
+            .id(elementId)
+            .layer(parentLayer)
+            .text("old text")
+            .build();
+
+    when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
+    when(layerElementRepository.save(any())).thenReturn(element);
+    when(layerRepository.save(any())).thenReturn(parentLayer);
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/layer-elements/" + elementId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\": \"new text\"}"))
+        .andExpect(status().isOk());
+
+    verify(layerRepository, times(1)).save(parentLayer);
+  }
+
+  @Test
+  public void testCreateLayer_MetadataAndDoubleZOrder() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Image image = Image.builder().id(imageId).filename("test.png").build();
+    Layer layer = Layer.builder().id(UUID.randomUUID()).image(image).type("translation").build();
+
+    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+    when(layerRepository.save(any(Layer.class))).thenReturn(layer);
+
+    mockMvc
+        .perform(
+            post("/api/images/" + imageId + "/layers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"type\": \"translation\", \"zOrder\": 2.5, \"metadataJson\": {\"foo\":"
+                        + " \"bar\"}}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testUpdateLayer_DoubleZOrder() throws Exception {
+    UUID layerId = UUID.randomUUID();
+    Layer layer = Layer.builder().id(layerId).zOrder(1).visible(true).build();
+    when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
+    when(layerRepository.save(any(Layer.class))).thenReturn(layer);
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/layers/" + layerId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"zOrder\": 3.5, \"visible\": false}"))
+        .andExpect(status().isOk());
+  }
 }

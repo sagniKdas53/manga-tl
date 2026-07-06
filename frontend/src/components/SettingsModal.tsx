@@ -172,7 +172,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.ocrProvider || ""}
                 onChange={(e) => handleChange("ocrProvider", e.target.value)}
               >
-                {OCR_PROVIDERS.filter((p) => p !== "local" || !settings.disableLocalOcr).map((p) => (
+                {OCR_PROVIDERS.filter(
+                  (p) => p !== "local" || !settings.disableLocalOcr,
+                ).map((p) => (
                   <option
                     key={p}
                     value={p}
@@ -199,10 +201,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <select
                 id="ocrModel"
                 className="glass-input"
-                value={settings.ocrProvider === "local" ? (settings.localOcrModel || "local") : (settings.ocrModel || "")}
+                value={
+                  settings.ocrProvider === "local"
+                    ? settings.localOcrModel || "local"
+                    : settings.ocrModel || ""
+                }
                 onChange={(e) => handleChange("ocrModel", e.target.value)}
                 disabled={settings.ocrProvider === "local"}
-                style={settings.ocrProvider === "local" ? { opacity: 0.6, cursor: "not-allowed" } : {}}
+                style={
+                  settings.ocrProvider === "local"
+                    ? { opacity: 0.6, cursor: "not-allowed" }
+                    : {}
+                }
               >
                 {settings.ocrProvider === "local" ? (
                   <option value={settings.localOcrModel || "local"}>
@@ -252,7 +262,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.tlProvider || ""}
                 onChange={(e) => handleChange("tlProvider", e.target.value)}
               >
-                {PROVIDERS.filter((p) => !["ollama", "lmstudio"].includes(p) || !settings.disableLocalLlm).map((p) => (
+                {PROVIDERS.filter(
+                  (p) =>
+                    !["ollama", "lmstudio"].includes(p) ||
+                    !settings.disableLocalLlm,
+                ).map((p) => (
                   <option
                     key={p}
                     value={p}
@@ -322,7 +336,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.qaProvider || ""}
                 onChange={(e) => handleChange("qaProvider", e.target.value)}
               >
-                {PROVIDERS.filter((p) => !["ollama", "lmstudio"].includes(p) || !settings.disableLocalLlm).map((p) => (
+                {PROVIDERS.filter(
+                  (p) =>
+                    !["ollama", "lmstudio"].includes(p) ||
+                    !settings.disableLocalLlm,
+                ).map((p) => (
                   <option
                     key={p}
                     value={p}
@@ -430,6 +448,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             gap: "12px",
             marginTop: "24px",
           }}
+        >
           <button
             type="button"
             className="btn btn-secondary"
