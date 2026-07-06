@@ -22,6 +22,13 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- System Settings
+CREATE TABLE IF NOT EXISTS system_settings (
+    setting_key TEXT PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Series
 CREATE TABLE IF NOT EXISTS series (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -31,6 +38,13 @@ CREATE TABLE IF NOT EXISTS series (
     target_language TEXT,
     reading_direction TEXT NOT NULL DEFAULT 'rtl', -- rtl, ltr, ttb
     metadata_json JSONB,
+    ocr_provider TEXT,
+    ocr_model TEXT,
+    tl_provider TEXT,
+    tl_model TEXT,
+    qa_provider TEXT,
+    qa_llm_model TEXT,
+    qa_vlm_model TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -53,6 +67,13 @@ CREATE TABLE IF NOT EXISTS chapters (
     title TEXT,
     summary_json JSONB,
     summary_generated_at TIMESTAMPTZ,
+    ocr_provider TEXT,
+    ocr_model TEXT,
+    tl_provider TEXT,
+    tl_model TEXT,
+    qa_provider TEXT,
+    qa_llm_model TEXT,
+    qa_vlm_model TEXT,
     UNIQUE(series_id, chapter_number)
 );
 

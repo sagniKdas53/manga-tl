@@ -12,4 +12,11 @@ public class SeriesDto {
   private String targetLanguage;
   private String readingDirection;
   private String coverImageUrl;
+  private String ocrProvider;
+  private String ocrModel;
+  private String tlProvider;
+  private String tlModel;
+  private String qaProvider;
+  private String qaLlmModel;
+  private String qaVlmModel;
 }

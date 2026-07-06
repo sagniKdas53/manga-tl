@@ -10,4 +10,11 @@ public class ChapterDto {
   private Double chapterNumber;
   private String title;
   private String coverImageUrl;
+  private String ocrProvider;
+  private String ocrModel;
+  private String tlProvider;
+  private String tlModel;
+  private String qaProvider;
+  private String qaLlmModel;
+  private String qaVlmModel;
 }

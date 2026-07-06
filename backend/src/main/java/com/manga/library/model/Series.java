@@ -42,6 +42,27 @@ public class Series {
   @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
   private String metadataJson;
 
+  @Column(name = "ocr_provider")
+  private String ocrProvider;
+
+  @Column(name = "ocr_model")
+  private String ocrModel;
+
+  @Column(name = "tl_provider")
+  private String tlProvider;
+
+  @Column(name = "tl_model")
+  private String tlModel;
+
+  @Column(name = "qa_provider")
+  private String qaProvider;
+
+  @Column(name = "qa_llm_model")
+  private String qaLlmModel;
+
+  @Column(name = "qa_vlm_model")
+  private String qaVlmModel;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by")
   @com.fasterxml.jackson.annotation.JsonIgnore
