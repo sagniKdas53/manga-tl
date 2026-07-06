@@ -393,4 +393,61 @@ public class PageControllerTest {
                 .param("type", "ocr"))
         .andExpect(status().isOk());
   }
+
+  @Test
+  public void testUploadPage_DuplicateImage() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    Chapter chapter =
+        Chapter.builder()
+            .id(chapterId)
+            .series(com.manga.library.model.Series.builder().build())
+            .build();
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageService.getFileExtension(anyString())).thenReturn(".png");
+
+    UUID existingImageId = UUID.randomUUID();
+    Image existingImage = Image.builder().id(existingImageId).hash("somehash").build();
+    when(imageRepository.findByHash(anyString())).thenReturn(Optional.of(existingImage));
+
+    Page page = Page.builder().id(UUID.randomUUID()).image(existingImage).build();
+    when(pageService.createPageWithExistingImage(any(), any(), any(), any())).thenReturn(page);
+
+    org.springframework.mock.web.MockMultipartFile file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.png", "image/png", "dummy data".getBytes());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/images")
+                .file(file)
+                .param("chapterId", chapterId.toString())
+                .param("pageNumber", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("duplicate"));
+  }
+
+  @Test
+  public void testDeletePage_Failure() throws Exception {
+    UUID pageId = UUID.randomUUID();
+    when(pageService.deletePageDb(pageId)).thenThrow(new RuntimeException("database error"));
+
+    mockMvc.perform(delete("/api/pages/" + pageId)).andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testGetImageFile_NotFound() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    when(imageRepository.findById(imageId)).thenReturn(Optional.empty());
+
+    mockMvc.perform(get("/api/images/" + imageId + "/file")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testGetImageThumbnail_NotFound() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    when(imageRepository.findById(imageId)).thenReturn(Optional.empty());
+
+    mockMvc.perform(get("/api/images/" + imageId + "/thumbnail")).andExpect(status().isNotFound());
+  }
 }

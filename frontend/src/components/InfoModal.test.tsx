@@ -67,4 +67,14 @@ describe("InfoModal", () => {
     fireEvent.click(backdrop);
     expect(defaultProps.onClose).toHaveBeenCalled();
   });
+
+  it("handles button hover style changes", () => {
+    render(<InfoModal {...defaultProps} />);
+    const okBtn = screen.getByRole("button", { name: /ok/i });
+
+    fireEvent.mouseEnter(okBtn);
+    expect(okBtn.style.opacity).toBe("0.88");
+    fireEvent.mouseLeave(okBtn);
+    expect(okBtn.style.opacity).toBe("1");
+  });
 });

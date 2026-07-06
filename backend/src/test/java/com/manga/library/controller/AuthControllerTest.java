@@ -146,4 +146,44 @@ public class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isUnauthorized());
   }
+
+  @Test
+  public void testLogin_PasswordMismatch() throws Exception {
+    User user = User.builder().email("test@test.com").passwordHash("hashed").build();
+    when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+    when(passwordEncoder.matches("password", "hashed")).thenReturn(false);
+
+    LoginRequest request = new LoginRequest();
+    request.setEmail("test@test.com");
+    request.setPassword("password");
+
+    mockMvc
+        .perform(
+            post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  public void testRegister_NotFirstRegistration() throws Exception {
+    when(userRepository.count()).thenReturn(10L);
+    when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.empty());
+    when(passwordEncoder.encode("password")).thenReturn("hashed_password");
+    when(jwtUtils.generateToken("user@test.com")).thenReturn("mocked_token");
+
+    RegisterRequest request = new RegisterRequest();
+    request.setEmail("user@test.com");
+    request.setPassword("password");
+    request.setDisplayName("Normal User");
+    request.setRole("viewer");
+
+    mockMvc
+        .perform(
+            post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.role").value("viewer"));
+  }
 }

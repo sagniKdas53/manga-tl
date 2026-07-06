@@ -2235,17 +2235,24 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // 4. project.json
       let totalCostVal = 0.0;
-      let hasPageCost = false;
       layers.forEach((lData) => {
         const meta = lData.layer.metadataJson;
         if (meta && typeof meta === "object") {
-          if (meta.cost && typeof meta.cost === "object" && typeof meta.cost.estimated_cost === "number") {
+          if (
+            meta.cost &&
+            typeof meta.cost === "object" &&
+            typeof meta.cost.estimated_cost === "number"
+          ) {
             totalCostVal += meta.cost.estimated_cost;
-            hasPageCost = true;
           }
-          if (meta.qa && typeof meta.qa === "object" && meta.qa.cost && typeof meta.qa.cost === "object" && typeof meta.qa.cost.estimated_cost === "number") {
+          if (
+            meta.qa &&
+            typeof meta.qa === "object" &&
+            meta.qa.cost &&
+            typeof meta.qa.cost === "object" &&
+            typeof meta.qa.cost.estimated_cost === "number"
+          ) {
             totalCostVal += meta.qa.cost.estimated_cost;
-            hasPageCost = true;
           }
         }
       });
@@ -2262,20 +2269,25 @@ export const Reader: React.FC<ReaderProps> = ({
         exportedAt: new Date().toISOString(),
         layers: layers.map((lData) => {
           let layerCostVal = 0.0;
-          let layerHasCost = false;
           const meta = lData.layer.metadataJson;
           let qaMeta = undefined;
 
           if (meta && typeof meta === "object") {
-            if (meta.cost && typeof meta.cost === "object" && typeof meta.cost.estimated_cost === "number") {
+            if (
+              meta.cost &&
+              typeof meta.cost === "object" &&
+              typeof meta.cost.estimated_cost === "number"
+            ) {
               layerCostVal += meta.cost.estimated_cost;
-              layerHasCost = true;
             }
             if (meta.qa && typeof meta.qa === "object") {
               qaMeta = { ...meta.qa };
-              if (meta.qa.cost && typeof meta.qa.cost === "object" && typeof meta.qa.cost.estimated_cost === "number") {
+              if (
+                meta.qa.cost &&
+                typeof meta.qa.cost === "object" &&
+                typeof meta.qa.cost.estimated_cost === "number"
+              ) {
                 layerCostVal += meta.qa.cost.estimated_cost;
-                layerHasCost = true;
                 qaMeta.cost = {
                   ...meta.qa.cost,
                   display: formatCost(meta.qa.cost.estimated_cost),

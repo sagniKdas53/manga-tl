@@ -10,12 +10,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.config.JwtAuthFilter;
 import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
+import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.SseService;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -55,6 +55,73 @@ public class InternalJobControllerTest {
   }
 
   @Test
+  public void testGetImageInfo_Success() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Image image =
+        Image.builder().id(imageId).filename("test.png").storagePath("orig/test.png").build();
+
+    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+    when(minioService.generatePresignedUrl(anyString())).thenReturn("http://presigned-url");
+    when(panelRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+
+    // Set up active OCR layer and elements
+    UUID ocrLayerId = UUID.randomUUID();
+    Layer ocrLayer = Layer.builder().id(ocrLayerId).type("ocr").zOrder(1).build();
+    when(layerRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(ocrLayer));
+
+    UUID regionId = UUID.randomUUID();
+    OcrRegion region = OcrRegion.builder().id(regionId).build();
+    when(ocrRegionRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(region));
+
+    LayerElement element = LayerElement.builder().id(UUID.randomUUID()).region(region).build();
+    when(layerElementRepository.findByLayerId(ocrLayerId))
+        .thenReturn(Collections.singletonList(element));
+    when(layerElementRepository.findByLayerImageId(imageId))
+        .thenReturn(Collections.singletonList(element));
+
+    // Page, Chapter, Series context
+    Series series =
+        Series.builder().id(UUID.randomUUID()).title("Series Title").originalLanguage("ja").build();
+    Chapter chapter =
+        Chapter.builder().id(UUID.randomUUID()).series(series).chapterNumber(2.0).build();
+    Page page =
+        Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(2).image(image).build();
+    when(pageRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(page));
+
+    // Previous page text
+    Page prevPage =
+        Page.builder()
+            .id(UUID.randomUUID())
+            .pageNumber(1)
+            .image(Image.builder().id(UUID.randomUUID()).build())
+            .build();
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(any()))
+        .thenReturn(Arrays.asList(prevPage, page));
+    OcrRegion prevRegion =
+        OcrRegion.builder()
+            .id(UUID.randomUUID())
+            .text("prev text")
+            .translatedText("translated prev")
+            .build();
+    when(ocrRegionRepository.findByImageId(prevPage.getImage().getId()))
+        .thenReturn(Collections.singletonList(prevRegion));
+
+    // Previous chapter summary
+    Chapter prevChapter = Chapter.builder().id(UUID.randomUUID()).summaryJson("summary").build();
+    when(chapterRepository.findBySeriesIdAndChapterNumber(any(), eq(1.0)))
+        .thenReturn(Optional.of(prevChapter));
+
+    // Conversations
+    Conversation conv = Conversation.builder().id(UUID.randomUUID()).sceneType("dialogue").build();
+    when(conversationRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(conv));
+    ConversationRegion cr = ConversationRegion.builder().regionId(regionId).position(1).build();
+    when(conversationRegionRepository.findByConversationId(conv.getId()))
+        .thenReturn(Collections.singletonList(cr));
+
+    mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isOk());
+  }
+
+  @Test
   public void testPanelCallback_Success() throws Exception {
     PanelCallbackDto dto = new PanelCallbackDto();
     dto.setImageId(UUID.randomUUID());
@@ -70,6 +137,22 @@ public class InternalJobControllerTest {
   }
 
   @Test
+  public void testPanelCallback_Failure() throws Exception {
+    PanelCallbackDto dto = new PanelCallbackDto();
+    dto.setImageId(UUID.randomUUID());
+    doThrow(new RuntimeException("error"))
+        .when(jobCoordinatorService)
+        .handlePanelCallback(any(PanelCallbackDto.class));
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/panel")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
   public void testOcrCallback_Success() throws Exception {
     OcrCallbackDto dto = new OcrCallbackDto();
     dto.setImageId(UUID.randomUUID());
@@ -81,6 +164,20 @@ public class InternalJobControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(dto)))
         .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testOcrCallback_Failure() throws Exception {
+    OcrCallbackDto dto = new OcrCallbackDto();
+    dto.setImageId(UUID.randomUUID());
+    doThrow(new RuntimeException("error")).when(jobCoordinatorService).handleOcrCallback(any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/ocr")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isInternalServerError());
   }
 
   @Test
@@ -122,6 +219,55 @@ public class InternalJobControllerTest {
             post("/api/internal/jobs/callback/qa")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testQaReOcrCallback_Success() throws Exception {
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("imageId", UUID.randomUUID().toString());
+    payload.put("results", List.of());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/qa-re-ocr")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testRegionCallback_Success() throws Exception {
+    UUID regionId = UUID.randomUUID();
+    OcrRegion region =
+        OcrRegion.builder()
+            .id(regionId)
+            .image(Image.builder().id(UUID.randomUUID()).build())
+            .build();
+    when(ocrRegionRepository.findById(regionId)).thenReturn(Optional.of(region));
+
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("text", "updated text");
+    payload.put("translatedText", "updated translation");
+
+    mockMvc
+        .perform(
+            post("/api/internal/ocr-regions/" + regionId + "/callback")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testRenderCallback_Success() throws Exception {
+    Map<String, String> payload = new HashMap<>();
+    payload.put("imageId", UUID.randomUUID().toString());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/render")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isOk());
   }
 }
