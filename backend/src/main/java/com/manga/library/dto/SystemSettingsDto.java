@@ -26,4 +26,7 @@ public class SystemSettingsDto {
 
   private boolean disableLocalOcr;
   private String localOcrModel;
+
+  private boolean disableLocalLlm;
+  private String qaMode;
 }

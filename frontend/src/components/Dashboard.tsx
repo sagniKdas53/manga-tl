@@ -37,6 +37,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [newQaProvider, setNewQaProvider] = useState("");
   const [newQaLlmModel, setNewQaLlmModel] = useState("");
   const [newQaVlmModel, setNewQaVlmModel] = useState("");
+  const [newQaMode, setNewQaMode] = useState("");
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [showModelOverrides, setShowModelOverrides] = useState(false);
@@ -85,6 +86,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setNewQaProvider(s.qaProvider || "");
     setNewQaLlmModel(s.qaLlmModel || "");
     setNewQaVlmModel(s.qaVlmModel || "");
+    setNewQaMode(s.qaMode || "");
     setShowModelOverrides(false);
     setShowSeriesModal(true);
   };
@@ -103,6 +105,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setNewQaProvider("");
     setNewQaLlmModel("");
     setNewQaVlmModel("");
+    setNewQaMode("");
     setShowModelOverrides(false);
     setShowSeriesModal(true);
   };
@@ -143,6 +146,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           qaProvider: newQaProvider || null,
           qaLlmModel: newQaLlmModel || null,
           qaVlmModel: newQaVlmModel || null,
+          qaMode: newQaMode || null,
         }),
       });
       if (res.ok) {
@@ -503,7 +507,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].map((p) => (
+                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -566,7 +570,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].map((p) => (
+                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -606,7 +610,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                     <div
                       className="form-group"
-                      style={{ marginBottom: 0, gridColumn: "1 / -1" }}
+                      style={{ marginBottom: 0 }}
                     >
                       <label
                         className="form-label"
@@ -629,6 +633,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             {m}
                           </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA Mode
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newQaMode}
+                        onChange={(e) => setNewQaMode(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        <option value="auto">auto</option>
+                        <option value="llm">llm</option>
+                        <option value="vlm">vlm</option>
+                        <option value="none">none</option>
                       </select>
                     </div>
                   </div>

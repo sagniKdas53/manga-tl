@@ -56,6 +56,12 @@ public class SystemSettingsService {
   @Value("${PADDLEOCR_REC_MODEL:PP-OCRv6_medium_rec}")
   private String paddleOcrRecModel;
 
+  @Value("${DISABLE_LOCAL_LLM:false}")
+  private boolean disableLocalLlm;
+
+  @Value("${QA_MODE:auto}")
+  private String qaMode;
+
   public SystemSettingsDto getSettings() {
     SystemSettingsDto dto = new SystemSettingsDto();
 
@@ -74,6 +80,9 @@ public class SystemSettingsService {
 
     dto.setDisableLocalOcr(disableLocalOcr);
     dto.setLocalOcrModel(paddleOcrRecModel);
+
+    dto.setDisableLocalLlm(disableLocalLlm);
+    dto.setQaMode(getSettingValue("qaMode", qaMode));
 
     return dto;
   }

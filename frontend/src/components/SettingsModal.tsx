@@ -247,7 +247,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.tlProvider || ""}
                 onChange={(e) => handleChange("tlProvider", e.target.value)}
               >
-                {PROVIDERS.map((p) => (
+                {PROVIDERS.filter((p) => !["ollama", "lmstudio"].includes(p) || !settings.disableLocalLlm).map((p) => (
                   <option
                     key={p}
                     value={p}
@@ -316,7 +316,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.qaProvider || ""}
                 onChange={(e) => handleChange("qaProvider", e.target.value)}
               >
-                {PROVIDERS.map((p) => (
+                {PROVIDERS.filter((p) => !["ollama", "lmstudio"].includes(p) || !settings.disableLocalLlm).map((p) => (
                   <option
                     key={p}
                     value={p}
@@ -386,6 +386,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     {m}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            >
+              <label
+                htmlFor="qaMode"
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  color: "var(--text)",
+                }}
+              >
+                Global QA Mode
+              </label>
+              <select
+                id="qaMode"
+                className="glass-input"
+                value={settings.qaMode || ""}
+                onChange={(e) => handleChange("qaMode", e.target.value)}
+              >
+                <option value="auto">auto</option>
+                <option value="llm">llm</option>
+                <option value="vlm">vlm</option>
+                <option value="none">none</option>
               </select>
             </div>
           </div>
