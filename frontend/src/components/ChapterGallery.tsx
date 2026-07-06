@@ -140,12 +140,14 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
   React.useEffect(() => {
     if (showEditModal && !settings) {
-      safeFetch("/api/settings")
+      safeFetch("/api/settings", {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
         .then(res => res.ok ? res.json() : null)
         .then(data => setSettings(data))
         .catch(console.error);
     }
-  }, [showEditModal, settings]);
+  }, [showEditModal, settings, user.token]);
 
   const handleEditClick = () => {
     if (selectedChapter) {

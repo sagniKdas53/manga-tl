@@ -42,12 +42,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   React.useEffect(() => {
     if (showSeriesModal && !settings) {
-      safeFetch("/api/settings")
+      safeFetch("/api/settings", {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
         .then(res => res.ok ? res.json() : null)
         .then(data => setSettings(data))
         .catch(console.error);
     }
-  }, [showSeriesModal, settings]);
+  }, [showSeriesModal, settings, user.token]);
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{

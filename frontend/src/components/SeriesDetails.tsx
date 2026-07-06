@@ -67,12 +67,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   React.useEffect(() => {
     if ((showSeriesModal || showChapterModal) && !settings) {
-      safeFetch("/api/settings")
+      safeFetch("/api/settings", {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
         .then(res => res.ok ? res.json() : null)
         .then(data => setSettings(data))
         .catch(console.error);
     }
-  }, [showSeriesModal, showChapterModal, settings]);
+  }, [showSeriesModal, showChapterModal, settings, user.token]);
 
   // Local states for chapter import modal
   const [showImportModal, setShowImportModal] = useState(false);
