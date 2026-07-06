@@ -956,6 +956,30 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         className="form-label"
                         style={{ fontSize: "12px" }}
                       >
+                        QA Mode
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newSeriesQaMode}
+                        onChange={(e) => setNewSeriesQaMode(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        <option value="auto">auto</option>
+                        <option value="llm">llm</option>
+                        <option value="vlm">vlm</option>
+                        <option value="none">none</option>
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
                         QA LLM Model
                       </label>
                       <select
@@ -1001,30 +1025,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                             {m}
                           </option>
                         ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Mode
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newSeriesQaMode}
-                        onChange={(e) => setNewSeriesQaMode(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        <option value="auto">auto</option>
-                        <option value="llm">llm</option>
-                        <option value="vlm">vlm</option>
-                        <option value="none">none</option>
                       </select>
                     </div>
                   </div>
@@ -1310,6 +1310,30 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         className="form-label"
                         style={{ fontSize: "12px" }}
                       >
+                        QA Mode
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newChapQaMode}
+                        onChange={(e) => setNewChapQaMode(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        <option value="auto">auto</option>
+                        <option value="llm">llm</option>
+                        <option value="vlm">vlm</option>
+                        <option value="none">none</option>
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
                         QA LLM Model
                       </label>
                       <select
@@ -1355,30 +1379,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                             {m}
                           </option>
                         ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Mode
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newChapQaMode}
-                        onChange={(e) => setNewChapQaMode(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        <option value="auto">auto</option>
-                        <option value="llm">llm</option>
-                        <option value="vlm">vlm</option>
-                        <option value="none">none</option>
                       </select>
                     </div>
                   </div>
