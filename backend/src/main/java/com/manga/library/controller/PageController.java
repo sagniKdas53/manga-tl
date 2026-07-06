@@ -773,7 +773,7 @@ public class PageController {
   }
 
   @DeleteMapping("/pages/{pageId}")
-  @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<?> deletePage(@PathVariable UUID pageId) {
     log.info("Received request to delete page: {}", pageId);
     try {
