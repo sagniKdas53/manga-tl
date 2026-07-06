@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { User, Series } from "../types";
 import { safeFetch, toSlug } from "../utils";
+import type { SystemSettingsDto } from "../types";
 import ConfirmModal from "./ConfirmModal";
 
 interface DashboardProps {
@@ -27,6 +28,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [newSeriesLang, setNewSeriesLang] = useState("ja");
   const [newSeriesTargetLang, setNewSeriesTargetLang] = useState("en");
   const [newSeriesDirection, setNewSeriesDirection] = useState("rtl");
+
+  // Model overrides
+  const [newOcrProvider, setNewOcrProvider] = useState("");
+  const [newOcrModel, setNewOcrModel] = useState("");
+  const [newTlProvider, setNewTlProvider] = useState("");
+  const [newTlModel, setNewTlModel] = useState("");
+  const [newQaProvider, setNewQaProvider] = useState("");
+  const [newQaLlmModel, setNewQaLlmModel] = useState("");
+  const [newQaVlmModel, setNewQaVlmModel] = useState("");
+
+  const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
+
+  React.useEffect(() => {
+    if (showSeriesModal && !settings) {
+      safeFetch("/api/settings")
+        .then(res => res.ok ? res.json() : null)
+        .then(data => setSettings(data))
+        .catch(console.error);
+    }
+  }, [showSeriesModal, settings]);
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -54,6 +75,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setNewSeriesLang(s.sourceLanguage || s.originalLanguage || "ja");
     setNewSeriesTargetLang(s.targetLanguage || "en");
     setNewSeriesDirection(s.readingDirection);
+    setNewOcrProvider(s.ocrProvider || "");
+    setNewOcrModel(s.ocrModel || "");
+    setNewTlProvider(s.tlProvider || "");
+    setNewTlModel(s.tlModel || "");
+    setNewQaProvider(s.qaProvider || "");
+    setNewQaLlmModel(s.qaLlmModel || "");
+    setNewQaVlmModel(s.qaVlmModel || "");
     setShowSeriesModal(true);
   };
 
@@ -64,6 +92,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setNewSeriesLang("ja");
     setNewSeriesTargetLang("en");
     setNewSeriesDirection("rtl");
+    setNewOcrProvider("");
+    setNewOcrModel("");
+    setNewTlProvider("");
+    setNewTlModel("");
+    setNewQaProvider("");
+    setNewQaLlmModel("");
+    setNewQaVlmModel("");
     setShowSeriesModal(true);
   };
 
@@ -96,6 +131,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           targetLanguage: newSeriesTargetLang,
           readingDirection: newSeriesDirection,
           coverImageUrl: newSeriesCoverUrl || null,
+          ocrProvider: newOcrProvider || null,
+          ocrModel: newOcrModel || null,
+          tlProvider: newTlProvider || null,
+          tlModel: newTlModel || null,
+          qaProvider: newQaProvider || null,
+          qaLlmModel: newQaLlmModel || null,
+          qaVlmModel: newQaVlmModel || null,
         }),
       });
       if (res.ok) {
@@ -333,6 +375,66 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <option value="ttb">Top to Bottom (Webtoons)</option>
                 </select>
               </div>
+              
+              <div style={{ marginTop: "16px", padding: "16px", background: "var(--bg-hover)", borderRadius: "8px" }}>
+                <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", opacity: 0.8 }}>Model Overrides (Optional)</h4>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>OCR Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newOcrProvider} onChange={(e) => setNewOcrProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>OCR VLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newOcrModel} onChange={(e) => setNewOcrModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.ocrVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>TL Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newTlProvider} onChange={(e) => setNewTlProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>TL LLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newTlModel} onChange={(e) => setNewTlModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.tlLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newQaProvider} onChange={(e) => setNewQaProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA LLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newQaLlmModel} onChange={(e) => setNewQaLlmModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.qaLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  
+                  <div className="form-group" style={{ marginBottom: 0, gridColumn: "1 / -1" }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA VLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newQaVlmModel} onChange={(e) => setNewQaVlmModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.qaVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
                 <button
                   type="button"
