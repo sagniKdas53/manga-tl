@@ -616,7 +616,7 @@ public class PageControllerTest {
   }
 
   @Test
-  public void testUpdateOcrRegion_Success() throws Exception {
+  public void testUpdateOcrRegion_Success_FullPayload() throws Exception {
     UUID id = UUID.randomUUID();
     com.manga.library.model.OcrRegion region =
         com.manga.library.model.OcrRegion.builder()

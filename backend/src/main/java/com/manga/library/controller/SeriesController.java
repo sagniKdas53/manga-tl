@@ -380,6 +380,14 @@ public class SeriesController {
       @RequestParam("file") MultipartFile file,
       @RequestParam("chapterNumber") Double chapterNumber,
       @RequestParam("title") String title,
+      @RequestParam(value = "ocrProvider", required = false) String ocrProvider,
+      @RequestParam(value = "ocrModel", required = false) String ocrModel,
+      @RequestParam(value = "tlProvider", required = false) String tlProvider,
+      @RequestParam(value = "tlModel", required = false) String tlModel,
+      @RequestParam(value = "qaProvider", required = false) String qaProvider,
+      @RequestParam(value = "qaLlmModel", required = false) String qaLlmModel,
+      @RequestParam(value = "qaVlmModel", required = false) String qaVlmModel,
+      @RequestParam(value = "qaMode", required = false) String qaMode,
       @AuthenticationPrincipal User user) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     log.info("Importing chapter {} (num={}) for series {}", title, chapterNumber, seriesId);
@@ -398,7 +406,19 @@ public class SeriesController {
 
       // 1. Create the Chapter
       Chapter chapter =
-          Chapter.builder().series(series).chapterNumber(chapterNumber).title(title).build();
+          Chapter.builder()
+              .series(series)
+              .chapterNumber(chapterNumber)
+              .title(title)
+              .ocrProvider(ocrProvider)
+              .ocrModel(ocrModel)
+              .tlProvider(tlProvider)
+              .tlModel(tlModel)
+              .qaProvider(qaProvider)
+              .qaLlmModel(qaLlmModel)
+              .qaVlmModel(qaVlmModel)
+              .qaMode(qaMode)
+              .build();
       chapter = chapterRepository.save(chapter);
 
       // 2. Read ZIP/ePub entries

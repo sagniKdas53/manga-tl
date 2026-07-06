@@ -71,16 +71,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [newChapQaVlmModel, setNewChapQaVlmModel] = useState("");
   const [newChapQaMode, setNewChapQaMode] = useState("");
 
-  React.useEffect(() => {
-    if ((showSeriesModal || showChapterModal) && !settings) {
-      safeFetch("/api/settings", {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => setSettings(data))
-        .catch(console.error);
-    }
-  }, [showSeriesModal, showChapterModal, settings, user.token]);
+  // Model overrides for Import
+  const [importOcrProvider, setImportOcrProvider] = useState("");
+  const [importOcrModel, setImportOcrModel] = useState("");
+  const [importTlProvider, setImportTlProvider] = useState("");
+  const [importTlModel, setImportTlModel] = useState("");
+  const [importQaProvider, setImportQaProvider] = useState("");
+  const [importQaLlmModel, setImportQaLlmModel] = useState("");
+  const [importQaVlmModel, setImportQaVlmModel] = useState("");
+  const [importQaMode, setImportQaMode] = useState("");
+  const [showImportModelOverrides, setShowImportModelOverrides] = useState(false);
 
   // Local states for chapter import modal
   const [showImportModal, setShowImportModal] = useState(false);
@@ -89,6 +89,17 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [importChapterTitle, setImportChapterTitle] = useState("");
   const [importError, setImportError] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+
+  React.useEffect(() => {
+    if ((showSeriesModal || showChapterModal || showImportModal) && !settings) {
+      safeFetch("/api/settings", {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => setSettings(data))
+        .catch(console.error);
+    }
+  }, [showSeriesModal, showChapterModal, showImportModal, settings, user.token]);
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -257,6 +268,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setImportChapterTitle("");
     setImportFile(null);
     setImportError("");
+    setImportOcrProvider("");
+    setImportOcrModel("");
+    setImportTlProvider("");
+    setImportTlModel("");
+    setImportQaProvider("");
+    setImportQaLlmModel("");
+    setImportQaVlmModel("");
+    setImportQaMode("");
+    setShowImportModelOverrides(false);
     setIsImporting(false);
     setShowImportModal(true);
   };
@@ -271,6 +291,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     formData.append("file", importFile);
     formData.append("chapterNumber", importChapterNum.toString());
     formData.append("title", importChapterTitle);
+    if (importOcrProvider) formData.append("ocrProvider", importOcrProvider);
+    if (importOcrModel) formData.append("ocrModel", importOcrModel);
+    if (importTlProvider) formData.append("tlProvider", importTlProvider);
+    if (importTlModel) formData.append("tlModel", importTlModel);
+    if (importQaProvider) formData.append("qaProvider", importQaProvider);
+    if (importQaLlmModel) formData.append("qaLlmModel", importQaLlmModel);
+    if (importQaVlmModel) formData.append("qaVlmModel", importQaVlmModel);
+    if (importQaMode) formData.append("qaMode", importQaMode);
 
     try {
       const res = await safeFetch(
@@ -1502,6 +1530,299 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   placeholder="e.g. Chapter 1 - Imported Volume"
                 />
               </div>
+
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "16px",
+                  background: "var(--bg-hover)",
+                  borderRadius: "8px",
+                }}
+              >
+                <div
+                  onClick={() =>
+                    setShowImportModelOverrides(!showImportModelOverrides)
+                  }
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
+                  <h4 style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>
+                    Model Overrides (Optional)
+                  </h4>
+                  <span style={{ fontSize: "12px", opacity: 0.6 }}>
+                    {showImportModelOverrides ? "▲" : "▼"}
+                  </span>
+                </div>
+
+                {showImportModelOverrides && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "12px",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        OCR Provider
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={importOcrProvider}
+                        onChange={(e) => setImportOcrProvider(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        {[
+                          "local",
+                          "openrouter",
+                          "gemini",
+                          "nvidia",
+                          "ollama",
+                          "lmstudio",
+                        ].map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        OCR VLM Model
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={importOcrModel}
+                        onChange={(e) => setImportOcrModel(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        {settings?.ocrVlmModelList.map((m) => (
+                          <option
+                            key={m}
+                            value={m}
+                          >
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        TL Provider
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={importTlProvider}
+                        onChange={(e) => setImportTlProvider(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        {[
+                          "openrouter",
+                          "gemini",
+                          "nvidia",
+                          "openai",
+                          "anthropic",
+                          "ollama",
+                          "lmstudio",
+                        ]
+                          .filter(
+                            (p) =>
+                              !["ollama", "lmstudio"].includes(p) ||
+                              !settings?.disableLocalLlm,
+                          )
+                          .map((p) => (
+                            <option
+                              key={p}
+                              value={p}
+                            >
+                              {p}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        TL LLM Model
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={importTlModel}
+                        onChange={(e) => setImportTlModel(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        {settings?.tlLlmModelList.map((m) => (
+                          <option
+                            key={m}
+                            value={m}
+                          >
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA Provider
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={importQaProvider}
+                        onChange={(e) => setImportQaProvider(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        {[
+                          "openrouter",
+                          "gemini",
+                          "nvidia",
+                          "openai",
+                          "anthropic",
+                          "ollama",
+                          "lmstudio",
+                        ]
+                          .filter(
+                            (p) =>
+                              !["ollama", "lmstudio"].includes(p) ||
+                              !settings?.disableLocalLlm,
+                          )
+                          .map((p) => (
+                            <option
+                              key={p}
+                              value={p}
+                            >
+                              {p}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA Mode
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={importQaMode}
+                        onChange={(e) => setImportQaMode(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        <option value="auto">auto</option>
+                        <option value="llm">llm</option>
+                        <option value="vlm">vlm</option>
+                        <option value="none">none</option>
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA LLM Model
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={importQaLlmModel}
+                        onChange={(e) => setImportQaLlmModel(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        {settings?.qaLlmModelList.map((m) => (
+                          <option
+                            key={m}
+                            value={m}
+                          >
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA VLM Model
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={importQaVlmModel}
+                        onChange={(e) => setImportQaVlmModel(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        {settings?.qaVlmModelList.map((m) => (
+                          <option
+                            key={m}
+                            value={m}
+                          >
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {importError && (
                 <div
                   style={{
