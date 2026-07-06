@@ -589,6 +589,7 @@ function AppContent() {
             <SettingsModal
               isOpen={isSettingsOpen}
               onClose={() => setIsSettingsOpen(false)}
+              token={user?.token}
             />
           </Suspense>
         </div>
