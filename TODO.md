@@ -4,10 +4,12 @@
 
 ## 🔴 Active Bugs
 
-- [ ] Opening the settings on front-end causes the user to get logged out (most probably due to the context path. Need to check if the context path is changed does this break?).
-- [ ] Make the model picker options collapsible in the series and chapter dialog boxes.
+- [x] Opening the settings on front-end causes the user to get logged out (most probably due to the context path. Need to check if the context path is changed does this break?).
+- [x] Make the model picker options collapsible in the series and chapter dialog boxes.
 - [ ] Cloud OCR is doesn't recognize free floating text that PP-OCR-v5 does, it almost always misses it. The bubbles are fine for the most part, check the latest logs for the breakdown
   - [ ] There appoears to be a yolo11 error in the logs as well, need to check that.
+- [ ] Delete Page seems to be broken
+  - [ ] On that note need to add CRUD tests for all levels like series, chapter, page, layer and element in the layers.
 
 ## 🟡 High Priority Features
 

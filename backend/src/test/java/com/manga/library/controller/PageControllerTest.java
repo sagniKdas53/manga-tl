@@ -450,4 +450,128 @@ public class PageControllerTest {
 
     mockMvc.perform(get("/api/images/" + imageId + "/thumbnail")).andExpect(status().isNotFound());
   }
+
+  @Test
+  public void testUploadPage_Failure() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    when(chapterRepository.findById(chapterId)).thenThrow(new RuntimeException("db error"));
+
+    org.springframework.mock.web.MockMultipartFile file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.png", "image/png", "dummy data".getBytes());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/images")
+                .file(file)
+                .param("chapterId", chapterId.toString())
+                .param("pageNumber", "1"))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testGetImageDetails_Failure() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    when(imageRepository.findById(imageId)).thenReturn(Optional.empty());
+
+    org.junit.jupiter.api.Assertions.assertThrows(
+        Exception.class, () -> mockMvc.perform(get("/api/images/" + imageId)));
+  }
+
+  @Test
+  public void testUploadPage_DuplicateImage_MissingTranslation() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    com.manga.library.model.Series series =
+        com.manga.library.model.Series.builder().id(UUID.randomUUID()).targetLanguage("en").build();
+    Chapter chapter = Chapter.builder().id(chapterId).series(series).build();
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageService.getFileExtension(anyString())).thenReturn(".png");
+
+    UUID existingImageId = UUID.randomUUID();
+    Image existingImage = Image.builder().id(existingImageId).hash("somehash").build();
+    when(imageRepository.findByHash(anyString())).thenReturn(Optional.of(existingImage));
+
+    when(layerRepository.findByImageId(existingImageId)).thenReturn(Collections.emptyList());
+
+    Page page = Page.builder().id(UUID.randomUUID()).image(existingImage).build();
+    when(pageService.createPageWithExistingImage(any(), any(), any(), any())).thenReturn(page);
+
+    org.springframework.mock.web.MockMultipartFile file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.png", "image/png", "dummy data".getBytes());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/images")
+                .file(file)
+                .param("chapterId", chapterId.toString())
+                .param("pageNumber", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("duplicate"));
+
+    verify(jobCoordinatorService, times(1)).triggerImageRedo(existingImageId, "translation");
+  }
+
+  @Test
+  public void testUploadPage_ZipNoImages() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    Chapter chapter =
+        Chapter.builder()
+            .id(chapterId)
+            .series(com.manga.library.model.Series.builder().build())
+            .build();
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageService.getFileExtension(anyString())).thenReturn(".zip");
+
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos);
+    zos.finish();
+
+    org.springframework.mock.web.MockMultipartFile file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.zip", "application/zip", baos.toByteArray());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/images")
+                .file(file)
+                .param("chapterId", chapterId.toString())
+                .param("pageNumber", "1"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  public void testUploadPage_ZipProjectNoImages() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    Chapter chapter =
+        Chapter.builder()
+            .id(chapterId)
+            .series(com.manga.library.model.Series.builder().build())
+            .build();
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageService.getFileExtension(anyString())).thenReturn(".zip");
+
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos);
+    zos.putNextEntry(new java.util.zip.ZipEntry("project.json"));
+    zos.write("{}".getBytes());
+    zos.closeEntry();
+    zos.finish();
+
+    org.springframework.mock.web.MockMultipartFile file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.zip", "application/zip", baos.toByteArray());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/images")
+                .file(file)
+                .param("chapterId", chapterId.toString())
+                .param("pageNumber", "1"))
+        .andExpect(status().isBadRequest());
+  }
 }

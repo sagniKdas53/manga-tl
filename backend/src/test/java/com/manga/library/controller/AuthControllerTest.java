@@ -186,4 +186,43 @@ public class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.role").value("viewer"));
   }
+
+  @Test
+  public void testRegister_AdminWhenNotFirstRegistration() throws Exception {
+    when(userRepository.count()).thenReturn(10L);
+    RegisterRequest request = new RegisterRequest();
+    request.setEmail("newadmin@test.com");
+    request.setPassword("password");
+    request.setDisplayName("Normal User");
+    request.setRole("admin");
+
+    mockMvc
+        .perform(
+            post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  public void testRegister_InvalidRoleDefaultsToViewer() throws Exception {
+    when(userRepository.count()).thenReturn(10L);
+    when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.empty());
+    when(passwordEncoder.encode("password")).thenReturn("hashed_password");
+    when(jwtUtils.generateToken("user@test.com")).thenReturn("mocked_token");
+
+    RegisterRequest request = new RegisterRequest();
+    request.setEmail("user@test.com");
+    request.setPassword("password");
+    request.setDisplayName("Normal User");
+    request.setRole("invalid_role");
+
+    mockMvc
+        .perform(
+            post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.role").value("viewer"));
+  }
 }

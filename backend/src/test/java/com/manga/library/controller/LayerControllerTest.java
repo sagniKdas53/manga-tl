@@ -38,6 +38,9 @@ public class LayerControllerTest {
   @MockBean private OcrRegionRepository ocrRegionRepository;
   @MockBean private JwtAuthFilter jwtAuthFilter;
 
+  @org.springframework.boot.test.mock.mockito.SpyBean
+  private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
   @Test
   public void testDeleteLayer_NotFound() throws Exception {
     UUID layerId = UUID.randomUUID();
@@ -146,5 +149,85 @@ public class LayerControllerTest {
     mockMvc.perform(delete("/api/layer-elements/" + elementId)).andExpect(status().isOk());
 
     verify(layerElementRepository, times(1)).delete(element);
+  }
+
+  @Test
+  public void testUpdateLayerElement_NotFound() throws Exception {
+    UUID elementId = UUID.randomUUID();
+    when(layerElementRepository.findById(elementId)).thenReturn(Optional.empty());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/layer-elements/" + elementId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testUpdateLayerElement_Exception() throws Exception {
+    UUID elementId = UUID.randomUUID();
+    com.manga.library.model.LayerElement element =
+        com.manga.library.model.LayerElement.builder().id(elementId).text("old text").build();
+    when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
+
+    doThrow(new RuntimeException("JSON error")).when(objectMapper).writeValueAsString(any());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/layer-elements/" + elementId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\": \"new text\"}"))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testCreateLayer_NotFound() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    when(imageRepository.findById(imageId)).thenReturn(Optional.empty());
+
+    mockMvc
+        .perform(
+            post("/api/images/" + imageId + "/layers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"type\": \"translation\"}"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testUpdateLayer_NotFound() throws Exception {
+    UUID layerId = UUID.randomUUID();
+    when(layerRepository.findById(layerId)).thenReturn(Optional.empty());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/layers/" + layerId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"zOrder\": 2}"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testCreateLayerElement_NotFound() throws Exception {
+    UUID layerId = UUID.randomUUID();
+    when(layerRepository.findById(layerId)).thenReturn(Optional.empty());
+
+    mockMvc
+        .perform(
+            post("/api/layers/" + layerId + "/elements")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\": \"hello\"}"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testDeleteLayerElement_NotFound() throws Exception {
+    UUID elementId = UUID.randomUUID();
+    when(layerElementRepository.findById(elementId)).thenReturn(Optional.empty());
+
+    mockMvc.perform(delete("/api/layer-elements/" + elementId)).andExpect(status().isNotFound());
   }
 }
