@@ -147,7 +147,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         ) : (
           <div
-            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "12px",
+            }}
           >
             <div
               style={{ display: "flex", flexDirection: "column", gap: "4px" }}
@@ -222,9 +226,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <div
               style={{
+                gridColumn: "1 / -1",
                 height: "1px",
                 background: "var(--border)",
-                margin: "8px 0",
+                margin: "4px 0",
               }}
             ></div>
 
@@ -291,9 +296,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <div
               style={{
+                gridColumn: "1 / -1",
                 height: "1px",
                 background: "var(--border)",
-                margin: "8px 0",
+                margin: "4px 0",
               }}
             ></div>
 
@@ -324,6 +330,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     {p}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            >
+              <label
+                htmlFor="qaMode"
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  color: "var(--text)",
+                }}
+              >
+                Global QA Mode
+              </label>
+              <select
+                id="qaMode"
+                className="glass-input"
+                value={settings.qaMode || ""}
+                onChange={(e) => handleChange("qaMode", e.target.value)}
+              >
+                <option value="auto">auto</option>
+                <option value="llm">llm</option>
+                <option value="vlm">vlm</option>
+                <option value="none">none</option>
               </select>
             </div>
 
@@ -388,32 +420,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ))}
               </select>
             </div>
-
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="qaMode"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
-                }}
-              >
-                Global QA Mode
-              </label>
-              <select
-                id="qaMode"
-                className="glass-input"
-                value={settings.qaMode || ""}
-                onChange={(e) => handleChange("qaMode", e.target.value)}
-              >
-                <option value="auto">auto</option>
-                <option value="llm">llm</option>
-                <option value="vlm">vlm</option>
-                <option value="none">none</option>
-              </select>
-            </div>
           </div>
         )}
 
@@ -424,24 +430,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             gap: "12px",
             marginTop: "24px",
           }}
-        >
           <button
-            className="glass-button"
+            type="button"
+            className="btn btn-secondary"
             onClick={onClose}
             disabled={saving}
-            style={{ padding: "8px 16px" }}
           >
             Cancel
           </button>
           <button
-            className="glass-button"
+            type="button"
+            className="btn btn-primary"
             onClick={handleSave}
             disabled={saving || loading}
-            style={{
-              padding: "8px 16px",
-              background: "var(--accent)",
-              color: "white",
-            }}
           >
             {saving ? "Saving..." : "Save Settings"}
           </button>
