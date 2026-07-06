@@ -501,4 +501,135 @@ public class JobCoordinatorServiceTest {
     ocrRegionRepository.delete(updatedRegion);
     imageRepository.delete(image);
   }
+
+  @Test
+  public void testHandleTranslationCallback_RedoAndCostAndRedisReason() {
+    Image rawImage =
+        Image.builder().filename("test_redo.png").storagePath("test/test_redo.png").build();
+    final Image image = imageRepository.save(rawImage);
+
+    Layer rawLayer =
+        Layer.builder()
+            .image(image)
+            .type("translation")
+            .targetLanguage("en")
+            .visible(true)
+            .zOrder(1)
+            .build();
+    final Layer existingLayer = layerRepository.save(rawLayer);
+
+    String reasonKey = "image:translation:reason:" + image.getId();
+    redisTemplate.opsForValue().set(reasonKey, "user-triggered");
+
+    OcrRegion region =
+        OcrRegion.builder()
+            .image(image)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .regionType("speech")
+            .build();
+    region = ocrRegionRepository.save(region);
+
+    Map<String, Object> translation = new HashMap<>();
+    translation.put("regionId", region.getId().toString());
+    translation.put("translatedText", "Hello Redo");
+    translation.put("translationFailed", "false");
+    translation.put("translationScore", 0.95);
+    translation.put("modelIdentifier", "gpt-4o");
+    translation.put("confidence", 0.99);
+
+    Map<String, Object> cost = Map.of("total_tokens", 150, "total_cost", 0.001);
+
+    jobCoordinatorService.handleTranslationCallback(image.getId(), List.of(translation), cost);
+
+    List<Layer> layers = layerRepository.findByImageId(image.getId());
+    assertEquals(2, layers.size());
+
+    Layer newLayer =
+        layers.stream()
+            .filter(l -> l.getId() != null && !l.getId().equals(existingLayer.getId()))
+            .findFirst()
+            .orElseThrow();
+    assertTrue(newLayer.getVisible());
+    assertEquals("en", newLayer.getTargetLanguage());
+    assertNotNull(newLayer.getMetadataJson());
+    assertTrue(newLayer.getMetadataJson().has("cost"));
+
+    Layer updatedExisting = layerRepository.findById(existingLayer.getId()).orElseThrow();
+    assertFalse(updatedExisting.getVisible());
+
+    List<LayerElement> elements = layerElementRepository.findByLayerId(newLayer.getId());
+    layerElementRepository.deleteAll(elements);
+    layerRepository.delete(newLayer);
+    layerRepository.delete(updatedExisting);
+    ocrRegionRepository.delete(region);
+    imageRepository.delete(image);
+  }
+
+  @Test
+  public void testHandleTranslationCallback_InvalidRegionId() {
+    Image rawImage =
+        Image.builder().filename("test_invalid.png").storagePath("test/test_invalid.png").build();
+    final Image image = imageRepository.save(rawImage);
+
+    Map<String, Object> translation = new HashMap<>();
+    translation.put("regionId", "not-a-valid-uuid");
+    translation.put("translatedText", "Hello");
+
+    assertDoesNotThrow(
+        () ->
+            jobCoordinatorService.handleTranslationCallback(
+                image.getId(), List.of(translation), null));
+
+    List<Layer> layers = layerRepository.findByImageId(image.getId());
+    layerRepository.deleteAll(layers);
+    imageRepository.delete(image);
+  }
+
+  @Test
+  public void testHandleLayoutCallback_InvalidRegionId() {
+    Image rawImage =
+        Image.builder().filename("test_invalid.png").storagePath("test/test_invalid.png").build();
+    final Image image = imageRepository.save(rawImage);
+
+    List<Map<String, String>> regionTypes =
+        List.of(Map.of("regionId", "not-a-uuid", "regionType", "text"));
+
+    assertDoesNotThrow(
+        () -> jobCoordinatorService.handleLayoutCallback(image.getId(), regionTypes, null));
+
+    imageRepository.delete(image);
+  }
+
+  @Test
+  public void testHandleOcrCallback_WithRedisReason() {
+    Image rawImage =
+        Image.builder().filename("test_ocr.png").storagePath("test/test_ocr.png").build();
+    final Image image = imageRepository.save(rawImage);
+
+    String ocrReasonKey = "image:ocr:reason:" + image.getId();
+    redisTemplate.opsForValue().set(ocrReasonKey, "user-request");
+
+    com.manga.library.dto.OcrCallbackDto dto = new com.manga.library.dto.OcrCallbackDto();
+    dto.setImageId(image.getId());
+    dto.setRegions(Collections.emptyList());
+    dto.setModelIdentifier("paddle-ocr");
+    dto.setConfidence(0.98);
+
+    jobCoordinatorService.handleOcrCallback(dto);
+
+    List<Layer> layers = layerRepository.findByImageId(image.getId());
+    assertFalse(layers.isEmpty());
+    Layer ocrLayer = layers.get(0);
+    assertEquals("ocr", ocrLayer.getType());
+    assertTrue(ocrLayer.getMetadataJson().get("layer_name").asText().contains("user-request"));
+
+    layerRepository.delete(ocrLayer);
+    imageRepository.delete(image);
+  }
 }

@@ -38,4 +38,12 @@ public class ForwardControllerTest {
         // forwardedUrl is /error
         .andExpect(forwardedUrl("/error"));
   }
+
+  @Test
+  public void testForwardWithContextPath() throws Exception {
+    mockMvc
+        .perform(get("/myapp/some-frontend-route").contextPath("/myapp"))
+        .andExpect(status().isOk())
+        .andExpect(forwardedUrl("/index.html"));
+  }
 }

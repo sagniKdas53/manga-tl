@@ -875,14 +875,20 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
+                        ]
+                          .filter(
+                            (p) =>
+                              !["ollama", "lmstudio"].includes(p) ||
+                              !settings?.disableLocalLlm,
+                          )
+                          .map((p) => (
+                            <option
+                              key={p}
+                              value={p}
+                            >
+                              {p}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div
@@ -938,14 +944,20 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
+                        ]
+                          .filter(
+                            (p) =>
+                              !["ollama", "lmstudio"].includes(p) ||
+                              !settings?.disableLocalLlm,
+                          )
+                          .map((p) => (
+                            <option
+                              key={p}
+                              value={p}
+                            >
+                              {p}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div
@@ -1229,14 +1241,20 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
+                        ]
+                          .filter(
+                            (p) =>
+                              !["ollama", "lmstudio"].includes(p) ||
+                              !settings?.disableLocalLlm,
+                          )
+                          .map((p) => (
+                            <option
+                              key={p}
+                              value={p}
+                            >
+                              {p}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div
@@ -1292,14 +1310,20 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
+                        ]
+                          .filter(
+                            (p) =>
+                              !["ollama", "lmstudio"].includes(p) ||
+                              !settings?.disableLocalLlm,
+                          )
+                          .map((p) => (
+                            <option
+                              key={p}
+                              value={p}
+                            >
+                              {p}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div

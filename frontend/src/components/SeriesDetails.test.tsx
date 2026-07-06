@@ -168,6 +168,7 @@ describe("SeriesDetails Component", () => {
           qaProvider: null,
           qaLlmModel: null,
           qaVlmModel: null,
+          qaMode: null,
         }),
       });
       expect(mockSetChapters).toHaveBeenCalled();
@@ -227,6 +228,7 @@ describe("SeriesDetails Component", () => {
           qaProvider: null,
           qaLlmModel: null,
           qaVlmModel: null,
+          qaMode: null,
         }),
       });
       expect(mockSetSelectedSeries).toHaveBeenCalled();
@@ -355,6 +357,7 @@ describe("SeriesDetails Component", () => {
           qaProvider: null,
           qaLlmModel: null,
           qaVlmModel: null,
+          qaMode: null,
         }),
       });
       expect(mockSetChapters).toHaveBeenCalled();

@@ -79,4 +79,106 @@ public class JwtTest {
         .andDo(print())
         .andExpect(status().isOk());
   }
+
+  @org.springframework.beans.factory.annotation.Value(
+      "${internal.api-token:manga-library-internal-token-12345}")
+  private String internalApiToken;
+
+  @Test
+  public void testInternalAuthFilter_MissingToken() throws Exception {
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                    "/api/internal/images/" + java.util.UUID.randomUUID())
+                .servletPath("/api/internal"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  public void testInternalAuthFilter_IncorrectToken() throws Exception {
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                    "/api/internal/images/" + java.util.UUID.randomUUID())
+                .servletPath("/api/internal")
+                .header("X-Internal-Token", "wrong-token"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  public void testInternalAuthFilter_CorrectToken() throws Exception {
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                    "/api/internal/images/" + java.util.UUID.randomUUID())
+                .servletPath("/api/internal")
+                .header("X-Internal-Token", internalApiToken))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testPostChapter_QueryParameterToken() throws Exception {
+    userRepository
+        .findByEmail("admin@manga.local")
+        .orElseGet(
+            () -> {
+              User buildUser =
+                  User.builder()
+                      .email("admin@manga.local")
+                      .passwordHash("mock_password_hash")
+                      .displayName("Admin User")
+                      .role("admin")
+                      .build();
+              Objects.requireNonNull(buildUser, "user cannot be null");
+              return userRepository.save(buildUser);
+            });
+
+    Series series =
+        Series.builder()
+            .title("Test Series QueryParam")
+            .originalLanguage("ja")
+            .readingDirection("rtl")
+            .build();
+    Objects.requireNonNull(series, "series cannot be null");
+    series = seriesRepository.save(series);
+
+    String rawToken = jwtUtils.generateToken("admin@manga.local");
+
+    ChapterDto dto = new ChapterDto();
+    dto.setChapterNumber(2.0);
+    dto.setTitle("Two");
+
+    mockMvc
+        .perform(
+            post("/api/series/" + series.getId() + "/chapters")
+                .param("token", rawToken)
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
+        .andDo(print())
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testPostChapter_InvalidQueryParameterToken() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/series/" + java.util.UUID.randomUUID() + "/chapters")
+                .param("token", "invalid-token-signature")
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content("{}"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  public void testPostChapter_UserNotFound() throws Exception {
+    String token = "Bearer " + jwtUtils.generateToken("nonexistent@manga.local");
+
+    mockMvc
+        .perform(
+            post("/api/series/" + java.util.UUID.randomUUID() + "/chapters")
+                .header("Authorization", token)
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content("{}"))
+        .andExpect(status().isForbidden());
+  }
 }

@@ -574,4 +574,79 @@ public class PageControllerTest {
                 .param("pageNumber", "1"))
         .andExpect(status().isBadRequest());
   }
+
+  @Test
+  public void testReorderPages_InvalidIds() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    UUID p1 = UUID.randomUUID();
+
+    Page page1 = Page.builder().id(p1).pageNumber(1).build();
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(java.util.Collections.singletonList(page1));
+
+    mockMvc
+        .perform(
+            put("/api/chapters/" + chapterId + "/pages/reorder")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("[]"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  public void testReorderPages_Exception() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenThrow(new RuntimeException("database failure"));
+
+    mockMvc
+        .perform(
+            put("/api/chapters/" + chapterId + "/pages/reorder")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("[]"))
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testDeletePage_Exception() throws Exception {
+    UUID pageId = UUID.randomUUID();
+    when(pageService.deletePageDb(pageId)).thenThrow(new RuntimeException("deletion failed"));
+
+    mockMvc.perform(delete("/api/pages/" + pageId)).andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testUpdateOcrRegion_Success() throws Exception {
+    UUID id = UUID.randomUUID();
+    com.manga.library.model.OcrRegion region =
+        com.manga.library.model.OcrRegion.builder()
+            .id(id)
+            .text("original text")
+            .confidence(0.8)
+            .build();
+
+    when(ocrRegionRepository.findById(id)).thenReturn(Optional.of(region));
+    when(ocrRegionRepository.save(any(com.manga.library.model.OcrRegion.class))).thenReturn(region);
+
+    mockMvc
+        .perform(
+            put("/api/ocr-regions/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"text\":\"updated text\",\"translatedText\":\"Hello\",\"approved\":true,\"confidence\":0.95}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testUpdateOcrRegion_NotFound() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(ocrRegionRepository.findById(id)).thenReturn(Optional.empty());
+
+    mockMvc
+        .perform(
+            put("/api/ocr-regions/" + id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"text\":\"updated text\"}"))
+        .andExpect(status().isNotFound());
+  }
 }

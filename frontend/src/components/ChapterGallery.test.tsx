@@ -182,6 +182,7 @@ describe("ChapterGallery Component", () => {
           qaProvider: null,
           qaLlmModel: null,
           qaVlmModel: null,
+          qaMode: null,
         }),
       });
       expect(mockSetSelectedChapter).toHaveBeenCalled();

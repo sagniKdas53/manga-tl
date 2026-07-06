@@ -142,10 +142,7 @@ public class JobCoordinatorService {
                           settings.getQaVlmModel()));
                   job.put(
                       "qaMode",
-                      resolveModel(
-                          chapter.getQaMode(),
-                          series.getQaMode(),
-                          settings.getQaMode()));
+                      resolveModel(chapter.getQaMode(), series.getQaMode(), settings.getQaMode()));
                 }
               });
 

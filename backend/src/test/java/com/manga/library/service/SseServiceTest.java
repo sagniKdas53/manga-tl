@@ -230,4 +230,55 @@ public class SseServiceTest {
       verify(listOps, times(1)).rightPush(eq("notifications:user:" + userId), anyString());
     }
   }
+
+  @Test
+  public void testSubscribe_Callbacks() {
+    UUID userId = UUID.randomUUID();
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(anyString())).thenReturn(0L);
+
+    final java.util.List<Runnable> completionCallbacks = new java.util.ArrayList<>();
+    final java.util.List<Runnable> timeoutCallbacks = new java.util.ArrayList<>();
+    final java.util.List<java.util.function.Consumer<Throwable>> errorCallbacks =
+        new java.util.ArrayList<>();
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) -> {
+              doAnswer(
+                      invocation -> {
+                        completionCallbacks.add(invocation.getArgument(0));
+                        return null;
+                      })
+                  .when(mock)
+                  .onCompletion(any());
+              doAnswer(
+                      invocation -> {
+                        timeoutCallbacks.add(invocation.getArgument(0));
+                        return null;
+                      })
+                  .when(mock)
+                  .onTimeout(any());
+              doAnswer(
+                      invocation -> {
+                        errorCallbacks.add(invocation.getArgument(0));
+                        return null;
+                      })
+                  .when(mock)
+                  .onError(any());
+            })) {
+      SseEmitter emitter = sseService.subscribe(userId);
+      assertNotNull(emitter);
+
+      assertFalse(completionCallbacks.isEmpty());
+      completionCallbacks.get(0).run();
+
+      assertFalse(timeoutCallbacks.isEmpty());
+      timeoutCallbacks.get(0).run();
+
+      assertFalse(errorCallbacks.isEmpty());
+      errorCallbacks.get(0).accept(new RuntimeException("test error"));
+    }
+  }
 }
