@@ -6,8 +6,8 @@
 
 - [x] Opening the settings on front-end causes the user to get logged out (most probably due to the context path. Need to check if the context path is changed does this break?).
 - [x] Make the model picker options collapsible in the series and chapter dialog boxes.
-- [ ] Cloud OCR is doesn't recognize free floating text that PP-OCR-v5/6 does, it almost always misses those. The bubbles are fine for the most part, check the latest logs for the breakdown
-  - [ ] There appoears to be a yolo11 error in the logs as well, need to check that.
+- [x] Cloud OCR is doesn't recognize free floating text that PP-OCR-v5/6 does, it almost always misses those. The bubbles are fine for the most part, check the latest logs for the breakdown
+  - [x] There appoears to be a yolo11 error in the logs as well, need to check that.
 - [x] Delete Page seems to be broken
   - [x] On that note need to add CRUD tests for all levels like series, chapter, page, layer and element in the layers.
 
@@ -48,6 +48,7 @@
   - [ ] Add an environemnt variable which controls the degree of paralleism, default to 1 (i.e. No parallelism) but can be configured to support it
   - [ ] This should still respect the rate-limits of the API
 - [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without PaddleOCR and local model dependencies for cloud-only deployments. Significantly reduces image size and build time. Only problem that I can think of is even if we pass on the OCR to cloud we will still need a way to actually detect the text regions, bubbles and stuff. Like the YOLO11 and PP-OCR-v6 dtetction may still be required unless we can find a a way to delegate that the the cloud as well
+  - [ ] **Cloud-based Text Detection** — Research/integrate Cloud-based Text Detection (e.g., Google Cloud Vision API `DOCUMENT_TEXT_DETECTION` or VLM spatial coordinates) to allow completely cloud-only OCR without local dependencies.
 - [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6). Requires worker registration, task routing by capability, and health checking.
 
 ### Reliability & Crash Recovery
