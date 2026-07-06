@@ -57,6 +57,14 @@ public class SeriesController {
     dto.setSourceLanguage(s.getSourceLanguage());
     dto.setTargetLanguage(s.getTargetLanguage());
     dto.setReadingDirection(s.getReadingDirection());
+    dto.setOcrProvider(s.getOcrProvider());
+    dto.setOcrModel(s.getOcrModel());
+    dto.setTlProvider(s.getTlProvider());
+    dto.setTlModel(s.getTlModel());
+    dto.setQaProvider(s.getQaProvider());
+    dto.setQaLlmModel(s.getQaLlmModel());
+    dto.setQaVlmModel(s.getQaVlmModel());
+    dto.setQaMode(s.getQaMode());
     if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
       dto.setCoverImageUrl(s.getCoverImageUrl());
     } else {
@@ -87,6 +95,14 @@ public class SeriesController {
     dto.setSourceLanguage(s.getSourceLanguage());
     dto.setTargetLanguage(s.getTargetLanguage());
     dto.setReadingDirection(s.getReadingDirection());
+    dto.setOcrProvider(s.getOcrProvider());
+    dto.setOcrModel(s.getOcrModel());
+    dto.setTlProvider(s.getTlProvider());
+    dto.setTlModel(s.getTlModel());
+    dto.setQaProvider(s.getQaProvider());
+    dto.setQaLlmModel(s.getQaLlmModel());
+    dto.setQaVlmModel(s.getQaVlmModel());
+    dto.setQaMode(s.getQaMode());
     if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
       dto.setCoverImageUrl(s.getCoverImageUrl());
     } else {
@@ -182,6 +198,14 @@ public class SeriesController {
             .series(series)
             .chapterNumber(dto.getChapterNumber())
             .title(dto.getTitle())
+            .ocrProvider(dto.getOcrProvider())
+            .ocrModel(dto.getOcrModel())
+            .tlProvider(dto.getTlProvider())
+            .tlModel(dto.getTlModel())
+            .qaProvider(dto.getQaProvider())
+            .qaLlmModel(dto.getQaLlmModel())
+            .qaVlmModel(dto.getQaVlmModel())
+            .qaMode(dto.getQaMode())
             .build();
     Objects.requireNonNull(chapter, "chapter cannot be null");
     chapter = chapterRepository.save(chapter);
@@ -214,6 +238,14 @@ public class SeriesController {
                   dto.setSeriesId(c.getSeries().getId());
                   dto.setChapterNumber(c.getChapterNumber());
                   dto.setTitle(c.getTitle());
+                  dto.setOcrProvider(c.getOcrProvider());
+                  dto.setOcrModel(c.getOcrModel());
+                  dto.setTlProvider(c.getTlProvider());
+                  dto.setTlModel(c.getTlModel());
+                  dto.setQaProvider(c.getQaProvider());
+                  dto.setQaLlmModel(c.getQaLlmModel());
+                  dto.setQaVlmModel(c.getQaVlmModel());
+                  dto.setQaMode(c.getQaMode());
                   UUID imageId = chapterCovers.get(c.getId());
                   if (imageId != null) {
                     dto.setCoverImageUrl(getImageUrl(imageId));
@@ -236,6 +268,14 @@ public class SeriesController {
               dto.setSeriesId(c.getSeries().getId());
               dto.setChapterNumber(c.getChapterNumber());
               dto.setTitle(c.getTitle());
+              dto.setOcrProvider(c.getOcrProvider());
+              dto.setOcrModel(c.getOcrModel());
+              dto.setTlProvider(c.getTlProvider());
+              dto.setTlModel(c.getTlModel());
+              dto.setQaProvider(c.getQaProvider());
+              dto.setQaLlmModel(c.getQaLlmModel());
+              dto.setQaVlmModel(c.getQaVlmModel());
+              dto.setQaMode(c.getQaMode());
               try {
                 List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
                 if (pages != null && !pages.isEmpty()) {
@@ -555,6 +595,14 @@ public class SeriesController {
       responseDto.setSeriesId(seriesId);
       responseDto.setChapterNumber(chapter.getChapterNumber());
       responseDto.setTitle(chapter.getTitle());
+      responseDto.setOcrProvider(chapter.getOcrProvider());
+      responseDto.setOcrModel(chapter.getOcrModel());
+      responseDto.setTlProvider(chapter.getTlProvider());
+      responseDto.setTlModel(chapter.getTlModel());
+      responseDto.setQaProvider(chapter.getQaProvider());
+      responseDto.setQaLlmModel(chapter.getQaLlmModel());
+      responseDto.setQaVlmModel(chapter.getQaVlmModel());
+      responseDto.setQaMode(chapter.getQaMode());
       return ResponseEntity.ok(responseDto);
 
     } catch (java.io.IOException

@@ -228,6 +228,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setNewChapQaProvider(c.qaProvider || "");
     setNewChapQaLlmModel(c.qaLlmModel || "");
     setNewChapQaVlmModel(c.qaVlmModel || "");
+    setNewChapQaMode(c.qaMode || "");
     setShowChapterModelOverrides(false);
     setShowChapterModal(true);
   };

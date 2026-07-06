@@ -21,6 +21,7 @@ export interface Series {
   qaProvider?: string;
   qaLlmModel?: string;
   qaVlmModel?: string;
+  qaMode?: string;
 }
 
 export interface Chapter {
@@ -36,6 +37,7 @@ export interface Chapter {
   qaProvider?: string;
   qaLlmModel?: string;
   qaVlmModel?: string;
+  qaMode?: string;
 }
 
 export interface Page {
