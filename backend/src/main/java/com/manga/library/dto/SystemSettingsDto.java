@@ -23,4 +23,7 @@ public class SystemSettingsDto {
   private String qaProvider;
   private String qaLlmModel;
   private String qaVlmModel;
+
+  private boolean disableLocalOcr;
+  private String localOcrModel;
 }
