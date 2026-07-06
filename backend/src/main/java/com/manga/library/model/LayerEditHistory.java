@@ -22,6 +22,7 @@ public class LayerEditHistory {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "layer_element_id", nullable = false)
+  @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private LayerElement layerElement;
 
   @Column(name = "previous_value_json")

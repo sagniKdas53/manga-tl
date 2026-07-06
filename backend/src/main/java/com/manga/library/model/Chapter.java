@@ -24,6 +24,7 @@ public class Chapter {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "series_id", nullable = false)
+  @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Series series;
 
   @Column(name = "chapter_number", nullable = false)

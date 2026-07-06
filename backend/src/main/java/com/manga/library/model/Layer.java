@@ -23,6 +23,7 @@ public class Layer {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "image_id", nullable = false)
   @com.fasterxml.jackson.annotation.JsonIgnore
+  @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Image image;
 
   @Column(nullable = false)
