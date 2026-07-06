@@ -21,6 +21,7 @@ public class Conversation {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "image_id", nullable = false)
+  @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Image image;
 
   @Column(name = "scene_type", nullable = false)

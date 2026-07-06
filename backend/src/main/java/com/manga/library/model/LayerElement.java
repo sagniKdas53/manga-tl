@@ -23,6 +23,7 @@ public class LayerElement {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "layer_id", nullable = false)
   @com.fasterxml.jackson.annotation.JsonIgnore
+  @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Layer layer;
 
   @ManyToOne(fetch = FetchType.LAZY)

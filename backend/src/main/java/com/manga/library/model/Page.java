@@ -23,6 +23,7 @@ public class Page {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "chapter_id", nullable = false)
+  @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Chapter chapter;
 
   @Column(name = "page_number", nullable = false)
@@ -30,5 +31,6 @@ public class Page {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "image_id", nullable = false)
+  @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Image image;
 }
