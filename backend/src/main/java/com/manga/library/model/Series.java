@@ -63,6 +63,9 @@ public class Series {
   @Column(name = "qa_vlm_model")
   private String qaVlmModel;
 
+  @Column(name = "qa_mode")
+  private String qaMode;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by")
   @com.fasterxml.jackson.annotation.JsonIgnore

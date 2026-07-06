@@ -59,6 +59,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [newSeriesQaProvider, setNewSeriesQaProvider] = useState("");
   const [newSeriesQaLlmModel, setNewSeriesQaLlmModel] = useState("");
   const [newSeriesQaVlmModel, setNewSeriesQaVlmModel] = useState("");
+  const [newSeriesQaMode, setNewSeriesQaMode] = useState("");
 
   // Model overrides for Chapter
   const [newChapOcrProvider, setNewChapOcrProvider] = useState("");
@@ -68,6 +69,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [newChapQaProvider, setNewChapQaProvider] = useState("");
   const [newChapQaLlmModel, setNewChapQaLlmModel] = useState("");
   const [newChapQaVlmModel, setNewChapQaVlmModel] = useState("");
+  const [newChapQaMode, setNewChapQaMode] = useState("");
 
   React.useEffect(() => {
     if ((showSeriesModal || showChapterModal) && !settings) {
@@ -131,6 +133,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setNewSeriesQaProvider(selectedSeries.qaProvider || "");
     setNewSeriesQaLlmModel(selectedSeries.qaLlmModel || "");
     setNewSeriesQaVlmModel(selectedSeries.qaVlmModel || "");
+    setNewSeriesQaMode(selectedSeries.qaMode || "");
     setShowSeriesModelOverrides(false);
     setShowSeriesModal(true);
   };
@@ -158,6 +161,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           qaProvider: newSeriesQaProvider || null,
           qaLlmModel: newSeriesQaLlmModel || null,
           qaVlmModel: newSeriesQaVlmModel || null,
+          qaMode: newSeriesQaMode || null,
         }),
       });
       if (res.ok) {
@@ -335,6 +339,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           qaProvider: newChapQaProvider || null,
           qaLlmModel: newChapQaLlmModel || null,
           qaVlmModel: newChapQaVlmModel || null,
+          qaMode: newChapQaMode || null,
         }),
       });
       if (res.ok) {
@@ -870,7 +875,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].map((p) => (
+                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -933,7 +938,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].map((p) => (
+                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -973,7 +978,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
                     <div
                       className="form-group"
-                      style={{ marginBottom: 0, gridColumn: "1 / -1" }}
+                      style={{ marginBottom: 0 }}
                     >
                       <label
                         className="form-label"
@@ -996,6 +1001,30 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                             {m}
                           </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA Mode
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newSeriesQaMode}
+                        onChange={(e) => setNewSeriesQaMode(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        <option value="auto">auto</option>
+                        <option value="llm">llm</option>
+                        <option value="vlm">vlm</option>
+                        <option value="none">none</option>
                       </select>
                     </div>
                   </div>
@@ -1200,7 +1229,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].map((p) => (
+                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -1263,7 +1292,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].map((p) => (
+                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -1303,7 +1332,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
                     <div
                       className="form-group"
-                      style={{ marginBottom: 0, gridColumn: "1 / -1" }}
+                      style={{ marginBottom: 0 }}
                     >
                       <label
                         className="form-label"
@@ -1326,6 +1355,30 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                             {m}
                           </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA Mode
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={newChapQaMode}
+                        onChange={(e) => setNewChapQaMode(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        <option value="auto">auto</option>
+                        <option value="llm">llm</option>
+                        <option value="vlm">vlm</option>
+                        <option value="none">none</option>
                       </select>
                     </div>
                   </div>

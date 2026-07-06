@@ -59,4 +59,7 @@ public class Chapter {
 
   @Column(name = "qa_vlm_model")
   private String qaVlmModel;
+
+  @Column(name = "qa_mode")
+  private String qaMode;
 }

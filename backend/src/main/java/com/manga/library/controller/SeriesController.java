@@ -269,6 +269,14 @@ public class SeriesController {
               s.setTargetLanguage(targetLang);
               s.setReadingDirection(dto.getReadingDirection());
               s.setCoverImageUrl(dto.getCoverImageUrl());
+              s.setOcrProvider(dto.getOcrProvider());
+              s.setOcrModel(dto.getOcrModel());
+              s.setTlProvider(dto.getTlProvider());
+              s.setTlModel(dto.getTlModel());
+              s.setQaProvider(dto.getQaProvider());
+              s.setQaLlmModel(dto.getQaLlmModel());
+              s.setQaVlmModel(dto.getQaVlmModel());
+              s.setQaMode(dto.getQaMode());
               Objects.requireNonNull(s, "series cannot be null");
               s = seriesRepository.save(s);
               return ResponseEntity.ok(toDto(s));
@@ -310,6 +318,14 @@ public class SeriesController {
               }
               c.setTitle(dto.getTitle());
               c.setChapterNumber(dto.getChapterNumber());
+              c.setOcrProvider(dto.getOcrProvider());
+              c.setOcrModel(dto.getOcrModel());
+              c.setTlProvider(dto.getTlProvider());
+              c.setTlModel(dto.getTlModel());
+              c.setQaProvider(dto.getQaProvider());
+              c.setQaLlmModel(dto.getQaLlmModel());
+              c.setQaVlmModel(dto.getQaVlmModel());
+              c.setQaMode(dto.getQaMode());
               Objects.requireNonNull(c, "chapter cannot be null");
               c = chapterRepository.save(c);
               dto.setId(c.getId());

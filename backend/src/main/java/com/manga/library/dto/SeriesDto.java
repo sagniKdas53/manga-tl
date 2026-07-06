@@ -19,4 +19,5 @@ public class SeriesDto {
   private String qaProvider;
   private String qaLlmModel;
   private String qaVlmModel;
+  private String qaMode;
 }

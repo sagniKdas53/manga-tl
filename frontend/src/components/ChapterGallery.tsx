@@ -138,6 +138,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [editChapQaProvider, setEditChapQaProvider] = useState("");
   const [editChapQaLlmModel, setEditChapQaLlmModel] = useState("");
   const [editChapQaVlmModel, setEditChapQaVlmModel] = useState("");
+  const [editChapQaMode, setEditChapQaMode] = useState("");
 
   React.useEffect(() => {
     if (showEditModal && !settings) {
@@ -162,6 +163,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       setEditChapQaProvider(selectedChapter.qaProvider || "");
       setEditChapQaLlmModel(selectedChapter.qaLlmModel || "");
       setEditChapQaVlmModel(selectedChapter.qaVlmModel || "");
+      setEditChapQaMode(selectedChapter.qaMode || "");
       setShowModelOverrides(false);
       setShowEditModal(true);
     }
@@ -190,6 +192,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             qaProvider: editChapQaProvider || null,
             qaLlmModel: editChapQaLlmModel || null,
             qaVlmModel: editChapQaVlmModel || null,
+            qaMode: editChapQaMode || null,
           }),
         },
       );
@@ -1030,7 +1033,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].map((p) => (
+                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -1093,7 +1096,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                           "anthropic",
                           "ollama",
                           "lmstudio",
-                        ].map((p) => (
+                        ].filter((p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm).map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -1133,7 +1136,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
                     <div
                       className="form-group"
-                      style={{ marginBottom: 0, gridColumn: "1 / -1" }}
+                      style={{ marginBottom: 0 }}
                     >
                       <label
                         className="form-label"
@@ -1156,6 +1159,30 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                             {m}
                           </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div
+                      className="form-group"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <label
+                        className="form-label"
+                        style={{ fontSize: "12px" }}
+                      >
+                        QA Mode
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ fontSize: "13px", padding: "6px" }}
+                        value={editChapQaMode}
+                        onChange={(e) => setEditChapQaMode(e.target.value)}
+                      >
+                        <option value="">-- Inherit --</option>
+                        <option value="auto">auto</option>
+                        <option value="llm">llm</option>
+                        <option value="vlm">vlm</option>
+                        <option value="none">none</option>
                       </select>
                     </div>
                   </div>

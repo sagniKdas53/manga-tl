@@ -166,4 +166,6 @@ export interface SystemSettingsDto {
 
   disableLocalOcr?: boolean;
   localOcrModel?: string;
+  disableLocalLlm?: boolean;
+  qaMode?: string;
 }
