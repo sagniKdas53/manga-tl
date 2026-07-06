@@ -11,7 +11,7 @@
 > This is a cross-cutting feature spanning backend, worker, and frontend.
 
 - [ ] **Backend: `/api/settings` endpoint** — Expose and update model configuration at runtime.
-  - [ ] Refactor env vars into three groups:
+  - [x] Refactor env vars into three groups:
     - `OCR_MODEL_PROVIDER` + `OCR_VLM_MODEL` / `OCR_VLM_MODEL_LIST`
     - `TL_MODEL_PROVIDER` + `PREFERRED_LLM_MODEL` / `PREFERRED_LLM_MODEL_LIST`
     - `QA_MODEL_PROVIDER` + `QA_LLM_MODEL` / `QA_VLM_MODEL` (+ list variants)
@@ -45,7 +45,7 @@
 
 ### Reliability & Crash Recovery
 
-- [ ] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/ restarts, queued jobs are lost. Save queue state to Postgres so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
+- [ ] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/ restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
 - [ ] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
 
 ---

@@ -37,4 +37,25 @@ public class Chapter {
 
   @Column(name = "summary_generated_at")
   private OffsetDateTime summaryGeneratedAt;
+
+  @Column(name = "ocr_provider")
+  private String ocrProvider;
+
+  @Column(name = "ocr_model")
+  private String ocrModel;
+
+  @Column(name = "tl_provider")
+  private String tlProvider;
+
+  @Column(name = "tl_model")
+  private String tlModel;
+
+  @Column(name = "qa_provider")
+  private String qaProvider;
+
+  @Column(name = "qa_llm_model")
+  private String qaLlmModel;
+
+  @Column(name = "qa_vlm_model")
+  private String qaVlmModel;
 }

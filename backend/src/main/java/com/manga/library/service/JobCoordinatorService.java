@@ -43,6 +43,7 @@ public class JobCoordinatorService {
   private final LayerElementRepository layerElementRepository;
   private final PageRepository pageRepository;
   private final SseService sseService;
+  private final SystemSettingsService systemSettingsService;
 
   public void startPipeline(UUID imageId) {
     log.info("Starting pipeline for image {}", imageId);
@@ -85,6 +86,7 @@ public class JobCoordinatorService {
               page -> {
                 if (page.getChapter() != null && page.getChapter().getSeries() != null) {
                   Series series = page.getChapter().getSeries();
+                  Chapter chapter = page.getChapter();
                   if (series.getReadingDirection() != null) {
                     job.put("readingDirection", series.getReadingDirection().trim().toLowerCase());
                   }
@@ -95,9 +97,17 @@ public class JobCoordinatorService {
                     job.put("targetLanguage", series.getTargetLanguage().trim().toLowerCase());
                   }
                   job.put("pageNumber", page.getPageNumber());
-                  if (page.getChapter() != null) {
-                    job.put("chapterNumber", page.getChapter().getChapterNumber());
-                  }
+                  job.put("chapterNumber", chapter.getChapterNumber());
+
+                  com.manga.library.dto.SystemSettingsDto settings = systemSettingsService.getSettings();
+
+                  job.put("ocrProvider", resolveModel(chapter.getOcrProvider(), series.getOcrProvider(), settings.getOcrProvider()));
+                  job.put("ocrModel", resolveModel(chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
+                  job.put("tlProvider", resolveModel(chapter.getTlProvider(), series.getTlProvider(), settings.getTlProvider()));
+                  job.put("tlModel", resolveModel(chapter.getTlModel(), series.getTlModel(), settings.getTlModel()));
+                  job.put("qaProvider", resolveModel(chapter.getQaProvider(), series.getQaProvider(), settings.getQaProvider()));
+                  job.put("qaLlmModel", resolveModel(chapter.getQaLlmModel(), series.getQaLlmModel(), settings.getQaLlmModel()));
+                  job.put("qaVlmModel", resolveModel(chapter.getQaVlmModel(), series.getQaVlmModel(), settings.getQaVlmModel()));
                 }
               });
 
@@ -110,6 +120,12 @@ public class JobCoordinatorService {
     } catch (Exception e) {
       log.error("Failed to enqueue job for image {}", imageId, e);
     }
+  }
+
+  private String resolveModel(String chapterVal, String seriesVal, String globalVal) {
+    if (chapterVal != null && !chapterVal.trim().isEmpty() && !chapterVal.equals("inherit") && !chapterVal.equals("default")) return chapterVal;
+    if (seriesVal != null && !seriesVal.trim().isEmpty() && !seriesVal.equals("inherit") && !seriesVal.equals("default")) return seriesVal;
+    return globalVal;
   }
 
   @Transactional
