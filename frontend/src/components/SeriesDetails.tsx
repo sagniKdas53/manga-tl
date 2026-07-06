@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { User, Series, Chapter } from "../types";
+import type { User, Series, Chapter, SystemSettingsDto } from "../types";
 import { safeFetch, toSlug } from "../utils";
 import ConfirmModal from "./ConfirmModal";
 
@@ -44,6 +44,35 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [newChapterNum, setNewChapterNum] = useState<number>(1);
   const [newChapterTitle, setNewChapterTitle] = useState("");
   const [chapterError, setChapterError] = useState("");
+
+  const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
+
+  // Model overrides for Series
+  const [newSeriesOcrProvider, setNewSeriesOcrProvider] = useState("");
+  const [newSeriesOcrModel, setNewSeriesOcrModel] = useState("");
+  const [newSeriesTlProvider, setNewSeriesTlProvider] = useState("");
+  const [newSeriesTlModel, setNewSeriesTlModel] = useState("");
+  const [newSeriesQaProvider, setNewSeriesQaProvider] = useState("");
+  const [newSeriesQaLlmModel, setNewSeriesQaLlmModel] = useState("");
+  const [newSeriesQaVlmModel, setNewSeriesQaVlmModel] = useState("");
+
+  // Model overrides for Chapter
+  const [newChapOcrProvider, setNewChapOcrProvider] = useState("");
+  const [newChapOcrModel, setNewChapOcrModel] = useState("");
+  const [newChapTlProvider, setNewChapTlProvider] = useState("");
+  const [newChapTlModel, setNewChapTlModel] = useState("");
+  const [newChapQaProvider, setNewChapQaProvider] = useState("");
+  const [newChapQaLlmModel, setNewChapQaLlmModel] = useState("");
+  const [newChapQaVlmModel, setNewChapQaVlmModel] = useState("");
+
+  React.useEffect(() => {
+    if ((showSeriesModal || showChapterModal) && !settings) {
+      safeFetch("/api/settings")
+        .then(res => res.ok ? res.json() : null)
+        .then(data => setSettings(data))
+        .catch(console.error);
+    }
+  }, [showSeriesModal, showChapterModal, settings]);
 
   // Local states for chapter import modal
   const [showImportModal, setShowImportModal] = useState(false);
@@ -89,6 +118,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     );
     setNewSeriesTargetLang(selectedSeries.targetLanguage || "en");
     setNewSeriesDirection(selectedSeries.readingDirection);
+    setNewSeriesOcrProvider(selectedSeries.ocrProvider || "");
+    setNewSeriesOcrModel(selectedSeries.ocrModel || "");
+    setNewSeriesTlProvider(selectedSeries.tlProvider || "");
+    setNewSeriesTlModel(selectedSeries.tlModel || "");
+    setNewSeriesQaProvider(selectedSeries.qaProvider || "");
+    setNewSeriesQaLlmModel(selectedSeries.qaLlmModel || "");
+    setNewSeriesQaVlmModel(selectedSeries.qaVlmModel || "");
     setShowSeriesModal(true);
   };
 
@@ -108,6 +144,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           targetLanguage: newSeriesTargetLang,
           readingDirection: newSeriesDirection,
           coverImageUrl: newSeriesCoverUrl || null,
+          ocrProvider: newSeriesOcrProvider || null,
+          ocrModel: newSeriesOcrModel || null,
+          tlProvider: newSeriesTlProvider || null,
+          tlModel: newSeriesTlModel || null,
+          qaProvider: newSeriesQaProvider || null,
+          qaLlmModel: newSeriesQaLlmModel || null,
+          qaVlmModel: newSeriesQaVlmModel || null,
         }),
       });
       if (res.ok) {
@@ -156,6 +199,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setNewChapterNum(c.chapterNumber);
     setNewChapterTitle(c.title || "");
     setChapterError("");
+    setNewChapOcrProvider(c.ocrProvider || "");
+    setNewChapOcrModel(c.ocrModel || "");
+    setNewChapTlProvider(c.tlProvider || "");
+    setNewChapTlModel(c.tlModel || "");
+    setNewChapQaProvider(c.qaProvider || "");
+    setNewChapQaLlmModel(c.qaLlmModel || "");
+    setNewChapQaVlmModel(c.qaVlmModel || "");
     setShowChapterModal(true);
   };
 
@@ -168,6 +218,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setNewChapterNum(maxNum + 1);
     setNewChapterTitle("");
     setChapterError("");
+    setNewChapOcrProvider("");
+    setNewChapOcrModel("");
+    setNewChapTlProvider("");
+    setNewChapTlModel("");
+    setNewChapQaProvider("");
+    setNewChapQaLlmModel("");
+    setNewChapQaVlmModel("");
     setShowChapterModal(true);
   };
 
@@ -262,6 +319,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         body: JSON.stringify({
           chapterNumber: newChapterNum,
           title: newChapterTitle,
+          ocrProvider: newChapOcrProvider || null,
+          ocrModel: newChapOcrModel || null,
+          tlProvider: newChapTlProvider || null,
+          tlModel: newChapTlModel || null,
+          qaProvider: newChapQaProvider || null,
+          qaLlmModel: newChapQaLlmModel || null,
+          qaVlmModel: newChapQaVlmModel || null,
         }),
       });
       if (res.ok) {
@@ -670,6 +734,66 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   <option value="ttb">Top to Bottom (Webtoons)</option>
                 </select>
               </div>
+
+              <div style={{ marginTop: "16px", padding: "16px", background: "var(--bg-hover)", borderRadius: "8px" }}>
+                <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", opacity: 0.8 }}>Model Overrides (Optional)</h4>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>OCR Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newSeriesOcrProvider} onChange={(e) => setNewSeriesOcrProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>OCR VLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newSeriesOcrModel} onChange={(e) => setNewSeriesOcrModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.ocrVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>TL Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newSeriesTlProvider} onChange={(e) => setNewSeriesTlProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>TL LLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newSeriesTlModel} onChange={(e) => setNewSeriesTlModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.tlLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newSeriesQaProvider} onChange={(e) => setNewSeriesQaProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA LLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newSeriesQaLlmModel} onChange={(e) => setNewSeriesQaLlmModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.qaLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  
+                  <div className="form-group" style={{ marginBottom: 0, gridColumn: "1 / -1" }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA VLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newSeriesQaVlmModel} onChange={(e) => setNewSeriesQaVlmModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.qaVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
                 <button
                   type="button"
@@ -742,6 +866,65 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   onChange={(e) => setNewChapterTitle(e.target.value)}
                   placeholder="e.g. The Beginning"
                 />
+              </div>
+
+              <div style={{ marginTop: "16px", padding: "16px", background: "var(--bg-hover)", borderRadius: "8px" }}>
+                <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", opacity: 0.8 }}>Model Overrides (Optional)</h4>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>OCR Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newChapOcrProvider} onChange={(e) => setNewChapOcrProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>OCR VLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newChapOcrModel} onChange={(e) => setNewChapOcrModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.ocrVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>TL Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newChapTlProvider} onChange={(e) => setNewChapTlProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>TL LLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newChapTlModel} onChange={(e) => setNewChapTlModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.tlLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA Provider</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newChapQaProvider} onChange={(e) => setNewChapQaProvider(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA LLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newChapQaLlmModel} onChange={(e) => setNewChapQaLlmModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.qaLlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  
+                  <div className="form-group" style={{ marginBottom: 0, gridColumn: "1 / -1" }}>
+                    <label className="form-label" style={{ fontSize: "12px" }}>QA VLM Model</label>
+                    <select className="form-input" style={{ fontSize: "13px", padding: "6px" }} value={newChapQaVlmModel} onChange={(e) => setNewChapQaVlmModel(e.target.value)}>
+                      <option value="">-- Inherit --</option>
+                      {settings?.qaVlmModelList.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
               </div>
               {chapterError && (
                 <div

@@ -14,6 +14,13 @@ export interface Series {
   coverImageUrl?: string | null;
   sourceLanguage?: string;
   targetLanguage?: string;
+  ocrProvider?: string;
+  ocrModel?: string;
+  tlProvider?: string;
+  tlModel?: string;
+  qaProvider?: string;
+  qaLlmModel?: string;
+  qaVlmModel?: string;
 }
 
 export interface Chapter {
@@ -22,6 +29,13 @@ export interface Chapter {
   chapterNumber: number;
   title: string;
   coverImageUrl?: string | null;
+  ocrProvider?: string;
+  ocrModel?: string;
+  tlProvider?: string;
+  tlModel?: string;
+  qaProvider?: string;
+  qaLlmModel?: string;
+  qaVlmModel?: string;
 }
 
 export interface Page {
@@ -134,4 +148,14 @@ export interface LayerEditHistory {
   newValueJson: string;
   editedBy?: User | null;
   editedAt: string;
+}
+
+export interface SystemSettingsDto {
+  ocrProvider: string;
+  ocrVlmModelList: string[];
+  tlProvider: string;
+  tlLlmModelList: string[];
+  qaProvider: string;
+  qaLlmModelList: string[];
+  qaVlmModelList: string[];
 }
