@@ -59,7 +59,7 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
   - [ ] Say if DISABLE_LOCAL_LLM=true, thenollama and lm-studio should not be visible as options
   - [ ] If DISABLE_LOCAL_OCR=true, then open-router and nvidia should be the only ones visible as options for OCR.
   - [ ] Also if say in the front-end we slect OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
-  - [ ] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
+  - [x] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
   
 ### Reliability & Crash Recovery
 
@@ -67,12 +67,12 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
 - [ ] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
 - [ ] **Queue Management:** Add a Queue managed in front-end just like the notification manager we have, it should be able to show us which jobs are in queue, processing and passed jobs get converted to notifications and removed, failed ones go the the bottom with a retry button on them
   - [ ] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
-- [ ] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
-  - [ ] Support reading secrets for Database Configuration
-  - [ ] Support reading secrets for MinIO Configuration
-  - [ ] Support reading secrets for JWT Configuration
-  - [ ] Support reading secrets for API Keys Configuration
-  - [ ] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
+- [x] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
+  - [x] Support reading secrets for Database Configuration
+  - [x] Support reading secrets for MinIO Configuration
+  - [x] Support reading secrets for JWT Configuration
+  - [x] Support reading secrets for API Keys Configuration
+  - [x] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
 - [ ] Add a Hybrid QA mode where both LLM and VLM are used
 
 ---
