@@ -28,14 +28,6 @@ Based on the requested features and priorities, this plan breaks down the tasks 
     - [x] Enable reading secrets for Database, MinIO, JWT, and API Keys from mounted files (e.g., `/run/secrets/db_password`).
     - [x] *Optional enhancement*: Support loading a single JSON file containing multiple secrets to avoid mounting many individual files.
 
-## Low Hanging Fruits (Testing & QA)
-
-*These are extremely easy tasks picked from the TODO list that provide immediate value with minimal effort and can be tackled in parallel with any Phase.*
-
-- [ ] **Test intentional bad translations**: Use a weak model to verify QA detection capabilities.
-- [ ] **Test with very low quality images**: Observe OCR failure handling and error reporting.
-- [ ] **Test language mismatch**: Upload a KR image to a JP series to observe behavior.
-
 ## Phase 2: Model Picker & Configuration Polish
 
 *Improves the user experience and robustness of model selection.*
@@ -79,3 +71,11 @@ Based on the requested features and priorities, this plan breaks down the tasks 
   - **Tasks**:
     - Introduce a QA mode that simultaneously utilizes an LLM (for textual translation accuracy) and a VLM (for visual context).
     - Implement logic to synthesize their evaluations into a final QA score/correction.
+
+## Low Hanging Fruits (Testing & QA)
+
+*These are extremely easy tasks picked from the TODO list that provide immediate value with minimal effort and can be tackled in parallel with any Phase.*
+
+- [ ] **Test intentional bad translations**: Use a weak model to verify QA detection capabilities.
+- [ ] **Test with very low quality images**: Observe OCR failure handling and error reporting.
+- [ ] **Test language mismatch**: Upload a KR image to a JP series to observe behavior.
