@@ -5,12 +5,14 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-manga_library}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
     ports:
       - "5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    secrets:
+      - db_password
     networks:
       - manga-net
     restart: unless-stopped
@@ -28,12 +30,14 @@ services:
       - POSTGRES_HOST=db
       - POSTGRES_DB=${POSTGRES_DB:-manga_library}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
       - SCHEDULE=@daily
       - BACKUP_KEEP_DAYS=7
       - BACKUP_ON_START=TRUE
     volumes:
       - ./data/backups:/backups
+    secrets:
+      - db_password
     depends_on:
       - db
     networks:
@@ -59,11 +63,13 @@ services:
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_ROOT_PASSWORD_FILE=/run/secrets/minio_password
     ports:
       - "9001:9001"
     volumes:
       - ./data/minio:/data
+    secrets:
+      - minio_password
     networks:
       - manga-net
     restart: unless-stopped
@@ -86,16 +92,16 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/${POSTGRES_DB:-manga_library}
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
-      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - SPRING_DATASOURCE_PASSWORD_FILE=/run/secrets/db_password
       - SPRING_DATA_REDIS_HOST=${REDIS_HOST:-redis}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
       - MINIO_EXTERNAL_URL=${MINIO_EXTERNAL_URL:-}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
-      - JWT_SECRET=${JWT_SECRET}
+      - MINIO_SECRET_KEY_FILE=/run/secrets/minio_password
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - CONTEXT_PATH=${CONTEXT_PATH:-/tlhub}
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
       - WORKER_HEALTH_URL=${WORKER_HEALTH_URL:-http://worker:8000/health}
       - USE_REMOTE_ML=${USE_REMOTE_ML:-false}
       - REMOTE_ML_URL=${REMOTE_ML_URL:-http://worker:8000}
@@ -115,6 +121,11 @@ services:
       - db
       - redis
       - minio
+    secrets:
+      - db_password
+      - minio_password
+      - jwt_secret
+      - internal_api_token
     networks:
       - manga-net
       - revProxy-net
@@ -149,17 +160,12 @@ services:
       - REDIS_PORT=${REDIS_PORT:-6379}
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECRET_KEY_FILE=/run/secrets/minio_password
       - BACKEND_CALLBACK_URL=${BACKEND_CALLBACK_URL:-http://backend:8080}${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
       - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-1.0}
-      # Models
-      # This is the main controller which controls which LLM's are used
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # API Keys are loaded via DOCKER_SECRETS_JSON
+      - DOCKER_SECRETS_JSON=/run/secrets/api_keys
       - OCR_MODEL_PROVIDER=${OCR_MODEL_PROVIDER}
       - OCR_VLM_MODEL=${OCR_VLM_MODEL}
       - OCR_VLM_MODEL_LIST=${OCR_VLM_MODEL_LIST}
@@ -201,6 +207,10 @@ services:
       - redis
       - minio
       - backend
+    secrets:
+      - minio_password
+      - internal_api_token
+      - api_keys
     volumes:
       - ./data/worker/huggingface:/root/.cache/huggingface
       - ./data/worker/paddlex:/root/.paddlex
@@ -222,3 +232,15 @@ networks:
     driver: bridge
   revProxy-net:
     external: true
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  minio_password:
+    file: ./secrets/minio_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  internal_api_token:
+    file: ./secrets/internal_api_token.txt
+  api_keys:
+    file: ./secrets/api_keys.json
