@@ -125,6 +125,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [editChapterNum, setEditChapterNum] = useState<number>(1.0);
   const [editChapterTitle, setEditChapterTitle] = useState("");
+  const [editChapterUseContextMemory, setEditChapterUseContextMemory] = useState<boolean>(true);
   const [editError, setEditError] = useState("");
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
@@ -155,6 +156,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     if (selectedChapter) {
       setEditChapterNum(selectedChapter.chapterNumber);
       setEditChapterTitle(selectedChapter.title || "");
+      setEditChapterUseContextMemory(selectedChapter.useContextMemory !== false);
       setEditError("");
       setEditChapOcrProvider(selectedChapter.ocrProvider || "");
       setEditChapOcrModel(selectedChapter.ocrModel || "");
@@ -185,6 +187,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           body: JSON.stringify({
             chapterNumber: editChapterNum,
             title: editChapterTitle,
+            useContextMemory: editChapterUseContextMemory,
             ocrProvider: editChapOcrProvider || null,
             ocrModel: editChapOcrModel || null,
             tlProvider: editChapTlProvider || null,
@@ -909,6 +912,18 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                   onChange={(e) => setEditChapterTitle(e.target.value)}
                   placeholder="e.g. The Beginning"
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={editChapterUseContextMemory}
+                    onChange={(e) => setEditChapterUseContextMemory(e.target.checked)}
+                    style={{ marginRight: "10px", width: "16px", height: "16px", accentColor: "var(--primary-color)" }}
+                  />
+                  Inject Context Memory (from previous chapter/page)
+                </label>
               </div>
 
               <div

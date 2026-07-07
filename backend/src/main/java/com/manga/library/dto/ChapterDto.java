@@ -18,4 +18,5 @@ public class ChapterDto {
   private String qaLlmModel;
   private String qaVlmModel;
   private String qaMode;
+  private Boolean useContextMemory;
 }
