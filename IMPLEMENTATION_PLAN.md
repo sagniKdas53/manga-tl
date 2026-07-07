@@ -6,12 +6,13 @@ Based on the requested features and priorities, this plan breaks down the tasks 
 
 *These tasks resolve major bottlenecks, provide immediate token savings, and improve foundational security and configuration.*
 
-- [ ] **1.1. Parallelize Cloud Processing**
-  - **Why**: Sequential local OCR is a massive bottleneck. Cloud APIs can handle parallel requests.
-  - **Tasks**:
-    - [ ] Add an environment variable (e.g., `CLOUD_CONCURRENCY`) to control the degree of parallelism, defaulting to `1` (sequential).
-    - [ ] Refactor worker processing loops to use async task groups / parallel execution when using Cloud OCR, TL, and QA.
-    - [ ] Ensure the parallel processing respects rate-limits (implement basic exponential backoff / 429 handling).
+- [x] **1.1. Parallelize Cloud Processing**
+  - **Goal**: Refactor worker processing loops to use async task groups / parallel execution when using Cloud OCR, TL, and QA.
+  - **File(s) to Modify**: `worker/handlers/ocr.py`, `worker/handlers/translation.py`, `worker/handlers/qa.py`
+  - **Task**:
+    - Add `CLOUD_CONCURRENCY` env var (default 1).
+    - Implement concurrency in the handlers.
+    - Ensure thread safety and implement `tenacity` exponential backoff / 429 handling.
 - [x] **1.2. Chapter-Level Memory Toggle**
   - **Why**: "I don't want the full memory thing right away but a way to disable or enable it at chapter level now." Prevents wasting tokens on stand-alone pages.
   - **Tasks**:

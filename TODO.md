@@ -18,7 +18,7 @@
 
 - [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6). Requires worker registration, task routing by capability, and health checking.
 - [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without any ml just simple job queuing and processing the results, all the hard work will be handled by the remote workers (for detection, OCR and rendering)
-- [ ] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck.
+- [x] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck.
   - [ ] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
   - [ ] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
   - [ ] This should still respect the rate-limits of the API
