@@ -103,41 +103,43 @@ public class InternalJobController {
                         seriesMap.put("readingDirection", series.getReadingDirection());
                         seriesMap.put("metadataJson", series.getMetadataJson());
                         map.put("seriesMetadata", seriesMap);
-
-                        // Previous page text summary
-                        if (page.getPageNumber() > 1) {
-                          List<Page> chapterPages =
-                              pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
-                          Page prevPage =
-                              chapterPages.stream()
-                                  .filter(p -> p.getPageNumber() == page.getPageNumber() - 1)
-                                  .findFirst()
-                                  .orElse(null);
-                          if (prevPage != null) {
-                            List<OcrRegion> prevRegions =
-                                ocrRegionRepository.findByImageId(prevPage.getImage().getId());
-                            List<String> textList = new ArrayList<>();
-                            for (OcrRegion r : prevRegions) {
-                              String txt =
-                                  r.getTranslatedText() != null
-                                      ? r.getTranslatedText()
-                                      : r.getText();
-                              if (txt != null && !txt.trim().isEmpty()) {
-                                textList.add(txt.trim());
+                        Boolean useMemory = chapter.getUseContextMemory();
+                        if (useMemory != null && useMemory) {
+                          // Previous page context
+                          if (page.getPageNumber() > 1) {
+                            List<Page> chapterPages =
+                                pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
+                            Page prevPage =
+                                chapterPages.stream()
+                                    .filter(p -> p.getPageNumber() == page.getPageNumber() - 1)
+                                    .findFirst()
+                                    .orElse(null);
+                            if (prevPage != null) {
+                              List<OcrRegion> prevRegions =
+                                  ocrRegionRepository.findByImageId(prevPage.getImage().getId());
+                              List<String> textList = new ArrayList<>();
+                              for (OcrRegion r : prevRegions) {
+                                String txt =
+                                    r.getTranslatedText() != null
+                                        ? r.getTranslatedText()
+                                        : r.getText();
+                                if (txt != null && !txt.trim().isEmpty()) {
+                                  textList.add(txt.trim());
+                                }
                               }
+                              map.put("previousPageText", String.join(" | ", textList));
                             }
-                            map.put("previousPageText", String.join(" | ", textList));
                           }
-                        }
 
-                        // Chapter summary context
-                        if (chapter.getChapterNumber() > 1) {
-                          chapterRepository
-                              .findBySeriesIdAndChapterNumber(
-                                  series.getId(), chapter.getChapterNumber() - 1)
-                              .ifPresent(
-                                  prevChapter ->
-                                      map.put("chapterSummary", prevChapter.getSummaryJson()));
+                          // Chapter summary context
+                          if (chapter.getChapterNumber() > 1) {
+                            chapterRepository
+                                .findBySeriesIdAndChapterNumber(
+                                    series.getId(), chapter.getChapterNumber() - 1)
+                                .ifPresent(
+                                    prevChapter ->
+                                        map.put("chapterSummary", prevChapter.getSummaryJson()));
+                          }
                         }
                       });
 

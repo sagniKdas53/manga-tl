@@ -22,7 +22,7 @@
   - [ ] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
   - [ ] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
   - [ ] This should still respect the rate-limits of the API
-- [ ] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this.
+- [x] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this.
 
 ### Model Picker Improvements
 

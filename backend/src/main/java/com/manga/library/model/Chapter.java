@@ -62,4 +62,8 @@ public class Chapter {
 
   @Column(name = "qa_mode")
   private String qaMode;
+
+  @Builder.Default
+  @Column(name = "use_context_memory", nullable = false, columnDefinition = "boolean default true")
+  private Boolean useContextMemory = true;
 }

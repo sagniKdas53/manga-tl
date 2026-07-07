@@ -206,6 +206,7 @@ public class SeriesController {
             .qaLlmModel(dto.getQaLlmModel())
             .qaVlmModel(dto.getQaVlmModel())
             .qaMode(dto.getQaMode())
+            .useContextMemory(dto.getUseContextMemory() != null ? dto.getUseContextMemory() : true)
             .build();
     Objects.requireNonNull(chapter, "chapter cannot be null");
     chapter = chapterRepository.save(chapter);
@@ -246,6 +247,7 @@ public class SeriesController {
                   dto.setQaLlmModel(c.getQaLlmModel());
                   dto.setQaVlmModel(c.getQaVlmModel());
                   dto.setQaMode(c.getQaMode());
+                  dto.setUseContextMemory(c.getUseContextMemory());
                   UUID imageId = chapterCovers.get(c.getId());
                   if (imageId != null) {
                     dto.setCoverImageUrl(getImageUrl(imageId));
@@ -276,6 +278,7 @@ public class SeriesController {
               dto.setQaLlmModel(c.getQaLlmModel());
               dto.setQaVlmModel(c.getQaVlmModel());
               dto.setQaMode(c.getQaMode());
+              dto.setUseContextMemory(c.getUseContextMemory());
               try {
                 List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
                 if (pages != null && !pages.isEmpty()) {
@@ -366,6 +369,9 @@ public class SeriesController {
               c.setQaLlmModel(dto.getQaLlmModel());
               c.setQaVlmModel(dto.getQaVlmModel());
               c.setQaMode(dto.getQaMode());
+              if (dto.getUseContextMemory() != null) {
+                c.setUseContextMemory(dto.getUseContextMemory());
+              }
               Objects.requireNonNull(c, "chapter cannot be null");
               c = chapterRepository.save(c);
               dto.setId(c.getId());
@@ -603,6 +609,7 @@ public class SeriesController {
       responseDto.setQaLlmModel(chapter.getQaLlmModel());
       responseDto.setQaVlmModel(chapter.getQaVlmModel());
       responseDto.setQaMode(chapter.getQaMode());
+      responseDto.setUseContextMemory(chapter.getUseContextMemory());
       return ResponseEntity.ok(responseDto);
 
     } catch (java.io.IOException

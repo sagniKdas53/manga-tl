@@ -43,6 +43,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
   const [newChapterNum, setNewChapterNum] = useState<number>(1);
   const [newChapterTitle, setNewChapterTitle] = useState("");
+  const [newChapterUseContextMemory, setNewChapterUseContextMemory] = useState<boolean>(true);
   const [chapterError, setChapterError] = useState("");
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
@@ -220,6 +221,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     setEditingChapter(c);
     setNewChapterNum(c.chapterNumber);
     setNewChapterTitle(c.title || "");
+    setNewChapterUseContextMemory(c.useContextMemory !== false);
     setChapterError("");
     setNewChapOcrProvider(c.ocrProvider || "");
     setNewChapOcrModel(c.ocrModel || "");
@@ -241,6 +243,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     );
     setNewChapterNum(maxNum + 1);
     setNewChapterTitle("");
+    setNewChapterUseContextMemory(true);
     setChapterError("");
     setNewChapOcrProvider("");
     setNewChapOcrModel("");
@@ -361,6 +364,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         body: JSON.stringify({
           chapterNumber: newChapterNum,
           title: newChapterTitle,
+          useContextMemory: newChapterUseContextMemory,
           ocrProvider: newChapOcrProvider || null,
           ocrModel: newChapOcrModel || null,
           tlProvider: newChapTlProvider || null,
@@ -1144,6 +1148,18 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   onChange={(e) => setNewChapterTitle(e.target.value)}
                   placeholder="e.g. The Beginning"
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={newChapterUseContextMemory}
+                    onChange={(e) => setNewChapterUseContextMemory(e.target.checked)}
+                    style={{ marginRight: "10px", width: "16px", height: "16px", accentColor: "var(--primary-color)" }}
+                  />
+                  Inject Context Memory (from previous chapter/page)
+                </label>
               </div>
 
               <div
