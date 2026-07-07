@@ -11,7 +11,6 @@ The cloud VLM benchmark script requires API keys to connect to external model pr
 1. Ensure the API keys are set in the `.env` file at the root of the project:
    * `OPENROUTER_API_KEY`
    * `NVIDIA_API_KEY`
-   * `NVIDIA_OCR_API_KEY`
    * `OPENAI_API_KEY`
 2. Start the Docker services (environment variables from `.env` are automatically forwarded to the container):
    ```bash

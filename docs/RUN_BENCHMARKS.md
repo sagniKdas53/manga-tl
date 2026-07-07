@@ -17,7 +17,6 @@ This guide details how to benchmark different manga pages across local OCR engin
    * `OPENROUTER_API_KEY` (for Qwen and Gemini models)
    * `GEMINI_API_KEY` (direct Google Gemini API access)
    * `NVIDIA_API_KEY` (for Nvidia Nemotron models)
-   * `NVIDIA_OCR_API_KEY` (for Nvidia Nemotron OCR v2)
 
 ---
 

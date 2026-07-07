@@ -53,7 +53,7 @@ PROVIDERS = {
     },
     "nvidia_ocr": {
         "url": "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2",
-        "key_env": "NVIDIA_OCR_API_KEY",
+        "key_env": "NVIDIA_API_KEY",
         "headers": lambda key: {"Authorization": f"Bearer {key}", "Accept": "application/json"}
     }
 }
