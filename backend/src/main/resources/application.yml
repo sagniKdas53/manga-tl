@@ -41,6 +41,9 @@ jwt:
   secret: ${JWT_SECRET:5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437}
   expirationMs: 86400000 # 24 hours
 
+internal:
+  api-token: ${INTERNAL_API_TOKEN:manga-library-internal-token-12345}
+
 worker:
   health-url: ${WORKER_HEALTH_URL:http://localhost:8000/health}
 
