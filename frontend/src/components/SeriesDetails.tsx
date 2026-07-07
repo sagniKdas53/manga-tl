@@ -379,11 +379,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         const data: Chapter = await res.json();
         if (isEdit) {
           setChapters((prev) =>
-            prev.map((c) =>
-              c.id === data.id
-                ? { ...c, chapterNumber: data.chapterNumber, title: data.title }
-                : c,
-            ),
+            prev.map((c) => (c.id === data.id ? data : c)),
           );
         } else {
           setChapters((prev) => [...prev, data]);
