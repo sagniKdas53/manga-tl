@@ -36,10 +36,7 @@ Based on the requested features and priorities, this plan breaks down the tasks 
   - **Tasks**:
     - [ ] Parse the comma-separated fallback lists (`OCR_VLM_MODEL_LIST`, `TL_LLM_MODEL_LIST`, etc.).
     - [ ] Implement fallback logic in the inference clients: if the primary model fails (timeout, 500 error, etc.), retry automatically with the next model in the list.
-- [ ] **2.2. Provider Model Name Mapping**
-  - **Tasks**:
-    - [ ] Create a mapping system to translate model formats between providers (e.g., translating OpenRouter's `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` to `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` when querying the NVIDIA API directly).
-- [ ] **2.3. Dynamic Provider Visibility**
+- [ ] **2.2. Dynamic Provider Visibility**
   - **Tasks**:
     - [ ] Backend: Evaluate available providers based on configured API keys and environment variables (hide OpenAI/Anthropic if no keys; hide Ollama/LM-Studio if `DISABLE_LOCAL_LLM=true`).
     - [ ] UI: Update the Model Picker to only show active providers.
