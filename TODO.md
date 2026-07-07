@@ -7,7 +7,7 @@
 ### Import and Export
 
 - [ ] Currently we can only import zips, add support for ePub import.
-- [ ] Also need to check and fix the issue where imported zips have their pages shuffled, they need to be displayed in the order they appear in the zip
+- [x] Also need to check and fix the issue where imported zips have their pages shuffled, they need to be displayed in the order they appear in the zip
 - [ ] **Full ePub export** — Extend `ChapterExportService.java` (which currently does ZIP only) to support ePub packaging.
 
 ---
@@ -16,30 +16,78 @@
 
 ### Cloud Optimization
 
+- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6). Requires worker registration, task routing by capability, and health checking.
+- [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without any ml just simple job queuing and processing the results, all the hard work will be handled by the remote workers (for detection, OCR and rendering)
 - [ ] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck.
   - [ ] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
   - [ ] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
   - [ ] This should still respect the rate-limits of the API
-- [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without PaddleOCR and local model dependencies for cloud-only deployments. Significantly reduces image size and build time. Only problem that I can think of is even if we pass on the OCR to cloud we will still need a way to actually detect the text regions, bubbles and stuff. Like the YOLO11 and PP-OCR-v6 detection may still be required unless we can find a way to delegate that to the cloud as well
-  - [ ] **Cloud-based Text Detection** — Research/integrate Cloud-based Text Detection (e.g., Google Cloud Vision API `DOCUMENT_TEXT_DETECTION` or VLM spatial coordinates) to allow completely cloud-only OCR without local dependencies.
-- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6). Requires worker registration, task routing by capability, and health checking.
+- [ ] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this.
 
+### Model Picker Improvements
+
+```txt
+# 1. OCR Model Configuration (To use cloud OCR set DISABLE_LOCAL_OCR to true)
+OCR_MODEL_PROVIDER=openrouter
+OCR_VLM_MODEL=qwen/qwen3-vl-32b-instruct
+# Fallback list for OCR (Active model at index 0, followed by commented out fallbacks)
+OCR_VLM_MODEL_LIST=qwen/qwen3-vl-32b-instruct,google/gemini-3.5-flash,nvidia/nemotron-nano-12b-v2-vl:free,google/gemini-2.5-flash,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,google/gemini-3.1-flash-lite
+
+# 2. Translation (TL) Model Configuration
+TL_MODEL_PROVIDER=openrouter
+# google/gemini-3.5-flash
+TL_LLM_MODEL=deepseek/deepseek-v4-pro
+# Fallback list for Translation (Active model at index 0, followed by commented out fallbacks)
+TL_LLM_MODEL_LIST=deepseek/deepseek-v4-pro,deepseek/deepseek-v4-flash,google/gemini-3.5-flash,google/gemma-4-31b-it:free,google/gemini-2.5-flash,tencent/hy3:free,cohere/north-mini-code:free,openai/gpt-oss-120b:free
+
+# 3. Quality Assurance (QA) Model Configuration
+QA_MODEL_PROVIDER=openrouter
+QA_LLM_MODEL=deepseek/deepseek-v4-flash
+# Fallback list for QA LLM (Active model at index 0, followed by commented out fallbacks)
+QA_LLM_MODEL_LIST=deepseek/deepseek-v4-flash,deepseek/deepseek-v4-pro,google/gemini-3.5-flash,google/gemma-4-31b-it:free,google/gemini-2.5-flash,tencent/hy3:free,cohere/north-mini-code:free,openai/gpt-oss-120b:free
+QA_VLM_MODEL=google/gemini-3.1-flash-lite
+# Fallback list for QA VLM (Active model at index 0, followed by commented out fallbacks)
+QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,google/gemini-3.5-flash,google/gemini-2.5-flash,nvidia/nemotron-nano-12b-v2-vl:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+```
+
+- [ ] As seen in the above code block despite having a picker we only really have one provider, OpenRouter.
+- [ ] The same model `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` on open-route, if to be used on nvidia nmi needs to be formatted as `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` so we need a way to map these different formats.
+- [ ] Also there should be a section for fallback models in the config which will be used when the primary model fails, the fallback will work in the same way as the primary just with a fallback priority.
+- [ ] Also providers should only become availbale if they are usable like currently the list shows that we have access to open-ai, anthoropic, ollama, lm-studio
+  - [ ] But we don't actually have keys configure for open-ai, anthoropic
+  - [ ] And since LOCAL_LLM_PROVIDER is ollama, lm-studio should also be hidden
+  - [ ] Say if DISABLE_LOCAL_LLM=true, thenollama and lm-studio should not be visible as options
+  - [ ] If DISABLE_LOCAL_OCR=true, then open-router and nvidia should be the only ones visible as options for OCR.
+  - [ ] Also if say in the front-end we slect OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
+  - [ ] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
+  
 ### Reliability & Crash Recovery
 
+- [ ]
 - [ ] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
+- [ ] **Queue Management:** Add a Queue managed in front-end just like the notification manager we have, it should be able to show us which jobs are in queue, processing and passed jobs get converted to notifications and removed, failed ones go the the bottom with a retry button on them
+  - [ ] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
 - [ ] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
+  - [ ] Support reading secrets for Database Configuration
+  - [ ] Support reading secrets for MinIO Configuration
+  - [ ] Support reading secrets for JWT Configuration
+  - [ ] Support reading secrets for API Keys Configuration
+  - [ ] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
+- [ ] Add a Hybrid QA mode where both LLM and VLM are used
 
 ---
 
 ## 🔵 Low Priority / Nice-to-Have
 
+- [ ] **True Cross-Page Character Memory** — Feed speaker profiles to translation prompts to prevent name/gender drift across pages.
+  - [ ] We have a very rudimentary implementation, in which we inject the previous pages' translated text into the current context.
+  - [ ] Instead, we can maintain a memory of past pages' characters, names, places, unique words and the like and inject that into the current context.
 - [ ] **Progress Gallery** — Create a visual showcase using `Sample1` showing output quality progression from v1 → v10+.
-- [ ] **Chapter & Series Summarization** — Background worker aggregates translated dialogue and generates chapter/series summaries via AI.
-- [ ] **Cross-Page Character Memory** — Feed speaker profiles to translation prompts to prevent name/gender drift across pages.
 - [ ] **Add draw-to-OCR / draw-to-translate workflow** — Let users draw a rectangle on the image canvas, then trigger OCR or translation for just that region. Requires:
-  - Frontend: new tool mode in canvas (similar to free resize but for region capture)
-  - Backend: new endpoint accepting image ID + bounding box coordinates
-  - Worker: crop-and-process pipeline for the selected region
+  - [ ] Frontend: new tool mode in canvas (similar to free resize but for region capture)
+  - [ ] Backend: new endpoint accepting image ID + bounding box coordinates
+  - [ ] Worker: crop-and-process pipeline for the selected region
+- [ ] **Chapter & Series Summarization** — Background worker aggregates translated dialogue and generates chapter/series summaries via AI.
 
 ---
 
