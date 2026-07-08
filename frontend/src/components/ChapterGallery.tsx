@@ -1159,9 +1159,16 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(((editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "vlm" || (editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {}),
+                        }}
                         value={editChapQaLlmModel}
                         onChange={(e) => setEditChapQaLlmModel(e.target.value)}
+                        disabled={(editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "vlm" || (editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none"}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaLlmModelList.map((m) => (
@@ -1187,9 +1194,16 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(((editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "llm" || (editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {}),
+                        }}
                         value={editChapQaVlmModel}
                         onChange={(e) => setEditChapQaVlmModel(e.target.value)}
+                        disabled={(editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "llm" || (editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none"}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaVlmModelList.map((m) => (

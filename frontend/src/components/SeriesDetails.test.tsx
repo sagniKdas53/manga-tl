@@ -176,6 +176,71 @@ describe("SeriesDetails Component", () => {
     });
   });
 
+  it("opens add chapter modal and submits successfully with context memory disabled", async () => {
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          id: "c2",
+          seriesId: "s1",
+          chapterNumber: 2,
+          title: "The Man Luffy",
+        }),
+    });
+
+    render(
+      <SeriesDetails
+        user={mockUser}
+        selectedSeries={mockSeries}
+        setSelectedSeries={mockSetSelectedSeries}
+        chapters={mockChapters}
+        setChapters={mockSetChapters}
+        onSelectChapter={mockOnSelectChapter}
+        isLoadingDetails={false}
+      />,
+    );
+
+    const addBtn = screen.getByRole("button", { name: /add chapter/i });
+    fireEvent.click(addBtn);
+
+    expect(
+      screen.getByRole("heading", { name: "Add Chapter" }),
+    ).toBeInTheDocument();
+
+    const titleInput = screen.getByPlaceholderText("e.g. The Beginning");
+    fireEvent.change(titleInput, { target: { value: "The Man Luffy" } });
+
+    const checkbox = screen.getByLabelText(/inject context memory/i);
+    fireEvent.click(checkbox);
+
+    const submitBtn = screen.getByRole("button", { name: "Add" });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series/s1/chapters", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer token123`,
+        },
+        body: JSON.stringify({
+          chapterNumber: 2,
+          title: "The Man Luffy",
+          useContextMemory: false,
+          ocrProvider: null,
+          ocrModel: null,
+          tlProvider: null,
+          tlModel: null,
+          qaProvider: null,
+          qaLlmModel: null,
+          qaVlmModel: null,
+          qaMode: null,
+        }),
+      });
+      expect(mockSetChapters).toHaveBeenCalled();
+    });
+  });
+
   it("opens edit series modal and submits updates", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,

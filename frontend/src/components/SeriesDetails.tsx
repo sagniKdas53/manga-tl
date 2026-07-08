@@ -1015,9 +1015,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(((newSeriesQaMode || settings?.qaMode) === "vlm" || (newSeriesQaMode || settings?.qaMode) === "none")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {}),
+                        }}
                         value={newSeriesQaLlmModel}
                         onChange={(e) => setNewSeriesQaLlmModel(e.target.value)}
+                        disabled={(newSeriesQaMode || settings?.qaMode) === "vlm" || (newSeriesQaMode || settings?.qaMode) === "none"}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaLlmModelList.map((m) => (
@@ -1043,9 +1050,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(((newSeriesQaMode || settings?.qaMode) === "llm" || (newSeriesQaMode || settings?.qaMode) === "none")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {}),
+                        }}
                         value={newSeriesQaVlmModel}
                         onChange={(e) => setNewSeriesQaVlmModel(e.target.value)}
+                        disabled={(newSeriesQaMode || settings?.qaMode) === "llm" || (newSeriesQaMode || settings?.qaMode) === "none"}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaVlmModelList.map((m) => (
@@ -1365,9 +1379,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(((newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "vlm" || (newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {}),
+                        }}
                         value={newChapQaLlmModel}
                         onChange={(e) => setNewChapQaLlmModel(e.target.value)}
+                        disabled={(newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "vlm" || (newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none"}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaLlmModelList.map((m) => (
@@ -1393,9 +1414,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(((newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "llm" || (newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {}),
+                        }}
                         value={newChapQaVlmModel}
                         onChange={(e) => setNewChapQaVlmModel(e.target.value)}
+                        disabled={(newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "llm" || (newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none"}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaVlmModelList.map((m) => (
