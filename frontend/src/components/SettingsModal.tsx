@@ -37,6 +37,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
 
+  const providers = settings?.activeProviders || PROVIDERS.filter(
+    (p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm
+  );
+  const ocrProviders = settings?.activeOcrProviders || OCR_PROVIDERS.filter(
+    (p) => p !== "local" || !settings?.disableLocalOcr
+  );
+
+
   useEffect(() => {
     if (isOpen) {
       safeFetch("/api/settings", {
@@ -172,9 +180,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.ocrProvider || ""}
                 onChange={(e) => handleChange("ocrProvider", e.target.value)}
               >
-                {OCR_PROVIDERS.filter(
-                  (p) => p !== "local" || !settings.disableLocalOcr,
-                ).map((p) => (
+                {ocrProviders.map((p) => (
                   <option
                     key={p}
                     value={p}
@@ -262,11 +268,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.tlProvider || ""}
                 onChange={(e) => handleChange("tlProvider", e.target.value)}
               >
-                {PROVIDERS.filter(
-                  (p) =>
-                    !["ollama", "lmstudio"].includes(p) ||
-                    !settings.disableLocalLlm,
-                ).map((p) => (
+                {providers.map((p) => (
                   <option
                     key={p}
                     value={p}
@@ -336,11 +338,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.qaProvider || ""}
                 onChange={(e) => handleChange("qaProvider", e.target.value)}
               >
-                {PROVIDERS.filter(
-                  (p) =>
-                    !["ollama", "lmstudio"].includes(p) ||
-                    !settings.disableLocalLlm,
-                ).map((p) => (
+                {providers.map((p) => (
                   <option
                     key={p}
                     value={p}

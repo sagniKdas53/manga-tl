@@ -129,6 +129,24 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [editError, setEditError] = useState("");
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
+  const providers = settings?.activeProviders || [
+    "openrouter",
+    "gemini",
+    "nvidia",
+    "openai",
+    "anthropic",
+    "ollama",
+    "lmstudio",
+  ];
+  const ocrProviders = settings?.activeOcrProviders || [
+    "local",
+    "openrouter",
+    "gemini",
+    "nvidia",
+    "ollama",
+    "lmstudio",
+  ];
+
   const [showModelOverrides, setShowModelOverrides] = useState(false);
 
   // Model overrides for Chapter
@@ -978,14 +996,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                         onChange={(e) => setEditChapOcrProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "local",
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "ollama",
-                          "lmstudio",
-                        ].map((p) => (
+                        {ocrProviders.map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -1007,9 +1018,16 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(editChapOcrProvider === "local" || (editChapOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {})
+                        }}
                         value={editChapOcrModel}
                         onChange={(e) => setEditChapOcrModel(e.target.value)}
+                        disabled={editChapOcrProvider === "local" || (editChapOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -1040,28 +1058,14 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                         onChange={(e) => setEditChapTlProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div
@@ -1109,28 +1113,14 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                         onChange={(e) => setEditChapQaProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div

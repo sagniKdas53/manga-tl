@@ -42,6 +42,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [showModelOverrides, setShowModelOverrides] = useState(false);
 
+  const providers = settings?.activeProviders || [
+    "openrouter",
+    "gemini",
+    "nvidia",
+    "openai",
+    "anthropic",
+    "ollama",
+    "lmstudio",
+  ];
+  const ocrProviders = settings?.activeOcrProviders || [
+    "local",
+    "openrouter",
+    "gemini",
+    "nvidia",
+    "ollama",
+    "lmstudio",
+  ];
+
+
   React.useEffect(() => {
     if (showSeriesModal && !settings) {
       safeFetch("/api/settings", {
@@ -437,14 +456,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         onChange={(e) => setNewOcrProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "local",
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "ollama",
-                          "lmstudio",
-                        ].map((p) => (
+                        {ocrProviders.map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -466,9 +478,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(newOcrProvider === "local" || (newOcrProvider === "" && settings?.ocrProvider === "local")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {})
+                        }}
                         value={newOcrModel}
                         onChange={(e) => setNewOcrModel(e.target.value)}
+                        disabled={newOcrProvider === "local" || (newOcrProvider === "" && settings?.ocrProvider === "local")}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -499,28 +518,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         onChange={(e) => setNewTlProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div
@@ -568,28 +573,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         onChange={(e) => setNewQaProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div

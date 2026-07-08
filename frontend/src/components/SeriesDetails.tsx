@@ -47,6 +47,24 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [chapterError, setChapterError] = useState("");
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
+  const providers = settings?.activeProviders || [
+    "openrouter",
+    "gemini",
+    "nvidia",
+    "openai",
+    "anthropic",
+    "ollama",
+    "lmstudio",
+  ];
+  const ocrProviders = settings?.activeOcrProviders || [
+    "local",
+    "openrouter",
+    "gemini",
+    "nvidia",
+    "ollama",
+    "lmstudio",
+  ];
+
   const [showSeriesModelOverrides, setShowSeriesModelOverrides] =
     useState(false);
   const [showChapterModelOverrides, setShowChapterModelOverrides] =
@@ -834,14 +852,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         }
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "local",
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "ollama",
-                          "lmstudio",
-                        ].map((p) => (
+                        {ocrProviders.map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -863,9 +874,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(newSeriesOcrProvider === "local" || (newSeriesOcrProvider === "" && settings?.ocrProvider === "local")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {})
+                        }}
                         value={newSeriesOcrModel}
                         onChange={(e) => setNewSeriesOcrModel(e.target.value)}
+                        disabled={newSeriesOcrProvider === "local" || (newSeriesOcrProvider === "" && settings?.ocrProvider === "local")}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -896,28 +914,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         onChange={(e) => setNewSeriesTlProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div
@@ -965,28 +969,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         onChange={(e) => setNewSeriesQaProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div
@@ -1212,14 +1202,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         onChange={(e) => setNewChapOcrProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "local",
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "ollama",
-                          "lmstudio",
-                        ].map((p) => (
+                        {ocrProviders.map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -1241,9 +1224,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(newChapOcrProvider === "local" || (newChapOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {})
+                        }}
                         value={newChapOcrModel}
                         onChange={(e) => setNewChapOcrModel(e.target.value)}
+                        disabled={newChapOcrProvider === "local" || (newChapOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -1274,28 +1264,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         onChange={(e) => setNewChapTlProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div
@@ -1343,28 +1319,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         onChange={(e) => setNewChapQaProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div
@@ -1598,14 +1560,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         onChange={(e) => setImportOcrProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "local",
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "ollama",
-                          "lmstudio",
-                        ].map((p) => (
+                        {ocrProviders.map((p) => (
                           <option
                             key={p}
                             value={p}
@@ -1627,9 +1582,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(importOcrProvider === "local" || (importOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {})
+                        }}
                         value={importOcrModel}
                         onChange={(e) => setImportOcrModel(e.target.value)}
+                        disabled={importOcrProvider === "local" || (importOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -1660,28 +1622,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         onChange={(e) => setImportTlProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div
@@ -1729,28 +1677,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         onChange={(e) => setImportQaProvider(e.target.value)}
                       >
                         <option value="">-- Inherit --</option>
-                        {[
-                          "openrouter",
-                          "gemini",
-                          "nvidia",
-                          "openai",
-                          "anthropic",
-                          "ollama",
-                          "lmstudio",
-                        ]
-                          .filter(
-                            (p) =>
-                              !["ollama", "lmstudio"].includes(p) ||
-                              !settings?.disableLocalLlm,
-                          )
-                          .map((p) => (
-                            <option
-                              key={p}
-                              value={p}
-                            >
-                              {p}
-                            </option>
-                          ))}
+                        {providers.map((p) => (
+                          <option
+                            key={p}
+                            value={p}
+                          >
+                            {p}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div

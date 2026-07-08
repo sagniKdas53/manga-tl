@@ -62,6 +62,15 @@ public class SystemSettingsService {
   @Value("${QA_MODE:auto}")
   private String qaMode;
 
+  @Value("${OPENAI_API_KEY:}")
+  private String openaiApiKey;
+
+  @Value("${ANTHROPIC_API_KEY:}")
+  private String anthropicApiKey;
+
+  @Value("${LOCAL_LLM_PROVIDER:ollama}")
+  private String localLlmProvider;
+
   public SystemSettingsDto getSettings() {
     SystemSettingsDto dto = new SystemSettingsDto();
 
@@ -83,6 +92,49 @@ public class SystemSettingsService {
 
     dto.setDisableLocalLlm(disableLocalLlm);
     dto.setQaMode(getSettingValue("qaMode", qaMode));
+
+    List<String> activeProviders = new java.util.ArrayList<>();
+    activeProviders.add("openrouter");
+    activeProviders.add("gemini");
+    activeProviders.add("nvidia");
+    if (openaiApiKey != null && !openaiApiKey.trim().isEmpty()) {
+      activeProviders.add("openai");
+    }
+    if (anthropicApiKey != null && !anthropicApiKey.trim().isEmpty()) {
+      activeProviders.add("anthropic");
+    }
+    if (!disableLocalLlm) {
+      String localProv = (localLlmProvider != null) ? localLlmProvider.trim().toLowerCase() : "ollama";
+      if ("ollama".equals(localProv)) {
+        activeProviders.add("ollama");
+      } else if ("lmstudio".equals(localProv)) {
+        activeProviders.add("lmstudio");
+      } else {
+        activeProviders.add("ollama");
+        activeProviders.add("lmstudio");
+      }
+    }
+    dto.setActiveProviders(activeProviders);
+
+    List<String> activeOcrProviders = new java.util.ArrayList<>();
+    if (!disableLocalOcr) {
+      activeOcrProviders.add("local");
+    }
+    activeOcrProviders.add("openrouter");
+    activeOcrProviders.add("gemini");
+    activeOcrProviders.add("nvidia");
+    if (!disableLocalLlm) {
+      String localProv = (localLlmProvider != null) ? localLlmProvider.trim().toLowerCase() : "ollama";
+      if ("ollama".equals(localProv)) {
+        activeOcrProviders.add("ollama");
+      } else if ("lmstudio".equals(localProv)) {
+        activeOcrProviders.add("lmstudio");
+      } else {
+        activeOcrProviders.add("ollama");
+        activeOcrProviders.add("lmstudio");
+      }
+    }
+    dto.setActiveOcrProviders(activeOcrProviders);
 
     return dto;
   }

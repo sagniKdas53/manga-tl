@@ -170,4 +170,7 @@ export interface SystemSettingsDto {
   localOcrModel?: string;
   disableLocalLlm?: boolean;
   qaMode?: string;
+
+  activeProviders?: string[];
+  activeOcrProviders?: string[];
 }
