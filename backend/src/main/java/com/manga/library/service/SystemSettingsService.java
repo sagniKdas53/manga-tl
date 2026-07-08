@@ -79,13 +79,25 @@ public class SystemSettingsService {
     dto.setQaLlmModelList(parseList(qaLlmModelList));
     dto.setQaVlmModelList(parseList(qaVlmModelList));
 
+    String actOcrModel = defaultOcrModel;
+    if ((actOcrModel == null || actOcrModel.isEmpty()) && !dto.getOcrVlmModelList().isEmpty()) actOcrModel = dto.getOcrVlmModelList().get(0);
+    
+    String actTlModel = defaultTlModel;
+    if ((actTlModel == null || actTlModel.isEmpty()) && !dto.getTlLlmModelList().isEmpty()) actTlModel = dto.getTlLlmModelList().get(0);
+    
+    String actQaLlmModel = defaultQaLlmModel;
+    if ((actQaLlmModel == null || actQaLlmModel.isEmpty()) && !dto.getQaLlmModelList().isEmpty()) actQaLlmModel = dto.getQaLlmModelList().get(0);
+    
+    String actQaVlmModel = defaultQaVlmModel;
+    if ((actQaVlmModel == null || actQaVlmModel.isEmpty()) && !dto.getQaVlmModelList().isEmpty()) actQaVlmModel = dto.getQaVlmModelList().get(0);
+
     dto.setOcrProvider(getSettingValue("ocrProvider", defaultOcrProvider));
-    dto.setOcrModel(getSettingValue("ocrModel", defaultOcrModel));
+    dto.setOcrModel(getSettingValue("ocrModel", actOcrModel));
     dto.setTlProvider(getSettingValue("tlProvider", defaultTlProvider));
-    dto.setTlModel(getSettingValue("tlModel", defaultTlModel));
+    dto.setTlModel(getSettingValue("tlModel", actTlModel));
     dto.setQaProvider(getSettingValue("qaProvider", defaultQaProvider));
-    dto.setQaLlmModel(getSettingValue("qaLlmModel", defaultQaLlmModel));
-    dto.setQaVlmModel(getSettingValue("qaVlmModel", defaultQaVlmModel));
+    dto.setQaLlmModel(getSettingValue("qaLlmModel", actQaLlmModel));
+    dto.setQaVlmModel(getSettingValue("qaVlmModel", actQaVlmModel));
 
     dto.setDisableLocalOcr(disableLocalOcr);
     dto.setLocalOcrModel(paddleOcrRecModel);

@@ -20,11 +20,11 @@
   - *Context*: Currently, local detection models (PaddleOCR-Det and YOLO speech bubble detection) run sequentially via a global process lock to avoid overloading CPU/GPU and causing OOM crashes on the host machine.
   - *Requirements*: Remote workers must expose capability APIs, health check endpoints, and task-specific concurrency status, allowing the coordinator to route OCR/detection tasks safely without resource exhaustion.
 - [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without any ml just simple job queuing and processing the results, all the hard work will be handled by the remote workers (for detection, OCR and rendering)
-- [x] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck.
+- [x] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)
   - [x] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
   - [x] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
   - [x] This should still respect the rate-limits of the API
-- [x] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this.
+- [x] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this. (Tests pending)
 
 ### Model Picker Improvements
 
@@ -65,18 +65,18 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
   
 ### Reliability & Crash Recovery
 
-- [ ] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
-- [ ] **Queue Management:** Add a Queue managed in front-end just like the notification manager we have, it should be able to show us which jobs are in queue, processing and passed jobs get converted to notifications and removed, failed ones go the the bottom with a retry button on them
-  - [ ] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
+- [x] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
+- [x] **Queue Management:** Add a Queue managed in front-end just like the notification manager we have, it should be able to show us which jobs are in queue, processing and passed jobs get converted to notifications and removed, failed ones go the the bottom with a retry button on them
+  - [x] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
 - [x] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
   - [x] Support reading secrets for Database Configuration
   - [x] Support reading secrets for MinIO Configuration
   - [x] Support reading secrets for JWT Configuration
   - [x] Support reading secrets for API Keys Configuration
   - [x] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
-- [ ] **Add a Hybrid QA mode where both LLM and VLM are used** — 
-  - [ ] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
-  - [ ] The VLM does the final pass on the rendered image
+- [x] **Add a Hybrid QA mode where both LLM and VLM are used** (Not Tested yet)
+  - [x] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
+  - [x] The VLM does the final pass on the rendered image
 
 ---
 

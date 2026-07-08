@@ -239,6 +239,13 @@ public class JobCoordinatorService {
   }
 
   public void requeuePendingJobs() {
+      // Clear queues first to prevent duplication
+      redisTemplate.delete(List.of(
+          "queue:panel-detection", "queue:ocr", "queue:layout", 
+          "queue:translation", "queue:render", "queue:qa", 
+          "queue:qa-re-ocr", "queue:region-redo"
+      ));
+
       List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
       for (Job job : pendingJobs) {
           pushJobToRedis(job);
