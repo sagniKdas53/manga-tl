@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.config.JwtAuthFilter;
@@ -392,5 +393,24 @@ public class InternalJobControllerTest {
     when(pageRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(page));
 
     mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isOk());
+  }
+
+  @Test
+  public void testGetJob_Success() throws Exception {
+    Job job = Job.builder().id("job1").type("ocr").status("PENDING").build();
+    when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
+
+    mockMvc.perform(get("/api/internal/jobs/job1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value("job1"))
+        .andExpect(jsonPath("$.status").value("PENDING"));
+  }
+
+  @Test
+  public void testGetJob_NotFound() throws Exception {
+    when(jobRepository.findById("job1")).thenReturn(Optional.empty());
+
+    mockMvc.perform(get("/api/internal/jobs/job1"))
+        .andExpect(status().isNotFound());
   }
 }
