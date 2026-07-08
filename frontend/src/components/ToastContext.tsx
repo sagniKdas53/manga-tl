@@ -105,7 +105,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
         style={{
           position: "fixed",
           top: "24px",
-          right: "24px",
+          left: "24px",
           zIndex: 10001,
           display: "flex",
           flexDirection: "column",

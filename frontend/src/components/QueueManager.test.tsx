@@ -21,6 +21,8 @@ describe("QueueManager", () => {
       payload: JSON.stringify({
         chapterNumber: 2,
         pageNumber: 3,
+        chapterTitle: "The Beginning",
+        seriesTitle: "My Manga",
         ocrProvider: "google",
         ocrModel: "gemini-3.5-flash"
       }),
@@ -60,7 +62,7 @@ describe("QueueManager", () => {
     expect(screen.queryByText("Queue Manager")).toBeNull();
   });
 
-  it("fetches and displays jobs when opened", async () => {
+  it("fetches and displays jobs immediately and renders dropdown content when opened", async () => {
     (safeFetch as Mock).mockImplementation((url: string) => {
       if (url === "/api/jobs") {
         return Promise.resolve({
@@ -91,12 +93,13 @@ describe("QueueManager", () => {
     expect(screen.getByText("Translation")).toBeInTheDocument();
 
     // Check payload details (Location & Provider/Model)
-    expect(screen.getByText("Ch.2 › Page 3")).toBeInTheDocument();
+    expect(screen.getByText("My Manga - The Beginning (Ch.2) › Page 3")).toBeInTheDocument();
     expect(screen.getByText("google / gemini-3.5-flash")).toBeInTheDocument();
     expect(screen.getByText("Ch.2 › Page 4")).toBeInTheDocument();
     expect(screen.getByText("openai / gpt-4o")).toBeInTheDocument();
 
     // Check buttons rendered
+    expect(screen.getByText("Clear Queue")).toBeInTheDocument();
     expect(screen.getByText("Pause")).toBeInTheDocument();
     expect(screen.getByText("Cancel")).toBeInTheDocument();
     expect(screen.getByText("Retry")).toBeInTheDocument();
