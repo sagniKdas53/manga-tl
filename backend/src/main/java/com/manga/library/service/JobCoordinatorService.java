@@ -82,6 +82,26 @@ public class JobCoordinatorService {
       }
   }
 
+  @org.springframework.scheduling.annotation.Scheduled(fixedRate = 300000)
+  @Transactional
+  public void recoverStaleProcessingJobs() {
+      try {
+          OffsetDateTime threshold = OffsetDateTime.now().minusMinutes(10);
+          List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
+          
+          for (Job job : processingJobs) {
+              if (job.getUpdatedAt() != null && job.getUpdatedAt().isBefore(threshold)) {
+                  log.warn("Recovering stale PROCESSING job {} (last updated at {})", job.getId(), job.getUpdatedAt());
+                  job.setStatus("PENDING");
+                  jobRepository.save(job);
+                  pushPersistedJobIfQueueRunning(job);
+              }
+          }
+      } catch (Exception e) {
+          log.error("Failed to recover stale processing jobs: {}", e.getMessage());
+      }
+  }
+
   public void startPipeline(UUID imageId) {
     log.info("Starting pipeline for image {}", imageId);
     enqueueJob("panel-detection", imageId);
@@ -891,7 +911,7 @@ public class JobCoordinatorService {
   }
 
   @Transactional
-  public void handleQaCallback(
+  public String handleQaCallback(
       UUID imageId, List<Map<String, Object>> qaResults, Map<String, Object> cost) {
     log.info(
         "Received QA callback for image: {} with {} results",
@@ -1077,11 +1097,7 @@ public class JobCoordinatorService {
     if (needsManualIntervention) {
       log.warn("QA requested manual intervention for image {}. Halting pipeline.", imageId);
       redisTemplate.delete(retryKey);
-      sseService.emitNotificationForImage(
-          imageId,
-          "WARNING",
-          "Manual Review Needed",
-          "QA pipeline halted because some regions require manual intervention.");
+      return "MANUAL_REVIEW";
     } else if (needsRetry && retries < 2) {
       redisTemplate.opsForValue().set(retryKey, String.valueOf(retries + 1));
 
@@ -1104,6 +1120,7 @@ public class JobCoordinatorService {
         redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "qa-re-translate");
         enqueueJob("translation", imageId);
       }
+      return "RETRIED";
     } else {
       if (needsRetry) {
         log.warn("QA failed for image {} but reached max retries. Completing pipeline.", imageId);
@@ -1111,6 +1128,7 @@ public class JobCoordinatorService {
         log.info("QA passed for image {}. Pipeline complete!", imageId);
       }
       redisTemplate.delete(retryKey);
+      return "COMPLETED";
     }
   }
 
