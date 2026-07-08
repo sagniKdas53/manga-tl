@@ -6,12 +6,56 @@ interface Job {
   type: string;
   imageId: string;
   status: "PENDING" | "PROCESSING" | "FAILED" | "PAUSED";
+  payload: string | null;
   error: string | null;
   attempt: number;
   maxAttempts: number;
   createdAt: string;
   updatedAt: string;
 }
+
+const renderJobDetails = (job: Job) => {
+  if (!job.payload) return null;
+  try {
+    const payload = JSON.parse(job.payload);
+    let providerModel = "";
+    let location = "";
+
+    if (payload.chapterNumber !== undefined && payload.pageNumber !== undefined) {
+      location = `Ch.${payload.chapterNumber} › Page ${payload.pageNumber}`;
+    }
+
+    if (job.type === "ocr") {
+      if (payload.ocrProvider) {
+        providerModel = `${payload.ocrProvider} / ${payload.ocrModel || "default"}`;
+      }
+    } else if (job.type === "translation") {
+      if (payload.tlProvider) {
+        providerModel = `${payload.tlProvider} / ${payload.tlModel || "default"}`;
+      }
+    } else if (job.type === "qa") {
+      const model = payload.qaMode === "vlm" ? payload.qaVlmModel : payload.qaLlmModel;
+      if (payload.qaProvider) {
+        providerModel = `${payload.qaProvider} / ${model || "default"}`;
+      }
+    } else if (job.type === "qa-re-ocr") {
+      if (payload.ocrProvider) {
+        providerModel = `${payload.ocrProvider} / ${payload.ocrModel || "default"}`;
+      }
+    } else if (job.type === "region-redo") {
+      providerModel = `Redo: ${payload.redoType || "manual"}`;
+    }
+
+    return (
+      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px", display: "flex", flexDirection: "column", gap: "2px" }}>
+        {location && <span style={{ fontWeight: "500", color: "var(--primary, #ed2553)" }}>{location}</span>}
+        {providerModel && <span>Using: <strong style={{ color: "var(--text-main)" }}>{providerModel}</strong></span>}
+      </div>
+    );
+  } catch (e) {
+    return null;
+  }
+};
 
 export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -260,16 +304,23 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                       style={{
                         fontWeight: "bold",
                         fontSize: "14px",
-                        marginBottom: "4px",
+                        marginBottom: "2px",
                         color: "var(--text-main)",
                       }}
                     >
-                      {job.type.toUpperCase()} Job
+                      {job.type === "panel-detection" ? "Panel Detection" :
+                       job.type === "ocr" ? "OCR Processing" :
+                       job.type === "translation" ? "Translation" :
+                       job.type === "qa" ? "Quality Assurance" :
+                       job.type === "qa-re-ocr" ? "QA Re-OCR" :
+                       job.type === "region-redo" ? "Region Redo" : job.type.toUpperCase()}
                     </div>
+                    {renderJobDetails(job)}
                     <div
                       style={{
-                        fontSize: "12px",
+                        fontSize: "11px",
                         color: "var(--text-muted)",
+                        marginTop: "4px",
                         marginBottom: "4px",
                       }}
                     >

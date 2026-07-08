@@ -49,6 +49,15 @@ public class InternalJobController {
       }).orElse(ResponseEntity.notFound().build());
   }
 
+  @GetMapping("/jobs/{jobId}")
+  public ResponseEntity<?> getJob(@PathVariable String jobId) {
+      log.info("Worker fetching status for job {}", jobId);
+      return jobRepository.findById(jobId)
+          .map(ResponseEntity::ok)
+          .orElse(ResponseEntity.notFound().build());
+  }
+
+
   @GetMapping("/images/{imageId}")
   public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
     Objects.requireNonNull(imageId, "imageId cannot be null");
