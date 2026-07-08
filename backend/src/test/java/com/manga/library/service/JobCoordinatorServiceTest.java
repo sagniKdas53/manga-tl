@@ -680,7 +680,8 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testPrepareHybridQa() {
-    Image image = Image.builder().filename("test_hybrid.png").storagePath("test/test_hybrid.png").build();
+    Image image =
+        Image.builder().filename("test_hybrid.png").storagePath("test/test_hybrid.png").build();
     image = imageRepository.save(image);
 
     // Old translation layer (should be set to invisible)
@@ -706,13 +707,7 @@ public class JobCoordinatorServiceTest {
     latestLayer = layerRepository.save(latestLayer);
 
     // OCR layer (should be set to invisible)
-    Layer ocrLayer =
-        Layer.builder()
-            .image(image)
-            .type("ocr")
-            .visible(true)
-            .zOrder(0)
-            .build();
+    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(0).build();
     ocrLayer = layerRepository.save(ocrLayer);
 
     OcrRegion region =

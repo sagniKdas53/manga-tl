@@ -4,8 +4,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.config.JwtAuthFilter;
@@ -214,7 +214,7 @@ public class InternalJobControllerTest {
   public void testQaCallback_Success() throws Exception {
     PanelCallbackDto dto = new PanelCallbackDto();
     dto.setImageId(UUID.randomUUID());
-    doNothing().when(jobCoordinatorService).handleQaCallback(any(), any(), any());
+    doReturn("PASSED").when(jobCoordinatorService).handleQaCallback(any(), any(), any());
 
     mockMvc
         .perform(
@@ -400,7 +400,8 @@ public class InternalJobControllerTest {
     Job job = Job.builder().id("job1").type("ocr").status("PENDING").build();
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
-    mockMvc.perform(get("/api/internal/jobs/job1"))
+    mockMvc
+        .perform(get("/api/internal/jobs/job1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("job1"))
         .andExpect(jsonPath("$.status").value("PENDING"));
@@ -410,15 +411,16 @@ public class InternalJobControllerTest {
   public void testGetJob_NotFound() throws Exception {
     when(jobRepository.findById("job1")).thenReturn(Optional.empty());
 
-    mockMvc.perform(get("/api/internal/jobs/job1"))
-        .andExpect(status().isNotFound());
+    mockMvc.perform(get("/api/internal/jobs/job1")).andExpect(status().isNotFound());
   }
 
   @Test
   public void testQaHybridPrepare_Success() throws Exception {
     UUID imageId = UUID.randomUUID();
     Map<String, Object> payload = new HashMap<>();
-    payload.put("qaResults", List.of(Map.of("regionId", UUID.randomUUID().toString(), "qaStatus", "passed")));
+    payload.put(
+        "qaResults",
+        List.of(Map.of("regionId", UUID.randomUUID().toString(), "qaStatus", "passed")));
 
     doNothing().when(jobCoordinatorService).prepareHybridQa(any(), any());
 
@@ -434,9 +436,13 @@ public class InternalJobControllerTest {
   public void testQaHybridPrepare_Failure() throws Exception {
     UUID imageId = UUID.randomUUID();
     Map<String, Object> payload = new HashMap<>();
-    payload.put("qaResults", List.of(Map.of("regionId", UUID.randomUUID().toString(), "qaStatus", "passed")));
+    payload.put(
+        "qaResults",
+        List.of(Map.of("regionId", UUID.randomUUID().toString(), "qaStatus", "passed")));
 
-    doThrow(new RuntimeException("prepare error")).when(jobCoordinatorService).prepareHybridQa(any(), any());
+    doThrow(new RuntimeException("prepare error"))
+        .when(jobCoordinatorService)
+        .prepareHybridQa(any(), any());
 
     mockMvc
         .perform(
@@ -446,4 +452,3 @@ public class InternalJobControllerTest {
         .andExpect(status().isInternalServerError());
   }
 }
-

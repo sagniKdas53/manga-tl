@@ -43,7 +43,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
   const [newChapterNum, setNewChapterNum] = useState<number>(1);
   const [newChapterTitle, setNewChapterTitle] = useState("");
-  const [newChapterUseContextMemory, setNewChapterUseContextMemory] = useState<boolean>(true);
+  const [newChapterUseContextMemory, setNewChapterUseContextMemory] =
+    useState<boolean>(true);
   const [chapterError, setChapterError] = useState("");
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
@@ -99,7 +100,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [importQaLlmModel, setImportQaLlmModel] = useState("");
   const [importQaVlmModel, setImportQaVlmModel] = useState("");
   const [importQaMode, setImportQaMode] = useState("");
-  const [showImportModelOverrides, setShowImportModelOverrides] = useState(false);
+  const [showImportModelOverrides, setShowImportModelOverrides] =
+    useState(false);
 
   // Local states for chapter import modal
   const [showImportModal, setShowImportModal] = useState(false);
@@ -118,7 +120,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         .then((data) => setSettings(data))
         .catch(console.error);
     }
-  }, [showSeriesModal, showChapterModal, showImportModal, settings, user.token]);
+  }, [
+    showSeriesModal,
+    showChapterModal,
+    showImportModal,
+    settings,
+    user.token,
+  ]);
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -396,9 +404,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       if (res.ok) {
         const data: Chapter = await res.json();
         if (isEdit) {
-          setChapters((prev) =>
-            prev.map((c) => (c.id === data.id ? data : c)),
-          );
+          setChapters((prev) => prev.map((c) => (c.id === data.id ? data : c)));
         } else {
           setChapters((prev) => [...prev, data]);
         }
@@ -877,13 +883,19 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(newSeriesOcrProvider === "local" || (newSeriesOcrProvider === "" && settings?.ocrProvider === "local")
+                          ...(newSeriesOcrProvider === "local" ||
+                          (newSeriesOcrProvider === "" &&
+                            settings?.ocrProvider === "local")
                             ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {})
+                            : {}),
                         }}
                         value={newSeriesOcrModel}
                         onChange={(e) => setNewSeriesOcrModel(e.target.value)}
-                        disabled={newSeriesOcrProvider === "local" || (newSeriesOcrProvider === "" && settings?.ocrProvider === "local")}
+                        disabled={
+                          newSeriesOcrProvider === "local" ||
+                          (newSeriesOcrProvider === "" &&
+                            settings?.ocrProvider === "local")
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -1019,13 +1031,17 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(((newSeriesQaMode || settings?.qaMode) === "vlm" || (newSeriesQaMode || settings?.qaMode) === "none")
+                          ...((newSeriesQaMode || settings?.qaMode) === "vlm" ||
+                          (newSeriesQaMode || settings?.qaMode) === "none"
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
                         value={newSeriesQaLlmModel}
                         onChange={(e) => setNewSeriesQaLlmModel(e.target.value)}
-                        disabled={(newSeriesQaMode || settings?.qaMode) === "vlm" || (newSeriesQaMode || settings?.qaMode) === "none"}
+                        disabled={
+                          (newSeriesQaMode || settings?.qaMode) === "vlm" ||
+                          (newSeriesQaMode || settings?.qaMode) === "none"
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaLlmModelList.map((m) => (
@@ -1054,13 +1070,17 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(((newSeriesQaMode || settings?.qaMode) === "llm" || (newSeriesQaMode || settings?.qaMode) === "none")
+                          ...((newSeriesQaMode || settings?.qaMode) === "llm" ||
+                          (newSeriesQaMode || settings?.qaMode) === "none"
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
                         value={newSeriesQaVlmModel}
                         onChange={(e) => setNewSeriesQaVlmModel(e.target.value)}
-                        disabled={(newSeriesQaMode || settings?.qaMode) === "llm" || (newSeriesQaMode || settings?.qaMode) === "none"}
+                        disabled={
+                          (newSeriesQaMode || settings?.qaMode) === "llm" ||
+                          (newSeriesQaMode || settings?.qaMode) === "none"
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaVlmModelList.map((m) => (
@@ -1152,12 +1172,27 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+                <label
+                  className="form-label"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={newChapterUseContextMemory}
-                    onChange={(e) => setNewChapterUseContextMemory(e.target.checked)}
-                    style={{ marginRight: "10px", width: "16px", height: "16px", accentColor: "var(--primary-color)" }}
+                    onChange={(e) =>
+                      setNewChapterUseContextMemory(e.target.checked)
+                    }
+                    style={{
+                      marginRight: "10px",
+                      width: "16px",
+                      height: "16px",
+                      accentColor: "var(--primary-color)",
+                    }}
                   />
                   Inject Context Memory (from previous chapter/page)
                 </label>
@@ -1242,13 +1277,23 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(newChapOcrProvider === "local" || (newChapOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))
+                          ...(newChapOcrProvider === "local" ||
+                          (newChapOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
                             ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {})
+                            : {}),
                         }}
                         value={newChapOcrModel}
                         onChange={(e) => setNewChapOcrModel(e.target.value)}
-                        disabled={newChapOcrProvider === "local" || (newChapOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))}
+                        disabled={
+                          newChapOcrProvider === "local" ||
+                          (newChapOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -1384,13 +1429,25 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(((newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "vlm" || (newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none")
+                          ...((newChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "vlm" ||
+                          (newChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "none"
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
                         value={newChapQaLlmModel}
                         onChange={(e) => setNewChapQaLlmModel(e.target.value)}
-                        disabled={(newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "vlm" || (newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none"}
+                        disabled={
+                          (newChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "vlm" ||
+                          (newChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "none"
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaLlmModelList.map((m) => (
@@ -1419,13 +1476,25 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(((newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "llm" || (newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none")
+                          ...((newChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "llm" ||
+                          (newChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "none"
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
                         value={newChapQaVlmModel}
                         onChange={(e) => setNewChapQaVlmModel(e.target.value)}
-                        disabled={(newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "llm" || (newChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none"}
+                        disabled={
+                          (newChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "llm" ||
+                          (newChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "none"
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaVlmModelList.map((m) => (
@@ -1615,13 +1684,23 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(importOcrProvider === "local" || (importOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))
+                          ...(importOcrProvider === "local" ||
+                          (importOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
                             ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {})
+                            : {}),
                         }}
                         value={importOcrModel}
                         onChange={(e) => setImportOcrModel(e.target.value)}
-                        disabled={importOcrProvider === "local" || (importOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))}
+                        disabled={
+                          importOcrProvider === "local" ||
+                          (importOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (

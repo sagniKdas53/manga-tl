@@ -80,16 +80,20 @@ public class SystemSettingsService {
     dto.setQaVlmModelList(parseList(qaVlmModelList));
 
     String actOcrModel = defaultOcrModel;
-    if ((actOcrModel == null || actOcrModel.isEmpty()) && !dto.getOcrVlmModelList().isEmpty()) actOcrModel = dto.getOcrVlmModelList().get(0);
-    
+    if ((actOcrModel == null || actOcrModel.isEmpty()) && !dto.getOcrVlmModelList().isEmpty())
+      actOcrModel = dto.getOcrVlmModelList().get(0);
+
     String actTlModel = defaultTlModel;
-    if ((actTlModel == null || actTlModel.isEmpty()) && !dto.getTlLlmModelList().isEmpty()) actTlModel = dto.getTlLlmModelList().get(0);
-    
+    if ((actTlModel == null || actTlModel.isEmpty()) && !dto.getTlLlmModelList().isEmpty())
+      actTlModel = dto.getTlLlmModelList().get(0);
+
     String actQaLlmModel = defaultQaLlmModel;
-    if ((actQaLlmModel == null || actQaLlmModel.isEmpty()) && !dto.getQaLlmModelList().isEmpty()) actQaLlmModel = dto.getQaLlmModelList().get(0);
-    
+    if ((actQaLlmModel == null || actQaLlmModel.isEmpty()) && !dto.getQaLlmModelList().isEmpty())
+      actQaLlmModel = dto.getQaLlmModelList().get(0);
+
     String actQaVlmModel = defaultQaVlmModel;
-    if ((actQaVlmModel == null || actQaVlmModel.isEmpty()) && !dto.getQaVlmModelList().isEmpty()) actQaVlmModel = dto.getQaVlmModelList().get(0);
+    if ((actQaVlmModel == null || actQaVlmModel.isEmpty()) && !dto.getQaVlmModelList().isEmpty())
+      actQaVlmModel = dto.getQaVlmModelList().get(0);
 
     dto.setOcrProvider(getSettingValue("ocrProvider", defaultOcrProvider));
     dto.setOcrModel(getSettingValue("ocrModel", actOcrModel));
@@ -116,7 +120,8 @@ public class SystemSettingsService {
       activeProviders.add("anthropic");
     }
     if (!disableLocalLlm) {
-      String localProv = (localLlmProvider != null) ? localLlmProvider.trim().toLowerCase() : "ollama";
+      String localProv =
+          (localLlmProvider != null) ? localLlmProvider.trim().toLowerCase() : "ollama";
       if ("ollama".equals(localProv)) {
         activeProviders.add("ollama");
       } else if ("lmstudio".equals(localProv)) {
@@ -136,7 +141,8 @@ public class SystemSettingsService {
     activeOcrProviders.add("gemini");
     activeOcrProviders.add("nvidia");
     if (!disableLocalLlm) {
-      String localProv = (localLlmProvider != null) ? localLlmProvider.trim().toLowerCase() : "ollama";
+      String localProv =
+          (localLlmProvider != null) ? localLlmProvider.trim().toLowerCase() : "ollama";
       if ("ollama".equals(localProv)) {
         activeOcrProviders.add("ollama");
       } else if ("lmstudio".equals(localProv)) {

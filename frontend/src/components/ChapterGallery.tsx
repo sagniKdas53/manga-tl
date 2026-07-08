@@ -125,7 +125,8 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [editChapterNum, setEditChapterNum] = useState<number>(1.0);
   const [editChapterTitle, setEditChapterTitle] = useState("");
-  const [editChapterUseContextMemory, setEditChapterUseContextMemory] = useState<boolean>(true);
+  const [editChapterUseContextMemory, setEditChapterUseContextMemory] =
+    useState<boolean>(true);
   const [editError, setEditError] = useState("");
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
@@ -174,7 +175,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     if (selectedChapter) {
       setEditChapterNum(selectedChapter.chapterNumber);
       setEditChapterTitle(selectedChapter.title || "");
-      setEditChapterUseContextMemory(selectedChapter.useContextMemory !== false);
+      setEditChapterUseContextMemory(
+        selectedChapter.useContextMemory !== false,
+      );
       setEditError("");
       setEditChapOcrProvider(selectedChapter.ocrProvider || "");
       setEditChapOcrModel(selectedChapter.ocrModel || "");
@@ -933,12 +936,27 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+                <label
+                  className="form-label"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={editChapterUseContextMemory}
-                    onChange={(e) => setEditChapterUseContextMemory(e.target.checked)}
-                    style={{ marginRight: "10px", width: "16px", height: "16px", accentColor: "var(--primary-color)" }}
+                    onChange={(e) =>
+                      setEditChapterUseContextMemory(e.target.checked)
+                    }
+                    style={{
+                      marginRight: "10px",
+                      width: "16px",
+                      height: "16px",
+                      accentColor: "var(--primary-color)",
+                    }}
                   />
                   Inject Context Memory (from previous chapter/page)
                 </label>
@@ -1021,13 +1039,23 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(editChapOcrProvider === "local" || (editChapOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))
+                          ...(editChapOcrProvider === "local" ||
+                          (editChapOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
                             ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {})
+                            : {}),
                         }}
                         value={editChapOcrModel}
                         onChange={(e) => setEditChapOcrModel(e.target.value)}
-                        disabled={editChapOcrProvider === "local" || (editChapOcrProvider === "" && (selectedSeries?.ocrProvider === "local" || (!selectedSeries?.ocrProvider && settings?.ocrProvider === "local")))}
+                        disabled={
+                          editChapOcrProvider === "local" ||
+                          (editChapOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -1163,13 +1191,25 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(((editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "vlm" || (editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none")
+                          ...((editChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "vlm" ||
+                          (editChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "none"
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
                         value={editChapQaLlmModel}
                         onChange={(e) => setEditChapQaLlmModel(e.target.value)}
-                        disabled={(editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "vlm" || (editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none"}
+                        disabled={
+                          (editChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "vlm" ||
+                          (editChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "none"
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaLlmModelList.map((m) => (
@@ -1198,13 +1238,25 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(((editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "llm" || (editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none")
+                          ...((editChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "llm" ||
+                          (editChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "none"
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
                         value={editChapQaVlmModel}
                         onChange={(e) => setEditChapQaVlmModel(e.target.value)}
-                        disabled={(editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "llm" || (editChapQaMode || selectedSeries.qaMode || settings?.qaMode) === "none"}
+                        disabled={
+                          (editChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "llm" ||
+                          (editChapQaMode ||
+                            selectedSeries.qaMode ||
+                            settings?.qaMode) === "none"
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaVlmModelList.map((m) => (

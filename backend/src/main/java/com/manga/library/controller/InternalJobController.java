@@ -35,28 +35,33 @@ public class InternalJobController {
   private final JobRepository jobRepository;
 
   @PatchMapping("/jobs/{jobId}/status")
-  public ResponseEntity<?> updateJobStatus(@PathVariable String jobId, @RequestBody Map<String, String> payload) {
-      log.info("Worker updating job {} status to {}", jobId, payload.get("status"));
-      return jobRepository.findById(jobId).map(job -> {
-          if (payload.containsKey("status")) {
-              job.setStatus(payload.get("status"));
-          }
-          if (payload.containsKey("error")) {
-              job.setError(payload.get("error"));
-          }
-          jobRepository.save(job);
-          return ResponseEntity.ok().build();
-      }).orElse(ResponseEntity.notFound().build());
+  public ResponseEntity<?> updateJobStatus(
+      @PathVariable String jobId, @RequestBody Map<String, String> payload) {
+    log.info("Worker updating job {} status to {}", jobId, payload.get("status"));
+    return jobRepository
+        .findById(jobId)
+        .map(
+            job -> {
+              if (payload.containsKey("status")) {
+                job.setStatus(payload.get("status"));
+              }
+              if (payload.containsKey("error")) {
+                job.setError(payload.get("error"));
+              }
+              jobRepository.save(job);
+              return ResponseEntity.ok().build();
+            })
+        .orElse(ResponseEntity.notFound().build());
   }
 
   @GetMapping("/jobs/{jobId}")
   public ResponseEntity<?> getJob(@PathVariable String jobId) {
-      log.info("Worker fetching status for job {}", jobId);
-      return jobRepository.findById(jobId)
-          .map(ResponseEntity::ok)
-          .orElse(ResponseEntity.notFound().build());
+    log.info("Worker fetching status for job {}", jobId);
+    return jobRepository
+        .findById(jobId)
+        .map(ResponseEntity::ok)
+        .orElse(ResponseEntity.notFound().build());
   }
-
 
   @GetMapping("/images/{imageId}")
   public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
@@ -458,19 +463,20 @@ public class InternalJobController {
       }
       String qaResultState = jobCoordinatorService.handleQaCallback(imageId, qaResults, cost);
       if ("COMPLETED".equals(qaResultState)) {
-          sseService.emitNotificationForImage(
-              imageId,
-              "SUCCESS",
-              "Page Processing Complete",
-              formatMessage("All processing steps finished successfully.", ctx),
-              ctx);
+        sseService.emitNotificationForImage(
+            imageId,
+            "SUCCESS",
+            "Page Processing Complete",
+            formatMessage("All processing steps finished successfully.", ctx),
+            ctx);
       } else if ("MANUAL_REVIEW".equals(qaResultState)) {
-          sseService.emitNotificationForImage(
-              imageId,
-              "WARNING",
-              "Manual Review Needed",
-              formatMessage("QA pipeline halted because some regions require manual intervention.", ctx),
-              ctx);
+        sseService.emitNotificationForImage(
+            imageId,
+            "WARNING",
+            "Manual Review Needed",
+            formatMessage(
+                "QA pipeline halted because some regions require manual intervention.", ctx),
+            ctx);
       }
       return ResponseEntity.ok().build();
     } catch (Exception e) {
