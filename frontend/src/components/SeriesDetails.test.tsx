@@ -161,6 +161,7 @@ describe("SeriesDetails Component", () => {
         body: JSON.stringify({
           chapterNumber: 2,
           title: "The Man Luffy",
+          useContextMemory: true,
           ocrProvider: null,
           ocrModel: null,
           tlProvider: null,
@@ -350,6 +351,7 @@ describe("SeriesDetails Component", () => {
         body: JSON.stringify({
           chapterNumber: 1,
           title: "Romance Dawn Updated",
+          useContextMemory: true,
           ocrProvider: null,
           ocrModel: null,
           tlProvider: null,

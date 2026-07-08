@@ -29,4 +29,7 @@ public class SystemSettingsDto {
 
   private boolean disableLocalLlm;
   private String qaMode;
+
+  private List<String> activeProviders;
+  private List<String> activeOcrProviders;
 }

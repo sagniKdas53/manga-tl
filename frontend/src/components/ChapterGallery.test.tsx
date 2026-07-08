@@ -175,6 +175,7 @@ describe("ChapterGallery Component", () => {
         body: JSON.stringify({
           chapterNumber: 1,
           title: "Romance Dawn Updated",
+          useContextMemory: true,
           ocrProvider: null,
           ocrModel: null,
           tlProvider: null,
