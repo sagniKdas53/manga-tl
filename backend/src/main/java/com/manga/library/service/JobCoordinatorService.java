@@ -12,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,21 +88,16 @@ public class JobCoordinatorService {
   }
 
   private void enqueueJob(String jobType, UUID imageId) {
-    if (TransactionSynchronizationManager.isActualTransactionActive()) {
-      log.info("Transaction active. Deferring enqueue of {} job for image {}", jobType, imageId);
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              enqueueJobDirectly(jobType, imageId);
-            }
-          });
-    } else {
-      enqueueJobDirectly(jobType, imageId);
-    }
+    enqueueJob(jobType, imageId, "normal", job -> {});
   }
 
-  private void enqueueJobDirectly(String jobType, UUID imageId) {
+  private void enqueueJob(
+      String jobType, UUID imageId, String priority, Consumer<Map<String, Object>> payloadCustomizer) {
+    enqueueJobDirectly(jobType, imageId, priority, payloadCustomizer);
+  }
+
+  private void enqueueJobDirectly(
+      String jobType, UUID imageId, String priority, Consumer<Map<String, Object>> payloadCustomizer) {
     if (!isWorkerHealthy()) {
       throw new IllegalStateException("Worker is not healthy or unreachable at " + workerHealthUrl);
     }
@@ -119,7 +115,7 @@ public class JobCoordinatorService {
       job.put("jobId", jobId);
       job.put("type", jobType);
       job.put("imageId", imageId.toString());
-      job.put("priority", "normal");
+      job.put("priority", priority);
       job.put("attempt", 1);
       job.put("maxAttempts", 3);
       job.put("createdAt", OffsetDateTime.now().toString());
@@ -190,29 +186,56 @@ public class JobCoordinatorService {
                 }
               });
 
+      payloadCustomizer.accept(job);
+
       String json = objectMapper.writeValueAsString(job);
       dbJob.setPayload(json);
       jobRepository.save(dbJob);
-
-      String paused = redisTemplate.opsForValue().get("system:queue:paused");
-      if (!"true".equals(paused)) {
-          pushJobToRedis(dbJob);
-      } else {
-          log.info("Queue is paused. Job {} saved to DB but not pushed to Redis.", jobId);
-      }
+      enqueuePersistedJob(dbJob);
     } catch (Exception e) {
       log.error("Failed to enqueue job for image {}", imageId, e);
     }
   }
 
-  public void pushJobToRedis(Job job) {
-      try {
-          String queueName = "queue:" + job.getType();
-          redisTemplate.opsForList().rightPush(queueName, job.getPayload());
-          log.info("Enqueued {} job {} onto {}", job.getType(), job.getId(), queueName);
-      } catch (Exception e) {
-          log.error("Failed to push job {} to Redis", job.getId(), e);
+  private void enqueuePersistedJob(Job dbJob) {
+    if (TransactionSynchronizationManager.isActualTransactionActive()) {
+      log.info(
+          "Transaction active. Deferring Redis push of {} job {} until commit",
+          dbJob.getType(),
+          dbJob.getId());
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              pushPersistedJobIfQueueRunning(dbJob);
+            }
+          });
+    } else {
+      pushPersistedJobIfQueueRunning(dbJob);
+    }
+  }
+
+  private void pushPersistedJobIfQueueRunning(Job dbJob) {
+    try {
+      String paused = redisTemplate.opsForValue().get("system:queue:paused");
+      if (!"true".equals(paused)) {
+        pushJobToRedis(dbJob);
+      } else {
+        log.info("Queue is paused. Job {} saved to DB but not pushed to Redis.", dbJob.getId());
       }
+    } catch (Exception e) {
+      log.error("Failed to push job {} to Redis", dbJob.getId(), e);
+    }
+  }
+
+  public void pushJobToRedis(Job job) {
+    try {
+      String queueName = "queue:" + job.getType();
+      redisTemplate.opsForList().rightPush(queueName, job.getPayload());
+      log.info("Enqueued {} job {} onto {}", job.getType(), job.getId(), queueName);
+    } catch (Exception e) {
+      log.error("Failed to push job {} to Redis", job.getId(), e);
+    }
   }
 
   public void requeuePendingJobs() {
@@ -705,9 +728,6 @@ public class JobCoordinatorService {
   }
 
   public void triggerRedo(UUID regionId, String redoType) {
-    if (!isWorkerHealthy()) {
-      throw new IllegalStateException("Worker is not healthy or unreachable at " + workerHealthUrl);
-    }
     log.info("Triggering redo for region {} with type {}", regionId, redoType);
 
     Objects.requireNonNull(regionId, "regionId cannot be null");
@@ -718,39 +738,14 @@ public class JobCoordinatorService {
 
     Image image = region.getImage();
 
-    try {
-      String jobId = UUID.randomUUID().toString();
-      Map<String, Object> job = new HashMap<>();
-      job.put("jobId", jobId);
-      job.put("type", "region-redo");
-      job.put("imageId", image.getId().toString());
-      job.put("regionId", regionId.toString());
-      job.put("redoType", redoType);
-      job.put("priority", "high");
-      job.put("attempt", 1);
-      job.put("maxAttempts", 3);
-      job.put("createdAt", OffsetDateTime.now().toString());
-
-      String json = objectMapper.writeValueAsString(job);
-      
-      Job dbJob = Job.builder()
-          .id(jobId)
-          .type("region-redo")
-          .imageId(image.getId())
-          .status("PENDING")
-          .attempt(1)
-          .maxAttempts(3)
-          .payload(json)
-          .build();
-      jobRepository.save(dbJob);
-
-      String paused = redisTemplate.opsForValue().get("system:queue:paused");
-      if (!"true".equals(paused)) {
-          pushJobToRedis(dbJob);
-      }
-    } catch (Exception e) {
-      log.error("Failed to enqueue region-redo job for region {}", regionId, e);
-    }
+    enqueueJob(
+        "region-redo",
+        image.getId(),
+        "high",
+        job -> {
+          job.put("regionId", regionId.toString());
+          job.put("redoType", redoType);
+        });
   }
 
   public void triggerImageRedo(UUID imageId, String jobType) {
@@ -1088,43 +1083,12 @@ public class JobCoordinatorService {
             "QA failed for image {} with Re-OCR request. Retry {}/2. Enqueuing qa-re-ocr job...",
             imageId,
             retries + 1);
-        try {
-          String jobId = UUID.randomUUID().toString();
-          Map<String, Object> job = new HashMap<>();
-          job.put("jobId", jobId);
-          job.put("type", "qa-re-ocr");
-          job.put("imageId", imageId.toString());
-          job.put("regionsToReOcr", regionsToReOcr);
-          job.put("priority", "high");
-          job.put("attempt", 1);
-          job.put("maxAttempts", 3);
-          job.put("createdAt", OffsetDateTime.now().toString());
-
-          String json = objectMapper.writeValueAsString(job);
-
-          Job dbJob = Job.builder()
-              .id(jobId)
-              .type("qa-re-ocr")
-              .imageId(imageId)
-              .status("PENDING")
-              .attempt(1)
-              .maxAttempts(3)
-              .payload(json)
-              .build();
-          jobRepository.save(dbJob);
-
-          String paused = null;
-          if (redisTemplate != null && redisTemplate.opsForValue() != null) {
-              paused = redisTemplate.opsForValue().get("system:queue:paused");
-          }
-          if (!"true".equals(paused)) {
-              pushJobToRedis(dbJob);
-          } else {
-              log.info("Queue is paused. Job {} saved to DB but not pushed to Redis.", jobId);
-          }
-        } catch (Exception e) {
-          log.error("Failed to enqueue qa-re-ocr job", e);
-        }
+        List<String> regionsToReOcrPayload = List.copyOf(regionsToReOcr);
+        enqueueJob(
+            "qa-re-ocr",
+            imageId,
+            "high",
+            job -> job.put("regionsToReOcr", regionsToReOcrPayload));
       } else {
         log.info(
             "QA failed for image {}. Retry {}/2. Enqueuing translation job...",
