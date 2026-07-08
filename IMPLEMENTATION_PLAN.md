@@ -64,10 +64,12 @@ Based on the requested features and priorities, this plan breaks down the tasks 
 
 *More complex AI features requiring prompt engineering and testing.*
 
-- [ ] **4.1. Hybrid QA Mode (LLM + VLM)**
+- [x] **4.1. Hybrid QA Mode (LLM + VLM)**
   - **Tasks**:
-  - [ ] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
-  - [ ] The VLM does the final pass on the rendered image
+  - [x] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
+  - [x] The VLM does the final pass on the rendered image
+  - [x] Make sure the front-end model picker supports it as well
+  - [x] And add tests for it in all 3 compoenents
 
 ## Low Hanging Fruits (Testing & QA)
 
