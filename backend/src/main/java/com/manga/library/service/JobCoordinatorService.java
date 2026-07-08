@@ -15,6 +15,8 @@ import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +46,40 @@ public class JobCoordinatorService {
   private final PageRepository pageRepository;
   private final SseService sseService;
   private final SystemSettingsService systemSettingsService;
+  private final JobRepository jobRepository;
+
+  @EventListener(ApplicationReadyEvent.class)
+  public void onStartup() {
+      log.info("Application started. Resetting orphaned processing jobs and requeueing...");
+      try {
+          resetProcessingJobsToPending();
+          String paused = null;
+          if (redisTemplate != null && redisTemplate.opsForValue() != null) {
+              paused = redisTemplate.opsForValue().get("system:queue:paused");
+          }
+          if (!"true".equals(paused)) {
+              requeuePendingJobs();
+          } else {
+              log.info("Queue is globally paused. Skipping requeue.");
+          }
+      } catch (Exception e) {
+          log.error("Failed to recover/requeue jobs on startup: {}", e.getMessage());
+      }
+  }
+
+  @Transactional
+  public void resetProcessingJobsToPending() {
+      try {
+          List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
+          for (Job job : processingJobs) {
+              log.info("Resetting processing job {} to PENDING on startup", job.getId());
+              job.setStatus("PENDING");
+              jobRepository.save(job);
+          }
+      } catch (Exception e) {
+          log.error("Failed to reset processing jobs to pending: {}", e.getMessage());
+      }
+  }
 
   public void startPipeline(UUID imageId) {
     log.info("Starting pipeline for image {}", imageId);
@@ -71,6 +107,14 @@ public class JobCoordinatorService {
     }
     try {
       String jobId = UUID.randomUUID().toString();
+      Job dbJob = Job.builder()
+          .id(jobId)
+          .type(jobType)
+          .imageId(imageId)
+          .status("PENDING")
+          .attempt(1)
+          .maxAttempts(3)
+          .build();
       Map<String, Object> job = new HashMap<>();
       job.put("jobId", jobId);
       job.put("type", jobType);
@@ -147,14 +191,35 @@ public class JobCoordinatorService {
               });
 
       String json = objectMapper.writeValueAsString(job);
-      String queueName = "queue:" + jobType;
-      Objects.requireNonNull(queueName, "queueName cannot be null");
-      Objects.requireNonNull(json, "json cannot be null");
-      redisTemplate.opsForList().rightPush(queueName, json);
-      log.info("Enqueued {} job for image {} onto {}", jobType, imageId, queueName);
+      dbJob.setPayload(json);
+      jobRepository.save(dbJob);
+
+      String paused = redisTemplate.opsForValue().get("system:queue:paused");
+      if (!"true".equals(paused)) {
+          pushJobToRedis(dbJob);
+      } else {
+          log.info("Queue is paused. Job {} saved to DB but not pushed to Redis.", jobId);
+      }
     } catch (Exception e) {
       log.error("Failed to enqueue job for image {}", imageId, e);
     }
+  }
+
+  public void pushJobToRedis(Job job) {
+      try {
+          String queueName = "queue:" + job.getType();
+          redisTemplate.opsForList().rightPush(queueName, job.getPayload());
+          log.info("Enqueued {} job {} onto {}", job.getType(), job.getId(), queueName);
+      } catch (Exception e) {
+          log.error("Failed to push job {} to Redis", job.getId(), e);
+      }
+  }
+
+  public void requeuePendingJobs() {
+      List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
+      for (Job job : pendingJobs) {
+          pushJobToRedis(job);
+      }
   }
 
   private String resolveModel(String chapterVal, String seriesVal, String globalVal) {
@@ -667,9 +732,22 @@ public class JobCoordinatorService {
       job.put("createdAt", OffsetDateTime.now().toString());
 
       String json = objectMapper.writeValueAsString(job);
-      Objects.requireNonNull(json, "json cannot be null");
-      redisTemplate.opsForList().rightPush("queue:region-redo", json);
-      log.info("Enqueued region-redo job for region {} onto queue:region-redo", regionId);
+      
+      Job dbJob = Job.builder()
+          .id(jobId)
+          .type("region-redo")
+          .imageId(image.getId())
+          .status("PENDING")
+          .attempt(1)
+          .maxAttempts(3)
+          .payload(json)
+          .build();
+      jobRepository.save(dbJob);
+
+      String paused = redisTemplate.opsForValue().get("system:queue:paused");
+      if (!"true".equals(paused)) {
+          pushJobToRedis(dbJob);
+      }
     } catch (Exception e) {
       log.error("Failed to enqueue region-redo job for region {}", regionId, e);
     }
@@ -943,7 +1021,27 @@ public class JobCoordinatorService {
           job.put("createdAt", OffsetDateTime.now().toString());
 
           String json = objectMapper.writeValueAsString(job);
-          redisTemplate.opsForList().rightPush("queue:qa-re-ocr", json);
+
+          Job dbJob = Job.builder()
+              .id(jobId)
+              .type("qa-re-ocr")
+              .imageId(imageId)
+              .status("PENDING")
+              .attempt(1)
+              .maxAttempts(3)
+              .payload(json)
+              .build();
+          jobRepository.save(dbJob);
+
+          String paused = null;
+          if (redisTemplate != null && redisTemplate.opsForValue() != null) {
+              paused = redisTemplate.opsForValue().get("system:queue:paused");
+          }
+          if (!"true".equals(paused)) {
+              pushJobToRedis(dbJob);
+          } else {
+              log.info("Queue is paused. Job {} saved to DB but not pushed to Redis.", jobId);
+          }
         } catch (Exception e) {
           log.error("Failed to enqueue qa-re-ocr job", e);
         }

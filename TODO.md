@@ -21,9 +21,9 @@
   - *Requirements*: Remote workers must expose capability APIs, health check endpoints, and task-specific concurrency status, allowing the coordinator to route OCR/detection tasks safely without resource exhaustion.
 - [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without any ml just simple job queuing and processing the results, all the hard work will be handled by the remote workers (for detection, OCR and rendering)
 - [x] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck.
-  - [ ] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
-  - [ ] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
-  - [ ] This should still respect the rate-limits of the API
+  - [x] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
+  - [x] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
+  - [x] This should still respect the rate-limits of the API
 - [x] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this.
 
 ### Model Picker Improvements
@@ -52,20 +52,19 @@ QA_VLM_MODEL=google/gemini-3.1-flash-lite
 QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,google/gemini-3.5-flash,google/gemini-2.5-flash,nvidia/nemotron-nano-12b-v2-vl:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
 ```
 
-- [ ] As seen in the above code block despite having a picker we only really have one provider, OpenRouter.
-- [ ] The same model `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` on open-route, if to be used on nvidia nmi needs to be formatted as `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` so we need a way to map these different formats.
-- [ ] Also there should be a section for fallback models in the config which will be used when the primary model fails, the fallback will work in the same way as the primary just with a fallback priority.
-- [ ] Also providers should only become availbale if they are usable like currently the list shows that we have access to open-ai, anthoropic, ollama, lm-studio
-  - [ ] But we don't actually have keys configure for open-ai, anthoropic
-  - [ ] And since LOCAL_LLM_PROVIDER is ollama, lm-studio should also be hidden
-  - [ ] Say if DISABLE_LOCAL_LLM=true, thenollama and lm-studio should not be visible as options
-  - [ ] If DISABLE_LOCAL_OCR=true, then open-router and nvidia should be the only ones visible as options for OCR.
-  - [ ] Also if say in the front-end we slect OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
-  - [x] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
+- [x] As seen in the above code block despite having a picker we only really have one provider, OpenRouter.
+- [x] The same model `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` on open-route, if to be used on nvidia nmi needs to be formatted as `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` so we need a way to map these different formats.
+- [x] Also there should be a section for fallback models in the config which will be used when the primary model fails, the fallback will work in the same way as the primary just with a fallback priority.
+- [x] Also providers should only become availbale if they are usable like currently the list shows that we have access to open-ai, anthoropic, ollama, lm-studio
+  - [x] But we don't actually have keys configure for open-ai, anthoropic
+  - [x] And since LOCAL_LLM_PROVIDER is ollama, lm-studio should also be hidden
+  - [x] Say if DISABLE_LOCAL_LLM=true, thenollama and lm-studio should not be visible as options
+  - [x] If DISABLE_LOCAL_OCR=true, then open-router and nvidia should be the only ones visible as options for OCR.
+  - [x] Also if say in the front-end we slect OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
+- [x] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
   
 ### Reliability & Crash Recovery
 
-- [ ]
 - [ ] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
 - [ ] **Queue Management:** Add a Queue managed in front-end just like the notification manager we have, it should be able to show us which jobs are in queue, processing and passed jobs get converted to notifications and removed, failed ones go the the bottom with a retry button on them
   - [ ] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
@@ -75,7 +74,9 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
   - [x] Support reading secrets for JWT Configuration
   - [x] Support reading secrets for API Keys Configuration
   - [x] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
-- [ ] Add a Hybrid QA mode where both LLM and VLM are used
+- [ ] **Add a Hybrid QA mode where both LLM and VLM are used** — 
+  - [ ] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
+  - [ ] The VLM does the final pass on the rendered image
 
 ---
 
