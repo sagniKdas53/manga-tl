@@ -11,12 +11,17 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 public class JobCoordinatorServiceTest {
@@ -26,6 +31,8 @@ public class JobCoordinatorServiceTest {
   @Autowired private OcrRegionRepository ocrRegionRepository;
   @Autowired private LayerRepository layerRepository;
   @Autowired private LayerElementRepository layerElementRepository;
+  @Autowired private JobRepository jobRepository;
+  @Autowired private TransactionTemplate transactionTemplate;
 
   @org.springframework.boot.test.mock.mockito.MockBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
@@ -33,6 +40,7 @@ public class JobCoordinatorServiceTest {
   private HttpServer testServer;
   private int testPort;
   private String originalUrl;
+  private BiConsumer<String, String> rightPushHook;
 
   @BeforeEach
   public void setUp() throws IOException {
@@ -83,6 +91,9 @@ public class JobCoordinatorServiceTest {
               String key = invocation.getArgument(0);
               String val = invocation.getArgument(1);
               mockRedisListStore.computeIfAbsent(key, k -> new ArrayList<>()).add(val);
+              if (rightPushHook != null) {
+                rightPushHook.accept(key, val);
+              }
               return (long) mockRedisListStore.get(key).size();
             });
     org.mockito.Mockito.when(listOps.size(org.mockito.Mockito.anyString()))
@@ -111,6 +122,7 @@ public class JobCoordinatorServiceTest {
       testServer.stop(0);
     }
     ReflectionTestUtils.setField(jobCoordinatorService, "workerHealthUrl", originalUrl);
+    rightPushHook = null;
   }
 
   @Test
@@ -186,6 +198,39 @@ public class JobCoordinatorServiceTest {
     ReflectionTestUtils.setField(
         jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/health");
     assertFalse(jobCoordinatorService.isWorkerHealthy());
+  }
+
+  @Test
+  public void testEnqueuedJobIsCommittedBeforeRedisPush() {
+    AtomicBoolean sawJobAtPushTime = new AtomicBoolean(false);
+    AtomicReference<String> pushedJobId = new AtomicReference<>();
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> payloadMap =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            String jobId = payloadMap.get("jobId").toString();
+            pushedJobId.set(jobId);
+            Future<Boolean> found =
+                executor.submit(() -> jobRepository.findById(jobId).isPresent());
+            sawJobAtPushTime.set(found.get(5, TimeUnit.SECONDS));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
+
+    transactionTemplate.executeWithoutResult(
+        status -> jobCoordinatorService.startPipeline(UUID.randomUUID()));
+
+    executor.shutdownNow();
+
+    assertNotNull(pushedJobId.get());
+    assertTrue(
+        sawJobAtPushTime.get(),
+        "Worker-visible Redis pushes must happen only after the jobs row is committed");
+    jobRepository.deleteById(pushedJobId.get());
   }
 
   @Test
@@ -757,4 +802,3 @@ public class JobCoordinatorServiceTest {
     imageRepository.delete(image);
   }
 }
-
