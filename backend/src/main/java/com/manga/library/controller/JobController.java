@@ -48,6 +48,22 @@ public class JobController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/clear")
+    public ResponseEntity<?> clearQueue() {
+        List<Job> jobsToClear = jobRepository.findByStatusInOrderByCreatedAtAsc(
+                List.of("PENDING", "PAUSED"));
+        jobRepository.deleteAll(jobsToClear);
+        
+        // Clear Redis queues
+        redisTemplate.delete(List.of(
+            "queue:panel-detection", "queue:ocr", "queue:layout", 
+            "queue:translation", "queue:render", "queue:qa", 
+            "queue:qa-re-ocr", "queue:region-redo"
+        ));
+        
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/{id}/retry")
     public ResponseEntity<?> retryJob(@PathVariable String id) {
         return jobRepository.findById(id).map(job -> {

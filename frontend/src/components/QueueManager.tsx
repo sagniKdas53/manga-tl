@@ -93,12 +93,15 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   };
 
   useEffect(() => {
-    if (isOpen) {
-      fetchJobs();
-      const interval = setInterval(fetchJobs, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [isOpen, token]);
+    if (!token) return;
+    
+    // Initial fetch
+    fetchJobs();
+    
+    // Setup interval for continuous polling
+    const interval = setInterval(fetchJobs, 3000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -127,6 +130,21 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       fetchJobs();
     } catch (err) {
       console.error("Failed to toggle queue state", err);
+    }
+  };
+
+  const handleClearQueue = async () => {
+    if (!token) return;
+    if (!window.confirm("Are you sure you want to clear the queue? This will delete all pending and paused jobs.")) return;
+    
+    try {
+      await safeFetch("/api/jobs/clear", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchJobs();
+    } catch (err) {
+      console.error("Failed to clear queue", err);
     }
   };
 
@@ -257,13 +275,22 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
             <h3 style={{ margin: 0, fontSize: "16px", color: "var(--text-main)" }}>
               Queue Manager
             </h3>
-            <button
-              onClick={handlePauseResumeQueue}
-              className="btn btn-secondary"
-              style={{ fontSize: "12px", padding: "4px 8px" }}
-            >
-              {isPaused ? "Resume Queue" : "Pause Queue"}
-            </button>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={handleClearQueue}
+                className="btn btn-secondary"
+                style={{ fontSize: "12px", padding: "4px 8px", borderColor: "#f44336", color: "#f44336" }}
+              >
+                Clear Queue
+              </button>
+              <button
+                onClick={handlePauseResumeQueue}
+                className="btn btn-secondary"
+                style={{ fontSize: "12px", padding: "4px 8px" }}
+              >
+                {isPaused ? "Resume Queue" : "Pause Queue"}
+              </button>
+            </div>
           </div>
 
           {jobs.length === 0 ? (
