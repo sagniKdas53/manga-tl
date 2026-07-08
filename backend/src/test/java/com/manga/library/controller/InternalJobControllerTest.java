@@ -413,4 +413,37 @@ public class InternalJobControllerTest {
     mockMvc.perform(get("/api/internal/jobs/job1"))
         .andExpect(status().isNotFound());
   }
+
+  @Test
+  public void testQaHybridPrepare_Success() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("qaResults", List.of(Map.of("regionId", UUID.randomUUID().toString(), "qaStatus", "passed")));
+
+    doNothing().when(jobCoordinatorService).prepareHybridQa(any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/images/" + imageId + "/qa-hybrid-prepare")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testQaHybridPrepare_Failure() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("qaResults", List.of(Map.of("regionId", UUID.randomUUID().toString(), "qaStatus", "passed")));
+
+    doThrow(new RuntimeException("prepare error")).when(jobCoordinatorService).prepareHybridQa(any(), any());
+
+    mockMvc
+        .perform(
+            post("/api/internal/images/" + imageId + "/qa-hybrid-prepare")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isInternalServerError());
+  }
 }
+

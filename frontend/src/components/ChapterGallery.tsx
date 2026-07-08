@@ -1143,6 +1143,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                         <option value="auto">auto</option>
                         <option value="llm">llm</option>
                         <option value="vlm">vlm</option>
+                        <option value="hybrid">hybrid</option>
                         <option value="none">none</option>
                       </select>
                     </div>

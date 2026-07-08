@@ -477,6 +477,36 @@ public class InternalJobController {
     }
   }
 
+  @PostMapping("/images/{imageId}/qa-hybrid-prepare")
+  public ResponseEntity<?> qaHybridPrepare(
+      @PathVariable UUID imageId, @RequestBody Map<String, Object> payload) {
+    Objects.requireNonNull(imageId, "imageId cannot be null");
+    log.info("Preparing hybrid QA for image: {}", imageId);
+    try {
+      List<?> rawResults = (List<?>) payload.get("qaResults");
+      List<Map<String, Object>> qaResults = new ArrayList<>();
+      if (rawResults != null) {
+        for (Object item : rawResults) {
+          if (item instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) item;
+            Map<String, Object> typedMap = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+              if (entry.getKey() instanceof String) {
+                typedMap.put((String) entry.getKey(), entry.getValue());
+              }
+            }
+            qaResults.add(typedMap);
+          }
+        }
+      }
+      jobCoordinatorService.prepareHybridQa(imageId, qaResults);
+      return ResponseEntity.ok().build();
+    } catch (Exception e) {
+      log.error("Error preparing hybrid QA", e);
+      return ResponseEntity.internalServerError().body(e.getMessage());
+    }
+  }
+
   @PostMapping("/jobs/callback/qa")
   public ResponseEntity<?> qaCallback(@RequestBody Map<String, Object> payload) {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));

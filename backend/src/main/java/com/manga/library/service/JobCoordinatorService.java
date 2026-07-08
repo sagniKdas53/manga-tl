@@ -809,6 +809,86 @@ public class JobCoordinatorService {
   }
 
   @Transactional
+  public void prepareHybridQa(UUID imageId, List<Map<String, Object>> qaResults) {
+    log.info("Preparing hybrid QA for image: {} with {} LLM first pass results", imageId, qaResults != null ? qaResults.size() : 0);
+    Objects.requireNonNull(imageId, "imageId cannot be null");
+
+    // Find the latest translation layer
+    List<Layer> layers = layerRepository.findByImageId(imageId);
+    Layer latestTranslationLayer = null;
+    for (Layer l : layers) {
+      if ("translation".equalsIgnoreCase(l.getType())) {
+        if (latestTranslationLayer == null || l.getZOrder() > latestTranslationLayer.getZOrder()) {
+          latestTranslationLayer = l;
+        }
+      }
+    }
+
+    final Layer finalLatestTranslationLayer = latestTranslationLayer;
+
+    if (qaResults != null) {
+      for (Map<String, Object> r : qaResults) {
+        try {
+          UUID regionId = UUID.fromString((String) r.get("regionId"));
+          String qaStatus = (String) r.get("qaStatus");
+          Double qaScore = r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
+          String qaFeedback = (String) r.get("qaFeedback");
+
+          ocrRegionRepository
+              .findById(regionId)
+              .ifPresent(
+                  region -> {
+                    region.setQaStatus(qaStatus);
+                    region.setQaScore(qaScore);
+                    region.setQaFeedback(qaFeedback);
+
+                    if ("direct_fix".equalsIgnoreCase(qaStatus) && r.containsKey("directFix")) {
+                      Map<?, ?> directFix = (Map<?, ?>) r.get("directFix");
+                      List<LayerElement> elements = layerElementRepository.findByRegionId(regionId);
+                      for (LayerElement el : elements) {
+                        if (el.getLayer() != null && "translation".equalsIgnoreCase(el.getLayer().getType())
+                            && finalLatestTranslationLayer != null && el.getLayer().getId().equals(finalLatestTranslationLayer.getId())) {
+                          if (directFix.containsKey("correctedText")) {
+                            el.setText((String) directFix.get("correctedText"));
+                            region.setTranslatedText((String) directFix.get("correctedText"));
+                          }
+                          if (directFix.containsKey("suggestedFontSize")) {
+                            el.setSize(((Number) directFix.get("suggestedFontSize")).doubleValue());
+                          }
+                          layerElementRepository.save(el);
+                        }
+                      }
+                      region.setQaStatus("fixed");
+                    }
+                    ocrRegionRepository.save(region);
+                  });
+        } catch (Exception e) {
+          log.error("Error processing LLM QA hybrid preparation result for region", e);
+        }
+      }
+    }
+
+    // Set correct layer visibility: latest translation visible, others invisible. OCR invisible.
+    for (Layer l : layers) {
+      boolean shouldBeVisible = false;
+      if ("translation".equalsIgnoreCase(l.getType())) {
+        shouldBeVisible = (latestTranslationLayer != null && l.getId().equals(latestTranslationLayer.getId()));
+      } else if ("ocr".equalsIgnoreCase(l.getType())) {
+        shouldBeVisible = false;
+      } else if ("sfx".equalsIgnoreCase(l.getType())) {
+        shouldBeVisible = true;
+      } else {
+        shouldBeVisible = l.getVisible() != null ? l.getVisible() : true;
+      }
+
+      if (l.getVisible() == null || l.getVisible() != shouldBeVisible) {
+        l.setVisible(shouldBeVisible);
+        layerRepository.save(l);
+      }
+    }
+  }
+
+  @Transactional
   public void handleQaCallback(
       UUID imageId, List<Map<String, Object>> qaResults, Map<String, Object> cost) {
     log.info(

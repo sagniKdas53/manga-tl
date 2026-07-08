@@ -632,4 +632,129 @@ public class JobCoordinatorServiceTest {
     layerRepository.delete(ocrLayer);
     imageRepository.delete(image);
   }
+
+  @Test
+  public void testPrepareHybridQa() {
+    Image image = Image.builder().filename("test_hybrid.png").storagePath("test/test_hybrid.png").build();
+    image = imageRepository.save(image);
+
+    // Old translation layer (should be set to invisible)
+    Layer oldLayer =
+        Layer.builder()
+            .image(image)
+            .type("translation")
+            .targetLanguage("en")
+            .visible(true)
+            .zOrder(1)
+            .build();
+    oldLayer = layerRepository.save(oldLayer);
+
+    // Latest translation layer (should remain/be set to visible)
+    Layer latestLayer =
+        Layer.builder()
+            .image(image)
+            .type("translation")
+            .targetLanguage("en")
+            .visible(false)
+            .zOrder(2)
+            .build();
+    latestLayer = layerRepository.save(latestLayer);
+
+    // OCR layer (should be set to invisible)
+    Layer ocrLayer =
+        Layer.builder()
+            .image(image)
+            .type("ocr")
+            .visible(true)
+            .zOrder(0)
+            .build();
+    ocrLayer = layerRepository.save(ocrLayer);
+
+    OcrRegion region =
+        OcrRegion.builder()
+            .image(image)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .qaStatus("pending")
+            .build();
+    region = ocrRegionRepository.save(region);
+
+    // Layer elements on both layers
+    LayerElement oldEl =
+        LayerElement.builder()
+            .layer(oldLayer)
+            .region(region)
+            .text("Hello old")
+            .x(10.0)
+            .y(20.0)
+            .maxWidth(100)
+            .maxHeight(50)
+            .visible(true)
+            .build();
+    layerElementRepository.save(oldEl);
+
+    LayerElement latestEl =
+        LayerElement.builder()
+            .layer(latestLayer)
+            .region(region)
+            .text("Hello latest")
+            .x(10.0)
+            .y(20.0)
+            .maxWidth(100)
+            .maxHeight(50)
+            .visible(true)
+            .build();
+    latestEl = layerElementRepository.save(latestEl);
+
+    // QA Results with a direct fix
+    Map<String, Object> qaResult = new HashMap<>();
+    qaResult.put("regionId", region.getId().toString());
+    qaResult.put("qaStatus", "direct_fix");
+    qaResult.put("qaScore", 0.85);
+    qaResult.put("qaFeedback", "Typo corrected");
+    Map<String, Object> directFix = new HashMap<>();
+    directFix.put("correctedText", "Hello fixed");
+    directFix.put("suggestedFontSize", 14.5);
+    qaResult.put("directFix", directFix);
+
+    jobCoordinatorService.prepareHybridQa(image.getId(), List.of(qaResult));
+
+    // Verify region updated
+    OcrRegion updatedRegion = ocrRegionRepository.findById(region.getId()).orElseThrow();
+    assertEquals("fixed", updatedRegion.getQaStatus());
+    assertEquals("Hello fixed", updatedRegion.getTranslatedText());
+
+    // Verify elements in latest translation layer updated, but not old layer
+    LayerElement updatedLatestEl = layerElementRepository.findById(latestEl.getId()).orElseThrow();
+    assertEquals("Hello fixed", updatedLatestEl.getText());
+    assertEquals(14.5, updatedLatestEl.getSize());
+
+    LayerElement updatedOldEl = layerElementRepository.findById(oldEl.getId()).orElseThrow();
+    assertEquals("Hello old", updatedOldEl.getText());
+
+    // Verify layer visibility
+    Layer verifiedLatest = layerRepository.findById(latestLayer.getId()).orElseThrow();
+    assertTrue(verifiedLatest.getVisible());
+
+    Layer verifiedOld = layerRepository.findById(oldLayer.getId()).orElseThrow();
+    assertFalse(verifiedOld.getVisible());
+
+    Layer verifiedOcr = layerRepository.findById(ocrLayer.getId()).orElseThrow();
+    assertFalse(verifiedOcr.getVisible());
+
+    // Clean up
+    layerElementRepository.delete(updatedLatestEl);
+    layerElementRepository.delete(updatedOldEl);
+    ocrRegionRepository.delete(updatedRegion);
+    layerRepository.delete(verifiedLatest);
+    layerRepository.delete(verifiedOld);
+    layerRepository.delete(verifiedOcr);
+    imageRepository.delete(image);
+  }
 }
+
