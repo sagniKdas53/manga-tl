@@ -32,6 +32,22 @@ public class InternalJobController {
   private final LayerElementRepository layerElementRepository;
   private final LayerRepository layerRepository;
   private final SseService sseService;
+  private final JobRepository jobRepository;
+
+  @PatchMapping("/jobs/{jobId}/status")
+  public ResponseEntity<?> updateJobStatus(@PathVariable String jobId, @RequestBody Map<String, String> payload) {
+      log.info("Worker updating job {} status to {}", jobId, payload.get("status"));
+      return jobRepository.findById(jobId).map(job -> {
+          if (payload.containsKey("status")) {
+              job.setStatus(payload.get("status"));
+          }
+          if (payload.containsKey("error")) {
+              job.setError(payload.get("error"));
+          }
+          jobRepository.save(job);
+          return ResponseEntity.ok().build();
+      }).orElse(ResponseEntity.notFound().build());
+  }
 
   @GetMapping("/images/{imageId}")
   public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {

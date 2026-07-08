@@ -45,6 +45,7 @@ public class InternalJobControllerTest {
   @MockBean private SeriesRepository seriesRepository;
   @MockBean private SseService sseService;
   @MockBean private JwtAuthFilter jwtAuthFilter;
+  @MockBean private JobRepository jobRepository;
 
   @Test
   public void testGetImageInfo_NotFound() throws Exception {
