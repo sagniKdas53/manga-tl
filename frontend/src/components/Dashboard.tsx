@@ -619,9 +619,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(((newQaMode || settings?.qaMode) === "vlm" || (newQaMode || settings?.qaMode) === "none")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {}),
+                        }}
                         value={newQaLlmModel}
                         onChange={(e) => setNewQaLlmModel(e.target.value)}
+                        disabled={(newQaMode || settings?.qaMode) === "vlm" || (newQaMode || settings?.qaMode) === "none"}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaLlmModelList.map((m) => (
@@ -647,9 +654,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </label>
                       <select
                         className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px",
+                          ...(((newQaMode || settings?.qaMode) === "llm" || (newQaMode || settings?.qaMode) === "none")
+                            ? { opacity: 0.6, cursor: "not-allowed" }
+                            : {}),
+                        }}
                         value={newQaVlmModel}
                         onChange={(e) => setNewQaVlmModel(e.target.value)}
+                        disabled={(newQaMode || settings?.qaMode) === "llm" || (newQaMode || settings?.qaMode) === "none"}
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaVlmModelList.map((m) => (

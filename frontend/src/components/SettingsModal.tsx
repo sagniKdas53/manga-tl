@@ -393,6 +393,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="glass-input"
                 value={settings.qaLlmModel || ""}
                 onChange={(e) => handleChange("qaLlmModel", e.target.value)}
+                disabled={settings.qaMode === "vlm" || settings.qaMode === "none"}
+                style={
+                  settings.qaMode === "vlm" || settings.qaMode === "none"
+                    ? { opacity: 0.6, cursor: "not-allowed" }
+                    : {}
+                }
               >
                 <option value="">-- Default / Inherit Env --</option>
                 {settings.qaLlmModelList.map((m) => (
@@ -424,6 +430,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="glass-input"
                 value={settings.qaVlmModel || ""}
                 onChange={(e) => handleChange("qaVlmModel", e.target.value)}
+                disabled={settings.qaMode === "llm" || settings.qaMode === "none"}
+                style={
+                  settings.qaMode === "llm" || settings.qaMode === "none"
+                    ? { opacity: 0.6, cursor: "not-allowed" }
+                    : {}
+                }
               >
                 <option value="">-- Default / Inherit Env --</option>
                 {settings.qaVlmModelList.map((m) => (
