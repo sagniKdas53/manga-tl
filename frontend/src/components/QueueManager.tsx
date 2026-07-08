@@ -22,7 +22,9 @@ const renderJobDetails = (job: Job) => {
     let location = "";
 
     if (payload.chapterNumber !== undefined && payload.pageNumber !== undefined) {
-      location = `Ch.${payload.chapterNumber} › Page ${payload.pageNumber}`;
+      let seriesContext = payload.seriesTitle ? `${payload.seriesTitle} - ` : "";
+      let chapterContext = payload.chapterTitle ? `${payload.chapterTitle} (Ch.${payload.chapterNumber})` : `Ch.${payload.chapterNumber}`;
+      location = `${seriesContext}${chapterContext} › Page ${payload.pageNumber}`;
     }
 
     if (job.type === "ocr") {
@@ -220,7 +222,12 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+          <line x1="3" y1="18" x2="3.01" y2="18"></line>
         </svg>
         {jobs.length > 0 && (
           <span

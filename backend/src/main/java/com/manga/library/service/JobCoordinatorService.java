@@ -158,6 +158,8 @@ public class JobCoordinatorService {
                   }
                   job.put("pageNumber", page.getPageNumber());
                   job.put("chapterNumber", chapter.getChapterNumber());
+                  if (chapter.getTitle() != null) job.put("chapterTitle", chapter.getTitle());
+                  if (series.getTitle() != null) job.put("seriesTitle", series.getTitle());
 
                   com.manga.library.dto.SystemSettingsDto settings =
                       systemSettingsService.getSettings();
