@@ -51,55 +51,58 @@ public class JobCoordinatorService {
 
   @EventListener(ApplicationReadyEvent.class)
   public void onStartup() {
-      log.info("Application started. Resetting orphaned processing jobs and requeueing...");
-      try {
-          resetProcessingJobsToPending();
-          String paused = null;
-          if (redisTemplate != null && redisTemplate.opsForValue() != null) {
-              paused = redisTemplate.opsForValue().get("system:queue:paused");
-          }
-          if (!"true".equals(paused)) {
-              requeuePendingJobs();
-          } else {
-              log.info("Queue is globally paused. Skipping requeue.");
-          }
-      } catch (Exception e) {
-          log.error("Failed to recover/requeue jobs on startup: {}", e.getMessage());
+    log.info("Application started. Resetting orphaned processing jobs and requeueing...");
+    try {
+      resetProcessingJobsToPending();
+      String paused = null;
+      if (redisTemplate != null && redisTemplate.opsForValue() != null) {
+        paused = redisTemplate.opsForValue().get("system:queue:paused");
       }
+      if (!"true".equals(paused)) {
+        requeuePendingJobs();
+      } else {
+        log.info("Queue is globally paused. Skipping requeue.");
+      }
+    } catch (Exception e) {
+      log.error("Failed to recover/requeue jobs on startup: {}", e.getMessage());
+    }
   }
 
   @Transactional
   public void resetProcessingJobsToPending() {
-      try {
-          List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
-          for (Job job : processingJobs) {
-              log.info("Resetting processing job {} to PENDING on startup", job.getId());
-              job.setStatus("PENDING");
-              jobRepository.save(job);
-          }
-      } catch (Exception e) {
-          log.error("Failed to reset processing jobs to pending: {}", e.getMessage());
+    try {
+      List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
+      for (Job job : processingJobs) {
+        log.info("Resetting processing job {} to PENDING on startup", job.getId());
+        job.setStatus("PENDING");
+        jobRepository.save(job);
       }
+    } catch (Exception e) {
+      log.error("Failed to reset processing jobs to pending: {}", e.getMessage());
+    }
   }
 
   @org.springframework.scheduling.annotation.Scheduled(fixedRate = 300000)
   @Transactional
   public void recoverStaleProcessingJobs() {
-      try {
-          OffsetDateTime threshold = OffsetDateTime.now().minusMinutes(10);
-          List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
-          
-          for (Job job : processingJobs) {
-              if (job.getUpdatedAt() != null && job.getUpdatedAt().isBefore(threshold)) {
-                  log.warn("Recovering stale PROCESSING job {} (last updated at {})", job.getId(), job.getUpdatedAt());
-                  job.setStatus("PENDING");
-                  jobRepository.save(job);
-                  pushPersistedJobIfQueueRunning(job);
-              }
-          }
-      } catch (Exception e) {
-          log.error("Failed to recover stale processing jobs: {}", e.getMessage());
+    try {
+      OffsetDateTime threshold = OffsetDateTime.now().minusMinutes(10);
+      List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
+
+      for (Job job : processingJobs) {
+        if (job.getUpdatedAt() != null && job.getUpdatedAt().isBefore(threshold)) {
+          log.warn(
+              "Recovering stale PROCESSING job {} (last updated at {})",
+              job.getId(),
+              job.getUpdatedAt());
+          job.setStatus("PENDING");
+          jobRepository.save(job);
+          pushPersistedJobIfQueueRunning(job);
+        }
       }
+    } catch (Exception e) {
+      log.error("Failed to recover stale processing jobs: {}", e.getMessage());
+    }
   }
 
   public void startPipeline(UUID imageId) {
@@ -112,25 +115,32 @@ public class JobCoordinatorService {
   }
 
   private void enqueueJob(
-      String jobType, UUID imageId, String priority, Consumer<Map<String, Object>> payloadCustomizer) {
+      String jobType,
+      UUID imageId,
+      String priority,
+      Consumer<Map<String, Object>> payloadCustomizer) {
     enqueueJobDirectly(jobType, imageId, priority, payloadCustomizer);
   }
 
   private void enqueueJobDirectly(
-      String jobType, UUID imageId, String priority, Consumer<Map<String, Object>> payloadCustomizer) {
+      String jobType,
+      UUID imageId,
+      String priority,
+      Consumer<Map<String, Object>> payloadCustomizer) {
     if (!isWorkerHealthy()) {
       throw new IllegalStateException("Worker is not healthy or unreachable at " + workerHealthUrl);
     }
     try {
       String jobId = UUID.randomUUID().toString();
-      Job dbJob = Job.builder()
-          .id(jobId)
-          .type(jobType)
-          .imageId(imageId)
-          .status("PENDING")
-          .attempt(1)
-          .maxAttempts(3)
-          .build();
+      Job dbJob =
+          Job.builder()
+              .id(jobId)
+              .type(jobType)
+              .imageId(imageId)
+              .status("PENDING")
+              .attempt(1)
+              .maxAttempts(3)
+              .build();
       Map<String, Object> job = new HashMap<>();
       job.put("jobId", jobId);
       job.put("type", jobType);
@@ -261,17 +271,22 @@ public class JobCoordinatorService {
   }
 
   public void requeuePendingJobs() {
-      // Clear queues first to prevent duplication
-      redisTemplate.delete(List.of(
-          "queue:panel-detection", "queue:ocr", "queue:layout", 
-          "queue:translation", "queue:render", "queue:qa", 
-          "queue:qa-re-ocr", "queue:region-redo"
-      ));
+    // Clear queues first to prevent duplication
+    redisTemplate.delete(
+        List.of(
+            "queue:panel-detection",
+            "queue:ocr",
+            "queue:layout",
+            "queue:translation",
+            "queue:render",
+            "queue:qa",
+            "queue:qa-re-ocr",
+            "queue:region-redo"));
 
-      List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
-      for (Job job : pendingJobs) {
-          pushJobToRedis(job);
-      }
+    List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
+    for (Job job : pendingJobs) {
+      pushJobToRedis(job);
+    }
   }
 
   private String resolveModel(String chapterVal, String seriesVal, String globalVal) {
@@ -834,7 +849,10 @@ public class JobCoordinatorService {
 
   @Transactional
   public void prepareHybridQa(UUID imageId, List<Map<String, Object>> qaResults) {
-    log.info("Preparing hybrid QA for image: {} with {} LLM first pass results", imageId, qaResults != null ? qaResults.size() : 0);
+    log.info(
+        "Preparing hybrid QA for image: {} with {} LLM first pass results",
+        imageId,
+        qaResults != null ? qaResults.size() : 0);
     Objects.requireNonNull(imageId, "imageId cannot be null");
 
     // Find the latest translation layer
@@ -855,7 +873,8 @@ public class JobCoordinatorService {
         try {
           UUID regionId = UUID.fromString((String) r.get("regionId"));
           String qaStatus = (String) r.get("qaStatus");
-          Double qaScore = r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
+          Double qaScore =
+              r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
           String qaFeedback = (String) r.get("qaFeedback");
 
           ocrRegionRepository
@@ -870,8 +889,10 @@ public class JobCoordinatorService {
                       Map<?, ?> directFix = (Map<?, ?>) r.get("directFix");
                       List<LayerElement> elements = layerElementRepository.findByRegionId(regionId);
                       for (LayerElement el : elements) {
-                        if (el.getLayer() != null && "translation".equalsIgnoreCase(el.getLayer().getType())
-                            && finalLatestTranslationLayer != null && el.getLayer().getId().equals(finalLatestTranslationLayer.getId())) {
+                        if (el.getLayer() != null
+                            && "translation".equalsIgnoreCase(el.getLayer().getType())
+                            && finalLatestTranslationLayer != null
+                            && el.getLayer().getId().equals(finalLatestTranslationLayer.getId())) {
                           if (directFix.containsKey("correctedText")) {
                             el.setText((String) directFix.get("correctedText"));
                             region.setTranslatedText((String) directFix.get("correctedText"));
@@ -896,7 +917,8 @@ public class JobCoordinatorService {
     for (Layer l : layers) {
       boolean shouldBeVisible = false;
       if ("translation".equalsIgnoreCase(l.getType())) {
-        shouldBeVisible = (latestTranslationLayer != null && l.getId().equals(latestTranslationLayer.getId()));
+        shouldBeVisible =
+            (latestTranslationLayer != null && l.getId().equals(latestTranslationLayer.getId()));
       } else if ("ocr".equalsIgnoreCase(l.getType())) {
         shouldBeVisible = false;
       } else if ("sfx".equalsIgnoreCase(l.getType())) {
@@ -1110,10 +1132,7 @@ public class JobCoordinatorService {
             retries + 1);
         List<String> regionsToReOcrPayload = List.copyOf(regionsToReOcr);
         enqueueJob(
-            "qa-re-ocr",
-            imageId,
-            "high",
-            job -> job.put("regionsToReOcr", regionsToReOcrPayload));
+            "qa-re-ocr", imageId, "high", job -> job.put("regionsToReOcr", regionsToReOcrPayload));
       } else {
         log.info(
             "QA failed for image {}. Retry {}/2. Enqueuing translation job...",

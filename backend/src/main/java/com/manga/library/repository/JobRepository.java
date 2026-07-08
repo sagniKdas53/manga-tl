@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface JobRepository extends JpaRepository<Job, String> {
-    List<Job> findByStatusOrderByCreatedAtAsc(String status);
-    List<Job> findByStatusInOrderByCreatedAtAsc(List<String> statuses);
+  List<Job> findByStatusOrderByCreatedAtAsc(String status);
+
+  List<Job> findByStatusInOrderByCreatedAtAsc(List<String> statuses);
 }

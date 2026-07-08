@@ -60,7 +60,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     "lmstudio",
   ];
 
-
   React.useEffect(() => {
     if (showSeriesModal && !settings) {
       safeFetch("/api/settings", {
@@ -481,13 +480,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(newOcrProvider === "local" || (newOcrProvider === "" && settings?.ocrProvider === "local")
+                          ...(newOcrProvider === "local" ||
+                          (newOcrProvider === "" &&
+                            settings?.ocrProvider === "local")
                             ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {})
+                            : {}),
                         }}
                         value={newOcrModel}
                         onChange={(e) => setNewOcrModel(e.target.value)}
-                        disabled={newOcrProvider === "local" || (newOcrProvider === "" && settings?.ocrProvider === "local")}
+                        disabled={
+                          newOcrProvider === "local" ||
+                          (newOcrProvider === "" &&
+                            settings?.ocrProvider === "local")
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.ocrVlmModelList.map((m) => (
@@ -623,13 +628,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(((newQaMode || settings?.qaMode) === "vlm" || (newQaMode || settings?.qaMode) === "none")
+                          ...((newQaMode || settings?.qaMode) === "vlm" ||
+                          (newQaMode || settings?.qaMode) === "none"
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
                         value={newQaLlmModel}
                         onChange={(e) => setNewQaLlmModel(e.target.value)}
-                        disabled={(newQaMode || settings?.qaMode) === "vlm" || (newQaMode || settings?.qaMode) === "none"}
+                        disabled={
+                          (newQaMode || settings?.qaMode) === "vlm" ||
+                          (newQaMode || settings?.qaMode) === "none"
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaLlmModelList.map((m) => (
@@ -658,13 +667,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         style={{
                           fontSize: "13px",
                           padding: "6px",
-                          ...(((newQaMode || settings?.qaMode) === "llm" || (newQaMode || settings?.qaMode) === "none")
+                          ...((newQaMode || settings?.qaMode) === "llm" ||
+                          (newQaMode || settings?.qaMode) === "none"
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
                         value={newQaVlmModel}
                         onChange={(e) => setNewQaVlmModel(e.target.value)}
-                        disabled={(newQaMode || settings?.qaMode) === "llm" || (newQaMode || settings?.qaMode) === "none"}
+                        disabled={
+                          (newQaMode || settings?.qaMode) === "llm" ||
+                          (newQaMode || settings?.qaMode) === "none"
+                        }
                       >
                         <option value="">-- Inherit --</option>
                         {settings?.qaVlmModelList.map((m) => (

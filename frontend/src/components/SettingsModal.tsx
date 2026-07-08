@@ -37,13 +37,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
 
-  const providers = settings?.activeProviders || PROVIDERS.filter(
-    (p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm
-  );
-  const ocrProviders = settings?.activeOcrProviders || OCR_PROVIDERS.filter(
-    (p) => p !== "local" || !settings?.disableLocalOcr
-  );
-
+  const providers =
+    settings?.activeProviders ||
+    PROVIDERS.filter(
+      (p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm,
+    );
+  const ocrProviders =
+    settings?.activeOcrProviders ||
+    OCR_PROVIDERS.filter((p) => p !== "local" || !settings?.disableLocalOcr);
 
   useEffect(() => {
     if (isOpen) {
@@ -394,7 +395,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="glass-input"
                 value={settings.qaLlmModel || ""}
                 onChange={(e) => handleChange("qaLlmModel", e.target.value)}
-                disabled={settings.qaMode === "vlm" || settings.qaMode === "none"}
+                disabled={
+                  settings.qaMode === "vlm" || settings.qaMode === "none"
+                }
                 style={
                   settings.qaMode === "vlm" || settings.qaMode === "none"
                     ? { opacity: 0.6, cursor: "not-allowed" }
@@ -431,7 +434,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="glass-input"
                 value={settings.qaVlmModel || ""}
                 onChange={(e) => handleChange("qaVlmModel", e.target.value)}
-                disabled={settings.qaMode === "llm" || settings.qaMode === "none"}
+                disabled={
+                  settings.qaMode === "llm" || settings.qaMode === "none"
+                }
                 style={
                   settings.qaMode === "llm" || settings.qaMode === "none"
                     ? { opacity: 0.6, cursor: "not-allowed" }

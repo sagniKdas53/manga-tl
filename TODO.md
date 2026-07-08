@@ -10,6 +10,12 @@
 - [ ] Export chapter as zip, currently just exports the original images as a zip the translations are not rendered in
 - [ ] Post processing edits after the translations also don't get synced in the rendered output
 
+### Improve the YOLO modles and related features
+
+- [ ] Currently we are on a yolo11n model but we can defiantly switch to a newer and more powerful model that will get almost all of the dialog
+- [ ] Need to add a way to filter the sfx out from the dialog bubbles or even the free text on the page
+- [ ] Look into in-painting models for dialog b
+
 ---
 
 ## 🟡 Medium Priority Improvements
@@ -66,9 +72,11 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
   
 ### Reliability & Crash Recovery
 
-- [x] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth.
+- [x] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth. (Need to test this out)
 - [x] **Queue Management:** Add a Queue managed in front-end just like the notification manager we have, it should be able to show us which jobs are in queue, processing and passed jobs get converted to notifications and removed, failed ones go the the bottom with a retry button on them
   - [x] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
+  - [x] Pausing and resuming works
+  - [ ] Need to test if clearing the queue does stop all the job including the currently running ones
 - [x] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
   - [x] Support reading secrets for Database Configuration
   - [x] Support reading secrets for MinIO Configuration
