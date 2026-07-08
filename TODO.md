@@ -6,9 +6,9 @@
 
 ### Import and Export
 
-- [ ] Currently we can only import zips, add support for ePub import.
-- [x] Also need to check and fix the issue where imported zips have their pages shuffled, they need to be displayed in the order they appear in the zip
-- [ ] **Full ePub export** — Extend `ChapterExportService.java` (which currently does ZIP only) to support ePub packaging.
+- [ ] Currently we can only import zips, add support for ePub,cbz import.
+- [ ] Export chapter as zip, currently just exports the original images as a zip the translations are not rendered in
+- [ ] Post processing edits after the translations also don't get synced in the rendered output
 
 ---
 
@@ -16,15 +16,16 @@
 
 ### Cloud Optimization
 
-- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6). 
+- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6).
   - *Context*: Currently, local detection models (PaddleOCR-Det and YOLO speech bubble detection) run sequentially via a global process lock to avoid overloading CPU/GPU and causing OOM crashes on the host machine.
   - *Requirements*: Remote workers must expose capability APIs, health check endpoints, and task-specific concurrency status, allowing the coordinator to route OCR/detection tasks safely without resource exhaustion.
 - [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without any ml just simple job queuing and processing the results, all the hard work will be handled by the remote workers (for detection, OCR and rendering)
-- [x] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)
+- [ ] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)
   - [x] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
   - [x] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
   - [x] This should still respect the rate-limits of the API
-- [x] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this. (Tests pending)
+  - [ ] Probably implemnetd wronly `CLOUD_CONCURRENCY=2` doesn't seem to be sending 2 requests to openrouter in parallel
+- [x] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this.
 
 ### Model Picker Improvements
 
@@ -74,7 +75,7 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
   - [x] Support reading secrets for JWT Configuration
   - [x] Support reading secrets for API Keys Configuration
   - [x] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
-- [x] **Add a Hybrid QA mode where both LLM and VLM are used** (Not Tested yet)
+- [x] **Add a Hybrid QA mode where both LLM and VLM are used**
   - [x] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
   - [x] The VLM does the final pass on the rendered image
 
@@ -96,9 +97,9 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
 
 ## 🧪 Testing & QA
 
-- [ ] Test intentional bad translations with a weak model to verify QA detection capabilities.
-- [ ] Test with very low quality images to observe OCR failure handling and error reporting.
-- [ ] Test uploading a KR (Korean) image to a JP (Japanese) series to observe language mismatch behavior.
+- [x] Test intentional bad translations with a weak model to verify QA detection capabilities.
+- [x] Test with very low quality images to observe OCR failure handling and error reporting.
+- [x] Test uploading a KR (Korean) image to a JP (Japanese) series to observe language mismatch behavior.
 
 ---
 
