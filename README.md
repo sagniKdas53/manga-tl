@@ -119,9 +119,10 @@ To respect remote API limitations and avoid bombarding servers with request stor
 
 #### 🔍 QA Mode Auto-Detection & Fallbacks
 
-When `QA_MODE=auto` (default) is configured in your environment, the worker evaluates available capabilities at startup to determine the most suitable QA pipeline:
+When `QA_MODE=auto` (default) is configured in your environment, the worker evaluates available capabilities at startup to determine the most suitable QA pipeline. Note that `auto` mode will **never** select `hybrid` by default—if both VLM and LLM capabilities are present, `auto` defaults to `vlm` to save on API costs and processing time. You must explicitly select `hybrid` to use the two-step pipeline:
 
-* **VLM Mode (`vlm`)**: Activated if `PREFERRED_VLM_MODEL` is set, or if `LOCAL_VLM_MODEL` is set (and `DISABLE_LOCAL_LLM` is false). Performs side-by-side visual comparison (original vs typeset image).
+* **VLM Mode (`vlm`)**: Activated if `PREFERRED_VLM_MODEL` is set, or if `LOCAL_VLM_MODEL` is set (and `DISABLE_LOCAL_LLM` is false). Performs a single-pass side-by-side visual comparison (original vs typeset image). It does **not** use a text-only LLM.
+* **Hybrid Mode (`hybrid`)**: A two-step pipeline. First, an LLM performs text-only semantic translation review. After applying text fixes, a VLM performs a final visual layout check.
 * **LLM Mode (`llm`)**: Activated if VLM is unavailable, but a `MODEL_PROVIDER` is selected or a local LLM model is configured (and `DISABLE_LOCAL_LLM` is false). Performs text-only semantic translation review.
 * **None Mode (`none`)**: Bypasses the QA check entirely, auto-passing all text regions.
 

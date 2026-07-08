@@ -73,12 +73,14 @@ Performs safety/formatting checks on the translations before final rendering.
 
 | Variable | Description | Recommended Default |
 | :--- | :--- | :--- |
-| `QA_MODE` | QA Mode (`auto` = auto-detect capabilities, `vlm` = image + text, `llm` = text-only, `none` = skip) | `auto` |
+| `QA_MODE` | QA Mode (`auto` = auto-detect capabilities, `vlm` = image + text, `hybrid` = llm + vlm, `llm` = text-only, `none` = skip) | `auto` |
 | `QA_MODEL_PROVIDER` | Cloud provider for QA (`openrouter`, `gemini`, `nvidia`, `openai`, `anthropic`, `ollama`) | `openrouter` |
 | `QA_LLM_MODEL` | The default model for text-only QA checks | `deepseek/deepseek-v4-flash` |
 | `QA_LLM_MODEL_LIST` | Fallback text models (comma-separated) | `deepseek/deepseek-v4-flash` |
 | `QA_VLM_MODEL` | The default vision-model for layout/rendering QA checks | `google/gemini-3.1-flash-lite` |
 | `QA_VLM_MODEL_LIST` | Fallback vision models (comma-separated) | `google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free` |
+
+> **Note on `auto` mode:** If `QA_MODE=auto` and both VLM and LLM models are available, it will default to **`vlm`** (to save on the extra API calls of the two-step `hybrid` pipeline). You must explicitly set `QA_MODE=hybrid` if you want to use the two-step LLM + VLM pipeline.
 
 ---
 
