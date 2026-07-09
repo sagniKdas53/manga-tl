@@ -889,7 +889,12 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
-                        value={newSeriesOcrModel}
+                        value={
+                          newSeriesOcrProvider === "local" ||
+                          (newSeriesOcrProvider === "" && settings?.ocrProvider === "local")
+                            ? settings?.localOcrModel || "local"
+                            : newSeriesOcrModel || ""
+                        }
                         onChange={(e) => setNewSeriesOcrModel(e.target.value)}
                         disabled={
                           newSeriesOcrProvider === "local" ||
@@ -897,15 +902,21 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                             settings?.ocrProvider === "local")
                         }
                       >
-                        <option value="">-- Inherit --</option>
-                        {settings?.ocrVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
+                        {newSeriesOcrProvider === "local" ||
+                        (newSeriesOcrProvider === "" && settings?.ocrProvider === "local") ? (
+                          <option value={settings?.localOcrModel || "local"}>
+                            {settings?.localOcrModel || "Local Worker Model"}
                           </option>
-                        ))}
+                        ) : (
+                          <>
+                            <option value="">-- Inherit --</option>
+                            {settings?.ocrVlmModelList.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </>
+                        )}
                       </select>
                     </div>
 
@@ -1285,7 +1296,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
-                        value={newChapOcrModel}
+                        value={
+                          newChapOcrProvider === "local" ||
+                          (newChapOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
+                            ? settings?.localOcrModel || "local"
+                            : newChapOcrModel || ""
+                        }
                         onChange={(e) => setNewChapOcrModel(e.target.value)}
                         disabled={
                           newChapOcrProvider === "local" ||
@@ -1295,15 +1314,24 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                                 settings?.ocrProvider === "local")))
                         }
                       >
-                        <option value="">-- Inherit --</option>
-                        {settings?.ocrVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
+                        {newChapOcrProvider === "local" ||
+                        (newChapOcrProvider === "" &&
+                          (selectedSeries?.ocrProvider === "local" ||
+                            (!selectedSeries?.ocrProvider &&
+                              settings?.ocrProvider === "local"))) ? (
+                          <option value={settings?.localOcrModel || "local"}>
+                            {settings?.localOcrModel || "Local Worker Model"}
                           </option>
-                        ))}
+                        ) : (
+                          <>
+                            <option value="">-- Inherit --</option>
+                            {settings?.ocrVlmModelList.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </>
+                        )}
                       </select>
                     </div>
 
@@ -1692,7 +1720,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
-                        value={importOcrModel}
+                        value={
+                          importOcrProvider === "local" ||
+                          (importOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
+                            ? settings?.localOcrModel || "local"
+                            : importOcrModel || ""
+                        }
                         onChange={(e) => setImportOcrModel(e.target.value)}
                         disabled={
                           importOcrProvider === "local" ||
@@ -1702,15 +1738,24 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                                 settings?.ocrProvider === "local")))
                         }
                       >
-                        <option value="">-- Inherit --</option>
-                        {settings?.ocrVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
+                        {importOcrProvider === "local" ||
+                        (importOcrProvider === "" &&
+                          (selectedSeries?.ocrProvider === "local" ||
+                            (!selectedSeries?.ocrProvider &&
+                              settings?.ocrProvider === "local"))) ? (
+                          <option value={settings?.localOcrModel || "local"}>
+                            {settings?.localOcrModel || "Local Worker Model"}
                           </option>
-                        ))}
+                        ) : (
+                          <>
+                            <option value="">-- Inherit --</option>
+                            {settings?.ocrVlmModelList.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </>
+                        )}
                       </select>
                     </div>
 

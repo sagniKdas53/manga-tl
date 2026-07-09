@@ -1047,7 +1047,15 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
-                        value={editChapOcrModel}
+                        value={
+                          editChapOcrProvider === "local" ||
+                          (editChapOcrProvider === "" &&
+                            (selectedSeries?.ocrProvider === "local" ||
+                              (!selectedSeries?.ocrProvider &&
+                                settings?.ocrProvider === "local")))
+                            ? settings?.localOcrModel || "local"
+                            : editChapOcrModel || ""
+                        }
                         onChange={(e) => setEditChapOcrModel(e.target.value)}
                         disabled={
                           editChapOcrProvider === "local" ||
@@ -1057,15 +1065,24 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                                 settings?.ocrProvider === "local")))
                         }
                       >
-                        <option value="">-- Inherit --</option>
-                        {settings?.ocrVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
+                        {editChapOcrProvider === "local" ||
+                        (editChapOcrProvider === "" &&
+                          (selectedSeries?.ocrProvider === "local" ||
+                            (!selectedSeries?.ocrProvider &&
+                              settings?.ocrProvider === "local"))) ? (
+                          <option value={settings?.localOcrModel || "local"}>
+                            {settings?.localOcrModel || "Local Worker Model"}
                           </option>
-                        ))}
+                        ) : (
+                          <>
+                            <option value="">-- Inherit --</option>
+                            {settings?.ocrVlmModelList.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </>
+                        )}
                       </select>
                     </div>
 

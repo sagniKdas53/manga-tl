@@ -43,10 +43,14 @@ const renderJobDetails = (job: Job) => {
         providerModel = `${payload.tlProvider} / ${payload.tlModel || "default"}`;
       }
     } else if (job.type === "qa") {
-      const model =
-        payload.qaMode === "vlm" ? payload.qaVlmModel : payload.qaLlmModel;
-      if (payload.qaProvider) {
-        providerModel = `${payload.qaProvider} / ${model || "default"}`;
+      if (payload.qaMode === "none") {
+        providerModel = `Skipped / none`;
+      } else {
+        const model =
+          payload.qaMode === "vlm" ? payload.qaVlmModel : payload.qaLlmModel;
+        if (payload.qaProvider) {
+          providerModel = `${payload.qaProvider} / ${model || "default"}`;
+        }
       }
     } else if (job.type === "qa-re-ocr") {
       if (payload.ocrProvider) {

@@ -169,16 +169,20 @@ public class JobCoordinatorService {
                   com.manga.library.dto.SystemSettingsDto settings =
                       systemSettingsService.getSettings();
 
-                  job.put(
-                      "ocrProvider",
-                      resolveModel(
+                  String resolvedOcrProvider = resolveModel(
                           chapter.getOcrProvider(),
                           series.getOcrProvider(),
-                          settings.getOcrProvider()));
-                  job.put(
-                      "ocrModel",
-                      resolveModel(
-                          chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
+                          settings.getOcrProvider());
+                  job.put("ocrProvider", resolvedOcrProvider);
+                  
+                  if ("local".equals(resolvedOcrProvider)) {
+                      job.put("ocrModel", settings.getLocalOcrModel());
+                  } else {
+                      job.put(
+                          "ocrModel",
+                          resolveModel(
+                              chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
+                  }
                   job.put(
                       "tlProvider",
                       resolveModel(
