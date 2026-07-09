@@ -486,7 +486,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             ? { opacity: 0.6, cursor: "not-allowed" }
                             : {}),
                         }}
-                        value={newOcrModel}
+                        value={
+                          newOcrProvider === "local" ||
+                          (newOcrProvider === "" && settings?.ocrProvider === "local")
+                            ? settings?.localOcrModel || "local"
+                            : newOcrModel || ""
+                        }
                         onChange={(e) => setNewOcrModel(e.target.value)}
                         disabled={
                           newOcrProvider === "local" ||
@@ -494,15 +499,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             settings?.ocrProvider === "local")
                         }
                       >
-                        <option value="">-- Inherit --</option>
-                        {settings?.ocrVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
+                        {newOcrProvider === "local" ||
+                        (newOcrProvider === "" && settings?.ocrProvider === "local") ? (
+                          <option value={settings?.localOcrModel || "local"}>
+                            {settings?.localOcrModel || "Local Worker Model"}
                           </option>
-                        ))}
+                        ) : (
+                          <>
+                            <option value="">-- Inherit --</option>
+                            {settings?.ocrVlmModelList.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </>
+                        )}
                       </select>
                     </div>
 

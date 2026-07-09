@@ -27,6 +27,11 @@ def main():
         f.write(internal_token)
     print("[✔] Generated secrets/internal_api_token.txt")
 
+    worker_api_secret = secrets.token_urlsafe(32)
+    with open("secrets/worker_api_secret.txt", "w") as f:
+        f.write(worker_api_secret)
+    print("[✔] Generated secrets/worker_api_secret.txt")
+
     print("\n--- Configuring API Keys ---")
     api_keys = {}
     
