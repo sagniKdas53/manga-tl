@@ -12,12 +12,6 @@ import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.dto.SeriesDto;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.util.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +21,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -55,9 +48,6 @@ public class PipelineFlowIntegrationTest {
 
   @org.springframework.boot.test.mock.mockito.MockBean private MinioService minioService;
 
-  private HttpServer testServer;
-  private int testPort;
-  private String originalUrl;
   private String adminToken;
 
   private final Map<String, String> mockRedisValueStore = new HashMap<>();
@@ -89,27 +79,6 @@ public class PipelineFlowIntegrationTest {
         .thenReturn("mocked-path");
     org.mockito.Mockito.when(minioService.generatePresignedUrl(org.mockito.Mockito.anyString()))
         .thenReturn("http://mock-minio/presigned-url");
-
-    // Setup mock worker health check server
-    originalUrl = (String) ReflectionTestUtils.getField(jobCoordinatorService, "workerHealthUrl");
-    testServer = HttpServer.create(new InetSocketAddress(0), 0);
-    testPort = testServer.getAddress().getPort();
-    testServer.createContext(
-        "/health",
-        new HttpHandler() {
-          @Override
-          public void handle(HttpExchange exchange) throws IOException {
-            String response = "{\"status\":\"healthy\",\"redis\":\"connected\"}";
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, response.length());
-            try (OutputStream os = exchange.getResponseBody()) {
-              os.write(response.getBytes());
-            }
-          }
-        });
-    testServer.start();
-    ReflectionTestUtils.setField(
-        jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/health");
 
     // Setup mock redisTemplate operations
     mockRedisValueStore.clear();
@@ -177,10 +146,6 @@ public class PipelineFlowIntegrationTest {
 
   @AfterEach
   public void tearDown() {
-    if (testServer != null) {
-      testServer.stop(0);
-    }
-    ReflectionTestUtils.setField(jobCoordinatorService, "workerHealthUrl", originalUrl);
 
     // Clean up DB records created by the test
     for (UUID imgId : createdImageIds) {

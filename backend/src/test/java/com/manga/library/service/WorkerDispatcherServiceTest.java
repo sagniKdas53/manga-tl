@@ -2,7 +2,6 @@ package com.manga.library.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,8 +36,7 @@ public class WorkerDispatcherServiceTest {
     when(redisTemplate.opsForValue()).thenReturn(valueOps);
     when(redisTemplate.opsForList()).thenReturn(listOps);
 
-    ReflectionTestUtils.setField(
-        workerDispatcherService, "workerUrlsConfig", "http://worker:9091");
+    ReflectionTestUtils.setField(workerDispatcherService, "workerUrlsConfig", "http://worker:9091");
     ReflectionTestUtils.setField(workerDispatcherService, "workerApiSecret", "test_secret");
 
     // Replace the internally created HttpClient with our mock
@@ -57,9 +55,7 @@ public class WorkerDispatcherServiceTest {
   public void testDispatchJobs_Accepted() throws Exception {
     when(valueOps.get("system:queue:paused")).thenReturn("false");
 
-    when(listOps.leftPop("queue:panel-detection"))
-        .thenReturn("{\"id\": \"123\"}")
-        .thenReturn(null);
+    when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
 
     HttpResponse<String> mockResponse = mock(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
@@ -78,8 +74,7 @@ public class WorkerDispatcherServiceTest {
   public void testDispatchJobs_RateLimited() throws Exception {
     when(valueOps.get("system:queue:paused")).thenReturn("false");
 
-    when(listOps.leftPop("queue:panel-detection"))
-        .thenReturn("{\"id\": \"123\"}");
+    when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}");
 
     HttpResponse<String> mockResponse = mock(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(429);
@@ -101,7 +96,8 @@ public class WorkerDispatcherServiceTest {
         workerDispatcherService, "workerApiSecretFile", tempFile.toString());
     workerDispatcherService.init();
 
-    String secret = (String) ReflectionTestUtils.getField(workerDispatcherService, "workerApiSecret");
+    String secret =
+        (String) ReflectionTestUtils.getField(workerDispatcherService, "workerApiSecret");
     assertEquals("file_secret", secret);
 
     Files.deleteIfExists(tempFile);
