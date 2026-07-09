@@ -5,17 +5,13 @@ import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -28,7 +24,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 @Slf4j
 public class JobCoordinatorService {
-
 
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
@@ -169,19 +164,20 @@ public class JobCoordinatorService {
                   com.manga.library.dto.SystemSettingsDto settings =
                       systemSettingsService.getSettings();
 
-                  String resolvedOcrProvider = resolveModel(
+                  String resolvedOcrProvider =
+                      resolveModel(
                           chapter.getOcrProvider(),
                           series.getOcrProvider(),
                           settings.getOcrProvider());
                   job.put("ocrProvider", resolvedOcrProvider);
-                  
+
                   if ("local".equals(resolvedOcrProvider)) {
-                      job.put("ocrModel", settings.getLocalOcrModel());
+                    job.put("ocrModel", settings.getLocalOcrModel());
                   } else {
-                      job.put(
-                          "ocrModel",
-                          resolveModel(
-                              chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
+                    job.put(
+                        "ocrModel",
+                        resolveModel(
+                            chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
                   }
                   job.put(
                       "tlProvider",
