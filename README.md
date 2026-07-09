@@ -209,4 +209,3 @@ python -c "import sys; sys.path.insert(0, 'unified-workers'); from tests.test_me
 ## 📄 Documentation Index
 
 * **Development Roadmap & Status**: [TODO.md](TODO.md)
-* **Remote Worker Setup & OCR Offloading**: [remote_worker_guide.md](file:///home/sagnik/Projects/docker-composes/manga-library/docs/remote_worker_guide.md)
