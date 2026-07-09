@@ -102,7 +102,8 @@ services:
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - CONTEXT_PATH=${CONTEXT_PATH:-/tlhub}
       - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
-      - WORKER_HEALTH_URL=${WORKER_HEALTH_URL:-http://worker:8000/health}
+      - WORKER_URLS=${WORKER_URLS:-http://worker:8000}
+      - WORKER_API_SECRET_FILE=/run/secrets/worker_api_secret
       - USE_REMOTE_ML=${USE_REMOTE_ML:-false}
       - REMOTE_ML_URL=${REMOTE_ML_URL:-http://worker:8000}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
@@ -126,6 +127,7 @@ services:
       - minio_password
       - jwt_secret
       - internal_api_token
+      - worker_api_secret
     networks:
       - manga-net
       - revProxy-net
@@ -191,7 +193,8 @@ services:
       - QA_MODE=${QA_MODE:-auto}
       - RENDER_CACHE_DIR=/app/rendered_cache
       # Finally the remote workers, to distibute load to shouldn't this be added to the back-end
-      - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-1}
+      - CONCURRENT_WORKERS=${CONCURRENT_WORKERS:-4}
+      - WORKER_API_SECRET_FILE=/run/secrets/worker_api_secret
       - CLOUD_CONCURRENCY=${CLOUD_CONCURRENCY:-1}
       - HF_HUB_DISABLE_SYMLINKS_WARNING=1
       # Comment these out if you want to seed the models or re-download them
@@ -210,6 +213,7 @@ services:
     secrets:
       - minio_password
       - internal_api_token
+      - worker_api_secret
       - api_keys
     volumes:
       - ./data/worker/huggingface:/root/.cache/huggingface
@@ -242,5 +246,7 @@ secrets:
     file: ./secrets/jwt_secret.txt
   internal_api_token:
     file: ./secrets/internal_api_token.txt
+  worker_api_secret:
+    file: ./secrets/worker_api_secret.txt
   api_keys:
     file: ./secrets/api_keys.json

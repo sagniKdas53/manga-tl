@@ -29,8 +29,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Slf4j
 public class JobCoordinatorService {
 
-  @Value("${worker.health-url}")
-  private String workerHealthUrl;
 
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
@@ -127,9 +125,6 @@ public class JobCoordinatorService {
       UUID imageId,
       String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
-    if (!isWorkerHealthy()) {
-      throw new IllegalStateException("Worker is not healthy or unreachable at " + workerHealthUrl);
-    }
     try {
       String jobId = UUID.randomUUID().toString();
       Job dbJob =
@@ -1170,37 +1165,6 @@ public class JobCoordinatorService {
       }
     }
     return bestPanel;
-  }
-
-  public boolean isWorkerHealthy() {
-    try {
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(URI.create(workerHealthUrl))
-              .timeout(Duration.ofSeconds(2))
-              .GET()
-              .build();
-      HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      if (response.statusCode() != 200) {
-        log.warn("Worker health check returned status code: {}", response.statusCode());
-        return false;
-      }
-      String body = response.body();
-      if (body == null) {
-        return false;
-      }
-      try {
-        Map<?, ?> map = objectMapper.readValue(body, Map.class);
-        return "healthy".equals(map.get("status"));
-      } catch (Exception e) {
-        log.warn("Failed to parse worker health check response body: {}", body, e);
-        return body.contains("\"status\"") && body.contains("\"healthy\"");
-      }
-    } catch (Exception e) {
-      log.error("Failed to connect to worker health endpoint: {}", workerHealthUrl, e);
-      return false;
-    }
   }
 
   private String getContrastingTextColor(String hexColor) {
