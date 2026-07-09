@@ -65,6 +65,7 @@ services:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_ROOT_PASSWORD_FILE=/run/secrets/minio_password
     ports:
+      - "9000:9000"
       - "9001:9001"
     volumes:
       - ./data/minio:/data
