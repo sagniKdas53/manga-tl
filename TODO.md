@@ -14,78 +14,30 @@
 
 - [ ] Currently we are on a yolo11n model but we can defiantly switch to a newer and more powerful model that will get almost all of the dialog
 - [ ] Need to add a way to filter the sfx out from the dialog bubbles or even the free text on the page
-- [ ] Look into in-painting models for dialog b
+- [ ] Look into blurring the free standing text and just placing the translated version over it.
+
+### Front end issues
+
+- [ ] We keep polling `/tlhub/api/jobs/status` for jobs, why can't we use SSE for this as well?
+- [ ] It seems like the thumbnails are not actually thumbnails but rather the full file as seen in the url `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file`
+- [ ] Also this GET `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file` seemd to work even without auth
+- [ ] The dialogs boxes are not fitting in the viewport
 
 ---
 
 ## 🟡 Medium Priority Improvements
 
-### Cloud Optimization
+### ML Processing Optimization
 
 - [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6).
   - *Context*: Currently, local detection models (PaddleOCR-Det and YOLO speech bubble detection) run sequentially via a global process lock to avoid overloading CPU/GPU and causing OOM crashes on the host machine.
   - *Requirements*: Remote workers must expose capability APIs, health check endpoints, and task-specific concurrency status, allowing the coordinator to route OCR/detection tasks safely without resource exhaustion.
-- [ ] **Build slim worker Docker image** — Create a `Dockerfile.slim` without any ml just simple job queuing and processing the results, all the hard work will be handled by the remote workers (for detection, OCR and rendering)
-- [ ] **Parallelize cloud processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)
-  - [x] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers
+- [ ] **Parallelize processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)
+  - [ ] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers, actually this can't be done as we still need to run PP-OCR-v6 det and YOLO bubble detection these are currently not being served by any cloud provider
   - [x] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
-  - [x] This should still respect the rate-limits of the API
-  - [ ] Probably implemnetd wronly `CLOUD_CONCURRENCY=2` doesn't seem to be sending 2 requests to openrouter in parallel
-- [x] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this.
-
-### Model Picker Improvements
-
-```txt
-# 1. OCR Model Configuration (To use cloud OCR set DISABLE_LOCAL_OCR to true)
-OCR_MODEL_PROVIDER=openrouter
-OCR_VLM_MODEL=qwen/qwen3-vl-32b-instruct
-# Fallback list for OCR (Active model at index 0, followed by commented out fallbacks)
-OCR_VLM_MODEL_LIST=qwen/qwen3-vl-32b-instruct,google/gemini-3.5-flash,nvidia/nemotron-nano-12b-v2-vl:free,google/gemini-2.5-flash,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,google/gemini-3.1-flash-lite
-
-# 2. Translation (TL) Model Configuration
-TL_MODEL_PROVIDER=openrouter
-# google/gemini-3.5-flash
-TL_LLM_MODEL=deepseek/deepseek-v4-pro
-# Fallback list for Translation (Active model at index 0, followed by commented out fallbacks)
-TL_LLM_MODEL_LIST=deepseek/deepseek-v4-pro,deepseek/deepseek-v4-flash,google/gemini-3.5-flash,google/gemma-4-31b-it:free,google/gemini-2.5-flash,tencent/hy3:free,cohere/north-mini-code:free,openai/gpt-oss-120b:free
-
-# 3. Quality Assurance (QA) Model Configuration
-QA_MODEL_PROVIDER=openrouter
-QA_LLM_MODEL=deepseek/deepseek-v4-flash
-# Fallback list for QA LLM (Active model at index 0, followed by commented out fallbacks)
-QA_LLM_MODEL_LIST=deepseek/deepseek-v4-flash,deepseek/deepseek-v4-pro,google/gemini-3.5-flash,google/gemma-4-31b-it:free,google/gemini-2.5-flash,tencent/hy3:free,cohere/north-mini-code:free,openai/gpt-oss-120b:free
-QA_VLM_MODEL=google/gemini-3.1-flash-lite
-# Fallback list for QA VLM (Active model at index 0, followed by commented out fallbacks)
-QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,google/gemini-3.5-flash,google/gemini-2.5-flash,nvidia/nemotron-nano-12b-v2-vl:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
-```
-
-- [x] As seen in the above code block despite having a picker we only really have one provider, OpenRouter.
-- [x] The same model `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` on open-route, if to be used on nvidia nmi needs to be formatted as `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` so we need a way to map these different formats.
-- [x] Also there should be a section for fallback models in the config which will be used when the primary model fails, the fallback will work in the same way as the primary just with a fallback priority.
-- [x] Also providers should only become availbale if they are usable like currently the list shows that we have access to open-ai, anthoropic, ollama, lm-studio
-  - [x] But we don't actually have keys configure for open-ai, anthoropic
-  - [x] And since LOCAL_LLM_PROVIDER is ollama, lm-studio should also be hidden
-  - [x] Say if DISABLE_LOCAL_LLM=true, thenollama and lm-studio should not be visible as options
-  - [x] If DISABLE_LOCAL_OCR=true, then open-router and nvidia should be the only ones visible as options for OCR.
-  - [x] Also if say in the front-end we slect OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
-- [x] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
-  
-### Reliability & Crash Recovery
-
-- [x] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth. (Need to test this out)
-- [x] **Queue Management:** Add a Queue managed in front-end just like the notification manager we have, it should be able to show us which jobs are in queue, processing and passed jobs get converted to notifications and removed, failed ones go the the bottom with a retry button on them
-  - [x] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
-  - [x] Pausing and resuming works
-  - [ ] Need to test if clearing the queue does stop all the job including the currently running ones
-- [x] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
-  - [x] Support reading secrets for Database Configuration
-  - [x] Support reading secrets for MinIO Configuration
-  - [x] Support reading secrets for JWT Configuration
-  - [x] Support reading secrets for API Keys Configuration
-  - [x] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
-- [x] **Add a Hybrid QA mode where both LLM and VLM are used**
-  - [x] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
-  - [x] The VLM does the final pass on the rendered image
+  - [ ] Probably implemented incorrectly `CLOUD_CONCURRENCY=2` doesn't seem to be sending 2 requests to openrouter in parallel, need to fix
+  - [ ] If implemented correctly we can parallelize the text and bubble deteation across workers and send parallel jobs to the cloud
+  - [ ] These will still need to respect the rate limits, and not keep sending jobs in parallel even when we are getting 429's
 
 ---
 
@@ -180,6 +132,7 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
 - [x] OpenRouter cloud OCR investigation (works but quality varies by model)
 - [x] Nemotron OCR v2 investigated — neither fast nor reliable, rejected
 - [x] Notifications/toasts made more informative (include image/chapter/series context)
+- [x] **Chapter-Level Memory Toggle** — Add a way to disable previous page context injection at the chapter level, so that say we are translating stand-alone pages we don't waste tokens on this.
 
 ### Worker Enhancements & Improvements (Done)
 
@@ -199,5 +152,62 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
   - [x] Also need to add QA feedback received for layers to the layers it was generated for
   - [x] Add to each layer its estimated cost; during export we can expect project json to include `totalCost` and per-layer cost breakdown
   - [x] **Update the `meta-data.json` in chapter export ZIP** — Now includes full `project.json` with correct cost, visibility, and the `chapterTotalCost` summary
+
+### Reliability & Crash Recovery (Done)
+
+- [x] **Persist job queue across restarts** — Currently Redis-only (`RedisPriorityQueue`). If Redis or the host crashes/restarts, queued jobs are lost. Save queue state so the worker can resume from where it crashed. Keep Redis for fast dequeuing, Postgres as the source of truth. (Need to test this out)
+- [x] **Queue Management:** Add a Queue managed in front-end just like the notification manager we have, it should be able to show us which jobs are in queue, processing and passed jobs get converted to notifications and removed, failed ones go the the bottom with a retry button on them
+  - [x] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
+  - [x] Pausing and resuming works
+  - [x] Need to test if clearing the queue does stop all the job including the currently running ones
+
+### Reliability & Crash Recovery (Done)
+
+- [x] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
+  - [x] Support reading secrets for Database Configuration
+  - [x] Support reading secrets for MinIO Configuration
+  - [x] Support reading secrets for JWT Configuration
+  - [x] Support reading secrets for API Keys Configuration
+  - [x] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
+- [x] **Add a Hybrid QA mode where both LLM and VLM are used**
+  - [x] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
+  - [x] The VLM does the final pass on the rendered image
+
+### Model Picker Improvements (Done)
+
+```txt
+# 1. OCR Model Configuration (To use cloud OCR set DISABLE_LOCAL_OCR to true)
+OCR_MODEL_PROVIDER=openrouter
+OCR_VLM_MODEL=qwen/qwen3-vl-32b-instruct
+# Fallback list for OCR (Active model at index 0, followed by commented out fallbacks)
+OCR_VLM_MODEL_LIST=qwen/qwen3-vl-32b-instruct,google/gemini-3.5-flash,nvidia/nemotron-nano-12b-v2-vl:free,google/gemini-2.5-flash,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free,google/gemini-3.1-flash-lite
+
+# 2. Translation (TL) Model Configuration
+TL_MODEL_PROVIDER=openrouter
+# google/gemini-3.5-flash
+TL_LLM_MODEL=deepseek/deepseek-v4-pro
+# Fallback list for Translation (Active model at index 0, followed by commented out fallbacks)
+TL_LLM_MODEL_LIST=deepseek/deepseek-v4-pro,deepseek/deepseek-v4-flash,google/gemini-3.5-flash,google/gemma-4-31b-it:free,google/gemini-2.5-flash,tencent/hy3:free,cohere/north-mini-code:free,openai/gpt-oss-120b:free
+
+# 3. Quality Assurance (QA) Model Configuration
+QA_MODEL_PROVIDER=openrouter
+QA_LLM_MODEL=deepseek/deepseek-v4-flash
+# Fallback list for QA LLM (Active model at index 0, followed by commented out fallbacks)
+QA_LLM_MODEL_LIST=deepseek/deepseek-v4-flash,deepseek/deepseek-v4-pro,google/gemini-3.5-flash,google/gemma-4-31b-it:free,google/gemini-2.5-flash,tencent/hy3:free,cohere/north-mini-code:free,openai/gpt-oss-120b:free
+QA_VLM_MODEL=google/gemini-3.1-flash-lite
+# Fallback list for QA VLM (Active model at index 0, followed by commented out fallbacks)
+QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,google/gemini-3.5-flash,google/gemini-2.5-flash,nvidia/nemotron-nano-12b-v2-vl:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+```
+
+- [x] As seen in the above code block despite having a picker we only really have one provider, OpenRouter.
+- [x] The same model `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` on open-route, if to be used on nvidia nmi needs to be formatted as `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` so we need a way to map these different formats.
+- [x] Also there should be a section for fallback models in the config which will be used when the primary model fails, the fallback will work in the same way as the primary just with a fallback priority.
+- [x] Also providers should only become availbale if they are usable like currently the list shows that we have access to open-ai, anthoropic, ollama, lm-studio
+  - [x] But we don't actually have keys configure for open-ai, anthoropic
+  - [x] And since LOCAL_LLM_PROVIDER is ollama, lm-studio should also be hidden
+  - [x] Say if DISABLE_LOCAL_LLM=true, thenollama and lm-studio should not be visible as options
+  - [x] If DISABLE_LOCAL_OCR=true, then open-router and nvidia should be the only ones visible as options for OCR.
+  - [x] Also if say in the front-end we slect OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
+- [x] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
 
 </details>
