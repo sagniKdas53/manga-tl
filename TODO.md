@@ -29,7 +29,7 @@
 
 ### ML Processing Optimization
 
-- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6).
+- [ ] ~~**Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6).~~ (Cancelled)
   - *Context*: Currently, local detection models (PaddleOCR-Det and YOLO speech bubble detection) run sequentially via a global process lock to avoid overloading CPU/GPU and causing OOM crashes on the host machine.
   - *Requirements*: Remote workers must expose capability APIs, health check endpoints, and task-specific concurrency status, allowing the coordinator to route OCR/detection tasks safely without resource exhaustion.
 - [ ] **Parallelize processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)

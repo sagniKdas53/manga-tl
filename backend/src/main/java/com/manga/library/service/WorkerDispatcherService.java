@@ -70,7 +70,18 @@ public class WorkerDispatcherService {
       return;
     }
 
-    List<String> workerUrls = Arrays.asList(workerUrlsConfig.split(","));
+    List<String> workerUrls = new ArrayList<>();
+    if (workerUrlsConfig != null) {
+      for (String url : workerUrlsConfig.split(",")) {
+        String trimmed = url.trim();
+        if (!trimmed.isEmpty()) {
+          workerUrls.add(trimmed);
+        }
+      }
+    }
+    if (workerUrls.isEmpty()) {
+      return;
+    }
 
     for (String queue : QUEUES) {
       boolean processed = true;
