@@ -29,9 +29,10 @@
 
 ### ML Processing Optimization
 
-- [ ] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6).
+- [x] **Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6).
   - *Context*: Currently, local detection models (PaddleOCR-Det and YOLO speech bubble detection) run sequentially via a global process lock to avoid overloading CPU/GPU and causing OOM crashes on the host machine.
-  - *Requirements*: Remote workers must expose capability APIs, health check endpoints, and task-specific concurrency status, allowing the coordinator to route OCR/detection tasks safely without resource exhaustion.
+  - *Completed*: Created `ALLOWED_QUEUES` queue filtering on workers and HTTP-push routing in Spring Boot backend. Added [Remote Worker Setup & OCR Offloading Guide](file:///home/sagnik/Projects/docker-composes/manga-library/docs/remote_worker_guide.md).
+  - [ ] **Remote Worker GPU Support** — Add testing/verification for GPU-accelerated remote workers (including documenting NVIDIA Container Toolkit setup and CUDA library caching details).
 - [ ] **Parallelize processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)
   - [ ] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers, actually this can't be done as we still need to run PP-OCR-v6 det and YOLO bubble detection these are currently not being served by any cloud provider
   - [x] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it

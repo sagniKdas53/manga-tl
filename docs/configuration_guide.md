@@ -2,6 +2,9 @@
 
 This guide explains how to configure the unified worker pipeline. The worker handles three distinct stages using dedicated configuration singletons: **OCR**, **Translation (TL)**, and **Quality Assurance (QA)**.
 
+> [!NOTE]
+> To configure and set up a **remote worker** (e.g., on a LAN device with a GPU) to offload OCR/Bubble detection tasks, please refer to the [Remote Worker Setup & OCR Offloading Guide](file:///home/sagnik/Projects/docker-composes/manga-library/docs/remote_worker_guide.md).
+
 ---
 
 ## 🗺️ Pipeline Architecture
