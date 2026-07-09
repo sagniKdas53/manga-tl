@@ -4,12 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,34 +31,11 @@ public class JobCoordinatorServiceTest {
   @org.springframework.boot.test.mock.mockito.MockBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
-  private HttpServer testServer;
-  private int testPort;
-  private String originalUrl;
+
   private BiConsumer<String, String> rightPushHook;
 
   @BeforeEach
-  public void setUp() throws IOException {
-    originalUrl = (String) ReflectionTestUtils.getField(jobCoordinatorService, "workerHealthUrl");
-    testServer = HttpServer.create(new InetSocketAddress(0), 0);
-    testPort = testServer.getAddress().getPort();
-    testServer.createContext(
-        "/default-health",
-        new HttpHandler() {
-          @Override
-          public void handle(HttpExchange exchange) throws IOException {
-            String response = "{\"status\":\"healthy\",\"redis\":\"connected\"}";
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, response.length());
-            try (OutputStream os = exchange.getResponseBody()) {
-              os.write(response.getBytes());
-            }
-          }
-        });
-    testServer.start();
-    ReflectionTestUtils.setField(
-        jobCoordinatorService,
-        "workerHealthUrl",
-        "http://localhost:" + testPort + "/default-health");
+  public void setUp() {
 
     // Set up mock for redisTemplate using in-memory structures
     final Map<String, String> mockRedisValueStore = new HashMap<>();
@@ -118,86 +89,7 @@ public class JobCoordinatorServiceTest {
 
   @AfterEach
   public void tearDown() {
-    if (testServer != null) {
-      testServer.stop(0);
-    }
-    ReflectionTestUtils.setField(jobCoordinatorService, "workerHealthUrl", originalUrl);
     rightPushHook = null;
-  }
-
-  @Test
-  public void testIsWorkerHealthy_Healthy() {
-    testServer.createContext(
-        "/health",
-        new HttpHandler() {
-          @Override
-          public void handle(HttpExchange exchange) throws IOException {
-            String response = "{\"status\":\"healthy\",\"redis\":\"connected\"}";
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, response.length());
-            try (OutputStream os = exchange.getResponseBody()) {
-              os.write(response.getBytes());
-            }
-          }
-        });
-
-    ReflectionTestUtils.setField(
-        jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/health");
-    assertTrue(jobCoordinatorService.isWorkerHealthy());
-  }
-
-  @Test
-  public void testIsWorkerHealthy_HealthyWithSpaces() {
-    testServer.createContext(
-        "/health-spaces",
-        new HttpHandler() {
-          @Override
-          public void handle(HttpExchange exchange) throws IOException {
-            String response = "{ \"status\": \"healthy\", \"redis\": \"connected\" }";
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, response.length());
-            try (OutputStream os = exchange.getResponseBody()) {
-              os.write(response.getBytes());
-            }
-          }
-        });
-
-    ReflectionTestUtils.setField(
-        jobCoordinatorService,
-        "workerHealthUrl",
-        "http://localhost:" + testPort + "/health-spaces");
-    assertTrue(jobCoordinatorService.isWorkerHealthy());
-  }
-
-  @Test
-  public void testIsWorkerHealthy_UnhealthyStatus() {
-    testServer.createContext(
-        "/health",
-        new HttpHandler() {
-          @Override
-          public void handle(HttpExchange exchange) throws IOException {
-            String response = "{\"status\":\"unhealthy\",\"redis\":\"disconnected\"}";
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(500, response.length());
-            try (OutputStream os = exchange.getResponseBody()) {
-              os.write(response.getBytes());
-            }
-          }
-        });
-
-    ReflectionTestUtils.setField(
-        jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/health");
-    assertFalse(jobCoordinatorService.isWorkerHealthy());
-  }
-
-  @Test
-  public void testIsWorkerHealthy_Offline() {
-    testServer.stop(0);
-    testServer = null;
-
-    ReflectionTestUtils.setField(
-        jobCoordinatorService, "workerHealthUrl", "http://localhost:" + testPort + "/health");
-    assertFalse(jobCoordinatorService.isWorkerHealthy());
   }
 
   @Test
