@@ -87,7 +87,7 @@ public class WorkerDispatcherService {
 
                         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                                 .uri(URI.create(targetUrl))
-                                .timeout(Duration.ofSeconds(5))
+                                .timeout(Duration.ofSeconds(30))
                                 .header("Content-Type", "application/json")
                                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
 
