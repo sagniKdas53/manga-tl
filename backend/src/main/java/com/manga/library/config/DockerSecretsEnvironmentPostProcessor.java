@@ -52,7 +52,7 @@ public class DockerSecretsEnvironmentPostProcessor implements EnvironmentPostPro
           File secretFile = new File(filePath);
           if (secretFile.exists()) {
             try {
-              String content = new String(Files.readAllBytes(secretFile.toPath())).trim();
+              String content = new String(Files.readAllBytes(secretFile.toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
               secretsMap.put(realKey, content);
               logger.info("Loaded secret for {} from file {}", realKey, filePath);
             } catch (IOException e) {
