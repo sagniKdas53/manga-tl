@@ -206,7 +206,7 @@ public class SeriesController {
             .qaLlmModel(dto.getQaLlmModel())
             .qaVlmModel(dto.getQaVlmModel())
             .qaMode(dto.getQaMode())
-            .useContextMemory(dto.getUseContextMemory() != null ? dto.getUseContextMemory() : true)
+            .useContextMemory(dto.getUseContextMemory() == null || dto.getUseContextMemory())
             .build();
     Objects.requireNonNull(chapter, "chapter cannot be null");
     chapter = chapterRepository.save(chapter);

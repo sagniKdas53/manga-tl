@@ -121,9 +121,7 @@ public class WorkerDispatcherService {
               sent = true;
               processed = true; // Try next job in this queue
               break;
-            } else if (response.statusCode() == 429) {
-              // Worker full, try next worker
-            } else {
+            } else if (response.statusCode() != 429) {
               log.error("Worker {} returned status {}", targetUrl, response.statusCode());
             }
           } catch (Exception e) {

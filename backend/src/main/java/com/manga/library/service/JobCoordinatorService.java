@@ -857,10 +857,8 @@ public class JobCoordinatorService {
     List<Layer> layers = layerRepository.findByImageId(imageId);
     Layer latestTranslationLayer = null;
     for (Layer l : layers) {
-      if ("translation".equalsIgnoreCase(l.getType())) {
-        if (latestTranslationLayer == null || l.getZOrder() > latestTranslationLayer.getZOrder()) {
-          latestTranslationLayer = l;
-        }
+      if ("translation".equalsIgnoreCase(l.getType()) && (latestTranslationLayer == null || l.getZOrder() > latestTranslationLayer.getZOrder())) {
+        latestTranslationLayer = l;
       }
     }
 
@@ -922,7 +920,7 @@ public class JobCoordinatorService {
       } else if ("sfx".equalsIgnoreCase(l.getType())) {
         shouldBeVisible = true;
       } else {
-        shouldBeVisible = l.getVisible() != null ? l.getVisible() : true;
+        shouldBeVisible = l.getVisible() == null || l.getVisible();
       }
 
       if (l.getVisible() == null || l.getVisible() != shouldBeVisible) {
