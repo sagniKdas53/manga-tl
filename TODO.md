@@ -10,11 +10,23 @@
 - [ ] Export chapter as zip, currently just exports the original images as a zip the translations are not rendered in
 - [ ] Post processing edits after the translations also don't get synced in the rendered output
 
-### Improve the YOLO models and related features
+### Improve the models and translation related features
 
-- [ ] Currently we are on a yolo11n model from `juithealien/manga109-segmentation-bubble` but it seems to be abandoned and only detects text bubbles but
-  - [ ] Y
-- [ ] Need to add a way to filter the sfx out from the dialog bubbles or even the free text on the page
+- [ ] Currently we are on a yolo11n model from `juithealien/manga109-segmentation-bubble` but it seems to be abandoned and only detects text bubbles
+  - [ ] Checkout the [Model Upgrade Plan](docs/model_upgrade_plan.md) it documents which model can serve as a successor
+- [ ] Currently we are using the prompts in [Sample Prompts](docs/models_and_prompts.md) and processing as documented
+  - [ ] However, the accuracy is not that great, need to improve the prompts and see if we can get better results.
+  - [ ] I also think we can improve the prompts for the VLM when doing OCR
+    - [ ] so that they classify the text and reject sfx and gibberish and text that doesn't need to be processed at all like author name/handle, sfx and even text that's already in english in that phase
+    - [ ] If we are doing Re-OCR or Redo-Region-TL with a VLM we can send in the QA feedback to help the model out, like if the reason is a manual trigger from user, then user didn't like it so do a clean redo and if the QA model didn't like it can tell it what it didn't like.
+  - [ ] Also enhance the QA prompt to check for similar issues as images which have been processed locally i.e. never sent to the cloud for OCR will not have this intelligence applied to their processin but that doesn't mean we can't apply it in post processing
+    - [ ] like giving it a way to directly update the text if it has a better translation
+    - [ ] or can reject the text if it's sfx/gibberish etc
+    - [ ] it will never be allowed to delete an elemnent only hide it (we have a toggle for that)
+    - [ ] remember to keep it's ability to trigger ocr and re-translation, we can improve that as well now it can device to do a while page re-ocr or re-tl or just send a region back that is not good enough
+    - [ ] but we should make it so that it never sends back the same text back for re-ocr or re-tl, or at least tries not to, i.e. the quality of the output should be strictly better than the previous output and if not it should not be sent back
+    - [ ] we also need to make sure that we don't get stuck in a loop of re-ocring and re-tling (just once pass, no loops)
+    - [ ] since we added redo-region-* queues this should happen pretty quick
 
 ### Front end issues
 
@@ -29,15 +41,7 @@
 
 ### ML Processing Optimization
 
-- [ ] ~~**Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6).~~ (Cancelled)
-  - *Context*: Currently, local detection models (PaddleOCR-Det and YOLO speech bubble detection) run sequentially via a global process lock to avoid overloading CPU/GPU and causing OOM crashes on the host machine.
-  - *Requirements*: Remote workers must expose capability APIs, health check endpoints, and task-specific concurrency status, allowing the coordinator to route OCR/detection tasks safely without resource exhaustion.
-- [ ] **Parallelize processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)
-  - [ ] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers, actually this can't be done as we still need to run PP-OCR-v6 det and YOLO bubble detection these are currently not being served by any cloud provider
-  - [x] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
-  - [ ] Probably implemented incorrectly `CLOUD_CONCURRENCY=2` doesn't seem to be sending 2 requests to openrouter in parallel, need to fix
-  - [ ] If implemented correctly we can parallelize the text and bubble deteation across workers and send parallel jobs to the cloud
-  - [ ] These will still need to respect the rate limits, and not keep sending jobs in parallel even when we are getting 429's
+- [ ]
 
 ---
 
@@ -46,7 +50,6 @@
 - [ ] **True Cross-Page Character Memory** — Feed speaker profiles to translation prompts to prevent name/gender drift across pages.
   - [ ] We have a very rudimentary implementation, in which we inject the previous pages' translated text into the current context.
   - [ ] Instead, we can maintain a memory of past pages' characters, names, places, unique words and the like and inject that into the current context.
-- [ ] **Progress Gallery** — Create a visual showcase using `Sample1` showing output quality progression from v1 → v10+.
 - [ ] **Add draw-to-OCR / draw-to-translate workflow** — Let users draw a rectangle on the image canvas, then trigger OCR or translation for just that region. Requires:
   - [ ] Frontend: new tool mode in canvas (similar to free resize but for region capture)
   - [ ] Backend: new endpoint accepting image ID + bounding box coordinates
@@ -57,9 +60,7 @@
 
 ## 🧪 Testing & QA
 
-- [x] Test intentional bad translations with a weak model to verify QA detection capabilities.
-- [x] Test with very low quality images to observe OCR failure handling and error reporting.
-- [x] Test uploading a KR (Korean) image to a JP (Japanese) series to observe language mismatch behavior.
+Will think of more.
 
 ---
 
@@ -203,3 +204,22 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
   - [x] If DISABLE_LOCAL_OCR=true, then open-router and nvidia should be the only ones visible as options for OCR.
   - [x] Also if say in the front-end we select OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
 - [x] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
+
+## 🧪 Testing & QA (Done)
+
+- [x] Test intentional bad translations with a weak model to verify QA detection capabilities.
+- [x] Test with very low quality images to observe OCR failure handling and error reporting.
+- [x] Test uploading a KR (Korean) image to a JP (Japanese) series to observe language mismatch behavior.
+- [x] ~~**Progress Gallery** — Create a visual showcase using `Sample1` showing output quality progression from v1 → v10+.~~ (Cancelled)
+
+### ML Processing Optimization (Done)
+
+- [x] ~~**Support remote workers for local OCR** — Allow spinning up dedicated workers on LAN devices for heavy local OCR (PP-OCRv6).~~ (Cancelled)
+  - *Context*: Currently, local detection models (PaddleOCR-Det and YOLO speech bubble detection) run sequentially via a global process lock to avoid overloading CPU/GPU and causing OOM crashes on the host machine.
+  - *Requirements*: Remote workers must expose capability APIs, health check endpoints, and task-specific concurrency status, allowing the coordinator to route OCR/detection tasks safely without resource exhaustion.
+- [x] **Parallelize processing** — Currently sequential because OCR is done locally sequentially, this is a massive bottleneck. (Tests pending)
+  - [x] When using cloud OCR (VLM) we can parallelize the tasks as TL and QA are already done using cloud providers, actually this can't be done as we still need to run PP-OCR-v6 det and YOLO bubble detection these are currently not being served by any cloud provider
+  - [x] Add an environment variable which controls the degree of parallelism, default to 1 (i.e. No parallelism) but can be configured to support it
+  - [x] Probably implemented incorrectly `CLOUD_CONCURRENCY=2` doesn't seem to be sending 2 requests to openrouter in parallel, need to fix
+  - [x] If implemented correctly we can parallelize the text and bubble deteation across workers and send parallel jobs to the cloud
+  - [x] These will still need to respect the rate limits, and not keep sending jobs in parallel even when we are getting 429's
