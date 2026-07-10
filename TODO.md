@@ -10,17 +10,17 @@
 - [ ] Export chapter as zip, currently just exports the original images as a zip the translations are not rendered in
 - [ ] Post processing edits after the translations also don't get synced in the rendered output
 
-### Improve the YOLO modles and related features
+### Improve the YOLO models and related features
 
-- [ ] Currently we are on a yolo11n model but we can defiantly switch to a newer and more powerful model that will get almost all of the dialog
+- [ ] Currently we are on a yolo11n model from `juithealien/manga109-segmentation-bubble` but it seems to be abandoned and only detects text bubbles but
+  - [ ] Y
 - [ ] Need to add a way to filter the sfx out from the dialog bubbles or even the free text on the page
-- [ ] Look into blurring the free standing text and just placing the translated version over it.
 
 ### Front end issues
 
 - [ ] We keep polling `/tlhub/api/jobs/status` for jobs, why can't we use SSE for this as well?
 - [ ] It seems like the thumbnails are not actually thumbnails but rather the full file as seen in the url `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file`
-- [ ] Also this GET `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file` seemd to work even without auth
+- [ ] Also this GET `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file` seemed to work even without auth
 - [ ] The dialogs boxes are not fitting in the viewport
 
 ---
@@ -64,9 +64,6 @@
 ---
 
 ## ✅ Completed (Archive)
-
-<details>
-<summary>Click to expand completed items</summary>
 
 ### Bugs (Fixed)
 
@@ -160,9 +157,6 @@
   - [x] We should be able to pause and resume the jobs, this will go nicely with the persistaence of jobs.
   - [x] Pausing and resuming works
   - [x] Need to test if clearing the queue does stop all the job including the currently running ones
-
-### Reliability & Crash Recovery (Done)
-
 - [x] **Docker secrets file support** — Add `_FILE` suffix convention support in backend and worker config loaders (e.g., `DB_PASSWORD_FILE=/run/secrets/db_password`). Read secrets from files mounted by Docker Swarm/Compose.
   - [x] Support reading secrets for Database Configuration
   - [x] Support reading secrets for MinIO Configuration
@@ -170,7 +164,7 @@
   - [x] Support reading secrets for API Keys Configuration
   - [x] Maybe we can mount a json or something as a secret and read all of it at once instead or reading one file at a time?
 - [x] **Add a Hybrid QA mode where both LLM and VLM are used**
-  - [x] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set ot be visible and generates the render
+  - [x] The LLM checks the translation and gives feedback on fixes, check if the correct layers are set to be visible and generates the render
   - [x] The VLM does the final pass on the rendered image
 
 ### Model Picker Improvements (Done)
@@ -202,12 +196,10 @@ QA_VLM_MODEL_LIST=google/gemini-3.1-flash-lite,google/gemma-4-26b-a4b-it:free,go
 - [x] As seen in the above code block despite having a picker we only really have one provider, OpenRouter.
 - [x] The same model `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` on open-route, if to be used on nvidia nmi needs to be formatted as `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` so we need a way to map these different formats.
 - [x] Also there should be a section for fallback models in the config which will be used when the primary model fails, the fallback will work in the same way as the primary just with a fallback priority.
-- [x] Also providers should only become availbale if they are usable like currently the list shows that we have access to open-ai, anthoropic, ollama, lm-studio
+- [x] Also providers should only become available if they are usable like currently the list shows that we have access to open-ai, anthoropic, ollama, lm-studio
   - [x] But we don't actually have keys configure for open-ai, anthoropic
   - [x] And since LOCAL_LLM_PROVIDER is ollama, lm-studio should also be hidden
   - [x] Say if DISABLE_LOCAL_LLM=true, thenollama and lm-studio should not be visible as options
   - [x] If DISABLE_LOCAL_OCR=true, then open-router and nvidia should be the only ones visible as options for OCR.
-  - [x] Also if say in the front-end we slect OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
+  - [x] Also if say in the front-end we select OCR Provider as local then OCR VLM Model should be disabled as we actually only have local models for that and the UI should be aware of it.
 - [x] Need to elimeninate this `NVIDIA_OCR_API_KEY` redundant key as well since we already have `NVIDIA_API_KEY`
-
-</details>

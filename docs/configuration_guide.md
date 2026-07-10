@@ -36,6 +36,7 @@ graph TD
 ## ⚙️ Environment Variables Reference
 
 ### 1. API Keys
+
 * `OPENROUTER_API_KEY`: Key for OpenRouter.
 * `GEMINI_API_KEY`: Direct API key for Google Gemini.
 * `NVIDIA_API_KEY`: Key for Nvidia NIM.
@@ -46,6 +47,7 @@ graph TD
 ---
 
 ### 2. OCR Configuration
+
 Controls speech bubble text extraction.
 
 | Variable | Description | Recommended Default |
@@ -58,6 +60,7 @@ Controls speech bubble text extraction.
 ---
 
 ### 3. Translation (TL) Configuration
+
 Controls translation of extracted Japanese texts to target languages.
 
 | Variable | Description | Recommended Default |
@@ -69,6 +72,7 @@ Controls translation of extracted Japanese texts to target languages.
 ---
 
 ### 4. Quality Assurance (QA) Configuration
+
 Performs safety/formatting checks on the translations before final rendering.
 
 | Variable | Description | Recommended Default |
@@ -85,6 +89,7 @@ Performs safety/formatting checks on the translations before final rendering.
 ---
 
 ### 5. Local Fallbacks
+
 These are fallback runtimes used when cloud servers time out or rate-limit (429), or when running in 100% local mode.
 
 * `DISABLE_LOCAL_LLM`: Set to `true` to completely disable local fallbacks (saves local CPU/GPU memory).
@@ -98,6 +103,7 @@ These are fallback runtimes used when cloud servers time out or rate-limit (429)
 ## 📋 Common Configurations
 
 ### Option A: 100% Cloud (Low Local Resources)
+
 Ideal if you have a slow local computer but a valid OpenRouter API key. Fast and highly accurate.
 
 ```ini
@@ -120,6 +126,7 @@ DISABLE_LOCAL_OCR=true
 ---
 
 ### Option B: Hybrid (Recommended Balance)
+
 Uses cloud services for high-quality translation and vision-QA, but falls back to local execution to save API costs or bypass rate limits.
 
 ```ini
@@ -148,6 +155,7 @@ DISABLE_LOCAL_OCR=false
 ---
 
 ### Option C: 100% Offline / Local-Only
+
 No internet required. Everything runs locally on your machine via Ollama and PaddleOCR.
 
 ```ini
