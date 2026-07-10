@@ -202,7 +202,7 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/panel")
   public ResponseEntity<?> panelCallback(@RequestBody PanelCallbackDto dto) {
     log.info("Received panel callback for image: {}", dto.getImageId());
-    Map<String, String> ctx = resolveNotificationContext(dto.getImageId());
+    resolveNotificationContext(dto.getImageId());
     try {
       jobCoordinatorService.handlePanelCallback(dto);
       return ResponseEntity.ok().build();
@@ -215,7 +215,7 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/ocr")
   public ResponseEntity<?> ocrCallback(@RequestBody OcrCallbackDto dto) {
     log.info("Received OCR callback for image: {}", dto.getImageId());
-    Map<String, String> ctx = resolveNotificationContext(dto.getImageId());
+    resolveNotificationContext(dto.getImageId());
     try {
       jobCoordinatorService.handleOcrCallback(dto);
       return ResponseEntity.ok().build();
@@ -230,7 +230,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received layout callback for image: {}", imageId);
-    Map<String, String> ctx = resolveNotificationContext(imageId);
+    resolveNotificationContext(imageId);
     try {
       List<?> rawRegionTypes = (List<?>) payload.get("regionTypes");
       List<Map<String, String>> regionTypes = new ArrayList<>();
@@ -277,7 +277,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received translation callback for image: {}", imageId);
-    Map<String, String> ctx = resolveNotificationContext(imageId);
+    resolveNotificationContext(imageId);
     try {
       List<?> rawTranslations = (List<?>) payload.get("translations");
       List<Map<String, Object>> translations = new ArrayList<>();
@@ -312,7 +312,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received QA Re-OCR callback for image: {}", imageId);
-    Map<String, String> ctx = resolveNotificationContext(imageId);
+    resolveNotificationContext(imageId);
     try {
       List<?> rawResults = (List<?>) payload.get("results");
       List<Map<String, Object>> results = new ArrayList<>();
@@ -394,7 +394,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString(payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received render callback for image: {}", imageId);
-    Map<String, String> ctx = resolveNotificationContext(imageId);
+    resolveNotificationContext(imageId);
     try {
       jobCoordinatorService.handleRenderCallback(imageId);
       return ResponseEntity.ok().build();
