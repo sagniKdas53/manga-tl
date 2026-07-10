@@ -51,14 +51,16 @@ public class WorkerDispatcherService {
 
   private final List<String> QUEUES =
       List.of(
-          "queue:panel-detection",
-          "queue:ocr",
-          "queue:layout",
-          "queue:translation",
-          "queue:render",
-          "queue:qa",
+          "queue:region-redo-tl", // High Priority (interactive re-translations)
           "queue:qa-re-ocr",
-          "queue:region-redo");
+          "queue:qa",
+          "queue:render",
+          "queue:translation",
+          "queue:layout",
+          "queue:region-redo-ocr",       // Lower Priority (interactive re-OCR)
+          "queue:ocr",
+          "queue:panel-detection"
+      );
 
   @Scheduled(fixedDelay = 2000)
   public void dispatchJobs() {

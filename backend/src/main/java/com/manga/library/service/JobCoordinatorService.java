@@ -276,7 +276,8 @@ public class JobCoordinatorService {
             "queue:render",
             "queue:qa",
             "queue:qa-re-ocr",
-            "queue:region-redo"));
+            "queue:region-redo-ocr",
+            "queue:region-redo-tl"));
 
     List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
     for (Job job : pendingJobs) {
@@ -777,8 +778,10 @@ public class JobCoordinatorService {
 
     Image image = region.getImage();
 
+    String jobType = "ocr".equalsIgnoreCase(redoType) ? "region-redo-ocr" : "region-redo-tl";
+
     enqueueJob(
-        "region-redo",
+        jobType,
         image.getId(),
         "high",
         job -> {
