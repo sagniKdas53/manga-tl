@@ -1,6 +1,6 @@
 # TODO — Manga Library
 
-> Last reviewed: 2026-07-06 | All completed items archived below.
+> Last reviewed: 2026-07-10 | All completed items archived below.
 
 ## 🟡 High Priority Features
 
@@ -31,9 +31,19 @@
 ### Front end issues
 
 - [ ] We keep polling `/tlhub/api/jobs/status` for jobs, why can't we use SSE for this as well?
+  - Frontend already has `useSSE.ts` hook, just needs a migration from polling
 - [ ] It seems like the thumbnails are not actually thumbnails but rather the full file as seen in the url `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file`
+  - [ ] Thumbnails are generated using basic bilinear interpolation + JPEG output (`PageService.java:108-141`). Switch to **Bicubic/Lanczos** interpolation and **WebP** format (~80% quality) for sharper results at smaller file sizes.
 - [ ] Also this GET `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file` seemed to work even without auth
 - [ ] The dialogs boxes are not fitting in the viewport
+
+### Backend & API Resilience
+
+- [x] **Disable Open-In-View (OSIV)** — `spring.jpa.open-in-view` defaults to `true` in the backend (`application.yml`), which keeps DB connections open for the entire HTTP request lifecycle. This can exhaust the HikariCP pool under concurrent load.
+  - Fix: Added `spring.jpa.open-in-view: false` to `backend/src/main/resources/application.yml`. Verify no lazy-loading issues exist in the service layer before deploying.
+- [ ] **Cross-provider failover** — Currently within a provider (e.g., OpenRouter), the code retries the primary model then iterates through the model list (`llm_model_list`). But if the **provider itself** is down (e.g., OpenRouter returns 400s for all models), the job fails.
+  - [ ] When all models within the current provider are exhausted, failover to another provider (e.g., OpenRouter → Nvidia/Gemini) before marking the job as failed
+  - [ ] Requires a `provider` fallback list/order in config (not just model list within a single provider)
 
 ---
 
@@ -41,7 +51,14 @@
 
 ### ML Processing Optimization
 
-- [ ]
+- [ ] **Enforce strict HTTP timeouts for cloud LLM calls** — Current approach uses ad-hoc hardcoded timeouts (60s, 90s, 120s) in `translation.py` without separating connect vs read timeouts. A frozen connection can paralyze the worker slot.
+  - Set `connect_timeout=10s` and `read_timeout=45s` at the HTTP client level for all cloud provider calls
+  - If a provider exceeds the read timeout, throw a `TimeoutException` to trigger retry/failover and free the worker slot
+
+### JVM & Infrastructure Hygiene
+
+- [x] **Clean up JVM `sun.misc.Unsafe` warnings** — Netty and other high-performance libs trigger these warnings at startup. While harmless, they clutter container logs.
+  - Added `--enable-native-access=ALL-UNNAMED` to the Dockerfile `ENTRYPOINT`. This suppresses the warnings without affecting functionality.
 
 ---
 
