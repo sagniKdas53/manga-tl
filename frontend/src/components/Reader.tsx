@@ -203,7 +203,6 @@ export const Reader: React.FC<ReaderProps> = ({
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedItem, setSelectedItem] = useState<SelectedItemType>(null);
-  const [activeItem, setActiveItem] = useState<RenderItem | null>(null);
   const [fitMode, setFitMode] = useState<"page" | "width" | "height">(() => {
     const saved = localStorage.getItem("manga_fit_mode");
     return saved === "page" || saved === "width" || saved === "height"
@@ -279,7 +278,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const hasMoved = useRef(false);
 
   const { notifications } = useNotifications();
-  const { showToast, showSuccess, showError } = useToast();
+  const { showToast, showError } = useToast();
 
   const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
   const autoSaveTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
@@ -453,22 +452,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Popover States
   const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const [isEditingRegion, setIsEditingRegion] = useState(false);
-  const [editText, setEditText] = useState("");
   const [isRedoing, setIsRedoing] = useState(false);
-  const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Helper to get combined text (original or translated) for a grouped item
-  const getCombinedText = useCallback(
-    (item: RenderItem, showTrans: boolean) => {
-      if (!item || !item.regions) return "";
-      return item.regions
-        .map((r: OcrRegion) => (showTrans ? r.translatedText || "" : r.text))
-        .join("\n");
-    },
-    [],
-  );
 
   const visibleOcrRegionIds = React.useMemo(() => {
     const ids = new Set<string>();
@@ -676,8 +660,6 @@ export const Reader: React.FC<ReaderProps> = ({
       setPan({ x: 0, y: 0 });
       setSelectedItem(null);
       setActiveRegion(null);
-      setActiveItem(null);
-      setPopoverOpen(false);
       setUndoStack([]);
       setRedoStack([]);
       setInteractionMode("none");
@@ -2405,8 +2387,6 @@ export const Reader: React.FC<ReaderProps> = ({
       } else if (e.key === "Escape") {
         setSelectedItem(null);
         setActiveRegion(null);
-        setActiveItem(null);
-        setPopoverOpen(false);
       }
     };
 
@@ -2562,156 +2542,12 @@ export const Reader: React.FC<ReaderProps> = ({
   // --- HOVER POPUP HANDLERS ---
   const handleMouseEnterItem = useCallback(
     (item: RenderItem) => {
-      if (hideTimeout.current) clearTimeout(hideTimeout.current);
-      setActiveItem(item);
       setActiveRegion(item.regions[0] || null);
-      setPopoverOpen(true);
-      setEditText(getCombinedText(item, showTranslations));
     },
-    [showTranslations, getCombinedText],
+    [],
   );
 
-  const handleMouseLeaveItem = useCallback(() => {
-    hideTimeout.current = setTimeout(() => {
-      setPopoverOpen(false);
-      setIsEditingRegion(false);
-    }, 300);
-  }, []);
-
-  const handleMouseEnterPopover = useCallback(() => {
-    if (hideTimeout.current) clearTimeout(hideTimeout.current);
-  }, []);
-
-  const handleMouseLeavePopover = useCallback(() => {
-    setPopoverOpen(false);
-    setIsEditingRegion(false);
-  }, []);
-
   // --- BUBBLE/CONVERSATION UPDATES ---
-  const handleToggleApprove = async (item: RenderItem) => {
-    const AegeanApproved = !item.approved;
-
-    // Optimistically update locally
-    setOcrRegions((prev) =>
-      prev.map((r) => {
-        if (item.regions.some((reg: OcrRegion) => reg.id === r.id)) {
-          return { ...r, approved: AegeanApproved };
-        }
-        return r;
-      }),
-    );
-
-    if (activeItem && activeItem.id === item.id) {
-      setActiveItem((prev: RenderItem | null) =>
-        prev ? { ...prev, approved: AegeanApproved } : null,
-      );
-    }
-
-    const promises = item.regions.map(async (region: OcrRegion) => {
-      try {
-        const res = await safeFetch(`/api/ocr-regions/${region.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
-          },
-          body: JSON.stringify({ approved: AegeanApproved }),
-        });
-        if (!res.ok) {
-          throw new Error("Failed to update approval on server");
-        }
-      } catch (err) {
-        console.error("Error updating approval status:", err);
-      }
-    });
-
-    await Promise.all(promises);
-
-    // Refresh conversations state from backend
-    if (selectedPage) {
-      safeFetch(`/api/images/${selectedPage.imageId}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setConversations(data.conversations || []);
-        })
-        .catch((err) => console.error(err));
-    }
-  };
-
-  const handleSaveEdit = async () => {
-    if (!activeItem) return;
-
-    const lines = editText.split("\n");
-    const promises = activeItem.regions.map(
-      async (region: OcrRegion, idx: number) => {
-        const newText =
-          lines.at(idx) !== undefined ? (lines.at(idx) ?? "") : "";
-
-        setOcrRegions((prev) =>
-          prev.map((r) => {
-            if (r.id === region.id) {
-              return {
-                ...r,
-                ...(showTranslations
-                  ? { translatedText: newText }
-                  : { text: newText }),
-              };
-            }
-            return r;
-          }),
-        );
-
-        const body: { text?: string; translatedText?: string } = {};
-        if (showTranslations) {
-          body.translatedText = newText;
-        } else {
-          body.text = newText;
-        }
-
-        try {
-          const res = await safeFetch(`/api/ocr-regions/${region.id}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${user.token}`,
-            },
-            body: JSON.stringify(body),
-          });
-          if (!res.ok) {
-            throw new Error("Failed to save edit on server");
-          }
-        } catch (err) {
-          console.error("Error saving region edit:", err);
-          throw err;
-        }
-      },
-    );
-
-    setIsEditingRegion(false);
-    const results = await Promise.allSettled(promises);
-    const hasErrors = results.some((r) => r.status === "rejected");
-    if (hasErrors) {
-      showError("Error saving region edit.", {
-        action: { label: "Retry", onClick: () => handleSaveEdit() },
-      });
-    } else {
-      showSuccess("Saved text changes!");
-    }
-
-    // Refresh conversations state from backend
-    if (selectedPage) {
-      safeFetch(`/api/images/${selectedPage.imageId}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setConversations(data.conversations || []);
-        })
-        .catch((err) => console.error(err));
-    }
-  };
 
   const handleRedoRegion = async (
     r: OcrRegion,
@@ -2772,20 +2608,6 @@ export const Reader: React.FC<ReaderProps> = ({
                 setConversations(data.conversations || []);
                 if (activeRegion && activeRegion.id === r.id) {
                   setActiveRegion(freshRegion);
-                  setActiveItem((prev: RenderItem | null) => {
-                    if (!prev) return null;
-                    return {
-                      ...prev,
-                      regions: prev.regions.map((reg: OcrRegion) =>
-                        reg.id === r.id ? freshRegion : reg,
-                      ),
-                    };
-                  });
-                  setEditText(
-                    showTranslations
-                      ? freshRegion.translatedText || ""
-                      : freshRegion.text,
-                  );
                 }
                 setIsRedoing(false);
               }
@@ -3314,13 +3136,9 @@ export const Reader: React.FC<ReaderProps> = ({
                         key={item.id}
                         onClick={() => {
                           setSelectedItem(item);
-                          setActiveItem(item);
                           setActiveRegion(item.regions[0] || null);
-                          setPopoverOpen(true);
-                          setEditText(getCombinedText(item, showTranslations));
                         }}
                         onMouseEnter={() => handleMouseEnterItem(item)}
-                        onMouseLeave={handleMouseLeaveItem}
                         style={{
                           cursor: "pointer",
                           pointerEvents:
