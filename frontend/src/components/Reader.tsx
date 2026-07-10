@@ -3834,392 +3834,6 @@ export const Reader: React.FC<ReaderProps> = ({
                 })}
               </svg>
 
-              {/* Popover overlay tooltip */}
-              {popoverOpen &&
-                activeItem &&
-                (() => {
-                  const showBelow = activeItem.bboxY < 150;
-                  const popoverWidth = 240;
-                  const halfWidth = popoverWidth / 2;
-                  const clampedX =
-                    imageDims.w > popoverWidth
-                      ? Math.max(
-                          halfWidth,
-                          Math.min(
-                            imageDims.w - halfWidth,
-                            activeItem.bboxX + activeItem.bboxW / 2,
-                          ),
-                        )
-                      : imageDims.w / 2;
-                  return (
-                    <div
-                      className="bubble-popover glass"
-                      onMouseEnter={handleMouseEnterPopover}
-                      onMouseLeave={handleMouseLeavePopover}
-                      style={{
-                        position: "absolute",
-                        left: `${(clampedX / imageDims.w) * 100}%`,
-                        top: showBelow
-                          ? `${((activeItem.bboxY + activeItem.bboxH) / imageDims.h) * 100}%`
-                          : `${(activeItem.bboxY / imageDims.h) * 100}%`,
-                        transform: `${showBelow ? "translate(-50%, 0%)" : "translate(-50%, -100%)"} scale(${1 / zoom})`,
-                        transformOrigin: showBelow
-                          ? "top center"
-                          : "bottom center",
-                        marginTop: showBelow ? "12px" : "-12px",
-                        zIndex: 100,
-                        padding: "12px",
-                        width: "240px",
-                        borderRadius: "8px",
-                        boxShadow:
-                          "0 10px 15px -3px rgba(0,0,0,0.15), 0 4px 6px -2px rgba(0,0,0,0.05)",
-                        border: "1px solid var(--border-color)",
-                        backgroundColor: "var(--bg-surface)",
-                        color: "var(--text-main)",
-                        fontSize: "13px",
-                        pointerEvents: "auto",
-                      }}
-                    >
-                      {isRedoing ? (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: "8px",
-                            padding: "12px 0",
-                          }}
-                        >
-                          <div
-                            className="spinner"
-                            style={{
-                              width: "24px",
-                              height: "24px",
-                              margin: "0 auto",
-                            }}
-                          ></div>
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              color: "var(--text-muted)",
-                            }}
-                          >
-                            Running Redo Job...
-                          </span>
-                        </div>
-                      ) : isEditingRegion ? (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "8px",
-                          }}
-                        >
-                          <textarea
-                            style={{
-                              width: "100%",
-                              minHeight: "80px",
-                              backgroundColor:
-                                "var(--bg-input, rgba(0,0,0,0.05))",
-                              border: "1px solid var(--primary)",
-                              borderRadius: "4px",
-                              color: "var(--text-main)",
-                              padding: "6px",
-                              fontSize: "13px",
-                              resize: "vertical",
-                              outline: "none",
-                              fontFamily: "inherit",
-                            }}
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                            autoFocus
-                          />
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "6px",
-                              justifyContent: "flex-end",
-                            }}
-                          >
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: "4px 8px", fontSize: "11px" }}
-                              onClick={() => setIsEditingRegion(false)}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              className="btn btn-primary"
-                              style={{ padding: "4px 8px", fontSize: "11px" }}
-                              onClick={handleSaveEdit}
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "8px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              wordBreak: "break-word",
-                              lineHeight: "1.4",
-                              maxHeight: "120px",
-                              overflowY: "auto",
-                              whiteSpace: "pre-wrap",
-                            }}
-                          >
-                            {showTranslations
-                              ? getCombinedText(activeItem, true) ||
-                                "No translation yet."
-                              : getCombinedText(activeItem, false)}
-                          </div>
-
-                          {activeItem.regions[0]?.qaStatus && (
-                            <div
-                              style={{
-                                marginTop: "4px",
-                                padding: "8px",
-                                borderRadius: "4px",
-                                border: "1px solid var(--border-color)",
-                                backgroundColor: "rgba(255, 255, 255, 0.03)",
-                                fontSize: "11px",
-                                lineHeight: "1.3",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                  marginBottom: "4px",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    fontWeight: "600",
-                                    color: "var(--text-dim)",
-                                  }}
-                                >
-                                  VLM QA Status
-                                </span>
-                                <span
-                                  style={{
-                                    textTransform: "uppercase",
-                                    fontWeight: "700",
-                                    padding: "2px 6px",
-                                    borderRadius: "3px",
-                                    fontSize: "9px",
-                                    color: "#fff",
-                                    backgroundColor:
-                                      activeItem.regions[0].qaStatus ===
-                                      "passed"
-                                        ? "rgba(46, 204, 113, 0.85)" // Green for passed
-                                        : activeItem.regions[0].qaStatus ===
-                                            "failed"
-                                          ? "rgba(231, 76, 60, 0.85)" // Red for failed
-                                          : "rgba(230, 126, 34, 0.85)", // Orange/yellow for direct_fix
-                                  }}
-                                >
-                                  {activeItem.regions[0].qaStatus.replace(
-                                    "_",
-                                    " ",
-                                  )}
-                                </span>
-                              </div>
-                              {activeItem.regions[0].qaScore !== undefined &&
-                                activeItem.regions[0].qaScore !== null && (
-                                  <div
-                                    style={{
-                                      color: "var(--text-muted)",
-                                      marginBottom: "4px",
-                                      fontSize: "10px",
-                                    }}
-                                  >
-                                    Confidence Score:{" "}
-                                    {(
-                                      activeItem.regions[0].qaScore * 100
-                                    ).toFixed(0)}
-                                    %
-                                  </div>
-                                )}
-                              {activeItem.regions[0].qaFeedback && (
-                                <div
-                                  style={{
-                                    color: "var(--text-main)",
-                                    fontStyle: "italic",
-                                    wordBreak: "break-word",
-                                    marginTop: "4px",
-                                  }}
-                                >
-                                  "{activeItem.regions[0].qaFeedback}"
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          <div
-                            style={{
-                              borderTop: "1px solid var(--border-color)",
-                              paddingTop: "8px",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: "11px",
-                                color: "var(--text-dim)",
-                              }}
-                            >
-                              {showTranslations ? "Translated" : "Original"} (
-                              {activeItem.regions[0]?.detectedLanguage})
-                            </span>
-                            <div style={{ display: "flex", gap: "10px" }}>
-                              <button
-                                onClick={() => handleToggleApprove(activeItem)}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  color: activeItem.approved
-                                    ? "var(--primary)"
-                                    : "var(--text-dim)",
-                                  padding: "2px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                }}
-                                title={
-                                  activeItem.approved ? "Approved" : "Approve"
-                                }
-                              >
-                                <svg
-                                  width="15"
-                                  height="15"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="3"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <polyline points="20 6 9 17 4 12"></polyline>
-                                </svg>
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setIsEditingRegion(true);
-                                  setEditText(
-                                    getCombinedText(
-                                      activeItem,
-                                      showTranslations,
-                                    ),
-                                  );
-                                }}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  color: "var(--text-dim)",
-                                  padding: "2px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                }}
-                                title="Edit text"
-                              >
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                </svg>
-                              </button>
-
-                              {activeRegion && (
-                                <>
-                                  <button
-                                    onClick={() =>
-                                      handleRedoRegion(activeRegion, "ocr")
-                                    }
-                                    style={{
-                                      background: "none",
-                                      border: "none",
-                                      cursor: "pointer",
-                                      color: "var(--text-dim)",
-                                      padding: "2px",
-                                      display: "flex",
-                                      alignItems: "center",
-                                    }}
-                                    title="Re-run OCR"
-                                  >
-                                    <svg
-                                      width="14"
-                                      height="14"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2.5"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    >
-                                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
-                                    </svg>
-                                  </button>
-
-                                  <button
-                                    onClick={() =>
-                                      handleRedoRegion(
-                                        activeRegion,
-                                        "translation",
-                                      )
-                                    }
-                                    style={{
-                                      background: "none",
-                                      border: "none",
-                                      cursor: "pointer",
-                                      color: "var(--text-dim)",
-                                      padding: "2px",
-                                      display: "flex",
-                                      alignItems: "center",
-                                    }}
-                                    title="Re-translate text"
-                                  >
-                                    <svg
-                                      width="14"
-                                      height="14"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    >
-                                      <path d="M2 5h12M7 2v3M7 5c0 4.4-3.6 8-8 8M5 9c-.9 2.3-2.9 4-5 4M14 18h8M18 11l4 10M18 11l-4 10" />
-                                    </svg>
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
             </div>
           </div>
         </div>
@@ -4754,6 +4368,74 @@ export const Reader: React.FC<ReaderProps> = ({
                     }
                   />
                 </div>
+
+                {/* Manual Region Redo Section */}
+                {selectedItem.regionId && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "8px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        padding: "8px 6px",
+                        height: "36px",
+                      }}
+                      disabled={isRedoing}
+                      onClick={() => {
+                        const actualRegion = ocrRegions.find(r => r.id === selectedItem.regionId);
+                        if (actualRegion) handleRedoRegion(actualRegion, "ocr");
+                      }}
+                    >
+                      {isRedoing ? (
+                        <div className="spinner" style={{ width: "12px", height: "12px" }}></div>
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                        </svg>
+                      )}
+                      Redo OCR
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        padding: "8px 6px",
+                        height: "36px",
+                      }}
+                      disabled={isRedoing}
+                      onClick={() => {
+                        const actualRegion = ocrRegions.find(r => r.id === selectedItem.regionId);
+                        if (actualRegion) handleRedoRegion(actualRegion, "translation");
+                      }}
+                    >
+                      {isRedoing ? (
+                        <div className="spinner" style={{ width: "12px", height: "12px" }}></div>
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                        </svg>
+                      )}
+                      Redo TL
+                    </button>
+                  </div>
+                )}
 
                 {/* Positioning Coordinates Row */}
                 <div
