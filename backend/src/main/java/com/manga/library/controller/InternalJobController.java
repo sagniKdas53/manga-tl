@@ -350,7 +350,7 @@ public class InternalJobController {
               region -> {
                 Objects.requireNonNull(region, "region cannot be null");
                 UUID imageId = region.getImage().getId();
-                Map<String, String> ctx = resolveNotificationContext(imageId);
+                resolveNotificationContext(imageId);
                 if (payload.containsKey("text")) {
                   region.setText((String) payload.get("text"));
                 }
