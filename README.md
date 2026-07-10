@@ -54,7 +54,6 @@ The translation pipeline flows sequentially from panel detection to final qualit
 
 ---
 
-
 ## 🚀 Key Features
 
 ### 1. Spatial OCR Region Merging
