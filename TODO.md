@@ -15,7 +15,7 @@
 - [ ] Currently we are on a yolo11n model from `juithealien/manga109-segmentation-bubble` but it seems to be abandoned and only detects text bubbles
   - [ ] Checkout the [Model Upgrade Plan](docs/model_upgrade_plan.md) it documents which model can serve as a successor
 - [ ] Currently we are using the prompts in [Sample Prompts](docs/models_and_prompts.md) and processing as documented
-  - [ ] However, the accuracy is not that great, need to improve the prompts and see if we can get better results.
+  - [ ] However we should improve the prompts and see if we can get better results.
   - [ ] I also think we can improve the prompts for the VLM when doing OCR
     - [ ] so that they classify the text and reject sfx and gibberish and text that doesn't need to be processed at all like author name/handle, sfx and even text that's already in english in that phase
     - [ ] If we are doing Re-OCR or Redo-Region-TL with a VLM we can send in the QA feedback to help the model out, like if the reason is a manual trigger from user, then user didn't like it so do a clean redo and if the QA model didn't like it can tell it what it didn't like.

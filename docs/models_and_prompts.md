@@ -348,6 +348,30 @@ All translation responses go through `is_valid_translation()` which applies:
 
 **Fix applied in** `worker/services/ocr.py:57-63`. The prompt now requests JSON output, a strict `json_schema` is enforced via `response_format` for OpenAI/OpenRouter, and responses are JSON-parsed with graceful fallback to raw text. Confidence is now propagated from the model instead of hardcoded to `1.0`.
 
+### 2. ✅ Add refusal/heuristic validation to OCR responses — **DONE**
+
+**Fix applied in** `worker/services/ocr.py:11-30` and callers.
+
+`OCR_REFUSAL_PATTERNS` list detects common model refusal phrases (`"i cannot"`, `"as an ai"`, `"unable to"`, etc.). The `is_valid_ocr_text()` function checks all OCR results before acceptance:
+
+- Applied in `perform_redo_ocr()` for both cloud VLM and PaddleOCR paths
+- Applied in the VLM batch OCR processing in `process_ocr()` in `worker/handlers/ocr.py`
+- PaddleOCR results also filter empty-text lines before joining
+
+### 3. ✅ Add confidence field to batch VLM OCR schema — **DONE**
+
+**Fix applied in** `worker/handlers/ocr.py:672-693`. The batch VLM OCR schema now includes an optional `confidence` field (0.0–1.0). Both cloud and local VLM paths extract it from the response. The hardcoded `0.99` for all VLM OCR regions has been replaced with the model-reported confidence (falling back to `0.99` if the model doesn't provide it).
+
+### 4. ✅ Normalize prompt closing style — **DONE**
+
+**Fix applied in** `worker/services/translation.py:1323`. The batch translation user prompt now matches the system prompt's closing instruction: `"Return ONLY valid JSON format conforming to the requested schema. No conversational prefix, suffix, or markdown formatting."` instead of just `"Return ONLY valid JSON."`.
+
+### 5. Add retry with temperature=0 for JSON parse failures
+
+**Not yet implemented.** When JSON parsing fails (e.g., model returns markdown-wrapped JSON), a simple retry with `temperature=0` would likely succeed. This applies to all structured output paths (OCR batch, translation, QA). Implementation would require storing the prompt + schema and re-calling with adjusted parameters.
+
+**Trade-off:** Increases API call volume and latency. Recommendation: implement only if parse failures are observed in production.
+
 ### 2. Stricter response validation for OCR paths
 
 **Current:** The cloud OCR response is trusted at face value — `if text and len(text.strip()) > 0: return text.strip(), 1.0`. A model returning `"I cannot process this image"` would be treated as valid OCR text with confidence 1.0.
