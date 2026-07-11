@@ -49,10 +49,10 @@ public class JobController {
     return ResponseEntity.ok().build();
   }
 
-  @PostMapping("/clear")
+  @DeleteMapping("/clear")
   public ResponseEntity<?> clearQueue() {
     List<Job> jobsToClear =
-        jobRepository.findByStatusInOrderByCreatedAtAsc(List.of("PENDING", "PAUSED"));
+        jobRepository.findByStatusInOrderByCreatedAtAsc(List.of("PENDING", "PAUSED", "FAILED", "PROCESSING"));
     jobRepository.deleteAll(jobsToClear);
 
     // Clear Redis queues
