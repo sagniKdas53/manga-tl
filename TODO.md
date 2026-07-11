@@ -32,6 +32,14 @@
 
 - [ ] We keep polling `/tlhub/api/jobs/status` for jobs, why can't we use SSE for this as well?
   - Frontend already has `useSSE.ts` hook, just needs a migration from polling
+  - **Analysis Findings**:
+    - The HAR file shows the frontend makes very frequent polling requests to `/tlhub/api/jobs` and `/tlhub/api/jobs/status` (multiple times per second in bursts, e.g., 2026-07-11T01:06:19 to 01:06:38).
+    - As highlighted in `found-improvements.md`, this two-way polling is resource-intensive for the backend.
+    - **Recommendation**: This is a high-impact improvement. We should transition to a hybrid approach:
+      1. **Two-Way (REST API):** Frontend sends POST to start a job, receiving a `job_id`.
+      2. **One-Way (SSE):** Frontend uses its existing `useSSE.ts` hook to listen to an SSE stream (e.g., `/api/jobs/stream`).
+      3. **Backend Push:** As job state changes in the worker/database (PENDING -> PROCESSING -> COMPLETED), the backend automatically pushes these updates over the open SSE connection.
+    - This eliminates the need for the frontend to constantly ask "is job X done?", saving significant HTTP overhead and database query load.
 - [ ] It seems like the thumbnails are not actually thumbnails but rather the full file as seen in the url `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file`
   - [ ] Thumbnails are generated using basic bilinear interpolation + JPEG output (`PageService.java:108-141`). Switch to **Bicubic/Lanczos** interpolation and **WebP** format (~80% quality) for sharper results at smaller file sizes.
   - [ ] **Thumbnail generation blocks the upload request (synchronous on the request thread)** — `generateThumbnail` (`PageService.java:108`) runs inline *before* the HTTP response returns and before the async pipeline is triggered (`PageController.java:540` → `startPipeline` at `:562`). It is not a pipeline phase; it happens at upload/ingest time. Per upload it does, sequentially: `file.getBytes()` (full original into heap, `:480`) → `ImageIO.read` (decodes full-res into a `BufferedImage`, `:110`) → bilinear resize + `ImageIO.write(jpg)` (`:123-135`) → **two sequential MinIO round trips** (original `:535`, thumbnail `:543`).
@@ -46,20 +54,28 @@
   - [ ] Allows us to change username and password
   - [ ] not the email though
 - [ ] The dialogs boxes are not fitting in the viewport correctly
-  - [ ] so remove the `Cover Image URL (Optional)` from create and edit series also make sure we remove the setter for image from backend see [here](./remove-set-thumbnail-url.png) we can remove it as it we are going to be using proper system generated thumbs from now on
-  - [ ] The global settings modal has some strgae issues fix it see [here](./model-picker-looks-wierd.png)
+  - [ ] so remove the `Cover Image URL (Optional)` from create and edit series also make sure we remove the setter for image from backend see [here](./examples/remove-custom-thumbnails.jpg) we can remove it as it we are going to be using proper system generated thumbs from now on
+  - [ ] The global settings modal has some strgae issues fix it see [here](./examples/remove-custom-thumbnails.jpg)
   - [ ] See if the model overrides can be re-designed to be easier to use and display.
+- [ ] Re-design the job manger see [here](./examples/redesign-the-job-queue.jpg)
+- [ ] Chapter cards also need to be added [here](./examples/chapter-cards.jpg)
+  - [ ] I had one more brilliant idea add an edit/add description in the chapter and series so that we can add descriptions and links
+  - [ ] Also these can optionally be used to inject into the context of the model like we can give it the name of the series and where it is from also maybe any artist commentry (just like the boorus)
+  - [ ] Remember the stretch goals **Chapter & Series Summarization** we can add it manually for now, later maybe the models can update it or generate one if not provided?
 - [ ] Add a delete chapter button inside the chapter page
 - [ ] Make sure that the model override components shows the models at every view, like instead of `--Inherit--` show `tencent/hy3:free (inherited from series/chapter/global)`
-- [ ] 
+- [ ] We follow the `nHentai` colour scheme for dark mode for the light mode lets follow `pixiv` clour scheme.
 
 ### Backend & API Resilience
 
 - [x] **Disable Open-In-View (OSIV)** — `spring.jpa.open-in-view` defaults to `true` in the backend (`application.yml`), which keeps DB connections open for the entire HTTP request lifecycle. This can exhaust the HikariCP pool under concurrent load.
   - Fix: Added `spring.jpa.open-in-view: false` to `backend/src/main/resources/application.yml`. Verify no lazy-loading issues exist in the service layer before deploying.
 - [ ] **Cross-provider failover** — Currently within a provider (e.g., OpenRouter), the code retries the primary model then iterates through the model list (`llm_model_list`). But if the **provider itself** is down (e.g., OpenRouter returns 400s for all models), the job fails.
-  - [ ] When all models within the current provider are exhausted, failover to another provider (e.g., OpenRouter → Nvidia/Gemini) before marking the job as failed
+  - [ ] When all models within the current provider are exhausted, failover to another provider (e.g., OpenRouter → Nvidia/DeepSeek) before marking the job as failed
   - [ ] Requires a `provider` fallback list/order in config (not just model list within a single provider)
+- [ ] Add a direct deep seek api provider, actually we should create a provider factory class in both java and python so that we can use almost any provider given they are following any/both of the below mentioned APIs:
+  - Open AI API
+  - Anthropic API
 
 ---
 
@@ -93,7 +109,13 @@
 
 ## 🧪 Testing & QA
 
-Will think of more.
+- [ ] Test at higher concurrenry
+- [ ] Make the OCR lock dynamic and tes out if we can handle 2 OCR detection runs, or have the local OCR split into smaller parts in the pipeline like
+  - [ ] One slot for OCR detection
+  - [ ] One slot for OCR recognition
+  - [ ] This will help parallelize even more at higher concurrenry
+  - [ ] But we should add a way for the worker to let us know that it can't accept anymore jobs, because it's going OOM or out of CPU
+- [ ] On that note I remember immich reserves CPU and memory for the ml-container we should do it too.
 
 ---
 
