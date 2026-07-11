@@ -583,6 +583,7 @@ public class PageController {
   }
 
   @GetMapping("/chapters/{chapterId}/pages")
+  @Transactional(readOnly = true)
   public ResponseEntity<List<PageDto>> listPages(@PathVariable UUID chapterId) {
     List<PageDto> list =
         pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId).stream()
@@ -603,6 +604,7 @@ public class PageController {
   }
 
   @GetMapping("/pages/{pageId}")
+  @Transactional(readOnly = true)
   public ResponseEntity<PageDto> getPage(@PathVariable UUID pageId) {
     Objects.requireNonNull(pageId, "pageId cannot be null");
     return pageRepository
