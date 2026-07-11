@@ -34,8 +34,24 @@
   - Frontend already has `useSSE.ts` hook, just needs a migration from polling
 - [ ] It seems like the thumbnails are not actually thumbnails but rather the full file as seen in the url `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file`
   - [ ] Thumbnails are generated using basic bilinear interpolation + JPEG output (`PageService.java:108-141`). Switch to **Bicubic/Lanczos** interpolation and **WebP** format (~80% quality) for sharper results at smaller file sizes.
+  - [ ] **Thumbnail generation blocks the upload request (synchronous on the request thread)** — `generateThumbnail` (`PageService.java:108`) runs inline *before* the HTTP response returns and before the async pipeline is triggered (`PageController.java:540` → `startPipeline` at `:562`). It is not a pipeline phase; it happens at upload/ingest time. Per upload it does, sequentially: `file.getBytes()` (full original into heap, `:480`) → `ImageIO.read` (decodes full-res into a `BufferedImage`, `:110`) → bilinear resize + `ImageIO.write(jpg)` (`:123-135`) → **two sequential MinIO round trips** (original `:535`, thumbnail `:543`).
+    - [ ] **Latency**: each upload waits on full decode + resize + encode + 2 MinIO hops; hundreds of ms to seconds for hi-res pages.
+    - [ ] **Memory/OOM risk**: a decoded RGB `BufferedImage` costs ~`w×h×3-4` bytes (a 5000×7000 image ≈ 105-140 MB) on top of the original `byte[]`; many concurrent uploads (Tomcat default 200 threads) can exhaust the heap.
+    - [ ] **Thread-pool starvation**: the servlet thread is held for the whole decode + both MinIO uploads, reducing upload concurrency.
+    - [ ] **Batch imports are the worst case**: `importProject` and `importChapter` (`SeriesController.java:574`) call this inside a **per-file loop**, serially on one request thread (`PageController.java:204`, `:248`, `:449`, `:1030`, `:1090`) → very long-running request, timeout risk, one thread pinned for minutes.
+    - [ ] Already handled well: thumbnail failure is caught and upload proceeds without it (`:546-548`); duplicate-hash uploads short-circuit before thumbnailing (`PageController.java:494-528`).
+    - [ ] **Fix direction**: move thumbnailing off the request path (async pipeline step or `@Async` bounded pool, then update `Image.thumbnailStoragePath` + notify via existing SSE); avoid full-res decode via `ImageReader` subsampling or imgscalr/Thumbnailator; parallelize/queue batch imports. Combine with the Bicubic/Lanczos + WebP change above.
 - [ ] Also this GET `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file` seemed to work even without auth
-- [ ] The dialogs boxes are not fitting in the viewport
+- [ ] Add a modal for user management which can be opened by clicking on the username in the nav bar
+  - [ ] Allows us to change username and password
+  - [ ] not the email though
+- [ ] The dialogs boxes are not fitting in the viewport correctly
+  - [ ] so remove the `Cover Image URL (Optional)` from create and edit series also make sure we remove the setter for image from backend see [here](./remove-set-thumbnail-url.png) we can remove it as it we are going to be using proper system generated thumbs from now on
+  - [ ] The global settings modal has some strgae issues fix it see [here](./model-picker-looks-wierd.png)
+  - [ ] See if the model overrides can be re-designed to be easier to use and display.
+- [ ] Add a delete chapter button inside the chapter page
+- [ ] Make sure that the model override components shows the models at every view, like instead of `--Inherit--` show `tencent/hy3:free (inherited from series/chapter/global)`
+- [ ] 
 
 ### Backend & API Resilience
 

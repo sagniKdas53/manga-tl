@@ -275,7 +275,11 @@ public class PipelineFlowIntegrationTest {
 
     // 4. Upload Page (Image)
     MockMultipartFile mockFile =
-        new MockMultipartFile("file", "page01.png", "image/png", "mock-image-bytes".getBytes());
+        new MockMultipartFile(
+            "file",
+            "page01.png",
+            "image/png",
+            ("mock-image-bytes-" + UUID.randomUUID()).getBytes());
 
     MvcResult pageResult =
         mockMvc
@@ -302,7 +306,11 @@ public class PipelineFlowIntegrationTest {
 
     // 5. Test page reordering (Upload second page first to have >1 pages)
     MockMultipartFile mockFile2 =
-        new MockMultipartFile("file", "page02.png", "image/png", "mock-image-bytes-2".getBytes());
+        new MockMultipartFile(
+            "file",
+            "page02.png",
+            "image/png",
+            ("mock-image-bytes-2-" + UUID.randomUUID()).getBytes());
     MvcResult pageResult2 =
         mockMvc
             .perform(

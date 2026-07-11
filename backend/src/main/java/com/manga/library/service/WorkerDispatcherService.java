@@ -57,10 +57,9 @@ public class WorkerDispatcherService {
           "queue:render",
           "queue:translation",
           "queue:layout",
-          "queue:region-redo-ocr",       // Lower Priority (interactive re-OCR)
+          "queue:region-redo-ocr", // Lower Priority (interactive re-OCR)
           "queue:ocr",
-          "queue:panel-detection"
-      );
+          "queue:panel-detection");
 
   @Scheduled(fixedDelay = 2000)
   public void dispatchJobs() {

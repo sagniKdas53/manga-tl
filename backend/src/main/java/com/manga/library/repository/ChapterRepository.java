@@ -10,4 +10,7 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   List<Chapter> findBySeriesId(UUID seriesId);
 
   Optional<Chapter> findBySeriesIdAndChapterNumber(UUID seriesId, Double chapterNumber);
+
+  @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"series"})
+  Optional<Chapter> findWithSeriesById(UUID id);
 }
