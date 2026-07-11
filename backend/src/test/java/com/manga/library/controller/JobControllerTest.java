@@ -59,6 +59,19 @@ public class JobControllerTest {
   }
 
   @Test
+  public void testClearQueue() throws Exception {
+    Job job1 = Job.builder().id("job1").type("ocr").status("FAILED").build();
+    Job job2 = Job.builder().id("job2").type("ocr").status("PENDING").build();
+    when(jobRepository.findByStatusInOrderByCreatedAtAsc(any()))
+        .thenReturn(List.of(job1, job2));
+
+    mockMvc.perform(delete("/api/jobs/clear")).andExpect(status().isOk());
+
+    verify(jobRepository).deleteAll(List.of(job1, job2));
+    verify(redisTemplate).delete(anyList());
+  }
+
+  @Test
   public void testPauseQueue() throws Exception {
     ValueOperations<String, String> valOps = mock(ValueOperations.class);
     when(redisTemplate.opsForValue()).thenReturn(valOps);
