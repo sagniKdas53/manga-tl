@@ -4,11 +4,26 @@
 
 ## 🟡 High Priority Features
 
-### Import and Export
+### Current bugs and issues
 
-- [ ] Currently we can only import zips, add support for ePub,cbz import.
-- [ ] Export chapter as zip, currently just exports the original images as a zip the translations are not rendered in
-- [ ] Post processing edits after the translations also don't get synced in the rendered output
+- [ ] Export chapter as zip, currently is broken
+  - [ ] `GET https://ideapad.tail9ece4.ts.net/tlhub/api/series/chapters/82e81d7c-d5fd-4f8b-9bd7-e6441a7c338f/export?format=zip` returns 500 with
+    ```RXJyb3IgZHVyaW5nIGV4cG9ydDogY291bGQgbm90IGluaXRpYWxpemUgcHJveHkgW2NvbS5tYW5nYS5saWJyYXJ5Lm1vZGVsLkltYWdlIzQ4ZDQ5ODAxLWM0ZjgtNDAwYy04MzI3LWQ2MDY2MjZmYWRhZl0gLSBubyBTZXNzaW9u``` as response body.
+- [ ] In the exports the local OCR layers have model as `"model": "MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)",` when it should be `"model": "PaddleOCR(PP-OCRv6_medium_rec)",` also I wonder if we should include the rest of the models like (we have a list)
+- [ ] I have found another issue, say an image is added to one chapter, while being in another and then deleted from the **other** chapter because of the bug on line 19 it get's delete from **this** chapter too, and then if you try to add it again this upload fails because of the following error
+  - [ ] ```manga-backend    | Caused by: org.postgresql.util.PSQLException: ERROR: duplicate key value violates unique constraint "pages_chapter_id_page_number_key"
+manga-backend    |   Detail: Key (chapter_id, page_number)=(8bc70d04-8a67-4864-8527-c24196848074, 2) already exists.```
+  - [ ] Check out [logs](./logs/run-7.log) and look for `8bc70d04-8a67-4864-8527-c24196848074`
+- [ ] Related to this If an image belongs to to different chapters (with different over-rider it, will only follow the overrides of one chapter, testing shows that it's the one which it was in earlier but not 100% sure) also for same uuid
+  - [ ] Case in point in one chapter the ocr was supposed to be local and in another using cloud but when I re-ran the ocr for cloud one it ran the local ocr flow, ie using the over-rides of the original chapter it was added to, not the one I was running it for (with cloud overrides)
+- [ ] Lastly also an issue with `8bc70d04-8a67-4864-8527-c24196848074` this was added to two chapters but when I deleted it from one it got deleted from both
+- [ ] The auto update the reader to load new layers as they come in is broken, since we are going to overhaul the `SSE` anyway maybe use it get the layers when triggering a manual re-ocr, manual re-tl and manual region-redo-ocr and manual region-redo-tl
+  - [ ] These events are to be broadcasted anyway but if the reader is open we can use them to check for new layers if the page id matches and update the layers, instead of polling and using some react use call back mumbo jumbo.
+
+#### Bugs blocked by other bugs
+
+- [ ] currently exporting as a zip is broken, but when we fix it we have to make sure that it works as expected (and not how it was before), because before it was just exporting the original images as a zip, the translations were not rendered in.
+- [ ] Post processing edits after the translations also don't get synced in the rendered output, when exported as chapter zip
 
 ### Improve the models and translation related features
 
@@ -40,7 +55,8 @@
       2. **One-Way (SSE):** Frontend uses its existing `useSSE.ts` hook to listen to an SSE stream (e.g., `/api/jobs/stream`).
       3. **Backend Push:** As job state changes in the worker/database (PENDING -> PROCESSING -> COMPLETED), the backend automatically pushes these updates over the open SSE connection.
     - This eliminates the need for the frontend to constantly ask "is job X done?", saving significant HTTP overhead and database query load.
-- [ ] It seems like the thumbnails are not actually thumbnails but rather the full file as seen in the url `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file`
+- [ ] It seems like the thumbnails in the main view (i.e. the list of all the series) and series page (i.e. the chapter thumbs) are not actually thumbnails but rather the full file as seen in the url `/tlhub/api/images/{{id}}/file`
+  - [ ] However the chapters seems to download the thumbnails correctly from `/tlhub/api/images/{{id}}/thumbnail` in chapter page
   - [ ] Thumbnails are generated using basic bilinear interpolation + JPEG output (`PageService.java:108-141`). Switch to **Bicubic/Lanczos** interpolation and **WebP** format (~80% quality) for sharper results at smaller file sizes.
   - [ ] **Thumbnail generation blocks the upload request (synchronous on the request thread)** — `generateThumbnail` (`PageService.java:108`) runs inline *before* the HTTP response returns and before the async pipeline is triggered (`PageController.java:540` → `startPipeline` at `:562`). It is not a pipeline phase; it happens at upload/ingest time. Per upload it does, sequentially: `file.getBytes()` (full original into heap, `:480`) → `ImageIO.read` (decodes full-res into a `BufferedImage`, `:110`) → bilinear resize + `ImageIO.write(jpg)` (`:123-135`) → **two sequential MinIO round trips** (original `:535`, thumbnail `:543`).
     - [ ] **Latency**: each upload waits on full decode + resize + encode + 2 MinIO hops; hundreds of ms to seconds for hi-res pages.
@@ -50,6 +66,7 @@
     - [ ] Already handled well: thumbnail failure is caught and upload proceeds without it (`:546-548`); duplicate-hash uploads short-circuit before thumbnailing (`PageController.java:494-528`).
     - [ ] **Fix direction**: move thumbnailing off the request path (async pipeline step or `@Async` bounded pool, then update `Image.thumbnailStoragePath` + notify via existing SSE); avoid full-res decode via `ImageReader` subsampling or imgscalr/Thumbnailator; parallelize/queue batch imports. Combine with the Bicubic/Lanczos + WebP change above.
 - [ ] Also this GET `/tlhub/api/images/106e431e-b4fe-4874-8b47-c43bbda47dd8/file` seemed to work even without auth
+  - [ ] And so does the thumbnails one but that's expected, right thumbs should work without auth shouldn't they?
 - [ ] Add a modal for user management which can be opened by clicking on the username in the nav bar
   - [ ] Allows us to change username and password
   - [ ] not the email though
@@ -96,6 +113,7 @@
 
 ## 🔵 Low Priority / Nice-to-Have
 
+- [ ] Currently we can only import zips, add support for ePub,cbz import and export.
 - [ ] **True Cross-Page Character Memory** — Feed speaker profiles to translation prompts to prevent name/gender drift across pages.
   - [ ] We have a very rudimentary implementation, in which we inject the previous pages' translated text into the current context.
   - [ ] Instead, we can maintain a memory of past pages' characters, names, places, unique words and the like and inject that into the current context.

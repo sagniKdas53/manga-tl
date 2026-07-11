@@ -1,0 +1,841 @@
+{
+  "pageNumber": 1,
+  "imageId": "27a153d0-8265-414a-ae45-5907a1291573",
+  "dimensions": {
+    "width": 832,
+    "height": 1248
+  },
+  "totalCost": {
+    "estimated_cost": 0.04424334241333334,
+    "display": "$0.0442",
+    "currency": "USD"
+  },
+  "exportedAt": "2026-07-11T10:51:58.569Z",
+  "layers": [
+    {
+      "id": "73c696d7-2f0f-47c1-a7d4-a6964a82ab0f",
+      "type": "ocr",
+      "targetLanguage": null,
+      "visible": false,
+      "metadataJson": {
+        "time": "2026-07-11T09:12:23.346020975Z",
+        "model": "MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)",
+        "provider": "OCR Worker",
+        "confidence": 0.9773991604646047,
+        "layer_name": "OCR",
+        "layer_order": 1,
+        "last_modified": "2026-07-11T09:12:23.346545192Z"
+      },
+      "cost": {
+        "estimated_cost": 0,
+        "display": "$0.00",
+        "currency": "USD"
+      },
+      "elements": [
+        {
+          "id": "9b7de03b-6cb4-4431-9115-0d4f111f62f7",
+          "text": "お兄ちゃん…本当にやるの？",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 642,
+          "y": 145,
+          "maxWidth": 74,
+          "maxHeight": 213,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "557af247-8862-4c6d-8e9f-c5e88c4ec595"
+        },
+        {
+          "id": "54b98b40-0f38-419e-a2e1-7c554c553ad7",
+          "text": "ああ、着替えたら向こうの岩場に集合なこんなチャンスめったに無い…楽しみだろ？",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 496,
+          "y": 542,
+          "maxWidth": 201,
+          "maxHeight": 454,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "579d3fd2-93bc-41e6-afbd-02611d8fc659"
+        },
+        {
+          "id": "c3361520-8fcf-4f68-b3c4-5eff1d2379af",
+          "text": "母さん達にはテキトーに言っとくから",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 43,
+          "y": 972,
+          "maxWidth": 113,
+          "maxHeight": 178,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "cb3a5f0e-b91e-4a0a-8b0e-fbc065a04337"
+        }
+      ]
+    },
+    {
+      "id": "29bd3642-5d25-4009-8dfc-2669b1b8ce27",
+      "type": "translation",
+      "targetLanguage": "en",
+      "visible": false,
+      "metadataJson": {
+        "qa": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "deepseek/deepseek-v4-pro",
+                "currency": "USD",
+                "provider": "openrouter",
+                "prompt_tokens": 995,
+                "estimated_cost": 0.004611723073333334,
+                "completion_tokens": 1164
+              },
+              {
+                "model": "google/gemini-3.5-flash",
+                "currency": "USD",
+                "provider": "openrouter",
+                "prompt_tokens": 2496,
+                "estimated_cost": 0.006399,
+                "completion_tokens": 295
+              }
+            ],
+            "prompt_tokens": 3491,
+            "estimated_cost": 0.011010723073333334,
+            "completion_tokens": 1459
+          },
+          "failed": 0,
+          "passed": 2,
+          "status": "partial_pass",
+          "avg_score": 0.9333333333333332,
+          "direct_fix": 1,
+          "last_qa_at": "2026-07-11T09:28:51.996430969Z",
+          "retries_used": 0,
+          "manual_review": 0,
+          "total_regions": 3,
+          "failed_regions": [
+            {
+              "qaScore": 0.8,
+              "qaStatus": "fixed",
+              "regionId": "e0f93c5b-5033-45e0-9d83-3206291590a2",
+              "qaFeedback": "The text overflows heavily outside the borders of the speech bubbles, resulting in terrible legibility. It needs a significant reduction in font size to fit properly within the split circular bubbles.",
+              "bubbleReadingOrder": 2
+            }
+          ]
+        },
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "deepseek/deepseek-v4-pro",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 1080,
+              "estimated_cost": 0.0026931012,
+              "completion_tokens": 430
+            }
+          ],
+          "prompt_tokens": 1080,
+          "estimated_cost": 0.0026931012,
+          "completion_tokens": 430
+        },
+        "time": "2026-07-11T09:12:37.714378322Z",
+        "model": "openrouter/deepseek/deepseek-v4-pro",
+        "provider": "Translation Worker",
+        "confidence": 1,
+        "layer_name": "Translation",
+        "layer_order": 2,
+        "last_modified": "2026-07-11T09:12:37.715812723Z"
+      },
+      "cost": {
+        "estimated_cost": 0.013703824273333335,
+        "display": "$0.0137",
+        "currency": "USD"
+      },
+      "qa": {
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "deepseek/deepseek-v4-pro",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 995,
+              "estimated_cost": 0.004611723073333334,
+              "completion_tokens": 1164
+            },
+            {
+              "model": "google/gemini-3.5-flash",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 2496,
+              "estimated_cost": 0.006399,
+              "completion_tokens": 295
+            }
+          ],
+          "prompt_tokens": 3491,
+          "estimated_cost": 0.011010723073333334,
+          "completion_tokens": 1459,
+          "display": "$0.0110"
+        },
+        "failed": 0,
+        "passed": 2,
+        "status": "partial_pass",
+        "avg_score": 0.9333333333333332,
+        "direct_fix": 1,
+        "last_qa_at": "2026-07-11T09:28:51.996430969Z",
+        "retries_used": 0,
+        "manual_review": 0,
+        "total_regions": 3,
+        "failed_regions": [
+          {
+            "qaScore": 0.8,
+            "qaStatus": "fixed",
+            "regionId": "e0f93c5b-5033-45e0-9d83-3206291590a2",
+            "qaFeedback": "The text overflows heavily outside the borders of the speech bubbles, resulting in terrible legibility. It needs a significant reduction in font size to fit properly within the split circular bubbles.",
+            "bubbleReadingOrder": 2
+          }
+        ]
+      },
+      "elements": [
+        {
+          "id": "3ac17083-7338-452b-9356-f350b39e444b",
+          "text": "Bro... are you really gonna do it?",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 597,
+          "y": 108,
+          "maxWidth": 166,
+          "maxHeight": 283,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[679, 105], [661, 110], [645, 118], [630, 130], [606, 161], [602, 172], [602, 181], [598, 188], [598, 208], [594, 233], [598, 274], [598, 302], [602, 309], [602, 320], [594, 329], [594, 333], [604, 335], [629, 372], [650, 389], [658, 393], [709, 393], [732, 381], [757, 356], [764, 337], [765, 184], [752, 147], [744, 133], [728, 117], [714, 109], [701, 105]]",
+          "regionId": "557af247-8862-4c6d-8e9f-c5e88c4ec595"
+        },
+        {
+          "id": "e40318b4-e225-4fba-9353-3050b0fbcb95",
+          "text": "Yeah. Get changed and meet up at the rocky area. A chance like this almost never comes around... You're excited, right?",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 460,
+          "y": 506,
+          "maxWidth": 267,
+          "maxHeight": 528,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[665, 503], [632, 503], [610, 511], [591, 523], [563, 555], [551, 591], [551, 693], [559, 730], [570, 755], [566, 760], [518, 769], [494, 784], [473, 812], [461, 850], [457, 931], [469, 985], [494, 1016], [514, 1028], [541, 1036], [581, 1036], [611, 1020], [635, 992], [647, 962], [651, 938], [651, 874], [634, 801], [638, 796], [663, 794], [689, 783], [710, 766], [725, 741], [729, 710], [729, 592], [725, 571], [706, 532], [685, 512]]",
+          "regionId": "579d3fd2-93bc-41e6-afbd-02611d8fc659"
+        },
+        {
+          "id": "2e15d15f-1986-49da-ad13-25fc0e61d6e0",
+          "text": "I'll just make up something to tell Mom and the others.",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 11,
+          "y": 927,
+          "maxWidth": 177,
+          "maxHeight": 263,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[83, 924], [60, 932], [53, 939], [48, 940], [31, 957], [16, 990], [16, 999], [12, 1004], [12, 1023], [8, 1030], [8, 1101], [12, 1107], [12, 1124], [16, 1129], [16, 1137], [20, 1148], [27, 1159], [40, 1173], [55, 1184], [75, 1192], [135, 1192], [150, 1184], [170, 1165], [182, 1145], [186, 1130], [190, 1124], [190, 1005], [182, 976], [171, 953], [154, 936], [138, 928], [129, 927], [126, 924]]",
+          "regionId": "cb3a5f0e-b91e-4a0a-8b0e-fbc065a04337"
+        }
+      ]
+    },
+    {
+      "id": "7acb090e-0ebc-4d75-92f4-068363442652",
+      "type": "ocr",
+      "targetLanguage": null,
+      "visible": false,
+      "metadataJson": {
+        "time": "2026-07-11T09:14:16.021788573Z",
+        "model": "MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)",
+        "provider": "OCR Worker",
+        "confidence": 0.9773991604646047,
+        "layer_name": "OCR (manual-re-ocr)",
+        "layer_order": 3,
+        "last_modified": "2026-07-11T09:14:16.022898009Z"
+      },
+      "cost": {
+        "estimated_cost": 0,
+        "display": "$0.00",
+        "currency": "USD"
+      },
+      "elements": [
+        {
+          "id": "3541b43e-36ca-44ec-adf1-4a0eff1c525d",
+          "text": "お兄ちゃん…本当にやるの？",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 642,
+          "y": 145,
+          "maxWidth": 74,
+          "maxHeight": 213,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "b32d3168-78d5-4a80-a325-13883ca82ffb"
+        },
+        {
+          "id": "a547bbc1-d7ee-40eb-9625-3d3e57da2157",
+          "text": "ああ、着替えたら向こうの岩場に集合なこんなチャンスめったに無い…楽しみだろ？",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 496,
+          "y": 542,
+          "maxWidth": 201,
+          "maxHeight": 454,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "b774afbb-88d1-48bb-9119-98aa911c06ec"
+        },
+        {
+          "id": "8b5f9c5f-6307-46ee-900f-4411a1bc7d81",
+          "text": "母さん達にはテキトーに言っとくから",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 43,
+          "y": 972,
+          "maxWidth": 113,
+          "maxHeight": 178,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "32d509f3-cb27-44ab-bba3-a7804051fd2c"
+        }
+      ]
+    },
+    {
+      "id": "fa6793c4-06b5-43e8-b978-ed9b91dde51d",
+      "type": "translation",
+      "targetLanguage": "en",
+      "visible": false,
+      "metadataJson": {
+        "qa": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "deepseek/deepseek-v4-pro",
+                "currency": "USD",
+                "provider": "openrouter",
+                "prompt_tokens": 995,
+                "estimated_cost": 0.004611723073333334,
+                "completion_tokens": 1164
+              },
+              {
+                "model": "google/gemini-3.5-flash",
+                "currency": "USD",
+                "provider": "openrouter",
+                "prompt_tokens": 2496,
+                "estimated_cost": 0.006399,
+                "completion_tokens": 295
+              }
+            ],
+            "prompt_tokens": 3491,
+            "estimated_cost": 0.011010723073333334,
+            "completion_tokens": 1459
+          },
+          "failed": 0,
+          "passed": 2,
+          "status": "partial_pass",
+          "avg_score": 0.9333333333333332,
+          "direct_fix": 1,
+          "last_qa_at": "2026-07-11T09:28:51.995992790Z",
+          "retries_used": 0,
+          "manual_review": 0,
+          "total_regions": 3,
+          "failed_regions": [
+            {
+              "qaScore": 0.8,
+              "qaStatus": "fixed",
+              "regionId": "e0f93c5b-5033-45e0-9d83-3206291590a2",
+              "qaFeedback": "The text overflows heavily outside the borders of the speech bubbles, resulting in terrible legibility. It needs a significant reduction in font size to fit properly within the split circular bubbles.",
+              "bubbleReadingOrder": 2
+            }
+          ]
+        },
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "deepseek/deepseek-v4-pro",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 1313,
+              "estimated_cost": 0.0038019595533333337,
+              "completion_tokens": 713
+            }
+          ],
+          "prompt_tokens": 1313,
+          "estimated_cost": 0.0038019595533333337,
+          "completion_tokens": 713
+        },
+        "time": "2026-07-11T09:14:33.826614046Z",
+        "model": "openrouter/deepseek/deepseek-v4-pro",
+        "provider": "Translation Worker",
+        "confidence": 0.95,
+        "layer_name": "Translation (retry)",
+        "layer_order": 4,
+        "last_modified": "2026-07-11T09:14:33.826882959Z"
+      },
+      "cost": {
+        "estimated_cost": 0.014812682626666667,
+        "display": "$0.0148",
+        "currency": "USD"
+      },
+      "qa": {
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "deepseek/deepseek-v4-pro",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 995,
+              "estimated_cost": 0.004611723073333334,
+              "completion_tokens": 1164
+            },
+            {
+              "model": "google/gemini-3.5-flash",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 2496,
+              "estimated_cost": 0.006399,
+              "completion_tokens": 295
+            }
+          ],
+          "prompt_tokens": 3491,
+          "estimated_cost": 0.011010723073333334,
+          "completion_tokens": 1459,
+          "display": "$0.0110"
+        },
+        "failed": 0,
+        "passed": 2,
+        "status": "partial_pass",
+        "avg_score": 0.9333333333333332,
+        "direct_fix": 1,
+        "last_qa_at": "2026-07-11T09:28:51.995992790Z",
+        "retries_used": 0,
+        "manual_review": 0,
+        "total_regions": 3,
+        "failed_regions": [
+          {
+            "qaScore": 0.8,
+            "qaStatus": "fixed",
+            "regionId": "e0f93c5b-5033-45e0-9d83-3206291590a2",
+            "qaFeedback": "The text overflows heavily outside the borders of the speech bubbles, resulting in terrible legibility. It needs a significant reduction in font size to fit properly within the split circular bubbles.",
+            "bubbleReadingOrder": 2
+          }
+        ]
+      },
+      "elements": [
+        {
+          "id": "d64af02a-1d99-40ba-98b7-5a0cbfc23cbd",
+          "text": "Onii-chan... are you really gonna do it?",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 597,
+          "y": 108,
+          "maxWidth": 166,
+          "maxHeight": 283,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[679, 105], [661, 110], [645, 118], [630, 130], [606, 161], [602, 172], [602, 181], [598, 188], [598, 208], [594, 233], [598, 274], [598, 302], [602, 309], [602, 320], [594, 329], [594, 333], [604, 335], [629, 372], [650, 389], [658, 393], [709, 393], [732, 381], [757, 356], [764, 337], [765, 184], [752, 147], [744, 133], [728, 117], [714, 109], [701, 105]]",
+          "regionId": "b32d3168-78d5-4a80-a325-13883ca82ffb"
+        },
+        {
+          "id": "cdf88faa-2c3c-4a2c-ab4e-d6bf63e39580",
+          "text": "Yeah, get changed and meet at the rocky area over there.\n\nWe don't get a chance like this often...\nlooking forward to it, right?",
+          "font": "Comic Neue",
+          "size": 14,
+          "autoSize": true,
+          "x": 460,
+          "y": 506,
+          "maxWidth": 267,
+          "maxHeight": 528,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[665, 503], [632, 503], [610, 511], [591, 523], [563, 555], [551, 591], [551, 693], [559, 730], [570, 755], [566, 760], [518, 769], [494, 784], [473, 812], [461, 850], [457, 931], [469, 985], [494, 1016], [514, 1028], [541, 1036], [581, 1036], [611, 1020], [635, 992], [647, 962], [651, 938], [651, 874], [634, 801], [638, 796], [663, 794], [689, 783], [710, 766], [725, 741], [729, 710], [729, 592], [725, 571], [706, 532], [685, 512]]",
+          "regionId": "b774afbb-88d1-48bb-9119-98aa911c06ec"
+        },
+        {
+          "id": "36bca3d7-89bf-419d-8dcb-b9f45d90cd83",
+          "text": "I'll just tell Mom and them something random.",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 11,
+          "y": 927,
+          "maxWidth": 177,
+          "maxHeight": 263,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[83, 924], [60, 932], [53, 939], [48, 940], [31, 957], [16, 990], [16, 999], [12, 1004], [12, 1023], [8, 1030], [8, 1101], [12, 1107], [12, 1124], [16, 1129], [16, 1137], [20, 1148], [27, 1159], [40, 1173], [55, 1184], [75, 1192], [135, 1192], [150, 1184], [170, 1165], [182, 1145], [186, 1130], [190, 1124], [190, 1005], [182, 976], [171, 953], [154, 936], [138, 928], [129, 927], [126, 924]]",
+          "regionId": "32d509f3-cb27-44ab-bba3-a7804051fd2c"
+        }
+      ]
+    },
+    {
+      "id": "d3baf241-3367-41f5-bfef-6cfd18e79c50",
+      "type": "ocr",
+      "targetLanguage": null,
+      "visible": false,
+      "metadataJson": {
+        "time": "2026-07-11T09:27:50.682638268Z",
+        "model": "MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)",
+        "provider": "OCR Worker",
+        "confidence": 0.9773991604646047,
+        "layer_name": "OCR (manual-re-ocr)",
+        "layer_order": 5,
+        "last_modified": "2026-07-11T09:27:50.686226799Z"
+      },
+      "cost": {
+        "estimated_cost": 0,
+        "display": "$0.00",
+        "currency": "USD"
+      },
+      "elements": [
+        {
+          "id": "4b0dbeb6-29f4-4b0e-b8a9-896c860ccef6",
+          "text": "お兄ちゃん…本当にやるの？",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 642,
+          "y": 145,
+          "maxWidth": 74,
+          "maxHeight": 213,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "e9a70e4a-061a-42cb-b6b7-46d91892af76"
+        },
+        {
+          "id": "b6d626d0-0a19-465f-9dcf-935518ebfc8a",
+          "text": "ああ、着替えたら向こうの岩場に集合なこんなチャンスめったに無い…楽しみだろ？",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 496,
+          "y": 542,
+          "maxWidth": 201,
+          "maxHeight": 454,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "e0f93c5b-5033-45e0-9d83-3206291590a2"
+        },
+        {
+          "id": "3c64a1a0-11a4-4245-8802-129c9f74e10c",
+          "text": "母さん達にはテキトーに言っとくから",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 43,
+          "y": 972,
+          "maxWidth": 113,
+          "maxHeight": 178,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "802f0ae1-7f2a-48ea-8c01-fd08de3711f6"
+        }
+      ]
+    },
+    {
+      "id": "0a46eabe-301a-40c3-a9a8-1891f331900f",
+      "type": "translation",
+      "targetLanguage": "en",
+      "visible": true,
+      "metadataJson": {
+        "qa": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "deepseek/deepseek-v4-pro",
+                "currency": "USD",
+                "provider": "openrouter",
+                "prompt_tokens": 995,
+                "estimated_cost": 0.004611723073333334,
+                "completion_tokens": 1164
+              },
+              {
+                "model": "google/gemini-3.5-flash",
+                "currency": "USD",
+                "provider": "openrouter",
+                "prompt_tokens": 2496,
+                "estimated_cost": 0.006399,
+                "completion_tokens": 295
+              }
+            ],
+            "prompt_tokens": 3491,
+            "estimated_cost": 0.011010723073333334,
+            "completion_tokens": 1459
+          },
+          "failed": 0,
+          "passed": 2,
+          "status": "partial_pass",
+          "avg_score": 0.9333333333333332,
+          "direct_fix": 1,
+          "last_qa_at": "2026-07-11T09:28:51.996797164Z",
+          "retries_used": 0,
+          "manual_review": 0,
+          "total_regions": 3,
+          "failed_regions": [
+            {
+              "qaScore": 0.8,
+              "qaStatus": "fixed",
+              "regionId": "e0f93c5b-5033-45e0-9d83-3206291590a2",
+              "qaFeedback": "The text overflows heavily outside the borders of the speech bubbles, resulting in terrible legibility. It needs a significant reduction in font size to fit properly within the split circular bubbles.",
+              "bubbleReadingOrder": 2
+            }
+          ]
+        },
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "deepseek/deepseek-v4-pro",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 1224,
+              "estimated_cost": 0.004716112440000001,
+              "completion_tokens": 1087
+            }
+          ],
+          "prompt_tokens": 1224,
+          "estimated_cost": 0.004716112440000001,
+          "completion_tokens": 1087
+        },
+        "time": "2026-07-11T09:28:05.774032346Z",
+        "model": "openrouter/deepseek/deepseek-v4-pro",
+        "provider": "Translation Worker",
+        "confidence": 0.95,
+        "layer_name": "Translation (retry)",
+        "layer_order": 6,
+        "last_modified": "2026-07-11T09:28:05.775226269Z"
+      },
+      "cost": {
+        "estimated_cost": 0.015726835513333336,
+        "display": "$0.0157",
+        "currency": "USD"
+      },
+      "qa": {
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "deepseek/deepseek-v4-pro",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 995,
+              "estimated_cost": 0.004611723073333334,
+              "completion_tokens": 1164
+            },
+            {
+              "model": "google/gemini-3.5-flash",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 2496,
+              "estimated_cost": 0.006399,
+              "completion_tokens": 295
+            }
+          ],
+          "prompt_tokens": 3491,
+          "estimated_cost": 0.011010723073333334,
+          "completion_tokens": 1459,
+          "display": "$0.0110"
+        },
+        "failed": 0,
+        "passed": 2,
+        "status": "partial_pass",
+        "avg_score": 0.9333333333333332,
+        "direct_fix": 1,
+        "last_qa_at": "2026-07-11T09:28:51.996797164Z",
+        "retries_used": 0,
+        "manual_review": 0,
+        "total_regions": 3,
+        "failed_regions": [
+          {
+            "qaScore": 0.8,
+            "qaStatus": "fixed",
+            "regionId": "e0f93c5b-5033-45e0-9d83-3206291590a2",
+            "qaFeedback": "The text overflows heavily outside the borders of the speech bubbles, resulting in terrible legibility. It needs a significant reduction in font size to fit properly within the split circular bubbles.",
+            "bubbleReadingOrder": 2
+          }
+        ]
+      },
+      "elements": [
+        {
+          "id": "afb736d2-48a3-413c-84b7-8d606afa8138",
+          "text": "Bro... Are we really gonna do this?",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 597,
+          "y": 108,
+          "maxWidth": 166,
+          "maxHeight": 283,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[679, 105], [661, 110], [645, 118], [630, 130], [606, 161], [602, 172], [602, 181], [598, 188], [598, 208], [594, 233], [598, 274], [598, 302], [602, 309], [602, 320], [594, 329], [594, 333], [604, 335], [629, 372], [650, 389], [658, 393], [709, 393], [732, 381], [757, 356], [764, 337], [765, 184], [752, 147], [744, 133], [728, 117], [714, 109], [701, 105]]",
+          "regionId": "e9a70e4a-061a-42cb-b6b7-46d91892af76"
+        },
+        {
+          "id": "269d80da-86e8-4f45-8192-876df73a0b49",
+          "text": "Yeah, get changed and meet at the rocks over there.\n\nA chance like this barely ever comes...\nYou're excited, right?",
+          "font": "Comic Neue",
+          "size": 21,
+          "autoSize": true,
+          "x": 460,
+          "y": 506,
+          "maxWidth": 267,
+          "maxHeight": 528,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[665, 503], [632, 503], [610, 511], [591, 523], [563, 555], [551, 591], [551, 693], [559, 730], [570, 755], [566, 760], [518, 769], [494, 784], [473, 812], [461, 850], [457, 931], [469, 985], [494, 1016], [514, 1028], [541, 1036], [581, 1036], [611, 1020], [635, 992], [647, 962], [651, 938], [651, 874], [634, 801], [638, 796], [663, 794], [689, 783], [710, 766], [725, 741], [729, 710], [729, 592], [725, 571], [706, 532], [685, 512]]",
+          "regionId": "e0f93c5b-5033-45e0-9d83-3206291590a2"
+        },
+        {
+          "id": "e5a61a02-01fa-4ab0-bb41-ce031baf6530",
+          "text": "I'll just give Mom and them some excuse.",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 11,
+          "y": 927,
+          "maxWidth": 177,
+          "maxHeight": 263,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[83, 924], [60, 932], [53, 939], [48, 940], [31, 957], [16, 990], [16, 999], [12, 1004], [12, 1023], [8, 1030], [8, 1101], [12, 1107], [12, 1124], [16, 1129], [16, 1137], [20, 1148], [27, 1159], [40, 1173], [55, 1184], [75, 1192], [135, 1192], [150, 1184], [170, 1165], [182, 1145], [186, 1130], [190, 1124], [190, 1005], [182, 976], [171, 953], [154, 936], [138, 928], [129, 927], [126, 924]]",
+          "regionId": "802f0ae1-7f2a-48ea-8c01-fd08de3711f6"
+        }
+      ]
+    }
+  ]
+}
