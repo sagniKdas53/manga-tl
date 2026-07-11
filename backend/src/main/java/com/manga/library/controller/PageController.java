@@ -66,7 +66,7 @@ public class PageController {
       Objects.requireNonNull(chapterId, "chapterId cannot be null");
       Chapter chapter =
           chapterRepository
-              .findById(chapterId)
+              .findWithSeriesById(chapterId)
               .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
 
       String originalFilename = file.getOriginalFilename();

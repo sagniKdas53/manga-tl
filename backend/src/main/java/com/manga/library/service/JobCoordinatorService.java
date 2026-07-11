@@ -98,6 +98,7 @@ public class JobCoordinatorService {
     }
   }
 
+  @Transactional
   public void startPipeline(UUID imageId) {
     log.info("Starting pipeline for image {}", imageId);
     enqueueJob("panel-detection", imageId);
@@ -767,6 +768,7 @@ public class JobCoordinatorService {
     enqueueJob("render", imageId);
   }
 
+  @Transactional
   public void triggerRedo(UUID regionId, String redoType) {
     log.info("Triggering redo for region {} with type {}", regionId, redoType);
 
@@ -790,6 +792,7 @@ public class JobCoordinatorService {
         });
   }
 
+  @Transactional
   public void triggerImageRedo(UUID imageId, String jobType) {
     log.info("Triggering image redo for image {} with job type {}", imageId, jobType);
     if ("ocr".equals(jobType)) {
@@ -857,7 +860,9 @@ public class JobCoordinatorService {
     List<Layer> layers = layerRepository.findByImageId(imageId);
     Layer latestTranslationLayer = null;
     for (Layer l : layers) {
-      if ("translation".equalsIgnoreCase(l.getType()) && (latestTranslationLayer == null || l.getZOrder() > latestTranslationLayer.getZOrder())) {
+      if ("translation".equalsIgnoreCase(l.getType())
+          && (latestTranslationLayer == null
+              || l.getZOrder() > latestTranslationLayer.getZOrder())) {
         latestTranslationLayer = l;
       }
     }

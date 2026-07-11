@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/internal")
 @RequiredArgsConstructor
 @Slf4j
+@org.springframework.transaction.annotation.Transactional
 public class InternalJobController {
 
   private final JobCoordinatorService jobCoordinatorService;

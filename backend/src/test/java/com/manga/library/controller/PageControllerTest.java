@@ -205,7 +205,7 @@ public class PageControllerTest {
             .id(chapterId)
             .series(com.manga.library.model.Series.builder().build())
             .build();
-    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".png");
 
     Image image = Image.builder().id(UUID.randomUUID()).build();
@@ -236,7 +236,7 @@ public class PageControllerTest {
             .id(chapterId)
             .series(com.manga.library.model.Series.builder().build())
             .build();
-    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".zip");
 
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
@@ -274,7 +274,7 @@ public class PageControllerTest {
             .id(chapterId)
             .series(com.manga.library.model.Series.builder().build())
             .build();
-    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".zip");
 
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
@@ -402,7 +402,7 @@ public class PageControllerTest {
             .id(chapterId)
             .series(com.manga.library.model.Series.builder().build())
             .build();
-    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".png");
 
     UUID existingImageId = UUID.randomUUID();
@@ -454,7 +454,8 @@ public class PageControllerTest {
   @Test
   public void testUploadPage_Failure() throws Exception {
     UUID chapterId = UUID.randomUUID();
-    when(chapterRepository.findById(chapterId)).thenThrow(new RuntimeException("db error"));
+    when(chapterRepository.findWithSeriesById(chapterId))
+        .thenThrow(new RuntimeException("db error"));
 
     org.springframework.mock.web.MockMultipartFile file =
         new org.springframework.mock.web.MockMultipartFile(
@@ -485,7 +486,7 @@ public class PageControllerTest {
     com.manga.library.model.Series series =
         com.manga.library.model.Series.builder().id(UUID.randomUUID()).targetLanguage("en").build();
     Chapter chapter = Chapter.builder().id(chapterId).series(series).build();
-    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".png");
 
     UUID existingImageId = UUID.randomUUID();
@@ -522,7 +523,7 @@ public class PageControllerTest {
             .id(chapterId)
             .series(com.manga.library.model.Series.builder().build())
             .build();
-    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".zip");
 
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
@@ -551,7 +552,7 @@ public class PageControllerTest {
             .id(chapterId)
             .series(com.manga.library.model.Series.builder().build())
             .build();
-    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".zip");
 
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
