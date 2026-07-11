@@ -19,11 +19,91 @@ manga-backend    |   Detail: Key (chapter_id, page_number)=(8bc70d04-8a67-4864-8
 - [ ] Lastly also an issue with `8bc70d04-8a67-4864-8527-c24196848074` this was added to two chapters but when I deleted it from one it got deleted from both
 - [ ] The auto update the reader to load new layers as they come in is broken, since we are going to overhaul the `SSE` anyway maybe use it get the layers when triggering a manual re-ocr, manual re-tl and manual region-redo-ocr and manual region-redo-tl
   - [ ] These events are to be broadcasted anyway but if the reader is open we can use them to check for new layers if the page id matches and update the layers, instead of polling and using some react use call back mumbo jumbo.
+- [ ] I accidenally dropped in a md file instead of an image the upload didn't fail, it even created a page for it, even the pipeline ran and found 0 layers
+  - [ ] Checkout `https://ideapad.tail9ece4.ts.net/tlhub/chapters/ac273b52-ffa0-4af4-8ced-88fd4767b37e/hsr/reader/5` this is an md file
+  - [ ] Need to add stricter validations on uploads.
+- [ ] Opening the rerader or going up to the series page dismisses the upload widget the upload still happen just are not shown.
+- [ ] For larger upload say 100+ images the lag is very noticeable need to optimize the upload process
+- [ ] For layer update I observed a failure need to check if it's reproducible or just one off error.
+- [ ] Observeing these in workers logs as well check [run logs 8](./logs/run-8.log)
+  - [ ] ```manga-worker     | 2026-07-11 13:22:44,228 [INFO] Attempting to acquire Valkey lock: ocr
+          manga-worker     | [OCR] Running PaddleOCR (PP-OCRv6_medium_det/PP-OCRv6_medium_rec, lang=ja).
+          manga-worker     | [OCR] Memory before OCR: 1798.5 MB
+          manga-worker     | 2026-07-11 13:22:44,229 [INFO] Acquired Valkey lock: ocr
+          manga-worker     | [OCR] Downscaled image for OCR (upscale factor: 1.88x)
+          manga-worker     | [OCR] Calling PaddleOCR...
+          manga-worker     | ----------------------------------------
+          manga-worker     | Exception occurred during processing of request from ('127.0.0.1', 36836)
+          manga-worker     | Traceback (most recent call last):
+          manga-worker     |   File "/usr/local/lib/python3.13/socketserver.py", line 697, in process_request_thread
+          manga-worker     |     self.finish_request(request, client_address)
+          manga-worker     |     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+          manga-worker     |   File "/usr/local/lib/python3.13/socketserver.py", line 362, in finish_request
+          manga-worker     |     self.RequestHandlerClass(request, client_address, self)
+          manga-worker     |     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          manga-worker     |   File "/usr/local/lib/python3.13/socketserver.py", line 766, in __init__
+          manga-worker     |     self.handle()
+          manga-worker     |     ~~~~~~~~~~~^^
+          manga-worker     | 2026-07-11 13:22:51,559 [DEBUG] Starting new HTTP connection (1): backend:8080
+          manga-worker     |   File "/usr/local/lib/python3.13/http/server.py", line 447, in handle
+          manga-worker     |     self.handle_one_request()
+          manga-worker     |     ~~~~~~~~~~~~~~~~~~~~~~~^^
+          manga-worker     |   File "/usr/local/lib/python3.13/http/server.py", line 435, in handle_one_request
+          manga-worker     |     method()
+          manga-worker     |     ~~~~~~^^
+          manga-worker     |   File "/app/worker/health_server.py", line 132, in do_GET
+          manga-worker     |     self.wfile.write(json.dumps(response_data).encode("utf-8"))
+          manga-worker     |     ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          manga-worker     |   File "/usr/local/lib/python3.13/socketserver.py", line 845, in write
+          manga-worker     |     self._sock.sendall(b)
+          manga-worker     |     ~~~~~~~~~~~~~~~~~~^^^
+          manga-worker     | BrokenPipeError: [Errno 32] Broken pipe
+          manga-worker     | ----------------------------------------
+          manga-worker     | [OCR] PaddleOCR returned.```
+- [ ] Hundreads of `Null type safety` warning in the java code base, better get them checked and fixed.
+- [ ] When switching pages fast it seems like the reader is reloading completely instead of just loading in the images and layers, probably some state is being reset or something, need to fix it.
+- [ ] Sometimes the translations are provided as `romanized text (actual results)` mostly done by the free or cheap models, probably can be mitigated by updating the prompts Examples:
+  - `要出发了哦` --> `Yào chūfā le o (About to depart!)`
+  - `还有还有！` --> `MADA MADA ( NOT YET! )`
+  - `エルフ!` --> `ERUFU (ELF!)`
+- [ ] The `https://ideapad.tail9ece4.ts.net/tlhub/api/jobs/clear` API can't actually clear stale jobs
+  - [ ] We get `{"timestamp":"2026-07-11T15:53:37.171+00:00","status":999,"error":"None"}`
+- [ ] Because we have queue priority if a single image is added more than one the order of the processing gets messed up like the layout analysis ran before the OCR so the bubbles were places without any consideration for the layout
+  - [ ] This is tested because sometimes manga have a cover page and that same page is used inside later so better to be safe
+  - [ ] Also idempotency is nice to have check out [the logs](./logs/run-9.log)
+  - [ ] Make sure that this doesn't happen, should be easy to prevent as we hash the images right?
+- [ ] The clear queue button does nothing (like it calls the API but that does nothing, expected outcome it clears all jobs that are queued i.e. not getting processed or are in a state that they can't be processed, like failed or paused)
+  - [ ] The cancel action for queued jobs works though although it calls a different end point
+  - [ ] ```curl 'https://ideapad.tail9ece4.ts.net/tlhub/api/jobs/8d19b9ab-daa6-4e43-afed-0464f53f946d' \
+  -X DELETE \
+  -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en-US,en;q=0.9' \
+  -H 'Accept-Encoding: gzip, deflate, br, zstd' \
+  -H 'Referer: https://ideapad.tail9ece4.ts.net/tlhub/chapters/975dad6b-ef09-458c-85fc-b726ea6dc320/test' \
+  -H 'Authorization: Bearer Token-Placeholder' \
+  -H 'Origin: https://ideapad.tail9ece4.ts.net' \
+  -H 'Sec-GPC: 1' \
+  -H 'Connection: keep-alive' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'DNT: 1' \
+  -H 'Priority: u=0' \
+  -H 'Pragma: no-cache' \
+  -H 'Cache-Control: no-cache' \
+  -H 'TE: trailers'```
 
 #### Bugs blocked by other bugs
 
 - [ ] currently exporting as a zip is broken, but when we fix it we have to make sure that it works as expected (and not how it was before), because before it was just exporting the original images as a zip, the translations were not rendered in.
 - [ ] Post processing edits after the translations also don't get synced in the rendered output, when exported as chapter zip
+
+### Output improvements
+
+- [ ] For sample 1 the results are good but we need to work on improving the quality of these other type of translations
+- [ ] Checkout ![samples 2](./examples/sample2/original.jpg) the output produced by `https://mangatranslator.ai/upload` ![this one](./examples/sample2/en-mangatranslator.ai.jpg) is like amazing while ours is ![this](./examples/sample2/en-local.png) and it leaves a lot to be desired
+- [ ] Also ![sample 3](./examples/sample3/original.jpg) the output from the service is ![this](./examples/sample3/en-mangatranslator.ai.jpg) while ours is ![this](./examples/sample3/en-local.png) is hediously bad
 
 ### Improve the models and translation related features
 
@@ -71,17 +151,18 @@ manga-backend    |   Detail: Key (chapter_id, page_number)=(8bc70d04-8a67-4864-8
   - [ ] Allows us to change username and password
   - [ ] not the email though
 - [ ] The dialogs boxes are not fitting in the viewport correctly
-  - [ ] so remove the `Cover Image URL (Optional)` from create and edit series also make sure we remove the setter for image from backend see [here](./examples/remove-custom-thumbnails.jpg) we can remove it as it we are going to be using proper system generated thumbs from now on
-  - [ ] The global settings modal has some strgae issues fix it see [here](./examples/remove-custom-thumbnails.jpg)
+  - [ ] so remove the `Cover Image URL (Optional)` from create and edit series also make sure we remove the setter for image from backend see [remove-custom-thumbnails](./examples/remove-custom-thumbnails.jpg) we can remove it as it we are going to be using proper system generated thumbs from now on
+  - [ ] The global settings modal has some strgae issues fix it see [remove-custom-thumbnails](./examples/remove-custom-thumbnails.jpg)
   - [ ] See if the model overrides can be re-designed to be easier to use and display.
-- [ ] Re-design the job manger see [here](./examples/redesign-the-job-queue.jpg)
-- [ ] Chapter cards also need to be added [here](./examples/chapter-cards.jpg)
+- [ ] Re-design the job manger see [redesign-the-job-queue](./examples/redesign-the-job-queue.jpg)
+- [ ] Chapter cards also need to be added [chapter-cards](./examples/chapter-cards.jpg)
   - [ ] I had one more brilliant idea add an edit/add description in the chapter and series so that we can add descriptions and links
   - [ ] Also these can optionally be used to inject into the context of the model like we can give it the name of the series and where it is from also maybe any artist commentry (just like the boorus)
   - [ ] Remember the stretch goals **Chapter & Series Summarization** we can add it manually for now, later maybe the models can update it or generate one if not provided?
 - [ ] Add a delete chapter button inside the chapter page
 - [ ] Make sure that the model override components shows the models at every view, like instead of `--Inherit--` show `tencent/hy3:free (inherited from series/chapter/global)`
 - [ ] We follow the `nHentai` colour scheme for dark mode for the light mode lets follow `pixiv` clour scheme.
+- [ ] The main view (i.e. Where all the series are listed) should have sorting options to sort by created date or last updated at, both ascendiong and descending as series are by nature indepandeant so there is no absolute ordering them other than time.
 
 ### Backend & API Resilience
 
@@ -134,6 +215,8 @@ manga-backend    |   Detail: Key (chapter_id, page_number)=(8bc70d04-8a67-4864-8
   - [ ] This will help parallelize even more at higher concurrenry
   - [ ] But we should add a way for the worker to let us know that it can't accept anymore jobs, because it's going OOM or out of CPU
 - [ ] On that note I remember immich reserves CPU and memory for the ml-container we should do it too.
+- [x] Adding a job and then immediately deleting the file, should trigger a failure, which it does
+  - [ ] but the retries were at 1/3 so, retries may not be working as I have never seen a job at like 2/3 retries. This needs to be investigated.
 
 ---
 
