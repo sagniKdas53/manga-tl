@@ -194,6 +194,21 @@ public class PipelineFlowIntegrationTest {
       } catch (Exception e) {
       }
     }
+
+    // Test the clear queue endpoint and clean up any stale jobs created by the test
+    try {
+      if (adminToken != null) {
+        mockMvc
+            .perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                        "/api/jobs/clear")
+                    .header("Authorization", adminToken))
+            .andExpect(
+                org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+      }
+    } catch (Exception e) {
+      // Ignore cleanup errors
+    }
   }
 
   @Test
