@@ -623,6 +623,7 @@ public class SeriesController {
   }
 
   @GetMapping("/chapters/{chapterId}/export")
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
   public ResponseEntity<byte[]> exportChapter(
       @PathVariable UUID chapterId,
       @RequestParam(name = "format", defaultValue = "zip") String format) {
