@@ -303,6 +303,29 @@ QA is configured as `auto` but when the configured provider (ollama) can't be re
   3. Only resolve to `none` if ALL options are exhausted
 - This mirrors how translation already handles the `Falling back to individual translation... using model 'deepseek/deepseek-v4-pro'` pattern seen in the same log
 
+### 4.6 Fix OCR Model Metadata to Support Multiple Models
+
+**Bug**: When a pipeline uses a separate detection model (like PaddleOCR) and recognition model (like Gemini 2.5 Flash), the exported `project.json` only shows a single model string (`"model": "MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)"`). This creates confusion because the recognition model is not recorded.
+
+**Root cause**: The worker and backend currently expect the OCR result's metadata to have a single `model` field.
+
+**Fix**:
+
+- **Worker (`ocr.py`)**: Change the model reporting to return a list of models or a concatenated string (e.g., `"PaddleOCR(PP-OCRv6) + google/gemini-2.5-flash"`).
+- **Backend**: Ensure the export logic and DB schema (`metadata_json`) correctly accommodate this updated structure so both models appear in the export.
+
+### 4.7 Fix Missing Gemini OCR Cost Tracking
+
+**Bug**: The cost of using `gemini-2.5-flash` for OCR is not captured in the system.
+
+**Root cause**: When VLM OCR is used, the usage data (prompt/completion tokens) from OpenRouter/Gemini API is either not extracted from the response or not sent back to the backend in the callback payload.
+
+**Fix**:
+
+- **Worker (`ocr.py` / `llm_client.py`)**: Extract the token usage metadata from the VLM response.
+- Attach the `usage` object to the OCR callback payload.
+- **Backend (`JobCoordinatorService.java` / `ImageRepository`)**: Ensure that OCR callbacks that include `usage` data increment the total cost tracking for the user/chapter.
+
 ### ✅ Checkpoint 4 — Worker Stability
 
 **Automated tests to add/run:**
@@ -343,6 +366,8 @@ QA is configured as `auto` but when the configured provider (ollama) can't be re
 | 4.3 | `rq_tasks.py`, `InternalJobController.java` | Implement job-level retry with attempt counter |
 | 4.4 | `backend/Dockerfile` | Fix Java version: temurin-26 → temurin-21 |
 | 4.5 | `qa.py` | QA fallback to default model instead of skipping |
+| 4.6 | `ocr.py` | Report both detection and recognition models |
+| 4.7 | `ocr.py`, Backend | Extract and report token usage for VLM OCR |
 
 ### 🚨 GitHub Actions / CI Reminder
 
