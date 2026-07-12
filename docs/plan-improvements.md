@@ -69,10 +69,12 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 ### ✅ Checkpoint A — SSE & Queue
 
 **Automated tests:**
+
 - `SseServiceTest`: emit `job_update` → verify SSE listener receives it
 - `QueueManagerTest`: mock SSE stream → verify UI updates without polling
 
 **Manual checks:**
+
 1. Open Queue Manager → upload a page → verify job cards appear in real-time (no page refresh)
 2. Click Pause Queue → verify toast/confirm modal → verify SSE delivers `queue_paused` event → all PENDING jobs show yellow dots
 3. Click Resume → verify SSE delivers `queue_resumed` → jobs resume processing and turn green/blue
@@ -97,6 +99,7 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 ### ✅ Checkpoint B — Reader SSE
 
 **Manual checks:**
+
 1. Open Reader on a freshly uploaded page → watch layers populate in real-time as pipeline completes
 2. Open Reader on a page → trigger "Redo OCR" from the detail panel → new OCR layer should appear without manual refresh
 
@@ -108,6 +111,7 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 
 > [!NOTE]
 > **Why WebP over AVIF?**  
+>
 > - AVIF gives ~20-50% better compression but encoding is **5-10× slower** per image — significant for batch uploads of 40+ page chapters
 > - Java AVIF support requires JNI native bindings (`libavif`) which add Docker build complexity
 > - WebP encoding is highly optimized, has universal browser support, and the `webp-imageio` plugin is a pure drop-in for `ImageIO`
@@ -136,10 +140,12 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 ### ✅ Checkpoint C — Thumbnails
 
 **Automated tests:**
+
 - `PageServiceTest`: generate thumbnail from test PNG → verify output is valid WebP
 - `PageControllerTest`: upload image → `GET /thumbnail` → verify `Content-Type: image/webp`
 
 **Manual checks:**
+
 1. Upload a new page → check MinIO storage → thumbnails should be `.webp` files
 2. Open Dashboard → inspect network tab → series covers should load from `/thumbnail` not `/file`
 3. Compare visual quality: old JPEG thumbnail vs new WebP thumbnail
@@ -224,6 +230,7 @@ Per `examples/chapter-cards.jpg`:
 ### ✅ Checkpoint D — UI Polish
 
 **Manual checks:**
+
 1. Create Series → verify no "Cover Image URL" field
 2. Open Settings → verify modal doesn't overflow, has internal scrollbar
 3. Open a chapter → verify header shows language, direction, page count, model info
@@ -256,10 +263,12 @@ Per `examples/chapter-cards.jpg`:
 ### ✅ Checkpoint E — Resilience
 
 **Automated tests:**
+
 - `test_provider_chain.py`: mock primary provider 500 → verify fallback to secondary
 - `test_provider_chain.py`: mock timeout → verify failover triggers
 
 **Manual checks:**
+
 1. Set primary OCR provider to an invalid key → run pipeline → verify it fails over to next provider in chain
 2. Set very low timeout (1s) → verify timeout is logged and failover triggers
 
