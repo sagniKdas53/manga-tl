@@ -39,6 +39,7 @@ public class SeriesControllerTest {
   @MockBean private PageService pageService;
   @MockBean private MinioService minioService;
   @MockBean private JobCoordinatorService jobCoordinatorService;
+  @MockBean private com.manga.library.service.ChapterExportService chapterExportService;
   @MockBean private JwtAuthFilter jwtAuthFilter;
 
   @Test
@@ -284,7 +285,7 @@ public class SeriesControllerTest {
 
     mockMvc
         .perform(get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
-        .andExpect(status().isOk());
+        .andExpect(status().isAccepted());
   }
 
   @Test
@@ -601,6 +602,6 @@ public class SeriesControllerTest {
 
     mockMvc
         .perform(get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
-        .andExpect(status().isOk());
+        .andExpect(status().isAccepted());
   }
 }

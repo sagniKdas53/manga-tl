@@ -36,6 +36,7 @@ public class SeriesController {
   private final PageService pageService;
   private final MinioService minioService;
   private final JobCoordinatorService jobCoordinatorService;
+  private final ChapterExportService chapterExportService;
   private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
@@ -624,9 +625,10 @@ public class SeriesController {
 
   @GetMapping("/chapters/{chapterId}/export")
   @org.springframework.transaction.annotation.Transactional(readOnly = true)
-  public ResponseEntity<byte[]> exportChapter(
+  public ResponseEntity<?> exportChapter(
       @PathVariable UUID chapterId,
-      @RequestParam(name = "format", defaultValue = "zip") String format) {
+      @RequestParam(name = "format", defaultValue = "zip") String format,
+      @AuthenticationPrincipal User user) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
 
     Chapter chapter =
@@ -637,271 +639,42 @@ public class SeriesController {
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
     if (pages == null || pages.isEmpty()) {
       return ResponseEntity.badRequest()
-          .body("No pages in chapter".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          .body(Map.of("message", "No pages in chapter"));
     }
 
-    try (java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-        java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos)) {
+    String exportId = UUID.randomUUID().toString();
+    UUID userId = user != null ? user.getId() : null;
 
-      // Prepare metadata list
-      List<Map<String, Object>> pageMetadataList = new ArrayList<>();
-      double chapterTotalCostVal = 0.0;
-      boolean chapterHasCost = false;
+    java.util.concurrent.CompletableFuture.runAsync(() -> {
+        chapterExportService.buildAndUploadExport(chapterId, userId, exportId);
+    });
 
-      for (int i = 0; i < pages.size(); i++) {
-        Page page = pages.get(i);
-        UUID imageId = page.getImage().getId();
-        String filename = page.getImage().getFilename();
-        if (filename == null || filename.trim().isEmpty()) {
-          filename = "page_" + page.getPageNumber() + ".png";
+    Map<String, String> response = new HashMap<>();
+    response.put("status", "accepted");
+    response.put("exportId", exportId);
+    response.put("message", "Export started in the background. You will be notified when it is ready.");
+    
+    return ResponseEntity.status(202).body(response);
+  }
+
+  @GetMapping("/chapters/exports/{exportId}/download")
+  public ResponseEntity<byte[]> downloadExport(@PathVariable String exportId) {
+    Objects.requireNonNull(exportId, "exportId cannot be null");
+    
+    try {
+        byte[] zipBytes;
+        try (java.io.InputStream is = minioService.downloadFile("exports/" + exportId + ".zip")) {
+            zipBytes = is.readAllBytes();
         }
-
-        // Find if rendered file exists, otherwise fall back to original
-        byte[] imageBytes = null;
-        boolean hasRendered = false;
-        try (java.io.InputStream is = minioService.downloadFile("rendered/" + imageId + ".png")) {
-          imageBytes = is.readAllBytes();
-          hasRendered = true;
-        } catch (io.minio.errors.MinioException
-            | java.io.IOException
-            | java.security.NoSuchAlgorithmException
-            | java.security.InvalidKeyException e) {
-          // fallback to original image
-          try (java.io.InputStream is =
-              minioService.downloadFile(page.getImage().getStoragePath())) {
-            imageBytes = is.readAllBytes();
-          } catch (io.minio.errors.MinioException
-              | java.io.IOException
-              | java.security.NoSuchAlgorithmException
-              | java.security.InvalidKeyException ex) {
-            log.error("Failed to download original/rendered image for page " + page.getId(), ex);
-          }
-        }
-
-        if (imageBytes != null) {
-          // Determine extension from filename, or default to png
-          String ext = "png";
-          if (filename.contains(".")) {
-            ext = filename.substring(filename.lastIndexOf('.') + 1);
-          }
-          String zipEntryName = String.format("%03d.%s", page.getPageNumber(), ext);
-          zos.putNextEntry(new java.util.zip.ZipEntry(zipEntryName));
-          zos.write(imageBytes);
-          zos.closeEntry();
-        }
-
-        // Collect metadata info
-        Map<String, Object> pageMeta = new HashMap<>();
-        pageMeta.put("pageNumber", page.getPageNumber());
-        pageMeta.put("imageId", imageId.toString());
-        pageMeta.put("originalFilename", page.getImage().getFilename());
-        pageMeta.put("hasRendered", hasRendered);
-
-        List<Layer> imageLayers = layerRepository.findByImageId(imageId);
-        pageMeta.put("layerCount", imageLayers.size());
-
-        List<Map<String, Object>> layersMetaList = new ArrayList<>();
-        double pageTotalCostVal = 0.0;
-        boolean pageHasCost = false;
-
-        // Models used map (for backward compatibility if anything reads pages.modelsUsed)
-        Map<String, String> modelsUsed = new HashMap<>();
-
-        for (Layer l : imageLayers) {
-          Map<String, Object> layerMeta = new HashMap<>();
-          layerMeta.put("id", l.getId().toString());
-          layerMeta.put("type", l.getType());
-          layerMeta.put("visible", l.getVisible() == null || l.getVisible());
-          if (l.getTargetLanguage() != null) {
-            layerMeta.put("targetLanguage", l.getTargetLanguage());
-          }
-
-          double layerCostVal = 0.0;
-          String modelName = null;
-
-          if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
-            com.fasterxml.jackson.databind.node.ObjectNode metaNode =
-                (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
-
-            // Extract model name
-            if (metaNode.has("model")) {
-              modelName = metaNode.get("model").asText();
-              layerMeta.put("model", modelName);
-              modelsUsed.put(l.getType().toLowerCase(), modelName);
-            }
-
-            // Extract layer-level direct cost (e.g. translation)
-            if (metaNode.has("cost")) {
-              com.fasterxml.jackson.databind.JsonNode costNode = metaNode.get("cost");
-              if (costNode.has("estimated_cost")) {
-                double estCost = costNode.get("estimated_cost").asDouble();
-                layerCostVal += estCost;
-                pageTotalCostVal += estCost;
-                pageHasCost = true;
-              }
-            }
-
-            // Extract QA results if present on this layer
-            if (metaNode.has("qa")) {
-              com.fasterxml.jackson.databind.JsonNode qaNode = metaNode.get("qa");
-              Map<String, Object> qaMeta = new HashMap<>();
-              if (qaNode.has("status")) qaMeta.put("status", qaNode.get("status").asText());
-              if (qaNode.has("total_regions"))
-                qaMeta.put("total_regions", qaNode.get("total_regions").asInt());
-              if (qaNode.has("passed")) qaMeta.put("passed", qaNode.get("passed").asInt());
-              if (qaNode.has("failed")) qaMeta.put("failed", qaNode.get("failed").asInt());
-              if (qaNode.has("avg_score"))
-                qaMeta.put("avg_score", qaNode.get("avg_score").asDouble());
-
-              // Extract QA cost if nested
-              if (qaNode.has("cost")) {
-                com.fasterxml.jackson.databind.JsonNode qaCostNode = qaNode.get("cost");
-                if (qaCostNode.has("estimated_cost")) {
-                  double qaEstCost = qaCostNode.get("estimated_cost").asDouble();
-                  layerCostVal += qaEstCost;
-                  pageTotalCostVal += qaEstCost;
-                  pageHasCost = true;
-
-                  Map<String, Object> qaCostMap = new HashMap<>();
-                  qaCostMap.put("estimated_cost", qaEstCost);
-                  qaCostMap.put("display", formatCost(qaEstCost));
-                  qaCostMap.put("currency", "USD");
-                  qaMeta.put("cost", qaCostMap);
-                }
-              }
-              layerMeta.put("qa", qaMeta);
-            }
-          }
-
-          // Build cost map for layer
-          Map<String, Object> layerCostMap = new HashMap<>();
-          layerCostMap.put("estimated_cost", layerCostVal);
-          layerCostMap.put("display", formatCost(layerCostVal));
-          layerCostMap.put("currency", "USD");
-          layerMeta.put("cost", layerCostMap);
-
-          layersMetaList.add(layerMeta);
-        }
-
-        pageMeta.put("layers", layersMetaList);
-        pageMeta.put("modelsUsed", modelsUsed);
-
-        if (pageHasCost) {
-          Map<String, Object> pageCostMap = new HashMap<>();
-          pageCostMap.put("estimated_cost", pageTotalCostVal);
-          pageCostMap.put("display", formatCost(pageTotalCostVal));
-          pageCostMap.put("currency", "USD");
-          pageMeta.put("totalCost", pageCostMap);
-
-          chapterTotalCostVal += pageTotalCostVal;
-          chapterHasCost = true;
-        } else {
-          Map<String, Object> pageCostMap = new HashMap<>();
-          pageCostMap.put("estimated_cost", 0.0);
-          pageCostMap.put("display", "$0.00");
-          pageCostMap.put("currency", "USD");
-          pageMeta.put("totalCost", pageCostMap);
-        }
-
-        // Find active/visible translation layer
-        Layer activeLayer = null;
-        for (Layer l : imageLayers) {
-          if ("translation".equalsIgnoreCase(l.getType()) && Boolean.TRUE.equals(l.getVisible())) {
-            activeLayer = l;
-            break;
-          }
-        }
-
-        if (activeLayer != null) {
-          Map<String, Object> activeLayerMeta = new HashMap<>();
-          activeLayerMeta.put("id", activeLayer.getId().toString());
-          activeLayerMeta.put("type", activeLayer.getType());
-          activeLayerMeta.put("language", activeLayer.getTargetLanguage());
-          pageMeta.put("activeLayer", activeLayerMeta);
-
-          // QA review / manual edit
-          boolean manualQaNeeded = false;
-          if (activeLayer.getMetadataJson() != null && activeLayer.getMetadataJson().isObject()) {
-            com.fasterxml.jackson.databind.node.ObjectNode metaNode =
-                (com.fasterxml.jackson.databind.node.ObjectNode) activeLayer.getMetadataJson();
-            if (metaNode.has("qa") && metaNode.get("qa").has("status")) {
-              String qaStatus = metaNode.get("qa").get("status").asText();
-              manualQaNeeded = "manual_review".equalsIgnoreCase(qaStatus);
-            }
-          }
-          pageMeta.put("manualQaNeeded", manualQaNeeded);
-
-          // Check if manual changes done
-          boolean manualChangesDone = false;
-          List<LayerElement> elements = layerElementRepository.findByLayerId(activeLayer.getId());
-          if (elements != null) {
-            for (LayerElement el : elements) {
-              if (Boolean.TRUE.equals(el.getIsManuallyEdited())) {
-                manualChangesDone = true;
-                break;
-              }
-            }
-          }
-          pageMeta.put("manualChangesDone", manualChangesDone);
-        } else {
-          pageMeta.put("manualChangesDone", false);
-          pageMeta.put("manualQaNeeded", false);
-        }
-
-        pageMetadataList.add(pageMeta);
-      }
-
-      // Compile final metadata.json
-      Map<String, Object> finalMeta = new HashMap<>();
-      finalMeta.put("chapterNumber", chapter.getChapterNumber());
-      finalMeta.put("chapterTitle", chapter.getTitle() != null ? chapter.getTitle() : "");
-      finalMeta.put(
-          "seriesTitle", chapter.getSeries() != null ? chapter.getSeries().getTitle() : "");
-      finalMeta.put("totalPages", pages.size());
-      finalMeta.put("exportTimestamp", java.time.OffsetDateTime.now().toString());
-      finalMeta.put("pages", pageMetadataList);
-
-      if (chapterHasCost) {
-        Map<String, Object> totalCostMap = new HashMap<>();
-        totalCostMap.put("estimated_cost", chapterTotalCostVal);
-        totalCostMap.put("display", formatCost(chapterTotalCostVal));
-        totalCostMap.put("currency", "USD");
-        finalMeta.put("chapterTotalCost", totalCostMap);
-      } else {
-        Map<String, Object> totalCostMap = new HashMap<>();
-        totalCostMap.put("estimated_cost", 0.0);
-        totalCostMap.put("display", "$0.00");
-        totalCostMap.put("currency", "USD");
-        finalMeta.put("chapterTotalCost", totalCostMap);
-      }
-
-      String metaJsonString =
-          objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(finalMeta);
-      zos.putNextEntry(new java.util.zip.ZipEntry("meta-data.json"));
-      zos.write(metaJsonString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-      zos.closeEntry();
-
-      zos.finish();
-      byte[] zipBytes = baos.toByteArray();
-
-      String chapterName =
-          chapter.getTitle() != null
-              ? chapter.getTitle().replaceAll("[^a-zA-Z0-9.-]", "_")
-              : "Chapter";
-      String zipFileName =
-          String.format("chapter_%s_%s.zip", chapter.getChapterNumber(), chapterName);
-
-      return ResponseEntity.ok()
-          .header("Content-Disposition", "attachment; filename=\"" + zipFileName + "\"")
-          .header("Content-Type", "application/zip")
-          .body(zipBytes);
-
-    } catch (java.io.IOException | RuntimeException e) {
-      log.error("Failed to export chapter zip " + chapterId, e);
-      return ResponseEntity.internalServerError()
-          .body(
-              ("Error during export: " + e.getMessage())
-                  .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.set(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=export_" + exportId + ".zip");
+        headers.set(org.springframework.http.HttpHeaders.CONTENT_TYPE, "application/zip");
+        
+        return ResponseEntity.ok().headers(headers).body(zipBytes);
+    } catch (Exception e) {
+        log.error("Failed to download export", e);
+        return ResponseEntity.notFound().build();
     }
   }
 
