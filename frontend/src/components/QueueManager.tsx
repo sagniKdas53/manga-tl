@@ -185,7 +185,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
 
     try {
       await safeFetch("/api/jobs/clear", {
-        method: "POST",
+        method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchJobs();
