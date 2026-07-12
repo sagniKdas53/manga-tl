@@ -23,9 +23,16 @@ This plan covers performance improvements, UI redesign, and quality-of-life enha
 - Emit `job_update` from:
   - `enqueueJobDirectly()` → status: `PENDING`
   - `InternalJobController.updateJobStatus()` → status: `PROCESSING`, `COMPLETED`, `FAILED`
-  - `pauseQueue()` / `resumeQueue()` → special events: `{ event: "queue_paused" }` and `{ event: "queue_resumed" }` so the frontend knows the request was acknowledged
-  - `clearQueue()` → emit `{ event: "queue_cleared", clearedCount: N }`
-- Use `emitNotificationForImage()` to route to the correct user, or broadcast to all connected emitters for queue-level events (pause/resume/clear)
+  - **Queue-level events** (broadcast to all connected emitters):
+    - `pauseQueue()` / `resumeQueue()` → `{ event: "queue_paused" }` / `{ event: "queue_resumed" }`
+    - `clearQueue()` → `{ event: "queue_cleared", clearedCount: N }`
+  - **Per-job events** (targeted to the job's owner via image→user mapping):
+    - `pauseJob()` → `{ event: "job_update", jobId, status: "PAUSED" }`
+    - `resumeJob()` → `{ event: "job_update", jobId, status: "PENDING" }`
+    - `deleteJob()` → `{ event: "job_update", jobId, status: "DELETED" }`
+    - `retryJob()` → `{ event: "job_update", jobId, status: "PENDING", attempt: 1 }`
+- Use `emitNotificationForImage()` to route per-job events to the correct user
+- Use a new `emitToAllUsers()` method for queue-level events (pause/resume/clear)
 
 ### A.2 Frontend: SSE-Driven Queue Manager
 
@@ -57,6 +64,13 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
   - Clear Queue
   - Pause Queue (with note: "all queued jobs will be paused")
 - **Play/Pause toggle** — replace text buttons with ▶/⏸ icon buttons
+- **Per-job controls** — each job card gets:
+  - ⏸ Pause button (only for PENDING jobs → sets to PAUSED, SSE confirms immediately)
+  - ▶ Resume button (only for PAUSED jobs → sets to PENDING, SSE confirms)
+  - 🔄 Retry button (only for FAILED jobs → resets to PENDING, SSE confirms)
+  - ✕ Cancel/Delete button (with confirm, SSE sends `DELETED` event)
+  - When any per-job action is taken, the frontend should optimistically update the UI and then confirm via the SSE event
+  - Other paused jobs should NOT block processing — only that specific job is paused
 - **Job card improvements**:
   - Show `Series → Ch.N → Page M` context
   - Make status dot larger and more prominent
@@ -81,6 +95,9 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 4. Click Clear Queue → confirm modal → verify cleared count toast
 5. Kill the backend briefly → restart → verify the heartbeat fallback re-fetches state within 30s
 6. Open two browser tabs → one uploads, the other should see job updates via SSE simultaneously
+7. **Per-job pause**: Queue 20 jobs → pause job #2 → verify the other 19 continue processing → verify job #2 shows yellow dot
+8. **Per-job resume**: Resume the paused job #2 → verify it goes back to blue → gets picked up for processing
+9. **Per-job retry**: Let a job fail → click retry → verify SSE sends `PENDING` event with `attempt: 1` → job reappears in queue
 
 ---
 

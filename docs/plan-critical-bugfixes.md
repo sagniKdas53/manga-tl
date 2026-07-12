@@ -225,20 +225,62 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
   GOOD: "ELF!"
   ```
 
-### 4.3 Investigate Job Retry Counter
+### 4.3 Fix Job Retry Counter (Confirmed Bug)
 
-**Observation**: Jobs never show 2/3 or 3/3 retries — they seem to go straight from 1/3 to FAILED.
+**Bug**: Frontend always shows `Attempt: 1/3` even when the worker retries internally (confirmed in `run-13-retry-check.log`).
 
-**Investigation**:
+**Root cause** (confirmed via code analysis):
 
-- Check worker's retry logic: does it increment `attempt` and re-push to the queue?
-- Check if the backend `retryJob()` endpoint resets attempt to 1 (it does at line 82) — this means manual retries always restart the counter, but automatic retries may not be working
-- Trace the flow: worker dequeues → fails → should update status to PENDING with attempt+1 → re-push
+The worker's `rq_tasks.py` has **no job-level retry logic at all**. The flow is:
+1. Worker calls `update_job_status(job_id, "PROCESSING")` — sends `{status: "PROCESSING"}` (no attempt field)
+2. If handler succeeds → `update_job_status(job_id, "COMPLETED")`
+3. If handler fails → `update_job_status(job_id, "FAILED", error)` — goes straight to FAILED, never retries
 
-**Fix** (worker `app.py` + `InternalJobController.java`):
+The "retries" visible in worker logs (e.g., `Retry pass 1`, `Retrying 4 failed items in batch`) are **internal translation batch retries** within a single job execution — they retry individual regions against different models, not the job itself.
 
-- Ensure the worker, on failure, calls `PATCH /api/internal/jobs/{id}/status` with `status=PENDING` and `attempt=current+1`
-- Backend status update endpoint should re-push to Redis if attempt < maxAttempts, otherwise set to FAILED
+The `attempt` field in the job payload is set to `1` at creation time in `enqueueJobDirectly()` and **never incremented**. The backend `updateJobStatus` endpoint also doesn't accept or update `attempt`.
+
+**Fix** (both `rq_tasks.py` + `InternalJobController.java`):
+
+1. **Worker** (`rq_tasks.py`): On failure, instead of immediately marking FAILED:
+   - Read `attempt` and `maxAttempts` from `job_data`
+   - If `attempt < maxAttempts`: call `PATCH /status` with `{status: "PENDING", attempt: attempt+1}`
+   - If `attempt >= maxAttempts`: call `PATCH /status` with `{status: "FAILED", error: ...}`
+2. **Backend** (`InternalJobController.java`): Update `updateJobStatus` to:
+   - Accept optional `attempt` field in the payload
+   - When status is set to `PENDING` with a new attempt, update the DB record AND re-push to Redis
+   - When status is set to `PROCESSING`/`COMPLETED`/`FAILED`, include `attempt` in the response for frontend display
+3. **Backend** (`Job.java` / `JobController.getJobs()`): Ensure `attempt` and `maxAttempts` are included in the job list response so the frontend can display `2/3`, `3/3`
+
+### 4.4 Fix Dockerfile Java Version Mismatch
+
+**Bug**: `docker compose build` fails with `failed to resolve source metadata for docker.io/library/maven:3-eclipse-temurin-26: no such host`.
+
+**Root cause**: `backend/Dockerfile:17` uses `maven:3-eclipse-temurin-26` and line 33 uses `eclipse-temurin:26-jre-alpine`. Java 26 is not GA — the Docker tags don't exist on Docker Hub. The project compiles with `java.version=17` and `release=17` in `pom.xml`, so there's no need for JDK 26.
+
+**Fix** (`backend/Dockerfile`):
+- Change `FROM maven:3-eclipse-temurin-26` → `FROM maven:3-eclipse-temurin-21`
+- Change `FROM eclipse-temurin:26-jre-alpine` → `FROM eclipse-temurin:21-jre-alpine`
+- Using JDK 21 (LTS) is forward-compatible with the `release=17` compiler target and gives access to virtual threads and other improvements if needed later
+
+### 4.5 Fix QA Skipping Instead of Falling Back to Default Model
+
+**Bug**: From `run-13-retry-check.log` line 693-695:
+```
+[QA] Processing image: ... (mode=auto)
+[QA] Skipping QA (QA_MODE=none) for image: ...
+[QA] Unknown QA_MODE=auto, falling back to auto-pass
+```
+QA is configured as `auto` but when the configured provider (ollama) can't be reached or doesn't have the QA model, it falls back to `none` (skip) instead of trying the globally configured QA models.
+
+**Root cause**: The `auto` resolution in `process_qa()` checks if the job's `qaProvider` is available locally. When `qaProvider=ollama` and the ollama endpoint doesn't have the configured model, it resolves to `none` instead of falling through to the global default QA models from system settings.
+
+**Fix** (`qa.py`):
+- When `qa_mode == "auto"`, check available providers in priority order:
+  1. Job's `qaProvider` + `qaLlmModel`/`qaVlmModel` — try this first
+  2. If that fails, fall back to global system settings QA models
+  3. Only resolve to `none` if ALL options are exhausted
+- This mirrors how translation already handles the `Falling back to individual translation... using model 'deepseek/deepseek-v4-pro'` pattern seen in the same log
 
 ### ✅ Checkpoint 4 — Worker Stability
 
@@ -246,13 +288,16 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 
 - `test_health_server.py`: simulate aborted connection → verify no unhandled exception
 - `test_translation_flow_e2e.py`: verify output contains no romanized text for known inputs
-- Worker retry test: submit a job that will fail → verify it retries up to maxAttempts with incrementing counter
+- `test_rq_tasks.py`: submit a job that will fail → verify it retries up to maxAttempts with incrementing counter → verify status PATCH includes `attempt: 2`
+- `test_qa.py`: set QA mode to `auto` with unreachable provider → verify it falls back to default model, not `none`
 
 **Manual checks:**
 
 1. Run pipeline → check worker logs for absence of BrokenPipeError stack traces
 2. Run OCR on a test page → check export → model should say `PaddleOCR(PP-OCRv6_medium_rec)` not `MangaOCR/...`
-3. Kill MinIO briefly while a job is running → restart → verify the job retries and shows 2/3 or 3/3 attempts
+3. Kill MinIO briefly while a job is running → restart → verify the job retries and shows `Attempt: 2/3` in the frontend
+4. `docker compose build` → verify no `temurin-26` resolution failure
+5. Set QA provider to unreachable ollama → run pipeline → verify QA uses fallback model (not skipped)
 
 ---
 
@@ -274,4 +319,6 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 | 3.3 | `SecurityConfig.java` | Remove /file permitAll |
 | 4.1 | `health_server.py` | Catch BrokenPipeError |
 | 4.2 | `translation.py` | Anti-romanization prompt update |
-| 4.3 | `app.py`, `InternalJobController.java` | Fix retry counter increment |
+| 4.3 | `rq_tasks.py`, `InternalJobController.java` | Implement job-level retry with attempt counter |
+| 4.4 | `backend/Dockerfile` | Fix Java version: temurin-26 → temurin-21 |
+| 4.5 | `qa.py` | QA fallback to default model instead of skipping |
