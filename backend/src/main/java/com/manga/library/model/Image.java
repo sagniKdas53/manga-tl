@@ -41,6 +41,12 @@ public class Image {
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
 
+  @Column(name = "last_edited_at")
+  private OffsetDateTime lastEditedAt;
+
+  @Column(name = "last_rendered_at")
+  private OffsetDateTime lastRenderedAt;
+
   @PrePersist
   protected void onCreate() {
     createdAt = OffsetDateTime.now();

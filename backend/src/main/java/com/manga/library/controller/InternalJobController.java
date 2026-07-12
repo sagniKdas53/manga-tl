@@ -398,6 +398,10 @@ public class InternalJobController {
     resolveNotificationContext(imageId);
     try {
       jobCoordinatorService.handleRenderCallback(imageId);
+      imageRepository.findById(imageId).ifPresent(image -> {
+          image.setLastRenderedAt(java.time.OffsetDateTime.now());
+          imageRepository.save(image);
+      });
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing render callback", e);
