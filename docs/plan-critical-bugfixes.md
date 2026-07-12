@@ -155,6 +155,7 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 - Since rendering is relatively fast, we can drop a message to the Redis `queue:render` to update the image in MinIO so future exports (and QA) see the edited version.
 
 ### ✅ Checkpoint 2 — API & Export
+
 **Automated tests to add/run:**
 
 - `SeriesControllerTest`: export a chapter with pages → verify 200 + valid ZIP with images
@@ -164,9 +165,9 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 
 **Manual checks:**
 
-1. Export a chapter as ZIP → should download successfully, open the ZIP → verify images and `meta-data.json` are inside
-2. Queue 5 jobs → click "Clear Queue" → verify toast + all non-processing jobs disappear
-3. Set chapter QA mode to inherit (let it resolve to "auto") → run pipeline → check worker logs for `mode=vlm` or `mode=llm` (not `mode=auto`)
+1. Export a chapter as ZIP → should download successfully, open the ZIP → verify images and `meta-data.json` are inside - Processing
+2. Queue 5 jobs → click "Clear Queue" → verify toast + all non-processing jobs disappear - Done
+3. Set chapter QA mode to inherit (let it resolve to "auto") → run pipeline → check worker logs for `mode=vlm` or `mode=llm` (not `mode=auto`) - Done
 
 **Notes:**
 

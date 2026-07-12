@@ -491,6 +491,13 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         throw new Error("Failed to export chapter zip");
       }
 
+      const contentType = res.headers.get("content-type");
+      if (res.status === 202 || (contentType && contentType.includes("application/json"))) {
+        const data = await res.json();
+        showToast(data.message || "Export started in the background. You will be notified when it is ready.", "info");
+        return;
+      }
+
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
