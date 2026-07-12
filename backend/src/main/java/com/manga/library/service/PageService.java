@@ -5,6 +5,7 @@ import com.manga.library.repository.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,12 @@ public class PageService {
       Integer pageNumber,
       String hash,
       User user) {
+    Optional<Page> existingPageOpt =
+        pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
+    if (existingPageOpt.isPresent()) {
+      shiftPagesUp(chapter.getId(), pageNumber);
+    }
+
     Image image =
         Image.builder()
             .filename(filename)
@@ -47,9 +54,32 @@ public class PageService {
   @Transactional
   public Page createPageWithExistingImage(
       Chapter chapter, Image existingImage, Integer pageNumber, User user) {
+    Optional<Page> existingPageOpt =
+        pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
+    if (existingPageOpt.isPresent()) {
+      Page existingPage = existingPageOpt.get();
+      if (existingPage.getImage().getId().equals(existingImage.getId())) {
+        return existingPage;
+      } else {
+        shiftPagesUp(chapter.getId(), pageNumber);
+      }
+    }
+
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(existingImage).build();
     Objects.requireNonNull(page, "page cannot be null");
     return pageRepository.save(page);
+  }
+
+  private void shiftPagesUp(UUID chapterId, Integer startingPageNumber) {
+    List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
+    for (int i = pages.size() - 1; i >= 0; i--) {
+      Page p = pages.get(i);
+      if (p.getPageNumber() >= startingPageNumber) {
+        p.setPageNumber(p.getPageNumber() + 1);
+        pageRepository.save(p);
+      }
+    }
+    pageRepository.flush();
   }
 
   @Transactional
@@ -61,18 +91,23 @@ public class PageService {
             .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
 
     Image image = page.getImage();
-    List<String> pathsToDelete = new ArrayList<>();
-    if (image.getStoragePath() != null) {
-      pathsToDelete.add(image.getStoragePath());
-    }
-    if (image.getThumbnailStoragePath() != null) {
-      pathsToDelete.add(image.getThumbnailStoragePath());
-    }
-    if (image.getId() != null) {
-      pathsToDelete.add("rendered/" + image.getId() + ".png");
-    }
     UUID chapterId = page.getChapter().getId();
     UUID imageId = image.getId();
+
+    long remainingReferences = pageRepository.findByImageId(imageId).size();
+
+    List<String> pathsToDelete = new ArrayList<>();
+    if (remainingReferences == 1) {
+      if (image.getStoragePath() != null) {
+        pathsToDelete.add(image.getStoragePath());
+      }
+      if (image.getThumbnailStoragePath() != null) {
+        pathsToDelete.add(image.getThumbnailStoragePath());
+      }
+      if (image.getId() != null) {
+        pathsToDelete.add("rendered/" + image.getId() + ".png");
+      }
+    }
 
     if (page.getChapter() != null && page.getChapter().getSeries() != null) {
       Series series = page.getChapter().getSeries();
@@ -86,8 +121,11 @@ public class PageService {
     // 1. Delete page first
     pageRepository.delete(page);
 
-    // 2. Delete image (triggers cascade delete in Postgres to panels, OCR, layers, etc.)
-    imageRepository.delete(image);
+    // 2. Delete image (triggers cascade delete in Postgres to panels, OCR, layers, etc.) only if
+    // last reference
+    if (remainingReferences == 1) {
+      imageRepository.delete(image);
+    }
 
     // 3. Flush deletions to DB
     pageRepository.flush();

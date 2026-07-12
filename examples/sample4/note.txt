@@ -1,0 +1,1 @@
+When using with a cloud VLM the image only-detected-the-dialog-boxes-ignored-the-rest

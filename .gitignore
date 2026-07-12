@@ -10,7 +10,7 @@ logs/
 .idea
 # examples/sample[2-9]
 # examples/sample[1-9][0-9]
-examples/Sample[2-9]
+examples/Sample[1-9]
 examples/Sample[1-9][0-9]
 AGENTS.md
 CLAUDE.md

@@ -592,7 +592,7 @@ public class SeriesController {
                 user);
 
         // Queue pipeline
-        jobCoordinatorService.startPipeline(page.getImage().getId());
+        jobCoordinatorService.startPipeline(page.getImage().getId(), chapter.getId());
         pageNum++;
       }
 
