@@ -62,8 +62,7 @@ public class JobControllerTest {
   public void testClearQueue() throws Exception {
     Job job1 = Job.builder().id("job1").type("ocr").status("FAILED").build();
     Job job2 = Job.builder().id("job2").type("ocr").status("PENDING").build();
-    when(jobRepository.findByStatusInOrderByCreatedAtAsc(any()))
-        .thenReturn(List.of(job1, job2));
+    when(jobRepository.findByStatusInOrderByCreatedAtAsc(any())).thenReturn(List.of(job1, job2));
 
     mockMvc.perform(delete("/api/jobs/clear")).andExpect(status().isOk());
 

@@ -26,6 +26,10 @@ public class JobCoordinatorServiceTest {
   @Autowired private LayerElementRepository layerElementRepository;
   @Autowired private JobRepository jobRepository;
   @Autowired private TransactionTemplate transactionTemplate;
+  @Autowired private PageRepository pageRepository;
+  @Autowired private ChapterRepository chapterRepository;
+  @Autowired private SeriesRepository seriesRepository;
+  @Autowired private SystemSettingsService systemSettingsService;
 
   @org.springframework.boot.test.mock.mockito.MockBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
@@ -685,5 +689,65 @@ public class JobCoordinatorServiceTest {
     layerRepository.delete(verifiedOld);
     layerRepository.delete(verifiedOcr);
     imageRepository.delete(image);
+  }
+
+  @Test
+  public void testChapterOcrProviderOverride() {
+    // Share image between chapters with different ocrProvider settings -> start pipeline from each
+    // -> verify correct provider
+    Series series =
+        Series.builder()
+            .title("Test Series")
+            .originalLanguage("ja")
+            .sourceLanguage("ja")
+            .targetLanguage("en")
+            .readingDirection("rtl")
+            .build();
+    series = seriesRepository.save(series);
+
+    Chapter chapterA =
+        Chapter.builder().series(series).chapterNumber(1.0).ocrProvider("openrouter").build();
+    chapterA = chapterRepository.save(chapterA);
+
+    Chapter chapterB =
+        Chapter.builder().series(series).chapterNumber(2.0).ocrProvider("local").build();
+    chapterB = chapterRepository.save(chapterB);
+
+    Image image = Image.builder().filename("shared.png").storagePath("shared/shared.png").build();
+    image = imageRepository.save(image);
+
+    Page pageA = Page.builder().chapter(chapterA).image(image).pageNumber(1).build();
+    pageRepository.save(pageA);
+
+    Page pageB = Page.builder().chapter(chapterB).image(image).pageNumber(1).build();
+    pageRepository.save(pageB);
+
+    AtomicReference<String> pushedProvider = new AtomicReference<>();
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> payloadMap =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            pushedProvider.set((String) payloadMap.get("ocrProvider"));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
+
+    // Test Chapter A
+    jobCoordinatorService.startPipeline(image.getId(), chapterA.getId());
+    assertEquals("openrouter", pushedProvider.get());
+
+    // Test Chapter B
+    jobCoordinatorService.startPipeline(image.getId(), chapterB.getId());
+    assertEquals("local", pushedProvider.get());
+
+    // Clean up
+    pageRepository.delete(pageA);
+    pageRepository.delete(pageB);
+    imageRepository.delete(image);
+    chapterRepository.delete(chapterA);
+    chapterRepository.delete(chapterB);
+    seriesRepository.delete(series);
   }
 }

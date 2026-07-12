@@ -424,7 +424,8 @@ public class PageController {
                                   && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
 
               if (!targetTranslationExists) {
-                jobCoordinatorService.triggerImageRedo(existingImage.getId(), "translation");
+                jobCoordinatorService.triggerImageRedo(
+                    existingImage.getId(), "translation", chapter.getId());
               }
               nextNum++;
               continue;
@@ -467,7 +468,7 @@ public class PageController {
 
             if (firstPage == null) firstPage = pg;
 
-            jobCoordinatorService.startPipeline(pg.getImage().getId());
+            jobCoordinatorService.startPipeline(pg.getImage().getId(), chapter.getId());
             nextNum++;
           }
 
@@ -499,8 +500,26 @@ public class PageController {
             fileHash,
             existingImage.getId());
 
+        // Check if page already exists at this exact slot (idempotency guard)
+        Optional<Page> exactSlotPage =
+            pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
+        if (exactSlotPage.isPresent()
+            && exactSlotPage.get().getImage().getId().equals(existingImage.getId())) {
+          return ResponseEntity.ok(
+              new UploadResponse(
+                  exactSlotPage.get().getId(), existingImage.getId(), "already_exists"));
+        }
+
+        // Calculate max page number + 1 for duplicate upload
+        List<Page> allChapterPages =
+            pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
+        int safePageNumber =
+            allChapterPages.isEmpty()
+                ? 1
+                : allChapterPages.get(allChapterPages.size() - 1).getPageNumber() + 1;
+
         Page page =
-            pageService.createPageWithExistingImage(chapter, existingImage, pageNumber, user);
+            pageService.createPageWithExistingImage(chapter, existingImage, safePageNumber, user);
 
         // Check if target language layer exists
         String targetLang =
@@ -519,7 +538,8 @@ public class PageController {
               "Target translation layer ({}) missing for existing image {}, queuing translation",
               targetLang,
               existingImage.getId());
-          jobCoordinatorService.triggerImageRedo(existingImage.getId(), "translation");
+          jobCoordinatorService.triggerImageRedo(
+              existingImage.getId(), "translation", chapter.getId());
           if (user != null) sseService.mapImageToUser(existingImage.getId(), user.getId());
         }
 
@@ -559,7 +579,7 @@ public class PageController {
               user);
 
       // Trigger pipeline
-      jobCoordinatorService.startPipeline(page.getImage().getId());
+      jobCoordinatorService.startPipeline(page.getImage().getId(), chapter.getId());
       if (user != null) sseService.mapImageToUser(page.getImage().getId(), user.getId());
 
       return ResponseEntity.ok(

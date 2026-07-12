@@ -36,6 +36,8 @@ public class PageServiceTest {
     Image image = Image.builder().id(UUID.randomUUID()).build();
     Page page = Page.builder().id(UUID.randomUUID()).build();
 
+    when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
+        .thenReturn(java.util.Optional.empty());
     when(imageRepository.save(any(Image.class))).thenReturn(image);
     when(pageRepository.save(any(Page.class))).thenReturn(page);
 
@@ -55,6 +57,8 @@ public class PageServiceTest {
     User user = new User();
     Page page = Page.builder().id(UUID.randomUUID()).build();
 
+    when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
+        .thenReturn(java.util.Optional.empty());
     when(pageRepository.save(any(Page.class))).thenReturn(page);
 
     Page result = pageService.createPageWithExistingImage(chapter, image, 1, user);
@@ -83,6 +87,7 @@ public class PageServiceTest {
     Page page = Page.builder().id(pageId).chapter(chapter).image(image).build();
 
     when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.of(page));
+    when(pageRepository.findByImageId(pageId)).thenReturn(java.util.List.of(page));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
         .thenReturn(java.util.Collections.emptyList());
 
@@ -93,6 +98,56 @@ public class PageServiceTest {
     verify(pageRepository, times(1)).delete(page);
     verify(imageRepository, times(1)).delete(image);
     verify(seriesRepository, times(1)).save(series);
+  }
+
+  @Test
+  public void testDeletePageDb_SharedImage() {
+    UUID pageId = UUID.randomUUID();
+    UUID chapterId = UUID.randomUUID();
+    Chapter chapter = Chapter.builder().id(chapterId).build();
+    Image image = Image.builder().id(pageId).storagePath("path").build();
+    Page page1 = Page.builder().id(pageId).chapter(chapter).image(image).build();
+    Page page2 = Page.builder().id(UUID.randomUUID()).chapter(chapter).image(image).build();
+
+    when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.of(page1));
+    when(pageRepository.findByImageId(pageId)).thenReturn(java.util.List.of(page1, page2));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(java.util.Collections.emptyList());
+
+    java.util.List<String> paths = pageService.deletePageDb(pageId);
+
+    assertNotNull(paths);
+    assertEquals(0, paths.size()); // should not delete image files
+    verify(pageRepository, times(1)).delete(page1);
+    verify(imageRepository, never()).delete(image);
+  }
+
+  @Test
+  public void testCreatePageWithExistingImage_Conflict() {
+    Chapter chapter = Chapter.builder().id(UUID.randomUUID()).build();
+    Image newImage = Image.builder().id(UUID.randomUUID()).build();
+    Image existingImage = Image.builder().id(UUID.randomUUID()).build();
+    User user = new User();
+
+    Page conflictingPage =
+        Page.builder()
+            .id(UUID.randomUUID())
+            .chapter(chapter)
+            .pageNumber(1)
+            .image(existingImage)
+            .build();
+    Page newPage = Page.builder().id(UUID.randomUUID()).build();
+
+    when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
+        .thenReturn(java.util.Optional.of(conflictingPage));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId()))
+        .thenReturn(java.util.List.of(conflictingPage));
+    when(pageRepository.save(any(Page.class))).thenReturn(newPage);
+
+    Page result = pageService.createPageWithExistingImage(chapter, newImage, 1, user);
+
+    assertNotNull(result);
+    verify(pageRepository, times(2)).save(any(Page.class)); // 1 for shift, 1 for new
   }
 
   @Test

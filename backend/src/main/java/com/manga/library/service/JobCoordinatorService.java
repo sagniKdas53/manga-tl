@@ -100,12 +100,21 @@ public class JobCoordinatorService {
 
   @Transactional
   public void startPipeline(UUID imageId) {
-    log.info("Starting pipeline for image {}", imageId);
-    enqueueJob("panel-detection", imageId);
+    startPipeline(imageId, null);
+  }
+
+  @Transactional
+  public void startPipeline(UUID imageId, UUID chapterId) {
+    log.info("Starting pipeline for image {} and chapter {}", imageId, chapterId);
+    enqueueJob("panel-detection", imageId, chapterId);
   }
 
   private void enqueueJob(String jobType, UUID imageId) {
-    enqueueJob(jobType, imageId, "normal", job -> {});
+    enqueueJob(jobType, imageId, null, "normal", job -> {});
+  }
+
+  private void enqueueJob(String jobType, UUID imageId, UUID chapterId) {
+    enqueueJob(jobType, imageId, chapterId, "normal", job -> {});
   }
 
   private void enqueueJob(
@@ -113,12 +122,22 @@ public class JobCoordinatorService {
       UUID imageId,
       String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
-    enqueueJobDirectly(jobType, imageId, priority, payloadCustomizer);
+    enqueueJobDirectly(jobType, imageId, null, priority, payloadCustomizer);
+  }
+
+  private void enqueueJob(
+      String jobType,
+      UUID imageId,
+      UUID chapterId,
+      String priority,
+      Consumer<Map<String, Object>> payloadCustomizer) {
+    enqueueJobDirectly(jobType, imageId, chapterId, priority, payloadCustomizer);
   }
 
   private void enqueueJobDirectly(
       String jobType,
       UUID imageId,
+      UUID chapterId,
       String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
     try {
@@ -141,78 +160,70 @@ public class JobCoordinatorService {
       job.put("maxAttempts", 3);
       job.put("createdAt", OffsetDateTime.now().toString());
 
-      pageRepository.findByImageId(imageId).stream()
-          .findFirst()
-          .ifPresent(
-              page -> {
-                if (page.getChapter() != null && page.getChapter().getSeries() != null) {
-                  Series series = page.getChapter().getSeries();
-                  Chapter chapter = page.getChapter();
-                  if (series.getReadingDirection() != null) {
-                    job.put("readingDirection", series.getReadingDirection().trim().toLowerCase());
-                  }
-                  if (series.getSourceLanguage() != null) {
-                    job.put("sourceLanguage", series.getSourceLanguage().trim().toLowerCase());
-                  }
-                  if (series.getTargetLanguage() != null) {
-                    job.put("targetLanguage", series.getTargetLanguage().trim().toLowerCase());
-                  }
-                  job.put("pageNumber", page.getPageNumber());
-                  job.put("chapterNumber", chapter.getChapterNumber());
-                  if (chapter.getTitle() != null) job.put("chapterTitle", chapter.getTitle());
-                  if (series.getTitle() != null) job.put("seriesTitle", series.getTitle());
+      Optional<Page> pageOpt =
+          chapterId != null
+              ? pageRepository.findByChapterIdAndImageId(chapterId, imageId)
+              : pageRepository.findByImageId(imageId).stream().findFirst();
 
-                  com.manga.library.dto.SystemSettingsDto settings =
-                      systemSettingsService.getSettings();
+      pageOpt.ifPresent(
+          page -> {
+            if (page.getChapter() != null && page.getChapter().getSeries() != null) {
+              Series series = page.getChapter().getSeries();
+              Chapter chapter = page.getChapter();
+              if (series.getReadingDirection() != null) {
+                job.put("readingDirection", series.getReadingDirection().trim().toLowerCase());
+              }
+              if (series.getSourceLanguage() != null) {
+                job.put("sourceLanguage", series.getSourceLanguage().trim().toLowerCase());
+              }
+              if (series.getTargetLanguage() != null) {
+                job.put("targetLanguage", series.getTargetLanguage().trim().toLowerCase());
+              }
+              job.put("pageNumber", page.getPageNumber());
+              job.put("chapterNumber", chapter.getChapterNumber());
+              if (chapter.getTitle() != null) job.put("chapterTitle", chapter.getTitle());
+              if (series.getTitle() != null) job.put("seriesTitle", series.getTitle());
 
-                  String resolvedOcrProvider =
-                      resolveModel(
-                          chapter.getOcrProvider(),
-                          series.getOcrProvider(),
-                          settings.getOcrProvider());
-                  job.put("ocrProvider", resolvedOcrProvider);
+              com.manga.library.dto.SystemSettingsDto settings =
+                  systemSettingsService.getSettings();
 
-                  if ("local".equals(resolvedOcrProvider)) {
-                    job.put("ocrModel", settings.getLocalOcrModel());
-                  } else {
-                    job.put(
-                        "ocrModel",
-                        resolveModel(
-                            chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
-                  }
-                  job.put(
-                      "tlProvider",
-                      resolveModel(
-                          chapter.getTlProvider(),
-                          series.getTlProvider(),
-                          settings.getTlProvider()));
-                  job.put(
-                      "tlModel",
-                      resolveModel(
-                          chapter.getTlModel(), series.getTlModel(), settings.getTlModel()));
-                  job.put(
-                      "qaProvider",
-                      resolveModel(
-                          chapter.getQaProvider(),
-                          series.getQaProvider(),
-                          settings.getQaProvider()));
-                  job.put(
-                      "qaLlmModel",
-                      resolveModel(
-                          chapter.getQaLlmModel(),
-                          series.getQaLlmModel(),
-                          settings.getQaLlmModel()));
-                  job.put(
-                      "qaVlmModel",
-                      resolveModel(
-                          chapter.getQaVlmModel(),
-                          series.getQaVlmModel(),
-                          settings.getQaVlmModel()));
-                  job.put(
-                      "qaMode",
-                      resolveModel(chapter.getQaMode(), series.getQaMode(), settings.getQaMode()));
-                }
-              });
+              String resolvedOcrProvider =
+                  resolveModel(
+                      chapter.getOcrProvider(), series.getOcrProvider(), settings.getOcrProvider());
+              job.put("ocrProvider", resolvedOcrProvider);
+
+              if ("local".equals(resolvedOcrProvider)) {
+                job.put("ocrModel", settings.getLocalOcrModel());
+              } else {
+                job.put(
+                    "ocrModel",
+                    resolveModel(
+                        chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
+              }
+              job.put(
+                  "tlProvider",
+                  resolveModel(
+                      chapter.getTlProvider(), series.getTlProvider(), settings.getTlProvider()));
+              job.put(
+                  "tlModel",
+                  resolveModel(chapter.getTlModel(), series.getTlModel(), settings.getTlModel()));
+              job.put(
+                  "qaProvider",
+                  resolveModel(
+                      chapter.getQaProvider(), series.getQaProvider(), settings.getQaProvider()));
+              job.put(
+                  "qaLlmModel",
+                  resolveModel(
+                      chapter.getQaLlmModel(), series.getQaLlmModel(), settings.getQaLlmModel()));
+              job.put(
+                  "qaVlmModel",
+                  resolveModel(
+                      chapter.getQaVlmModel(), series.getQaVlmModel(), settings.getQaVlmModel()));
+              job.put(
+                  "qaMode",
+                  resolveModel(chapter.getQaMode(), series.getQaMode(), settings.getQaMode()));
+            }
+          });
 
       payloadCustomizer.accept(job);
 
@@ -794,13 +805,22 @@ public class JobCoordinatorService {
 
   @Transactional
   public void triggerImageRedo(UUID imageId, String jobType) {
-    log.info("Triggering image redo for image {} with job type {}", imageId, jobType);
+    triggerImageRedo(imageId, jobType, null);
+  }
+
+  @Transactional
+  public void triggerImageRedo(UUID imageId, String jobType, UUID chapterId) {
+    log.info(
+        "Triggering image redo for image {} with job type {} and chapter {}",
+        imageId,
+        jobType,
+        chapterId);
     if ("ocr".equals(jobType)) {
       redisTemplate.opsForValue().set("image:ocr:reason:" + imageId, "manual-re-ocr");
     } else if ("translation".equals(jobType)) {
       redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "manual-re-translate");
     }
-    enqueueJob(jobType, imageId);
+    enqueueJob(jobType, imageId, chapterId);
   }
 
   @Transactional

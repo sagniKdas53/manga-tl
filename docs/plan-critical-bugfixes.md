@@ -72,10 +72,19 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 
 **Manual checks:**
 
-1. Upload the same image to 2 chapters
-2. Delete from one → open the other → image must still display
-3. Set Chapter A's OCR to `local` and Chapter B's to `openrouter` → re-run OCR from each → verify in worker logs which provider was used
-4. Re-upload a previously deleted image → must not 500
+1. Upload the same image to 2 chapters - ✅ done
+2. Delete from one → open the other → image must still display - ✅ done
+3. Set Chapter A's OCR to `local` and Chapter B's to `openrouter` → re-run OCR from each → verify in worker logs which provider was used - ❌ needs refinement
+4. Re-upload a previously deleted image → must not 500 - ✅ done
+
+**Notes:**
+
+1. The same image has the same hash so it makes sense to re-use the layers across chapters, but in some cause not creating a copy is bad as it causes the images to not be processed how we want
+2. Image `b8cfa87c-a792-45a5-824e-f7fb36dcf114` was added to `https://ideapad.tail9ece4.ts.net/tlhub/chapters/f8eb5518-1c4e-47ae-98e8-2f4961dd12ee/local-ocr/reader/1` first and two runs of OCR were done which were correctly done by `MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)`
+3. When added to `https://ideapad.tail9ece4.ts.net/tlhub/chapters/51870862-444c-4576-92c7-3df29cd3033c/cloud-ocr/reader/1` this time when a re-ocr was triggered it still used the old OCR `MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)` instead of the new one `google/gemini-2.5-flash` even though the chapter `https://ideapad.tail9ece4.ts.net/tlhub/chapters/51870862-444c-4576-92c7-3df29cd3033c/cloud-ocr/reader/1` was set to use `google/gemini-2.5-flash` as the cloud OCR over-ride
+   1. So either the over-ride is not working
+   2. Or this multi chapter is causing the ol(first chapters properties to be used instead of the current one)
+4. Checkout [logs](../logs/run-14-phase-1.log) and [project](../examples/Sample1/page-1-layers(26)/project.json) to see if you can find the issue
 
 ---
 
@@ -232,6 +241,7 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 **Root cause** (confirmed via code analysis):
 
 The worker's `rq_tasks.py` has **no job-level retry logic at all**. The flow is:
+
 1. Worker calls `update_job_status(job_id, "PROCESSING")` — sends `{status: "PROCESSING"}` (no attempt field)
 2. If handler succeeds → `update_job_status(job_id, "COMPLETED")`
 3. If handler fails → `update_job_status(job_id, "FAILED", error)` — goes straight to FAILED, never retries
@@ -259,6 +269,7 @@ The `attempt` field in the job payload is set to `1` at creation time in `enqueu
 **Root cause**: `backend/Dockerfile:17` uses `maven:3-eclipse-temurin-26` and line 33 uses `eclipse-temurin:26-jre-alpine`. Java 26 is not GA — the Docker tags don't exist on Docker Hub. The project compiles with `java.version=17` and `release=17` in `pom.xml`, so there's no need for JDK 26.
 
 **Fix** (`backend/Dockerfile`):
+
 - Change `FROM maven:3-eclipse-temurin-26` → `FROM maven:3-eclipse-temurin-21`
 - Change `FROM eclipse-temurin:26-jre-alpine` → `FROM eclipse-temurin:21-jre-alpine`
 - Using JDK 21 (LTS) is forward-compatible with the `release=17` compiler target and gives access to virtual threads and other improvements if needed later
@@ -266,16 +277,19 @@ The `attempt` field in the job payload is set to `1` at creation time in `enqueu
 ### 4.5 Fix QA Skipping Instead of Falling Back to Default Model
 
 **Bug**: From `run-13-retry-check.log` line 693-695:
+
 ```
 [QA] Processing image: ... (mode=auto)
 [QA] Skipping QA (QA_MODE=none) for image: ...
 [QA] Unknown QA_MODE=auto, falling back to auto-pass
 ```
+
 QA is configured as `auto` but when the configured provider (ollama) can't be reached or doesn't have the QA model, it falls back to `none` (skip) instead of trying the globally configured QA models.
 
 **Root cause**: The `auto` resolution in `process_qa()` checks if the job's `qaProvider` is available locally. When `qaProvider=ollama` and the ollama endpoint doesn't have the configured model, it resolves to `none` instead of falling through to the global default QA models from system settings.
 
 **Fix** (`qa.py`):
+
 - When `qa_mode == "auto"`, check available providers in priority order:
   1. Job's `qaProvider` + `qaLlmModel`/`qaVlmModel` — try this first
   2. If that fails, fall back to global system settings QA models
