@@ -86,6 +86,13 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
    2. Or this multi chapter is causing the ol(first chapters properties to be used instead of the current one)
 4. Checkout [logs](../logs/run-14-phase-1.log) and [project](../examples/Sample1/page-1-layers(26)/project.json) to see if you can find the issue
 
+**Fixed:** This is because the manual redo endpoint (`POST /api/images/{imageId}/redo`) did not accept `chapterId`. It has now been updated to optionally accept `chapterId`, which will propagate the correct chapter context to the worker instead of randomly falling back to the first page's chapter.
+
+**Notes 2:**
+
+1. This reaveals one more hidden issue as can be seen in [project.json](../examples/sample5/gemini-2.5-ocr-deep-seek-4-tl/project.json) despite using `gemini-2.5-flash` for OCR it shows that it used `"model": "MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)",` which it did for detetction but for the recognition part it used `gemini-2.5-flash` so need to make sure that we are correctly populating the `metadataJson` with the list of models and not a single model to avoid this confusion.
+2. Also the costs of `gemini-2.5-flash` was not captured despited it costing us ![costs](../examples/sample5/Screenshot%202026-07-12%20at%2020-49-00%20Activity%20OpenRouter.png)
+
 ---
 
 ## Phase 2 — Backend API & Export Fixes
@@ -336,3 +343,7 @@ QA is configured as `auto` but when the configured provider (ollama) can't be re
 | 4.3 | `rq_tasks.py`, `InternalJobController.java` | Implement job-level retry with attempt counter |
 | 4.4 | `backend/Dockerfile` | Fix Java version: temurin-26 → temurin-21 |
 | 4.5 | `qa.py` | QA fallback to default model instead of skipping |
+
+### 🚨 GitHub Actions / CI Reminder
+
+- **Always ensure that tests are run locally and that there are no compilation or formatting errors (`mvn spotless:check`) before committing, so that CI tasks (like `ci-maven.yml`) don't fail on GitHub.**

@@ -512,7 +512,8 @@ public class PageControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("duplicate"));
 
-    verify(jobCoordinatorService, times(1)).triggerImageRedo(existingImageId, "translation");
+    verify(jobCoordinatorService, times(1))
+        .triggerImageRedo(existingImageId, "translation", chapterId);
   }
 
   @Test
