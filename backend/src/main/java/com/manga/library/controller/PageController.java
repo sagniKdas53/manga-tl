@@ -914,11 +914,16 @@ public class PageController {
   public ResponseEntity<?> redoImage(
       @PathVariable UUID imageId,
       @RequestParam("type") String type,
+      @RequestParam(value = "chapterId", required = false) UUID chapterId,
       @AuthenticationPrincipal User user) {
-    log.info("Request to redo image {} with type {}", imageId, type);
+    log.info("Request to redo image {} with type {} for chapter {}", imageId, type, chapterId);
     try {
       if ("ocr".equals(type) || "translation".equals(type) || "layout".equals(type)) {
-        jobCoordinatorService.triggerImageRedo(imageId, type);
+        if (chapterId != null) {
+          jobCoordinatorService.triggerImageRedo(imageId, type, chapterId);
+        } else {
+          jobCoordinatorService.triggerImageRedo(imageId, type);
+        }
         if (user != null) {
           sseService.mapImageToUser(imageId, user.getId());
         }

@@ -1,0 +1,520 @@
+{
+  "pageNumber": 1,
+  "imageId": "53510192-a5b0-4a85-8f5b-b216350fa85e",
+  "dimensions": {
+    "width": 2400,
+    "height": 1600
+  },
+  "totalCost": {
+    "estimated_cost": 0,
+    "display": "$0.00",
+    "currency": "USD"
+  },
+  "exportedAt": "2026-07-12T15:26:02.408Z",
+  "layers": [
+    {
+      "id": "ee0c0b71-4736-4245-a919-cf2ca72bc5ac",
+      "type": "ocr",
+      "targetLanguage": null,
+      "visible": true,
+      "metadataJson": {
+        "time": "2026-07-12T15:21:41.560312638Z",
+        "model": "MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)",
+        "provider": "OCR Worker",
+        "confidence": 0.910783847173055,
+        "layer_name": "OCR",
+        "layer_order": 1,
+        "last_modified": "2026-07-12T15:21:41.560739149Z"
+      },
+      "cost": {
+        "estimated_cost": 0,
+        "display": "$0.00",
+        "currency": "USD"
+      },
+      "elements": [
+        {
+          "id": "d44a55bb-585c-4006-bdf4-9f10a35fb8e0",
+          "text": "大丈夫です！キキ、お父様と寝るの大好きですから！",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1162,
+          "y": 131,
+          "maxWidth": 314,
+          "maxHeight": 829,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "5ca94748-8e15-4fd1-b8ad-8345a0c48170"
+        },
+        {
+          "id": "0fad821a-16bd-4920-8888-203e5a041fc4",
+          "text": "ああご家族でしたか！でしたら一部屋の方ご案内させていただきますね！",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 14,
+          "y": 757,
+          "maxWidth": 281,
+          "maxHeight": 609,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "fb4a0aca-9df2-46db-807f-1d3808d249d4"
+        },
+        {
+          "id": "51b19897-2569-4935-89f9-89d9f715564d",
+          "text": "申し訳ございませんただ今一部屋しかご用意することが出来ず…",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1713,
+          "y": 944,
+          "maxWidth": 274,
+          "maxHeight": 518,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "c7c2ee10-5b79-4f6f-bf6d-fe52ad311a25"
+        },
+        {
+          "id": "9e6599ed-2cae-4a88-9c91-af4ab3e1314b",
+          "text": "O",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1448,
+          "y": 1490,
+          "maxWidth": 68,
+          "maxHeight": 77,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": null,
+          "textColor": null,
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "boxShape": "rectangular",
+          "maskPolygon": null,
+          "regionId": "5e2f67f6-9ce1-4d51-9568-6327352955c2"
+        }
+      ]
+    },
+    {
+      "id": "a4d5bc1d-5b79-40bc-acf2-160e3fa23f3e",
+      "type": "translation",
+      "targetLanguage": "en",
+      "visible": false,
+      "metadataJson": {
+        "qa": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "tencent/hy3:free",
+                "currency": "USD",
+                "provider": "openrouter",
+                "prompt_tokens": 834,
+                "estimated_cost": 0,
+                "completion_tokens": 6397
+              }
+            ],
+            "prompt_tokens": 834,
+            "estimated_cost": 0,
+            "completion_tokens": 6397
+          },
+          "failed": 0,
+          "passed": 3,
+          "status": "partial_pass",
+          "avg_score": 0.9575,
+          "direct_fix": 1,
+          "last_qa_at": "2026-07-12T15:24:26.961811684Z",
+          "retries_used": 1,
+          "manual_review": 0,
+          "total_regions": 4,
+          "failed_regions": [
+            {
+              "qaScore": 0.9,
+              "qaStatus": "fixed",
+              "regionId": "5e2f67f6-9ce1-4d51-9568-6327352955c2",
+              "qaFeedback": "Evaluation: The OCR text 'O' has low confidence (0.648) and is likely a misread of a Japanese sound effect, probably the hiragana 'お' (or katakana 'オ') representing a small exclamation like 'Oh'. Since the correct source can be deduced, ocrBad is flagged with correctedSourceText 'お'. The translated text 'O' is a literal copy; as an English manga sound effect 'Oh' is more natural and idiomatic, so a direct_fix is prescribed. Reading order 4 is appropriate as a subsequent reaction after the clerk's guidance, so no order flag needed. Overall, the region requires only cosmetic correction.",
+              "bubbleReadingOrder": 4
+            }
+          ]
+        },
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "tencent/hy3:free",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 1437,
+              "estimated_cost": 0,
+              "completion_tokens": 2506
+            },
+            {
+              "model": "tencent/hy3:free",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 1339,
+              "estimated_cost": 0,
+              "completion_tokens": 2809
+            }
+          ],
+          "prompt_tokens": 2776,
+          "estimated_cost": 0,
+          "completion_tokens": 5315
+        },
+        "time": "2026-07-12T15:22:35.886925911Z",
+        "model": "openrouter/deepseek/deepseek-v4-pro",
+        "provider": "Translation Worker",
+        "confidence": 0.98,
+        "layer_name": "Translation",
+        "layer_order": 2,
+        "last_modified": "2026-07-12T15:22:35.888980538Z"
+      },
+      "cost": {
+        "estimated_cost": 0,
+        "display": "$0.00",
+        "currency": "USD"
+      },
+      "qa": {
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "tencent/hy3:free",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 834,
+              "estimated_cost": 0,
+              "completion_tokens": 6397
+            }
+          ],
+          "prompt_tokens": 834,
+          "estimated_cost": 0,
+          "completion_tokens": 6397,
+          "display": "$0.00"
+        },
+        "failed": 0,
+        "passed": 3,
+        "status": "partial_pass",
+        "avg_score": 0.9575,
+        "direct_fix": 1,
+        "last_qa_at": "2026-07-12T15:24:26.961811684Z",
+        "retries_used": 1,
+        "manual_review": 0,
+        "total_regions": 4,
+        "failed_regions": [
+          {
+            "qaScore": 0.9,
+            "qaStatus": "fixed",
+            "regionId": "5e2f67f6-9ce1-4d51-9568-6327352955c2",
+            "qaFeedback": "Evaluation: The OCR text 'O' has low confidence (0.648) and is likely a misread of a Japanese sound effect, probably the hiragana 'お' (or katakana 'オ') representing a small exclamation like 'Oh'. Since the correct source can be deduced, ocrBad is flagged with correctedSourceText 'お'. The translated text 'O' is a literal copy; as an English manga sound effect 'Oh' is more natural and idiomatic, so a direct_fix is prescribed. Reading order 4 is appropriate as a subsequent reaction after the clerk's guidance, so no order flag needed. Overall, the region requires only cosmetic correction.",
+            "bubbleReadingOrder": 4
+          }
+        ]
+      },
+      "elements": [
+        {
+          "id": "4c245a10-bd28-4a0e-a53c-23508a57ce13",
+          "text": "It's okay! Kiki loves sleeping with Daddy!",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1034,
+          "y": 48,
+          "maxWidth": 545,
+          "maxHeight": 963,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[1380, 45], [1325, 46], [1266, 69], [1218, 100], [1156, 161], [1073, 319], [1035, 475], [1035, 653], [1074, 814], [1103, 868], [1126, 892], [1164, 902], [1171, 942], [1201, 987], [1250, 1013], [1304, 1013], [1353, 997], [1414, 967], [1452, 939], [1459, 924], [1483, 914], [1520, 876], [1550, 822], [1581, 705], [1581, 554], [1559, 458], [1572, 371], [1559, 257], [1535, 213], [1518, 196], [1500, 191], [1490, 147], [1469, 109], [1421, 61]]",
+          "regionId": "5ca94748-8e15-4fd1-b8ad-8345a0c48170"
+        },
+        {
+          "id": "608d987e-e272-4368-91ff-285ec6303cca",
+          "text": "Ah, you're a family! In that case, I'll show you to one room!",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 0,
+          "y": 702,
+          "maxWidth": 334,
+          "maxHeight": 700,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[93, 707], [0, 744], [0, 1360], [40, 1380], [118, 1404], [255, 1403], [275, 1395], [305, 1360], [336, 1251], [336, 905], [329, 892], [321, 827], [299, 754], [284, 724], [258, 700], [135, 699], [121, 706]]",
+          "regionId": "fb4a0aca-9df2-46db-807f-1d3808d249d4"
+        },
+        {
+          "id": "7682d836-9463-48a6-af69-3d5e40c06148",
+          "text": "I'm sorry, but at the moment we can only prepare one room…",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1656,
+          "y": 882,
+          "maxWidth": 396,
+          "maxHeight": 625,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[1698, 933], [1665, 964], [1658, 1002], [1652, 1130], [1658, 1236], [1665, 1253], [1673, 1328], [1695, 1401], [1725, 1468], [1758, 1501], [1786, 1509], [2007, 1508], [2017, 1482], [2030, 1469], [2032, 1446], [2038, 1439], [2054, 1301], [2054, 1086], [2047, 1063], [2039, 973], [2023, 920], [2013, 909], [1969, 887], [1886, 879], [1876, 885], [1796, 895]]",
+          "regionId": "c7c2ee10-5b79-4f6f-bf6d-fe52ad311a25"
+        },
+        {
+          "id": "e768cfa7-4f1d-4642-b60e-106d16858383",
+          "text": "Oh",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1442,
+          "y": 1484,
+          "maxWidth": 80,
+          "maxHeight": 89,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[1442, 1484], [1522, 1484], [1522, 1573], [1442, 1573]]",
+          "regionId": "5e2f67f6-9ce1-4d51-9568-6327352955c2"
+        }
+      ]
+    },
+    {
+      "id": "acd0e679-61a9-41e2-b30f-5fc67914c9f6",
+      "type": "translation",
+      "targetLanguage": "en",
+      "visible": true,
+      "metadataJson": {
+        "qa": {
+          "cost": {
+            "currency": "USD",
+            "breakdown": [
+              {
+                "model": "tencent/hy3:free",
+                "currency": "USD",
+                "provider": "openrouter",
+                "prompt_tokens": 834,
+                "estimated_cost": 0,
+                "completion_tokens": 6397
+              }
+            ],
+            "prompt_tokens": 834,
+            "estimated_cost": 0,
+            "completion_tokens": 6397
+          },
+          "failed": 0,
+          "passed": 3,
+          "status": "partial_pass",
+          "avg_score": 0.9575,
+          "direct_fix": 1,
+          "last_qa_at": "2026-07-12T15:24:26.962342172Z",
+          "retries_used": 1,
+          "manual_review": 0,
+          "total_regions": 4,
+          "failed_regions": [
+            {
+              "qaScore": 0.9,
+              "qaStatus": "fixed",
+              "regionId": "5e2f67f6-9ce1-4d51-9568-6327352955c2",
+              "qaFeedback": "Evaluation: The OCR text 'O' has low confidence (0.648) and is likely a misread of a Japanese sound effect, probably the hiragana 'お' (or katakana 'オ') representing a small exclamation like 'Oh'. Since the correct source can be deduced, ocrBad is flagged with correctedSourceText 'お'. The translated text 'O' is a literal copy; as an English manga sound effect 'Oh' is more natural and idiomatic, so a direct_fix is prescribed. Reading order 4 is appropriate as a subsequent reaction after the clerk's guidance, so no order flag needed. Overall, the region requires only cosmetic correction.",
+              "bubbleReadingOrder": 4
+            }
+          ]
+        },
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "tencent/hy3:free",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 1175,
+              "estimated_cost": 0,
+              "completion_tokens": 3976
+            }
+          ],
+          "prompt_tokens": 1175,
+          "estimated_cost": 0,
+          "completion_tokens": 3976
+        },
+        "time": "2026-07-12T15:23:44.394890055Z",
+        "model": "openrouter/deepseek/deepseek-v4-pro",
+        "provider": "Translation Worker",
+        "confidence": 0.97,
+        "layer_name": "Translation (qa-re-translate)",
+        "layer_order": 3,
+        "last_modified": "2026-07-12T15:23:44.395692731Z"
+      },
+      "cost": {
+        "estimated_cost": 0,
+        "display": "$0.00",
+        "currency": "USD"
+      },
+      "qa": {
+        "cost": {
+          "currency": "USD",
+          "breakdown": [
+            {
+              "model": "tencent/hy3:free",
+              "currency": "USD",
+              "provider": "openrouter",
+              "prompt_tokens": 834,
+              "estimated_cost": 0,
+              "completion_tokens": 6397
+            }
+          ],
+          "prompt_tokens": 834,
+          "estimated_cost": 0,
+          "completion_tokens": 6397,
+          "display": "$0.00"
+        },
+        "failed": 0,
+        "passed": 3,
+        "status": "partial_pass",
+        "avg_score": 0.9575,
+        "direct_fix": 1,
+        "last_qa_at": "2026-07-12T15:24:26.962342172Z",
+        "retries_used": 1,
+        "manual_review": 0,
+        "total_regions": 4,
+        "failed_regions": [
+          {
+            "qaScore": 0.9,
+            "qaStatus": "fixed",
+            "regionId": "5e2f67f6-9ce1-4d51-9568-6327352955c2",
+            "qaFeedback": "Evaluation: The OCR text 'O' has low confidence (0.648) and is likely a misread of a Japanese sound effect, probably the hiragana 'お' (or katakana 'オ') representing a small exclamation like 'Oh'. Since the correct source can be deduced, ocrBad is flagged with correctedSourceText 'お'. The translated text 'O' is a literal copy; as an English manga sound effect 'Oh' is more natural and idiomatic, so a direct_fix is prescribed. Reading order 4 is appropriate as a subsequent reaction after the clerk's guidance, so no order flag needed. Overall, the region requires only cosmetic correction.",
+            "bubbleReadingOrder": 4
+          }
+        ]
+      },
+      "elements": [
+        {
+          "id": "58aa42e2-777e-4181-9744-a0b24b580391",
+          "text": "Ah, you're a family! In that case, I'll show you to a single room!",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 0,
+          "y": 702,
+          "maxWidth": 334,
+          "maxHeight": 700,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[93, 707], [0, 744], [0, 1360], [40, 1380], [118, 1404], [255, 1403], [275, 1395], [305, 1360], [336, 1251], [336, 905], [329, 892], [321, 827], [299, 754], [284, 724], [258, 700], [135, 699], [121, 706]]",
+          "regionId": "fb4a0aca-9df2-46db-807f-1d3808d249d4"
+        },
+        {
+          "id": "942abee2-b19a-4916-a23f-f9d3524ccabf",
+          "text": "It's okay! Kiki loves sleeping with Daddy!",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1034,
+          "y": 48,
+          "maxWidth": 545,
+          "maxHeight": 963,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[1380, 45], [1325, 46], [1266, 69], [1218, 100], [1156, 161], [1073, 319], [1035, 475], [1035, 653], [1074, 814], [1103, 868], [1126, 892], [1164, 902], [1171, 942], [1201, 987], [1250, 1013], [1304, 1013], [1353, 997], [1414, 967], [1452, 939], [1459, 924], [1483, 914], [1520, 876], [1550, 822], [1581, 705], [1581, 554], [1559, 458], [1572, 371], [1559, 257], [1535, 213], [1518, 196], [1500, 191], [1490, 147], [1469, 109], [1421, 61]]",
+          "regionId": "5ca94748-8e15-4fd1-b8ad-8345a0c48170"
+        },
+        {
+          "id": "952a222d-4394-4936-aea4-f36c36859e4b",
+          "text": "I'm sorry, but at the moment we can only provide one room...",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1656,
+          "y": 882,
+          "maxWidth": 396,
+          "maxHeight": 625,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[1698, 933], [1665, 964], [1658, 1002], [1652, 1130], [1658, 1236], [1665, 1253], [1673, 1328], [1695, 1401], [1725, 1468], [1758, 1501], [1786, 1509], [2007, 1508], [2017, 1482], [2030, 1469], [2032, 1446], [2038, 1439], [2054, 1301], [2054, 1086], [2047, 1063], [2039, 973], [2023, 920], [2013, 909], [1969, 887], [1886, 879], [1876, 885], [1796, 895]]",
+          "regionId": "c7c2ee10-5b79-4f6f-bf6d-fe52ad311a25"
+        },
+        {
+          "id": "9a0a3570-30c5-4f30-92a7-5d1db546efe8",
+          "text": "Oh",
+          "font": "Comic Neue",
+          "size": null,
+          "autoSize": true,
+          "x": 1442,
+          "y": 1484,
+          "maxWidth": 80,
+          "maxHeight": 89,
+          "rotation": 0,
+          "visible": true,
+          "wordWrap": true,
+          "backgroundColor": "#ffffff",
+          "textColor": "#000000",
+          "fontWeight": "bold",
+          "fontStyle": "normal",
+          "boxShape": "elliptical",
+          "maskPolygon": "[[1442, 1484], [1522, 1484], [1522, 1573], [1442, 1573]]",
+          "regionId": "5e2f67f6-9ce1-4d51-9568-6327352955c2"
+        }
+      ]
+    }
+  ]
+}
