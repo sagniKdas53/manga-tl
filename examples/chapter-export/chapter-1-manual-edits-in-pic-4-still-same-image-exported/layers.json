@@ -1,0 +1,99 @@
+{
+    "layerCount": 5,
+    "layers": [
+        {
+            "qa": {
+                "total_regions": 14,
+                "cost": {
+                    "estimated_cost": 0.002697,
+                    "display": "$0.002697",
+                    "currency": "USD"
+                },
+                "passed": 14,
+                "failed": 0,
+                "status": "passed",
+                "avg_score": 0.9928571428571429
+            },
+            "visible": false,
+            "cost": {
+                "estimated_cost": 0.021581704593333337,
+                "display": "$0.0216",
+                "currency": "USD"
+            },
+            "targetLanguage": "en",
+            "model": "openrouter/deepseek/deepseek-v4-pro",
+            "id": "86873630-3736-4d13-8d66-8f7f4f3c1840",
+            "type": "translation"
+        },
+        {
+            "visible": true,
+            "cost": {
+                "estimated_cost": 0.0,
+                "display": "$0.00",
+                "currency": "USD"
+            },
+            "model": "PaddleOCR(PP-OCRv6_medium_rec)",
+            "id": "76d07f03-1aa1-4052-b04a-5812820dcf37",
+            "type": "ocr"
+        },
+        {
+            "qa": {
+                "total_regions": 14,
+                "cost": {
+                    "estimated_cost": 0.002697,
+                    "display": "$0.002697",
+                    "currency": "USD"
+                },
+                "passed": 14,
+                "failed": 0,
+                "status": "passed",
+                "avg_score": 0.9928571428571429
+            },
+            "visible": false,
+            "cost": {
+                "estimated_cost": 0.01846473546666667,
+                "display": "$0.0185",
+                "currency": "USD"
+            },
+            "targetLanguage": "en",
+            "model": "openrouter/deepseek/deepseek-v4-pro",
+            "id": "fcc1bcbe-424b-4dfc-9233-0d7b7c403ba3",
+            "type": "translation"
+        },
+        {
+            "visible": true,
+            "cost": {
+                "estimated_cost": 0.0,
+                "display": "$0.00",
+                "currency": "USD"
+            },
+            "targetLanguage": "en",
+            "id": "91adaf14-8f6b-43ce-819a-25724a507507",
+            "type": "translation"
+        },
+        {
+            "qa": {
+                "total_regions": 14,
+                "cost": {
+                    "estimated_cost": 0.002697,
+                    "display": "$0.002697",
+                    "currency": "USD"
+                },
+                "passed": 14,
+                "failed": 0,
+                "status": "passed",
+                "avg_score": 0.9928571428571429
+            },
+            "visible": false,
+            "cost": {
+                "estimated_cost": 0.020869321673333337,
+                "display": "$0.0209",
+                "currency": "USD"
+            },
+            "targetLanguage": "en",
+            "model": "openrouter/deepseek/deepseek-v4-pro",
+            "id": "8090d231-400c-462f-a4ef-0bb0d81f3c35",
+            "type": "translation"
+        }
+    ]
+}
