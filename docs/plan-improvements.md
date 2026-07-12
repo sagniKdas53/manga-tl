@@ -154,18 +154,49 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 - Replace any use of `/api/images/{id}/file` with `/api/images/{id}/thumbnail` for preview contexts
 - The full `/file` endpoint should only be used in the Reader for full-resolution viewing
 
+### C.3 Move Thumbnail Generation Off the Upload Request Path
+
+> [!IMPORTANT]
+> The WebP + bicubic change alone won't fix the performance bottleneck. The real issue is the **full-resolution decode + 2 sequential MinIO round trips** blocking the servlet thread. A 5000×7000 image = 105-140 MB `BufferedImage` in heap. With 200 concurrent uploads (Tomcat default), this risks OOM and thread-pool starvation.
+
+**Files**: `PageService.java`, `PageController.java`, `SeriesController.java`
+
+**Current flow** (synchronous, blocking):
+```
+Upload → file.getBytes() → ImageIO.read (full decode) → bilinear resize → ImageIO.write(jpg)
+      → MinIO.put(original) → MinIO.put(thumbnail) → HTTP response → startPipeline()
+```
+
+**Proposed flow** (async, non-blocking):
+```
+Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPipeline()
+                                                                ↳ @Async thumbnailPool:
+                                                                  ImageReader.subsampled()
+                                                                  → bicubic resize → WebP
+                                                                  → MinIO.put(thumbnail)
+                                                                  → update Image.thumbnailStoragePath
+```
+
+- Use `ImageReader` subsampling to avoid full-resolution decode (read at 1/4 or 1/8 scale directly)
+- Create a bounded `@Async` thread pool (`thumbnailExecutor`, size 2-4)
+- `Image.thumbnailStoragePath` starts as `null`; thumbnail endpoint returns a placeholder/original until ready
+- For batch imports (`importProject`/`importChapter`): queue all thumbnails to the async pool instead of blocking per-file
+- Existing behavior is already resilient: thumbnail failure doesn't block upload (lines 546-548)
+
 ### ✅ Checkpoint C — Thumbnails
 
 **Automated tests:**
 
 - `PageServiceTest`: generate thumbnail from test PNG → verify output is valid WebP
 - `PageControllerTest`: upload image → `GET /thumbnail` → verify `Content-Type: image/webp`
+- `PageServiceTest`: upload with async thumbnail → verify `thumbnailStoragePath` is populated within 5s
 
 **Manual checks:**
 
 1. Upload a new page → check MinIO storage → thumbnails should be `.webp` files
 2. Open Dashboard → inspect network tab → series covers should load from `/thumbnail` not `/file`
 3. Compare visual quality: old JPEG thumbnail vs new WebP thumbnail
+4. Upload 40 pages in batch → verify upload response returns quickly (< 2s per page) → thumbnails populate asynchronously
 
 ---
 
@@ -232,17 +263,32 @@ Per `examples/chapter-cards.jpg`:
 
 **Files**: `[NEW] UserManagement.tsx`, `Navbar.tsx`
 
-- Clickable username in navbar → opens user management modal
-- Allow changing: username, password (requires current password confirmation)
-- Email shown but not editable (used for login)
+Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
+
+- Clickable username in navbar → opens user management modal/page
+- **Profile section**: avatar (upload or generate from initials), about/bio field
+- **Account section**: change username, change password (requires current password), email shown but not editable
+- **Session management**: list active sessions, ability to revoke
+- **Delete profile**: with confirmation
+- **API keys** (stretch goal): stub the UI design now, implement later
+- Do NOT include: favourite tags, blocked tags (not relevant to our app)
 
 ### D.8 Theme Improvements
 
 **Files**: `index.css`
 
-- Dark mode: nHentai-inspired color scheme (dark grays, accent colors)
-- Light mode: Pixiv-inspired color scheme (clean whites, blues)
+- **Dark mode**: Use extracted [nHentai palette](../examples/nHentai/Screenshot%202026-07-12%20at%2014-09-52%20Site%20Palette%20🎨.png) for color scheme
+- **Light mode**: Use extracted [Pixiv palette](../examples/pixiv/Screenshot%202026-07-12%20at%2014-11-16%20Site%20Palette%20🎨.png) — palette only, NOT Pixiv's design/layout
 - Ensure all components respect the theme toggle
+
+### D.9 Lazy Loading / Infinite Scroll
+
+**Files**: `Dashboard.tsx`, `SeriesDetails.tsx`, `ChapterGallery.tsx`
+
+- Instead of pagination (like [nHentai's paged navigation](../examples/nHentai/add-paged-navigation-as-the-library-can-big.png)), implement infinite scroll
+- Load initial batch (e.g., 20 series / 10 chapters / 30 pages) → load more as user scrolls near the bottom
+- Use `IntersectionObserver` API for scroll detection
+- Requires backend pagination support: `GET /api/series?page=1&size=20&sort=updatedAt,desc`
 
 ### ✅ Checkpoint D — UI Polish
 
@@ -255,6 +301,8 @@ Per `examples/chapter-cards.jpg`:
 5. In Reader: navigate between pages → verify smooth transition without full reload
 6. Dashboard: toggle sort options → verify order changes
 7. Toggle dark/light mode → verify both themes look polished
+8. Click username → verify user profile modal opens with avatar, password change, session list
+9. Add 50+ series → scroll Dashboard → verify more series load dynamically
 
 ---
 
@@ -291,25 +339,82 @@ Per `examples/chapter-cards.jpg`:
 
 ---
 
+## Phase F — ML Model & Prompt Upgrades
+
+*Independent of other phases. Can be parallelized.*
+
+### F.1 YOLO Model Upgrade
+
+**Files**: worker model download scripts, `bubble_detector.py`
+
+- Current model `juithealien/manga109-segmentation-bubble` (yolo11n) is abandoned and only detects text bubbles
+- Evaluate successors from [Model Upgrade Plan](../docs/model_upgrade_plan.md)
+- Goal: detect SFX regions, narration boxes, and other text containers beyond speech bubbles
+
+### F.2 OCR VLM Prompt Improvements
+
+**Files**: `ocr.py` (VLM prompt templates)
+
+- Classify text types at OCR stage: reject SFX, gibberish, author handles, already-English text
+- When doing Re-OCR or Redo-Region-TL with a VLM, inject QA feedback to help the model:
+  - If manually triggered by user → "user rejected previous result, do a clean redo"
+  - If triggered by QA → include what QA didn't like
+
+### F.3 QA Prompt Enhancements
+
+**Files**: `qa.py`, `qa_re_ocr.py`
+
+- Allow QA to directly update text if it has a better translation
+- Reject SFX/gibberish (hide elements, never delete)
+- Trigger re-OCR or re-TL for specific bad regions (via `redo-region-*` queues)
+- QA output must be strictly better than input — never send back the same text
+- One pass only, no loops (prevent re-OCR → re-TL → re-OCR cycles)
+
+### F.4 Translation Prompt Improvements
+
+**Files**: `translation.py` (prompt templates)
+
+- Review and improve [current prompts](../docs/models_and_prompts.md)
+- Anti-romanization already handled in critical bugfixes Phase 4.2
+- Additional improvements: tone consistency, character name preservation, context injection
+
+### ✅ Checkpoint F — ML Upgrades
+
+**Manual checks:**
+
+1. Upload a page with SFX text → verify OCR doesn't try to translate SFX
+2. Run QA on a page with known bad translations → verify QA proposes fixes, not just flags
+3. Compare bubble detection accuracy between old and new YOLO model
+
+---
+
 ## Summary: Files Changed
 
 | Phase | File | Change |
 |-------|------|--------|
-| A.1 | `SseService.java` | Add `job_update`, `queue_paused`/`queue_resumed`/`queue_cleared` event types |
+| A.1 | `SseService.java` | Add `job_update`, queue/job-level event types |
 | A.1 | `JobCoordinatorService.java` | Emit SSE on job state transitions |
+| A.1 | `JobController.java` | Emit SSE on per-job pause/resume/retry/delete |
 | A.1 | `InternalJobController.java` | Emit SSE on status update |
 | A.2 | `useSSE.ts` | Add `job_update` listener, 30s heartbeat fallback |
-| A.3 | `QueueManager.tsx` | Redesign with SSE, status dots, confirm modals |
+| A.3 | `QueueManager.tsx` | Redesign with SSE, status dots, per-job controls |
 | B.1 | `Reader.tsx` | Subscribe to SSE for layer auto-refresh |
 | C.1 | `PageService.java`, `pom.xml` | WebP thumbnails with bicubic interpolation |
 | C.2 | `Dashboard.tsx`, `SeriesDetails.tsx` | Use thumbnail URLs for previews |
+| C.3 | `PageService.java`, `PageController.java` | Async thumbnail generation |
 | D.1 | `Dashboard.tsx`, `SeriesController.java` | Remove cover image URL field |
 | D.2 | `SettingsModal.tsx` | Fix modal overflow |
 | D.3 | `SeriesDetails.tsx`, `ChapterGallery.tsx` | Chapter cards redesign |
 | D.4 | `Dashboard.tsx` | Sorting dropdown |
 | D.5 | `Reader.tsx` | Fix page switch reload |
 | D.6 | `App.tsx` / `UploadContext.tsx` | Persist upload widget |
-| D.7 | `[NEW] UserManagement.tsx` | User profile modal |
-| D.8 | `index.css` | Theme improvements |
+| D.7 | `[NEW] UserManagement.tsx` | User profile with avatar, sessions, API keys stub |
+| D.8 | `index.css` | nHentai dark + Pixiv light palettes |
+| D.9 | `Dashboard.tsx`, `SeriesDetails.tsx` | Lazy loading / infinite scroll |
+| D.10 | Model override components | Show resolved model names |
 | E.1 | `[NEW] ProviderChain.py`, `config.py` | Cross-provider failover |
 | E.2 | Worker HTTP call sites | Strict timeouts |
+| F.1 | `bubble_detector.py` | YOLO model upgrade |
+| F.2 | `ocr.py` | VLM prompt improvements |
+| F.3 | `qa.py`, `qa_re_ocr.py` | QA prompt enhancements |
+| F.4 | `translation.py` | Translation prompt improvements |
