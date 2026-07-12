@@ -50,25 +50,31 @@ public class JobController {
   }
 
   @DeleteMapping("/clear")
+  @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<?> clearQueue() {
-    List<Job> jobsToClear =
-        jobRepository.findByStatusInOrderByCreatedAtAsc(
-            List.of("PENDING", "PAUSED", "FAILED", "PROCESSING"));
-    jobRepository.deleteAll(jobsToClear);
+    try {
+      List<Job> jobsToClear =
+          jobRepository.findByStatusInOrderByCreatedAtAsc(List.of("PENDING", "PAUSED", "FAILED"));
+      jobRepository.deleteAll(jobsToClear);
 
-    // Clear Redis queues
-    redisTemplate.delete(
-        List.of(
-            "queue:panel-detection",
-            "queue:ocr",
-            "queue:layout",
-            "queue:translation",
-            "queue:render",
-            "queue:qa",
-            "queue:qa-re-ocr",
-            "queue:region-redo"));
+      // Clear Redis queues
+      redisTemplate.delete(
+          List.of(
+              "queue:panel-detection",
+              "queue:ocr",
+              "queue:layout",
+              "queue:translation",
+              "queue:render",
+              "queue:qa",
+              "queue:qa-re-ocr",
+              "queue:region-redo",
+              "queue:region-redo-ocr",
+              "queue:region-redo-tl"));
 
-    return ResponseEntity.ok().build();
+      return ResponseEntity.ok().build();
+    } catch (Exception e) {
+      return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+    }
   }
 
   @PostMapping("/{id}/retry")

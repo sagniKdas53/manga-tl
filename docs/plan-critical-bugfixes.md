@@ -145,8 +145,16 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 
 - Change `f"MangaOCR/PaddleOCR({rec_model})"` → `f"PaddleOCR({rec_model})"`
 
-### ✅ Checkpoint 2 — API & Export
+### 2.5 Trigger Re-Render After Manual Edits
 
+**Bug**: As shown in `examples/chapter-export`, manual edits made in the UI (e.g., hiding a layer, changing translation text) are not reflected in the exported ZIP. The exported image is exactly the same as the original render because manual edits only update the database without triggering a new render job.
+
+**Fix** (`LayerElementController.java` or `JobCoordinatorService.java`):
+
+- When a `LayerElement` is updated manually (or its visibility is toggled), the backend needs to enqueue a `render` job for that `imageId`.
+- Since rendering is relatively fast, we can drop a message to the Redis `queue:render` to update the image in MinIO so future exports (and QA) see the edited version.
+
+### ✅ Checkpoint 2 — API & Export
 **Automated tests to add/run:**
 
 - `SeriesControllerTest`: export a chapter with pages → verify 200 + valid ZIP with images
@@ -159,6 +167,11 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 1. Export a chapter as ZIP → should download successfully, open the ZIP → verify images and `meta-data.json` are inside
 2. Queue 5 jobs → click "Clear Queue" → verify toast + all non-processing jobs disappear
 3. Set chapter QA mode to inherit (let it resolve to "auto") → run pipeline → check worker logs for `mode=vlm` or `mode=llm` (not `mode=auto`)
+
+**Notes:**
+
+1. **Auto QA Mode Priority**: If both an LLM and VLM are configured globally, `auto` mode resolves to `vlm`. The multiple models seen in usage charts (e.g., DeepSeek + Gemini) correspond to Translation + QA steps, not a "hybrid" QA mode.
+2. **Missing Re-renders**: As discovered via `examples/chapter-export`, manual edits to layers (disabling layers, editing text) do not update the `rendered/` image in MinIO. This causes chapter exports to contain stale images that do not reflect manual edits. This will be addressed in step 2.5 by triggering a re-render job when edits are saved.
 
 ---
 
