@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNotifications, type Notification } from "./useNotifications";
+import { safeFetch } from "../utils";
 
 export const NotificationCenter: React.FC = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
@@ -226,6 +227,42 @@ export const NotificationCenter: React.FC = () => {
                     <div style={{ fontSize: "10px", color: "var(--text-dim)" }}>
                       {new Date(n.timestamp).toLocaleTimeString()}
                     </div>
+                    {n.type === "EXPORT_SUCCESS" && n.context?.exportId && (
+                      <div style={{ marginTop: "8px" }}>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const storedUser = localStorage.getItem("manga_user");
+                              if (!storedUser) return;
+                              const user = JSON.parse(storedUser);
+                              const res = await safeFetch(`/api/series/chapters/exports/${n.context.exportId}/download`, {
+                                headers: { Authorization: `Bearer ${user.token}` }
+                              });
+                              if (res.ok) {
+                                const blob = await res.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = `chapter_export.zip`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                window.URL.revokeObjectURL(url);
+                              } else {
+                                console.error("Failed to download export");
+                              }
+                            } catch (err) {
+                              console.error("Error downloading export", err);
+                            }
+                          }}
+                          className="btn btn-primary"
+                          style={{ fontSize: "12px", padding: "4px 12px" }}
+                        >
+                          Download ZIP
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}
