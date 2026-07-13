@@ -1095,38 +1095,38 @@ public class PageController {
         // Always create a new Image entity for imports to prevent layer stacking
         String imgExt = pageService.getFileExtension(originalImageFilename);
         String uuid = UUID.randomUUID().toString();
-          String storagePath = "originals/" + uuid + imgExt;
-          String contentType = "image/png";
-          if (imgExt.equalsIgnoreCase(".jpg") || imgExt.equalsIgnoreCase(".jpeg")) {
-            contentType = "image/jpeg";
-          } else if (imgExt.equalsIgnoreCase(".webp")) {
-            contentType = "image/webp";
-          } else if (imgExt.equalsIgnoreCase(".gif")) {
-            contentType = "image/gif";
+        String storagePath = "originals/" + uuid + imgExt;
+        String contentType = "image/png";
+        if (imgExt.equalsIgnoreCase(".jpg") || imgExt.equalsIgnoreCase(".jpeg")) {
+          contentType = "image/jpeg";
+        } else if (imgExt.equalsIgnoreCase(".webp")) {
+          contentType = "image/webp";
+        } else if (imgExt.equalsIgnoreCase(".gif")) {
+          contentType = "image/gif";
+        }
+
+        minioService.uploadFile(storagePath, originalImageBytes, contentType);
+
+        String thumbnailStoragePath = null;
+        try {
+          byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
+          if (thumbBytes != null) {
+            thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
+            minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
           }
+        } catch (Exception e) {
+          log.error("Failed to generate thumbnail for imported project", e);
+        }
 
-          minioService.uploadFile(storagePath, originalImageBytes, contentType);
-
-          String thumbnailStoragePath = null;
-          try {
-            byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
-            if (thumbBytes != null) {
-              thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-              minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
-            }
-          } catch (Exception e) {
-            log.error("Failed to generate thumbnail for imported project", e);
-          }
-
-          page =
-              pageService.createPageAndImage(
-                  chapter,
-                  originalImageFilename,
-                  storagePath,
-                  thumbnailStoragePath,
-                  pageNumber,
-                  fileHash,
-                  user);
+        page =
+            pageService.createPageAndImage(
+                chapter,
+                originalImageFilename,
+                storagePath,
+                thumbnailStoragePath,
+                pageNumber,
+                fileHash,
+                user);
       }
 
       int importedLayersCount = 0;

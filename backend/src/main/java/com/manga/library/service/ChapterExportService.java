@@ -63,6 +63,9 @@ public class ChapterExportService {
         double pageTotalCostVal = 0.0;
         boolean pageHasCost = false;
         Map<String, Set<String>> modelsUsed = new HashMap<>();
+        modelsUsed.put("ocr", new java.util.HashSet<>());
+        modelsUsed.put("translation", new java.util.HashSet<>());
+        modelsUsed.put("qa", new java.util.HashSet<>());
 
         for (Layer l : imageLayers) {
           Map<String, Object> layerMeta = new HashMap<>();
@@ -86,8 +89,10 @@ public class ChapterExportService {
           if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
             com.fasterxml.jackson.databind.node.ObjectNode metaNode =
                 (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
-            
-            Set<String> typeModels = modelsUsed.computeIfAbsent(l.getType().toLowerCase(), k -> new java.util.HashSet<>());
+
+            Set<String> typeModels =
+                modelsUsed.computeIfAbsent(
+                    l.getType().toLowerCase(), k -> new java.util.HashSet<>());
 
             if (metaNode.has("model")) {
               modelName = metaNode.get("model").asText();
@@ -98,37 +103,42 @@ public class ChapterExportService {
             final double[] accumulatedCost = {0.0};
             final boolean[] costFound = {false};
 
-            java.util.function.Consumer<com.fasterxml.jackson.databind.JsonNode> extractCostAndModels = (costNode) -> {
-              if (costNode == null || !costNode.isObject()) return;
-              if (costNode.has("estimated_cost")) {
-                costFound[0] = true;
-                accumulatedCost[0] += costNode.get("estimated_cost").asDouble();
-              }
-              if (costNode.has("breakdown") && costNode.get("breakdown").isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode item : costNode.get("breakdown")) {
-                  if (item.has("model")) typeModels.add(item.get("model").asText());
-                  if (item.has("model_identifier")) typeModels.add(item.get("model_identifier").asText());
-                }
-              }
-            };
-            
+            java.util.function.BiConsumer<com.fasterxml.jackson.databind.JsonNode, Set<String>>
+                extractCostAndModels =
+                    (costNode, targetSet) -> {
+                      if (costNode == null || !costNode.isObject()) return;
+                      if (costNode.has("estimated_cost")) {
+                        costFound[0] = true;
+                        accumulatedCost[0] += costNode.get("estimated_cost").asDouble();
+                      }
+                      if (costNode.has("breakdown") && costNode.get("breakdown").isArray()) {
+                        for (com.fasterxml.jackson.databind.JsonNode item :
+                            costNode.get("breakdown")) {
+                          if (item.has("model")) targetSet.add(item.get("model").asText());
+                          if (item.has("model_identifier"))
+                            targetSet.add(item.get("model_identifier").asText());
+                        }
+                      }
+                    };
+
             if (metaNode.has("cost")) {
-              extractCostAndModels.accept(metaNode.get("cost"));
+              extractCostAndModels.accept(metaNode.get("cost"), typeModels);
             }
 
             if (metaNode.has("qa") && metaNode.get("qa").has("cost")) {
-              extractCostAndModels.accept(metaNode.get("qa").get("cost"));
+              extractCostAndModels.accept(metaNode.get("qa").get("cost"), modelsUsed.get("qa"));
             }
-            
+
             if (metaNode.has("tl") && metaNode.get("tl").has("cost")) {
-              extractCostAndModels.accept(metaNode.get("tl").get("cost"));
+              extractCostAndModels.accept(
+                  metaNode.get("tl").get("cost"), modelsUsed.get("translation"));
             }
-            
+
             if (costFound[0]) {
-                layerMeta.put("estimated_cost", accumulatedCost[0]);
-                layerCostVal += accumulatedCost[0];
-                pageTotalCostVal += accumulatedCost[0];
-                pageHasCost = true;
+              layerMeta.put("estimated_cost", accumulatedCost[0]);
+              layerCostVal += accumulatedCost[0];
+              pageTotalCostVal += accumulatedCost[0];
+              pageHasCost = true;
             }
           }
 
@@ -196,8 +206,9 @@ public class ChapterExportService {
             if (manualChangesDone) {
               java.time.OffsetDateTime lastEditedAt = page.getImage().getLastEditedAt();
               java.time.OffsetDateTime lastRenderedAt = page.getImage().getLastRenderedAt();
-              if (lastEditedAt != null && (lastRenderedAt == null || lastEditedAt.isAfter(lastRenderedAt))) {
-                  needsReRender = true;
+              if (lastEditedAt != null
+                  && (lastRenderedAt == null || lastEditedAt.isAfter(lastRenderedAt))) {
+                needsReRender = true;
               }
             }
             pageMeta.put("manualChangesDone", manualChangesDone);
@@ -289,11 +300,11 @@ public class ChapterExportService {
           byte[] imageBytes = null;
           try (java.io.InputStream is = minioService.downloadFile("rendered/" + imageId + ".png")) {
             imageBytes = is.readAllBytes();
-          } catch (Exception e) {
+          } catch (RuntimeException | java.io.IOException e) {
             try (java.io.InputStream is =
                 minioService.downloadFile(page.getImage().getStoragePath())) {
               imageBytes = is.readAllBytes();
-            } catch (Exception ex) {
+            } catch (RuntimeException | java.io.IOException ex) {
               log.error("Failed to download original/rendered image for page " + page.getId(), ex);
             }
           }
@@ -328,7 +339,7 @@ public class ChapterExportService {
               ctx);
         }
       }
-    } catch (Exception e) {
+    } catch (RuntimeException | java.io.IOException e) {
       log.error("Failed to build export for chapter: " + chapterId, e);
       if (userId != null) {
         sseService.emitNotificationToUser(
