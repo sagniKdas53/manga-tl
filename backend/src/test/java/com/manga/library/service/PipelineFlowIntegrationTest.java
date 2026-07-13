@@ -288,13 +288,23 @@ public class PipelineFlowIntegrationTest {
     Chapter chapterInDb = chapterRepository.findById(savedCh2.getId()).orElseThrow();
     assertEquals(1.5, chapterInDb.getChapterNumber());
 
+    // Helper to generate valid PNG bytes with unique suffix
+    java.util.function.Supplier<byte[]> generateMockPng =
+        () -> {
+          byte[] header =
+              new byte[] {
+                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0
+              };
+          byte[] suffix = UUID.randomUUID().toString().getBytes();
+          byte[] combined = new byte[header.length + suffix.length];
+          System.arraycopy(header, 0, combined, 0, header.length);
+          System.arraycopy(suffix, 0, combined, header.length, suffix.length);
+          return combined;
+        };
+
     // 4. Upload Page (Image)
     MockMultipartFile mockFile =
-        new MockMultipartFile(
-            "file",
-            "page01.png",
-            "image/png",
-            ("mock-image-bytes-" + UUID.randomUUID()).getBytes());
+        new MockMultipartFile("file", "page01.png", "image/png", generateMockPng.get());
 
     MvcResult pageResult =
         mockMvc
@@ -321,11 +331,7 @@ public class PipelineFlowIntegrationTest {
 
     // 5. Test page reordering (Upload second page first to have >1 pages)
     MockMultipartFile mockFile2 =
-        new MockMultipartFile(
-            "file",
-            "page02.png",
-            "image/png",
-            ("mock-image-bytes-2-" + UUID.randomUUID()).getBytes());
+        new MockMultipartFile("file", "page02.png", "image/png", generateMockPng.get());
     MvcResult pageResult2 =
         mockMvc
             .perform(

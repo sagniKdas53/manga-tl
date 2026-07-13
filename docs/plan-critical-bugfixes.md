@@ -77,7 +77,7 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 3. Set Chapter A's OCR to `local` and Chapter B's to `openrouter` → re-run OCR from each → verify in worker logs which provider was used - ❌ needs refinement
 4. Re-upload a previously deleted image → must not 500 - ✅ done
 
-**Notes:**
+### Bugs and fixes (phase1)
 
 1. The same image has the same hash so it makes sense to re-use the layers across chapters, but in some cause not creating a copy is bad as it causes the images to not be processed how we want
 2. Image `b8cfa87c-a792-45a5-824e-f7fb36dcf114` was added to `https://ideapad.tail9ece4.ts.net/tlhub/chapters/f8eb5518-1c4e-47ae-98e8-2f4961dd12ee/local-ocr/reader/1` first and two runs of OCR were done which were correctly done by `MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)`
@@ -88,7 +88,7 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 
 **Fixed:** This is because the manual redo endpoint (`POST /api/images/{imageId}/redo`) did not accept `chapterId`. It has now been updated to optionally accept `chapterId`, which will propagate the correct chapter context to the worker instead of randomly falling back to the first page's chapter.
 
-**Notes 2:**
+### Bugs and fixes (phase1 cont.)
 
 1. This reaveals one more hidden issue as can be seen in [project.json](../examples/sample5/gemini-2.5-ocr-deep-seek-4-tl/project.json) despite using `gemini-2.5-flash` for OCR it shows that it used `"model": "MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)",` which it did for detetction but for the recognition part it used `gemini-2.5-flash` so need to make sure that we are correctly populating the `metadataJson` with the list of models and not a single model to avoid this confusion.
 2. Also the costs of `gemini-2.5-flash` was not captured despited it costing us ![costs](../examples/sample5/Screenshot%202026-07-12%20at%2020-49-00%20Activity%20OpenRouter.png)
@@ -170,8 +170,8 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 3. Set chapter QA mode to inherit (let it resolve to "auto") → run pipeline → check worker logs for `mode=vlm` or `mode=llm` (not `mode=auto`) - Done
 
 4. **Auto QA Mode Priority**: If both an LLM and VLM are configured globally, `auto` mode resolves to `vlm`. The multiple models seen in usage charts (e.g., DeepSeek + Gemini) correspond to Translation + QA steps, not a "hybrid" QA mode.
-5. **Debounced Re-renders on Edits**: 
-   - Addressed the missing re-renders issue (where `examples/chapter-export` showed manual edits weren't reflected in exported ZIPs). 
+5. **Debounced Re-renders on Edits**:
+   - Addressed the missing re-renders issue (where `examples/chapter-export` showed manual edits weren't reflected in exported ZIPs).
    - Implemented `DebouncedRenderService.java` which sweeps every 30 seconds. If an image's `manualChangesDone` is true (i.e. it has a `lastEditedAt` timestamp) and it hasn't been rendered since the edits (or it has been at least 1 minute since the last edit), a background `render` job is automatically queued. This ensures exported ZIPs always contain up-to-date edits without blocking UI responsiveness.
 6. **Queue Persistence & Render Skipping Bugfixes**:
    - **Persistence**: Fixed `docker-compose.yml` to include a volume for the Valkey (Redis) service so that processing and pending jobs are not wiped out on stack restart.
@@ -185,6 +185,17 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
      - `modelsUsed`, `cost`, `hasRendered`, and `originalFilename`
      - Per-layer and per-page costs
      - If a page is not fully processed, `hasRendered` correctly remains `false` and the original image is exported as expected.
+
+## Bugs and fixes (phase 2)
+
+| ID | Component | Change |
+|----|-----------|--------|
+| 5.1 | `ChapterExportService.java` | Aggregated modelsUsed from cost breakdowns across QA and Translation |
+| 5.2 | `ChapterExportService.java` | Added `needsReRender` flag based on lastEditedAt vs lastRenderedAt |
+| 5.3 | `JobCoordinatorService.java` | Added padding to `LayerElement` bounds during OCR to Layout generation to improve `render.py` text fitting |
+| 5.4 | `JobCoordinatorService.java` | Checked for manual edits before enqueueing QA on Render callback, avoiding costly QA on manual re-renders |
+| 5.5 | `PageController.java` | Removed Image hash deduplication on Project Import to prevent layers stacking on existing pages |
+| 5.6 | `ChapterExportService.java` | Separated QA models from Translation models in export metadata `modelsUsed` payload and guaranteed base keys (`ocr`, `translation`, `qa`) |
 
 ---
 
@@ -203,12 +214,9 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 - Return `400 Bad Request` with a descriptive error: `"Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF"`
 - Apply the same validation inside the ZIP import flow
 
-### 3.2 Duplicate Image Idempotency Guard
+### 3.2 Duplicate Image Idempotency Guard (✅ Implemented)
 
-**Fix** (`PageController.java`):
-
-- When a duplicate hash is detected and the image already exists in the **exact same chapter at the same page slot**, return `200` with status `"already_exists"` instead of crashing
-- This is different from 1.4 (which allows adding a duplicate at a *new* page number) — this specifically handles the re-upload-at-same-slot race condition
+*Note: This behavior is already implemented correctly in `PageController.java` (returns `"already_exists"`). For full details on how duplicates are handled and future architectural plans for image deduplication, see [Duplicate Handling](./duplicate-handling.md).*
 
 ### 3.3 Require Auth for Image File Endpoint
 
@@ -232,9 +240,17 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 
 **Manual checks:**
 
-1. Drag-and-drop a `.md` file into the upload widget → should show an error toast, no page created
-2. Open an incognito browser → navigate to an image `/file` URL → should get 401
-3. Navigate to a thumbnail URL in incognito → should still load
+1. Drag-and-drop a `.md` file into the upload widget → should show an error toast, no page created - Done
+2. Open an incognito browser → navigate to an image `/file` URL → should get 401 - Done
+3. Navigate to a thumbnail URL in incognito → should still load - Done
+
+### Bugs and fixes (phase 3)
+
+1. Frontend calling `/file` endpoint un-authenticated: 
+   - **Bug**: Removing `/api/images/*/file` from `permitAll` in `SecurityConfig.java` broke images in the frontend (`Reader.tsx` and fallback thumbnails in `ChapterGallery.tsx`) because `<img src=".../file">` tags do not automatically attach the `Authorization` bearer token.
+   - **Bug**: `SeriesController.java` generated `coverImageUrl` utilizing the heavy, protected `/file` endpoint instead of the public `/thumbnail` endpoint, breaking covers across the frontend.
+   - **Fix**: Re-wrote `getImageUrl` in `SeriesController.java` to point to `/thumbnail`. Added backward compatibility in `toDto()` to rewrite existing `/file` cover URLs to `/thumbnail`.
+   - **Fix**: Appended `?token=${user.token}` to all raw image `src` URLs loaded natively by `<img src>` elements in `Reader.tsx` and `ChapterGallery.tsx`, as `JwtAuthFilter` correctly accepts tokens supplied in the query string.
 
 ---
 
@@ -398,14 +414,3 @@ QA is configured as `auto` but when the configured provider (ollama) can't be re
 ### 🚨 GitHub Actions / CI Reminder
 
 - **Always ensure that tests are run locally and that there are no compilation or formatting errors (`mvn spotless:check`) before committing, so that CI tasks (like `ci-maven.yml`) don't fail on GitHub.**
-
-## Bugs and fixes
-
-| ID | Component | Change |
-|----|-----------|--------|
-| 5.1 | `ChapterExportService.java` | Aggregated modelsUsed from cost breakdowns across QA and Translation |
-| 5.2 | `ChapterExportService.java` | Added `needsReRender` flag based on lastEditedAt vs lastRenderedAt |
-| 5.3 | `JobCoordinatorService.java` | Added padding to `LayerElement` bounds during OCR to Layout generation to improve `render.py` text fitting |
-| 5.4 | `JobCoordinatorService.java` | Checked for manual edits before enqueueing QA on Render callback, avoiding costly QA on manual re-renders |
-| 5.5 | `PageController.java` | Removed Image hash deduplication on Project Import to prevent layers stacking on existing pages |
-| 5.6 | `ChapterExportService.java` | Separated QA models from Translation models in export metadata `modelsUsed` payload and guaranteed base keys (`ocr`, `translation`, `qa`) |

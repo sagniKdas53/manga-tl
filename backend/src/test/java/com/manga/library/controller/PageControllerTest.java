@@ -216,7 +216,12 @@ public class PageControllerTest {
 
     org.springframework.mock.web.MockMultipartFile file =
         new org.springframework.mock.web.MockMultipartFile(
-            "file", "test.png", "image/png", "dummy data".getBytes());
+            "file",
+            "test.png",
+            "image/png",
+            new byte[] {
+              (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0
+            });
 
     mockMvc
         .perform(
@@ -242,7 +247,8 @@ public class PageControllerTest {
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos);
     zos.putNextEntry(new java.util.zip.ZipEntry("page1.png"));
-    zos.write("dummy image content".getBytes());
+    zos.write(
+        new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0});
     zos.closeEntry();
     zos.finish();
 
@@ -280,7 +286,8 @@ public class PageControllerTest {
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos);
     zos.putNextEntry(new java.util.zip.ZipEntry("page1.png"));
-    zos.write("dummy image content".getBytes());
+    zos.write(
+        new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0});
     zos.closeEntry();
 
     zos.putNextEntry(new java.util.zip.ZipEntry("project.json"));
@@ -330,7 +337,8 @@ public class PageControllerTest {
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(baos);
     zos.putNextEntry(new java.util.zip.ZipEntry("original.png"));
-    zos.write("dummy image content".getBytes());
+    zos.write(
+        new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0});
     zos.closeEntry();
 
     zos.putNextEntry(new java.util.zip.ZipEntry("project.json"));
@@ -414,7 +422,12 @@ public class PageControllerTest {
 
     org.springframework.mock.web.MockMultipartFile file =
         new org.springframework.mock.web.MockMultipartFile(
-            "file", "test.png", "image/png", "dummy data".getBytes());
+            "file",
+            "test.png",
+            "image/png",
+            new byte[] {
+              (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0
+            });
 
     mockMvc
         .perform(
@@ -459,7 +472,12 @@ public class PageControllerTest {
 
     org.springframework.mock.web.MockMultipartFile file =
         new org.springframework.mock.web.MockMultipartFile(
-            "file", "test.png", "image/png", "dummy data".getBytes());
+            "file",
+            "test.png",
+            "image/png",
+            new byte[] {
+              (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0
+            });
 
     mockMvc
         .perform(
@@ -500,7 +518,12 @@ public class PageControllerTest {
 
     org.springframework.mock.web.MockMultipartFile file =
         new org.springframework.mock.web.MockMultipartFile(
-            "file", "test.png", "image/png", "dummy data".getBytes());
+            "file",
+            "test.png",
+            "image/png",
+            new byte[] {
+              (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0
+            });
 
     mockMvc
         .perform(
@@ -650,5 +673,73 @@ public class PageControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"updated text\"}"))
         .andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testUploadPage_WithMarkdownFile_ReturnsBadRequest() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    Chapter chapter =
+        Chapter.builder()
+            .id(chapterId)
+            .series(com.manga.library.model.Series.builder().build())
+            .build();
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageService.getFileExtension(anyString())).thenReturn(".md");
+
+    org.springframework.mock.web.MockMultipartFile file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.md", "text/markdown", "# Markdown Data".getBytes());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/images")
+                .file(file)
+                .param("chapterId", chapterId.toString())
+                .param("pageNumber", "1"))
+        .andExpect(status().isBadRequest())
+        .andExpect(
+            jsonPath("$.status")
+                .value("Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF"));
+  }
+
+  @Test
+  public void testUploadPage_WithBmpFile_ReturnsOkAndConverts() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    Chapter chapter =
+        Chapter.builder()
+            .id(chapterId)
+            .series(com.manga.library.model.Series.builder().build())
+            .build();
+    when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageService.getFileExtension(anyString())).thenReturn(".bmp");
+
+    // Create a 1x1 valid BMP in memory
+    java.awt.image.BufferedImage img =
+        new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB);
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    javax.imageio.ImageIO.write(img, "bmp", baos);
+    byte[] bmpBytes = baos.toByteArray();
+
+    Page page =
+        Page.builder()
+            .id(UUID.randomUUID())
+            .image(Image.builder().id(UUID.randomUUID()).build())
+            .build();
+    when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(page);
+
+    org.springframework.mock.web.MockMultipartFile file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "test.bmp", "image/bmp", bmpBytes);
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/images")
+                .file(file)
+                .param("chapterId", chapterId.toString())
+                .param("pageNumber", "1"))
+        .andExpect(status().isOk());
   }
 }

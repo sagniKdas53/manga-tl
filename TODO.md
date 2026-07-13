@@ -11,37 +11,45 @@
 
 ### Phase 1 — Data Integrity
 
-- [P] **1.1** Shared image cascade delete — deleting a page from one chapter destroys the image in all chapters
+- [x] **1.1** Shared image cascade delete — deleting a page from one chapter destroys the image in all chapters
   - Root cause: `PageService.deletePageDb()` unconditionally deletes the `Image` entity
   - Evidence: chapter `8bc70d04` in [run-7.log](logs/run-7.log)
-- [P] **1.2** Per-chapter model override uses wrong chapter — `findFirst()` picks arbitrary chapter for config resolution
+- [x] **1.2** Per-chapter model override uses wrong chapter — `findFirst()` picks arbitrary chapter for config resolution
   - Evidence: local OCR ran instead of cloud when re-running OCR on the cloud-override chapter
-- [P] **1.3** Re-upload after cross-chapter delete fails with `pages_chapter_id_page_number_key` duplicate key constraint
+- [x] **1.3** Re-upload after cross-chapter delete fails with `pages_chapter_id_page_number_key` duplicate key constraint
   - Evidence: chapter `8bc70d04` in [run-7.log](logs/run-7.log)
-- [P] **1.4** Allow duplicate images in same chapter (doujin cover page use case)
+- [x] **1.4** Allow duplicate images in same chapter (doujin cover page use case)
   - Currently blocked by idempotency check; same hash should still create new page entries
+- [x] **1.5** Image hash reuse causing unintended layer sharing across chapters, leading to incorrect processing.
+- [ ] **1.6** `project.json` `metadataJson` showing single model (e.g. PaddleOCR) instead of list of models (e.g. PaddleOCR + Gemini), and Gemini costs not captured.
 
 ### Phase 2 — Backend API & Export
 
-- [P] **2.1** Chapter export returns 500 — `LazyInitializationException` after OSIV disabled
+- [x] **2.1** Chapter export returns 500 — `LazyInitializationException` after OSIV disabled
   - Endpoint: `GET /api/series/chapters/{id}/export?format=zip`
   - Response body is base64-encoded error: `...could not initialize proxy...no Session`
-- [P] **2.2** Clear queue API returns `{status: 999}` — missing `@Transactional`, incomplete Redis queue list, deletes PROCESSING jobs
+- [x] **2.2** Clear queue API returns `{status: 999}` — missing `@Transactional`, incomplete Redis queue list, deletes PROCESSING jobs
   - Individual job delete works (`DELETE /api/jobs/{id}`)
-- [P] **2.3** QA_MODE `auto` not recognized by worker — falls back to auto-pass instead of resolving to vlm/llm/hybrid
+- [x] **2.3** QA_MODE `auto` not recognized by worker — falls back to auto-pass instead of resolving to vlm/llm/hybrid
   - Worker logs: `[QA] Unknown QA_MODE=auto, falling back to auto-pass`
-- [P] **2.4** OCR model identifier string has dead `MangaOCR/` prefix
+- [x] **2.4** OCR model identifier string has dead `MangaOCR/` prefix
   - Shows as `MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)` in exports
-- [ ] **2.5** Exported ZIP should include rendered translations, not just original images
+- [x] **2.5** Exported ZIP should include rendered translations, not just original images
   - Currently exports only originals; post-processing edits don't sync into rendered output either
+- [x] **2.6** Aggregated `modelsUsed` from cost breakdowns across QA and Translation in ChapterExportService.
+- [x] **2.7** Added `needsReRender` flag based on lastEditedAt vs lastRenderedAt in ChapterExportService.
+- [x] **2.8** Added padding to `LayerElement` bounds during OCR to Layout generation to improve `render.py` text fitting.
+- [x] **2.9** Checked for manual edits before enqueueing QA on Render callback, avoiding costly QA on manual re-renders.
+- [x] **2.10** Removed Image hash deduplication on Project Import to prevent layers stacking on existing pages.
+- [x] **2.11** Separated QA models from Translation models in export metadata `modelsUsed` payload and guaranteed base keys.
 
 ### Phase 3 — Upload Validation & Security
 
-- [P] **3.1** Non-image files accepted on upload (`.md`, `.txt` etc.) — no file type validation
+- [x] **3.1** Non-image files accepted on upload (`.md`, `.txt` etc.) — no file type validation
   - Evidence: `https://ideapad.tail9ece4.ts.net/tlhub/chapters/.../reader/5` is a `.md` file
   - Accept: PNG, JPEG, WebP, GIF, BMP, TIFF (magic bytes validation + extension check)
-- [P] **3.2** Duplicate image idempotency guard for same chapter/same slot
-- [P] **3.3** Image file endpoint (`/api/images/{id}/file`) works without auth
+- [x] **3.2** Duplicate image idempotency guard for same chapter/same slot
+- [x] **3.3** Image file endpoint (`/api/images/{id}/file`) works without auth
   - Thumbnail endpoint should remain public
 
 ### Phase 4 — Worker & Pipeline Robustness

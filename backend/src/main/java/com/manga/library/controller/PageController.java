@@ -52,6 +52,101 @@ public class PageController {
     return cleanContext + "/api/images/" + imageId + "/file";
   }
 
+  private record ProcessedImage(byte[] bytes, String extension, String filename) {}
+
+  private ProcessedImage validateAndProcessImageBytes(String originalFilename, byte[] fileBytes) {
+    if (fileBytes == null || fileBytes.length < 16) {
+      throw new IllegalArgumentException(
+          "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+    }
+
+    String lowerName = originalFilename == null ? "" : originalFilename.toLowerCase();
+    boolean hasValidExt =
+        lowerName.endsWith(".png")
+            || lowerName.endsWith(".jpg")
+            || lowerName.endsWith(".jpeg")
+            || lowerName.endsWith(".webp")
+            || lowerName.endsWith(".gif")
+            || lowerName.endsWith(".bmp")
+            || lowerName.endsWith(".tiff")
+            || lowerName.endsWith(".tif");
+
+    if (!hasValidExt && !lowerName.isEmpty()) {
+      throw new IllegalArgumentException(
+          "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+    }
+
+    // Magic Bytes Check
+    boolean isPng =
+        fileBytes[0] == (byte) 0x89
+            && fileBytes[1] == (byte) 0x50
+            && fileBytes[2] == (byte) 0x4E
+            && fileBytes[3] == (byte) 0x47;
+    boolean isJpeg =
+        fileBytes[0] == (byte) 0xFF && fileBytes[1] == (byte) 0xD8 && fileBytes[2] == (byte) 0xFF;
+    boolean isGif =
+        fileBytes[0] == (byte) 0x47
+            && fileBytes[1] == (byte) 0x49
+            && fileBytes[2] == (byte) 0x46
+            && fileBytes[3] == (byte) 0x38;
+    boolean isWebp =
+        fileBytes[0] == (byte) 0x52
+            && fileBytes[1] == (byte) 0x49
+            && fileBytes[2] == (byte) 0x46
+            && fileBytes[3] == (byte) 0x46
+            && fileBytes[8] == (byte) 0x57
+            && fileBytes[9] == (byte) 0x45
+            && fileBytes[10] == (byte) 0x42
+            && fileBytes[11] == (byte) 0x50;
+    boolean isBmp = fileBytes[0] == (byte) 0x42 && fileBytes[1] == (byte) 0x4D;
+    boolean isTiff =
+        (fileBytes[0] == (byte) 0x49
+                && fileBytes[1] == (byte) 0x49
+                && fileBytes[2] == (byte) 0x2A
+                && fileBytes[3] == (byte) 0x00)
+            || (fileBytes[0] == (byte) 0x4D
+                && fileBytes[1] == (byte) 0x4D
+                && fileBytes[2] == (byte) 0x00
+                && fileBytes[3] == (byte) 0x2A);
+
+    if (!isPng && !isJpeg && !isGif && !isWebp && !isBmp && !isTiff) {
+      throw new IllegalArgumentException(
+          "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+    }
+
+    if (isBmp || isTiff) {
+      try {
+        java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(fileBytes);
+        java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(bais);
+        if (img == null) {
+          throw new IllegalArgumentException(
+              "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+        }
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "png", baos);
+
+        String newExt = ".png";
+        String newFilename = "converted.png";
+        if (originalFilename != null) {
+          int lastDot = originalFilename.lastIndexOf('.');
+          if (lastDot != -1) {
+            newFilename = originalFilename.substring(0, lastDot) + ".png";
+          } else {
+            newFilename = originalFilename + ".png";
+          }
+        }
+        return new ProcessedImage(baos.toByteArray(), newExt, newFilename);
+      } catch (java.io.IOException e) {
+        log.error("Failed to convert BMP/TIFF to PNG", e);
+        throw new IllegalArgumentException(
+            "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+      }
+    }
+
+    String ext = pageService.getFileExtension(originalFilename);
+    return new ProcessedImage(fileBytes, ext, originalFilename);
+  }
+
   @PostMapping("/images")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<UploadResponse> uploadPage(
@@ -142,6 +237,11 @@ public class PageController {
           if (originalImageFilename == null) {
             originalImageFilename = "original.png";
           }
+
+          ProcessedImage processed =
+              validateAndProcessImageBytes(originalImageFilename, originalImageBytes);
+          originalImageBytes = processed.bytes();
+          originalImageFilename = processed.filename();
 
           java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
           byte[] encodedhash = digest.digest(originalImageBytes);
@@ -392,7 +492,10 @@ public class PageController {
           int nextNum = pageNumber;
 
           for (com.manga.library.dto.ZipImageEntry imgEntry : imageEntries) {
-            byte[] originalBytes = imgEntry.getBytes();
+            ProcessedImage processed =
+                validateAndProcessImageBytes(imgEntry.getName(), imgEntry.getBytes());
+            byte[] originalBytes = processed.bytes();
+            String processedFilename = processed.filename();
 
             java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
             byte[] encodedhash = digest.digest(originalBytes);
@@ -432,7 +535,7 @@ public class PageController {
             }
 
             String uuid = UUID.randomUUID().toString();
-            String imgExt = pageService.getFileExtension(imgEntry.getName());
+            String imgExt = pageService.getFileExtension(processedFilename);
             String storagePath = "originals/" + uuid + imgExt;
             String contentType = "image/png";
             if (imgExt.equalsIgnoreCase(".jpg") || imgExt.equalsIgnoreCase(".jpeg")) {
@@ -459,7 +562,7 @@ public class PageController {
             Page pg =
                 pageService.createPageAndImage(
                     chapter,
-                    imgEntry.getName(),
+                    processedFilename,
                     storagePath,
                     thumbnailStoragePath,
                     nextNum,
@@ -478,7 +581,11 @@ public class PageController {
       }
 
       // 2. Process standard single image upload
-      byte[] originalBytes = file.getBytes();
+      ProcessedImage processed = validateAndProcessImageBytes(originalFilename, file.getBytes());
+      byte[] originalBytes = processed.bytes();
+      originalFilename = processed.filename();
+      fileExtension = processed.extension();
+
       java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
       byte[] encodedhash = digest.digest(originalBytes);
       StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
@@ -571,7 +678,7 @@ public class PageController {
       Page page =
           pageService.createPageAndImage(
               chapter,
-              file.getOriginalFilename(),
+              originalFilename,
               storagePath,
               thumbnailStoragePath,
               pageNumber,
@@ -584,6 +691,12 @@ public class PageController {
 
       return ResponseEntity.ok(
           new UploadResponse(page.getId(), page.getImage().getId(), "processing"));
+    } catch (IllegalArgumentException e) {
+      if (e.getMessage() != null && e.getMessage().startsWith("Invalid file type")) {
+        return ResponseEntity.badRequest().body(new UploadResponse(null, null, e.getMessage()));
+      }
+      log.error("Bad request", e);
+      return ResponseEntity.badRequest().body(new UploadResponse(null, null, e.getMessage()));
     } catch (java.io.IOException
         | java.security.NoSuchAlgorithmException
         | java.security.InvalidKeyException
