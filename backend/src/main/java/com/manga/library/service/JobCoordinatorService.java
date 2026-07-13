@@ -644,8 +644,16 @@ public class JobCoordinatorService {
         }
       }
     }
-    metadata.put("provider", "Translation Worker");
-    metadata.put("model", modelIdentifier);
+    String provider = "Translation Worker";
+    String model = modelIdentifier;
+    if (modelIdentifier.contains("/")) {
+      int slashIdx = modelIdentifier.indexOf("/");
+      provider = modelIdentifier.substring(0, slashIdx);
+      model = modelIdentifier.substring(slashIdx + 1);
+    }
+
+    metadata.put("provider", provider);
+    metadata.put("model", model);
     metadata.put("time", OffsetDateTime.now().toString());
     metadata.put("confidence", avgConfidence);
 
@@ -663,7 +671,13 @@ public class JobCoordinatorService {
     metadata.put("last_modified", OffsetDateTime.now().toString());
 
     if (cost != null) {
-      metadata.set("cost", objectMapper.valueToTree(cost));
+      com.fasterxml.jackson.databind.node.ObjectNode tlNode = objectMapper.createObjectNode();
+      tlNode.set("cost", objectMapper.valueToTree(cost));
+      // if summary is passed inside cost object, we can leave it there, or if we need to we can
+      // extract it.
+      // But user said move tl cost and summary under 'tl'.
+      // If summary is in cost, it'll naturally move under 'tl'.
+      metadata.set("tl", tlNode);
     }
 
     final Layer translationLayer =

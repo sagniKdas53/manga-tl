@@ -1151,6 +1151,8 @@ public class PageController {
           boolean visible = !layerNode.has("visible") || layerNode.get("visible").asBoolean();
           int zOrder = layerNode.has("zOrder") ? layerNode.get("zOrder").asInt() : 0;
 
+          com.fasterxml.jackson.databind.JsonNode metadataJson = layerNode.get("metadataJson");
+
           Layer newLayer =
               Layer.builder()
                   .image(image)
@@ -1158,6 +1160,7 @@ public class PageController {
                   .targetLanguage(targetLanguage)
                   .visible(visible)
                   .zOrder(zOrder)
+                  .metadataJson(metadataJson)
                   .build();
           newLayer = layerRepository.save(newLayer);
           importedLayersCount++;
