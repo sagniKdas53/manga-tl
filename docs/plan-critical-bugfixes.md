@@ -398,3 +398,13 @@ QA is configured as `auto` but when the configured provider (ollama) can't be re
 ### 🚨 GitHub Actions / CI Reminder
 
 - **Always ensure that tests are run locally and that there are no compilation or formatting errors (`mvn spotless:check`) before committing, so that CI tasks (like `ci-maven.yml`) don't fail on GitHub.**
+
+## Bugs and fixes
+
+| ID | Component | Change |
+|----|-----------|--------|
+| 5.1 | `ChapterExportService.java` | Aggregated modelsUsed from cost breakdowns across QA and Translation |
+| 5.2 | `ChapterExportService.java` | Added `needsReRender` flag based on lastEditedAt vs lastRenderedAt |
+| 5.3 | `JobCoordinatorService.java` | Added padding to `LayerElement` bounds during OCR to Layout generation to improve `render.py` text fitting |
+| 5.4 | `JobCoordinatorService.java` | Checked for manual edits before enqueueing QA on Render callback, avoiding costly QA on manual re-renders |
+| 5.5 | `PageController.java` | Removed Image hash deduplication on Project Import to prevent layers stacking on existing pages |

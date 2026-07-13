@@ -62,7 +62,7 @@ public class ChapterExportService {
         List<Map<String, Object>> layersMetaList = new ArrayList<>();
         double pageTotalCostVal = 0.0;
         boolean pageHasCost = false;
-        Map<String, String> modelsUsed = new HashMap<>();
+        Map<String, Set<String>> modelsUsed = new HashMap<>();
 
         for (Layer l : imageLayers) {
           Map<String, Object> layerMeta = new HashMap<>();
@@ -86,34 +86,49 @@ public class ChapterExportService {
           if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
             com.fasterxml.jackson.databind.node.ObjectNode metaNode =
                 (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
+            
+            Set<String> typeModels = modelsUsed.computeIfAbsent(l.getType().toLowerCase(), k -> new java.util.HashSet<>());
 
             if (metaNode.has("model")) {
               modelName = metaNode.get("model").asText();
               layerMeta.put("model", modelName);
-              modelsUsed.put(l.getType().toLowerCase(), modelName);
+              typeModels.add(modelName);
             }
 
-            if (metaNode.has("cost")) {
-              com.fasterxml.jackson.databind.JsonNode costNode = metaNode.get("cost");
+            final double[] accumulatedCost = {0.0};
+            final boolean[] costFound = {false};
+
+            java.util.function.Consumer<com.fasterxml.jackson.databind.JsonNode> extractCostAndModels = (costNode) -> {
+              if (costNode == null || !costNode.isObject()) return;
               if (costNode.has("estimated_cost")) {
-                double estCost = costNode.get("estimated_cost").asDouble();
-                layerCostVal += estCost;
-                pageTotalCostVal += estCost;
-                pageHasCost = true;
+                costFound[0] = true;
+                accumulatedCost[0] += costNode.get("estimated_cost").asDouble();
               }
-            }
-
-            if (metaNode.has("qa")) {
-              com.fasterxml.jackson.databind.JsonNode qaNode = metaNode.get("qa");
-              if (qaNode.has("cost")) {
-                com.fasterxml.jackson.databind.JsonNode qaCostNode = qaNode.get("cost");
-                if (qaCostNode.has("estimated_cost")) {
-                  double qaEstCost = qaCostNode.get("estimated_cost").asDouble();
-                  layerCostVal += qaEstCost;
-                  pageTotalCostVal += qaEstCost;
-                  pageHasCost = true;
+              if (costNode.has("breakdown") && costNode.get("breakdown").isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode item : costNode.get("breakdown")) {
+                  if (item.has("model")) typeModels.add(item.get("model").asText());
+                  if (item.has("model_identifier")) typeModels.add(item.get("model_identifier").asText());
                 }
               }
+            };
+            
+            if (metaNode.has("cost")) {
+              extractCostAndModels.accept(metaNode.get("cost"));
+            }
+
+            if (metaNode.has("qa") && metaNode.get("qa").has("cost")) {
+              extractCostAndModels.accept(metaNode.get("qa").get("cost"));
+            }
+            
+            if (metaNode.has("tl") && metaNode.get("tl").has("cost")) {
+              extractCostAndModels.accept(metaNode.get("tl").get("cost"));
+            }
+            
+            if (costFound[0]) {
+                layerMeta.put("estimated_cost", accumulatedCost[0]);
+                layerCostVal += accumulatedCost[0];
+                pageTotalCostVal += accumulatedCost[0];
+                pageHasCost = true;
             }
           }
 
@@ -166,19 +181,34 @@ public class ChapterExportService {
           }
           pageMeta.put("manualQaNeeded", manualQaNeeded);
 
-          boolean manualChangesDone = false;
-          List<LayerElement> elements = layerElementRepository.findByLayerId(activeLayer.getId());
-          if (elements != null) {
-            for (LayerElement el : elements) {
-              if (Boolean.TRUE.equals(el.getIsManuallyEdited())) {
+          if (page.getImage() != null) {
+            boolean manualChangesDone = false;
+            List<LayerElement> allElementsForImage =
+                layerElementRepository.findByLayerImageId(page.getImage().getId());
+            for (LayerElement el : allElementsForImage) {
+              if (el.getIsManuallyEdited() != null && el.getIsManuallyEdited()) {
                 manualChangesDone = true;
                 break;
               }
             }
+
+            boolean needsReRender = false;
+            if (manualChangesDone) {
+              java.time.OffsetDateTime lastEditedAt = page.getImage().getLastEditedAt();
+              java.time.OffsetDateTime lastRenderedAt = page.getImage().getLastRenderedAt();
+              if (lastEditedAt != null && (lastRenderedAt == null || lastEditedAt.isAfter(lastRenderedAt))) {
+                  needsReRender = true;
+              }
+            }
+            pageMeta.put("manualChangesDone", manualChangesDone);
+            pageMeta.put("needsReRender", needsReRender);
+          } else {
+            pageMeta.put("manualChangesDone", false);
+            pageMeta.put("needsReRender", false);
           }
-          pageMeta.put("manualChangesDone", manualChangesDone);
         } else {
           pageMeta.put("manualChangesDone", false);
+          pageMeta.put("needsReRender", false);
           pageMeta.put("manualQaNeeded", false);
         }
 

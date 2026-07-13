@@ -729,30 +729,32 @@ public class JobCoordinatorService {
                     // Find or create LayerElement
                     LayerElement element = elementMap.get(regionId);
                     if (element == null) {
-                      double ex =
-                          region.getSafeTextX() != null
-                              ? region.getSafeTextX().doubleValue()
-                              : region.getBubbleX() != null
-                                  ? region.getBubbleX().doubleValue()
-                                  : region.getBboxX().doubleValue();
-                      double ey =
-                          region.getSafeTextY() != null
-                              ? region.getSafeTextY().doubleValue()
-                              : region.getBubbleY() != null
-                                  ? region.getBubbleY().doubleValue()
-                                  : region.getBboxY().doubleValue();
-                      int ew =
-                          region.getSafeTextW() != null
-                              ? region.getSafeTextW()
-                              : region.getBubbleW() != null
-                                  ? region.getBubbleW()
-                                  : region.getBboxW();
-                      int eh =
-                          region.getSafeTextH() != null
-                              ? region.getSafeTextH()
-                              : region.getBubbleH() != null
-                                  ? region.getBubbleH()
-                                  : region.getBboxH();
+                      double padding = 10.0;
+                      double rawEx = region.getSafeTextX() != null
+                          ? region.getSafeTextX().doubleValue()
+                          : region.getBubbleX() != null
+                              ? region.getBubbleX().doubleValue()
+                              : region.getBboxX().doubleValue();
+                      double rawEy = region.getSafeTextY() != null
+                          ? region.getSafeTextY().doubleValue()
+                          : region.getBubbleY() != null
+                              ? region.getBubbleY().doubleValue()
+                              : region.getBboxY().doubleValue();
+                      int rawEw = region.getSafeTextW() != null
+                          ? region.getSafeTextW()
+                          : region.getBubbleW() != null
+                              ? region.getBubbleW()
+                              : region.getBboxW();
+                      int rawEh = region.getSafeTextH() != null
+                          ? region.getSafeTextH()
+                          : region.getBubbleH() != null
+                              ? region.getBubbleH()
+                              : region.getBboxH();
+
+                      double ex = Math.max(0, rawEx - padding);
+                      double ey = Math.max(0, rawEy - padding);
+                      int ew = rawEw + (int)(padding * 2);
+                      int eh = rawEh + (int)(padding * 2);
 
                       element =
                           LayerElement.builder()
@@ -777,13 +779,15 @@ public class JobCoordinatorService {
                               .build();
                     } else {
                       element.setText(translatedText);
-                      if (region.getSafeTextX() != null) {
-                        element.setX(region.getSafeTextX().doubleValue());
-                        element.setY(region.getSafeTextY().doubleValue());
-                        element.setMaxWidth(region.getSafeTextW());
-                        element.setMaxHeight(region.getSafeTextH());
+                      if (!Boolean.TRUE.equals(element.getIsManuallyEdited())) {
+                        if (region.getSafeTextX() != null) {
+                          element.setX(Math.max(0, region.getSafeTextX().doubleValue() - 10.0));
+                          element.setY(Math.max(0, region.getSafeTextY().doubleValue() - 10.0));
+                          element.setMaxWidth(region.getSafeTextW() + 20);
+                          element.setMaxHeight(region.getSafeTextH() + 20);
+                        }
+                        element.setMaskPolygon(region.getMaskPolygon());
                       }
-                      element.setMaskPolygon(region.getMaskPolygon());
                     }
                     Objects.requireNonNull(element, "element cannot be null");
                     layerElementRepository.save(element);
@@ -882,8 +886,24 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleRenderCallback(UUID imageId) {
-    log.info("Received Render callback for image: {}. Enqueuing QA job...", imageId);
-    enqueueJob("qa", imageId);
+    boolean manualChangesDone = false;
+    List<LayerElement> allElementsForImage =
+        layerElementRepository.findByLayerImageId(imageId);
+    if (allElementsForImage != null) {
+      for (LayerElement el : allElementsForImage) {
+        if (Boolean.TRUE.equals(el.getIsManuallyEdited())) {
+          manualChangesDone = true;
+          break;
+        }
+      }
+    }
+
+    if (manualChangesDone) {
+      log.info("Received Render callback for image: {}. Skipping QA as manual edits exist.", imageId);
+    } else {
+      log.info("Received Render callback for image: {}. Enqueuing QA job...", imageId);
+      enqueueJob("qa", imageId);
+    }
   }
 
   @Transactional
