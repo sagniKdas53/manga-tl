@@ -208,10 +208,11 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 **Fix** (`PageController.java`):
 
 - At the top of the upload handler, validate using both:
-  1. **Extension check**: Accept `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tiff`, `.tif`
-  2. **Magic bytes check**: Read first 16 bytes and verify against known image signatures (PNG: `89 50 4E 47`, JPEG: `FF D8 FF`, GIF: `47 49 46 38`, WebP: `52 49 46 46...57 45 42 50`, BMP: `42 4D`, TIFF: `49 49 2A 00` or `4D 4D 00 2A`)
-- For BMP/TIFF: accept on upload but convert to PNG internally before storing (ImageIO can read both natively)
-- Return `400 Bad Request` with a descriptive error: `"Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF"`
+  1. **Extension check**: Accept `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`
+  2. **Magic bytes check**: Read first 16 bytes and verify against known image signatures (PNG: `89 50 4E 47`, JPEG: `FF D8 FF`, WebP: `52 49 46 46...57 45 42 50`, BMP: `42 4D`)
+- For BMP: accept on upload but convert to PNG internally before storing
+- Return `400 Bad Request` with a descriptive error: `"Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP"`
+- *Note: GIF and TIFF support were dropped because of pipeline render failures and lack of browser compatibility, respectively.*
 - Apply the same validation inside the ZIP import flow
 
 ### 3.2 Duplicate Image Idempotency Guard (✅ Implemented)
