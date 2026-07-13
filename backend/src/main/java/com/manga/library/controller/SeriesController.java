@@ -631,10 +631,10 @@ public class SeriesController {
       @AuthenticationPrincipal User user) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
 
-    Chapter chapter =
-        chapterRepository
-            .findById(chapterId)
-            .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
+    // Verify chapter exists before exporting
+    chapterRepository
+        .findById(chapterId)
+        .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
 
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
     if (pages == null || pages.isEmpty()) {

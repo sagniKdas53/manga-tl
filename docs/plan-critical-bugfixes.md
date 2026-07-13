@@ -408,3 +408,4 @@ QA is configured as `auto` but when the configured provider (ollama) can't be re
 | 5.3 | `JobCoordinatorService.java` | Added padding to `LayerElement` bounds during OCR to Layout generation to improve `render.py` text fitting |
 | 5.4 | `JobCoordinatorService.java` | Checked for manual edits before enqueueing QA on Render callback, avoiding costly QA on manual re-renders |
 | 5.5 | `PageController.java` | Removed Image hash deduplication on Project Import to prevent layers stacking on existing pages |
+| 5.6 | `ChapterExportService.java` | Separated QA models from Translation models in export metadata `modelsUsed` payload and guaranteed base keys (`ocr`, `translation`, `qa`) |

@@ -730,31 +730,35 @@ public class JobCoordinatorService {
                     LayerElement element = elementMap.get(regionId);
                     if (element == null) {
                       double padding = 10.0;
-                      double rawEx = region.getSafeTextX() != null
-                          ? region.getSafeTextX().doubleValue()
-                          : region.getBubbleX() != null
-                              ? region.getBubbleX().doubleValue()
-                              : region.getBboxX().doubleValue();
-                      double rawEy = region.getSafeTextY() != null
-                          ? region.getSafeTextY().doubleValue()
-                          : region.getBubbleY() != null
-                              ? region.getBubbleY().doubleValue()
-                              : region.getBboxY().doubleValue();
-                      int rawEw = region.getSafeTextW() != null
-                          ? region.getSafeTextW()
-                          : region.getBubbleW() != null
-                              ? region.getBubbleW()
-                              : region.getBboxW();
-                      int rawEh = region.getSafeTextH() != null
-                          ? region.getSafeTextH()
-                          : region.getBubbleH() != null
-                              ? region.getBubbleH()
-                              : region.getBboxH();
+                      double rawEx =
+                          region.getSafeTextX() != null
+                              ? region.getSafeTextX().doubleValue()
+                              : region.getBubbleX() != null
+                                  ? region.getBubbleX().doubleValue()
+                                  : region.getBboxX().doubleValue();
+                      double rawEy =
+                          region.getSafeTextY() != null
+                              ? region.getSafeTextY().doubleValue()
+                              : region.getBubbleY() != null
+                                  ? region.getBubbleY().doubleValue()
+                                  : region.getBboxY().doubleValue();
+                      int rawEw =
+                          region.getSafeTextW() != null
+                              ? region.getSafeTextW()
+                              : region.getBubbleW() != null
+                                  ? region.getBubbleW()
+                                  : region.getBboxW();
+                      int rawEh =
+                          region.getSafeTextH() != null
+                              ? region.getSafeTextH()
+                              : region.getBubbleH() != null
+                                  ? region.getBubbleH()
+                                  : region.getBboxH();
 
                       double ex = Math.max(0, rawEx - padding);
                       double ey = Math.max(0, rawEy - padding);
-                      int ew = rawEw + (int)(padding * 2);
-                      int eh = rawEh + (int)(padding * 2);
+                      int ew = rawEw + (int) (padding * 2);
+                      int eh = rawEh + (int) (padding * 2);
 
                       element =
                           LayerElement.builder()
@@ -887,8 +891,7 @@ public class JobCoordinatorService {
   @Transactional
   public void handleRenderCallback(UUID imageId) {
     boolean manualChangesDone = false;
-    List<LayerElement> allElementsForImage =
-        layerElementRepository.findByLayerImageId(imageId);
+    List<LayerElement> allElementsForImage = layerElementRepository.findByLayerImageId(imageId);
     if (allElementsForImage != null) {
       for (LayerElement el : allElementsForImage) {
         if (Boolean.TRUE.equals(el.getIsManuallyEdited())) {
@@ -899,7 +902,8 @@ public class JobCoordinatorService {
     }
 
     if (manualChangesDone) {
-      log.info("Received Render callback for image: {}. Skipping QA as manual edits exist.", imageId);
+      log.info(
+          "Received Render callback for image: {}. Skipping QA as manual edits exist.", imageId);
     } else {
       log.info("Received Render callback for image: {}. Enqueuing QA job...", imageId);
       enqueueJob("qa", imageId);
