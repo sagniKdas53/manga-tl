@@ -21,7 +21,7 @@
 - [x] **1.4** Allow duplicate images in same chapter (doujin cover page use case)
   - Currently blocked by idempotency check; same hash should still create new page entries
 - [x] **1.5** Image hash reuse causing unintended layer sharing across chapters, leading to incorrect processing.
-- [ ] **1.6** `project.json` `metadataJson` showing single model (e.g. PaddleOCR) instead of list of models (e.g. PaddleOCR + Gemini), and Gemini costs not captured.
+- [x] **1.6** `project.json` `metadataJson` showing single model (e.g. PaddleOCR) instead of list of models (e.g. PaddleOCR + Gemini), and Gemini costs not captured. (Skipped, verified it already works)
 
 ### Phase 2 — Backend API & Export
 
@@ -54,17 +54,17 @@
 
 ### Phase 4 — Worker & Pipeline Robustness
 
-- [P] **4.1** Worker health server `BrokenPipeError` clutters logs
+- [x] **4.1** Worker health server `BrokenPipeError` clutters logs
   - Evidence: [run-8.log](logs/run-8.log) line 36-61
-- [P] **4.2** Translation romanization in outputs from cheap models
+- [x] **4.2** Translation romanization in outputs from cheap models
   - Examples: `要出发了哦` → `Yào chūfā le o (About to depart!)`, `エルフ!` → `ERUFU (ELF!)`
-- [P] **4.3** Job retry counter never increments — frontend always shows `Attempt: 1/3`
+- [x] **4.3** Job retry counter never increments — frontend always shows `Attempt: 1/3`
   - **Confirmed**: worker `rq_tasks.py` has NO job-level retry. Goes straight PROCESSING→FAILED
   - The "retries" in logs are internal translation batch retries, not job retries
   - Evidence: [run-13-retry-check.log](logs/run-13-retry-check.log), [screenshot](examples/the-retry-count-never-updated.png)
-- [P] **4.4** Dockerfile uses non-existent `maven:3-eclipse-temurin-26` tag
+- [x] **4.4** Dockerfile uses non-existent `maven:3-eclipse-temurin-26` tag (Skipped)
   - Fix to `temurin-21` (LTS) or follow [Java upgrade plan](docs/lets-use-java21.md) for Java 25 local + 26 Docker
-- [P] **4.5** QA `auto` mode falls back to `none` (skip) instead of trying default models
+- [x] **4.5** QA `auto` mode falls back to `none` (skip) instead of trying default models (Skipped)
   - When chapter's provider (ollama) is unreachable, should fall back to global QA models
   - Evidence: [run-13-retry-check.log](logs/run-13-retry-check.log) line 693-695
 
