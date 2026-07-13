@@ -300,11 +300,19 @@ public class ChapterExportService {
           byte[] imageBytes = null;
           try (java.io.InputStream is = minioService.downloadFile("rendered/" + imageId + ".png")) {
             imageBytes = is.readAllBytes();
-          } catch (RuntimeException | java.io.IOException e) {
+          } catch (RuntimeException
+              | java.io.IOException
+              | java.security.NoSuchAlgorithmException
+              | io.minio.errors.MinioException
+              | java.security.InvalidKeyException e) {
             try (java.io.InputStream is =
                 minioService.downloadFile(page.getImage().getStoragePath())) {
               imageBytes = is.readAllBytes();
-            } catch (RuntimeException | java.io.IOException ex) {
+            } catch (RuntimeException
+                | java.io.IOException
+                | java.security.NoSuchAlgorithmException
+                | io.minio.errors.MinioException
+                | java.security.InvalidKeyException ex) {
               log.error("Failed to download original/rendered image for page " + page.getId(), ex);
             }
           }
@@ -339,7 +347,11 @@ public class ChapterExportService {
               ctx);
         }
       }
-    } catch (RuntimeException | java.io.IOException e) {
+    } catch (RuntimeException
+        | java.io.IOException
+        | java.security.NoSuchAlgorithmException
+        | io.minio.errors.MinioException
+        | java.security.InvalidKeyException e) {
       log.error("Failed to build export for chapter: " + chapterId, e);
       if (userId != null) {
         sseService.emitNotificationToUser(
