@@ -102,16 +102,31 @@ public class LayerElement {
 
   @com.fasterxml.jackson.annotation.JsonProperty("qaStatus")
   public String getQaStatusSerialized() {
-    return region != null ? region.getQaStatus() : null;
+    if (region == null) return null;
+    try {
+      return region.getQaStatus();
+    } catch (org.hibernate.LazyInitializationException e) {
+      return null;
+    }
   }
 
   @com.fasterxml.jackson.annotation.JsonProperty("qaScore")
   public Double getQaScoreSerialized() {
-    return region != null ? region.getQaScore() : null;
+    if (region == null) return null;
+    try {
+      return region.getQaScore();
+    } catch (org.hibernate.LazyInitializationException e) {
+      return null;
+    }
   }
 
   @com.fasterxml.jackson.annotation.JsonProperty("qaFeedback")
   public String getQaFeedbackSerialized() {
-    return region != null ? region.getQaFeedback() : null;
+    if (region == null) return null;
+    try {
+      return region.getQaFeedback();
+    } catch (org.hibernate.LazyInitializationException e) {
+      return null;
+    }
   }
 }

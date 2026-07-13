@@ -432,7 +432,6 @@ public class JobCoordinatorService {
 
     if (dto.getCost() != null) {
       metadata.set("cost", objectMapper.valueToTree(dto.getCost()));
-      recordJobCost(imageId, dto.getCost());
     }
 
     metadata.put("layer_order", nextZOrder);
