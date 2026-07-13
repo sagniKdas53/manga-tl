@@ -337,6 +337,12 @@ The `attempt` field in the job payload is set to `1` at creation time in `enqueu
 - `test_rq_tasks.py`: submit a job that will fail → verify it retries up to maxAttempts with incrementing counter → verify status PATCH includes `attempt: 2`
 - `test_qa.py`: set QA mode to `auto` with unreachable provider → verify it falls back to default model, not `none`
 
+### Bugs and fixes (phase 4)
+
+1. Worker retry logic failing on connection errors:
+   - **Bug**: When MinIO or the Backend became unreachable (e.g., container stopped), jobs vanished from the queue instead of retrying or failing. The handlers (`process_render`, `process_panel_detection`, etc.) were catching `ConnectionError` and `HTTPError`, logging them, and using `return` to exit early. This caused the main `process_job_rq` loop to assume the handler succeeded and erroneously mark the job as `COMPLETED`.
+   - **Fix**: Replaced all `return` statements in the `except` blocks of the worker handlers with `raise`. This ensures that network and API exceptions bubble up to `process_job_rq`, which correctly catches them, waits for 2 seconds, and patches the backend status to `PENDING` with an incremented `attempt` count until max attempts are exhausted.
+
 **Manual checks:**
 
 1. Run pipeline → check worker logs for absence of BrokenPipeError stack traces
@@ -344,6 +350,9 @@ The `attempt` field in the job payload is set to `1` at creation time in `enqueu
 3. Kill MinIO briefly while a job is running → restart → verify the job retries and shows `Attempt: 2/3` in the frontend
 4. `docker compose build` → verify no `temurin-26` resolution failure
 5. Set QA provider to unreachable ollama → run pipeline → verify QA uses fallback model (not skipped)
+6. Stop the `backend` container briefly while jobs are processing → verify jobs retry and frontend eventually reflects `FAILED` or recovers if backend is restarted.
+7. Stop the `postgres` container while backend is running → verify the backend throws 500s on API calls, and the worker retries the job.
+8. Simulate a 429 Rate Limit or 500 Error from the AI translation/QA provider → verify the worker propagates the exception and retries the job.
 
 ---
 
