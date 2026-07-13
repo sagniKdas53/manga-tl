@@ -46,13 +46,16 @@ services:
   redis:
     image: valkey/valkey:8-alpine
     container_name: manga-valkey
+    command: ["valkey-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
+    volumes:
+      - ./data/redis:/data
     networks:
       - manga-net
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: [ "CMD", "valkey-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
