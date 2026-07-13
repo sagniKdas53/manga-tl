@@ -91,6 +91,37 @@ const renderJobDetails = (job: Job) => {
   }
 };
 
+const formatErrorMessage = (error: string, status: string) => {
+  if (!error) return "";
+  const prefix = status === "FAILED" ? "Job failed: " : "Error: ";
+  
+  if (
+    error.includes("Max retries exceeded") ||
+    error.includes("NameResolutionError") ||
+    error.includes("Failed to resolve") ||
+    error.includes("ConnectionError")
+  ) {
+    return prefix + "Could not connect to internal service (Network Error).";
+  }
+  if (
+    error.includes("500 Server Error") ||
+    error.includes("500 Internal Server Error")
+  ) {
+    return prefix + "Internal API returned 500 error.";
+  }
+  
+  let cleanError = error;
+  const match = error.match(/([a-zA-Z]+Error):\s*(.+)/);
+  if (match) {
+    cleanError = `${match[1]}: ${match[2]}`;
+  }
+  
+  if (cleanError.length > 100) {
+    cleanError = cleanError.substring(0, 100) + "...";
+  }
+  return cleanError;
+};
+
 export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isPaused, setIsPaused] = useState(false);
@@ -455,6 +486,15 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                     >
                       Status: {job.status} | Attempt: {job.attempt}/
                       {job.maxAttempts}
+                      {job.type === "qa" && (() => {
+                        try {
+                          const payload = JSON.parse(job.payload || "{}");
+                          if (payload.qaPass) {
+                            return ` | Pass: ${payload.qaPass}/3`;
+                          }
+                        } catch {}
+                        return "";
+                      })()}
                     </div>
                     {job.error && (
                       <div
@@ -464,8 +504,9 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                           marginBottom: "4px",
                           wordBreak: "break-all",
                         }}
+                        title={job.error}
                       >
-                        {job.error}
+                        {formatErrorMessage(job.error, job.status)}
                       </div>
                     )}
                     <div

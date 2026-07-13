@@ -906,7 +906,10 @@ public class JobCoordinatorService {
           "Received Render callback for image: {}. Skipping QA as manual edits exist.", imageId);
     } else {
       log.info("Received Render callback for image: {}. Enqueuing QA job...", imageId);
-      enqueueJob("qa", imageId);
+      String retryKey = "image:qa:retries:" + imageId;
+      String retryValStr = redisTemplate.opsForValue().get(retryKey);
+      int retries = retryValStr != null ? Integer.parseInt(retryValStr) : 0;
+      enqueueJob("qa", imageId, "normal", job -> job.put("qaPass", retries + 1));
     }
   }
 
