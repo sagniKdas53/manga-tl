@@ -8,6 +8,7 @@ import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.SseService;
 import java.util.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +35,7 @@ public class InternalJobController {
   private final LayerRepository layerRepository;
   private final SseService sseService;
   private final JobRepository jobRepository;
+  private final ObjectMapper objectMapper;
 
   @PatchMapping("/jobs/{jobId}/status")
   public ResponseEntity<?> updateJobStatus(
@@ -51,8 +53,20 @@ public class InternalJobController {
               }
               if (payload.containsKey("attempt")) {
                 try {
-                  job.setAttempt(Integer.parseInt(payload.get("attempt")));
-                } catch (NumberFormatException ignored) {}
+                  int attempt = Integer.parseInt(payload.get("attempt"));
+                  job.setAttempt(attempt);
+                  
+                  if (job.getPayload() != null) {
+                    Map<String, Object> payloadMap = objectMapper.readValue(
+                        job.getPayload(), 
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+                    );
+                    payloadMap.put("attempt", attempt);
+                    job.setPayload(objectMapper.writeValueAsString(payloadMap));
+                  }
+                } catch (Exception e) {
+                  log.error("Failed to parse attempt or update payload: {}", e.getMessage());
+                }
               }
               jobRepository.save(job);
               if ("PENDING".equals(payload.get("status"))) {
