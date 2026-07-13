@@ -430,6 +430,11 @@ public class JobCoordinatorService {
       metadata.put("layer_name", "OCR");
     }
 
+    if (dto.getCost() != null) {
+      metadata.set("cost", objectMapper.valueToTree(dto.getCost()));
+      recordJobCost(imageId, dto.getCost());
+    }
+
     metadata.put("layer_order", nextZOrder);
     metadata.put("last_modified", OffsetDateTime.now().toString());
 

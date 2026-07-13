@@ -244,7 +244,9 @@ export const NotificationCenter: React.FC = () => {
                                 const url = window.URL.createObjectURL(blob);
                                 const a = document.createElement("a");
                                 a.href = url;
-                                a.download = `chapter_export.zip`;
+                                const seriesTitle = n.context.seriesTitle || "chapter";
+                                const chapterNumber = n.context.chapterNumber || "export";
+                                a.download = `${seriesTitle} - Chapter ${chapterNumber}.zip`;
                                 document.body.appendChild(a);
                                 a.click();
                                 document.body.removeChild(a);

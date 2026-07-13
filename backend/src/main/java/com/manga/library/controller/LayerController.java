@@ -96,15 +96,16 @@ public class LayerController {
                   if (parentLayer != null) {
                     if (parentLayer.getMetadataJson() != null
                         && parentLayer.getMetadataJson().isObject()) {
-                      ((com.fasterxml.jackson.databind.node.ObjectNode) parentLayer.getMetadataJson())
+                      ((com.fasterxml.jackson.databind.node.ObjectNode)
+                              parentLayer.getMetadataJson())
                           .put("last_modified", OffsetDateTime.now().toString());
                     }
                     layerRepository.save(parentLayer);
-                    
+
                     Image img = parentLayer.getImage();
                     if (img != null) {
-                        img.setLastEditedAt(OffsetDateTime.now());
-                        imageRepository.save(img);
+                      img.setLastEditedAt(OffsetDateTime.now());
+                      imageRepository.save(img);
                     }
                   }
                 }
@@ -181,10 +182,10 @@ public class LayerController {
 
               Objects.requireNonNull(layer, "layer cannot be null");
               Layer saved = layerRepository.save(layer);
-              
+
               image.setLastEditedAt(OffsetDateTime.now());
               imageRepository.save(image);
-              
+
               return ResponseEntity.ok(saved);
             })
         .orElse(ResponseEntity.notFound().build());
@@ -204,8 +205,8 @@ public class LayerController {
               Image img = layer.getImage();
               layerRepository.delete(layer);
               if (img != null) {
-                  img.setLastEditedAt(OffsetDateTime.now());
-                  imageRepository.save(img);
+                img.setLastEditedAt(OffsetDateTime.now());
+                imageRepository.save(img);
               }
               return ResponseEntity.ok().build();
             })
@@ -247,8 +248,8 @@ public class LayerController {
               Layer saved = layerRepository.save(layer);
               Image img = saved.getImage();
               if (img != null) {
-                  img.setLastEditedAt(OffsetDateTime.now());
-                  imageRepository.save(img);
+                img.setLastEditedAt(OffsetDateTime.now());
+                imageRepository.save(img);
               }
               log.info(
                   "Layer {} updated — zOrder={}, visible={}",
@@ -299,8 +300,8 @@ public class LayerController {
               LayerElement saved = layerElementRepository.save(el);
               Image img = layer.getImage();
               if (img != null) {
-                  img.setLastEditedAt(OffsetDateTime.now());
-                  imageRepository.save(img);
+                img.setLastEditedAt(OffsetDateTime.now());
+                imageRepository.save(img);
               }
               return ResponseEntity.ok(saved);
             })
@@ -321,8 +322,8 @@ public class LayerController {
               Image img = element.getLayer() != null ? element.getLayer().getImage() : null;
               layerElementRepository.delete(element);
               if (img != null) {
-                  img.setLastEditedAt(OffsetDateTime.now());
-                  imageRepository.save(img);
+                img.setLastEditedAt(OffsetDateTime.now());
+                imageRepository.save(img);
               }
               return ResponseEntity.ok().build();
             })

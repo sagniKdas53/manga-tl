@@ -100,18 +100,18 @@ public class LayerElement {
     return region != null ? region.getId() : null;
   }
 
-  @com.fasterxml.jackson.annotation.JsonProperty("layerType")
-  public String getLayerTypeSerialized() {
-    return layer != null ? layer.getType() : null;
+  @com.fasterxml.jackson.annotation.JsonProperty("qaStatus")
+  public String getQaStatusSerialized() {
+    return region != null ? region.getQaStatus() : null;
   }
 
-  @com.fasterxml.jackson.annotation.JsonProperty("layerVisible")
-  public Boolean getLayerVisibleSerialized() {
-    return layer != null ? layer.getVisible() : Boolean.FALSE;
+  @com.fasterxml.jackson.annotation.JsonProperty("qaScore")
+  public Double getQaScoreSerialized() {
+    return region != null ? region.getQaScore() : null;
   }
 
-  @com.fasterxml.jackson.annotation.JsonProperty("layerMetadata")
-  public com.fasterxml.jackson.databind.JsonNode getLayerMetadataSerialized() {
-    return layer != null ? layer.getMetadataJson() : null;
+  @com.fasterxml.jackson.annotation.JsonProperty("qaFeedback")
+  public String getQaFeedbackSerialized() {
+    return region != null ? region.getQaFeedback() : null;
   }
 }

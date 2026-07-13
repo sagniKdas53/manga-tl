@@ -9,6 +9,7 @@ public class OcrCallbackDto {
   private UUID imageId;
   private String modelIdentifier;
   private Double confidence;
+  private Object cost;
   private List<OcrRegionData> regions;
 
   @Data

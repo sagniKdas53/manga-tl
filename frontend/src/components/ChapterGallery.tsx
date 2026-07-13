@@ -479,7 +479,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const handleExportChapterZip = useCallback(async () => {
     if (!selectedChapter) return;
     try {
-      showToast("Preparing chapter export...", "info");
       const res = await safeFetch(
         `/api/series/chapters/${selectedChapter.id}/export?format=zip`,
         {
