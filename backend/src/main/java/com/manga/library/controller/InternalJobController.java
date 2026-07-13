@@ -49,7 +49,15 @@ public class InternalJobController {
               if (payload.containsKey("error")) {
                 job.setError(payload.get("error"));
               }
+              if (payload.containsKey("attempt")) {
+                try {
+                  job.setAttempt(Integer.parseInt(payload.get("attempt")));
+                } catch (NumberFormatException ignored) {}
+              }
               jobRepository.save(job);
+              if ("PENDING".equals(payload.get("status"))) {
+                  jobCoordinatorService.pushJobToRedis(job);
+              }
               return ResponseEntity.ok().build();
             })
         .orElse(ResponseEntity.notFound().build());
