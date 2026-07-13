@@ -746,7 +746,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             style={{ position: "relative" }}
           >
             <img
-              src={p.thumbnailUrl || p.url}
+              src={p.thumbnailUrl || `${p.url}?token=${user.token}`}
               className="page-thumbnail"
               alt={`Page ${p.pageNumber}`}
             />

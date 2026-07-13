@@ -47,7 +47,7 @@ public class SeriesController {
     if (cleanContext.endsWith("/")) {
       cleanContext = cleanContext.substring(0, cleanContext.length() - 1);
     }
-    return cleanContext + "/api/images/" + imageId + "/file";
+    return cleanContext + "/api/images/" + imageId + "/thumbnail";
   }
 
   private SeriesDto toDto(Series s) {
@@ -67,7 +67,7 @@ public class SeriesController {
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
     if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
-      dto.setCoverImageUrl(s.getCoverImageUrl());
+      dto.setCoverImageUrl(s.getCoverImageUrl().replace("/file", "/thumbnail"));
     } else {
       // Find default cover image (first page of first chapter)
       try {
@@ -105,7 +105,7 @@ public class SeriesController {
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
     if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
-      dto.setCoverImageUrl(s.getCoverImageUrl());
+      dto.setCoverImageUrl(s.getCoverImageUrl().replace("/file", "/thumbnail"));
     } else {
       UUID imageId = defaultCovers.get(s.getId());
       if (imageId != null) {

@@ -3054,7 +3054,7 @@ export const Reader: React.FC<ReaderProps> = ({
             >
               <img
                 ref={imgRef}
-                src={selectedPage.url}
+                src={`${selectedPage.url}?token=${user.token}`}
                 alt={`Page ${selectedPage.pageNumber}`}
                 className="reader-image"
                 onLoad={handleImgLoad}
