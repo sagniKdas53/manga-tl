@@ -1131,6 +1131,7 @@ public class PageController {
 
       int importedLayersCount = 0;
       int importedElementsCount = 0;
+      boolean hasManualEdits = false;
 
       // Restore layers and elements
       Image image = page.getImage();
@@ -1187,6 +1188,11 @@ public class PageController {
                   elNode.has("fontStyle") ? elNode.get("fontStyle").asText() : "normal";
               String boxShape =
                   elNode.has("boxShape") ? elNode.get("boxShape").asText() : "rectangular";
+              boolean isManuallyEdited =
+                  elNode.has("isManuallyEdited") && elNode.get("isManuallyEdited").asBoolean();
+              if (isManuallyEdited) {
+                hasManualEdits = true;
+              }
 
               String maskPolygon = null;
               if (elNode.has("maskPolygon") && !elNode.get("maskPolygon").isNull()) {
@@ -1228,12 +1234,18 @@ public class PageController {
                       .fontStyle(fontStyle)
                       .boxShape(boxShape)
                       .maskPolygon(maskPolygon)
+                      .isManuallyEdited(isManuallyEdited)
                       .build();
               layerElementRepository.save(newEl);
               importedElementsCount++;
             }
           }
         }
+      }
+
+      if (hasManualEdits) {
+        image.setLastEditedAt(java.time.OffsetDateTime.now());
+        imageRepository.save(image);
       }
 
       log.info(
