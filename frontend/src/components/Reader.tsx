@@ -2274,6 +2274,7 @@ export const Reader: React.FC<ReaderProps> = ({
               textColor: el.textColor,
               fontWeight: el.fontWeight || "normal",
               fontStyle: el.fontStyle || "normal",
+              isManuallyEdited: el.isManuallyEdited || false,
               boxShape: el.boxShape || "rectangular",
               maskPolygon: el.maskPolygon,
               regionId: el.regionId,
