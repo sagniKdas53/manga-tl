@@ -57,7 +57,7 @@ public class PageController {
   private ProcessedImage validateAndProcessImageBytes(String originalFilename, byte[] fileBytes) {
     if (fileBytes == null || fileBytes.length < 16) {
       throw new IllegalArgumentException(
-          "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+          "Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP");
     }
 
     String lowerName = originalFilename == null ? "" : originalFilename.toLowerCase();
@@ -66,14 +66,11 @@ public class PageController {
             || lowerName.endsWith(".jpg")
             || lowerName.endsWith(".jpeg")
             || lowerName.endsWith(".webp")
-            || lowerName.endsWith(".gif")
-            || lowerName.endsWith(".bmp")
-            || lowerName.endsWith(".tiff")
-            || lowerName.endsWith(".tif");
+            || lowerName.endsWith(".bmp");
 
     if (!hasValidExt && !lowerName.isEmpty()) {
       throw new IllegalArgumentException(
-          "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+          "Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP");
     }
 
     // Magic Bytes Check
@@ -84,11 +81,6 @@ public class PageController {
             && fileBytes[3] == (byte) 0x47;
     boolean isJpeg =
         fileBytes[0] == (byte) 0xFF && fileBytes[1] == (byte) 0xD8 && fileBytes[2] == (byte) 0xFF;
-    boolean isGif =
-        fileBytes[0] == (byte) 0x47
-            && fileBytes[1] == (byte) 0x49
-            && fileBytes[2] == (byte) 0x46
-            && fileBytes[3] == (byte) 0x38;
     boolean isWebp =
         fileBytes[0] == (byte) 0x52
             && fileBytes[1] == (byte) 0x49
@@ -99,28 +91,19 @@ public class PageController {
             && fileBytes[10] == (byte) 0x42
             && fileBytes[11] == (byte) 0x50;
     boolean isBmp = fileBytes[0] == (byte) 0x42 && fileBytes[1] == (byte) 0x4D;
-    boolean isTiff =
-        (fileBytes[0] == (byte) 0x49
-                && fileBytes[1] == (byte) 0x49
-                && fileBytes[2] == (byte) 0x2A
-                && fileBytes[3] == (byte) 0x00)
-            || (fileBytes[0] == (byte) 0x4D
-                && fileBytes[1] == (byte) 0x4D
-                && fileBytes[2] == (byte) 0x00
-                && fileBytes[3] == (byte) 0x2A);
 
-    if (!isPng && !isJpeg && !isGif && !isWebp && !isBmp && !isTiff) {
+    if (!isPng && !isJpeg && !isWebp && !isBmp) {
       throw new IllegalArgumentException(
-          "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+          "Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP");
     }
 
-    if (isBmp || isTiff) {
+    if (isBmp) {
       try {
         java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(fileBytes);
         java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(bais);
         if (img == null) {
           throw new IllegalArgumentException(
-              "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+              "Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP");
         }
         java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
         javax.imageio.ImageIO.write(img, "png", baos);
@@ -137,9 +120,9 @@ public class PageController {
         }
         return new ProcessedImage(baos.toByteArray(), newExt, newFilename);
       } catch (java.io.IOException e) {
-        log.error("Failed to convert BMP/TIFF to PNG", e);
+        log.error("Failed to convert BMP to PNG", e);
         throw new IllegalArgumentException(
-            "Invalid file type. Accepted formats: PNG, JPEG, WebP, GIF, BMP, TIFF");
+            "Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP");
       }
     }
 
@@ -814,8 +797,6 @@ public class PageController {
         contentType = "image/jpeg";
       } else if (filename.endsWith(".webp")) {
         contentType = "image/webp";
-      } else if (filename.endsWith(".gif")) {
-        contentType = "image/gif";
       }
 
       String finalContentType = contentType;
