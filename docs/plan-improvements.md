@@ -12,7 +12,7 @@ This plan covers performance improvements, UI redesign, and quality-of-life enha
 > [!NOTE]
 > This replaces the current multi-per-second REST polling with a hybrid approach:
 > **one initial REST fetch** for the full snapshot + **SSE for real-time deltas**.
-> If no SSE events arrive within 30s, a single heartbeat REST fallback fires to ensure consistency.
+> If no SSE events arrive within 60s, a single heartbeat REST fallback fires to ensure consistency.
 
 ### A.1 Backend: Emit Job State Change Events via SSE
 
@@ -162,12 +162,14 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 **Files**: `PageService.java`, `PageController.java`, `SeriesController.java`
 
 **Current flow** (synchronous, blocking):
+
 ```
 Upload → file.getBytes() → ImageIO.read (full decode) → bilinear resize → ImageIO.write(jpg)
       → MinIO.put(original) → MinIO.put(thumbnail) → HTTP response → startPipeline()
 ```
 
 **Proposed flow** (async, non-blocking):
+
 ```
 Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPipeline()
                                                                 ↳ @Async thumbnailPool:
