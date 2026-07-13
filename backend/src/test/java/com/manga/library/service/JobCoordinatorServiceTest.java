@@ -426,10 +426,10 @@ public class JobCoordinatorServiceTest {
     assertFalse(elements.isEmpty());
     LayerElement el = elements.get(0);
     assertEquals("Hello", el.getText());
-    assertEquals(10.0, el.getX(), 0.001);
-    assertEquals(20.0, el.getY(), 0.001);
-    assertEquals(100, el.getMaxWidth().intValue());
-    assertEquals(50, el.getMaxHeight().intValue());
+    assertEquals(0.0, el.getX(), 0.001); // max(0, 10 - 10)
+    assertEquals(10.0, el.getY(), 0.001); // max(0, 20 - 10)
+    assertEquals(120, el.getMaxWidth().intValue()); // 100 + 20
+    assertEquals(70, el.getMaxHeight().intValue()); // 50 + 20
 
     // Clean up
     layerElementRepository.delete(el);
@@ -497,7 +497,8 @@ public class JobCoordinatorServiceTest {
     assertTrue(newLayer.getVisible());
     assertEquals("en", newLayer.getTargetLanguage());
     assertNotNull(newLayer.getMetadataJson());
-    assertTrue(newLayer.getMetadataJson().has("cost"));
+    assertTrue(newLayer.getMetadataJson().has("tl"));
+    assertTrue(newLayer.getMetadataJson().get("tl").has("cost"));
 
     Layer updatedExisting = layerRepository.findById(existingLayer.getId()).orElseThrow();
     assertFalse(updatedExisting.getVisible());

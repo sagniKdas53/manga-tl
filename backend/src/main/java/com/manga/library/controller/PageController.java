@@ -1092,14 +1092,9 @@ public class PageController {
         }
         String fileHash = hexString.toString();
 
-        Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
-        Image image;
-        if (existingImageOpt.isPresent()) {
-          image = existingImageOpt.get();
-          page = pageService.createPageWithExistingImage(chapter, image, pageNumber, user);
-        } else {
-          String imgExt = pageService.getFileExtension(originalImageFilename);
-          String uuid = UUID.randomUUID().toString();
+        // Always create a new Image entity for imports to prevent layer stacking
+        String imgExt = pageService.getFileExtension(originalImageFilename);
+        String uuid = UUID.randomUUID().toString();
           String storagePath = "originals/" + uuid + imgExt;
           String contentType = "image/png";
           if (imgExt.equalsIgnoreCase(".jpg") || imgExt.equalsIgnoreCase(".jpeg")) {
@@ -1132,7 +1127,6 @@ public class PageController {
                   pageNumber,
                   fileHash,
                   user);
-        }
       }
 
       int importedLayersCount = 0;
