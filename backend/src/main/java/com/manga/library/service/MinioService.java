@@ -117,4 +117,14 @@ public class MinioService {
       log.error("Failed to delete MinIO file: {}", objectPath, e);
     }
   }
+
+  public boolean fileExists(String objectPath) {
+    try {
+      minioClient.statObject(
+          io.minio.StatObjectArgs.builder().bucket(bucketName).object(objectPath).build());
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
+  }
 }
