@@ -638,43 +638,46 @@ public class SeriesController {
 
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
     if (pages == null || pages.isEmpty()) {
-      return ResponseEntity.badRequest()
-          .body(Map.of("message", "No pages in chapter"));
+      return ResponseEntity.badRequest().body(Map.of("message", "No pages in chapter"));
     }
 
     String exportId = UUID.randomUUID().toString();
     UUID userId = user != null ? user.getId() : null;
 
-    java.util.concurrent.CompletableFuture.runAsync(() -> {
-        chapterExportService.buildAndUploadExport(chapterId, userId, exportId);
-    });
+    java.util.concurrent.CompletableFuture.runAsync(
+        () -> {
+          chapterExportService.buildAndUploadExport(chapterId, userId, exportId);
+        });
 
     Map<String, String> response = new HashMap<>();
     response.put("status", "accepted");
     response.put("exportId", exportId);
-    response.put("message", "Export started in the background. You will be notified when it is ready.");
-    
+    response.put(
+        "message", "Export started in the background. You will be notified when it is ready.");
+
     return ResponseEntity.status(202).body(response);
   }
 
   @GetMapping("/chapters/exports/{exportId}/download")
   public ResponseEntity<byte[]> downloadExport(@PathVariable String exportId) {
     Objects.requireNonNull(exportId, "exportId cannot be null");
-    
+
     try {
-        byte[] zipBytes;
-        try (java.io.InputStream is = minioService.downloadFile("exports/" + exportId + ".zip")) {
-            zipBytes = is.readAllBytes();
-        }
-        
-        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-        headers.set(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=export_" + exportId + ".zip");
-        headers.set(org.springframework.http.HttpHeaders.CONTENT_TYPE, "application/zip");
-        
-        return ResponseEntity.ok().headers(headers).body(zipBytes);
+      byte[] zipBytes;
+      try (java.io.InputStream is = minioService.downloadFile("exports/" + exportId + ".zip")) {
+        zipBytes = is.readAllBytes();
+      }
+
+      org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+      headers.set(
+          org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+          "attachment; filename=export_" + exportId + ".zip");
+      headers.set(org.springframework.http.HttpHeaders.CONTENT_TYPE, "application/zip");
+
+      return ResponseEntity.ok().headers(headers).body(zipBytes);
     } catch (Exception e) {
-        log.error("Failed to download export", e);
-        return ResponseEntity.notFound().build();
+      log.error("Failed to download export", e);
+      return ResponseEntity.notFound().build();
     }
   }
 

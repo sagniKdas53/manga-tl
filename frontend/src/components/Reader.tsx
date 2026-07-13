@@ -2250,34 +2250,6 @@ export const Reader: React.FC<ReaderProps> = ({
         },
         exportedAt: new Date().toISOString(),
         layers: layers.map((lData) => {
-          let layerCostVal = 0.0;
-          const meta = lData.layer.metadataJson;
-          let qaMeta = undefined;
-
-          if (meta && typeof meta === "object") {
-            if (
-              meta.cost &&
-              typeof meta.cost === "object" &&
-              typeof meta.cost.estimated_cost === "number"
-            ) {
-              layerCostVal += meta.cost.estimated_cost;
-            }
-            if (meta.qa && typeof meta.qa === "object") {
-              qaMeta = { ...meta.qa };
-              if (
-                meta.qa.cost &&
-                typeof meta.qa.cost === "object" &&
-                typeof meta.qa.cost.estimated_cost === "number"
-              ) {
-                layerCostVal += meta.qa.cost.estimated_cost;
-                qaMeta.cost = {
-                  ...meta.qa.cost,
-                  display: formatCost(meta.qa.cost.estimated_cost),
-                };
-              }
-            }
-          }
-
           return {
             id: lData.layer.id,
             type: lData.layer.type,
@@ -2285,12 +2257,6 @@ export const Reader: React.FC<ReaderProps> = ({
             visible: lData.layer.visible,
             zOrder: lData.layer.zOrder,
             metadataJson: lData.layer.metadataJson,
-            cost: {
-              estimated_cost: layerCostVal,
-              display: formatCost(layerCostVal),
-              currency: "USD",
-            },
-            qa: qaMeta,
             elements: lData.elements.map((el) => ({
               id: el.id,
               text: el.text,
@@ -2311,6 +2277,9 @@ export const Reader: React.FC<ReaderProps> = ({
               boxShape: el.boxShape || "rectangular",
               maskPolygon: el.maskPolygon,
               regionId: el.regionId,
+              qaStatus: el.region?.qaStatus,
+              qaScore: el.region?.qaScore,
+              qaFeedback: el.region?.qaFeedback,
             })),
           };
         }),

@@ -170,7 +170,9 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 3. Set chapter QA mode to inherit (let it resolve to "auto") → run pipeline → check worker logs for `mode=vlm` or `mode=llm` (not `mode=auto`) - Done
 
 4. **Auto QA Mode Priority**: If both an LLM and VLM are configured globally, `auto` mode resolves to `vlm`. The multiple models seen in usage charts (e.g., DeepSeek + Gemini) correspond to Translation + QA steps, not a "hybrid" QA mode.
-5. **Missing Re-renders**: As discovered via `examples/chapter-export`, manual edits to layers (disabling layers, editing text) do not update the `rendered/` image in MinIO. This causes chapter exports to contain stale images that do not reflect manual edits. This will be addressed in step 2.5 by triggering a re-render job when edits are saved.
+5. **Debounced Re-renders on Edits**: 
+   - Addressed the missing re-renders issue (where `examples/chapter-export` showed manual edits weren't reflected in exported ZIPs). 
+   - Implemented `DebouncedRenderService.java` which sweeps every 30 seconds. If an image's `manualChangesDone` is true (i.e. it has a `lastEditedAt` timestamp) and it hasn't been rendered since the edits (or it has been at least 1 minute since the last edit), a background `render` job is automatically queued. This ensures exported ZIPs always contain up-to-date edits without blocking UI responsiveness.
 6. **Queue Persistence & Render Skipping Bugfixes**:
    - **Persistence**: Fixed `docker-compose.yml` to include a volume for the Valkey (Redis) service so that processing and pending jobs are not wiped out on stack restart.
    - **Render Skipping**: Found that `render.py` skipped generating flattened images if `QA_MODE=llm` or `none`. Removed this logic because ZIP exports rely on these rendered images regardless of QA mode.
@@ -178,6 +180,11 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
    - Removed duplicate "Preparing export" toast in `ChapterGallery.tsx` and updated the `NotificationCenter.tsx` to name the downloaded zip as `${seriesTitle} - Chapter ${chapterNumber}.zip` using SSE context.
 8. **Export Caching (Hash-based)**:
    - Modified `ChapterExportService.java` to hash the chapter metadata before building the ZIP. If the MinIO object `exports/<hash>.zip` exists, the backend instantly returns a success notification, avoiding re-rendering ZIPs for unchanged chapters.
+9. **Meta-data Validation**:
+   - Validated the `meta-data.json` produced by the new export service. It successfully tracks:
+     - `modelsUsed`, `cost`, `hasRendered`, and `originalFilename`
+     - Per-layer and per-page costs
+     - If a page is not fully processed, `hasRendered` correctly remains `false` and the original image is exported as expected.
 
 ---
 

@@ -73,7 +73,8 @@ public class JobController {
 
       return ResponseEntity.ok().build();
     } catch (Exception e) {
-      return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage() != null ? e.getMessage() : e.toString()));
+      return ResponseEntity.internalServerError()
+          .body(Map.of("error", e.getMessage() != null ? e.getMessage() : e.toString()));
     }
   }
 
