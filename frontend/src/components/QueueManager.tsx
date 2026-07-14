@@ -492,7 +492,9 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                           if (payload.qaPass) {
                             return ` | Pass: ${payload.qaPass}/3`;
                           }
-                        } catch {}
+                        } catch (e) {
+                          // ignore JSON parse error
+                        }
                         return "";
                       })()}
                     </div>
