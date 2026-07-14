@@ -63,9 +63,9 @@ public class ChapterExportService {
         double pageTotalCostVal = 0.0;
         boolean pageHasCost = false;
         Map<String, Set<String>> modelsUsed = new HashMap<>();
-        modelsUsed.put("ocr", new java.util.HashSet<>());
-        modelsUsed.put("translation", new java.util.HashSet<>());
-        modelsUsed.put("qa", new java.util.HashSet<>());
+        modelsUsed.put("ocr", new HashSet<>());
+        modelsUsed.put("translation", new HashSet<>());
+        modelsUsed.put("qa", new HashSet<>());
 
         for (Layer l : imageLayers) {
           Map<String, Object> layerMeta = new HashMap<>();
@@ -83,7 +83,6 @@ public class ChapterExportService {
             layerMeta.put("elements", elements);
           }
 
-          double layerCostVal = 0.0;
           String modelName = null;
 
           if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
@@ -92,7 +91,7 @@ public class ChapterExportService {
 
             Set<String> typeModels =
                 modelsUsed.computeIfAbsent(
-                    l.getType().toLowerCase(), k -> new java.util.HashSet<>());
+                    l.getType().toLowerCase(), k -> new HashSet<>());
 
             if (metaNode.has("model")) {
               modelName = metaNode.get("model").asText();
