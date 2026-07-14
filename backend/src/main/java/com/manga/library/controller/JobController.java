@@ -32,14 +32,14 @@ public class JobController {
     List<Job> jobs =
         jobRepository.findByStatusInOrderByCreatedAtAsc(
             List.of("PENDING", "PROCESSING", "FAILED", "PAUSED"));
-    
+
     String paused = redisTemplate.opsForValue().get(QUEUE_PAUSED_KEY);
     boolean isPaused = "true".equals(paused);
-    
+
     Map<String, Object> response = new HashMap<>();
     response.put("jobs", jobs);
     response.put("isPaused", isPaused);
-    
+
     return ResponseEntity.ok(response);
   }
 

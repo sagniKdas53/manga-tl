@@ -197,6 +197,8 @@ services:
       - RENDER_CACHE_DIR=/app/rendered_cache
       # Finally the remote workers, to distibute load to shouldn't this be added to the back-end
       - CONCURRENT_JOBS=${CONCURRENT_JOBS:-2}
+      - MAX_HEAVY_SLOTS=${MAX_HEAVY_SLOTS:-}
+      - MAX_LIGHT_SLOTS=${MAX_LIGHT_SLOTS:-}
       - WORKER_API_SECRET_FILE=/run/secrets/worker_api_secret
       - HF_HUB_DISABLE_SYMLINKS_WARNING=1
       # Comment these out if you want to seed the models or re-download them

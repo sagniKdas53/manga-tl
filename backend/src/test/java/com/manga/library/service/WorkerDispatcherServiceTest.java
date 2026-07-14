@@ -191,4 +191,109 @@ public class WorkerDispatcherServiceTest {
 
     Files.deleteIfExists(tempFile);
   }
+
+  @Test
+  public void testDispatchJobs_IndependentSlots_HeavyRejectedLightAccepted() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+
+    when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}");
+    when(listOps.leftPop("queue:region-redo-tl"))
+        .thenReturn("{\"id\": \"light1\"}")
+        .thenReturn(null);
+
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenAnswer(
+            invocation -> {
+              HttpRequest request = invocation.getArgument(0);
+              String body = request.bodyPublisher().get().toString();
+              HttpResponse<String> response = mock(HttpResponse.class);
+              if (body.contains("qa-re-ocr")
+                  || body.contains("region-redo-ocr")
+                  || body.contains("\"queue:ocr\"")
+                  || body.contains("panel-detection")) {
+                when(response.statusCode()).thenReturn(429);
+              } else {
+                when(response.statusCode()).thenReturn(202);
+              }
+              return response;
+            });
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps).leftPush("queue:qa-re-ocr", "{\"id\": \"heavy1\"}");
+    verify(listOps, times(2)).leftPop("queue:region-redo-tl");
+    verify(listOps, never()).leftPush(eq("queue:region-redo-tl"), anyString());
+  }
+
+  @Test
+  public void testDispatchJobs_IndependentSlots_LightRejectedHeavyAccepted() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+
+    when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}").thenReturn(null);
+    when(listOps.leftPop("queue:region-redo-tl")).thenReturn("{\"id\": \"light1\"}");
+
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenAnswer(
+            invocation -> {
+              HttpRequest request = invocation.getArgument(0);
+              String body = request.bodyPublisher().get().toString();
+              HttpResponse<String> response = mock(HttpResponse.class);
+              if (body.contains("region-redo-tl")
+                  || body.contains("\"queue:qa\"")
+                  || body.contains("render")
+                  || body.contains("translation")
+                  || body.contains("layout")) {
+                when(response.statusCode()).thenReturn(429);
+              } else {
+                when(response.statusCode()).thenReturn(202);
+              }
+              return response;
+            });
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps, times(2)).leftPop("queue:qa-re-ocr");
+    verify(listOps, never()).leftPush(eq("queue:qa-re-ocr"), anyString());
+    verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
+  }
+
+  @Test
+  public void testDispatchJobs_BothSlotsAccepted() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+
+    when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}").thenReturn(null);
+    when(listOps.leftPop("queue:region-redo-tl"))
+        .thenReturn("{\"id\": \"light1\"}")
+        .thenReturn(null);
+
+    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    when(mockResponse.statusCode()).thenReturn(202);
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(mockResponse);
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps, times(2)).leftPop("queue:qa-re-ocr");
+    verify(listOps, times(2)).leftPop("queue:region-redo-tl");
+    verify(listOps, never()).leftPush(anyString(), anyString());
+    verify(httpClient, times(2)).send(any(HttpRequest.class), any());
+  }
+
+  @Test
+  public void testDispatchJobs_BothSlotsRejected() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+
+    when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}");
+    when(listOps.leftPop("queue:region-redo-tl")).thenReturn("{\"id\": \"light1\"}");
+
+    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    when(mockResponse.statusCode()).thenReturn(429);
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(mockResponse);
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps).leftPush("queue:qa-re-ocr", "{\"id\": \"heavy1\"}");
+    verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
+  }
 }

@@ -100,6 +100,50 @@ These are fallback runtimes used when cloud servers time out or rate-limit (429)
 
 ---
 
+### 6. Concurrency & Slot Allocation
+
+The worker uses a **dual-slot concurrency model** to maximize throughput. Instead of a single job queue, jobs are classified as **heavy** (GPU-bound) or **light** (cloud API / fast local), and each type has its own concurrency slot.
+
+This means a GPU-intensive OCR job and a cloud-only translation job can run **in parallel** on the same worker, instead of waiting for each other sequentially.
+
+#### Queue Classification
+
+| Slot Type | Queues | Why |
+| :--- | :--- | :--- |
+| **Heavy** | `panel-detection`, `ocr`, `qa-re-ocr`, `region-redo-ocr` | Use local GPU models (YOLO, PaddleOCR). Serialized by GPU locks — running 2+ heavy jobs simultaneously causes lock contention with no throughput gain. |
+| **Light** | `layout`, `translation`, `render`, `qa`, `region-redo-tl` | Cloud API calls or fast local processing. I/O-bound, genuinely parallelizable. |
+
+#### Environment Variables
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `CONCURRENT_JOBS` | Total max concurrent jobs (heavy + light combined) | `2` |
+| `MAX_HEAVY_SLOTS` | Max concurrent heavy (GPU-bound) jobs | `1` |
+| `MAX_LIGHT_SLOTS` | Max concurrent light (cloud/fast) jobs | `CONCURRENT_JOBS - MAX_HEAVY_SLOTS` |
+
+#### Default Slot Allocation
+
+| `CONCURRENT_JOBS` | Heavy Slots | Light Slots | Effect |
+| :--- | :--- | :--- | :--- |
+| `2` | 1 | 1 | 1 OCR + 1 Translation in parallel |
+| `3` | 1 | 2 | 1 OCR + 2 cloud jobs in parallel |
+| `4` | 1 | 3 | 1 OCR + 3 cloud jobs in parallel |
+
+> **Why default to 1 heavy slot?** Heavy jobs are serialized by the GPU lock (`acquire_lock("ocr")`). Even with 2 heavy slots, only one can use the GPU at a time — the second blocks on the lock. Increasing heavy slots only helps if you have multiple GPUs or run heavy jobs that don't all need the same lock.
+
+#### How Dispatch Works
+
+The backend's `WorkerDispatcherService` polls Redis queues every 2 seconds and dispatches jobs to workers via HTTP push. It dispatches heavy and light queues **independently**:
+
+1. Try dispatching from heavy queues (in priority order)
+2. **Independently**, try dispatching from light queues (in priority order)
+3. If the heavy slot is full (worker returns 429), light dispatch still proceeds
+4. If the light slot is full, heavy dispatch still proceeds
+
+This ensures maximum parallelism — a full heavy slot never blocks light jobs and vice versa.
+
+---
+
 ## 📋 Common Configurations
 
 ### Option A: 100% Cloud (Low Local Resources)
