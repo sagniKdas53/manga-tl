@@ -230,10 +230,10 @@ public class JobCoordinatorService {
       String json = objectMapper.writeValueAsString(job);
       dbJob.setPayload(json);
       jobRepository.save(dbJob);
-      
+
       // Emit real-time SSE event for the new job
       sseService.emitEventForImage(imageId, "job_update", job);
-      
+
       enqueuePersistedJob(dbJob);
     } catch (Exception e) {
       log.error("Failed to enqueue job for image {}", imageId, e);

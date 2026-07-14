@@ -34,6 +34,9 @@ export default defineConfig({
         "**/*.test.{ts,tsx}",
         "dist/**",
       ],
+      thresholds: {
+        lines: 80,
+      },
     },
   },
 });
