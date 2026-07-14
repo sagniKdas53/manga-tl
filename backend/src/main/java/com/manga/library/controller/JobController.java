@@ -27,18 +27,20 @@ public class JobController {
   private static final String QUEUE_PAUSED_KEY = "system:queue:paused";
 
   @GetMapping
-  public ResponseEntity<List<Job>> getJobs() {
+  public ResponseEntity<Map<String, Object>> getJobs() {
     // Return jobs that are not COMPLETED
     List<Job> jobs =
         jobRepository.findByStatusInOrderByCreatedAtAsc(
             List.of("PENDING", "PROCESSING", "FAILED", "PAUSED"));
-    return ResponseEntity.ok(jobs);
-  }
-
-  @GetMapping("/status")
-  public ResponseEntity<Map<String, Boolean>> getQueueStatus() {
+    
     String paused = redisTemplate.opsForValue().get(QUEUE_PAUSED_KEY);
-    return ResponseEntity.ok(Map.of("isPaused", "true".equals(paused)));
+    boolean isPaused = "true".equals(paused);
+    
+    Map<String, Object> response = new HashMap<>();
+    response.put("jobs", jobs);
+    response.put("isPaused", isPaused);
+    
+    return ResponseEntity.ok(response);
   }
 
   @PostMapping("/pause")

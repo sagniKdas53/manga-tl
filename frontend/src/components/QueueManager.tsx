@@ -156,7 +156,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { lastEvent, lastEventTime } = useNotifications();
+  const { subscribe } = useNotifications();
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -176,7 +176,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
     const statusOrder: Record<string, number> = {
       PROCESSING: 1,
       PENDING: 2,
-      PAUSED: 3,
+      PAUSED: 2, // Give PAUSED same priority as PENDING so they don't jump to the bottom
       FAILED: 4,
     };
     return [...jobsList].sort((a, b) => {
@@ -195,15 +195,8 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       });
       if (res.ok) {
         const data = await res.json();
-        setJobs(sortJobs(data));
-      }
-
-      const statusRes = await safeFetch("/api/jobs/status", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (statusRes.ok) {
-        const statusData = await statusRes.json();
-        setIsPaused(statusData.isPaused);
+        setIsPaused(data.isPaused);
+        setJobs(sortJobs(data.jobs));
       }
     } catch (err) {
       console.error("Failed to fetch jobs", err);
@@ -225,40 +218,42 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
 
   // Handle SSE events
   useEffect(() => {
-    if (!lastEvent) return;
-
-    if (lastEvent.type === "job_update") {
-      try {
-        const data = JSON.parse(lastEvent.data);
-        // eslint-disable-next-line
-        setJobs((prev) => {
-          let updated = [...prev];
-          if (data.status === "DELETED") {
-            updated = updated.filter((j) => j.id !== data.jobId && j.id !== data.id);
-          } else {
-            // jobData might have `jobId` from new payloads, but existing ones have `id`
-            const idToMatch = data.jobId || data.id;
-            const index = updated.findIndex((j) => j.id === idToMatch);
-            if (index !== -1) {
-              updated[index] = { ...updated[index], ...data, id: idToMatch };
+    if (!token) return;
+    
+    return subscribe((event) => {
+      if (event.type === "job_update") {
+        try {
+          const data = JSON.parse(event.data);
+          // eslint-disable-next-line
+          setJobs((prev) => {
+            let updated = [...prev];
+            if (data.status === "DELETED") {
+              updated = updated.filter((j) => j.id !== data.jobId && j.id !== data.id);
             } else {
-              // Add new job
-              updated.push({ ...data, id: idToMatch } as Job);
+              // jobData might have `jobId` from new payloads, but existing ones have `id`
+              const idToMatch = data.jobId || data.id;
+              const index = updated.findIndex((j) => j.id === idToMatch);
+              if (index !== -1) {
+                updated[index] = { ...updated[index], ...data, id: idToMatch };
+              } else {
+                // Add new job
+                updated.push({ ...data, id: idToMatch } as Job);
+              }
             }
-          }
-          return sortJobs(updated);
-        });
-      } catch (e) {
-        console.error("Failed to parse job_update", e);
+            return sortJobs(updated);
+          });
+        } catch (e) {
+          console.error("Failed to parse job_update", e);
+        }
+      } else if (event.type === "queue_paused") {
+        setIsPaused(true);
+      } else if (event.type === "queue_resumed") {
+        setIsPaused(false);
+      } else if (event.type === "queue_cleared") {
+        setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
       }
-    } else if (lastEvent.type === "queue_paused") {
-      setIsPaused(true);
-    } else if (lastEvent.type === "queue_resumed") {
-      setIsPaused(false);
-    } else if (lastEvent.type === "queue_cleared") {
-      setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
-    }
-  }, [lastEvent, lastEventTime]);
+    });
+  }, [token, subscribe]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -384,7 +379,13 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
     }
   };
 
+  const getDisplayStatus = (status: string) => {
+    if (isPaused && status === "PENDING") return "PAUSED";
+    return status;
+  };
+
   const getStatusColor = (status: string) => {
+    if (isPaused && status === "PENDING") return "#ffc107";
     switch (status) {
       case "PROCESSING":
         return "#4caf50";
@@ -591,7 +592,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                         fontWeight: "600"
                       }}
                     >
-                      {job.status}
+                      {getDisplayStatus(job.status)}
                     </div>
                     {job.error && (
                       <div
