@@ -76,6 +76,14 @@
 
 ## 🟡 Improvements (plan-improvements.md)
 
+### Phase 0 — CI Foundation (Do First)
+
+- [P] **0.1** Add static analysis to Python CI
+  - Worker CI only runs `pytest` — no linting, no type checking (unlike backend with PMD + SpotBugs)
+  - Add `ruff check` + `ruff format --check` + `pyright` to `ci-python.yml`
+  - Create `pyproject.toml` (ruff config) + `pyrightconfig.json` (basic mode)
+  - **Do this first** — protects all worker changes in Phases A–F
+
 ### Phase A — SSE Job System Migration
 
 - [P] **A.1** Replace polling with SSE for job state updates

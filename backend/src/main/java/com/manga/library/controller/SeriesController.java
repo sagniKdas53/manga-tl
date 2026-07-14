@@ -681,10 +681,5 @@ public class SeriesController {
     }
   }
 
-  private String formatCost(double cost) {
-    if (cost == 0.0) return "$0.00";
-    if (cost >= 0.01) return String.format("$%.4f", cost);
-    if (cost >= 0.0001) return String.format("$%.6f", cost);
-    return String.format("$%.2e", cost);
-  }
+
 }

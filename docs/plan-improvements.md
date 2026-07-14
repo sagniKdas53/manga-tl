@@ -8,6 +8,160 @@ All critical bug fixes from `plan-critical-bugfixes.md` (Phases 1–4) have been
 
 ---
 
+## 🔒 Quality Gate Reference
+
+> [!IMPORTANT]
+> **Every phase must pass the full quality gate before manual testing begins.**
+> Run these checks from the project root after completing each phase. All must exit 0.
+
+### Backend (Java) — `cd backend`
+
+```bash
+# 1. Format code (auto-fix)
+mvn spotless:apply
+
+# 2. Compile + unit tests + PMD + SpotBugs + JaCoCo coverage gate (≥15%)
+mvn clean verify -DforkCount=1 -DreuseForks=true
+
+# 3. Verify formatting (CI parity check — must match what CI runs)
+mvn spotless:check
+```
+
+**What each tool catches:**
+
+| Tool | What it detects | Bound to |
+|------|----------------|----------|
+| **Spotless** | Formatting (Google Java Format), unused imports, trailing whitespace | Manual / pre-commit |
+| **PMD 3.28.0** | God classes, complex methods, dead code, copy-paste, style violations | `mvn verify` |
+| **SpotBugs 4.10.2** | Null pointer bugs, resource leaks, concurrency issues, bad practices (bytecode analysis) | `mvn verify` |
+| **JaCoCo 0.8.15** | Line coverage gate — fails build if coverage < 15% | `mvn verify` |
+| **Surefire** | Unit test failures | `mvn verify` |
+
+### Frontend (React/TypeScript) — `cd frontend`
+
+```bash
+# 1. Lint (ESLint — catches unused vars, type errors, React issues)
+npm run lint
+
+# 2. Unit tests with coverage (Vitest, sequential to avoid race conditions)
+npm run test:coverage
+
+# 3. Production build (catches TypeScript compilation errors, dead imports)
+npm run build
+```
+
+### Worker (Python) — `cd unified-workers`
+
+```bash
+# 1. Lint (catches bugs, unused imports, style issues)
+ruff check .
+
+# 2. Auto-fix safe lint issues + format
+ruff check . --fix && ruff format .
+
+# 3. Static type checking (catches type errors, None misuse, missing attrs)
+#    ⚠️  Not yet in CI — see Phase 0 for adding this
+pyright .
+
+# 4. Unit tests with coverage
+pytest tests/ --cov=. --cov-report=xml --cov-report=html
+```
+
+> [!WARNING]
+> **Python currently has NO static analysis in CI** (only `pytest`). The backend catches bugs early via PMD + SpotBugs, but the worker has no equivalent. See **Phase 0** below — it adds `pyright` + `ruff check` to the Python CI workflow and should be completed **first** so all subsequent phases benefit.
+
+---
+
+## Phase 0 — CI Foundation (Do First)
+
+> [!IMPORTANT]
+> Complete this phase **before starting any other phase**. Every worker change in Phases A–F will benefit from having ruff + pyright catching bugs automatically.
+
+### 0.1 Add Static Analysis to Python CI
+
+> [!WARNING]
+> The backend CI catches bugs **before they ship** via PMD (code patterns) and SpotBugs (bytecode analysis). The Python worker CI currently **only runs `pytest`** — no linting, no formatting checks, no type checking. This means bugs like the `vlm_model_used` scoping issue (fixed in bugfixes Phase 4) could have been caught automatically.
+
+**Files**: `unified-workers/.github/workflows/ci-python.yml`, `unified-workers/requirements.txt`, new `unified-workers/pyproject.toml`
+
+- **Create `pyproject.toml`** with ruff configuration:
+
+  ```toml
+  [tool.ruff]
+  target-version = "py313"
+  line-length = 120
+
+  [tool.ruff.lint]
+  select = [
+      "E",    # pycodestyle errors
+      "W",    # pycodestyle warnings
+      "F",    # pyflakes (unused imports, undefined names, etc.)
+      "I",    # isort (import ordering)
+      "B",    # flake8-bugbear (common bug patterns)
+      "UP",   # pyupgrade (Python version upgrade suggestions)
+      "SIM",  # flake8-simplify (simplifiable code)
+      "RUF",  # Ruff-specific rules
+  ]
+  ```
+
+- **Add `pyright`** for static type checking:
+  - Install: `pip install pyright`
+  - Create `pyrightconfig.json` with `typeCheckingMode: "basic"` (not strict — avoids noise on untyped dependencies like `paddleocr`)
+  - Catches: `None` dereferences, missing attributes, wrong argument types, unreachable code
+- **Update CI workflow** (`ci-python.yml`):
+
+  ```yaml
+  - name: Install dev tools
+    run: pip install ruff pyright
+
+  - name: Lint (ruff)
+    run: ruff check .
+
+  - name: Format check (ruff)
+    run: ruff format --check .
+
+  - name: Type check (pyright)
+    run: pyright .
+
+  - name: Run test suite
+    run: pytest tests/ --cov=. --cov-report=xml
+  ```
+
+- **Add to `requirements.txt`** (dev section or separate `requirements-dev.txt`):
+
+  ```
+  ruff
+  pyright
+  ```
+
+**Parity with backend CI:**
+
+| Python tool | Equivalent to (Java) | What it catches |
+|-------------|---------------------|------------------|
+| **ruff check** | PMD | Dead code, unused imports, bug patterns, complexity |
+| **ruff format** | Spotless | Formatting consistency |
+| **pyright** | SpotBugs | Type errors, None misuse, missing attributes |
+| **pytest** | Surefire | Unit test failures |
+| pytest-cov | JaCoCo | Coverage reporting (no gate yet — add later) |
+
+### ✅ Checkpoint 0 — CI Foundation
+
+**Verification:**
+
+1. Run `ruff check .` locally in `unified-workers/` — fix all violations
+2. Run `ruff format --check .` — fix all formatting issues
+3. Run `pyright .` — fix all type errors (or add targeted `# type: ignore` for untyped third-party libs)
+4. Run `pytest tests/` — all tests pass
+5. Push to a PR branch — verify the updated `ci-python.yml` workflow runs all 4 steps and passes
+
+**🔒 Quality Gate:**
+
+```bash
+cd unified-workers && ruff check . && ruff format --check . && pyright . && pytest tests/ --cov=. --cov-report=xml
+```
+
+---
+
 ## Phase A — SSE Job System Migration
 
 > [!NOTE]
@@ -100,6 +254,15 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 8. **Per-job resume**: Resume the paused job #2 → verify it goes back to blue → gets picked up for processing
 9. **Per-job retry**: Let a job fail → click retry → verify SSE sends `PENDING` event with `attempt: 1` → job reappears in queue
 
+**🔒 Quality Gate** (run before manual checks — see [reference](#-quality-gate-reference)):
+
+```bash
+# Backend (SSE + job controller changes)
+cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=true
+# Frontend (SSE hook + QueueManager changes)
+cd frontend && npm run lint && npm run test:coverage && npm run build
+```
+
 ---
 
 ## Phase B — Reader Auto-Refresh via SSE
@@ -120,6 +283,12 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 
 1. Open Reader on a freshly uploaded page → watch layers populate in real-time as pipeline completes
 2. Open Reader on a page → trigger "Redo OCR" from the detail panel → new OCR layer should appear without manual refresh
+
+**🔒 Quality Gate** (run before manual checks):
+
+```bash
+cd frontend && npm run lint && npm run test:coverage && npm run build
+```
 
 ---
 
@@ -201,6 +370,12 @@ Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPi
 2. Open Dashboard → inspect network tab → series covers should load from `/thumbnail` not `/file`
 3. Compare visual quality: old JPEG thumbnail vs new WebP thumbnail
 4. Upload 40 pages in batch → verify upload response returns quickly (< 2s per page) → thumbnails populate asynchronously
+
+**🔒 Quality Gate** (run before manual checks):
+
+```bash
+cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=true
+```
 
 ---
 
@@ -373,6 +548,13 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 11. Verify model overrides show a clear hierarchy and "Reset to Default" works
 12. Verify all major components render as MUI components (buttons, dialogs, inputs, cards) — no vanilla HTML elements for interactive controls
 
+**🔒 Quality Gate** (run before manual checks):
+
+```bash
+# Frontend (all D-phase changes are frontend)
+cd frontend && npm run lint && npm run test:coverage && npm run build
+```
+
 ---
 
 ## Phase E — Backend Resilience
@@ -451,6 +633,15 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 4. Run a full pipeline → verify no QA images saved to `rendered_cache/` → verify rendered images accessible in MinIO GUI
 5. Export a chapter → wait past retention → verify cleanup removes the old ZIP → re-export regenerates it
 
+**🔒 Quality Gate** (run before manual checks):
+
+```bash
+# Backend (E.3, E.5 changes)
+cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=true
+# Worker (E.1, E.2, E.4 changes)
+cd unified-workers && ruff check . && ruff format --check . && pyright . && pytest tests/ --cov=. --cov-report=xml
+```
+
 ---
 
 ## Phase F — ML Model & Prompt Upgrades
@@ -500,6 +691,12 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 2. Run QA on a page with known bad translations → verify QA proposes fixes, not just flags
 3. Compare bubble detection accuracy between old and new YOLO model
 
+**🔒 Quality Gate** (run before manual checks):
+
+```bash
+cd unified-workers && ruff check . && ruff format --check . && pyright . && pytest tests/ --cov=. --cov-report=xml
+```
+
 ---
 
 ## Summary: Files Changed
@@ -533,6 +730,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 | E.3 | Worker cost utils, `JobCoordinatorService.java` | Move cost tracking from `costs.json` to PostgreSQL |
 | E.4 | `render.py`, `qa.py`, `docker-compose.yml` | Remove `rendered_cache` QA image writes |
 | E.5 | `[NEW] ExportCleanupService.java` | Scheduled cleanup of stale chapter export ZIPs |
+| 0.1 | `ci-python.yml`, `pyproject.toml`, `pyrightconfig.json` | Add ruff + pyright static analysis to Python CI |
 | F.1 | `bubble_detector.py` | YOLO model upgrade |
 | F.2 | `ocr.py` | VLM prompt improvements |
 | F.3 | `qa.py`, `qa_re_ocr.py` | QA prompt enhancements |

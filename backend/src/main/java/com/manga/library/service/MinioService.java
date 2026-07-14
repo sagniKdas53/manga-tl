@@ -121,7 +121,7 @@ public class MinioService {
   public boolean fileExists(String objectPath) {
     try {
       minioClient.statObject(
-          io.minio.StatObjectArgs.builder().bucket(bucketName).object(objectPath).build());
+          StatObjectArgs.builder().bucket(bucketName).object(objectPath).build());
       return true;
     } catch (Exception e) {
       return false;
