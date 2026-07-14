@@ -1,13 +1,13 @@
 package com.manga.library.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.model.Job;
 import com.manga.library.repository.JobRepository;
 import com.manga.library.service.JobCoordinatorService;
+import com.manga.library.service.SseService;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-import com.manga.library.service.SseService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
@@ -78,7 +78,8 @@ public class JobController {
               "queue:region-redo-ocr",
               "queue:region-redo-tl"));
 
-      sseService.emitEventToAllUsers("queue_cleared", Map.of("event", "queue_cleared", "clearedCount", jobsToClear.size()));
+      sseService.emitEventToAllUsers(
+          "queue_cleared", Map.of("event", "queue_cleared", "clearedCount", jobsToClear.size()));
 
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -103,7 +104,7 @@ public class JobController {
               if (!"true".equals(paused)) {
                 jobCoordinatorService.pushJobToRedis(job);
               }
-              
+
               emitJobUpdateEvent(job);
               return ResponseEntity.ok().build();
             })
@@ -168,7 +169,10 @@ public class JobController {
   private void emitJobUpdateEvent(Job job) {
     try {
       if (job.getPayload() != null) {
-        Map<String, Object> jobData = objectMapper.readValue(job.getPayload(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        Map<String, Object> jobData =
+            objectMapper.readValue(
+                job.getPayload(),
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
         jobData.put("status", job.getStatus());
         jobData.put("attempt", job.getAttempt());
         if (job.getError() != null) {
@@ -176,8 +180,8 @@ public class JobController {
         }
         sseService.emitEventForImage(job.getImageId(), "job_update", jobData);
       }
-    } catch (Exception e) {
-      // Ignore
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      System.err.println("Failed to emit job update event: " + e.getMessage());
     }
   }
 }

@@ -241,4 +241,69 @@ describe("QueueManager", () => {
     // We shouldn't see 'Pause' button for PROCESSING jobs
     expect(screen.queryByTitle("Pause")).toBeNull();
   });
+
+  it("handles retrying a failed job", async () => {
+    (safeFetch as Mock).mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/jobs") {
+        return Promise.resolve({ ok: true, json: async () => mockJobs });
+      }
+      if (url === "/api/jobs/status") {
+        return Promise.resolve({ ok: true, json: async () => ({ isPaused: false }) });
+      }
+      if (url === "/api/jobs/job-2/retry" && init?.method === "POST") {
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.reject(new Error("Unknown URL"));
+    });
+
+    render(<QueueManager token={mockToken} />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+
+    await waitFor(() => {
+      expect(screen.getByTitle("Retry")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTitle("Retry"));
+
+    await waitFor(() => {
+      expect(safeFetch).toHaveBeenCalledWith(
+        "/api/jobs/job-2/retry",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+  });
+
+  it("handles pausing a pending job", async () => {
+    (safeFetch as Mock).mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/jobs") {
+        return Promise.resolve({ ok: true, json: async () => mockJobs });
+      }
+      if (url === "/api/jobs/status") {
+        return Promise.resolve({ ok: true, json: async () => ({ isPaused: false }) });
+      }
+      if (url === "/api/jobs/job-1/pause" && init?.method === "POST") {
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.reject(new Error("Unknown URL"));
+    });
+
+    render(<QueueManager token={mockToken} />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+
+    await waitFor(() => {
+      expect(screen.getAllByTitle("Pause").length).toBeGreaterThan(0);
+    });
+
+    // We have a global pause and a job pause button
+    const pauseButtons = screen.getAllByTitle("Pause");
+    // Job 1 should have a pause button
+    fireEvent.click(pauseButtons[pauseButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(safeFetch).toHaveBeenCalledWith(
+        "/api/jobs/job-1/pause",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+  });
 });

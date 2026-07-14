@@ -7,7 +7,7 @@ type SSEEvent = {
 
 export function useSSE(url: string, token: string | null) {
   const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
-  const [lastEventTime, setLastEventTime] = useState<number>(Date.now());
+  const [lastEventTime, setLastEventTime] = useState<number>(() => Date.now());
   const [isConnected, setIsConnected] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);

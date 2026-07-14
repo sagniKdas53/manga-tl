@@ -50,7 +50,7 @@ mvn spotless:check
 npm run lint
 
 # 2. Unit tests with HTML coverage (minimum 80% expected)
-npm run test:coverage -- --reporter=html
+npm run test:coverage
 
 # 3. Production build (catches TypeScript compilation errors, dead imports)
 npm run build

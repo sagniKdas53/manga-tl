@@ -73,7 +73,7 @@ public class InternalJobController {
               if ("PENDING".equals(payload.get("status"))) {
                 jobCoordinatorService.pushJobToRedis(job);
               }
-              
+
               // Emit real-time SSE event
               try {
                 if (job.getPayload() != null) {
