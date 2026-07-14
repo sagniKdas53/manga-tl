@@ -160,4 +160,66 @@ public class SseService {
     redisTemplate.opsForList().rightPush(key, jsonPayload);
     redisTemplate.expire(key, java.time.Duration.ofDays(7));
   }
+
+  public void emitEventToAllUsers(String eventName, Object data) {
+    String jsonPayload;
+    try {
+      jsonPayload = objectMapper.writeValueAsString(data);
+    } catch (Exception e) {
+      log.error("Failed to serialize event data", e);
+      return;
+    }
+
+    emitters.forEach(
+        (uId, emitter) -> {
+          try {
+            emitter.send(SseEmitter.event().name(eventName).data(jsonPayload));
+          } catch (IOException e) {
+            log.error("Failed to send event to user {}, removing emitter", uId, e);
+            emitters.remove(uId);
+          }
+        });
+  }
+
+  public void emitEventForImage(UUID imageId, String eventName, Object data) {
+    String userIdStr = redisTemplate.opsForValue().get(IMAGE_USER_MAPPING_PREFIX + imageId);
+    if (userIdStr != null) {
+      emitEventToUser(UUID.fromString(userIdStr), eventName, data);
+    } else {
+      imageRepository
+          .findById(imageId)
+          .ifPresentOrElse(
+              image -> {
+                if (image.getCreatedBy() != null) {
+                  UUID uId = image.getCreatedBy().getId();
+                  emitEventToUser(uId, eventName, data);
+                  mapImageToUser(imageId, uId);
+                }
+              },
+              () ->
+                  log.warn(
+                      "Could not find owner user for image {} in Redis or DB. Cannot send SSE event.",
+                      imageId));
+    }
+  }
+
+  public void emitEventToUser(UUID userId, String eventName, Object data) {
+    String jsonPayload;
+    try {
+      jsonPayload = objectMapper.writeValueAsString(data);
+    } catch (Exception e) {
+      log.error("Failed to serialize event data", e);
+      return;
+    }
+
+    SseEmitter emitter = emitters.get(userId);
+    if (emitter != null) {
+      try {
+        emitter.send(SseEmitter.event().name(eventName).data(jsonPayload));
+      } catch (IOException e) {
+        log.error("Failed to send live event to user {}, removing emitter", userId, e);
+        emitters.remove(userId);
+      }
+    }
+  }
 }

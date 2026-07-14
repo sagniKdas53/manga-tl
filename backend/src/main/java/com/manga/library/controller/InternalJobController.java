@@ -73,6 +73,25 @@ public class InternalJobController {
               if ("PENDING".equals(payload.get("status"))) {
                 jobCoordinatorService.pushJobToRedis(job);
               }
+              
+              // Emit real-time SSE event
+              try {
+                if (job.getPayload() != null) {
+                  Map<String, Object> jobData =
+                      objectMapper.readValue(
+                          job.getPayload(),
+                          new com.fasterxml.jackson.core.type.TypeReference<
+                              Map<String, Object>>() {});
+                  jobData.put("status", job.getStatus());
+                  if (job.getError() != null) {
+                    jobData.put("error", job.getError());
+                  }
+                  sseService.emitEventForImage(job.getImageId(), "job_update", jobData);
+                }
+              } catch (Exception e) {
+                log.error("Failed to emit job_update event: {}", e.getMessage());
+              }
+
               return ResponseEntity.ok().build();
             })
         .orElse(ResponseEntity.notFound().build());

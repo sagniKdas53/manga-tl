@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { safeFetch } from "../utils";
+import { useNotifications } from "./useNotifications";
+import ConfirmModal from "./ConfirmModal";
 
 interface Job {
   id: string;
   type: string;
   imageId: string;
-  status: "PENDING" | "PROCESSING" | "FAILED" | "PAUSED";
+  status: "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "DELETED";
   payload: string | null;
   error: string | null;
   attempt: number;
@@ -127,6 +129,36 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { lastEvent, lastEventTime } = useNotifications();
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    isDangerous: boolean;
+    action: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    isDangerous: false,
+    action: () => {},
+  });
+
+  const sortJobs = (jobsList: Job[]) => {
+    const statusOrder: Record<string, number> = {
+      PROCESSING: 1,
+      PENDING: 2,
+      PAUSED: 3,
+      FAILED: 4,
+    };
+    return [...jobsList].sort((a, b) => {
+      const orderA = statusOrder[a.status] || 99;
+      const orderB = statusOrder[b.status] || 99;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  };
 
   const fetchJobs = useCallback(async () => {
     if (!token) return;
@@ -136,15 +168,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       });
       if (res.ok) {
         const data = await res.json();
-        // Move failed jobs to bottom
-        data.sort((a: Job, b: Job) => {
-          if (a.status === "FAILED" && b.status !== "FAILED") return 1;
-          if (a.status !== "FAILED" && b.status === "FAILED") return -1;
-          return (
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
-        });
-        setJobs(data);
+        setJobs(sortJobs(data));
       }
 
       const statusRes = await safeFetch("/api/jobs/status", {
@@ -159,21 +183,54 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
     }
   }, [token]);
 
+  // Initial fetch and 30s heartbeat
   useEffect(() => {
     if (!token) return;
-
-    // Initial fetch via setTimeout to avoid calling state updates synchronously inside effect
     const timeout = setTimeout(() => {
       fetchJobs();
     }, 0);
-
-    // Setup interval for continuous polling
-    const interval = setInterval(fetchJobs, 3000);
+    const interval = setInterval(fetchJobs, 30000); // Heartbeat
     return () => {
       clearTimeout(timeout);
       clearInterval(interval);
     };
   }, [token, fetchJobs]);
+
+  // Handle SSE events
+  useEffect(() => {
+    if (!lastEvent) return;
+
+    if (lastEvent.type === "job_update") {
+      try {
+        const data = JSON.parse(lastEvent.data);
+        setJobs((prev) => {
+          let updated = [...prev];
+          if (data.status === "DELETED") {
+            updated = updated.filter((j) => j.id !== data.jobId && j.id !== data.id);
+          } else {
+            // jobData might have `jobId` from new payloads, but existing ones have `id`
+            const idToMatch = data.jobId || data.id;
+            const index = updated.findIndex((j) => j.id === idToMatch);
+            if (index !== -1) {
+              updated[index] = { ...updated[index], ...data, id: idToMatch };
+            } else {
+              // Add new job
+              updated.push({ ...data, id: idToMatch } as Job);
+            }
+          }
+          return sortJobs(updated);
+        });
+      } catch (e) {
+        console.error("Failed to parse job_update", e);
+      }
+    } else if (lastEvent.type === "queue_paused") {
+      setIsPaused(true);
+    } else if (lastEvent.type === "queue_resumed") {
+      setIsPaused(false);
+    } else if (lastEvent.type === "queue_cleared") {
+      setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
+    }
+  }, [lastEvent, lastEventTime]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -190,7 +247,47 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
 
   const toggleDropdown = () => setIsOpen(!isOpen);
 
-  const handlePauseResumeQueue = async () => {
+  const handleClearQueue = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Clear Queue",
+      message: "Are you sure you want to clear the queue? This will delete all pending, paused, and failed jobs.",
+      isDangerous: true,
+      action: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        if (!token) return;
+        try {
+          await safeFetch("/api/jobs/clear", {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          // Optimistic UI update
+          setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
+        } catch (err) {
+          console.error("Failed to clear queue", err);
+        }
+      }
+    });
+  };
+
+  const handlePauseResumeQueue = () => {
+    if (isPaused) {
+      performPauseResumeQueue();
+    } else {
+      setConfirmModal({
+        isOpen: true,
+        title: "Pause Queue",
+        message: "Are you sure you want to pause the queue? All pending jobs will be paused.",
+        isDangerous: true,
+        action: () => {
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          performPauseResumeQueue();
+        }
+      });
+    }
+  };
+
+  const performPauseResumeQueue = async () => {
     if (!token) return;
     try {
       const endpoint = isPaused ? "/api/jobs/resume" : "/api/jobs/pause";
@@ -198,41 +295,28 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+      // Optimistic update
       setIsPaused(!isPaused);
-      fetchJobs();
     } catch (err) {
       console.error("Failed to toggle queue state", err);
-    }
-  };
-
-  const handleClearQueue = async () => {
-    if (!token) return;
-    if (
-      !window.confirm(
-        "Are you sure you want to clear the queue? This will delete all pending and paused jobs.",
-      )
-    )
-      return;
-
-    try {
-      await safeFetch("/api/jobs/clear", {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      fetchJobs();
-    } catch (err) {
-      console.error("Failed to clear queue", err);
     }
   };
 
   const handleRetryJob = async (jobId: string) => {
     if (!token) return;
     try {
+      // Optimistic update
+      setJobs((prev) =>
+        sortJobs(
+          prev.map((j) =>
+            j.id === jobId ? { ...j, status: "PENDING", attempt: 1 } : j
+          )
+        )
+      );
       await safeFetch(`/api/jobs/${jobId}/retry`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchJobs();
     } catch (err) {
       console.error("Failed to retry job", err);
     }
@@ -241,15 +325,18 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const handleToggleJobPause = async (job: Job) => {
     if (!token) return;
     try {
-      const endpoint =
-        job.status === "PAUSED"
-          ? `/api/jobs/${job.id}/resume`
-          : `/api/jobs/${job.id}/pause`;
+      const endpoint = job.status === "PAUSED" ? `/api/jobs/${job.id}/resume` : `/api/jobs/${job.id}/pause`;
+      const newStatus = job.status === "PAUSED" ? "PENDING" : "PAUSED";
+      
+      // Optimistic update
+      setJobs((prev) =>
+        sortJobs(prev.map((j) => (j.id === job.id ? { ...j, status: newStatus } : j)))
+      );
+
       await safeFetch(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchJobs();
     } catch (err) {
       console.error("Failed to toggle job pause", err);
     }
@@ -258,11 +345,12 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const handleDeleteJob = async (jobId: string) => {
     if (!token) return;
     try {
+      // Optimistic update
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
       await safeFetch(`/api/jobs/${jobId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchJobs();
     } catch (err) {
       console.error("Failed to delete job", err);
     }
@@ -270,16 +358,45 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case "PROCESSING":
+        return "#4caf50";
+      case "PENDING":
+        return "#2196f3";
       case "FAILED":
         return "#f44336";
-      case "PROCESSING":
-        return "#2196f3";
       case "PAUSED":
-        return "#9e9e9e";
+        return "#ffc107";
       default:
-        return "#4caf50";
+        return "#9e9e9e";
     }
   };
+
+  const IconPlay = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+
+  const IconPause = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="4" width="4" height="16" />
+      <rect x="14" y="4" width="4" height="16" />
+    </svg>
+  );
+
+  const IconRetry = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+  );
+
+  const IconCancel = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
 
   return (
     <div
@@ -304,42 +421,12 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <line
-            x1="8"
-            y1="6"
-            x2="21"
-            y2="6"
-          ></line>
-          <line
-            x1="8"
-            y1="12"
-            x2="21"
-            y2="12"
-          ></line>
-          <line
-            x1="8"
-            y1="18"
-            x2="21"
-            y2="18"
-          ></line>
-          <line
-            x1="3"
-            y1="6"
-            x2="3.01"
-            y2="6"
-          ></line>
-          <line
-            x1="3"
-            y1="12"
-            x2="3.01"
-            y2="12"
-          ></line>
-          <line
-            x1="3"
-            y1="18"
-            x2="3.01"
-            y2="18"
-          ></line>
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" />
+          <line x1="3" y1="12" x2="3.01" y2="12" />
+          <line x1="3" y1="18" x2="3.01" y2="18" />
         </svg>
         {jobs.length > 0 && (
           <span
@@ -364,6 +451,15 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
           </span>
         )}
       </button>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDangerous={confirmModal.isDangerous}
+        onConfirm={confirmModal.action}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
 
       {isOpen && (
         <div
@@ -414,7 +510,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                 className="btn btn-secondary"
                 style={{ fontSize: "12px", padding: "4px 8px" }}
               >
-                {isPaused ? "Resume Queue" : "Pause Queue"}
+                {isPaused ? <><IconPlay /> Resume</> : <><IconPause /> Pause</>}
               </button>
             </div>
           </div>
@@ -445,11 +541,12 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                 >
                   <div
                     style={{
-                      width: "8px",
-                      height: "8px",
+                      width: "12px",
+                      height: "12px",
                       borderRadius: "50%",
                       backgroundColor: getStatusColor(job.status),
-                      marginTop: "6px",
+                      marginTop: "4px",
+                      boxShadow: `0 0 8px ${getStatusColor(job.status)}66`
                     }}
                   />
                   <div style={{ flex: 1 }}>
@@ -459,45 +556,41 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                         fontSize: "14px",
                         marginBottom: "2px",
                         color: "var(--text-main)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
                       }}
                     >
-                      {job.type === "panel-detection"
-                        ? "Panel Detection"
-                        : job.type === "ocr"
-                          ? "OCR Processing"
-                          : job.type === "translation"
-                            ? "Translation"
-                            : job.type === "qa"
-                              ? "Quality Assurance"
-                              : job.type === "qa-re-ocr"
-                                ? "QA Re-OCR"
-                                : job.type === "region-redo"
-                                  ? "Region Redo"
-                                  : job.type.toUpperCase()}
+                      <span>
+                        {job.type === "panel-detection"
+                          ? "Panel Detection"
+                          : job.type === "ocr"
+                            ? "OCR Processing"
+                            : job.type === "translation"
+                              ? "Translation"
+                              : job.type === "qa"
+                                ? "Quality Assurance"
+                                : job.type === "qa-re-ocr"
+                                  ? "QA Re-OCR"
+                                  : job.type === "region-redo"
+                                    ? "Region Redo"
+                                    : job.type.toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "normal" }}>
+                        Attempt {job.attempt}/{job.maxAttempts}
+                      </span>
                     </div>
                     {renderJobDetails(job)}
                     <div
                       style={{
                         fontSize: "11px",
-                        color: "var(--text-muted)",
+                        color: getStatusColor(job.status),
                         marginTop: "4px",
                         marginBottom: "4px",
+                        fontWeight: "600"
                       }}
                     >
-                      Status: {job.status} | Attempt: {job.attempt}/
-                      {job.maxAttempts}
-                      {job.type === "qa" &&
-                        (() => {
-                          try {
-                            const payload = JSON.parse(job.payload || "{}");
-                            if (payload.qaPass) {
-                              return ` | Pass: ${payload.qaPass}/3`;
-                            }
-                          } catch {
-                            // ignore JSON parse error
-                          }
-                          return "";
-                        })()}
+                      {job.status}
                     </div>
                     {job.error && (
                       <div
@@ -513,63 +606,49 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                       </div>
                     )}
                     <div
-                      style={{
-                        fontSize: "10px",
-                        color: "var(--text-dim)",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      Created: {new Date(job.createdAt).toLocaleTimeString()}
-                    </div>
-                    <div
-                      style={{ display: "flex", gap: "8px", marginTop: "8px" }}
+                      style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}
                     >
                       {job.status === "FAILED" && (
                         <>
                           <button
                             onClick={() => handleRetryJob(job.id)}
-                            className="btn btn-primary"
-                            style={{ fontSize: "11px", padding: "4px 8px" }}
-                          >
-                            Retry
-                          </button>
-                          <button
-                            onClick={() => handleDeleteJob(job.id)}
                             className="btn btn-secondary"
-                            style={{
-                              fontSize: "11px",
-                              padding: "4px 8px",
-                              borderColor: "#f44336",
-                              color: "#f44336",
-                            }}
+                            style={{ fontSize: "11px", padding: "4px 8px", display: "flex", alignItems: "center", gap: "4px" }}
+                            title="Retry"
                           >
-                            Dismiss
+                            <IconRetry />
                           </button>
                         </>
                       )}
-                      {(job.status === "PENDING" ||
-                        job.status === "PAUSED") && (
+                      {(job.status === "PENDING" || job.status === "PAUSED") && (
                         <>
                           <button
                             onClick={() => handleToggleJobPause(job)}
                             className="btn btn-secondary"
-                            style={{ fontSize: "11px", padding: "4px 8px" }}
+                            style={{ fontSize: "11px", padding: "4px 8px", display: "flex", alignItems: "center", gap: "4px" }}
+                            title={job.status === "PAUSED" ? "Resume" : "Pause"}
                           >
-                            {job.status === "PAUSED" ? "Resume" : "Pause"}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteJob(job.id)}
-                            className="btn btn-secondary"
-                            style={{
-                              fontSize: "11px",
-                              padding: "4px 8px",
-                              borderColor: "#f44336",
-                              color: "#f44336",
-                            }}
-                          >
-                            Cancel
+                            {job.status === "PAUSED" ? <IconPlay /> : <IconPause />}
                           </button>
                         </>
+                      )}
+                      {job.status !== "PROCESSING" && (
+                        <button
+                          onClick={() => handleDeleteJob(job.id)}
+                          className="btn btn-secondary"
+                          style={{
+                            fontSize: "11px",
+                            padding: "4px 8px",
+                            borderColor: "#f44336",
+                            color: "#f44336",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px"
+                          }}
+                          title="Delete"
+                        >
+                          <IconCancel />
+                        </button>
                       )}
                     </div>
                   </div>

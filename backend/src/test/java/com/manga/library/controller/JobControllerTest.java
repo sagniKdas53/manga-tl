@@ -11,6 +11,7 @@ import com.manga.library.config.JwtAuthFilter;
 import com.manga.library.model.Job;
 import com.manga.library.repository.JobRepository;
 import com.manga.library.service.JobCoordinatorService;
+import com.manga.library.service.SseService;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,7 @@ public class JobControllerTest {
   @MockBean private JobCoordinatorService jobCoordinatorService;
   @MockBean private StringRedisTemplate redisTemplate;
   @MockBean private JwtAuthFilter jwtAuthFilter;
+  @MockBean private SseService sseService;
 
   @Test
   public void testGetJobs() throws Exception {
