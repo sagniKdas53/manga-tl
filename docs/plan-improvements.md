@@ -14,6 +14,9 @@ All critical bug fixes from `plan-critical-bugfixes.md` (Phases 1–4) have been
 > **Every phase must pass the full quality gate before manual testing begins.**
 > Run these checks from the project root after completing each phase. All must exit 0.
 
+> [!WARNING]
+> **This PC is not very powerful. Do NOT run too many tasks in parallel during the quality gate, otherwise it will lock up and waste all the effort. Run checks sequentially.**
+
 ### Backend (Java) — `cd backend`
 
 ```bash
@@ -72,7 +75,7 @@ pytest tests/ --cov=. --cov-report=xml --cov-report=html
 
 ---
 
-## Phase 0 — CI Foundation (Do First)
+## Phase 0 — CI Foundation (Do First) ✅ Completed
 
 > [!IMPORTANT]
 > Complete this phase **before starting any other phase**. Every worker change in Phases A–F will benefit from having ruff + pyright catching bugs automatically.
@@ -144,7 +147,7 @@ pytest tests/ --cov=. --cov-report=xml --cov-report=html
 | **pytest** | Surefire | Unit test failures |
 | pytest-cov | JaCoCo | Coverage reporting (no gate yet — add later) |
 
-### ✅ Checkpoint 0 — CI Foundation
+### ✅ Checkpoint 0 — CI Foundation (Completed)
 
 **Verification:**
 
