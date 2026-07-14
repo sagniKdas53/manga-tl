@@ -49,17 +49,12 @@ public class WorkerDispatcherService {
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
 
-  private final List<String> QUEUES =
+  private final List<String> HEAVY_QUEUES =
+      List.of("queue:qa-re-ocr", "queue:region-redo-ocr", "queue:ocr", "queue:panel-detection");
+
+  private final List<String> LIGHT_QUEUES =
       List.of(
-          "queue:region-redo-tl", // High Priority (interactive re-translations)
-          "queue:qa-re-ocr",
-          "queue:qa",
-          "queue:render",
-          "queue:translation",
-          "queue:layout",
-          "queue:region-redo-ocr", // Lower Priority (interactive re-OCR)
-          "queue:ocr",
-          "queue:panel-detection");
+          "queue:region-redo-tl", "queue:qa", "queue:render", "queue:translation", "queue:layout");
 
   @Scheduled(fixedDelay = 2000)
   public void dispatchJobs() {
@@ -84,7 +79,12 @@ public class WorkerDispatcherService {
       return;
     }
 
-    for (String queue : QUEUES) {
+    dispatchFromSlot(HEAVY_QUEUES, workerUrls);
+    dispatchFromSlot(LIGHT_QUEUES, workerUrls);
+  }
+
+  private void dispatchFromSlot(List<String> queues, List<String> workerUrls) {
+    for (String queue : queues) {
       boolean processed = true;
       while (processed) {
         processed = false;
@@ -118,7 +118,7 @@ public class WorkerDispatcherService {
 
             if (response.statusCode() == 202) {
               sent = true;
-              processed = true; // Try next job in this queue
+              processed = true;
               break;
             } else if (response.statusCode() != 429) {
               log.error("Worker {} returned status {}", targetUrl, response.statusCode());
@@ -129,9 +129,8 @@ public class WorkerDispatcherService {
         }
 
         if (!sent) {
-          // No worker accepted it, push it back
           redisTemplate.opsForList().leftPush(queue, jobJson);
-          break;
+          return;
         }
       }
     }

@@ -1,0 +1,37 @@
+Ran command: `source /home/sagnik/Projects/docker-composes/manga-library/.venv/bin/activate`
+Viewed health_server.py:205-234
+
+Here is a complete summary of everything we implemented and the bugs we squashed during this conversation:
+
+### 1. Python CI Pipeline Upgrades (Phase 0)
+
+* **What we implemented**: We added strict static analysis to the GitHub Actions Quality Gate for the Python workers.
+* **Why**: The Java backend already had PMD and SpotBugs catching errors early, but the Python workers were lacking equivalent protection.
+* **Bugs fixed along the way**: Setting this up forced us to fix several latent issues in the Python code, including type mismatches, missing `Optional` annotations, undeclared loop variables in `model_manager.py`, and `sys.exit()` calls that were incorrectly placed outside of functions. We also cleaned up the test coverage scripts so they export to a single unified `frontend/coverage` folder instead of duplicating reports.
+
+### 2. SSE Job System Migration (Phase A)
+
+* **What we implemented**: We completely migrated the frontend Job Queue from a heavy, polling-based approach to a highly efficient Server-Sent Events (SSE) system. The backend now pushes updates directly to the frontend in real-time.
+* **API Consolidation**: You correctly pointed out that having both `/api/jobs` and `/api/jobs/status` was redundant. We merged these into a single `/api/jobs` endpoint that returns a unified `{ isPaused, jobs }` object, updating the frontend and rewriting the test suite to match.
+
+### 3. Frontend Real-Time Bugs Found & Fixed
+
+As we integrated the SSE system, we encountered and fixed several edge-case bugs:
+
+* **Bug: Duplicate Job Cards**
+  * *Issue*: Every incoming SSE event spawned a brand new job card in the queue instead of updating the existing one.
+  * *Fix*: The backend was emitting raw data maps that lacked proper job IDs. We updated the backend to serialize and emit the full `Job` object. This allowed the frontend to accurately find the existing job by its ID and patch it in place.
+* **Bug: Cards Stuck Saying Only "PROCESSING"**
+  * *Issue*: When a job updated, it lost its visual metadata (like attempt counts, series title, and chapter info) and just said "PROCESSING".
+  * *Fix*: We updated `QueueManager.tsx` to properly merge the incoming SSE data with the existing job state so the UI retains all relevant metadata across renders.
+* **Bug: Missed Notifications for Fast Events**
+  * *Issue*: If multiple jobs (e.g., 3 pages) finished simultaneously, the UI only showed a notification for the last one.
+  * *Fix*: This was a subtle React race condition. Our `useSSE` hook was writing incoming events to a single piece of state (`lastEvent`). When three events hit in the same millisecond, React batched the state updates and dropped the first two. We completely rewrote the hook to use a robust **Subscriber Pattern** (passing an `onMessage` callback) so every single event is caught and processed synchronously.
+* **Bug: Paused Jobs Jumping to the Bottom**
+  * *Issue*: Hitting pause on a job instantly threw it to the bottom of the list, losing its place in the queue.
+  * *Fix*: In `QueueManager.tsx`, the sorting algorithm penalized `PAUSED` jobs by giving them a lower priority weight. We adjusted the sorting weights so `PAUSED` and `PENDING` jobs are treated equally, allowing them to remain in their natural chronological order.
+* **Bug: Unclear Global Pause State**
+  * *Issue*: When you paused the entire global queue, the pending jobs stayed blue, making it look like they were still active.
+  * *Fix*: We added conditional logic to the color and text renderers. Now, if the global queue is paused, all `PENDING` jobs instantly turn yellow and display the text `"PAUSED"` to clearly indicate their blocked state.
+
+Everything is deployed, the 100+ tests we refactored are passing, and the codebase is much healthier and more responsive!
