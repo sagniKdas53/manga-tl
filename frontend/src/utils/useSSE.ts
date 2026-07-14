@@ -5,9 +5,11 @@ type SSEEvent = {
   data: string;
 };
 
-export function useSSE(url: string, token: string | null) {
-  const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
-  const [lastEventTime, setLastEventTime] = useState<number>(() => Date.now());
+export function useSSE(
+  url: string,
+  token: string | null,
+  onMessage?: (event: SSEEvent) => void
+) {
   const [isConnected, setIsConnected] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -22,8 +24,9 @@ export function useSSE(url: string, token: string | null) {
 
     const updateEvent = (type: string, data: string) => {
       console.log(`[SSE Event Received] ${type}:`, data);
-      setLastEvent({ type, data });
-      setLastEventTime(Date.now());
+      if (onMessage) {
+        onMessage({ type, data });
+      }
     };
 
     eventSource.onopen = () => {
@@ -68,5 +71,5 @@ export function useSSE(url: string, token: string | null) {
     };
   }, [url, token, retryCount]);
 
-  return { lastEvent, lastEventTime, isConnected };
+  return { isConnected, retryCount };
 }

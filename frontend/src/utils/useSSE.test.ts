@@ -73,14 +73,15 @@ describe("useSSE", () => {
     expect(result.current.isConnected).toBe(true);
   });
 
-  it("updates lastEvent when connected or notification event is received", () => {
-    const { result } = renderHook(() => useSSE("/api/sse", "token123"));
+  it("calls onMessage when connected or notification event is received", () => {
+    const onMessage = vi.fn();
+    renderHook(() => useSSE("/api/sse", "token123", onMessage));
     const instance = mockEventSourceInstances[0];
 
     act(() => {
       instance.trigger("connected", "welcome");
     });
-    expect(result.current.lastEvent).toEqual({
+    expect(onMessage).toHaveBeenCalledWith({
       type: "connected",
       data: "welcome",
     });
@@ -88,14 +89,15 @@ describe("useSSE", () => {
     act(() => {
       instance.trigger("notification", "new_notification");
     });
-    expect(result.current.lastEvent).toEqual({
+    expect(onMessage).toHaveBeenCalledWith({
       type: "notification",
       data: "new_notification",
     });
   });
 
   it("handles connection error and attempts reconnection", () => {
-    const { result } = renderHook(() => useSSE("/api/sse", "token123"));
+    const onMessage = vi.fn();
+    const { result } = renderHook(() => useSSE("/api/sse", "token123", onMessage));
     const instance = mockEventSourceInstances[0];
 
     act(() => {
@@ -109,7 +111,7 @@ describe("useSSE", () => {
     });
 
     expect(result.current.isConnected).toBe(false);
-    expect(result.current.lastEvent).toEqual({
+    expect(onMessage).toHaveBeenCalledWith({
       type: "error",
       data: "Connection lost. Retrying...",
     });

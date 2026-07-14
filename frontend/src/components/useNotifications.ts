@@ -27,8 +27,7 @@ export interface NotificationContextType {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
-  lastEvent: SSEEvent | null;
-  lastEventTime: number;
+  subscribe: (callback: (event: SSEEvent) => void) => () => void;
 }
 
 export const NotificationContext = createContext<
