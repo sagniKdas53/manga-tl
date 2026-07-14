@@ -445,10 +445,33 @@ public class InternalJobControllerTest {
         .prepareHybridQa(any(), any());
 
     mockMvc
+        .andExpect(status().isInternalServerError());
+  }
+
+  @Test
+  public void testUpdateJobStatus_WithAttemptUpdate() throws Exception {
+    Job job = Job.builder()
+        .id("job1")
+        .type("ocr")
+        .status("PROCESSING")
+        .payload("{\"attempt\": 1, \"jobId\": \"job1\"}")
+        .attempt(1)
+        .build();
+    when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
+
+    Map<String, String> payload = new HashMap<>();
+    payload.put("status", "PENDING");
+    payload.put("attempt", "2");
+
+    mockMvc
         .perform(
-            post("/api/internal/images/" + imageId + "/qa-hybrid-prepare")
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/internal/jobs/job1/status")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payload)))
-        .andExpect(status().isInternalServerError());
+        .andExpect(status().isOk());
+
+    org.junit.jupiter.api.Assertions.assertEquals(2, job.getAttempt());
+    org.junit.jupiter.api.Assertions.assertTrue(job.getPayload().contains("\"attempt\":2"));
+    verify(jobCoordinatorService, times(1)).pushJobToRedis(job);
   }
 }
