@@ -90,8 +90,7 @@ public class ChapterExportService {
                 (com.fasterxml.jackson.databind.node.ObjectNode) l.getMetadataJson();
 
             Set<String> typeModels =
-                modelsUsed.computeIfAbsent(
-                    l.getType().toLowerCase(), k -> new HashSet<>());
+                modelsUsed.computeIfAbsent(l.getType().toLowerCase(), k -> new HashSet<>());
 
             if (metaNode.has("model")) {
               modelName = metaNode.get("model").asText();
@@ -135,7 +134,6 @@ public class ChapterExportService {
 
             if (costFound[0]) {
               layerMeta.put("estimated_cost", accumulatedCost[0]);
-              layerCostVal += accumulatedCost[0];
               pageTotalCostVal += accumulatedCost[0];
               pageHasCost = true;
             }

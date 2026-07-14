@@ -63,15 +63,12 @@ ruff check .
 ruff check . --fix && ruff format .
 
 # 3. Static type checking (catches type errors, None misuse, missing attrs)
-#    ⚠️  Not yet in CI — see Phase 0 for adding this
 pyright .
 
 # 4. Unit tests with coverage
 pytest tests/ --cov=. --cov-report=xml --cov-report=html
 ```
 
-> [!WARNING]
-> **Python currently has NO static analysis in CI** (only `pytest`). The backend catches bugs early via PMD + SpotBugs, but the worker has no equivalent. See **Phase 0** below — it adds `pyright` + `ruff check` to the Python CI workflow and should be completed **first** so all subsequent phases benefit.
 
 ---
 
