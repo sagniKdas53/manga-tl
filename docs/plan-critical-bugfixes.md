@@ -342,6 +342,12 @@ The `attempt` field in the job payload is set to `1` at creation time in `enqueu
 1. Worker retry logic failing on connection errors:
    - **Bug**: When MinIO or the Backend became unreachable (e.g., container stopped), jobs vanished from the queue instead of retrying or failing. The handlers (`process_render`, `process_panel_detection`, etc.) were catching `ConnectionError` and `HTTPError`, logging them, and using `return` to exit early. This caused the main `process_job_rq` loop to assume the handler succeeded and erroneously mark the job as `COMPLETED`.
    - **Fix**: Replaced all `return` statements in the `except` blocks of the worker handlers with `raise`. This ensures that network and API exceptions bubble up to `process_job_rq`, which correctly catches them, waits for 2 seconds, and patches the backend status to `PENDING` with an incremented `attempt` count until max attempts are exhausted.
+2. Lint and parallel test execution issues across components:
+   - **Bug**: The frontend build failed due to an unused `e` variable in a `catch` block (`QueueManager.tsx`), the unified-worker failed formatting checks due to an unhandled local assignment (`vlm_model_used` in `ocr.py`), and the backend failed formatting checks. Additionally, tests were not explicitly restricted to sequential execution, which could cause race conditions.
+   - **Fix**: 
+     - **Frontend**: Renamed the unused catch variable `e` to `_e` in `QueueManager.tsx` to satisfy `@typescript-eslint/no-unused-vars` and enforced sequential test execution using `npx vitest run --pool=threads --poolOptions.threads.maxThreads=1`.
+     - **Backend**: Auto-formatted code using `mvn spotless:apply` and enforced sequential tests via `-DforkCount=1 -DreuseForks=true` to prevent parallel test JVMs.
+     - **Worker**: Fixed the unused variable error in `ocr.py` by adding `nonlocal vlm_model_used` inside the nested `process_crop_chunk` function, ran `ruff check . --fix && ruff format .`, and ran `pytest` sequentially.
 
 **Manual checks:**
 

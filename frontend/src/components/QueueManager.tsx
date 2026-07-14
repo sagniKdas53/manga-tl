@@ -94,7 +94,7 @@ const renderJobDetails = (job: Job) => {
 const formatErrorMessage = (error: string, status: string) => {
   if (!error) return "";
   const prefix = status === "FAILED" ? "Job failed: " : "Error: ";
-  
+
   if (
     error.includes("Max retries exceeded") ||
     error.includes("NameResolutionError") ||
@@ -109,13 +109,13 @@ const formatErrorMessage = (error: string, status: string) => {
   ) {
     return prefix + "Internal API returned 500 error.";
   }
-  
+
   let cleanError = error;
   const match = error.match(/([a-zA-Z]+Error):\s*(.+)/);
   if (match) {
     cleanError = `${match[1]}: ${match[2]}`;
   }
-  
+
   if (cleanError.length > 100) {
     cleanError = cleanError.substring(0, 100) + "...";
   }
@@ -486,17 +486,18 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                     >
                       Status: {job.status} | Attempt: {job.attempt}/
                       {job.maxAttempts}
-                      {job.type === "qa" && (() => {
-                        try {
-                          const payload = JSON.parse(job.payload || "{}");
-                          if (payload.qaPass) {
-                            return ` | Pass: ${payload.qaPass}/3`;
+                      {job.type === "qa" &&
+                        (() => {
+                          try {
+                            const payload = JSON.parse(job.payload || "{}");
+                            if (payload.qaPass) {
+                              return ` | Pass: ${payload.qaPass}/3`;
+                            }
+                          } catch {
+                            // ignore JSON parse error
                           }
-                        } catch (e) {
-                          // ignore JSON parse error
-                        }
-                        return "";
-                      })()}
+                          return "";
+                        })()}
                     </div>
                     {job.error && (
                       <div

@@ -233,19 +233,27 @@ export const NotificationCenter: React.FC = () => {
                           onClick={async (e) => {
                             e.stopPropagation();
                             try {
-                              const storedUser = localStorage.getItem("manga_user");
+                              const storedUser =
+                                localStorage.getItem("manga_user");
                               if (!storedUser) return;
                               const user = JSON.parse(storedUser);
-                              const res = await safeFetch(`/api/series/chapters/exports/${n.context.exportId}/download`, {
-                                headers: { Authorization: `Bearer ${user.token}` }
-                              });
+                              const res = await safeFetch(
+                                `/api/series/chapters/exports/${n.context.exportId}/download`,
+                                {
+                                  headers: {
+                                    Authorization: `Bearer ${user.token}`,
+                                  },
+                                },
+                              );
                               if (res.ok) {
                                 const blob = await res.blob();
                                 const url = window.URL.createObjectURL(blob);
                                 const a = document.createElement("a");
                                 a.href = url;
-                                const seriesTitle = n.context.seriesTitle || "chapter";
-                                const chapterNumber = n.context.chapterNumber || "export";
+                                const seriesTitle =
+                                  n.context.seriesTitle || "chapter";
+                                const chapterNumber =
+                                  n.context.chapterNumber || "export";
                                 a.download = `${seriesTitle} - Chapter ${chapterNumber}.zip`;
                                 document.body.appendChild(a);
                                 a.click();

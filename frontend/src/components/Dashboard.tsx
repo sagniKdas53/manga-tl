@@ -488,7 +488,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         }}
                         value={
                           newOcrProvider === "local" ||
-                          (newOcrProvider === "" && settings?.ocrProvider === "local")
+                          (newOcrProvider === "" &&
+                            settings?.ocrProvider === "local")
                             ? settings?.localOcrModel || "local"
                             : newOcrModel || ""
                         }
@@ -500,7 +501,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         }
                       >
                         {newOcrProvider === "local" ||
-                        (newOcrProvider === "" && settings?.ocrProvider === "local") ? (
+                        (newOcrProvider === "" &&
+                          settings?.ocrProvider === "local") ? (
                           <option value={settings?.localOcrModel || "local"}>
                             {settings?.localOcrModel || "Local Worker Model"}
                           </option>
@@ -508,7 +510,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           <>
                             <option value="">-- Inherit --</option>
                             {settings?.ocrVlmModelList.map((m) => (
-                              <option key={m} value={m}>
+                              <option
+                                key={m}
+                                value={m}
+                              >
                                 {m}
                               </option>
                             ))}

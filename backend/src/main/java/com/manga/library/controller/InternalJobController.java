@@ -1,5 +1,6 @@
 package com.manga.library.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.model.*;
@@ -8,7 +9,6 @@ import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.SseService;
 import java.util.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -55,12 +55,13 @@ public class InternalJobController {
                 try {
                   int attempt = Integer.parseInt(payload.get("attempt"));
                   job.setAttempt(attempt);
-                  
+
                   if (job.getPayload() != null) {
-                    Map<String, Object> payloadMap = objectMapper.readValue(
-                        job.getPayload(), 
-                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
-                    );
+                    Map<String, Object> payloadMap =
+                        objectMapper.readValue(
+                            job.getPayload(),
+                            new com.fasterxml.jackson.core.type.TypeReference<
+                                Map<String, Object>>() {});
                     payloadMap.put("attempt", attempt);
                     job.setPayload(objectMapper.writeValueAsString(payloadMap));
                   }
@@ -70,7 +71,7 @@ public class InternalJobController {
               }
               jobRepository.save(job);
               if ("PENDING".equals(payload.get("status"))) {
-                  jobCoordinatorService.pushJobToRedis(job);
+                jobCoordinatorService.pushJobToRedis(job);
               }
               return ResponseEntity.ok().build();
             })

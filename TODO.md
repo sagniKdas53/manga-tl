@@ -67,6 +67,10 @@
 - [x] **4.5** QA `auto` mode falls back to `none` (skip) instead of trying default models (Skipped)
   - When chapter's provider (ollama) is unreachable, should fall back to global QA models
   - Evidence: [run-13-retry-check.log](logs/run-13-retry-check.log) line 693-695
+- [x] **4.8** Linting and parallel test execution issues across components
+  - Fixed `vlm_model_used` variable scoping in worker `ocr.py`
+  - Fixed unused `e` variable in frontend `QueueManager.tsx`
+  - Enforced sequential test execution (`vitest run --pool=threads`, `mvn test -DforkCount=1`)
 
 ---
 
