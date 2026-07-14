@@ -344,7 +344,7 @@ The `attempt` field in the job payload is set to `1` at creation time in `enqueu
    - **Fix**: Replaced all `return` statements in the `except` blocks of the worker handlers with `raise`. This ensures that network and API exceptions bubble up to `process_job_rq`, which correctly catches them, waits for 2 seconds, and patches the backend status to `PENDING` with an incremented `attempt` count until max attempts are exhausted.
 2. Lint and parallel test execution issues across components:
    - **Bug**: The frontend build failed due to an unused `e` variable in a `catch` block (`QueueManager.tsx`), the unified-worker failed formatting checks due to an unhandled local assignment (`vlm_model_used` in `ocr.py`), and the backend failed formatting checks. Additionally, tests were not explicitly restricted to sequential execution, which could cause race conditions.
-   - **Fix**: 
+   - **Fix**:
      - **Frontend**: Renamed the unused catch variable `e` to `_e` in `QueueManager.tsx` to satisfy `@typescript-eslint/no-unused-vars` and enforced sequential test execution using `npx vitest run --pool=threads --poolOptions.threads.maxThreads=1`.
      - **Backend**: Auto-formatted code using `mvn spotless:apply` and enforced sequential tests via `-DforkCount=1 -DreuseForks=true` to prevent parallel test JVMs.
      - **Worker**: Fixed the unused variable error in `ocr.py` by adding `nonlocal vlm_model_used` inside the nested `process_crop_chunk` function, ran `ruff check . --fix && ruff format .`, and ran `pytest` sequentially.
@@ -352,11 +352,11 @@ The `attempt` field in the job payload is set to `1` at creation time in `enqueu
 **Manual checks:**
 
 1. Run pipeline → check worker logs for absence of BrokenPipeError stack traces
-2. Run OCR on a test page → check export → model should say `PaddleOCR(PP-OCRv6_medium_rec)` not `MangaOCR/...`
-3. Kill MinIO briefly while a job is running → restart → verify the job retries and shows `Attempt: 2/3` in the frontend
-4. `docker compose build` → verify no `temurin-26` resolution failure
-5. Set QA provider to unreachable ollama → run pipeline → verify QA uses fallback model (not skipped)
-6. Stop the `backend` container briefly while jobs are processing → verify jobs retry and frontend eventually reflects `FAILED` or recovers if backend is restarted.
+2. Run OCR on a test page → check export → model should say `PaddleOCR(PP-OCRv6_medium_rec)` not `MangaOCR/...` - Done
+3. Kill MinIO briefly while a job is running → restart → verify the job retries and shows `Attempt: 2/3` in the frontend - Done
+4. `docker compose build` → verify no `temurin-26` resolution failure - Done
+5. Set QA provider to unreachable ollama → run pipeline → verify QA uses fallback model (not skipped) -  Skipped, since only Gemini is configured for now.
+6. Stop the `backend` container briefly while jobs are processing → verify jobs retry and frontend eventually reflects `FAILED` or recovers if backend is restarted
 7. Stop the `postgres` container while backend is running → verify the backend throws 500s on API calls, and the worker retries the job.
 8. Simulate a 429 Rate Limit or 500 Error from the AI translation/QA provider → verify the worker propagates the exception and retries the job.
 
