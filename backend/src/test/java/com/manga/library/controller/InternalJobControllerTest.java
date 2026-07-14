@@ -445,18 +445,23 @@ public class InternalJobControllerTest {
         .prepareHybridQa(any(), any());
 
     mockMvc
+        .perform(
+            post("/api/internal/images/" + imageId + "/qa-hybrid-prepare")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isInternalServerError());
   }
 
   @Test
   public void testUpdateJobStatus_WithAttemptUpdate() throws Exception {
-    Job job = Job.builder()
-        .id("job1")
-        .type("ocr")
-        .status("PROCESSING")
-        .payload("{\"attempt\": 1, \"jobId\": \"job1\"}")
-        .attempt(1)
-        .build();
+    Job job =
+        Job.builder()
+            .id("job1")
+            .type("ocr")
+            .status("PROCESSING")
+            .payload("{\"attempt\": 1, \"jobId\": \"job1\"}")
+            .attempt(1)
+            .build();
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     Map<String, String> payload = new HashMap<>();
@@ -465,7 +470,8 @@ public class InternalJobControllerTest {
 
     mockMvc
         .perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/internal/jobs/job1/status")
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                    "/api/internal/jobs/job1/status")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isOk());

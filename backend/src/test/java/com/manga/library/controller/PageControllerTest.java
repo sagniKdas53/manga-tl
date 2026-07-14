@@ -698,7 +698,9 @@ public class PageControllerTest {
                 .param("chapterId", chapterId.toString())
                 .param("pageNumber", "1"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.status").value("Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP"));
+        .andExpect(
+            jsonPath("$.status")
+                .value("Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP"));
   }
 
   @Test

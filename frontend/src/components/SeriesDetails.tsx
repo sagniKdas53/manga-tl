@@ -891,7 +891,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         }}
                         value={
                           newSeriesOcrProvider === "local" ||
-                          (newSeriesOcrProvider === "" && settings?.ocrProvider === "local")
+                          (newSeriesOcrProvider === "" &&
+                            settings?.ocrProvider === "local")
                             ? settings?.localOcrModel || "local"
                             : newSeriesOcrModel || ""
                         }
@@ -903,7 +904,8 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         }
                       >
                         {newSeriesOcrProvider === "local" ||
-                        (newSeriesOcrProvider === "" && settings?.ocrProvider === "local") ? (
+                        (newSeriesOcrProvider === "" &&
+                          settings?.ocrProvider === "local") ? (
                           <option value={settings?.localOcrModel || "local"}>
                             {settings?.localOcrModel || "Local Worker Model"}
                           </option>
@@ -911,7 +913,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           <>
                             <option value="">-- Inherit --</option>
                             {settings?.ocrVlmModelList.map((m) => (
-                              <option key={m} value={m}>
+                              <option
+                                key={m}
+                                value={m}
+                              >
                                 {m}
                               </option>
                             ))}
@@ -1326,7 +1331,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           <>
                             <option value="">-- Inherit --</option>
                             {settings?.ocrVlmModelList.map((m) => (
-                              <option key={m} value={m}>
+                              <option
+                                key={m}
+                                value={m}
+                              >
                                 {m}
                               </option>
                             ))}
@@ -1750,7 +1758,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                           <>
                             <option value="">-- Inherit --</option>
                             {settings?.ocrVlmModelList.map((m) => (
-                              <option key={m} value={m}>
+                              <option
+                                key={m}
+                                value={m}
+                              >
                                 {m}
                               </option>
                             ))}

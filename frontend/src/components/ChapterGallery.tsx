@@ -491,9 +491,16 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       }
 
       const contentType = res.headers.get("content-type");
-      if (res.status === 202 || (contentType && contentType.includes("application/json"))) {
+      if (
+        res.status === 202 ||
+        (contentType && contentType.includes("application/json"))
+      ) {
         const data = await res.json();
-        showToast(data.message || "Export started in the background. You will be notified when it is ready.", "info");
+        showToast(
+          data.message ||
+            "Export started in the background. You will be notified when it is ready.",
+          "info",
+        );
         return;
       }
 
@@ -1083,7 +1090,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                           <>
                             <option value="">-- Inherit --</option>
                             {settings?.ocrVlmModelList.map((m) => (
-                              <option key={m} value={m}>
+                              <option
+                                key={m}
+                                value={m}
+                              >
                                 {m}
                               </option>
                             ))}

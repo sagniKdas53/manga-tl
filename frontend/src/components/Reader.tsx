@@ -2510,12 +2510,9 @@ export const Reader: React.FC<ReaderProps> = ({
   };
 
   // --- HOVER POPUP HANDLERS ---
-  const handleMouseEnterItem = useCallback(
-    (item: RenderItem) => {
-      setActiveRegion(item.regions[0] || null);
-    },
-    [],
-  );
+  const handleMouseEnterItem = useCallback((item: RenderItem) => {
+    setActiveRegion(item.regions[0] || null);
+  }, []);
 
   // --- BUBBLE/CONVERSATION UPDATES ---
 
@@ -3621,7 +3618,6 @@ export const Reader: React.FC<ReaderProps> = ({
                   });
                 })}
               </svg>
-
             </div>
           </div>
         </div>
@@ -4181,15 +4177,27 @@ export const Reader: React.FC<ReaderProps> = ({
                       }}
                       disabled={isRedoing}
                       onClick={() => {
-                        const actualRegion = ocrRegions.find(r => r.id === selectedItem.regionId);
+                        const actualRegion = ocrRegions.find(
+                          (r) => r.id === selectedItem.regionId,
+                        );
                         if (actualRegion) handleRedoRegion(actualRegion, "ocr");
                       }}
                     >
                       {isRedoing ? (
-                        <div className="spinner" style={{ width: "12px", height: "12px" }}></div>
+                        <div
+                          className="spinner"
+                          style={{ width: "12px", height: "12px" }}
+                        ></div>
                       ) : (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
                         </svg>
                       )}
                       Redo OCR
@@ -4209,15 +4217,28 @@ export const Reader: React.FC<ReaderProps> = ({
                       }}
                       disabled={isRedoing}
                       onClick={() => {
-                        const actualRegion = ocrRegions.find(r => r.id === selectedItem.regionId);
-                        if (actualRegion) handleRedoRegion(actualRegion, "translation");
+                        const actualRegion = ocrRegions.find(
+                          (r) => r.id === selectedItem.regionId,
+                        );
+                        if (actualRegion)
+                          handleRedoRegion(actualRegion, "translation");
                       }}
                     >
                       {isRedoing ? (
-                        <div className="spinner" style={{ width: "12px", height: "12px" }}></div>
+                        <div
+                          className="spinner"
+                          style={{ width: "12px", height: "12px" }}
+                        ></div>
                       ) : (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
                         </svg>
                       )}
                       Redo TL

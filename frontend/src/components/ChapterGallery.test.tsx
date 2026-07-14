@@ -263,6 +263,9 @@ describe("ChapterGallery Component", () => {
   it("handles exporting chapter zip", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
+      headers: {
+        get: () => "application/zip",
+      },
       blob: () =>
         Promise.resolve(new Blob(["dummy"], { type: "application/zip" })),
     });
