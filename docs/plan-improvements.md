@@ -1,9 +1,10 @@
 # Plan: Improvements & UI Redesign
 
-> Priority: **After Critical Bug Fixes** | Depends on: `plan-critical-bugfixes.md` being completed  
-> Last updated: 2026-07-12
+> Priority: **Ready to Start** | Prerequisite `plan-critical-bugfixes.md`: ✅ Completed  
+> Last updated: 2026-07-14
 
-This plan covers performance improvements, UI redesign, and quality-of-life enhancements from `TODO.md`.
+This plan covers performance improvements, UI redesign, and quality-of-life enhancements from `TODO.md`.  
+All critical bug fixes from `plan-critical-bugfixes.md` (Phases 1–4) have been completed — this plan is now unblocked.
 
 ---
 
@@ -145,6 +146,7 @@ Per the annotated mockup in `examples/redesign-the-job-queue.jpg`:
 - Update content type from `image/jpeg` → `image/webp` at all upload sites
 - In `getImageThumbnail()`: update fallback content type to `image/webp`
 - **Migration**: Existing JPEG thumbnails continue to work — the endpoint already serves based on the stored path
+- **Cleanup**: Existing thumbnails in the MinIO bucket are still `.jpg` (see [screenshot](../examples/thumbs-still-in-jpg-not-webp.png)). Add a one-time migration task or startup job that re-generates thumbnails as WebP for all images that still have a `.jpg` thumbnail path. This can run on the `thumbnailExecutor` pool (C.3) in the background at low priority.
 
 ### C.2 Frontend: Use Thumbnail URLs Everywhere
 
@@ -292,6 +294,68 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - Use `IntersectionObserver` API for scroll detection
 - Requires backend pagination support: `GET /api/series?page=1&size=20&sort=updatedAt,desc`
 
+### D.10 Model Override Display — Show Resolved Model
+
+**Files**: `SettingsModal.tsx` (or model picker components), `SeriesDetails.tsx`, `ChapterGallery.tsx`
+
+- Currently, when a chapter/series inherits a model setting, the UI shows `--Inherit--` with no indication of what model is actually being used
+- **Change**: resolve the inheritance chain and display the effective model name with provenance:
+  - e.g., `tencent/hy3:free (inherited from series)` or `google/gemini-2.5-flash (inherited from global)`
+- In the model picker dropdowns:
+  - The `--Inherit--` option should show a subtitle with the resolved model name
+  - When a chapter inherits from series, and series inherits from global, display the full chain
+- In chapter cards (D.3) and Reader metadata:
+  - Display the resolved model name for OCR, Translation, and QA
+  - Use a subtle label like `(inherited)` or `(global)` to indicate the source
+- Backend may need a new endpoint or enrichment: `GET /api/chapters/{id}/resolved-settings` that returns the fully resolved model configuration with source annotations
+
+### D.11 Model Override UX Redesign
+
+**Files**: `SettingsModal.tsx`, model picker components, `SeriesDetails.tsx`
+
+- The current model override system (global → series → chapter) is functional but confusing for users
+- **Goals**:
+  - Make it visually clear which level is setting each model
+  - Show a visual hierarchy: Global defaults → Series overrides → Chapter overrides
+  - Allow quick "reset to inherited" action per setting
+  - Group related settings (OCR provider + model, TL provider + model, QA provider + model) into logical sections
+- **Proposed UX changes**:
+  - Use an accordion or tabbed layout per override level
+  - Color-code or badge settings that differ from their parent level
+  - Add a "Reset to Default" button per setting that clears the override
+  - Show a summary view: "This chapter uses 2 custom overrides, inherits 4 from series"
+  - Consider a diff-style view showing what's overridden vs inherited
+- This builds on D.10 (resolved display) — D.10 should be completed first
+
+### D.12 Migrate Frontend to Material UI (MUI)
+
+> [!IMPORTANT]
+> This is a **foundational change** that affects all of Phase D. It should be tackled early (ideally first in Phase D) so that subsequent UI items (D.1–D.11) are built on MUI components rather than vanilla CSS that will be replaced later.
+
+**Files**: `package.json`, all `.tsx` components, `index.css` → MUI theme files
+
+- **Motivation**: The current transparent/glassmorphism design doesn't feel polished. Adopting MUI gives us a battle-tested component library with consistent design language.
+- **Dependencies**:
+  - [`@mui/material`](https://mui.com/material-ui/getting-started/) — core components
+  - [`@mui/icons-material`](https://mui.com/material-ui/material-icons/) — icon library
+  - `@emotion/react`, `@emotion/styled` — MUI's styling engine
+- **Theme setup**:
+  - Create a custom MUI `ThemeProvider` with two themes:
+    - **Dark mode**: nHentai palette (from D.8) applied as MUI theme tokens
+    - **Light mode**: Pixiv palette (from D.8) applied as MUI theme tokens
+  - This replaces the manual CSS variable approach in D.8 — the palettes are now injected via `createTheme()`
+  - Persist theme preference in `localStorage` (integrate with existing dark/light toggle)
+- **Migration strategy** — incremental, not big-bang:
+  1. Install MUI + wrap `App.tsx` in `ThemeProvider`
+  2. Replace primitive elements first: buttons → `Button`, inputs → `TextField`, dialogs → `Dialog`, modals → `Modal`
+  3. Replace layout: use `Container`, `Grid`, `Card`, `AppBar`, `Drawer` for page structure
+  4. Replace feedback: toasts → `Snackbar`/`Alert`, confirms → `Dialog`, loading → `CircularProgress`/`Skeleton`
+  5. Use MUI `DataGrid` or `Table` for the Queue Manager (A.3)
+  6. Use MUI `Select`, `Accordion`, `Tabs` for model overrides (D.10, D.11)
+- **Use pre-built MUI components wherever possible** to reduce custom CSS and offload design decisions to MUI's defaults
+- **Remove** most of `index.css` once migration is complete — keep only truly custom styles
+- D.8 (theme improvements) is **subsumed** by this item — the palette work becomes MUI theme configuration
+
 ### ✅ Checkpoint D — UI Polish
 
 **Manual checks:**
@@ -302,9 +366,12 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 4. Upload 5 pages → navigate to Series page mid-upload → verify upload widget persists
 5. In Reader: navigate between pages → verify smooth transition without full reload
 6. Dashboard: toggle sort options → verify order changes
-7. Toggle dark/light mode → verify both themes look polished
+7. Toggle dark/light mode → verify both themes look polished (MUI theme switch)
 8. Click username → verify user profile modal opens with avatar, password change, session list
 9. Add 50+ series → scroll Dashboard → verify more series load dynamically
+10. Open chapter/series settings → model picker should show resolved model name next to `--Inherit--` (e.g., `google/gemini-2.5-flash (global)`)
+11. Verify model overrides show a clear hierarchy and "Reset to Default" works
+12. Verify all major components render as MUI components (buttons, dialogs, inputs, cards) — no vanilla HTML elements for interactive controls
 
 ---
 
@@ -327,17 +394,62 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - On `TimeoutError`, trigger the failover chain from E.1
 - Log timeout events with the provider + model + duration for debugging
 
+### E.3 Move Cost Tracking from Filesystem to Database
+
+**Files**: worker `rq_tasks.py` / cost utilities, `JobCoordinatorService.java`, new DB migration
+
+- **Current problem**: Costs are stored in `costs.json` files under `data/worker/rendered_cache/`. This adds filesystem I/O overhead on every job completion, is fragile (no transactions, no backup), and can't be queried.
+- **Fix**:
+  - Add a `costs` table (or `job_costs` / `layer_costs` columns) in PostgreSQL to store per-job and per-layer cost breakdowns
+  - Worker should POST cost data to the backend API (alongside the existing status callback) instead of writing to `costs.json`
+  - Backend `InternalJobController` or `JobCoordinatorService` persists costs to DB on job completion
+  - Update `ChapterExportService` to read costs from DB instead of `costs.json`
+  - Keep a brief transition period where both sources are checked (DB preferred, `costs.json` fallback)
+  - Once migration is verified, remove the filesystem cost storage entirely
+- **Benefits**: queryable cost analytics, survives container restarts, no filesystem coupling
+
+### E.4 Remove Worker `rendered_cache` QA Images
+
+**Files**: `render.py`, `qa.py`, Docker volume config
+
+- **Current problem**: All images rendered for QA are saved to `data/worker/rendered_cache/`. This is no longer needed since rendered images are already stored in MinIO and can be viewed via the MinIO web GUI.
+- **Fix**:
+  - Remove the local file writes in `render.py` / `qa.py` that save to `rendered_cache/`
+  - The rendered images in MinIO (`rendered/{imageId}.png`) serve as the single source of truth
+  - Remove the `rendered_cache` volume mapping from `docker-compose.yml` (or repurpose it for truly temporary processing only)
+  - Add cleanup logic: on worker startup, delete any stale files in `rendered_cache/` older than 24h
+- **Note**: `costs.json` files in `rendered_cache/` are addressed separately in E.3
+
+### E.5 Chapter Export Cleanup
+
+**Files**: `ChapterExportService.java`, new `ExportCleanupService.java`
+
+- **Current problem**: Exported chapter ZIPs are cached in MinIO under `exports/<hash>.zip` (added in the bugfixes plan) but there is no way to clean up old exports (see [screenshot](../examples/no-way-to-clean-up-old-chapter-exports.png)). Over time, this accumulates stale ZIP files.
+- **Fix**:
+  - Add a scheduled cleanup service (`@Scheduled` or manual trigger) that:
+    1. Lists all objects in the `exports/` MinIO prefix
+    2. Deletes ZIPs older than a configurable retention period (default: 7 days)
+    3. Invalidates the hash in the DB/cache so the next export regenerates
+  - Add a "Clear Exports" button in the admin/settings UI (or per-series)
+  - Add a per-chapter "Re-export" button that forces regeneration (deletes cached ZIP + rebuilds)
+  - Consider showing export cache size in the settings/admin panel
+
 ### ✅ Checkpoint E — Resilience
 
 **Automated tests:**
 
 - `test_provider_chain.py`: mock primary provider 500 → verify fallback to secondary
 - `test_provider_chain.py`: mock timeout → verify failover triggers
+- `JobCoordinatorServiceTest`: complete a job with costs → verify costs persisted to DB
+- `ExportCleanupServiceTest`: create old exports → run cleanup → verify deleted
 
 **Manual checks:**
 
 1. Set primary OCR provider to an invalid key → run pipeline → verify it fails over to next provider in chain
 2. Set very low timeout (1s) → verify timeout is logged and failover triggers
+3. Run a full pipeline → verify no `costs.json` written to `rendered_cache/` → verify costs appear in DB
+4. Run a full pipeline → verify no QA images saved to `rendered_cache/` → verify rendered images accessible in MinIO GUI
+5. Export a chapter → wait past retention → verify cleanup removes the old ZIP → re-export regenerates it
 
 ---
 
@@ -413,9 +525,14 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 | D.7 | `[NEW] UserManagement.tsx` | User profile with avatar, sessions, API keys stub |
 | D.8 | `index.css` | nHentai dark + Pixiv light palettes |
 | D.9 | `Dashboard.tsx`, `SeriesDetails.tsx` | Lazy loading / infinite scroll |
-| D.10 | Model override components | Show resolved model names |
+| D.10 | `SettingsModal.tsx`, model picker components | Show resolved model names with inheritance source |
+| D.11 | `SettingsModal.tsx`, model picker components | Model override UX redesign with visual hierarchy |
+| D.12 | All `.tsx` components, `package.json` | Migrate to Material UI (MUI) with custom theme |
 | E.1 | `[NEW] ProviderChain.py`, `config.py` | Cross-provider failover |
 | E.2 | Worker HTTP call sites | Strict timeouts |
+| E.3 | Worker cost utils, `JobCoordinatorService.java` | Move cost tracking from `costs.json` to PostgreSQL |
+| E.4 | `render.py`, `qa.py`, `docker-compose.yml` | Remove `rendered_cache` QA image writes |
+| E.5 | `[NEW] ExportCleanupService.java` | Scheduled cleanup of stale chapter export ZIPs |
 | F.1 | `bubble_detector.py` | YOLO model upgrade |
 | F.2 | `ocr.py` | VLM prompt improvements |
 | F.3 | `qa.py`, `qa_re_ocr.py` | QA prompt enhancements |
