@@ -1,6 +1,6 @@
 # TODO — Manga Library (Master Checklist)
 
-> **Last updated**: 2026-07-12  
+> **Last updated**: 2026-07-14  
 > Merged from: `TODO.md` + `docs/More Observations.md`  
 > Plans: [Critical Bug Fixes](docs/plan-critical-bugfixes.md) | [Improvements](docs/plan-improvements.md)  
 > Status legend: `[ ]` = not started, `[/]` = in progress, `[x]` = done, `[P]` = planned (in a plan doc)
@@ -101,6 +101,7 @@
 ### Phase C — Thumbnail & Image Optimization
 
 - [P] **C.1** WebP thumbnails with bicubic interpolation (replacing JPEG + bilinear)
+  - Includes migration of existing JPEG thumbnails in MinIO to WebP
 - [P] **C.2** Frontend: use `/thumbnail` URLs everywhere (Dashboard, SeriesDetails)
   - Currently series covers and chapter cards load full `/file` URLs
 - [P] **C.3** Async thumbnail generation off the upload request path *(NEW from More Observations)*
@@ -129,11 +130,16 @@
 - [P] **D.8** Theme improvements
   - Dark mode: nHentai palette — see [extracted palette](examples/nHentai/Screenshot%202026-07-12%20at%2014-09-52%20Site%20Palette%20🎨.png)
   - Light mode: Pixiv palette only (not design) — see [extracted palette](examples/pixiv/Screenshot%202026-07-12%20at%2014-11-16%20Site%20Palette%20🎨.png)
-- [ ] **D.9** Lazy loading / infinite scroll for series, chapters, and pages *(NEW from More Observations)*
+- [P] **D.9** Lazy loading / infinite scroll for series, chapters, and pages *(NEW from More Observations)*
   - Instead of pagination (like [nHentai's paged nav](examples/nHentai/add-paged-navigation-as-the-library-can-big.png)), load more as user scrolls
 - [P] **D.10** Model override display — show resolved model instead of `--Inherit--`
   - e.g., `tencent/hy3:free (inherited from series)` instead of `--Inherit--`
-- [ ] **D.11** Model override UX redesign — make overrides easier to use and display
+- [P] **D.11** Model override UX redesign — make overrides easier to use and display
+- [P] **D.12** Migrate frontend to Material UI (MUI) *(NEW from More Observations)*
+  - Replace vanilla CSS + glassmorphism with [MUI components](https://mui.com/material-ui/getting-started/) + [MUI icons](https://mui.com/material-ui/material-icons/)
+  - Custom `ThemeProvider` with nHentai dark + Pixiv light palettes (subsumes D.8)
+  - Incremental migration: buttons → inputs → dialogs → layout → feedback
+  - Use pre-built components to offload design decisions
 
 ### Phase E — Backend Resilience
 
@@ -141,6 +147,14 @@
   - Direct DeepSeek API provider
   - When provider is down, failover to next in priority list
 - [P] **E.2** Strict HTTP timeouts (connect=10s, read=45s) for all cloud LLM calls
+- [P] **E.3** Move cost tracking from `costs.json` filesystem to PostgreSQL *(NEW from More Observations)*
+  - Worker POSTs costs to backend API instead of writing files
+  - Enables queryable cost analytics, survives container restarts
+- [P] **E.4** Remove `rendered_cache` QA images *(NEW from More Observations)*
+  - Rendered images already in MinIO — local file writes are redundant overhead
+- [P] **E.5** Chapter export cleanup *(NEW from More Observations)*
+  - Scheduled cleanup of stale `exports/<hash>.zip` in MinIO (default retention: 7 days)
+  - "Clear Exports" button in admin/settings
 
 ---
 
