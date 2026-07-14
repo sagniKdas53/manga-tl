@@ -680,6 +680,4 @@ public class SeriesController {
       return ResponseEntity.notFound().build();
     }
   }
-
-
 }
