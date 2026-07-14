@@ -23,8 +23,11 @@ All critical bug fixes from `plan-critical-bugfixes.md` (Phases 1–4) have been
 # 1. Format code (auto-fix)
 mvn spotless:apply
 
-# 2. Compile + unit tests + PMD + SpotBugs + JaCoCo coverage gate (≥15%)
+# 2. Compile + unit tests + PMD + SpotBugs + JaCoCo coverage gate (≥80% expected)
 mvn clean verify -DforkCount=1 -DreuseForks=true
+
+# (Optional) Generate HTML coverage report explicitly at target/site/jacoco/index.html
+mvn jacoco:report
 
 # 3. Verify formatting (CI parity check — must match what CI runs)
 mvn spotless:check
@@ -37,7 +40,7 @@ mvn spotless:check
 | **Spotless** | Formatting (Google Java Format), unused imports, trailing whitespace | Manual / pre-commit |
 | **PMD 3.28.0** | God classes, complex methods, dead code, copy-paste, style violations | `mvn verify` |
 | **SpotBugs 4.10.2** | Null pointer bugs, resource leaks, concurrency issues, bad practices (bytecode analysis) | `mvn verify` |
-| **JaCoCo 0.8.15** | Line coverage gate — fails build if coverage < 15% | `mvn verify` |
+| **JaCoCo 0.8.15** | Line coverage gate — fails build if coverage < 80% | `mvn verify` |
 | **Surefire** | Unit test failures | `mvn verify` |
 
 ### Frontend (React/TypeScript) — `cd frontend`
@@ -46,8 +49,8 @@ mvn spotless:check
 # 1. Lint (ESLint — catches unused vars, type errors, React issues)
 npm run lint
 
-# 2. Unit tests with coverage (Vitest, sequential to avoid race conditions)
-npm run test:coverage
+# 2. Unit tests with HTML coverage (minimum 80% expected)
+npm run test:coverage -- --reporter=html
 
 # 3. Production build (catches TypeScript compilation errors, dead imports)
 npm run build
@@ -65,7 +68,7 @@ ruff check . --fix && ruff format .
 # 3. Static type checking (catches type errors, None misuse, missing attrs)
 pyright .
 
-# 4. Unit tests with coverage
+# 4. Unit tests with coverage (minimum 80% expected)
 pytest tests/ --cov=. --cov-report=xml --cov-report=html
 ```
 

@@ -281,4 +281,50 @@ public class SseServiceTest {
       errorCallbacks.get(0).accept(new RuntimeException("test error"));
     }
   }
+
+  @Test
+  public void testEmitEventToAllUsers() {
+    UUID userId = UUID.randomUUID();
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(anyString())).thenReturn(0L);
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) -> {
+              doNothing().when(mock).send(any(SseEmitter.SseEventBuilder.class));
+            })) {
+      sseService.subscribe(userId);
+      sseService.emitEventToAllUsers("test_event", "test_data");
+      // Verify send was called on the emitter
+      assertFalse(mocked.constructed().isEmpty());
+      verify(mocked.constructed().get(0), times(2)).send(any(SseEmitter.SseEventBuilder.class));
+    } catch (Exception e) {
+      fail("Exception not expected");
+    }
+  }
+
+  @Test
+  public void testEmitEventForImage() {
+    UUID imageId = UUID.randomUUID();
+    UUID userId = UUID.randomUUID();
+    when(redisTemplate.opsForValue()).thenReturn(valOps);
+    when(valOps.get("job:owner:image:" + imageId)).thenReturn(userId.toString());
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(anyString())).thenReturn(0L);
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) -> {
+              doNothing().when(mock).send(any(SseEmitter.SseEventBuilder.class));
+            })) {
+      sseService.subscribe(userId);
+      sseService.emitEventForImage(imageId, "job_update", "test_data");
+      assertFalse(mocked.constructed().isEmpty());
+      verify(mocked.constructed().get(0), times(2)).send(any(SseEmitter.SseEventBuilder.class));
+    } catch (Exception e) {
+      fail("Exception not expected");
+    }
+  }
 }

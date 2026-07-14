@@ -1,5 +1,10 @@
 import { createContext, useContext } from "react";
 
+export type SSEEvent = {
+  type: string;
+  data: string;
+};
+
 export interface Notification {
   id: string;
   type: "INFO" | "WARNING" | "ERROR";
@@ -22,6 +27,8 @@ export interface NotificationContextType {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
+  lastEvent: SSEEvent | null;
+  lastEventTime: number;
 }
 
 export const NotificationContext = createContext<

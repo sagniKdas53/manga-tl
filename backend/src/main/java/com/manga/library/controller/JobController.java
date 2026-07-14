@@ -5,6 +5,9 @@ import com.manga.library.repository.JobRepository;
 import com.manga.library.service.JobCoordinatorService;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import com.manga.library.service.SseService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +21,8 @@ public class JobController {
   private final JobRepository jobRepository;
   private final JobCoordinatorService jobCoordinatorService;
   private final StringRedisTemplate redisTemplate;
+  private final SseService sseService;
+  private final ObjectMapper objectMapper;
 
   private static final String QUEUE_PAUSED_KEY = "system:queue:paused";
 
@@ -39,6 +44,7 @@ public class JobController {
   @PostMapping("/pause")
   public ResponseEntity<?> pauseQueue() {
     redisTemplate.opsForValue().set(QUEUE_PAUSED_KEY, "true");
+    sseService.emitEventToAllUsers("queue_paused", Map.of("event", "queue_paused"));
     return ResponseEntity.ok().build();
   }
 
@@ -46,6 +52,7 @@ public class JobController {
   public ResponseEntity<?> resumeQueue() {
     redisTemplate.opsForValue().set(QUEUE_PAUSED_KEY, "false");
     jobCoordinatorService.requeuePendingJobs();
+    sseService.emitEventToAllUsers("queue_resumed", Map.of("event", "queue_resumed"));
     return ResponseEntity.ok().build();
   }
 
@@ -71,6 +78,8 @@ public class JobController {
               "queue:region-redo-ocr",
               "queue:region-redo-tl"));
 
+      sseService.emitEventToAllUsers("queue_cleared", Map.of("event", "queue_cleared", "clearedCount", jobsToClear.size()));
+
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       return ResponseEntity.internalServerError()
@@ -94,6 +103,8 @@ public class JobController {
               if (!"true".equals(paused)) {
                 jobCoordinatorService.pushJobToRedis(job);
               }
+              
+              emitJobUpdateEvent(job);
               return ResponseEntity.ok().build();
             })
         .orElse(ResponseEntity.notFound().build());
@@ -108,6 +119,7 @@ public class JobController {
               if ("PENDING".equals(job.getStatus())) {
                 job.setStatus("PAUSED");
                 jobRepository.save(job);
+                emitJobUpdateEvent(job);
                 return ResponseEntity.ok().build();
               }
               return ResponseEntity.badRequest().body("Only PENDING jobs can be paused");
@@ -129,6 +141,7 @@ public class JobController {
                 if (!"true".equals(paused)) {
                   jobCoordinatorService.pushJobToRedis(job);
                 }
+                emitJobUpdateEvent(job);
                 return ResponseEntity.ok().build();
               }
               return ResponseEntity.badRequest().body("Only PAUSED jobs can be resumed");
@@ -143,8 +156,28 @@ public class JobController {
         .map(
             job -> {
               jobRepository.delete(job);
+              Map<String, Object> deletedJobData = new HashMap<>();
+              deletedJobData.put("jobId", job.getId());
+              deletedJobData.put("status", "DELETED");
+              sseService.emitEventForImage(job.getImageId(), "job_update", deletedJobData);
               return ResponseEntity.ok().build();
             })
         .orElse(ResponseEntity.notFound().build());
+  }
+
+  private void emitJobUpdateEvent(Job job) {
+    try {
+      if (job.getPayload() != null) {
+        Map<String, Object> jobData = objectMapper.readValue(job.getPayload(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        jobData.put("status", job.getStatus());
+        jobData.put("attempt", job.getAttempt());
+        if (job.getError() != null) {
+          jobData.put("error", job.getError());
+        }
+        sseService.emitEventForImage(job.getImageId(), "job_update", jobData);
+      }
+    } catch (Exception e) {
+      // Ignore
+    }
   }
 }

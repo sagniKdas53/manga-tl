@@ -7,6 +7,7 @@ type SSEEvent = {
 
 export function useSSE(url: string, token: string | null) {
   const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
+  const [lastEventTime, setLastEventTime] = useState<number>(Date.now());
   const [isConnected, setIsConnected] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -19,26 +20,35 @@ export function useSSE(url: string, token: string | null) {
     eventSourceRef.current = eventSource;
     let timeoutId: NodeJS.Timeout | null = null;
 
+    const updateEvent = (type: string, data: string) => {
+      setLastEvent({ type, data });
+      setLastEventTime(Date.now());
+    };
+
     eventSource.onopen = () => {
       setIsConnected(true);
       console.log("SSE connection opened");
     };
 
-    eventSource.addEventListener("connected", (event) => {
-      setLastEvent({ type: "connected", data: (event as MessageEvent).data });
-    });
+    const listeners = [
+      "connected",
+      "notification",
+      "job_update",
+      "queue_paused",
+      "queue_resumed",
+      "queue_cleared",
+    ];
 
-    eventSource.addEventListener("notification", (event) => {
-      setLastEvent({
-        type: "notification",
-        data: (event as MessageEvent).data,
+    listeners.forEach((evtType) => {
+      eventSource.addEventListener(evtType, (event) => {
+        updateEvent(evtType, (event as MessageEvent).data);
       });
     });
 
     eventSource.onerror = (error) => {
       console.error("SSE error", error);
       setIsConnected(false);
-      setLastEvent({ type: "error", data: "Connection lost. Retrying..." });
+      updateEvent("error", "Connection lost. Retrying...");
       eventSource.close();
 
       // Auto-reconnect after 5 seconds
@@ -57,5 +67,5 @@ export function useSSE(url: string, token: string | null) {
     };
   }, [url, token, retryCount]);
 
-  return { lastEvent, isConnected };
+  return { lastEvent, lastEventTime, isConnected };
 }

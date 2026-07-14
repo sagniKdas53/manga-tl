@@ -16,7 +16,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
   // Connect to SSE stream
   const contextPath = getContextPath();
-  const { lastEvent } = useSSE(
+  const { lastEvent, lastEventTime } = useSSE(
     `${contextPath}/api/notifications/stream`,
     token,
   );
@@ -80,6 +80,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
         markAsRead,
         markAllAsRead,
         clearAll,
+        lastEvent,
+        lastEventTime,
       }}
     >
       {children}
