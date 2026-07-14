@@ -232,7 +232,7 @@ public class JobCoordinatorService {
       jobRepository.save(dbJob);
 
       // Emit real-time SSE event for the new job
-      sseService.emitEventForImage(imageId, "job_update", job);
+      sseService.emitEventForImage(imageId, "job_update", dbJob);
 
       enqueuePersistedJob(dbJob);
     } catch (Exception e) {

@@ -21,6 +21,7 @@ export function useSSE(url: string, token: string | null) {
     let timeoutId: NodeJS.Timeout | null = null;
 
     const updateEvent = (type: string, data: string) => {
+      console.log(`[SSE Event Received] ${type}:`, data);
       setLastEvent({ type, data });
       setLastEventTime(Date.now());
     };

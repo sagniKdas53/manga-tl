@@ -168,19 +168,8 @@ public class JobController {
 
   private void emitJobUpdateEvent(Job job) {
     try {
-      if (job.getPayload() != null) {
-        Map<String, Object> jobData =
-            objectMapper.readValue(
-                job.getPayload(),
-                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-        jobData.put("status", job.getStatus());
-        jobData.put("attempt", job.getAttempt());
-        if (job.getError() != null) {
-          jobData.put("error", job.getError());
-        }
-        sseService.emitEventForImage(job.getImageId(), "job_update", jobData);
-      }
-    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      sseService.emitEventForImage(job.getImageId(), "job_update", job);
+    } catch (Exception e) {
       System.err.println("Failed to emit job update event: " + e.getMessage());
     }
   }
