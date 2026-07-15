@@ -7,6 +7,7 @@ This document describes the design, configuration, and runtime behavior of the *
 ## 1. Overview & Rationale
 
 Historically, the system dispatched all jobs through a single flat queue processing system. However, different steps in the translation pipeline have vastly different resource requirements:
+
 - **GPU-bound (Heavy) Tasks**: OCR and panel-detection use local machine learning models. Because they are execution-constrained by the GPU, running multiple GPU tasks concurrently leads to resource contention and lock blocking (via the `acquire_lock` mechanisms in Python), yielding no throughput improvement.
 - **I/O-bound / Network (Light) Tasks**: Translation, rendering, and QA are either cloud API calls or rapid lightweight local processes. These can easily be parallelized.
 

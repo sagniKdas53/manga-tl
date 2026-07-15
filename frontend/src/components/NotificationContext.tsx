@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ReactNode } from "react";
+import React, { useState, useRef, useCallback, ReactNode } from "react";
 import { useSSE } from "../utils/useSSE";
 import { getContextPath } from "../utils";
 import { NotificationContext, type Notification } from "./useNotifications";
