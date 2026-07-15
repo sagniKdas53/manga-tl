@@ -150,7 +150,9 @@ public class JobCoordinatorService {
         traceId = redisTemplate.opsForValue().get("pipeline:trace:" + imageId);
         if (traceId == null) {
           traceId = UUID.randomUUID().toString();
-          redisTemplate.opsForValue().set("pipeline:trace:" + imageId, traceId, Duration.ofHours(2));
+          redisTemplate
+              .opsForValue()
+              .set("pipeline:trace:" + imageId, traceId, Duration.ofHours(2));
         }
       } else {
         traceId = UUID.randomUUID().toString();
@@ -867,12 +869,12 @@ public class JobCoordinatorService {
     } else if ("translation".equals(jobType)) {
       redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "manual-re-translate");
     }
-    
+
     // Clear the traceId so a fresh one is generated for the new pipeline run
     if (redisTemplate != null) {
       redisTemplate.delete("pipeline:trace:" + imageId);
     }
-    
+
     enqueueJob(jobType, imageId, chapterId);
   }
 
