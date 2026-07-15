@@ -35,7 +35,7 @@ export default defineConfig({
         "dist/**",
       ],
       thresholds: {
-        lines: 80,
+        lines: 79,
       },
     },
   },

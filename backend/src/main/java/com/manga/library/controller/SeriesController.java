@@ -75,7 +75,10 @@ public class SeriesController {
         List<Page> pages =
             pageRepository.findByChapterIdOrderByPageNumberAsc(firstChapter.getId());
         if (pages != null && !pages.isEmpty()) {
-          dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
+          Image firstImg = pages.get(0).getImage();
+          if (firstImg.getThumbnailStoragePath() != null) {
+            dto.setCoverImageUrl(getImageUrl(firstImg.getId()));
+          }
         }
       }
     } catch (Exception e) {
@@ -139,7 +142,10 @@ public class SeriesController {
       try {
         List<Object[]> covers = pageRepository.findDefaultCoverImageIds();
         for (Object[] row : covers) {
-          defaultCovers.put((UUID) row[0], (UUID) row[1]);
+          String thumbPath = (String) row[2];
+          if (thumbPath != null) {
+            defaultCovers.put((UUID) row[0], (UUID) row[1]);
+          }
         }
       } catch (Exception e) {
         log.debug("Ignore query exception in listSeries", e);
@@ -214,7 +220,10 @@ public class SeriesController {
     try {
       List<Object[]> covers = pageRepository.findFirstPageImageIdsBySeriesId(seriesId);
       for (Object[] row : covers) {
-        chapterCovers.put((UUID) row[0], (UUID) row[1]);
+        String thumbPath = (String) row[2];
+        if (thumbPath != null) {
+          chapterCovers.put((UUID) row[0], (UUID) row[1]);
+        }
       }
     } catch (Exception e) {
       log.debug("Ignore query exception in listChapters", e);
@@ -272,7 +281,10 @@ public class SeriesController {
               try {
                 List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
                 if (pages != null && !pages.isEmpty()) {
-                  dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
+                  Image firstImg = pages.get(0).getImage();
+                  if (firstImg.getThumbnailStoragePath() != null) {
+                    dto.setCoverImageUrl(getImageUrl(firstImg.getId()));
+                  }
                 }
               } catch (Exception e) {
                 log.debug("Ignore fallback exception in getChapter", e);
@@ -368,7 +380,10 @@ public class SeriesController {
               try {
                 List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
                 if (pages != null && !pages.isEmpty()) {
-                  dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
+                  Image firstImg = pages.get(0).getImage();
+                  if (firstImg.getThumbnailStoragePath() != null) {
+                    dto.setCoverImageUrl(getImageUrl(firstImg.getId()));
+                  }
                 }
               } catch (Exception e) {
                 log.debug("Ignore fallback exception in updateChapter", e);

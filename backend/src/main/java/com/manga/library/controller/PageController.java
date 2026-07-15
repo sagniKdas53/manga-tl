@@ -679,7 +679,9 @@ public class PageController {
                   dto.setChapterId(p.getChapter().getId());
                   dto.setFilename(p.getImage().getFilename());
                   dto.setUrl(getImageUrl(p.getImage().getId()));
-                  dto.setThumbnailUrl(getThumbnailUrl(p.getImage().getId()));
+                  if (p.getImage().getThumbnailStoragePath() != null) {
+                    dto.setThumbnailUrl(getThumbnailUrl(p.getImage().getId()));
+                  }
                   return dto;
                 })
             .collect(Collectors.toList());
@@ -701,7 +703,9 @@ public class PageController {
               dto.setChapterId(p.getChapter().getId());
               dto.setFilename(p.getImage().getFilename());
               dto.setUrl(getImageUrl(p.getImage().getId()));
-              dto.setThumbnailUrl(getThumbnailUrl(p.getImage().getId()));
+              if (p.getImage().getThumbnailStoragePath() != null) {
+                dto.setThumbnailUrl(getThumbnailUrl(p.getImage().getId()));
+              }
               return ResponseEntity.ok(dto);
             })
         .orElse(ResponseEntity.notFound().build());
@@ -799,23 +803,11 @@ public class PageController {
       String contentType = "image/webp";
 
       if (storagePath == null || storagePath.trim().isEmpty()) {
-        org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
-            outputStream -> {
-              try (java.io.InputStream is = getClass().getResourceAsStream("/static/processing-thumbnail.webp")) {
-                if (is != null) {
-                  is.transferTo(outputStream);
-                }
-              } catch (Exception e) {
-                log.error("Error streaming processing thumbnail", e);
-              }
-            };
-        return ResponseEntity.ok()
-            .contentType(org.springframework.http.MediaType.parseMediaType("image/webp"))
-            .body(responseBody);
-      } else {
-        if (storagePath.toLowerCase().endsWith(".jpg") || storagePath.toLowerCase().endsWith(".jpeg")) {
-            contentType = "image/jpeg";
-        }
+        return ResponseEntity.notFound().build();
+      }
+      
+      if (storagePath.toLowerCase().endsWith(".jpg") || storagePath.toLowerCase().endsWith(".jpeg")) {
+        contentType = "image/jpeg";
       }
 
       String finalStoragePath = storagePath;
