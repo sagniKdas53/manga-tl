@@ -205,6 +205,7 @@ describe("QueueManager", () => {
       type: "job_update",
       data: JSON.stringify({
         jobId: "job-1",
+        imageId: "img-1",
         status: "PROCESSING",
       }),
     });
@@ -275,6 +276,50 @@ describe("QueueManager", () => {
         "/api/jobs/job-1/pause",
         expect.objectContaining({ method: "POST" })
       );
+    });
+  });
+
+  it("filters out old COMPLETED jobs on fetch", async () => {
+    const oldCompletedJob = {
+      id: "job-3",
+      type: "qa",
+      imageId: "img-3",
+      status: "COMPLETED",
+      payload: JSON.stringify({}),
+      error: null,
+      attempt: 1,
+      maxAttempts: 3,
+      createdAt: new Date(Date.now() - 20000).toISOString(),
+      updatedAt: new Date(Date.now() - 15000).toISOString(), // 15 seconds old
+    };
+    const recentCompletedJob = {
+      id: "job-4",
+      type: "qa",
+      imageId: "img-4",
+      status: "COMPLETED",
+      payload: JSON.stringify({}),
+      error: null,
+      attempt: 1,
+      maxAttempts: 3,
+      createdAt: new Date(Date.now() - 5000).toISOString(),
+      updatedAt: new Date(Date.now() - 2000).toISOString(), // 2 seconds old
+    };
+    
+    (safeFetch as Mock).mockImplementation((url: string) => {
+      if (url === "/api/jobs") {
+        return Promise.resolve({ ok: true, json: async () => ({ isPaused: false, jobs: [oldCompletedJob, recentCompletedJob] }) });
+      }
+      return Promise.reject(new Error("Unknown URL"));
+    });
+
+    render(<QueueManager token={mockToken} />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+
+    // recent completed should show, old should not
+    await waitFor(() => {
+      // It should display 'TRANSITIONING...' for completed jobs
+      const texts = screen.queryAllByText("TRANSITIONING...");
+      expect(texts.length).toBe(1);
     });
   });
 });
