@@ -13,6 +13,11 @@ export function useSSE(
   const [isConnected, setIsConnected] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
+  
+  const onMessageRef = useRef(onMessage);
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   useEffect(() => {
     if (!token) return;
@@ -24,8 +29,8 @@ export function useSSE(
 
     const updateEvent = (type: string, data: string) => {
       console.log(`[SSE Event Received] ${type}:`, data);
-      if (onMessage) {
-        onMessage({ type, data });
+      if (onMessageRef.current) {
+        onMessageRef.current({ type, data });
       }
     };
 

@@ -4,16 +4,17 @@ import { useNotifications } from "./useNotifications";
 import ConfirmModal from "./ConfirmModal";
 
 interface Job {
-  id: string;
+  id: string; // Tracks the current job's ID
   traceId?: string;
   type: string;
   imageId: string;
-  status: "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "DELETED";
+  status: "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
   payload: string | null;
   error: string | null;
   attempt: number;
   maxAttempts: number;
-  createdAt: string;
+  createdAt: string; // Pipeline start time
+  jobCreatedAt: string; // Current job start time
   updatedAt: string;
 }
 
@@ -206,14 +207,16 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const sortJobs = (jobsList: Job[]) => {
     const statusOrder: Record<string, number> = {
       PROCESSING: 1,
-      PENDING: 2,
-      PAUSED: 2, // Give PAUSED same priority as PENDING so they don't jump to the bottom
-      FAILED: 4,
+      PENDING: 1,
+      COMPLETED: 1, // Keep completed items on the same level (transitioning between stages)
+      PAUSED: 2,
+      FAILED: 3,
     };
     return [...jobsList].sort((a, b) => {
       const orderA = statusOrder[a.status] || 99;
       const orderB = statusOrder[b.status] || 99;
       if (orderA !== orderB) return orderA - orderB;
+      // Stable sort purely by pipeline creation time
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
   };
@@ -227,7 +230,40 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       if (res.ok) {
         const data = await res.json();
         setIsPaused(data.isPaused);
-        setJobs(sortJobs(data.jobs));
+        
+        setJobs((prevJobs) => {
+          const newJobsList: Array<Omit<Job, 'jobCreatedAt'>> = data.jobs;
+          const pipelinesMap = new Map<string, Job>();
+          
+          // Seed with existing to preserve pipeline-level createdAt
+          prevJobs.forEach(p => pipelinesMap.set(p.imageId, p));
+          
+          newJobsList.forEach(job => {
+            const existing = pipelinesMap.get(job.imageId);
+            if (!existing || new Date(job.createdAt) >= new Date(existing.jobCreatedAt)) {
+              pipelinesMap.set(job.imageId, {
+                ...job,
+                jobCreatedAt: job.createdAt,
+                createdAt: existing ? existing.createdAt : job.createdAt
+              });
+            }
+          });
+          
+          const activeImageIds = new Set(newJobsList.map((j) => j.imageId));
+          const now = Date.now();
+          
+          const finalPipelines = Array.from(pipelinesMap.values()).filter((p) => {
+            if (!activeImageIds.has(p.imageId)) return false;
+            // Filter out completed pipelines lingering in API response (> 10s old)
+            if (p.status === "COMPLETED") {
+              const updatedAt = new Date(p.updatedAt).getTime();
+              if (now - updatedAt > 10000) return false;
+            }
+            return true;
+          });
+          
+          return sortJobs(finalPipelines);
+        });
       }
     } catch (err) {
       console.error("Failed to fetch jobs", err);
@@ -255,42 +291,58 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       if (event.type === "job_update") {
         try {
           const data = JSON.parse(event.data);
-          // eslint-disable-next-line
           setJobs((prev) => {
-            let updated = [...prev];
-            if (data.status === "DELETED") {
-              updated = updated.filter((j) => j.id !== data.jobId && j.id !== data.id);
-            } else {
-              const idToMatch = data.jobId || data.id;
-              // Try matching by traceId first (pipeline grouping)
-              let index = -1;
-              if (data.traceId) {
-                index = updated.findIndex((j) => j.traceId === data.traceId);
-              }
-              // Fall back to matching by id
-              if (index === -1) {
-                index = updated.findIndex((j) => j.id === idToMatch);
-              }
-              if (index !== -1) {
-                updated[index] = { ...updated[index], ...data, id: idToMatch };
-              } else {
-                updated.push({ ...data, id: idToMatch } as Job);
-              }
+            const imageId = data.imageId;
+            if (!imageId) return prev; // Ignore un-groupable jobs
 
-              // If the job just completed, set a timeout to remove it after 10 seconds
-              if (data.status === "COMPLETED") {
-                const traceOrId = data.traceId || idToMatch;
-                setTimeout(() => {
-                  setJobs((currentJobs) => 
-                    currentJobs.filter((j) => j.traceId !== traceOrId && j.id !== traceOrId)
-                  );
-                }, 10000);
-              }
+            if (data.status === "DELETED") {
+              return prev.filter((p) => p.imageId !== imageId);
             }
+
+            const existingIndex = prev.findIndex((p) => p.imageId === imageId);
+            const updated = [...prev];
+
+            if (existingIndex !== -1) {
+              const existing = updated[existingIndex];
+              
+              const dataId = data.jobId || data.id;
+              const isSameJob = dataId === existing.id;
+              const isNewerJob = data.createdAt && new Date(data.createdAt) > new Date(existing.jobCreatedAt);
+              const isSameJobButNewer = isSameJob && (!existing.updatedAt || !data.updatedAt || new Date(data.updatedAt) >= new Date(existing.updatedAt));
+
+              if (isNewerJob || isSameJobButNewer) {
+                updated[existingIndex] = {
+                  ...existing,
+                  ...data,
+                  id: dataId,
+                  jobCreatedAt: data.createdAt || existing.jobCreatedAt,
+                  createdAt: existing.createdAt // preserve pipeline creation time
+                };
+              }
+            } else {
+              // New pipeline tracking
+              updated.push({
+                ...data,
+                id: data.jobId || data.id,
+                jobCreatedAt: data.createdAt || new Date().toISOString(),
+                createdAt: data.createdAt || new Date().toISOString(),
+              });
+            }
+
             return sortJobs(updated);
           });
         } catch (e) {
           console.error("Failed to parse job_update", e);
+        }
+      } else if (event.type === "notification") {
+        try {
+          const data = JSON.parse(event.data);
+          // If we receive the global processing complete notification, gracefully remove the pipeline from UI
+          if (data.type === "SUCCESS" && data.title === "Page Processing Complete" && data.imageId) {
+            setJobs((prev) => prev.filter((p) => p.imageId !== data.imageId));
+          }
+        } catch (e) {
+          console.error("Failed to parse notification", e);
         }
       } else if (event.type === "queue_paused") {
         setIsPaused(true);
@@ -396,7 +448,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
     if (!token) return;
     try {
       const endpoint = job.status === "PAUSED" ? `/api/jobs/${job.id}/resume` : `/api/jobs/${job.id}/pause`;
-      const newStatus = job.status === "PAUSED" ? "PENDING" : "PAUSED";
+      const newStatus: Job["status"] = job.status === "PAUSED" ? "PENDING" : "PAUSED";
       
       // Optimistic update
       setJobs((prev) =>
@@ -428,6 +480,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
 
   const getDisplayStatus = (status: string) => {
     if (isPaused && status === "PENDING") return "PAUSED";
+    if (status === "COMPLETED") return "TRANSITIONING...";
     return status;
   };
 
@@ -438,6 +491,8 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
         return "#4caf50";
       case "PENDING":
         return "#2196f3";
+      case "COMPLETED":
+        return "#2196f3"; // Visual consistency for transitioning pipelines
       case "FAILED":
         return "#f44336";
       case "PAUSED":
