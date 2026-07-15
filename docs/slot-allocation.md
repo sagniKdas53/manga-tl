@@ -35,6 +35,7 @@ You can tune slot allocation using environment variables defined in the worker's
 | `CONCURRENT_JOBS` | The maximum total number of jobs the worker can process at once. | `2` |
 | `MAX_HEAVY_SLOTS` | The subset of concurrent jobs reserved for GPU/Heavy queues. | `1` |
 | `MAX_LIGHT_SLOTS` | The subset of concurrent jobs reserved for Cloud/Light queues. | `CONCURRENT_JOBS - MAX_HEAVY_SLOTS` |
+| `REUSE_IDLE_SLOTS`| When `true`, light jobs can use idle heavy slots for extra throughput without exceeding `CONCURRENT_JOBS`. | `true` |
 
 ### Default Slot Allocation Matrix
 
@@ -68,8 +69,10 @@ graph TD
     Start --> DispatchLight{Dispatch Light?}
     DispatchLight -->|Yes| PollLight[Poll Light Queues]
     PollLight --> SendLight[Dispatch Light Job to Worker]
-    SendLight --> WorkerLightCheck{Worker Light Slots Full? 429}
-    WorkerLightCheck -->|Yes| BlockLight[Pause Light Dispatch]
+    SendLight --> WorkerLightCheck{Worker Light Slots Full?}
+    WorkerLightCheck -->|Yes| OverflowCheck{REUSE_IDLE_SLOTS && Global Capacity Free?}
+    OverflowCheck -->|Yes| SuccessLight[Accept as Overflow]
+    OverflowCheck -->|No| BlockLight[Pause Light Dispatch 429]
     WorkerLightCheck -->|No| SuccessLight[Light Dispatch OK]
 
     BlockHeavy --> End([End Poll Cycle])
@@ -80,4 +83,5 @@ graph TD
 
 1. **Independent Dispatch**: The dispatcher processes heavy and light queues independently.
 2. **Non-Blocking 429s**: If the worker returns a `429 Too Many Requests` status because its heavy slots are full, dispatcher logic for light slots still proceeds.
-3. **Failover & Isolation**: A rate limit or failure on heavy queues never delays or blocks the execution of light queues.
+3. **Idle Slot Overflow**: If `REUSE_IDLE_SLOTS` is enabled, the worker will accept light jobs beyond `MAX_LIGHT_SLOTS` as long as `CONCURRENT_JOBS` isn't exceeded, effectively reusing idle heavy slots.
+4. **Failover & Isolation**: A rate limit or failure on heavy queues never delays or blocks the execution of light queues.

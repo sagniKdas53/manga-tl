@@ -26,6 +26,9 @@ public class Job {
   @Column(name = "id")
   private String id;
 
+  @Column(name = "trace_id")
+  private String traceId;
+
   @Column(nullable = false)
   private String type;
 

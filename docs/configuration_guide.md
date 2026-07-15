@@ -117,9 +117,10 @@ This means a GPU-intensive OCR job and a cloud-only translation job can run **in
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `CONCURRENT_JOBS` | Total max concurrent jobs (heavy + light combined) | `2` |
+| `CONCURRENT_WORKERS`| Total max concurrent jobs/pages (heavy + light combined). Alias: `CONCURRENT_JOBS` | `1` |
 | `MAX_HEAVY_SLOTS` | Max concurrent heavy (GPU-bound) jobs | `1` |
-| `MAX_LIGHT_SLOTS` | Max concurrent light (cloud/fast) jobs | `CONCURRENT_JOBS - MAX_HEAVY_SLOTS` |
+| `MAX_LIGHT_SLOTS` | Max concurrent light (cloud/fast) jobs | `CONCURRENT_WORKERS - MAX_HEAVY_SLOTS` |
+| `REUSE_IDLE_SLOTS`| When `true`, light jobs can use idle heavy slots for extra throughput. | `true` |
 
 #### Default Slot Allocation
 

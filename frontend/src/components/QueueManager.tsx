@@ -5,6 +5,7 @@ import ConfirmModal from "./ConfirmModal";
 
 interface Job {
   id: string;
+  traceId?: string;
   type: string;
   imageId: string;
   status: "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "DELETED";
@@ -42,6 +43,36 @@ const IconDelete = () => (
     <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
+
+const getPipelineProgress = (jobType: string) => {
+  const stages = ["panel-detection", "ocr", "layout", "translation", "render", "qa"];
+  let currentIndex = stages.indexOf(jobType);
+  
+  // If it's not a standard pipeline stage, don't show the dots (or map it loosely)
+  if (currentIndex === -1) {
+    if (jobType === "qa-re-ocr") currentIndex = 1;
+    else if (jobType === "region-redo") currentIndex = 1;
+    else return null;
+  }
+  
+  return (
+    <div style={{ display: "flex", gap: "3px", marginTop: "4px", marginBottom: "4px" }}>
+      {stages.map((stage, i) => (
+        <div 
+          key={i} 
+          style={{ 
+            width: "6px", 
+            height: "6px", 
+            borderRadius: "50%", 
+            backgroundColor: i <= currentIndex ? "var(--primary-color, #2196f3)" : "var(--border-color, #ccc)",
+            opacity: i === currentIndex ? 1 : i < currentIndex ? 0.7 : 0.3
+          }} 
+          title={stage}
+        />
+      ))}
+    </div>
+  );
+};
 
 const renderJobDetails = (job: Job) => {
   if (!job.payload) return null;
@@ -230,14 +261,30 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
             if (data.status === "DELETED") {
               updated = updated.filter((j) => j.id !== data.jobId && j.id !== data.id);
             } else {
-              // jobData might have `jobId` from new payloads, but existing ones have `id`
               const idToMatch = data.jobId || data.id;
-              const index = updated.findIndex((j) => j.id === idToMatch);
+              // Try matching by traceId first (pipeline grouping)
+              let index = -1;
+              if (data.traceId) {
+                index = updated.findIndex((j) => j.traceId === data.traceId);
+              }
+              // Fall back to matching by id
+              if (index === -1) {
+                index = updated.findIndex((j) => j.id === idToMatch);
+              }
               if (index !== -1) {
                 updated[index] = { ...updated[index], ...data, id: idToMatch };
               } else {
-                // Add new job
                 updated.push({ ...data, id: idToMatch } as Job);
+              }
+
+              // If the job just completed, set a timeout to remove it after 10 seconds
+              if (data.status === "COMPLETED") {
+                const traceOrId = data.traceId || idToMatch;
+                setTimeout(() => {
+                  setJobs((currentJobs) => 
+                    currentJobs.filter((j) => j.traceId !== traceOrId && j.id !== traceOrId)
+                  );
+                }, 10000);
               }
             }
             return sortJobs(updated);
@@ -563,21 +610,24 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                         alignItems: "center"
                       }}
                     >
-                      <span>
-                        {job.type === "panel-detection"
-                          ? "Panel Detection"
-                          : job.type === "ocr"
-                            ? "OCR Processing"
-                            : job.type === "translation"
-                              ? "Translation"
-                              : job.type === "qa"
-                                ? "Quality Assurance"
-                                : job.type === "qa-re-ocr"
-                                  ? "QA Re-OCR"
-                                  : job.type === "region-redo"
-                                    ? "Region Redo"
-                                    : job.type.toUpperCase()}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <span>
+                          {job.type === "panel-detection"
+                            ? "Panel Detection"
+                            : job.type === "ocr"
+                              ? "OCR Processing"
+                              : job.type === "translation"
+                                ? "Translation"
+                                : job.type === "qa"
+                                  ? "Quality Assurance"
+                                  : job.type === "qa-re-ocr"
+                                    ? "QA Re-OCR"
+                                    : job.type === "region-redo"
+                                      ? "Region Redo"
+                                      : job.type.toUpperCase()}
+                        </span>
+                        {getPipelineProgress(job.type)}
+                      </div>
                       <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "normal" }}>
                         Attempt {job.attempt}/{job.maxAttempts}
                       </span>
