@@ -212,7 +212,7 @@ public class PageService {
         imageRepository.save(img);
       });
       log.info("Successfully generated and uploaded WebP thumbnail to {}", thumbnailStoragePath);
-    } catch (Exception e) {
+    } catch (java.io.IOException | RuntimeException | io.minio.errors.MinioException | java.security.NoSuchAlgorithmException | java.security.InvalidKeyException e) {
       log.error("Failed to generate async thumbnail for image {}", imageId, e);
     }
   }

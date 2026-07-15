@@ -292,7 +292,6 @@ describe("SeriesDetails Component", () => {
           sourceLanguage: "ja",
           targetLanguage: "en",
           readingDirection: "rtl",
-          coverImageUrl: "http://example.com/op.jpg",
           ocrProvider: null,
           ocrModel: null,
           tlProvider: null,

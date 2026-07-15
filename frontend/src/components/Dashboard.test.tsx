@@ -154,7 +154,6 @@ describe("Dashboard Component", () => {
           sourceLanguage: "ja",
           targetLanguage: "en",
           readingDirection: "rtl",
-          coverImageUrl: null,
           ocrProvider: null,
           ocrModel: null,
           tlProvider: null,
@@ -210,7 +209,6 @@ describe("Dashboard Component", () => {
           sourceLanguage: "ja",
           targetLanguage: "en",
           readingDirection: "rtl",
-          coverImageUrl: "http://example.com/op.jpg",
           ocrProvider: null,
           ocrModel: null,
           tlProvider: null,
@@ -399,10 +397,6 @@ describe("Dashboard Component", () => {
     fireEvent.change(screen.getByPlaceholderText("e.g. My Hero Academia"), {
       target: { value: "New Manga" },
     });
-    fireEvent.change(
-      screen.getByPlaceholderText("Leave empty for default cover"),
-      { target: { value: "http://example.com/cover.jpg" } },
-    );
 
     // Change selects
     const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
@@ -431,7 +425,6 @@ describe("Dashboard Component", () => {
           sourceLanguage: "ko",
           targetLanguage: "zh-TW",
           readingDirection: "ltr",
-          coverImageUrl: "http://example.com/cover.jpg",
           ocrProvider: null,
           ocrModel: null,
           tlProvider: null,
