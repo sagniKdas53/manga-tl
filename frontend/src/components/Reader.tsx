@@ -277,7 +277,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const initialTouchPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
 
-  const { notifications } = useNotifications();
+  const { subscribe } = useNotifications();
   const { showToast, showError } = useToast();
 
   const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
@@ -290,30 +290,40 @@ export const Reader: React.FC<ReaderProps> = ({
     };
   }, []);
 
-  // Listen for new notifications and refresh page if processing completed
-  const latestNotificationId =
-    notifications.length > 0 ? notifications[0].id : null;
+  // Listen for job_update events and refresh page if processing completed
   useEffect(() => {
-    if (notifications.length > 0) {
-      const latest = notifications[0];
-      if (latest && selectedPage) {
-        const isCurrentImage =
-          !latest.imageId || latest.imageId === selectedPage.imageId;
-        const isLayerUpdate =
-          latest.title === "OCR Completed" ||
-          latest.title === "Translation Completed";
-        if (isCurrentImage && isLayerUpdate) {
-          console.log(
-            `SSE event: Reloading page layers due to ${latest.title}`,
-          );
-          // Force refetch of page details by clearing the loaded image ID
-          Promise.resolve().then(() => {
-            setLoadedImageId(null);
-          });
+    return subscribe((event) => {
+      if (event.type === "job_update") {
+        try {
+          const data = JSON.parse(event.data);
+          if (
+            data.status === "COMPLETED" &&
+            selectedPage &&
+            data.imageId === selectedPage.imageId
+          ) {
+            const relevantTypes = [
+              "ocr",
+              "translation",
+              "region-redo-ocr",
+              "region-redo-tl",
+            ];
+            if (relevantTypes.includes(data.type)) {
+              console.log(
+                `SSE event: Reloading page layers due to ${data.type} job completion`,
+              );
+              // Force refetch of page details by clearing the loaded image ID
+              Promise.resolve().then(() => {
+                setLoadedImageId(null);
+              });
+              showToast("New layers available — refreshed", "success");
+            }
+          }
+        } catch (e) {
+          console.error("Failed to parse job_update in Reader", e);
         }
       }
-    }
-  }, [latestNotificationId, selectedPage, notifications]);
+    });
+  }, [subscribe, selectedPage, showToast]);
 
   // Persistence effects
   useEffect(() => {

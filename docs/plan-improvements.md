@@ -72,7 +72,6 @@ pyright .
 pytest tests/ --cov=. --cov-report=xml --cov-report=html
 ```
 
-
 ---
 
 ## Phase 0 — CI Foundation (Do First) ✅ Completed
@@ -303,14 +302,14 @@ As we integrated the SSE-based Job Queue system, we resolved several critical re
 
 ---
 
-## Phase B — Reader Auto-Refresh via SSE
+## Phase B — Reader Auto-Refresh via SSE ✅ Completed
 
 ### B.1 Reader Layer Auto-Refresh
 
 **Files**: `Reader.tsx`, `useSSE.ts`
 
 - Subscribe to `job_update` events in the Reader
-- When a `COMPLETED` event arrives for the current page's `imageId` with type `ocr`, `translation`, `render`, or `qa`:
+- When a `COMPLETED` event arrives for the current page's `imageId` with type `ocr`, `translation`, `region-redo-ocr`, `region-redo-tl`:
   - Auto-refresh the layers panel
   - Show a subtle toast: "New layers available — refreshed"
 - Remove any existing manual "Refresh Gallery" button dependency
@@ -568,6 +567,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - **Use pre-built MUI components wherever possible** to reduce custom CSS and offload design decisions to MUI's defaults
 - **Remove** most of `index.css` once migration is complete — keep only truly custom styles
 - D.8 (theme improvements) is **subsumed** by this item — the palette work becomes MUI theme configuration
+
 ### D.13 Global Toast Notifications for Deletion Restrictions
 
 **Files**: `SeriesDetails.tsx`, `Dashboard.tsx`, `ChapterGallery.tsx`, `Reader.tsx`, `QueueManager.tsx`, `utils.ts`

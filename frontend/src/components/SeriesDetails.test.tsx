@@ -8,6 +8,12 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => mockNavigate,
 }));
 
+vi.mock("./ToastContext", () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+  }),
+}));
+
 const mockSafeFetch = vi.fn();
 vi.mock("../utils", () => ({
   safeFetch: (url: string, ...args: unknown[]) => {

@@ -8,6 +8,14 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => mockNavigate,
 }));
 
+const mockShowToast = vi.fn();
+vi.mock("./ToastContext", () => ({
+  useToast: () => ({
+    showToast: mockShowToast,
+    showError: vi.fn(),
+  }),
+}));
+
 const mockSafeFetch = vi.fn();
 vi.mock("../utils", () => ({
   safeFetch: (url: string, ...args: unknown[]) => {
@@ -305,7 +313,6 @@ describe("Dashboard Component", () => {
 
   it("shows alert when deleting series fails", async () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: false });
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
 
     render(
       <Dashboard
@@ -326,10 +333,8 @@ describe("Dashboard Component", () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith("Failed to delete series");
+      expect(mockShowToast).toHaveBeenCalledWith("Failed to delete series", "error");
     });
-
-    alertSpy.mockRestore();
   });
 
   it("handles error when deleting a series", async () => {
