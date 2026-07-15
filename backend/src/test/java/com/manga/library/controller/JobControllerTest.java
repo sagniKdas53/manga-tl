@@ -40,24 +40,17 @@ public class JobControllerTest {
     Job job = Job.builder().id("job1").type("ocr").status("PENDING").build();
     when(jobRepository.findByStatusInOrderByCreatedAtAsc(any())).thenReturn(List.of(job));
 
+    ValueOperations<String, String> valOps = mock(ValueOperations.class);
+    when(redisTemplate.opsForValue()).thenReturn(valOps);
+    when(valOps.get("system:queue:paused")).thenReturn("false");
+
     mockMvc
         .perform(get("/api/jobs"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].id").value("job1"))
-        .andExpect(jsonPath("$[0].type").value("ocr"))
-        .andExpect(jsonPath("$[0].status").value("PENDING"));
-  }
-
-  @Test
-  public void testGetQueueStatus() throws Exception {
-    ValueOperations<String, String> valOps = mock(ValueOperations.class);
-    when(redisTemplate.opsForValue()).thenReturn(valOps);
-    when(valOps.get("system:queue:paused")).thenReturn("true");
-
-    mockMvc
-        .perform(get("/api/jobs/status"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.isPaused").value(true));
+        .andExpect(jsonPath("$.isPaused").value(false))
+        .andExpect(jsonPath("$.jobs[0].id").value("job1"))
+        .andExpect(jsonPath("$.jobs[0].type").value("ocr"))
+        .andExpect(jsonPath("$.jobs[0].status").value("PENDING"));
   }
 
   @Test
