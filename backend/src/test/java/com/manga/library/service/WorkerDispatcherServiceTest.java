@@ -196,30 +196,25 @@ public class WorkerDispatcherServiceTest {
   public void testDispatchJobs_IndependentSlots_HeavyRejectedLightAccepted() throws Exception {
     when(valueOps.get("system:queue:paused")).thenReturn("false");
 
+    // Heavy queue has a job, light queue has a job
     when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}");
     when(listOps.leftPop("queue:region-redo-tl"))
         .thenReturn("{\"id\": \"light1\"}")
         .thenReturn(null);
 
+    // First call (heavy) → 429, second call (light) → 202
+    HttpResponse<String> heavyResponse = mock(HttpResponse.class);
+    when(heavyResponse.statusCode()).thenReturn(429);
+    HttpResponse<String> lightResponse = mock(HttpResponse.class);
+    when(lightResponse.statusCode()).thenReturn(202);
+
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-        .thenAnswer(
-            invocation -> {
-              HttpRequest request = invocation.getArgument(0);
-              String body = request.bodyPublisher().get().toString();
-              HttpResponse<String> response = mock(HttpResponse.class);
-              if (body.contains("qa-re-ocr")
-                  || body.contains("region-redo-ocr")
-                  || body.contains("\"queue:ocr\"")
-                  || body.contains("panel-detection")) {
-                when(response.statusCode()).thenReturn(429);
-              } else {
-                when(response.statusCode()).thenReturn(202);
-              }
-              return response;
-            });
+        .thenReturn(heavyResponse)
+        .thenReturn(lightResponse);
 
     workerDispatcherService.dispatchJobs();
 
+    // Heavy job was pushed back, light job was accepted
     verify(listOps).leftPush("queue:qa-re-ocr", "{\"id\": \"heavy1\"}");
     verify(listOps, times(2)).leftPop("queue:region-redo-tl");
     verify(listOps, never()).leftPush(eq("queue:region-redo-tl"), anyString());
@@ -229,29 +224,23 @@ public class WorkerDispatcherServiceTest {
   public void testDispatchJobs_IndependentSlots_LightRejectedHeavyAccepted() throws Exception {
     when(valueOps.get("system:queue:paused")).thenReturn("false");
 
+    // Heavy queue has a job, light queue has a job
     when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}").thenReturn(null);
     when(listOps.leftPop("queue:region-redo-tl")).thenReturn("{\"id\": \"light1\"}");
 
+    // First call (heavy) → 202, second call (light) → 429
+    HttpResponse<String> heavyResponse = mock(HttpResponse.class);
+    when(heavyResponse.statusCode()).thenReturn(202);
+    HttpResponse<String> lightResponse = mock(HttpResponse.class);
+    when(lightResponse.statusCode()).thenReturn(429);
+
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-        .thenAnswer(
-            invocation -> {
-              HttpRequest request = invocation.getArgument(0);
-              String body = request.bodyPublisher().get().toString();
-              HttpResponse<String> response = mock(HttpResponse.class);
-              if (body.contains("region-redo-tl")
-                  || body.contains("\"queue:qa\"")
-                  || body.contains("render")
-                  || body.contains("translation")
-                  || body.contains("layout")) {
-                when(response.statusCode()).thenReturn(429);
-              } else {
-                when(response.statusCode()).thenReturn(202);
-              }
-              return response;
-            });
+        .thenReturn(heavyResponse)
+        .thenReturn(lightResponse);
 
     workerDispatcherService.dispatchJobs();
 
+    // Heavy job was accepted, light job was pushed back
     verify(listOps, times(2)).leftPop("queue:qa-re-ocr");
     verify(listOps, never()).leftPush(eq("queue:qa-re-ocr"), anyString());
     verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
