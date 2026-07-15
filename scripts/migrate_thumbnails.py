@@ -84,11 +84,11 @@ def process_image(image_record):
         if img.mode not in ('RGB', 'RGBA'):
             img = img.convert('RGBA')
             
-        img.thumbnail((THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION), Image.Resampling.BICUBIC)
+        img.thumbnail((THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION), Image.Resampling.LANCZOS)
         
         # 3. Save to webp
         webp_io = io.BytesIO()
-        img.save(webp_io, format="WEBP", quality=80)
+        img.save(webp_io, format="WEBP", quality=85)
         webp_bytes = webp_io.getvalue()
         
         # 4. Upload new thumbnail

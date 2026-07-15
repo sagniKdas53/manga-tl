@@ -154,14 +154,15 @@ public class PageService {
       int originalWidth = reader.getWidth(0);
       int originalHeight = reader.getHeight(0);
 
-      int targetWidth = 300;
+      int targetWidth = 512;
       double ratio = (double) originalHeight / originalWidth;
       int targetHeight = (int) (targetWidth * ratio);
       if (targetHeight <= 0) targetHeight = 1;
 
-      // Subsampling
+      // Subsampling: only subsample if the image is extremely large to save memory,
+      // but keep it at least 3x the target width for high-quality downscaling
       javax.imageio.ImageReadParam param = reader.getDefaultReadParam();
-      int scale = originalWidth / targetWidth;
+      int scale = originalWidth / (targetWidth * 3);
       if (scale > 1) {
         param.setSourceSubsampling(scale, scale, 0, 0);
       }
@@ -170,18 +171,37 @@ public class PageService {
       reader.dispose();
       iis.close();
 
+      // High-quality area-averaging scaling
+      java.awt.Image scaled = subsampledImage.getScaledInstance(targetWidth, targetHeight, java.awt.Image.SCALE_SMOOTH);
+
       java.awt.image.BufferedImage thumbnail = new java.awt.image.BufferedImage(
           targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
 
       java.awt.Graphics2D g = thumbnail.createGraphics();
-      g.setRenderingHint(
-          java.awt.RenderingHints.KEY_INTERPOLATION,
-          java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-      g.drawImage(subsampledImage, 0, 0, targetWidth, targetHeight, null);
+      g.drawImage(scaled, 0, 0, null);
       g.dispose();
 
       java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-      javax.imageio.ImageIO.write(thumbnail, "webp", out);
+      java.util.Iterator<javax.imageio.ImageWriter> writers = javax.imageio.ImageIO.getImageWritersByFormatName("webp");
+      if (writers.hasNext()) {
+          javax.imageio.ImageWriter writer = writers.next();
+          javax.imageio.ImageWriteParam writeParam = writer.getDefaultWriteParam();
+          if (writeParam.canWriteCompressed()) {
+              writeParam.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+              String[] types = writeParam.getCompressionTypes();
+              if (types != null && types.length > 0) {
+                  writeParam.setCompressionType(types[0]); // Lossy
+              }
+              writeParam.setCompressionQuality(0.85f);
+          }
+          javax.imageio.stream.ImageOutputStream ios = javax.imageio.ImageIO.createImageOutputStream(out);
+          writer.setOutput(ios);
+          writer.write(null, new javax.imageio.IIOImage(thumbnail, null, null), writeParam);
+          ios.close();
+          writer.dispose();
+      } else {
+          javax.imageio.ImageIO.write(thumbnail, "webp", out);
+      }
       byte[] thumbBytes = out.toByteArray();
 
       String thumbnailStoragePath = "thumbnails/" + uuid + ".webp";
