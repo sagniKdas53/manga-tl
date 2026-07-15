@@ -547,6 +547,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           if (res.ok) {
             // Filter locally
             setPages((prev) => prev.filter((p) => p.id !== pageId));
+            showToast("Page deleted successfully", "success");
             // Re-fetch pages list to verify orders
             if (selectedChapter) {
               const r = await safeFetch(
@@ -560,11 +561,14 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
                 setPages(data);
               }
             }
+          } else if (res.status === 403) {
+            showToast("You don't have permission to delete this page.", "error");
           } else {
-            alert("Failed to delete page");
+            showToast("Failed to delete page", "error");
           }
         } catch (err) {
           console.error("Error deleting page:", err);
+          showToast("Error deleting page", "error");
         }
       },
     });

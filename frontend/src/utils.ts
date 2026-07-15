@@ -38,7 +38,7 @@ window.fetch = async (
   for (let i = 0; i <= MAX_RETRIES; i++) {
     try {
       const response = await originalFetch(targetUrl, init);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         if (localStorage.getItem("manga_user")) {
           localStorage.removeItem("manga_user");
           window.location.pathname = context + "/login"; // Safely redirects without Open Redirect warning
