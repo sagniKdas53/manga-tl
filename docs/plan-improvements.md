@@ -329,7 +329,7 @@ cd frontend && npm run lint && npm run test:coverage && npm run build
 
 ---
 
-## Phase C — Thumbnail & Image Serving
+## Phase C — Thumbnail & Image Serving ✅ Completed
 
 ### C.1 Upgrade Thumbnail Generation to WebP
 
@@ -394,6 +394,14 @@ Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPi
 - Existing behavior is already resilient: thumbnail failure doesn't block upload (lines 546-548)
 
 ### ✅ Checkpoint C — Thumbnails
+
+**Bugs Found & Resolved:**
+- **Bug**: WebP thumbnails were pixelated and aliased due to aggressive image subsampling (`setSourceSubsampling`) in Java before downscaling.
+- **Fix**: Replaced pure subsampling with a hybrid approach (subsample up to 3x target size, then use `Image.SCALE_SMOOTH` area-averaging) for crisp, high-quality thumbnails. Also updated the python migration script to use `LANCZOS` filter.
+- **Bug**: The async WebP generation crashed in the background thread with `IllegalStateException: No compression type set!`, causing thumbnails to never generate. This resulted in missing `thumbnail_storage_path` values in the DB, causing Chapter/Series views to have no covers.
+- **Fix**: Added explicit `setCompressionType()` call before setting the compression quality in `PageService.java`.
+- **Bug**: Fallback `processing-thumbnail.webp` looked ugly and didn't match the standard UI pattern for uninitialized items.
+- **Fix**: Removed the static fallback logic. If a thumbnail isn't generated yet, the backend correctly omits the URL or returns `404 Not Found`, prompting the frontend to seamlessly render its CSS `manga-cover-placeholder` element instead.
 
 **Automated tests:**
 
