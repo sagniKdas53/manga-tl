@@ -283,15 +283,6 @@ public class PageController {
                 minioService.uploadFile(storagePath, originalImageBytes, contentType);
 
                 String thumbnailStoragePath = null;
-                try {
-                  byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
-                  if (thumbBytes != null) {
-                    thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-                    minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
-                  }
-                } catch (Exception e) {
-                  log.error("Failed to generate/upload thumbnail in ZIP import", e);
-                }
 
                 image =
                     Image.builder()
@@ -302,6 +293,7 @@ public class PageController {
                         .createdBy(user)
                         .build();
                 image = imageRepository.save(image);
+                pageService.generateAndSaveThumbnailAsync(image.getId(), uuid, originalImageBytes);
               }
               page.setImage(image);
               page = pageRepository.save(page);
@@ -327,15 +319,6 @@ public class PageController {
               minioService.uploadFile(storagePath, originalImageBytes, contentType);
 
               String thumbnailStoragePath = null;
-              try {
-                byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
-                if (thumbBytes != null) {
-                  thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-                  minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
-                }
-              } catch (Exception e) {
-                log.error("Failed to generate/upload thumbnail in ZIP import", e);
-              }
 
               page =
                   pageService.createPageAndImage(
@@ -346,6 +329,7 @@ public class PageController {
                       pageNumber,
                       fileHash,
                       user);
+              pageService.generateAndSaveThumbnailAsync(page.getImage().getId(), uuid, originalImageBytes);
             }
           }
 
@@ -532,15 +516,6 @@ public class PageController {
             minioService.uploadFile(storagePath, originalBytes, contentType);
 
             String thumbnailStoragePath = null;
-            try {
-              byte[] thumbBytes = pageService.generateThumbnail(originalBytes);
-              if (thumbBytes != null) {
-                thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-                minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
-              }
-            } catch (Exception e) {
-              log.error("Failed to generate thumbnail for page in zip", e);
-            }
 
             Page pg =
                 pageService.createPageAndImage(
@@ -551,6 +526,7 @@ public class PageController {
                     nextNum,
                     fileHash,
                     user);
+            pageService.generateAndSaveThumbnailAsync(pg.getImage().getId(), uuid, originalBytes);
 
             if (firstPage == null) firstPage = pg;
 
@@ -646,16 +622,6 @@ public class PageController {
 
       // Generate and upload thumbnail
       String thumbnailStoragePath = null;
-      try {
-        byte[] thumbBytes = pageService.generateThumbnail(originalBytes);
-        if (thumbBytes != null) {
-          thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-          minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
-          log.info("Successfully generated and uploaded thumbnail to {}", thumbnailStoragePath);
-        }
-      } catch (Exception e) {
-        log.error("Failed to generate/upload thumbnail, proceeding without it", e);
-      }
 
       // Call transactional service to save image and page records
       Page page =
@@ -667,6 +633,7 @@ public class PageController {
               pageNumber,
               fileHash,
               user);
+      pageService.generateAndSaveThumbnailAsync(page.getImage().getId(), uuid, originalBytes);
 
       // Trigger pipeline
       jobCoordinatorService.startPipeline(page.getImage().getId(), chapter.getId());
@@ -829,19 +796,25 @@ public class PageController {
               .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
       String storagePath = image.getThumbnailStoragePath();
-      String contentType = "image/jpeg"; // generated thumbnails are always JPEG
+      String contentType = "image/webp";
 
       if (storagePath == null || storagePath.trim().isEmpty()) {
-        // Fall back to original file if no thumbnail exists
-        storagePath = image.getStoragePath();
-        String filename = image.getFilename().toLowerCase();
-        contentType = "image/png";
-        if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
-          contentType = "image/jpeg";
-        } else if (filename.endsWith(".webp")) {
-          contentType = "image/webp";
-        } else if (filename.endsWith(".gif")) {
-          contentType = "image/gif";
+        org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
+            outputStream -> {
+              try (java.io.InputStream is = getClass().getResourceAsStream("/static/processing-thumbnail.webp")) {
+                if (is != null) {
+                  is.transferTo(outputStream);
+                }
+              } catch (Exception e) {
+                log.error("Error streaming processing thumbnail", e);
+              }
+            };
+        return ResponseEntity.ok()
+            .contentType(org.springframework.http.MediaType.parseMediaType("image/webp"))
+            .body(responseBody);
+      } else {
+        if (storagePath.toLowerCase().endsWith(".jpg") || storagePath.toLowerCase().endsWith(".jpeg")) {
+            contentType = "image/jpeg";
         }
       }
 
@@ -1147,15 +1120,6 @@ public class PageController {
               minioService.uploadFile(storagePath, originalImageBytes, contentType);
 
               String thumbnailStoragePath = null;
-              try {
-                byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
-                if (thumbBytes != null) {
-                  thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-                  minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
-                }
-              } catch (Exception e) {
-                log.error("Failed to generate thumbnail for imported project", e);
-              }
 
               image =
                   Image.builder()
@@ -1166,6 +1130,7 @@ public class PageController {
                       .createdBy(user)
                       .build();
               image = imageRepository.save(image);
+              pageService.generateAndSaveThumbnailAsync(image.getId(), uuid, originalImageBytes);
             }
             page.setImage(image);
             page = pageRepository.save(page);
@@ -1202,15 +1167,6 @@ public class PageController {
         minioService.uploadFile(storagePath, originalImageBytes, contentType);
 
         String thumbnailStoragePath = null;
-        try {
-          byte[] thumbBytes = pageService.generateThumbnail(originalImageBytes);
-          if (thumbBytes != null) {
-            thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-            minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
-          }
-        } catch (Exception e) {
-          log.error("Failed to generate thumbnail for imported project", e);
-        }
 
         page =
             pageService.createPageAndImage(
@@ -1221,6 +1177,7 @@ public class PageController {
                 pageNumber,
                 fileHash,
                 user);
+        pageService.generateAndSaveThumbnailAsync(page.getImage().getId(), uuid, originalImageBytes);
       }
 
       int importedLayersCount = 0;

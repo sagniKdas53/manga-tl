@@ -26,7 +26,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [showSeriesModal, setShowSeriesModal] = useState(false);
   const [editingSeries, setEditingSeries] = useState<Series | null>(null);
   const [newSeriesTitle, setNewSeriesTitle] = useState("");
-  const [newSeriesCoverUrl, setNewSeriesCoverUrl] = useState("");
   const [newSeriesLang, setNewSeriesLang] = useState("ja");
   const [newSeriesTargetLang, setNewSeriesTargetLang] = useState("en");
   const [newSeriesDirection, setNewSeriesDirection] = useState("rtl");
@@ -95,7 +94,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     e.stopPropagation();
     setEditingSeries(s);
     setNewSeriesTitle(s.title);
-    setNewSeriesCoverUrl(s.coverImageUrl || "");
     setNewSeriesLang(s.sourceLanguage || s.originalLanguage || "ja");
     setNewSeriesTargetLang(s.targetLanguage || "en");
     setNewSeriesDirection(s.readingDirection);
@@ -114,7 +112,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const handleNewSeriesClick = () => {
     setEditingSeries(null);
     setNewSeriesTitle("");
-    setNewSeriesCoverUrl("");
     setNewSeriesLang("ja");
     setNewSeriesTargetLang("en");
     setNewSeriesDirection("rtl");
@@ -134,7 +131,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setShowSeriesModal(false);
     setEditingSeries(null);
     setNewSeriesTitle("");
-    setNewSeriesCoverUrl("");
     setNewSeriesLang("ja");
     setNewSeriesTargetLang("en");
   };
@@ -158,7 +154,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           sourceLanguage: newSeriesLang,
           targetLanguage: newSeriesTargetLang,
           readingDirection: newSeriesDirection,
-          coverImageUrl: newSeriesCoverUrl || null,
           ocrProvider: newOcrProvider || null,
           ocrModel: newOcrModel || null,
           tlProvider: newTlProvider || null,
@@ -181,7 +176,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         setShowSeriesModal(false);
         setEditingSeries(null);
         setNewSeriesTitle("");
-        setNewSeriesCoverUrl("");
       }
     } catch (err) {
       console.error("Error saving series:", err);
@@ -358,16 +352,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   required
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">Cover Image URL (Optional)</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={newSeriesCoverUrl}
-                  onChange={(e) => setNewSeriesCoverUrl(e.target.value)}
-                  placeholder="Leave empty for default cover"
-                />
-              </div>
+
               <div className="form-group">
                 <label className="form-label">Source Language</label>
                 <select

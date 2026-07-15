@@ -34,7 +34,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   // Local states for series edit modal
   const [showSeriesModal, setShowSeriesModal] = useState(false);
   const [newSeriesTitle, setNewSeriesTitle] = useState("");
-  const [newSeriesCoverUrl, setNewSeriesCoverUrl] = useState("");
   const [newSeriesLang, setNewSeriesLang] = useState("ja");
   const [newSeriesTargetLang, setNewSeriesTargetLang] = useState("en");
   const [newSeriesDirection, setNewSeriesDirection] = useState("rtl");
@@ -160,7 +159,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   // --- SERIES ACTIONS ---
   const handleEditSeriesClick = () => {
     setNewSeriesTitle(selectedSeries.title);
-    setNewSeriesCoverUrl(selectedSeries.coverImageUrl || "");
     setNewSeriesLang(
       selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja",
     );
@@ -193,7 +191,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           sourceLanguage: newSeriesLang,
           targetLanguage: newSeriesTargetLang,
           readingDirection: newSeriesDirection,
-          coverImageUrl: newSeriesCoverUrl || null,
           ocrProvider: newSeriesOcrProvider || null,
           ocrModel: newSeriesOcrModel || null,
           tlProvider: newSeriesTlProvider || null,
@@ -760,15 +757,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   value={newSeriesTitle}
                   onChange={(e) => setNewSeriesTitle(e.target.value)}
                   required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Cover Image URL (Optional)</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={newSeriesCoverUrl}
-                  onChange={(e) => setNewSeriesCoverUrl(e.target.value)}
                 />
               </div>
               <div className="form-group">

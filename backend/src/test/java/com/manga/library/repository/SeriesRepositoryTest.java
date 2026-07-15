@@ -27,7 +27,6 @@ public class SeriesRepositoryTest {
             .sourceLanguage("ja")
             .targetLanguage("en")
             .readingDirection("rtl")
-            .coverImageUrl("http://example.com/cover.png")
             .build();
 
     Series saved = seriesRepository.save(series);

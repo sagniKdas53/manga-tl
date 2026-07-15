@@ -35,8 +35,6 @@ public class Series {
   @Column(name = "reading_direction", nullable = false)
   private String readingDirection; // rtl | ltr | ttb
 
-  @Column(name = "cover_image_url")
-  private String coverImageUrl;
 
   @Column(name = "metadata_json")
   @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
