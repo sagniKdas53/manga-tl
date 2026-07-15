@@ -688,18 +688,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           <div style={{ display: "flex", gap: "12px" }}>
             <button
               className="btn btn-secondary"
-              onClick={() => {
-                safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
-                  headers: { Authorization: `Bearer ${user.token}` },
-                })
-                  .then((r) => r.json())
-                  .then((data) => setPages(data));
-              }}
-            >
-              Refresh Gallery
-            </button>
-            <button
-              className="btn btn-secondary"
               onClick={() =>
                 document.getElementById("project-import-upload")?.click()
               }

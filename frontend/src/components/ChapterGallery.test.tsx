@@ -229,36 +229,7 @@ describe("ChapterGallery Component", () => {
     });
   });
 
-  it("handles refreshing gallery", async () => {
-    mockSafeFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([{ ...mockPages[0], id: "p2" }]),
-    });
 
-    render(
-      <ChapterGallery
-        user={mockUser}
-        selectedSeries={mockSeries}
-        selectedChapter={mockChapter}
-        setSelectedChapter={mockSetSelectedChapter}
-        pages={mockPages}
-        setPages={mockSetPages}
-        onSelectPage={mockOnSelectPage}
-        isLoadingDetails={false}
-      />,
-    );
-
-    const refreshBtn = screen.getByRole("button", { name: "Refresh Gallery" });
-    fireEvent.click(refreshBtn);
-
-    await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith(
-        "/api/chapters/c1/pages",
-        expect.any(Object),
-      );
-      expect(mockSetPages).toHaveBeenCalled();
-    });
-  });
 
   it("handles exporting chapter zip", async () => {
     mockSafeFetch.mockResolvedValueOnce({

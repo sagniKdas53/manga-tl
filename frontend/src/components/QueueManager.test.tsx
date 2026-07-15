@@ -15,6 +15,12 @@ vi.mock("./useNotifications", () => ({
   useNotifications: vi.fn(),
 }));
 
+vi.mock("./ToastContext", () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+  }),
+}));
+
 describe("QueueManager", () => {
   const mockToken = "test-token";
 
@@ -89,10 +95,9 @@ describe("QueueManager", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Clear Queue")).toBeInTheDocument();
+      expect(screen.getByText("OCR Processing")).toBeInTheDocument();
+      expect(screen.getByText("Translation")).toBeInTheDocument();
     });
-
-    expect(screen.getByText("OCR Processing")).toBeInTheDocument();
-    expect(screen.getByText("Translation")).toBeInTheDocument();
 
     expect(
       screen.getByText("My Manga - The Beginning (Ch.2) › Page 3"),

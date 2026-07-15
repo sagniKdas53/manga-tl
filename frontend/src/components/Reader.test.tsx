@@ -9,13 +9,15 @@ vi.mock("react-router-dom", () => ({
   useParams: () => ({ pageNumber: "1" }),
 }));
 
+export const mockSubscribe = vi.fn(() => vi.fn());
 vi.mock("./useNotifications", () => ({
-  useNotifications: () => ({ notifications: [] }),
+  useNotifications: () => ({ notifications: [], subscribe: mockSubscribe }),
 }));
 
+export const mockShowToast = vi.fn();
 vi.mock("./ToastContext", () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: mockShowToast,
     showSuccess: vi.fn(),
     showError: vi.fn(),
   }),
@@ -66,6 +68,8 @@ describe("Reader Component", () => {
   beforeEach(() => {
     localStorage.clear();
     mockSafeFetch.mockReset();
+    mockSubscribe.mockClear();
+    mockShowToast.mockClear();
     mockSafeFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve([]),
@@ -155,5 +159,35 @@ describe("Reader Component", () => {
       json: () => Promise.resolve({ id: "l2", type: "sfx", name: "SFX Layer" }),
     });
     fireEvent.click(screen.getByTitle("Add SFX Layer"));
+  });
+
+  it("reloads layers and shows toast on job_update SSE event", async () => {
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />,
+    );
+
+    await screen.findByText(/Test Series/);
+
+    const sseCallback = mockSubscribe.mock.calls[0][0];
+    expect(sseCallback).toBeDefined();
+
+    // Trigger SSE event
+    sseCallback({
+      type: "job_update",
+      data: JSON.stringify({
+        status: "COMPLETED",
+        imageId: "img1",
+        type: "ocr",
+      }),
+    });
+
+    expect(mockShowToast).toHaveBeenCalledWith("New layers available — refreshed", "success");
   });
 });
