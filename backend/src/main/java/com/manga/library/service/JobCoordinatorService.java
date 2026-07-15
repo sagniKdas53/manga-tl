@@ -106,6 +106,10 @@ public class JobCoordinatorService {
   @Transactional
   public void startPipeline(UUID imageId, UUID chapterId) {
     log.info("Starting pipeline for image {} and chapter {}", imageId, chapterId);
+    if (redisTemplate != null && redisTemplate.opsForValue() != null) {
+      String traceId = UUID.randomUUID().toString();
+      redisTemplate.opsForValue().set("pipeline:trace:" + imageId, traceId, Duration.ofHours(2));
+    }
     enqueueJob("panel-detection", imageId, chapterId);
   }
 
@@ -141,10 +145,22 @@ public class JobCoordinatorService {
       String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
     try {
+      String traceId = null;
+      if (redisTemplate != null && redisTemplate.opsForValue() != null) {
+        traceId = redisTemplate.opsForValue().get("pipeline:trace:" + imageId);
+        if (traceId == null) {
+          traceId = UUID.randomUUID().toString();
+          redisTemplate.opsForValue().set("pipeline:trace:" + imageId, traceId, Duration.ofHours(2));
+        }
+      } else {
+        traceId = UUID.randomUUID().toString();
+      }
+
       String jobId = UUID.randomUUID().toString();
       Job dbJob =
           Job.builder()
               .id(jobId)
+              .traceId(traceId)
               .type(jobType)
               .imageId(imageId)
               .status("PENDING")
@@ -153,6 +169,7 @@ public class JobCoordinatorService {
               .build();
       Map<String, Object> job = new HashMap<>();
       job.put("jobId", jobId);
+      job.put("traceId", traceId);
       job.put("type", jobType);
       job.put("imageId", imageId.toString());
       job.put("priority", priority);
@@ -850,6 +867,12 @@ public class JobCoordinatorService {
     } else if ("translation".equals(jobType)) {
       redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "manual-re-translate");
     }
+    
+    // Clear the traceId so a fresh one is generated for the new pipeline run
+    if (redisTemplate != null) {
+      redisTemplate.delete("pipeline:trace:" + imageId);
+    }
+    
     enqueueJob(jobType, imageId, chapterId);
   }
 
@@ -908,6 +931,9 @@ public class JobCoordinatorService {
     if (manualChangesDone) {
       log.info(
           "Received Render callback for image: {}. Skipping QA as manual edits exist.", imageId);
+      if (redisTemplate != null) {
+        redisTemplate.delete("pipeline:trace:" + imageId);
+      }
     } else {
       log.info("Received Render callback for image: {}. Enqueuing QA job...", imageId);
       String retryKey = "image:qa:retries:" + imageId;
@@ -1191,6 +1217,7 @@ public class JobCoordinatorService {
     if (needsManualIntervention) {
       log.warn("QA requested manual intervention for image {}. Halting pipeline.", imageId);
       redisTemplate.delete(retryKey);
+      redisTemplate.delete("pipeline:trace:" + imageId);
       return "MANUAL_REVIEW";
     } else if (needsRetry && retries < 2) {
       redisTemplate.opsForValue().set(retryKey, String.valueOf(retries + 1));
@@ -1219,6 +1246,7 @@ public class JobCoordinatorService {
         log.info("QA passed for image {}. Pipeline complete!", imageId);
       }
       redisTemplate.delete(retryKey);
+      redisTemplate.delete("pipeline:trace:" + imageId);
       return "COMPLETED";
     }
   }
