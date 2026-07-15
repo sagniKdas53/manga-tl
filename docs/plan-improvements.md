@@ -163,9 +163,18 @@ pytest tests/ --cov=. --cov-report=xml --cov-report=html
 cd unified-workers && ruff check . && ruff format --check . && pyright . && pytest tests/ --cov=. --cov-report=xml
 ```
 
+### Bugs and fixes (phase 0)
+
+During the implementation of Phase 0, setting up strict static analysis for Python workers uncovered several latent issues:
+
+1. **Undeclared Loop Variables**: In `model_manager.py`, some loop variables were referenced outside of the loop scope or undeclared, causing potential runtime `NameError` exceptions.
+2. **Incorrect `sys.exit()` Calls**: Found `sys.exit()` calls placed incorrectly outside of functions or main execution blocks, which could lead to unexpected script terminations during imports.
+3. **Type Mismatches & Missing Annotations**: Pyright detected multiple type mismatches and missing `Optional` / `None` type annotations across the codebase.
+4. **Duplicate Coverage Reports**: Cleaned up the test coverage scripts so they export to a single unified `frontend/coverage` folder instead of duplicating reports.
+
 ---
 
-## Phase A — SSE Job System Migration
+## Phase A — SSE Job System Migration ✅ Completed
 
 > [!NOTE]
 > This replaces the current multi-per-second REST polling with a hybrid approach:
@@ -265,6 +274,29 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 # Frontend (SSE hook + QueueManager changes)
 cd frontend && npm run lint && npm run test:coverage && npm run build
 ```
+
+### Bugs and fixes (phase A)
+
+As we integrated the SSE-based Job Queue system, we resolved several critical real-time bugs in the frontend and backend:
+
+1. **Duplicate Job Cards**
+   - **Bug**: Every incoming SSE event spawned a brand new job card in the queue instead of updating the existing one.
+   - **Fix**: The backend was emitting raw data maps that lacked proper job IDs. We updated the backend to serialize and emit the full `Job` object, allowing the frontend to find the existing job by its ID and patch it in place.
+2. **Cards Stuck Saying Only "PROCESSING"**
+   - **Bug**: When a job updated, it lost its visual metadata (like attempt counts, series title, and chapter info) and just displayed "PROCESSING".
+   - **Fix**: We updated `QueueManager.tsx` to properly merge the incoming SSE data with the existing job state so the UI retains all relevant metadata across renders.
+3. **Missed Notifications for Fast Events**
+   - **Bug**: If multiple jobs (e.g., 3 pages) finished simultaneously, the UI only showed a notification for the last one.
+   - **Fix**: Resolved a React race condition in `useSSE` where incoming events were written to a single `lastEvent` state. We rewrote the hook to use a robust **Subscriber Pattern** (passing an `onMessage` callback) so every single event is caught and processed synchronously.
+4. **Paused Jobs Jumping to the Bottom**
+   - **Bug**: Pausing a job instantly threw it to the bottom of the list, losing its place in the queue.
+   - **Fix**: The sorting algorithm in `QueueManager.tsx` penalized `PAUSED` jobs by giving them a lower priority weight. We adjusted the sorting weights so `PAUSED` and `PENDING` jobs are treated equally, keeping them in their natural chronological order.
+5. **Unclear Global Pause State**
+   - **Bug**: When the entire global queue was paused, pending jobs stayed blue, making them look active.
+   - **Fix**: Added conditional logic to the color/text renderers. If the global queue is paused, all `PENDING` jobs instantly turn yellow and display the text `"PAUSED"`.
+6. **API Consolidation**
+   - **Bug**: Having both `/api/jobs` and `/api/jobs/status` was redundant and increased polling overhead.
+   - **Fix**: Merged these into a single `/api/jobs` endpoint that returns a unified `{ isPaused, jobs }` object, updated the frontend, and refactored the test suite to match.
 
 ---
 
@@ -702,6 +734,43 @@ cd unified-workers && ruff check . && ruff format --check . && pyright . && pyte
 
 ---
 
+## Phase G — Concurrency & Slot Allocation ✅ Completed
+
+To maximize throughput and prevent heavy local GPU tasks (like OCR) from blocking light, fast cloud API tasks (like translation), we implemented a dual-slot concurrency model.
+
+### G.1 Dual-Slot Dispatcher
+
+**Files**: `WorkerDispatcherService.java`, `WorkerDispatcherServiceTest.java`
+
+- Split the flat `QUEUES` list into `HEAVY_QUEUES` and `LIGHT_QUEUES`.
+- Refactored `dispatchJobs()` to call `dispatchFromSlot()` independently for each slot type.
+- A `429 Too Many Requests` response from a worker on a heavy job dispatch no longer blocks light job dispatch, and vice versa.
+
+### G.2 Configurable Worker Slots
+
+**Files**: `health_server.py`, `test_health_server.py`
+
+- Removed the legacy `queue:region-redo` queue.
+- Added `MAX_HEAVY_SLOTS` and `MAX_LIGHT_SLOTS` environment variables (defaulting to 1 heavy slot, and the remainder of `CONCURRENT_JOBS` as light slots).
+- Slot checks now use configurable limits rather than a hardcoded capacity.
+- Updated the capabilities endpoint to report slot allocation info.
+
+### G.3 Deployment & Documentation
+
+**Files**: `.env.example`, `docker-compose.yml`, `configuration_guide.md`, `slot-allocation.md`
+
+- Passed new environment variables `MAX_HEAVY_SLOTS` and `MAX_LIGHT_SLOTS` to the worker container in `docker-compose.yml`.
+- Added detailed slot allocation documentation to `configuration_guide.md` and created an independent `slot-allocation.md` guide.
+
+### ✅ Checkpoint G — Concurrency & Slot Allocation
+
+**Verification:**
+
+1. Run backend tests: `WorkerDispatcherServiceTest` (12/12 pass) — verifies heavy/light independent dispatch.
+2. Run worker tests: `test_health_server.py` (10/10 pass) — verifies slot limit parsing and capabilities reports.
+
+---
+
 ## Summary: Files Changed
 
 | Phase | File | Change |
@@ -738,3 +807,7 @@ cd unified-workers && ruff check . && ruff format --check . && pyright . && pyte
 | F.2 | `ocr.py` | VLM prompt improvements |
 | F.3 | `qa.py`, `qa_re_ocr.py` | QA prompt enhancements |
 | F.4 | `translation.py` | Translation prompt improvements |
+| G.1 | `WorkerDispatcherService.java`, `WorkerDispatcherServiceTest.java` | Split queues into heavy/light, refactored independent dispatch |
+| G.2 | `health_server.py`, `test_health_server.py` | Configure heavy/light slots with env vars, capabilities endpoint |
+| G.3 | `.env.example`, `docker-compose.yml`, `configuration_guide.md` | Document and configure slot allocation parameters |
+| G.3 | `docs/slot-allocation.md` | Independent documentation file detailing slot behavior |
