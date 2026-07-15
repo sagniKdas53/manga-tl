@@ -331,7 +331,7 @@ cd frontend && npm run lint && npm run test:coverage && npm run build
 
 ## Phase C — Thumbnail & Image Serving ✅ Completed
 
-### C.1 Upgrade Thumbnail Generation to WebP
+### C.1 Upgrade Thumbnail Generation to WebP ✅ Completed (migration skipped for now)
 
 > [!NOTE]
 > **Why WebP over AVIF?**  
@@ -354,7 +354,7 @@ cd frontend && npm run lint && npm run test:coverage && npm run build
 - **Migration**: Existing JPEG thumbnails continue to work — the endpoint already serves based on the stored path
 - **Cleanup**: Existing thumbnails in the MinIO bucket are still `.jpg` (see [screenshot](../examples/thumbs-still-in-jpg-not-webp.png)). Add a one-time migration task or startup job that re-generates thumbnails as WebP for all images that still have a `.jpg` thumbnail path. This can run on the `thumbnailExecutor` pool (C.3) in the background at low priority.
 
-### C.2 Frontend: Use Thumbnail URLs Everywhere
+### C.2 Frontend: Use Thumbnail URLs Everywhere ✅ Completed
 
 **Files**: `Dashboard.tsx`, `SeriesDetails.tsx`, `ChapterGallery.tsx`
 
@@ -362,7 +362,7 @@ cd frontend && npm run lint && npm run test:coverage && npm run build
 - Replace any use of `/api/images/{id}/file` with `/api/images/{id}/thumbnail` for preview contexts
 - The full `/file` endpoint should only be used in the Reader for full-resolution viewing
 
-### C.3 Move Thumbnail Generation Off the Upload Request Path
+### C.3 Move Thumbnail Generation Off the Upload Request Path ✅ Completed
 
 > [!IMPORTANT]
 > The WebP + bicubic change alone won't fix the performance bottleneck. The real issue is the **full-resolution decode + 2 sequential MinIO round trips** blocking the servlet thread. A 5000×7000 image = 105-140 MB `BufferedImage` in heap. With 200 concurrent uploads (Tomcat default), this risks OOM and thread-pool starvation.
@@ -393,17 +393,31 @@ Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPi
 - For batch imports (`importProject`/`importChapter`): queue all thumbnails to the async pool instead of blocking per-file
 - Existing behavior is already resilient: thumbnail failure doesn't block upload (lines 546-548)
 
+### C.4 Future Optimization: Denormalize Cover Image Paths
+
+> [!NOTE]
+> Currently, the backend dynamically calculates the default cover image for Series and Chapters on the fly. When fetching `GET /api/series` or `GET /api/series/{id}`, it runs heavy SQL subqueries (e.g., `SELECT p.image.thumbnailStoragePath ... WHERE p.pageNumber = (SELECT MIN...)`) to find the first page of the first chapter.
+>
+> **Why this is problematic:** As the library grows, running these nested `MIN()` queries on the `Page` table across thousands of pages becomes an unnecessary bottleneck for something that is essentially static.
+>
+> **Future Optimization Plan:**
+>
+> 1. Add a `cover_image_id` or `cover_image_url` column directly to the `Series` and `Chapter` tables.
+> 2. When a new `Page` is uploaded and determined to be the "first" page (e.g., Chapter 1, Page 1), have the `PageService` / `PageController` directly update the `cover_image_id` of the parent `Chapter` and `Series`.
+> 3. Update the `SeriesController` and `ChapterController` to simply read this pre-computed column, eliminating the heavy SQL joins entirely.
+
 ### ✅ Checkpoint C — Thumbnails
 
 **Bugs Found & Resolved:**
+
 - **Bug**: WebP thumbnails were pixelated and aliased due to aggressive image subsampling (`setSourceSubsampling`) in Java before downscaling.
 - **Fix**: Replaced pure subsampling with a hybrid approach (subsample up to 3x target size, then use `Image.SCALE_SMOOTH` area-averaging) for crisp, high-quality thumbnails. Also updated the python migration script to use `LANCZOS` filter.
 - **Bug**: The async WebP generation crashed in the background thread with `IllegalStateException: No compression type set!`, causing thumbnails to never generate. This resulted in missing `thumbnail_storage_path` values in the DB, causing Chapter/Series views to have no covers.
 - **Fix**: Added explicit `setCompressionType()` call before setting the compression quality in `PageService.java`.
 - **Bug**: Fallback `processing-thumbnail.webp` looked ugly and didn't match the standard UI pattern for uninitialized items.
 - **Fix**: Removed the static fallback logic. If a thumbnail isn't generated yet, the backend correctly omits the URL or returns `404 Not Found`, prompting the frontend to seamlessly render its CSS `manga-cover-placeholder` element instead.
-- **Bug**: Thumbnail propagation issue where navigating from a chapter back to the series details view resulted in a stale series object (missing its thumbnail) because the frontend cached the old series object based on route IDs.
-- **Fix**: Rewrote the `useEffect` hooks in `App.tsx` that load Series and Chapter route data. By using `Promise.all` and making the hooks explicitly depend only on URL route IDs (e.g. `seriesId`, `chapterId`) rather than state variables, we ensure fresh asynchronous data fetches whenever the user navigates the hierarchy, fixing the stale cache issue without causing infinite render loops.
+- **Bug**: Thumbnail propagation issue where navigating from a chapter back to the series details view resulted in a stale series object (missing its thumbnail) because the frontend cached the old series object based on route IDs, AND the backend `GET /api/series/{id}` endpoint silently swallowed a `LazyInitializationException` when trying to eagerly fetch the lazy `Image` entity to resolve the series cover.
+- **Fix**: First, rewrote the `useEffect` hooks in `App.tsx` that load Series and Chapter route data to ensure fresh asynchronous data fetches whenever the user navigates the hierarchy. Second, fixed `SeriesController.toDto` in the backend to use the existing JPQL `Object[]` projection query (`findFirstPageImageIdsBySeriesId`) instead of fetching `Page`/`Image` entities, completely eliminating the `LazyInitializationException` and ensuring the series cover URL is always populated.
 
 **Automated tests:**
 
@@ -426,7 +440,7 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 
 ---
 
-## Phase D — Frontend UI Fixes & Redesign
+## Phase D — Frontend UI Fixes & Redesign - Starting
 
 ### D.1 Remove Cover Image URL Field from Dialogs
 
