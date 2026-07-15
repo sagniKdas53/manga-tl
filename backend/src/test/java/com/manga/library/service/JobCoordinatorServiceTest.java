@@ -54,6 +54,16 @@ public class JobCoordinatorServiceTest {
             })
         .when(valueOps)
         .set(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString());
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              mockRedisValueStore.put(invocation.getArgument(0), invocation.getArgument(1));
+              return null;
+            })
+        .when(valueOps)
+        .set(
+            org.mockito.Mockito.anyString(),
+            org.mockito.Mockito.anyString(),
+            org.mockito.Mockito.any(java.time.Duration.class));
 
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
         org.mockito.Mockito.mock(org.springframework.data.redis.core.ListOperations.class);
