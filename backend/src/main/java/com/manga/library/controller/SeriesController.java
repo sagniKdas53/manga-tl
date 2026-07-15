@@ -72,12 +72,16 @@ public class SeriesController {
       if (chapters != null && !chapters.isEmpty()) {
         chapters.sort(Comparator.comparing(Chapter::getChapterNumber));
         Chapter firstChapter = chapters.get(0);
-        List<Page> pages =
-            pageRepository.findByChapterIdOrderByPageNumberAsc(firstChapter.getId());
-        if (pages != null && !pages.isEmpty()) {
-          Image firstImg = pages.get(0).getImage();
-          if (firstImg.getThumbnailStoragePath() != null) {
-            dto.setCoverImageUrl(getImageUrl(firstImg.getId()));
+        
+        List<Object[]> covers = pageRepository.findFirstPageImageIdsBySeriesId(s.getId());
+        for (Object[] row : covers) {
+          UUID chapId = (UUID) row[0];
+          if (firstChapter.getId().equals(chapId)) {
+            String thumbPath = (String) row[2];
+            if (thumbPath != null) {
+              dto.setCoverImageUrl(getImageUrl((UUID) row[1]));
+            }
+            break;
           }
         }
       }
