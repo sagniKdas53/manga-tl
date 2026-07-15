@@ -1617,19 +1617,23 @@ export const Reader: React.FC<ReaderProps> = ({
             },
           });
 
-          if (!res.ok) throw new Error("Failed to delete layer element");
-
-          setLayers((prevLayers) =>
-            prevLayers.map((l) => ({
-              ...l,
-              elements: l.elements.filter((el) => el.id !== elementId),
-            })),
-          );
-
-          setSelectedItem(null);
+          if (res.ok) {
+            setLayers((prevLayers) =>
+              prevLayers.map((l) => ({
+                ...l,
+                elements: l.elements.filter((el) => el.id !== elementId),
+              })),
+            );
+            setSelectedItem(null);
+            showToast("Element deleted successfully", "success");
+          } else if (res.status === 403) {
+            showToast("You don't have permission to delete this element.", "error");
+          } else {
+            showToast("Failed to delete layer element", "error");
+          }
         } catch (err) {
           console.error(err);
-          alert("Error deleting layer element.");
+          showToast("Error deleting layer element.", "error");
         }
       },
     });
@@ -1721,10 +1725,17 @@ export const Reader: React.FC<ReaderProps> = ({
             },
           });
 
-          if (!res.ok) throw new Error("Failed to delete layer");
-          setLayers((prev) => prev.filter((l) => l.layer.id !== layerId));
+          if (res.ok) {
+            setLayers((prev) => prev.filter((l) => l.layer.id !== layerId));
+            showToast("Layer deleted successfully", "success");
+          } else if (res.status === 403) {
+            showToast("You don't have permission to delete this layer.", "error");
+          } else {
+            showToast("Failed to delete layer", "error");
+          }
         } catch (err) {
           console.error(err);
+          showToast("Error deleting layer", "error");
         }
       },
     });

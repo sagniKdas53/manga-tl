@@ -391,7 +391,8 @@ public class SeriesController {
   }
 
   @DeleteMapping("/chapters/{chapterId}")
-  @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<Void> deleteChapter(@PathVariable UUID chapterId) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository

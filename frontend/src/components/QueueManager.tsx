@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
+import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
 
 interface Job {
@@ -189,6 +190,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { subscribe } = useNotifications();
+  const { showToast } = useToast();
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -379,14 +381,22 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         if (!token) return;
         try {
-          await safeFetch("/api/jobs/clear", {
+          const res = await safeFetch("/api/jobs/clear", {
             method: "DELETE",
             headers: { Authorization: `Bearer ${token}` },
           });
-          // Optimistic UI update
-          setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
+          if (res.ok) {
+            // Optimistic UI update
+            setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
+            showToast("Queue cleared successfully", "success");
+          } else if (res.status === 403) {
+            showToast("You don't have permission to clear the queue.", "error");
+          } else {
+            showToast("Failed to clear queue", "error");
+          }
         } catch (err) {
           console.error("Failed to clear queue", err);
+          showToast("Error clearing queue", "error");
         }
       }
     });
@@ -467,14 +477,22 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const handleDeleteJob = async (jobId: string) => {
     if (!token) return;
     try {
-      // Optimistic update
-      setJobs((prev) => prev.filter((j) => j.id !== jobId));
-      await safeFetch(`/api/jobs/${jobId}`, {
+      const res = await safeFetch(`/api/jobs/${jobId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.ok) {
+        // Optimistic update
+        setJobs((prev) => prev.filter((j) => j.id !== jobId));
+        showToast("Job deleted successfully", "success");
+      } else if (res.status === 403) {
+        showToast("You don't have permission to delete this job.", "error");
+      } else {
+        showToast("Failed to delete job", "error");
+      }
     } catch (err) {
       console.error("Failed to delete job", err);
+      showToast("Error deleting job", "error");
     }
   };
 
@@ -732,10 +750,19 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                           <button
                             onClick={() => handleToggleJobPause(job)}
                             className="btn btn-secondary"
-                            style={{ fontSize: "11px", padding: "4px 8px", display: "flex", alignItems: "center", gap: "4px" }}
-                            title={job.status === "PAUSED" ? "Resume" : "Pause"}
+                            style={{ 
+                              fontSize: "11px", 
+                              padding: "4px 8px", 
+                              display: "flex", 
+                              alignItems: "center", 
+                              gap: "4px",
+                              opacity: isPaused ? 0.5 : 1,
+                              cursor: isPaused ? "not-allowed" : "pointer"
+                            }}
+                            title={isPaused ? "Queue is globally paused" : (job.status === "PAUSED" ? "Resume" : "Pause")}
+                            disabled={isPaused}
                           >
-                            {job.status === "PAUSED" ? <IconPlay /> : <IconPause />}
+                            {(job.status === "PAUSED" || isPaused) ? <IconPlay /> : <IconPause />}
                           </button>
                         </>
                       )}

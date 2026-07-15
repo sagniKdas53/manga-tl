@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "./ToastContext";
 import type { User, Series } from "../types";
 import { safeFetch, toSlug } from "../utils";
 import type { SystemSettingsDto } from "../types";
@@ -19,6 +20,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSelectSeries,
 }) => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   // Series modal form states (fully encapsulated)
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -204,11 +206,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           });
           if (res.ok) {
             setSeriesList((prev) => prev.filter((s) => s.id !== seriesId));
+            showToast("Series deleted successfully", "success");
+          } else if (res.status === 403) {
+            showToast("You don't have permission to delete this series.", "error");
           } else {
-            alert("Failed to delete series");
+            showToast("Failed to delete series", "error");
           }
         } catch (err) {
           console.error("Error deleting series:", err);
+          showToast("Error deleting series", "error");
         }
       },
     });

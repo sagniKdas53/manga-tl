@@ -297,6 +297,9 @@ As we integrated the SSE-based Job Queue system, we resolved several critical re
 6. **API Consolidation**
    - **Bug**: Having both `/api/jobs` and `/api/jobs/status` was redundant and increased polling overhead.
    - **Fix**: Merged these into a single `/api/jobs` endpoint that returns a unified `{ isPaused, jobs }` object, updated the frontend, and refactored the test suite to match.
+7. **Confusing Per-Job Play/Pause Buttons during Global Pause**
+   - **Bug**: Even when the entire queue was paused globally, individual job cards still displayed active pause buttons, incorrectly implying they could be interacted with.
+   - **Fix**: Updated `QueueManager.tsx` to visually disable these per-job buttons (opacity reduction, not-allowed cursor) and display a play icon with a "Queue is globally paused" tooltip whenever `isPaused` is true.
 
 ---
 
@@ -565,6 +568,13 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - **Use pre-built MUI components wherever possible** to reduce custom CSS and offload design decisions to MUI's defaults
 - **Remove** most of `index.css` once migration is complete — keep only truly custom styles
 - D.8 (theme improvements) is **subsumed** by this item — the palette work becomes MUI theme configuration
+### D.13 Global Toast Notifications for Deletion Restrictions
+
+**Files**: `SeriesDetails.tsx`, `Dashboard.tsx`, `ChapterGallery.tsx`, `Reader.tsx`, `QueueManager.tsx`, `utils.ts`
+
+- Improved feedback when users attempt unauthorized deletions (e.g., when a user lacking the `TRANSLATOR` role tries to delete a chapter/series/page)
+- Migrated all `alert()` usage in deletion workflows to the custom `useToast()` hook.
+- Modified `safeFetch` to only auto-logout on `401 Unauthorized` responses instead of `403 Forbidden`, preventing abrupt logouts and allowing the application to display a clear toast message explaining the permission issue instead.
 
 ### ✅ Checkpoint D — UI Polish
 
@@ -797,6 +807,7 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 | D.10 | `SettingsModal.tsx`, model picker components | Show resolved model names with inheritance source |
 | D.11 | `SettingsModal.tsx`, model picker components | Model override UX redesign with visual hierarchy |
 | D.12 | All `.tsx` components, `package.json` | Migrate to Material UI (MUI) with custom theme |
+| D.13 | `SeriesDetails.tsx`, `utils.ts`, etc. | Global toast notifications for deletion restrictions |
 | E.1 | `[NEW] ProviderChain.py`, `config.py` | Cross-provider failover |
 | E.2 | Worker HTTP call sites | Strict timeouts |
 | E.3 | Worker cost utils, `JobCoordinatorService.java` | Move cost tracking from `costs.json` to PostgreSQL |

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "./ToastContext";
 import type { User, Series, Chapter, SystemSettingsDto } from "../types";
 import { safeFetch, toSlug } from "../utils";
 import ConfirmModal from "./ConfirmModal";
@@ -46,6 +47,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [newChapterUseContextMemory, setNewChapterUseContextMemory] =
     useState<boolean>(true);
   const [chapterError, setChapterError] = useState("");
+  const { showToast } = useToast();
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const providers = settings?.activeProviders || [
@@ -231,11 +233,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           if (res.ok) {
             setSelectedSeries(null);
             navigate("/");
+            showToast("Series deleted successfully", "success");
+          } else if (res.status === 403) {
+            showToast("You don't have permission to delete this series.", "error");
           } else {
-            alert("Failed to delete series");
+            showToast("Failed to delete series", "error");
           }
         } catch (err) {
           console.error("Error deleting series:", err);
+          showToast("Error deleting series", "error");
         }
       },
     });
@@ -453,11 +459,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           });
           if (res.ok) {
             setChapters((prev) => prev.filter((c) => c.id !== chapterId));
+            showToast("Chapter deleted successfully", "success");
+          } else if (res.status === 403) {
+            showToast("You don't have permission to delete this chapter.", "error");
           } else {
-            alert("Failed to delete chapter");
+            showToast("Failed to delete chapter", "error");
           }
         } catch (err) {
           console.error("Error deleting chapter:", err);
+          showToast("Error deleting chapter", "error");
         }
       },
     });
