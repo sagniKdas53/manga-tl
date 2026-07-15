@@ -66,24 +66,20 @@ public class SeriesController {
     dto.setQaLlmModel(s.getQaLlmModel());
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
-    if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
-      dto.setCoverImageUrl(s.getCoverImageUrl().replace("/file", "/thumbnail"));
-    } else {
-      // Find default cover image (first page of first chapter)
-      try {
-        List<Chapter> chapters = chapterRepository.findBySeriesId(s.getId());
-        if (chapters != null && !chapters.isEmpty()) {
-          chapters.sort(Comparator.comparing(Chapter::getChapterNumber));
-          Chapter firstChapter = chapters.get(0);
-          List<Page> pages =
-              pageRepository.findByChapterIdOrderByPageNumberAsc(firstChapter.getId());
-          if (pages != null && !pages.isEmpty()) {
-            dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
-          }
+    // Find default cover image (first page of first chapter)
+    try {
+      List<Chapter> chapters = chapterRepository.findBySeriesId(s.getId());
+      if (chapters != null && !chapters.isEmpty()) {
+        chapters.sort(Comparator.comparing(Chapter::getChapterNumber));
+        Chapter firstChapter = chapters.get(0);
+        List<Page> pages =
+            pageRepository.findByChapterIdOrderByPageNumberAsc(firstChapter.getId());
+        if (pages != null && !pages.isEmpty()) {
+          dto.setCoverImageUrl(getImageUrl(pages.get(0).getImage().getId()));
         }
-      } catch (Exception e) {
-        log.debug("Ignore fallback exception in toDto", e);
       }
+    } catch (Exception e) {
+      log.debug("Ignore fallback exception in toDto", e);
     }
     return dto;
   }
@@ -104,13 +100,9 @@ public class SeriesController {
     dto.setQaLlmModel(s.getQaLlmModel());
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
-    if (s.getCoverImageUrl() != null && !s.getCoverImageUrl().trim().isEmpty()) {
-      dto.setCoverImageUrl(s.getCoverImageUrl().replace("/file", "/thumbnail"));
-    } else {
-      UUID imageId = defaultCovers.get(s.getId());
-      if (imageId != null) {
-        dto.setCoverImageUrl(getImageUrl(imageId));
-      }
+    UUID imageId = defaultCovers.get(s.getId());
+    if (imageId != null) {
+      dto.setCoverImageUrl(getImageUrl(imageId));
     }
     return dto;
   }
@@ -129,7 +121,6 @@ public class SeriesController {
             .sourceLanguage(sourceLang != null ? sourceLang : "ja")
             .targetLanguage(targetLang)
             .readingDirection(dto.getReadingDirection())
-            .coverImageUrl(dto.getCoverImageUrl())
             .createdBy(user)
             .build();
     Objects.requireNonNull(series, "series cannot be null");
@@ -143,9 +134,7 @@ public class SeriesController {
     List<Series> seriesList = seriesRepository.findAll();
 
     Map<UUID, UUID> defaultCovers = new HashMap<>();
-    boolean needsDefaultCovers =
-        seriesList.stream()
-            .anyMatch(s -> s.getCoverImageUrl() == null || s.getCoverImageUrl().trim().isEmpty());
+    boolean needsDefaultCovers = true;
     if (needsDefaultCovers) {
       try {
         List<Object[]> covers = pageRepository.findDefaultCoverImageIds();
@@ -312,7 +301,6 @@ public class SeriesController {
               s.setSourceLanguage(sourceLang != null ? sourceLang : "ja");
               s.setTargetLanguage(targetLang);
               s.setReadingDirection(dto.getReadingDirection());
-              s.setCoverImageUrl(dto.getCoverImageUrl());
               s.setOcrProvider(dto.getOcrProvider());
               s.setOcrModel(dto.getOcrModel());
               s.setTlProvider(dto.getTlProvider());
@@ -399,22 +387,6 @@ public class SeriesController {
         .findById(chapterId)
         .map(
             chapter -> {
-              Series series = chapter.getSeries();
-              if (series != null && series.getCoverImageUrl() != null) {
-                List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
-                if (pages != null) {
-                  for (Page page : pages) {
-                    if (page.getImage() != null) {
-                      String imageIdStr = page.getImage().getId().toString();
-                      if (series.getCoverImageUrl().contains(imageIdStr)) {
-                        series.setCoverImageUrl(null);
-                        seriesRepository.save(series);
-                        break;
-                      }
-                    }
-                  }
-                }
-              }
               chapterRepository.delete(chapter);
               return ResponseEntity.ok().<Void>build();
             })
@@ -572,15 +544,6 @@ public class SeriesController {
 
         // Generate thumbnail
         String thumbnailStoragePath = null;
-        try {
-          byte[] thumbBytes = pageService.generateThumbnail(originalBytes);
-          if (thumbBytes != null) {
-            thumbnailStoragePath = "thumbnails/" + uuid + ".jpg";
-            minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/jpeg");
-          }
-        } catch (Exception e) {
-          log.error("Failed to generate/upload thumbnail in ZIP chapter import", e);
-        }
 
         // Save records
         Page page =
@@ -592,6 +555,7 @@ public class SeriesController {
                 pageNum,
                 fileHash,
                 user);
+        pageService.generateAndSaveThumbnailAsync(page.getImage().getId(), uuid, originalBytes);
 
         // Queue pipeline
         jobCoordinatorService.startPipeline(page.getImage().getId(), chapter.getId());

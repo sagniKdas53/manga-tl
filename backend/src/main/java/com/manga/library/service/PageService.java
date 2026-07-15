@@ -19,6 +19,7 @@ public class PageService {
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
   private final SeriesRepository seriesRepository;
+  private final MinioService minioService;
 
   @Transactional
   public Page createPageAndImage(
@@ -109,14 +110,7 @@ public class PageService {
       }
     }
 
-    if (page.getChapter() != null && page.getChapter().getSeries() != null) {
-      Series series = page.getChapter().getSeries();
-      if (series.getCoverImageUrl() != null
-          && series.getCoverImageUrl().contains(imageId.toString())) {
-        series.setCoverImageUrl(null);
-        seriesRepository.save(series);
-      }
-    }
+
 
     // 1. Delete page first
     pageRepository.delete(page);
@@ -143,38 +137,63 @@ public class PageService {
     return pathsToDelete;
   }
 
-  public byte[] generateThumbnail(byte[] originalBytes) {
+  @org.springframework.scheduling.annotation.Async("thumbnailExecutor")
+  public void generateAndSaveThumbnailAsync(UUID imageId, String uuid, byte[] originalBytes) {
     try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(originalBytes)) {
-      java.awt.image.BufferedImage originalImage = javax.imageio.ImageIO.read(in);
-      if (originalImage == null) {
-        log.warn("Unsupported image format or failed to read image for thumbnail generation.");
-        return null;
+      in.mark(Integer.MAX_VALUE);
+      javax.imageio.stream.ImageInputStream iis = javax.imageio.ImageIO.createImageInputStream(in);
+      java.util.Iterator<javax.imageio.ImageReader> readers = javax.imageio.ImageIO.getImageReaders(iis);
+      if (!readers.hasNext()) {
+        log.warn("No image reader found for image {}", imageId);
+        iis.close();
+        return;
       }
+      javax.imageio.ImageReader reader = readers.next();
+      reader.setInput(iis, true, true);
+
+      int originalWidth = reader.getWidth(0);
+      int originalHeight = reader.getHeight(0);
 
       int targetWidth = 300;
-      double ratio = (double) originalImage.getHeight() / originalImage.getWidth();
+      double ratio = (double) originalHeight / originalWidth;
       int targetHeight = (int) (targetWidth * ratio);
-      if (targetHeight <= 0) {
-        targetHeight = 1;
+      if (targetHeight <= 0) targetHeight = 1;
+
+      // Subsampling
+      javax.imageio.ImageReadParam param = reader.getDefaultReadParam();
+      int scale = originalWidth / targetWidth;
+      if (scale > 1) {
+        param.setSourceSubsampling(scale, scale, 0, 0);
       }
 
-      java.awt.image.BufferedImage thumbnail =
-          new java.awt.image.BufferedImage(
-              targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.image.BufferedImage subsampledImage = reader.read(0, param);
+      reader.dispose();
+      iis.close();
+
+      java.awt.image.BufferedImage thumbnail = new java.awt.image.BufferedImage(
+          targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
 
       java.awt.Graphics2D g = thumbnail.createGraphics();
       g.setRenderingHint(
           java.awt.RenderingHints.KEY_INTERPOLATION,
-          java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-      g.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
+          java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+      g.drawImage(subsampledImage, 0, 0, targetWidth, targetHeight, null);
       g.dispose();
 
       java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-      javax.imageio.ImageIO.write(thumbnail, "jpg", out);
-      return out.toByteArray();
+      javax.imageio.ImageIO.write(thumbnail, "webp", out);
+      byte[] thumbBytes = out.toByteArray();
+
+      String thumbnailStoragePath = "thumbnails/" + uuid + ".webp";
+      minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/webp");
+
+      imageRepository.findById(imageId).ifPresent(img -> {
+        img.setThumbnailStoragePath(thumbnailStoragePath);
+        imageRepository.save(img);
+      });
+      log.info("Successfully generated and uploaded WebP thumbnail to {}", thumbnailStoragePath);
     } catch (Exception e) {
-      log.error("Failed to generate thumbnail", e);
-      return null;
+      log.error("Failed to generate async thumbnail for image {}", imageId, e);
     }
   }
 

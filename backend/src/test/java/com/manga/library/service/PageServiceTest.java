@@ -21,12 +21,13 @@ public class PageServiceTest {
   @Mock private ImageRepository imageRepository;
   @Mock private PageRepository pageRepository;
   @Mock private SeriesRepository seriesRepository;
+  @Mock private MinioService minioService;
 
   private PageService pageService;
 
   @BeforeEach
   public void setUp() {
-    pageService = new PageService(imageRepository, pageRepository, seriesRepository);
+    pageService = new PageService(imageRepository, pageRepository, seriesRepository, minioService);
   }
 
   @Test
@@ -80,7 +81,7 @@ public class PageServiceTest {
     UUID pageId = UUID.randomUUID();
     UUID chapterId = UUID.randomUUID();
     Series series =
-        Series.builder().id(UUID.randomUUID()).coverImageUrl("some_url/" + pageId).build();
+        Series.builder().id(UUID.randomUUID()).build();
     Chapter chapter = Chapter.builder().id(chapterId).series(series).build();
     Image image =
         Image.builder().id(pageId).storagePath("path").thumbnailStoragePath("thumb").build();
@@ -97,7 +98,6 @@ public class PageServiceTest {
     assertEquals(3, paths.size());
     verify(pageRepository, times(1)).delete(page);
     verify(imageRepository, times(1)).delete(image);
-    verify(seriesRepository, times(1)).save(series);
   }
 
   @Test
@@ -151,33 +151,10 @@ public class PageServiceTest {
   }
 
   @Test
-  public void testGenerateThumbnail_Success() throws Exception {
-    java.awt.image.BufferedImage img =
-        new java.awt.image.BufferedImage(10, 10, java.awt.image.BufferedImage.TYPE_INT_RGB);
-    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-    javax.imageio.ImageIO.write(img, "png", baos);
-
-    byte[] thumbnail = pageService.generateThumbnail(baos.toByteArray());
-    assertNotNull(thumbnail);
-  }
-
-  @Test
   public void testDeletePageDb_NotFound() {
     UUID pageId = UUID.randomUUID();
     when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.empty());
 
     assertThrows(IllegalArgumentException.class, () -> pageService.deletePageDb(pageId));
-  }
-
-  @Test
-  public void testGenerateThumbnail_InvalidBytes() {
-    byte[] thumbnail = pageService.generateThumbnail("invalid image".getBytes());
-    assertNull(thumbnail);
-  }
-
-  @Test
-  public void testGenerateThumbnail_NullBytes() {
-    byte[] thumbnail = pageService.generateThumbnail(null);
-    assertNull(thumbnail);
   }
 }
