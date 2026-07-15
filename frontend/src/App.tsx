@@ -195,95 +195,82 @@ function AppContent() {
   // Load series details and chapters when seriesId is active in route
   useEffect(() => {
     if (user && seriesId) {
-      if (!selectedSeries || selectedSeries.id !== seriesId) {
-        // Defer loading details setting to avoid synchronous render warning
-        Promise.resolve().then(() => {
-          setIsLoadingDetails(true);
-        });
+      Promise.resolve().then(() => {
+        setIsLoadingDetails(true);
+      });
 
+      Promise.all([
         safeFetch(`/api/series/${seriesId}`, {
           headers: { Authorization: `Bearer ${user.token}` },
-        })
-          .then((res) => {
-            if (!res.ok) throw new Error("Series not found");
-            return res.json();
-          })
-          .then((data) => {
-            setSelectedSeries(data);
-            setIsLoadingDetails(false);
-          })
-          .catch((err) => {
-            console.error(err);
-            setIsLoadingDetails(false);
-          });
-      }
-
-      safeFetch(`/api/series/${seriesId}/chapters`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => {
+        }).then((res) => {
+          if (!res.ok) throw new Error("Series not found");
+          return res.json();
+        }),
+        safeFetch(`/api/series/${seriesId}/chapters`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        }).then((res) => {
           if (!res.ok) throw new Error("Failed to fetch chapters");
           return res.json();
-        })
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setChapters(data);
+        }),
+      ])
+        .then(([seriesData, chaptersData]) => {
+          setSelectedSeries(seriesData);
+          if (Array.isArray(chaptersData)) {
+            setChapters(chaptersData);
           }
+          setIsLoadingDetails(false);
         })
-        .catch((err) => console.error("Error fetching chapters:", err));
+        .catch((err) => {
+          console.error("Error fetching series details:", err);
+          setIsLoadingDetails(false);
+        });
     }
-  }, [seriesId, user, selectedSeries]);
+  }, [seriesId, user?.token]);
 
   // Load chapter details and pages when chapterId is active in route
   useEffect(() => {
     if (user && chapterId) {
-      if (!selectedChapter || selectedChapter.id !== chapterId) {
-        Promise.resolve().then(() => {
-          setIsLoadingDetails(true);
-        });
+      Promise.resolve().then(() => {
+        setIsLoadingDetails(true);
+      });
 
-        safeFetch(`/api/series/chapters/${chapterId}`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        })
-          .then((res) => {
-            if (!res.ok) throw new Error("Chapter not found");
-            return res.json();
-          })
-          .then((chapterData) => {
-            setSelectedChapter(chapterData);
-            return safeFetch(`/api/series/${chapterData.seriesId}`, {
-              headers: { Authorization: `Bearer ${user.token}` },
-            });
-          })
-          .then((res) => {
-            if (!res.ok) throw new Error("Series not found");
-            return res.json();
-          })
-          .then((seriesData) => {
-            setSelectedSeries(seriesData);
-            setIsLoadingDetails(false);
-          })
-          .catch((err) => {
-            console.error(err);
-            setIsLoadingDetails(false);
-          });
-      }
-
-      safeFetch(`/api/chapters/${chapterId}/pages`, {
+      safeFetch(`/api/series/chapters/${chapterId}`, {
         headers: { Authorization: `Bearer ${user.token}` },
       })
         .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch pages");
+          if (!res.ok) throw new Error("Chapter not found");
           return res.json();
         })
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setPages(data);
-          }
+        .then((chapterData) => {
+          setSelectedChapter(chapterData);
+          return Promise.all([
+            safeFetch(`/api/series/${chapterData.seriesId}`, {
+              headers: { Authorization: `Bearer ${user.token}` },
+            }).then((res) => {
+              if (!res.ok) throw new Error("Series not found");
+              return res.json();
+            }),
+            safeFetch(`/api/chapters/${chapterId}/pages`, {
+              headers: { Authorization: `Bearer ${user.token}` },
+            }).then((res) => {
+              if (!res.ok) throw new Error("Failed to fetch pages");
+              return res.json();
+            }),
+          ]);
         })
-        .catch((err) => console.error("Error fetching pages:", err));
+        .then(([seriesData, pagesData]) => {
+          setSelectedSeries(seriesData);
+          if (Array.isArray(pagesData)) {
+            setPages(pagesData);
+          }
+          setIsLoadingDetails(false);
+        })
+        .catch((err) => {
+          console.error("Error fetching chapter details:", err);
+          setIsLoadingDetails(false);
+        });
     }
-  }, [chapterId, user, selectedChapter]);
+  }, [chapterId, user?.token]);
 
   // Dynamically manage browser tab title
   useEffect(() => {

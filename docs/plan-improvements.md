@@ -402,6 +402,8 @@ Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPi
 - **Fix**: Added explicit `setCompressionType()` call before setting the compression quality in `PageService.java`.
 - **Bug**: Fallback `processing-thumbnail.webp` looked ugly and didn't match the standard UI pattern for uninitialized items.
 - **Fix**: Removed the static fallback logic. If a thumbnail isn't generated yet, the backend correctly omits the URL or returns `404 Not Found`, prompting the frontend to seamlessly render its CSS `manga-cover-placeholder` element instead.
+- **Bug**: Thumbnail propagation issue where navigating from a chapter back to the series details view resulted in a stale series object (missing its thumbnail) because the frontend cached the old series object based on route IDs.
+- **Fix**: Rewrote the `useEffect` hooks in `App.tsx` that load Series and Chapter route data. By using `Promise.all` and making the hooks explicitly depend only on URL route IDs (e.g. `seriesId`, `chapterId`) rather than state variables, we ensure fresh asynchronous data fetches whenever the user navigates the hierarchy, fixing the stale cache issue without causing infinite render loops.
 
 **Automated tests:**
 
