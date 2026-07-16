@@ -54,12 +54,18 @@ public class SeriesControllerTest {
   public void testGetSeries_Success() throws Exception {
     UUID seriesId = UUID.randomUUID();
     UUID coverId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).title("Test Series").coverImageId(coverId).build();
+    Series series =
+        Series.builder().id(seriesId).title("Test Series").coverImageId(coverId).build();
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
 
-    mockMvc.perform(get("/api/series/" + seriesId))
+    mockMvc
+        .perform(get("/api/series/" + seriesId))
         .andExpect(status().isOk())
-        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.coverImageUrl").value(org.hamcrest.Matchers.containsString("/api/images/" + coverId + "/thumbnail")));
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.coverImageUrl")
+                .value(
+                    org.hamcrest.Matchers.containsString("/api/images/" + coverId + "/thumbnail")));
   }
 
   @Test
@@ -179,19 +185,28 @@ public class SeriesControllerTest {
     UUID coverId = UUID.randomUUID();
     Series series = Series.builder().id(UUID.randomUUID()).build();
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder().id(chapterId).series(series).coverImageId(coverId).build();
+        com.manga.library.model.Chapter.builder()
+            .id(chapterId)
+            .series(series)
+            .coverImageId(coverId)
+            .build();
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
 
-    mockMvc.perform(get("/api/series/chapters/" + chapterId))
+    mockMvc
+        .perform(get("/api/series/chapters/" + chapterId))
         .andExpect(status().isOk())
-        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.coverImageUrl").value(org.hamcrest.Matchers.containsString("/api/images/" + coverId + "/thumbnail")));
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.coverImageUrl")
+                .value(
+                    org.hamcrest.Matchers.containsString("/api/images/" + coverId + "/thumbnail")));
   }
 
   @Test
   public void testDeleteChapter_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder().id(chapterId).build();
+        com.manga.library.model.Chapter.builder().id(chapterId).series(com.manga.library.model.Series.builder().id(UUID.randomUUID()).build()).build();
 
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId)).thenReturn(null);
@@ -607,5 +622,54 @@ public class SeriesControllerTest {
     mockMvc
         .perform(get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
         .andExpect(status().isAccepted());
+  }
+
+  @Test
+  public void testDeleteChapterCoverRecalculation() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    UUID seriesId = UUID.randomUUID();
+    com.manga.library.model.Series series = new com.manga.library.model.Series();
+    series.setId(seriesId);
+    com.manga.library.model.Chapter chapter = new com.manga.library.model.Chapter();
+    chapter.setId(chapterId);
+    chapter.setSeries(series);
+
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    doNothing().when(chapterRepository).delete(chapter);
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                "/api/series/chapters/" + chapterId))
+        .andExpect(status().isOk());
+
+    verify(pageService, times(1)).recalculateSeriesCover(seriesId);
+  }
+
+  @Test
+  public void testUpdateChapterCoverRecalculation() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    UUID seriesId = UUID.randomUUID();
+    com.manga.library.model.Series series = new com.manga.library.model.Series();
+    series.setId(seriesId);
+    com.manga.library.model.Chapter chapter = new com.manga.library.model.Chapter();
+    chapter.setId(chapterId);
+    chapter.setSeries(series);
+    chapter.setChapterNumber(2.0);
+
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
+
+    String payload = "{\"chapterNumber\": 1.0}";
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/series/chapters/" + chapterId)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(payload))
+        .andExpect(status().isOk());
+
+    verify(pageService, times(1)).recalculateSeriesCover(seriesId);
   }
 }

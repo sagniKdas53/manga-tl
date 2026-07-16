@@ -28,7 +28,9 @@ public class PageServiceTest {
 
   @BeforeEach
   public void setUp() {
-    pageService = new PageService(imageRepository, pageRepository, seriesRepository, chapterRepository, minioService);
+    pageService =
+        new PageService(
+            imageRepository, pageRepository, seriesRepository, chapterRepository, minioService);
   }
 
   @Test
@@ -40,12 +42,15 @@ public class PageServiceTest {
     chapter.setSeries(series);
     User user = new User();
     Image image = Image.builder().id(UUID.randomUUID()).build();
-    Page page = Page.builder().id(UUID.randomUUID()).build();
+    Page page = Page.builder().id(UUID.randomUUID()).image(image).build();
 
     when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
-        .thenReturn(java.util.Optional.empty());
+        .thenReturn(java.util.Optional.of(page));
     when(imageRepository.save(any(Image.class))).thenReturn(image);
     when(pageRepository.save(any(Page.class))).thenReturn(page);
+
+    when(chapterRepository.findById(chapter.getId())).thenReturn(java.util.Optional.of(chapter));
+    when(seriesRepository.findById(series.getId())).thenReturn(java.util.Optional.of(series));
     when(chapterRepository.findMinChapterNumberWithCoverBySeriesId(series.getId())).thenReturn(1.0);
 
     Page result =
@@ -72,6 +77,8 @@ public class PageServiceTest {
     when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
         .thenReturn(java.util.Optional.empty());
     when(pageRepository.save(any(Page.class))).thenReturn(page);
+    when(chapterRepository.findById(chapter.getId())).thenReturn(java.util.Optional.of(chapter));
+    when(seriesRepository.findById(series.getId())).thenReturn(java.util.Optional.of(series));
     when(chapterRepository.findMinChapterNumberWithCoverBySeriesId(series.getId())).thenReturn(1.0);
 
     Page result = pageService.createPageWithExistingImage(chapter, image, 1, user);
@@ -92,8 +99,7 @@ public class PageServiceTest {
   public void testDeletePageDb_Success() {
     UUID pageId = UUID.randomUUID();
     UUID chapterId = UUID.randomUUID();
-    Series series =
-        Series.builder().id(UUID.randomUUID()).build();
+    Series series = Series.builder().id(UUID.randomUUID()).build();
     Chapter chapter = Chapter.builder().id(chapterId).series(series).build();
     Image image =
         Image.builder().id(pageId).storagePath("path").thumbnailStoragePath("thumb").build();
@@ -157,6 +163,8 @@ public class PageServiceTest {
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId()))
         .thenReturn(java.util.List.of(conflictingPage));
     when(pageRepository.save(any(Page.class))).thenReturn(newPage);
+    when(chapterRepository.findById(chapter.getId())).thenReturn(java.util.Optional.of(chapter));
+    when(seriesRepository.findById(series.getId())).thenReturn(java.util.Optional.of(series));
     when(chapterRepository.findMinChapterNumberWithCoverBySeriesId(series.getId())).thenReturn(1.0);
 
     Page result = pageService.createPageWithExistingImage(chapter, newImage, 1, user);
@@ -171,5 +179,59 @@ public class PageServiceTest {
     when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.empty());
 
     assertThrows(IllegalArgumentException.class, () -> pageService.deletePageDb(pageId));
+  }
+
+  @Test
+  public void testRecalculateSeriesCover() {
+    UUID seriesId = UUID.randomUUID();
+    Series series = new Series();
+    series.setId(seriesId);
+
+    UUID coverId = UUID.randomUUID();
+    Chapter chapter = new Chapter();
+    chapter.setId(UUID.randomUUID());
+    chapter.setCoverImageId(coverId);
+
+    when(seriesRepository.findById(seriesId)).thenReturn(java.util.Optional.of(series));
+    when(chapterRepository.findMinChapterNumberWithCoverBySeriesId(seriesId)).thenReturn(1.0);
+    when(chapterRepository.findBySeriesIdAndChapterNumber(seriesId, 1.0))
+        .thenReturn(java.util.Optional.of(chapter));
+
+    pageService.recalculateSeriesCover(seriesId);
+
+    verify(seriesRepository, times(1)).save(series);
+    assertEquals(coverId, series.getCoverImageId());
+  }
+
+  @Test
+  public void testRecalculateChapterCover() {
+    UUID chapterId = UUID.randomUUID();
+    Series series = new Series();
+    series.setId(UUID.randomUUID());
+
+    Chapter chapter = new Chapter();
+    chapter.setId(chapterId);
+    chapter.setSeries(series);
+
+    UUID imageId = UUID.randomUUID();
+    Image image = new Image();
+    image.setId(imageId);
+
+    Page firstPage = new Page();
+    firstPage.setId(UUID.randomUUID());
+    firstPage.setImage(image);
+
+    when(chapterRepository.findById(chapterId)).thenReturn(java.util.Optional.of(chapter));
+    when(pageRepository.findByChapterIdAndPageNumber(chapterId, 1))
+        .thenReturn(java.util.Optional.of(firstPage));
+
+    // For the cascaded series recalculation
+    when(seriesRepository.findById(series.getId())).thenReturn(java.util.Optional.of(series));
+
+    pageService.recalculateChapterCover(chapterId);
+
+    verify(chapterRepository, times(1)).save(chapter);
+    assertEquals(imageId, chapter.getCoverImageId());
+    verify(seriesRepository, times(1)).save(series);
   }
 }

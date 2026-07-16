@@ -51,19 +51,12 @@ public class PageService {
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(image).build();
     Objects.requireNonNull(page, "page cannot be null");
     page = pageRepository.save(page);
-    
-    if (pageNumber == 1) {
-      chapter.setCoverImageId(image.getId());
-      chapterRepository.save(chapter);
 
-      Series series = chapter.getSeries();
-      Double minChapterNum = chapterRepository.findMinChapterNumberWithCoverBySeriesId(series.getId());
-      if (minChapterNum == null || chapter.getChapterNumber() <= minChapterNum) {
-        series.setCoverImageId(image.getId());
-        seriesRepository.save(series);
-      }
+    if (pageNumber == 1) {
+      pageRepository.flush();
+      recalculateChapterCover(chapter.getId());
     }
-    
+
     return page;
   }
 
@@ -84,19 +77,12 @@ public class PageService {
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(existingImage).build();
     Objects.requireNonNull(page, "page cannot be null");
     page = pageRepository.save(page);
-    
-    if (pageNumber == 1) {
-      chapter.setCoverImageId(existingImage.getId());
-      chapterRepository.save(chapter);
 
-      Series series = chapter.getSeries();
-      Double minChapterNum = chapterRepository.findMinChapterNumberWithCoverBySeriesId(series.getId());
-      if (minChapterNum == null || chapter.getChapterNumber() <= minChapterNum) {
-        series.setCoverImageId(existingImage.getId());
-        seriesRepository.save(series);
-      }
+    if (pageNumber == 1) {
+      pageRepository.flush();
+      recalculateChapterCover(chapter.getId());
     }
-    
+
     return page;
   }
 
@@ -139,8 +125,6 @@ public class PageService {
       }
     }
 
-
-
     // 1. Delete page first
     pageRepository.delete(page);
 
@@ -163,6 +147,8 @@ public class PageService {
     }
     pageRepository.flush();
 
+    recalculateChapterCover(chapterId);
+
     return pathsToDelete;
   }
 
@@ -171,7 +157,8 @@ public class PageService {
     try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(originalBytes)) {
       in.mark(Integer.MAX_VALUE);
       javax.imageio.stream.ImageInputStream iis = javax.imageio.ImageIO.createImageInputStream(in);
-      java.util.Iterator<javax.imageio.ImageReader> readers = javax.imageio.ImageIO.getImageReaders(iis);
+      java.util.Iterator<javax.imageio.ImageReader> readers =
+          javax.imageio.ImageIO.getImageReaders(iis);
       if (!readers.hasNext()) {
         log.warn("No image reader found for image {}", imageId);
         iis.close();
@@ -201,47 +188,58 @@ public class PageService {
       iis.close();
 
       // High-quality area-averaging scaling
-      java.awt.Image scaled = subsampledImage.getScaledInstance(targetWidth, targetHeight, java.awt.Image.SCALE_SMOOTH);
+      java.awt.Image scaled =
+          subsampledImage.getScaledInstance(targetWidth, targetHeight, java.awt.Image.SCALE_SMOOTH);
 
-      java.awt.image.BufferedImage thumbnail = new java.awt.image.BufferedImage(
-          targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
+      java.awt.image.BufferedImage thumbnail =
+          new java.awt.image.BufferedImage(
+              targetWidth, targetHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
 
       java.awt.Graphics2D g = thumbnail.createGraphics();
       g.drawImage(scaled, 0, 0, null);
       g.dispose();
 
       java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-      java.util.Iterator<javax.imageio.ImageWriter> writers = javax.imageio.ImageIO.getImageWritersByFormatName("webp");
+      java.util.Iterator<javax.imageio.ImageWriter> writers =
+          javax.imageio.ImageIO.getImageWritersByFormatName("webp");
       if (writers.hasNext()) {
-          javax.imageio.ImageWriter writer = writers.next();
-          javax.imageio.ImageWriteParam writeParam = writer.getDefaultWriteParam();
-          if (writeParam.canWriteCompressed()) {
-              writeParam.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
-              String[] types = writeParam.getCompressionTypes();
-              if (types != null && types.length > 0) {
-                  writeParam.setCompressionType(types[0]); // Lossy
-              }
-              writeParam.setCompressionQuality(0.85f);
+        javax.imageio.ImageWriter writer = writers.next();
+        javax.imageio.ImageWriteParam writeParam = writer.getDefaultWriteParam();
+        if (writeParam.canWriteCompressed()) {
+          writeParam.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+          String[] types = writeParam.getCompressionTypes();
+          if (types != null && types.length > 0) {
+            writeParam.setCompressionType(types[0]); // Lossy
           }
-          javax.imageio.stream.ImageOutputStream ios = javax.imageio.ImageIO.createImageOutputStream(out);
-          writer.setOutput(ios);
-          writer.write(null, new javax.imageio.IIOImage(thumbnail, null, null), writeParam);
-          ios.close();
-          writer.dispose();
+          writeParam.setCompressionQuality(0.85f);
+        }
+        javax.imageio.stream.ImageOutputStream ios =
+            javax.imageio.ImageIO.createImageOutputStream(out);
+        writer.setOutput(ios);
+        writer.write(null, new javax.imageio.IIOImage(thumbnail, null, null), writeParam);
+        ios.close();
+        writer.dispose();
       } else {
-          javax.imageio.ImageIO.write(thumbnail, "webp", out);
+        javax.imageio.ImageIO.write(thumbnail, "webp", out);
       }
       byte[] thumbBytes = out.toByteArray();
 
       String thumbnailStoragePath = "thumbnails/" + uuid + ".webp";
       minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/webp");
 
-      imageRepository.findById(imageId).ifPresent(img -> {
-        img.setThumbnailStoragePath(thumbnailStoragePath);
-        imageRepository.save(img);
-      });
+      imageRepository
+          .findById(imageId)
+          .ifPresent(
+              img -> {
+                img.setThumbnailStoragePath(thumbnailStoragePath);
+                imageRepository.save(img);
+              });
       log.info("Successfully generated and uploaded WebP thumbnail to {}", thumbnailStoragePath);
-    } catch (java.io.IOException | RuntimeException | io.minio.errors.MinioException | java.security.NoSuchAlgorithmException | java.security.InvalidKeyException e) {
+    } catch (java.io.IOException
+        | RuntimeException
+        | io.minio.errors.MinioException
+        | java.security.NoSuchAlgorithmException
+        | java.security.InvalidKeyException e) {
       log.error("Failed to generate async thumbnail for image {}", imageId, e);
     }
   }
@@ -250,5 +248,38 @@ public class PageService {
     if (filename == null) return ".jpg";
     int lastIndex = filename.lastIndexOf('.');
     return lastIndex == -1 ? ".jpg" : filename.substring(lastIndex);
+  }
+
+  @Transactional
+  public void recalculateSeriesCover(UUID seriesId) {
+    Series series = seriesRepository.findById(seriesId).orElse(null);
+    if (series == null) return;
+
+    Double minChapterNum = chapterRepository.findMinChapterNumberWithCoverBySeriesId(seriesId);
+    UUID coverImageId = null;
+    if (minChapterNum != null) {
+      Optional<Chapter> firstCoverChapter =
+          chapterRepository.findBySeriesIdAndChapterNumber(seriesId, minChapterNum);
+      if (firstCoverChapter.isPresent()) {
+        coverImageId = firstCoverChapter.get().getCoverImageId();
+      }
+    }
+
+    series.setCoverImageId(coverImageId);
+    seriesRepository.save(series);
+  }
+
+  @Transactional
+  public void recalculateChapterCover(UUID chapterId) {
+    Chapter chapter = chapterRepository.findById(chapterId).orElse(null);
+    if (chapter == null) return;
+
+    Optional<Page> firstPage = pageRepository.findByChapterIdAndPageNumber(chapterId, 1);
+    UUID coverImageId = firstPage.map(page -> page.getImage().getId()).orElse(null);
+
+    chapter.setCoverImageId(coverImageId);
+    chapterRepository.save(chapter);
+
+    recalculateSeriesCover(chapter.getSeries().getId());
   }
 }
