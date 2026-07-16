@@ -409,12 +409,13 @@ Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPi
 ### C.5 Future Optimization: Background Image Decoding for Instant Transitions
 
 > [!NOTE]
-> Currently, we pre-fetch the next 2 pages in JavaScript using `new Image().src = ...`. This downloads the file in the background, but the browser often defers *decoding/rendering* it until it's actually shown on screen. 
-> 
+> Currently, we pre-fetch the next 2 pages in JavaScript using `new Image().src = ...`. This downloads the file in the background, but the browser often defers *decoding/rendering* it until it's actually shown on screen.
+>
 > **The Tradeoff:**
+>
 > - **Current approach (JS fetch only):** Keeps memory usage low and provides progressive rendering visual feedback (the image loads top-to-bottom like "assembling parts") which users on slower connections prefer to see.
-> - **Future approach (Hidden DOM elements):** If we ever want 100% instant, seamless transitions, we could render hidden `<img />` tags for the pre-fetched pages in the DOM. This forces the browser to do the heavy decoding and rasterizing early. 
-> 
+> - **Future approach (Hidden DOM elements):** If we ever want 100% instant, seamless transitions, we could render hidden `<img />` tags for the pre-fetched pages in the DOM. This forces the browser to do the heavy decoding and rasterizing early.
+>
 > For now, we are intentionally sticking to the lightweight JS fetch to retain progressive rendering, but this is documented here as an easy switch if the UX requirements change.
 
 ### ✅ Checkpoint C — Thumbnails
@@ -453,7 +454,7 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 
 ---
 
-## Phase D — Frontend UI Fixes & Redesign - Starting
+## Phase D — Frontend UI Fixes & Redesign
 
 ### D.1 Remove Cover Image URL Field from Dialogs
 
@@ -580,6 +581,8 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 
 > [!IMPORTANT]
 > This is a **foundational change** that affects all of Phase D. It should be tackled early (ideally first in Phase D) so that subsequent UI items (D.1–D.11) are built on MUI components rather than vanilla CSS that will be replaced later.
+>
+> **Full plan**: [docs/plan-mui-migration.md](plan-mui-migration.md) — 9-phase incremental migration with component mapping, palette extraction, CSS tracking sheet, and phase dependency graph.
 
 **Files**: `package.json`, all `.tsx` components, `index.css` → MUI theme files
 
