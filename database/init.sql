@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 -- Series
 CREATE TABLE IF NOT EXISTS series (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cover_image_id UUID,
     title TEXT NOT NULL,
     original_language TEXT NOT NULL, -- ja, zh, ko, en etc.
     source_language TEXT,
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS chapters (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     volume_id UUID REFERENCES volumes(id) ON DELETE SET NULL,
     series_id UUID NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+    cover_image_id UUID,
     chapter_number DOUBLE PRECISION NOT NULL,
     title TEXT,
     summary_json JSONB,
@@ -252,6 +254,21 @@ CREATE TABLE IF NOT EXISTS search_index (
     content TEXT NOT NULL,
     content_type TEXT NOT NULL, -- ocr, translation, tag
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Jobs
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    trace_id VARCHAR(255),
+    type TEXT NOT NULL,
+    image_id UUID REFERENCES images(id) ON DELETE SET NULL,
+    status TEXT NOT NULL,
+    payload TEXT,
+    error TEXT,
+    attempt INT,
+    max_attempts INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Create some default indexes for performance and spatial-like range queries
