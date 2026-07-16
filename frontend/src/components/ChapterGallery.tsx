@@ -1,9 +1,38 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import type { User, Series, Chapter, Page, SystemSettingsDto } from "../types";
+import type { User, Series, Chapter, Page } from "../types";
 import { safeFetch, toSlug, getContextPath } from "../utils";
 import ConfirmModal from "./ConfirmModal";
+import ChapterDialog from "./ChapterDialog";
 import { useToast } from "./ToastContext";
+
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import Container from "@mui/material/Container";
+import IconButton from "@mui/material/IconButton";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import Paper from "@mui/material/Paper";
+import ImageList from "@mui/material/ImageList";
+import ImageListItem from "@mui/material/ImageListItem";
+import ImageListItemBar from "@mui/material/ImageListItemBar";
+import CircularProgress from "@mui/material/CircularProgress";
+import LinearProgress from "@mui/material/LinearProgress";
+import Backdrop from "@mui/material/Backdrop";
+import Tooltip from "@mui/material/Tooltip";
+
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import UploadIcon from "@mui/icons-material/Upload";
+import ArrowLeftIcon from "@mui/icons-material/ArrowLeft";
+import ArrowRightIcon from "@mui/icons-material/ArrowRight";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import CloseIcon from "@mui/icons-material/Close";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
+import ArchiveIcon from "@mui/icons-material/Archive";
 
 interface UploadQueueItem {
   id: string;
@@ -35,20 +64,33 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   isLoadingDetails,
 }) => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
-  // Page-wide drag state
   const [dragCounter, setDragCounter] = useState(0);
-
-  // Upload queue and feedback states
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [isQueueExpanded, setIsQueueExpanded] = useState(true);
   const [isImportingProject, setIsImportingProject] = useState(false);
 
-  // Use global toast hook
-  const { showToast } = useToast();
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  // XHR upload wrapper to report progress percentages
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    isDangerous?: boolean;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
+
+  const closeConfirmModal = () =>
+    setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+
   const uploadFileWithProgress = React.useCallback(
     (
       file: File,
@@ -103,156 +145,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     [user.token],
   );
 
-  // Confirm modal state
-  const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    confirmText?: string;
-    isDangerous?: boolean;
-    onConfirm: () => void;
-  }>({
-    isOpen: false,
-    title: "",
-    message: "",
-    onConfirm: () => {},
-  });
-
-  const closeConfirmModal = () =>
-    setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-
-  // Chapter editing modal state
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editChapterNum, setEditChapterNum] = useState<number>(1.0);
-  const [editChapterTitle, setEditChapterTitle] = useState("");
-  const [editChapterUseContextMemory, setEditChapterUseContextMemory] =
-    useState<boolean>(true);
-  const [editError, setEditError] = useState("");
-
-  const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
-  const providers = settings?.activeProviders || [
-    "openrouter",
-    "gemini",
-    "nvidia",
-    "openai",
-    "anthropic",
-    "ollama",
-    "lmstudio",
-  ];
-  const ocrProviders = settings?.activeOcrProviders || [
-    "local",
-    "openrouter",
-    "gemini",
-    "nvidia",
-    "ollama",
-    "lmstudio",
-  ];
-
-  const [showModelOverrides, setShowModelOverrides] = useState(false);
-
-  // Model overrides for Chapter
-  const [editChapOcrProvider, setEditChapOcrProvider] = useState("");
-  const [editChapOcrModel, setEditChapOcrModel] = useState("");
-  const [editChapTlProvider, setEditChapTlProvider] = useState("");
-  const [editChapTlModel, setEditChapTlModel] = useState("");
-  const [editChapQaProvider, setEditChapQaProvider] = useState("");
-  const [editChapQaLlmModel, setEditChapQaLlmModel] = useState("");
-  const [editChapQaVlmModel, setEditChapQaVlmModel] = useState("");
-  const [editChapQaMode, setEditChapQaMode] = useState("");
-
-  React.useEffect(() => {
-    if (showEditModal && !settings) {
-      safeFetch("/api/settings", {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => setSettings(data))
-        .catch(console.error);
-    }
-  }, [showEditModal, settings, user.token]);
-
-  const handleEditClick = () => {
-    if (selectedChapter) {
-      setEditChapterNum(selectedChapter.chapterNumber);
-      setEditChapterTitle(selectedChapter.title || "");
-      setEditChapterUseContextMemory(
-        selectedChapter.useContextMemory !== false,
-      );
-      setEditError("");
-      setEditChapOcrProvider(selectedChapter.ocrProvider || "");
-      setEditChapOcrModel(selectedChapter.ocrModel || "");
-      setEditChapTlProvider(selectedChapter.tlProvider || "");
-      setEditChapTlModel(selectedChapter.tlModel || "");
-      setEditChapQaProvider(selectedChapter.qaProvider || "");
-      setEditChapQaLlmModel(selectedChapter.qaLlmModel || "");
-      setEditChapQaVlmModel(selectedChapter.qaVlmModel || "");
-      setEditChapQaMode(selectedChapter.qaMode || "");
-      setShowModelOverrides(false);
-      setShowEditModal(true);
-    }
-  };
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedChapter) return;
-    setEditError("");
-    try {
-      const res = await safeFetch(
-        `/api/series/chapters/${selectedChapter.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
-          },
-          body: JSON.stringify({
-            chapterNumber: editChapterNum,
-            title: editChapterTitle,
-            useContextMemory: editChapterUseContextMemory,
-            ocrProvider: editChapOcrProvider || null,
-            ocrModel: editChapOcrModel || null,
-            tlProvider: editChapTlProvider || null,
-            tlModel: editChapTlModel || null,
-            qaProvider: editChapQaProvider || null,
-            qaLlmModel: editChapQaLlmModel || null,
-            qaVlmModel: editChapQaVlmModel || null,
-            qaMode: editChapQaMode || null,
-          }),
-        },
-      );
-      if (res.ok) {
-        const data: Chapter = await res.json();
-        setSelectedChapter(data);
-        setShowEditModal(false);
-        setEditError("");
-      } else {
-        let errMsg = "Failed to update chapter";
-        try {
-          const text = await res.text();
-          if (text) {
-            try {
-              const parsed = JSON.parse(text);
-              errMsg = parsed.message || parsed.error || errMsg;
-            } catch {
-              errMsg = text;
-            }
-          }
-        } catch (readErr) {
-          console.error(readErr);
-        }
-        setEditError(errMsg);
-      }
-    } catch (err) {
-      console.error("Error updating chapter:", err);
-      setEditError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
   const processUploadedFiles = React.useCallback(
     async (files: FileList) => {
       if (!selectedChapter) return;
 
-      // Build new queue items
       const newItems: UploadQueueItem[] = [];
       const now = Date.now();
       for (let i = 0; i < files.length; i++) {
@@ -285,7 +181,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         if (!queueItem) continue;
         const queueItemId = queueItem.id;
 
-        // Update status to uploading
         setUploadQueue((prev) =>
           prev.map((item) =>
             item.id === queueItemId ? { ...item, status: "uploading" } : item,
@@ -337,7 +232,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         }
       }
 
-      // Refresh pages list automatically at the end
       try {
         const r = await safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
           headers: { Authorization: `Bearer ${user.token}` },
@@ -346,10 +240,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           const data: Page[] = await r.json();
           setPages(data);
           if (successCount > 0) {
-            showToast(
-              `Successfully uploaded ${successCount} page(s)`,
-              "success",
-            );
+            showToast(`Successfully uploaded ${successCount} page(s)`, "success");
           }
           if (failCount > 0) {
             showToast(`Failed to upload ${failCount} page(s)`, "error");
@@ -359,17 +250,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         console.error("Error refreshing pages:", err);
       }
     },
-    [
-      selectedChapter,
-      pages.length,
-      user.token,
-      setPages,
-      uploadFileWithProgress,
-      showToast,
-    ],
+    [selectedChapter, pages.length, user.token, setPages, uploadFileWithProgress, showToast],
   );
 
-  // Bind window-wide drag and drop events
   const processUploadedFilesRef = useRef(processUploadedFiles);
   useEffect(() => {
     processUploadedFilesRef.current = processUploadedFiles;
@@ -381,18 +264,15 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       e.stopPropagation();
       setDragCounter((prev) => prev + 1);
     };
-
     const handleDragLeave = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setDragCounter((prev) => Math.max(0, prev - 1));
     };
-
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
     };
-
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -402,12 +282,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         processUploadedFilesRef.current(files);
       }
     };
-
     window.addEventListener("dragenter", handleDragEnter);
     window.addEventListener("dragleave", handleDragLeave);
     window.addEventListener("dragover", handleDragOver);
     window.addEventListener("drop", handleDrop);
-
     return () => {
       window.removeEventListener("dragenter", handleDragEnter);
       window.removeEventListener("dragleave", handleDragLeave);
@@ -421,15 +299,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     if (files) processUploadedFiles(files);
   };
 
-  const handleProjectImportUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleProjectImportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedChapter) return;
-
-    // Reset input value so onChange triggers again for same file if needed
     e.target.value = "";
-
     setIsImportingProject(true);
     showToast("Importing project layers...", "info");
 
@@ -441,22 +314,16 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         `/api/chapters/${selectedChapter.id}/import-project`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
+          headers: { Authorization: `Bearer ${user.token}` },
           body: formData,
         },
       );
 
       if (res.ok) {
         showToast("Project imported successfully!", "success");
-        // Refresh pages list
-        const pagesRes = await safeFetch(
-          `/api/chapters/${selectedChapter.id}/pages`,
-          {
-            headers: { Authorization: `Bearer ${user.token}` },
-          },
-        );
+        const pagesRes = await safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
         if (pagesRes.ok) {
           const data: Page[] = await pagesRes.json();
           setPages(data);
@@ -467,10 +334,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       }
     } catch (err) {
       console.error(err);
-      showToast(
-        err instanceof Error ? err.message : "Error importing project",
-        "error",
-      );
+      showToast(err instanceof Error ? err.message : "Error importing project", "error");
     } finally {
       setIsImportingProject(false);
     }
@@ -481,26 +345,14 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     try {
       const res = await safeFetch(
         `/api/series/chapters/${selectedChapter.id}/export?format=zip`,
-        {
-          headers: { Authorization: `Bearer ${user.token}` },
-        },
+        { headers: { Authorization: `Bearer ${user.token}` } },
       );
-
-      if (!res.ok) {
-        throw new Error("Failed to export chapter zip");
-      }
+      if (!res.ok) throw new Error("Failed to export chapter zip");
 
       const contentType = res.headers.get("content-type");
-      if (
-        res.status === 202 ||
-        (contentType && contentType.includes("application/json"))
-      ) {
+      if (res.status === 202 || (contentType && contentType.includes("application/json"))) {
         const data = await res.json();
-        showToast(
-          data.message ||
-            "Export started in the background. You will be notified when it is ready.",
-          "info",
-        );
+        showToast(data.message || "Export started in the background. You will be notified when it is ready.", "info");
         return;
       }
 
@@ -519,22 +371,12 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     }
   }, [selectedChapter, user.token, showToast]);
 
-  if (isLoadingDetails || !selectedSeries || !selectedChapter) {
-    return (
-      <div className="dashboard-content text-center">
-        <div className="spinner"></div>
-        <p>Loading chapter details...</p>
-      </div>
-    );
-  }
-
   const handleDeletePage = (pageId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmModal({
       isOpen: true,
       title: "Delete Page",
-      message:
-        "Are you sure you want to delete this page? This will also delete all associated panels, OCR regions, and translations.",
+      message: "Are you sure you want to delete this page? This will also delete all associated panels, OCR regions, and translations.",
       confirmText: "Delete Page",
       isDangerous: true,
       onConfirm: async () => {
@@ -545,24 +387,17 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             headers: { Authorization: `Bearer ${user.token}` },
           });
           if (res.ok) {
-            // Filter locally
             setPages((prev) => prev.filter((p) => p.id !== pageId));
             showToast("Page deleted successfully", "success");
-            // Re-fetch pages list to verify orders
             if (selectedChapter) {
-              const r = await safeFetch(
-                `/api/chapters/${selectedChapter.id}/pages`,
-                {
-                  headers: { Authorization: `Bearer ${user.token}` },
-                },
-              );
+              const r = await safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
+                headers: { Authorization: `Bearer ${user.token}` },
+              });
               if (r.ok) {
                 const data: Page[] = await r.json();
                 setPages(data);
               }
             }
-          } else if (res.status === 403) {
-            showToast("You don't have permission to delete this page.", "error");
           } else {
             showToast("Failed to delete page", "error");
           }
@@ -579,12 +414,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     const newIndex = direction === "left" ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= pages.length) return;
 
-    // Swap locally for instant feedback using splice to avoid dynamic bracket notation lint warning
     const updatedPages = [...pages];
     const [moved] = updatedPages.splice(index, 1);
     updatedPages.splice(newIndex, 0, moved);
 
-    // Adjust pageNumbers in the updated array
     const finalPages = updatedPages.map((p, idx) => ({
       ...p,
       pageNumber: idx + 1,
@@ -592,126 +425,88 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     setPages(finalPages);
 
     try {
-      const res = await safeFetch(
-        `/api/chapters/${selectedChapter.id}/pages/reorder`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
-          },
-          body: JSON.stringify(finalPages.map((p) => p.id)),
+      const res = await safeFetch(`/api/chapters/${selectedChapter.id}/pages/reorder`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
         },
-      );
-      if (!res.ok) {
-        throw new Error("Failed to save reorder on backend");
-      }
+        body: JSON.stringify(finalPages.map((p) => p.id)),
+      });
+      if (!res.ok) throw new Error("Failed to save reorder on backend");
     } catch (err) {
       console.error("Error saving page order:", err);
-      // Revert if error
       if (selectedChapter) {
         safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
           headers: { Authorization: `Bearer ${user.token}` },
         })
           .then((r) => r.json())
           .then((data) => setPages(data))
-          .catch((fetchErr) =>
-            console.error("Error reverting page order:", fetchErr),
-          );
+          .catch(console.error);
       }
     }
   };
 
+  if (isLoadingDetails || !selectedSeries || !selectedChapter) {
+    return (
+      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="50vh" gap={2}>
+        <CircularProgress />
+        <Typography color="text.secondary">Loading chapter details...</Typography>
+      </Box>
+    );
+  }
+
   return (
-    <div className="dashboard-content">
-      <div className="mb-8">
-        <button
-          className="btn btn-secondary"
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Box mb={4}>
+        <Button
+          startIcon={<ArrowBackIcon />}
           onClick={() => {
             setSelectedChapter(null);
-            navigate(
-              `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`,
-            );
+            navigate(`/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`);
           }}
-          style={{ padding: "8px 16px", marginBottom: "16px" }}
+          color="inherit"
         >
-          &larr; Back to Series
-        </button>
-        <div className="page-header">
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <h1>Chapter {selectedChapter.chapterNumber}</h1>
-              <button
-                className="action-btn-small"
-                onClick={handleEditClick}
-                title="Edit Chapter Name & Number"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "6px",
-                  padding: "6px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--text-muted)",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "#fff";
-                  e.currentTarget.style.background = "rgba(255,255,255,0.1)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-            </div>
-            <p style={{ color: "var(--text-muted)", margin: "8px 0 0" }}>
+          Back to Series
+        </Button>
+      </Box>
+
+      <Paper elevation={0} sx={{ p: 4, mb: 4, borderRadius: 4, bgcolor: 'background.paper' }}>
+        <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems="center" gap={3}>
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={2} mb={1}>
+              <Typography variant="h3" component="h1" sx={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                Chapter {selectedChapter.chapterNumber}
+              </Typography>
+              <Tooltip title="Edit Chapter">
+                <IconButton onClick={() => setShowEditModal(true)} size="small" sx={{ bgcolor: 'action.hover' }}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+            <Typography variant="body1" color="text.secondary">
               {selectedSeries.title} / {selectedChapter.title || "Untitled"}
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "12px" }}>
-            <button
-              className="btn btn-secondary"
-              onClick={() =>
-                document.getElementById("project-import-upload")?.click()
-              }
+            </Typography>
+          </Box>
+          <Box display="flex" gap={2} flexWrap="wrap">
+            <Button
+              variant="outlined"
+              startIcon={<ArchiveIcon />}
+              onClick={() => document.getElementById("project-import-upload")?.click()}
               disabled={isImportingProject}
             >
               {isImportingProject ? "Importing..." : "Import Project (ZIP)"}
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={handleExportChapterZip}
-            >
+            </Button>
+            <Button variant="outlined" startIcon={<ArchiveIcon />} onClick={handleExportChapterZip}>
               Export Chapter (ZIP)
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={() => document.getElementById("file-upload")?.click()}
-            >
-              Upload Page
-            </button>
-          </div>
-        </div>
-      </div>
+            </Button>
+            <Button variant="contained" startIcon={<UploadIcon />} onClick={() => document.getElementById("file-upload")?.click()}>
+              Upload Pages
+            </Button>
+          </Box>
+        </Box>
+      </Paper>
 
-      {/* Hidden file input for browsing */}
       <input
         id="file-upload"
         type="file"
@@ -728,155 +523,176 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         onChange={handleProjectImportUpload}
       />
 
-      <h2 style={{ fontFamily: "var(--font-display)", fontSize: "22px" }}>
+      <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
         Uploaded Pages ({pages.length})
-      </h2>
-      <div className="pages-grid">
+      </Typography>
+
+      <ImageList cols={4} gap={16} sx={{ mb: 4, gridTemplateColumns: { xs: 'repeat(1, 1fr)', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' } }}>
         {pages.map((p, idx) => (
-          <div
-            key={p.id}
-            className="page-thumbnail-container glass"
-            onClick={() => {
-              onSelectPage(p);
-              navigate(
-                `/chapters/${selectedChapter.id}/${toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`)}/reader/${p.pageNumber}`,
-              );
-            }}
-            style={{ position: "relative" }}
-          >
-            <img
+          <ImageListItem key={p.id} sx={{ cursor: 'pointer', borderRadius: 2, overflow: 'hidden', boxShadow: 2, '&:hover .MuiImageListItemBar-root': { opacity: 1 } }}>
+            <Box
+              component="img"
               src={p.thumbnailUrl || `${p.url}?token=${user.token}`}
-              className="page-thumbnail"
               alt={`Page ${p.pageNumber}`}
+              loading="lazy"
+              onClick={() => {
+                onSelectPage(p);
+                navigate(
+                  `/chapters/${selectedChapter.id}/${toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`)}/reader/${p.pageNumber}`
+                );
+              }}
+              sx={{ width: '100%', height: 400, objectFit: 'cover' }}
             />
-            <span className="page-num-tag">Page {p.pageNumber}</span>
-
-            <button
-              className="delete-page-btn"
-              onClick={(e) => handleDeletePage(p.id, e)}
-              title="Delete page"
-            >
-              &times;
-            </button>
-
-            <div
-              className="reorder-controls"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                className="reorder-btn"
-                onClick={() => handleMovePage(idx, "left")}
-                disabled={idx === 0}
-                title="Move page left"
-              >
-                &larr;
-              </button>
-              <button
-                className="reorder-btn"
-                onClick={() => handleMovePage(idx, "right")}
-                disabled={idx === pages.length - 1}
-                title="Move page right"
-              >
-                &rarr;
-              </button>
-            </div>
-          </div>
+            <ImageListItemBar
+              title={`Page ${p.pageNumber}`}
+              sx={{ opacity: 0.9, transition: 'opacity 0.2s' }}
+              actionIcon={
+                <Stack direction="row" spacing={0.5} mr={1}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMovePage(idx, "left");
+                    }}
+                    disabled={idx === 0}
+                    sx={{ color: 'white', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' } }}
+                  >
+                    <ArrowLeftIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMovePage(idx, "right");
+                    }}
+                    disabled={idx === pages.length - 1}
+                    sx={{ color: 'white', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' } }}
+                  >
+                    <ArrowRightIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleDeletePage(p.id, e)}
+                    sx={{ color: 'error.main', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' } }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              }
+            />
+          </ImageListItem>
         ))}
-      </div>
+      </ImageList>
 
-      {/* Fullscreen Drag Overlay */}
-      {dragCounter > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 10000,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(15, 15, 25, 0.85)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            border: "4px dashed rgba(99, 102, 241, 0.6)",
-            borderRadius: "16px",
-            margin: "16px",
-            pointerEvents: "none",
-            animation: "fadeIn 0.15s ease-out",
+      <Backdrop
+        open={dragCounter > 0}
+        sx={{
+          color: '#fff',
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          flexDirection: 'column',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        <Paper elevation={24} sx={{ p: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', borderRadius: 4, bgcolor: 'rgba(20, 20, 35, 0.9)', border: '2px dashed primary.main' }}>
+          <FileUploadIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+          <Typography variant="h4" gutterBottom fontWeight={700}>Drop Manga Pages Anywhere</Typography>
+          <Typography variant="body1" color="text.secondary">Release to add multiple files to Chapter {selectedChapter.chapterNumber}</Typography>
+        </Paper>
+      </Backdrop>
+
+      {/* Upload Queue Panel */}
+      {showQueuePanel && (
+        <Paper
+          elevation={12}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            width: 360,
+            zIndex: 1400,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            maxHeight: isQueueExpanded ? 400 : 50,
           }}
         >
-          <div
-            style={{
-              background:
-                "linear-gradient(145deg, rgba(30,30,50,0.95) 0%, rgba(20,20,38,0.95) 100%)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "20px",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
-              padding: "40px 60px",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "16px",
+          <Box
+            sx={{
+              p: 1.5,
+              bgcolor: 'background.default',
+              borderBottom: 1,
+              borderColor: 'divider',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
             }}
+            onClick={() => setIsQueueExpanded(!isQueueExpanded)}
           >
-            <div
-              style={{
-                width: "60px",
-                height: "60px",
-                borderRadius: "16px",
-                background: "rgba(99, 102, 241, 0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                animation: "pulse 2s infinite",
-              }}
-            >
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#818cf8"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: uploadQueue.some((item) => item.status === "uploading" || item.status === "pending")
+                    ? 'warning.main'
+                    : 'success.main',
+                }}
+              />
+              <Typography variant="subtitle2" fontWeight={600}>
+                {uploadQueue.some((item) => item.status === "uploading" || item.status === "pending")
+                  ? `Uploading ${uploadQueue.filter((item) => item.status === "uploading" || item.status === "pending").length} file(s)...`
+                  : "Uploads Completed"}
+              </Typography>
+            </Stack>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <IconButton size="small" onClick={(e) => { e.stopPropagation(); setIsQueueExpanded(!isQueueExpanded); }}>
+                {isQueueExpanded ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
+              </IconButton>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowQueuePanel(false);
+                  setUploadQueue([]);
+                }}
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line
-                  x1="12"
-                  y1="3"
-                  x2="12"
-                  y2="15"
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+          </Box>
+          
+          <Box sx={{ flex: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {uploadQueue.map((item) => (
+              <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="caption" noWrap sx={{ maxWidth: '75%', fontWeight: 500 }}>
+                    {item.name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 600,
+                      color: item.status === "completed" ? 'success.main' : item.status === "failed" ? 'error.main' : 'text.secondary'
+                    }}
+                  >
+                    {item.status === "uploading" ? `${item.progress}%` : item.status}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={item.progress}
+                  color={item.status === "completed" ? "success" : item.status === "failed" ? "error" : "primary"}
+                  sx={{ height: 4, borderRadius: 2 }}
                 />
-              </svg>
-            </div>
-            <h2
-              style={{
-                color: "#fff",
-                fontSize: "20px",
-                fontWeight: 700,
-                margin: 0,
-              }}
-            >
-              Drop Manga Pages Anywhere
-            </h2>
-            <p
-              style={{
-                color: "rgba(226,232,240,0.7)",
-                fontSize: "14px",
-                margin: 0,
-              }}
-            >
-              Release to add multiple files to Chapter{" "}
-              {selectedChapter.chapterNumber}
-            </p>
-          </div>
-        </div>
+              </Box>
+            ))}
+          </Box>
+        </Paper>
       )}
 
-      {/* Confirm Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
@@ -887,667 +703,22 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         onCancel={closeConfirmModal}
       />
 
-      {/* Edit Chapter Modal */}
-      {showEditModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+      {selectedChapter && (
+        <ChapterDialog
+          isOpen={showEditModal}
+          editingChapter={selectedChapter}
+          series={selectedSeries}
+          nextChapterNum={selectedChapter.chapterNumber}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={(data) => {
+            setSelectedChapter(data);
+            setShowEditModal(false);
           }}
-        >
-          <div
-            className="glass"
-            style={{ padding: "32px", width: "100%", maxWidth: "400px" }}
-          >
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                marginBottom: "24px",
-              }}
-            >
-              Edit Chapter
-            </h2>
-            <form onSubmit={handleEditSubmit}>
-              <div className="form-group">
-                <label className="form-label">Chapter Number</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="form-input"
-                  value={editChapterNum}
-                  onChange={(e) =>
-                    setEditChapterNum(parseFloat(e.target.value) || 0)
-                  }
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Chapter Title</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={editChapterTitle}
-                  onChange={(e) => setEditChapterTitle(e.target.value)}
-                  placeholder="e.g. The Beginning"
-                />
-              </div>
-
-              <div className="form-group">
-                <label
-                  className="form-label"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editChapterUseContextMemory}
-                    onChange={(e) =>
-                      setEditChapterUseContextMemory(e.target.checked)
-                    }
-                    style={{
-                      marginRight: "10px",
-                      width: "16px",
-                      height: "16px",
-                      accentColor: "var(--primary-color)",
-                    }}
-                  />
-                  Inject Context Memory (from previous chapter/page)
-                </label>
-              </div>
-
-              <div
-                style={{
-                  marginTop: "16px",
-                  padding: "16px",
-                  background: "var(--bg-hover)",
-                  borderRadius: "8px",
-                }}
-              >
-                <div
-                  onClick={() => setShowModelOverrides(!showModelOverrides)}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  <h4 style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>
-                    Model Overrides (Optional)
-                  </h4>
-                  <span style={{ fontSize: "12px", opacity: 0.6 }}>
-                    {showModelOverrides ? "▲" : "▼"}
-                  </span>
-                </div>
-
-                {showModelOverrides && (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "12px",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        OCR Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapOcrProvider}
-                        onChange={(e) => setEditChapOcrProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {ocrProviders.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        OCR VLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...(editChapOcrProvider === "local" ||
-                          (editChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={
-                          editChapOcrProvider === "local" ||
-                          (editChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                            ? settings?.localOcrModel || "local"
-                            : editChapOcrModel || ""
-                        }
-                        onChange={(e) => setEditChapOcrModel(e.target.value)}
-                        disabled={
-                          editChapOcrProvider === "local" ||
-                          (editChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                        }
-                      >
-                        {editChapOcrProvider === "local" ||
-                        (editChapOcrProvider === "" &&
-                          (selectedSeries?.ocrProvider === "local" ||
-                            (!selectedSeries?.ocrProvider &&
-                              settings?.ocrProvider === "local"))) ? (
-                          <option value={settings?.localOcrModel || "local"}>
-                            {settings?.localOcrModel || "Local Worker Model"}
-                          </option>
-                        ) : (
-                          <>
-                            <option value="">-- Inherit --</option>
-                            {settings?.ocrVlmModelList.map((m) => (
-                              <option
-                                key={m}
-                                value={m}
-                              >
-                                {m}
-                              </option>
-                            ))}
-                          </>
-                        )}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        TL Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapTlProvider}
-                        onChange={(e) => setEditChapTlProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {providers.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        TL LLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapTlModel}
-                        onChange={(e) => setEditChapTlModel(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.tlLlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapQaProvider}
-                        onChange={(e) => setEditChapQaProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {providers.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Mode
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapQaMode}
-                        onChange={(e) => setEditChapQaMode(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        <option value="auto">auto</option>
-                        <option value="llm">llm</option>
-                        <option value="vlm">vlm</option>
-                        <option value="hybrid">hybrid</option>
-                        <option value="none">none</option>
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA LLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...((editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "vlm" ||
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={editChapQaLlmModel}
-                        onChange={(e) => setEditChapQaLlmModel(e.target.value)}
-                        disabled={
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "vlm" ||
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                        }
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.qaLlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA VLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...((editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "llm" ||
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={editChapQaVlmModel}
-                        onChange={(e) => setEditChapQaVlmModel(e.target.value)}
-                        disabled={
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "llm" ||
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                        }
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.qaVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {editError && (
-                <div
-                  style={{
-                    color: "var(--error, #ff4d4f)",
-                    fontSize: "13px",
-                    marginTop: "16px",
-                    textAlign: "center",
-                  }}
-                >
-                  {editError}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditError("");
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                >
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          token={user.token}
+        />
       )}
 
-      {/* Toasts rendered globally by ToastProvider in App.tsx */}
-
-      {/* Floating Upload Queue Panel */}
-      {showQueuePanel && (
-        <div
-          className="glass"
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            width: "360px",
-            zIndex: 10000,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            maxHeight: isQueueExpanded ? "400px" : "50px",
-            transition: "max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-color)",
-            boxShadow: "0 12px 32px rgba(0,0,0,0.3)",
-          }}
-        >
-          {/* Header */}
-          <div
-            style={{
-              padding: "12px 16px",
-              background: "rgba(0, 0, 0, 0.1)",
-              borderBottom: "1px solid var(--border-color)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              cursor: "pointer",
-              userSelect: "none",
-            }}
-            onClick={() => setIsQueueExpanded(!isQueueExpanded)}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  backgroundColor: uploadQueue.some(
-                    (item) =>
-                      item.status === "uploading" || item.status === "pending",
-                  )
-                    ? "var(--warning)"
-                    : "var(--success)",
-                  display: "inline-block",
-                }}
-              ></span>
-              <span
-                style={{
-                  fontWeight: 600,
-                  fontSize: "14px",
-                  fontFamily: "var(--font-display)",
-                }}
-              >
-                {uploadQueue.some(
-                  (item) =>
-                    item.status === "uploading" || item.status === "pending",
-                )
-                  ? `Uploading ${uploadQueue.filter((item) => item.status === "uploading" || item.status === "pending").length} file(s)...`
-                  : "Uploads Completed"}
-              </span>
-            </div>
-            <div
-              style={{ display: "flex", alignItems: "center", gap: "12px" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={() => setIsQueueExpanded(!isQueueExpanded)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  padding: "4px",
-                  display: "flex",
-                }}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  style={{
-                    transform: isQueueExpanded ? "rotate(180deg)" : "none",
-                    transition: "transform 0.2s",
-                  }}
-                >
-                  <polyline points="18 15 12 9 6 15"></polyline>
-                </svg>
-              </button>
-              <button
-                onClick={() => {
-                  setShowQueuePanel(false);
-                  setUploadQueue([]);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  padding: "4px",
-                  fontSize: "18px",
-                  display: "flex",
-                  alignItems: "center",
-                  lineHeight: 1,
-                }}
-              >
-                &times;
-              </button>
-            </div>
-          </div>
-
-          {/* Queue Items List */}
-          {isQueueExpanded && (
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "12px 16px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-                maxHeight: "340px",
-              }}
-            >
-              {uploadQueue.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      fontSize: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        textOverflow: "ellipsis",
-                        overflow: "hidden",
-                        whiteSpace: "nowrap",
-                        maxWidth: "75%",
-                        color: "var(--text-main)",
-                        fontWeight: 500,
-                      }}
-                      title={item.name}
-                    >
-                      {item.name}
-                    </span>
-                    <span
-                      style={{
-                        color:
-                          item.status === "completed"
-                            ? "var(--success)"
-                            : item.status === "failed"
-                              ? "var(--error)"
-                              : "var(--text-muted)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {item.status === "uploading"
-                        ? `${item.progress}%`
-                        : item.status}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      width: "100%",
-                      height: "4px",
-                      backgroundColor: "rgba(255, 255, 255, 0.05)",
-                      borderRadius: "2px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${item.progress}%`,
-                        height: "100%",
-                        backgroundColor:
-                          item.status === "failed"
-                            ? "var(--error)"
-                            : item.status === "completed"
-                              ? "var(--success)"
-                              : "var(--primary)",
-                        transition: "width 0.1s ease-out",
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.08); }
-        }
-      `}</style>
-    </div>
+    </Container>
   );
 };
 

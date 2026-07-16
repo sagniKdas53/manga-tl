@@ -1,4 +1,7 @@
-import React, { useState } from "react";
+const fs = require('fs');
+const file = 'frontend/src/components/SeriesDetails.tsx';
+
+const content = `import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "./ToastContext";
 import type { User, Series, Chapter, SystemSettingsDto } from "../types";
@@ -107,9 +110,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       onConfirm: async () => {
         closeConfirmModal();
         try {
-          const res = await safeFetch(`/api/series/${selectedSeries.id}`, {
+          const res = await safeFetch(\`/api/series/\${selectedSeries.id}\`, {
             method: "DELETE",
-            headers: { Authorization: `Bearer ${user.token}` },
+            headers: { Authorization: \`Bearer \${user.token}\` },
           });
           if (res.ok) {
             setSelectedSeries(null);
@@ -163,9 +166,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       onConfirm: async () => {
         closeConfirmModal();
         try {
-          const res = await safeFetch(`/api/series/chapters/${chapterId}`, {
+          const res = await safeFetch(\`/api/series/chapters/\${chapterId}\`, {
             method: "DELETE",
-            headers: { Authorization: `Bearer ${user.token}` },
+            headers: { Authorization: \`Bearer \${user.token}\` },
           });
           if (res.ok) {
             setChapters((prev) => prev.filter((c) => c.id !== chapterId));
@@ -215,7 +218,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           <Box display="grid" gridTemplateColumns="auto 1fr" gap={2} alignItems="center">
             <Typography color="text.secondary" fontWeight={600}>Language:</Typography>
             <Stack direction="row" spacing={1} alignItems="center">
-              <Chip label={`${selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja"} → ${selectedSeries.targetLanguage || "en"}`} color="primary" variant="outlined" />
+              <Chip label={\`\${selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja"} → \${selectedSeries.targetLanguage || "en"}\`} color="primary" variant="outlined" />
               {(selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja") === (selectedSeries.targetLanguage || "en") && (
                 <Chip label="Reader Mode" color="info" size="small" />
               )}
@@ -280,7 +283,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
               <CardActionArea
                 onClick={() => {
                   onSelectChapter(c);
-                  navigate(`/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`);
+                  navigate(\`/chapters/\${c.id}/\${toSlug(c.title || \`chapter-\${c.chapterNumber}\`)}\`);
                 }}
                 sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
               >
@@ -289,7 +292,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                     component="img"
                     height="200"
                     image={c.coverImageUrl}
-                    alt={c.title || `Chapter ${c.chapterNumber}`}
+                    alt={c.title || \`Chapter \${c.chapterNumber}\`}
                     sx={{ objectFit: 'cover' }}
                   />
                 ) : selectedSeries.coverImageUrl ? (
@@ -381,3 +384,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 };
 
 export default SeriesDetails;
+`
+
+fs.writeFileSync(file, content);
+console.log('SeriesDetails.tsx successfully rewritten.');

@@ -1,4 +1,7 @@
-import React, { useState } from "react";
+const fs = require('fs');
+const file = 'frontend/src/components/Dashboard.tsx';
+
+const content = `import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "./ToastContext";
 import type { User, Series } from "../types";
@@ -97,9 +100,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       onConfirm: async () => {
         closeConfirmModal();
         try {
-          const res = await safeFetch(`/api/series/${seriesId}`, {
+          const res = await safeFetch(\`/api/series/\${seriesId}\`, {
             method: "DELETE",
-            headers: { Authorization: `Bearer ${user.token}` },
+            headers: { Authorization: \`Bearer \${user.token}\` },
           });
           if (res.ok) {
             setSeriesList((prev) => prev.filter((s) => s.id !== seriesId));
@@ -149,7 +152,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <CardActionArea
               onClick={() => {
                 onSelectSeries(s);
-                navigate(`/series/${s.id}/${toSlug(s.title)}`);
+                navigate(\`/series/\${s.id}/\${toSlug(s.title)}\`);
               }}
               sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
             >
@@ -185,7 +188,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <Stack direction="row" spacing={1} mb={2} flexWrap="wrap" useFlexGap>
                   <Chip
                     size="small"
-                    label={`${s.sourceLanguage || s.originalLanguage || "ja"} → ${s.targetLanguage || "en"}`}
+                    label={\`\${s.sourceLanguage || s.originalLanguage || "ja"} → \${s.targetLanguage || "en"}\`}
                     variant="outlined"
                   />
                   <Chip
@@ -257,3 +260,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 };
 
 export default Dashboard;
+`
+
+fs.writeFileSync(file, content);
+console.log('Dashboard.tsx successfully rewritten.');

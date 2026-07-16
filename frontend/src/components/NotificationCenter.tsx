@@ -1,285 +1,231 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import { useNotifications, type Notification } from "./useNotifications";
 import { safeFetch } from "../utils";
+
+import Popover from "@mui/material/Popover";
+import Badge from "@mui/material/Badge";
+import IconButton from "@mui/material/IconButton";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
+import ListItemText from "@mui/material/ListItemText";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import Divider from "@mui/material/Divider";
+import Stack from "@mui/material/Stack";
+
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import CircleIcon from "@mui/icons-material/Circle";
+import DownloadIcon from "@mui/icons-material/Download";
 
 export const NotificationCenter: React.FC = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
     useNotifications();
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
 
-  const toggleDropdown = () => setIsOpen(!isOpen);
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const open = Boolean(anchorEl);
+  const id = open ? "notification-popover" : undefined;
 
   const getIconColor = (type: string) => {
     switch (type) {
       case "ERROR":
-        return "#f44336";
+        return "error.main";
       case "WARNING":
-        return "#ff9800";
+        return "warning.main";
       case "INFO":
       default:
-        return "#2196f3";
+        return "info.main";
     }
   };
 
   return (
-    <div
-      className="notification-center"
-      ref={dropdownRef}
-      style={{ position: "relative", display: "flex", alignItems: "center" }}
-    >
-      <button
-        className="theme-toggle-btn"
-        onClick={toggleDropdown}
-        style={{ position: "relative" }}
+    <Box display="flex" alignItems="center">
+      <IconButton
+        aria-describedby={id}
+        onClick={handleClick}
+        color="inherit"
         title="Notifications"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-        </svg>
-        {unreadCount > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: 2,
-              right: 2,
-              backgroundColor: "var(--primary, #ed2553)",
-              color: "white",
-              borderRadius: "50%",
-              width: "14px",
-              height: "14px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "9px",
-              fontWeight: "bold",
-              lineHeight: 1,
-            }}
-          >
-            {unreadCount}
-          </span>
-        )}
-      </button>
+        <Badge badgeContent={unreadCount} color="error">
+          <NotificationsIcon />
+        </Badge>
+      </IconButton>
 
-      {isOpen && (
-        <div
-          className="glass"
-          style={{
-            position: "absolute",
-            top: "100%",
-            right: 0,
-            marginTop: "12px",
-            width: "320px",
-            maxHeight: "400px",
-            overflowY: "auto",
-            zIndex: 1000,
+      <Popover
+        id={id}
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "right",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "right",
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: 360,
+              maxHeight: 500,
+              display: "flex",
+              flexDirection: "column",
+            },
+          },
+        }}
+      >
+        <Box
+          sx={{
+            p: 2,
+            borderBottom: 1,
+            borderColor: "divider",
             display: "flex",
-            flexDirection: "column",
-            color: "var(--text-main)",
+            justifyContent: "space-between",
+            alignItems: "center",
+            bgcolor: "background.paper",
           }}
         >
-          <div
-            style={{
-              padding: "12px",
-              borderBottom: "1px solid var(--border-color)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <h3
-              style={{ margin: 0, fontSize: "16px", color: "var(--text-main)" }}
-            >
-              Notifications
-            </h3>
-            {notifications.length > 0 && (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  onClick={markAllAsRead}
-                  style={{
-                    fontSize: "12px",
-                    background: "none",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                  }}
-                >
-                  Mark all read
-                </button>
-                <button
-                  onClick={clearAll}
-                  style={{
-                    fontSize: "12px",
-                    background: "none",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
-            )}
-          </div>
-
-          {notifications.length === 0 ? (
-            <div
-              style={{
-                padding: "24px",
-                textAlign: "center",
-                color: "var(--text-muted)",
-              }}
-            >
-              No notifications
-            </div>
-          ) : (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {notifications.map((n: Notification) => (
-                <li
-                  key={n.id}
-                  onClick={() => markAsRead(n.id)}
-                  style={{
-                    padding: "12px",
-                    borderBottom: "1px solid var(--border-color)",
-                    backgroundColor: n.read ? "transparent" : "var(--bg-hover)",
-                    cursor: "pointer",
-                    display: "flex",
-                    gap: "12px",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      backgroundColor: getIconColor(n.type),
-                      marginTop: "6px",
-                    }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontWeight: "bold",
-                        fontSize: "14px",
-                        marginBottom: "4px",
-                        color: "var(--text-main)",
-                      }}
-                    >
-                      {n.title}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--text-muted)",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      {n.message}
-                    </div>
-                    {n.context && (
-                      <div
-                        style={{
-                          fontSize: "10px",
-                          color: "var(--primary, var(--text-muted))",
-                          opacity: 0.8,
-                          marginBottom: "4px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {[
-                          n.context.seriesTitle,
-                          n.context.chapterNumber
-                            ? `Ch.${n.context.chapterNumber}`
-                            : null,
-                          n.context.pageNumber
-                            ? `Page ${n.context.pageNumber}`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" › ")}
-                      </div>
-                    )}
-                    <div style={{ fontSize: "10px", color: "var(--text-dim)" }}>
-                      {new Date(n.timestamp).toLocaleTimeString()}
-                    </div>
-                    {n.type === "EXPORT_SUCCESS" && n.context?.exportId && (
-                      <div style={{ marginTop: "8px" }}>
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              const storedUser =
-                                localStorage.getItem("manga_user");
-                              if (!storedUser) return;
-                              const user = JSON.parse(storedUser);
-                              const res = await safeFetch(
-                                `/api/series/chapters/exports/${n.context.exportId}/download`,
-                                {
-                                  headers: {
-                                    Authorization: `Bearer ${user.token}`,
-                                  },
-                                },
-                              );
-                              if (res.ok) {
-                                const blob = await res.blob();
-                                const url = window.URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                const seriesTitle =
-                                  n.context.seriesTitle || "chapter";
-                                const chapterNumber =
-                                  n.context.chapterNumber || "export";
-                                a.download = `${seriesTitle} - Chapter ${chapterNumber}.zip`;
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                window.URL.revokeObjectURL(url);
-                              } else {
-                                console.error("Failed to download export");
-                              }
-                            } catch (err) {
-                              console.error("Error downloading export", err);
-                            }
-                          }}
-                          className="btn btn-primary"
-                          style={{ fontSize: "12px", padding: "4px 12px" }}
-                        >
-                          Download ZIP
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+          <Typography variant="h6" component="h3">
+            Notifications
+          </Typography>
+          {notifications.length > 0 && (
+            <Stack direction="row" spacing={1}>
+              <Button size="small" onClick={markAllAsRead} color="inherit">
+                Mark all read
+              </Button>
+              <Button size="small" onClick={clearAll} color="inherit">
+                Clear
+              </Button>
+            </Stack>
           )}
-        </div>
-      )}
-    </div>
+        </Box>
+
+        {notifications.length === 0 ? (
+          <Box p={4} textAlign="center">
+            <Typography color="text.secondary">No notifications</Typography>
+          </Box>
+        ) : (
+          <List sx={{ p: 0, flex: 1, overflowY: "auto" }}>
+            {notifications.map((n: Notification) => (
+              <React.Fragment key={n.id}>
+                <ListItem
+                  disablePadding
+                  sx={{
+                    bgcolor: n.read ? "transparent" : "action.hover",
+                  }}
+                >
+                  <ListItemButton
+                    onClick={() => markAsRead(n.id)}
+                    sx={{ alignItems: "flex-start", py: 1.5 }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 36, mt: 0.5 }}>
+                      <CircleIcon
+                        sx={{ fontSize: 12, color: getIconColor(n.type) }}
+                      />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          {n.title}
+                        </Typography>
+                      }
+                      secondary={
+                        <Stack spacing={0.5} mt={0.5}>
+                          <Typography variant="body2" color="text.secondary">
+                            {n.message}
+                          </Typography>
+                          {n.context && (
+                            <Typography
+                              variant="caption"
+                              color="primary.main"
+                              fontWeight={500}
+                            >
+                              {[
+                                n.context.seriesTitle,
+                                n.context.chapterNumber
+                                  ? `Ch.${n.context.chapterNumber}`
+                                  : null,
+                                n.context.pageNumber
+                                  ? `Page ${n.context.pageNumber}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" › ")}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="text.disabled">
+                            {new Date(n.timestamp).toLocaleTimeString()}
+                          </Typography>
+                          {n.type === "EXPORT_SUCCESS" && n.context?.exportId && (
+                            <Box mt={1}>
+                              <Button
+                                variant="contained"
+                                size="small"
+                                startIcon={<DownloadIcon />}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const storedUser =
+                                      localStorage.getItem("manga_user");
+                                    if (!storedUser) return;
+                                    const user = JSON.parse(storedUser);
+                                    const res = await safeFetch(
+                                      `/api/series/chapters/exports/${n.context.exportId}/download`,
+                                      {
+                                        headers: {
+                                          Authorization: `Bearer ${user.token}`,
+                                        },
+                                      }
+                                    );
+                                    if (res.ok) {
+                                      const blob = await res.blob();
+                                      const url = window.URL.createObjectURL(blob);
+                                      const a = document.createElement("a");
+                                      a.href = url;
+                                      const seriesTitle =
+                                        n.context.seriesTitle || "chapter";
+                                      const chapterNumber =
+                                        n.context.chapterNumber || "export";
+                                      a.download = `${seriesTitle} - Chapter ${chapterNumber}.zip`;
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      document.body.removeChild(a);
+                                      window.URL.revokeObjectURL(url);
+                                    } else {
+                                      console.error("Failed to download export");
+                                    }
+                                  } catch (err) {
+                                    console.error("Error downloading export", err);
+                                  }
+                                }}
+                              >
+                                Download ZIP
+                              </Button>
+                            </Box>
+                          )}
+                        </Stack>
+                      }
+                    />
+                  </ListItemButton>
+                </ListItem>
+                <Divider component="li" />
+              </React.Fragment>
+            ))}
+          </List>
+        )}
+      </Popover>
+    </Box>
   );
 };

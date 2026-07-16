@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from "react";
+const fs = require('fs');
+const file = 'frontend/src/components/SettingsModal.tsx';
+
+const content = `import React, { useEffect, useState } from "react";
 import { safeFetch } from "../utils";
 import type { SystemSettingsDto } from "../types";
 import { useToast } from "./ToastContext";
@@ -67,7 +70,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       safeFetch("/api/settings", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: token ? { Authorization: \`Bearer \${token}\` } : {},
       })
         .then((res) => {
           if (!res.ok) throw new Error("Failed to fetch settings");
@@ -93,7 +96,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         "Content-Type": "application/json",
       };
       if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
+        headers["Authorization"] = \`Bearer \${token}\`;
       }
       const res = await safeFetch("/api/settings", {
         method: "PUT",
@@ -331,3 +334,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 };
 
 export default SettingsModal;
+`
+
+fs.writeFileSync(file, content);
+console.log('SettingsModal.tsx successfully rewritten.');

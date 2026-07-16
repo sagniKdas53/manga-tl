@@ -19,6 +19,16 @@ import { ColorPicker } from "./ColorPicker";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import JSZip from "jszip";
+import Box from "@mui/material/Box";
+import Drawer from "@mui/material/Drawer";
+import Paper from "@mui/material/Paper";
+import AppBar from "@mui/material/AppBar";
+import Toolbar from "@mui/material/Toolbar";
+import IconButton from "@mui/material/IconButton";
+import Typography from "@mui/material/Typography";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import SettingsIcon from "@mui/icons-material/Settings";
+import InfoIcon from "@mui/icons-material/Info";
 import {
   type Point,
   type Polygon,
@@ -2776,138 +2786,42 @@ export const Reader: React.FC<ReaderProps> = ({
 
   if (!selectedPage) {
     return (
-      <div
-        className="reader-container-nhentai"
-        style={{ alignItems: "center", justifyContent: "center" }}
-      >
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: "center", justifyContent: "center", bgcolor: 'background.default' }}>
         <div className="spinner"></div>
         <p>Loading page...</p>
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div className="reader-container-nhentai">
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
       {/* Top Navbar */}
-      <div
-        className="reader-navbar-nhentai"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button
-            className="reader-nav-btn back-btn"
-            onClick={() =>
-              navigate(
-                `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
-              )
-            }
-            title="Back to Chapter"
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line
-                x1="19"
-                y1="12"
-                x2="5"
-                y2="12"
-              ></line>
-              <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
-          </button>
+      <AppBar position="static" color="default" elevation={1} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+        <Toolbar variant="dense" sx={{ justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton color="inherit" onClick={() => navigate(`/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`)} title="Back to Chapter" size="small">
+              <ArrowBackIcon />
+            </IconButton>
 
-          <button
-            className={`reader-nav-btn gear-btn ${showLeftSidebar ? "active" : ""}`}
-            onClick={() => setShowLeftSidebar((prev) => !prev)}
-            title="Toggle Global Controls (Left Sidebar)"
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-            >
-              <rect
-                x="3"
-                y="3"
-                width="18"
-                height="18"
-                rx="2"
-              />
-              <line
-                x1="9"
-                y1="3"
-                x2="9"
-                y2="21"
-              />
-            </svg>
-          </button>
-        </div>
+            <IconButton color={showLeftSidebar ? "primary" : "inherit"} onClick={() => setShowLeftSidebar((prev) => !prev)} title="Toggle Global Controls (Left Sidebar)" size="small">
+              <SettingsIcon />
+            </IconButton>
+          </Box>
 
-        <div
-          style={{
-            fontWeight: 600,
-            fontSize: "14px",
-            fontFamily: "var(--font-display)",
-            color: "var(--text-main)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            maxWidth: "50%",
-          }}
-        >
-          {selectedSeries ? selectedSeries.title : "Series"} &mdash; Chapter{" "}
-          {selectedChapter?.chapterNumber}
-        </div>
+          <Typography variant="subtitle2" noWrap sx={{ fontWeight: 600, fontFamily: "var(--font-display)", maxWidth: "50%" }}>
+            {selectedSeries ? selectedSeries.title : "Series"} &mdash; Chapter {selectedChapter?.chapterNumber}
+          </Typography>
 
-        <button
-          className={`reader-nav-btn gear-btn ${showRightSidebar ? "active" : ""}`}
-          onClick={() => setShowRightSidebar((prev) => !prev)}
-          title="Toggle Property Inspector (Right Sidebar)"
-        >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-          >
-            <rect
-              x="3"
-              y="3"
-              width="18"
-              height="18"
-              rx="2"
-            />
-            <line
-              x1="15"
-              y1="3"
-              x2="15"
-              y2="21"
-            />
-          </svg>
-        </button>
-      </div>
+          <IconButton color={showRightSidebar ? "primary" : "inherit"} onClick={() => setShowRightSidebar((prev) => !prev)} title="Toggle Property Inspector (Right Sidebar)" size="small">
+            <InfoIcon />
+          </IconButton>
+        </Toolbar>
+      </AppBar>
 
       {/* Main Workspace split */}
-      <div className="reader-workspace-frame-nhentai">
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* Left Sidebar (Global Controls) */}
-        {showLeftSidebar && (
-          <div className="reader-left-sidebar-nhentai">
+        {showLeftSidebar && (<Drawer variant="persistent" anchor="left" open={showLeftSidebar} sx={{ width: showLeftSidebar ? 320 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 320, position: 'relative', boxSizing: 'border-box', borderRight: '1px solid var(--border-color)', bgcolor: 'background.paper' } }}><Box sx={{ height: '100%', overflowY: 'auto', p: 0 }}>
             {/* Overlays Visibility Section */}
             <div className="panel-section">
               <div className="panel-section-title">Overlays</div>
@@ -3038,8 +2952,7 @@ export const Reader: React.FC<ReaderProps> = ({
             <div className="panel-section">
               <div className="panel-section-title">Navigation</div>
 
-              <div
-                className="reader-page-controls-nhentai"
+              <Paper elevation={3} className="reader-page-controls-nhentai"
                 style={{
                   display: "flex",
                   justifyContent: "center",
@@ -3087,7 +3000,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 >
                   &gt;&gt;
                 </button>
-              </div>
+              </Paper>
 
               {/* Chapter Navigation */}
               <div style={{ display: "flex", gap: "8px", width: "100%" }}>
@@ -3119,7 +3032,8 @@ export const Reader: React.FC<ReaderProps> = ({
                 </button>
               </div>
             </div>
-          </div>
+          </Box>
+        </Drawer>
         )}
 
         {/* Center Canvas */}
@@ -3751,8 +3665,7 @@ export const Reader: React.FC<ReaderProps> = ({
         </div>
 
         {/* Right Sidebar (Property Inspector) */}
-        {showRightSidebar && (
-          <div className="reader-right-sidebar-nhentai">
+        {showRightSidebar && (<Drawer variant="persistent" anchor="right" open={showRightSidebar} sx={{ width: showRightSidebar ? 320 : 0, flexShrink: 0, '& .MuiDrawer-paper': { width: 320, position: 'relative', boxSizing: 'border-box', borderLeft: '1px solid var(--border-color)', bgcolor: 'background.paper' } }}><Box sx={{ height: '100%', overflowY: 'auto', p: 0 }}>
             {!selectedItem && (
               <>
                 <div
@@ -5264,9 +5177,9 @@ export const Reader: React.FC<ReaderProps> = ({
                 </div>
               </div>
             )}
-          </div>
+          </Box></Drawer>
         )}
-      </div>
+      </Box>
 
       {/* Confirm Modal */}
       <ConfirmModal
@@ -5285,7 +5198,7 @@ export const Reader: React.FC<ReaderProps> = ({
         type={infoModal.type}
         onClose={closeInfo}
       />
-    </div>
+    </Box>
   );
 };
 
