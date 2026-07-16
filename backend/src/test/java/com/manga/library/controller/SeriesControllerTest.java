@@ -206,7 +206,10 @@ public class SeriesControllerTest {
   public void testDeleteChapter_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder().id(chapterId).series(com.manga.library.model.Series.builder().id(UUID.randomUUID()).build()).build();
+        com.manga.library.model.Chapter.builder()
+            .id(chapterId)
+            .series(com.manga.library.model.Series.builder().id(UUID.randomUUID()).build())
+            .build();
 
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId)).thenReturn(null);
