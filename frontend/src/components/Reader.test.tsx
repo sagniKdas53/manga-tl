@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Reader } from "./Reader";
 
@@ -177,6 +177,9 @@ describe("Reader Component", () => {
 
     const sseCallback = mockSubscribe.mock.calls[0][0];
     expect(sseCallback).toBeDefined();
+    
+    // Clear mock history before triggering the SSE
+    mockSafeFetch.mockClear();
 
     // Trigger SSE event
     sseCallback({
@@ -189,5 +192,14 @@ describe("Reader Component", () => {
     });
 
     expect(mockShowToast).toHaveBeenCalledWith("New layers available — refreshed", "success");
+    
+    // Wait for the Promise.resolve().then() to execute the state update and trigger the fetch
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalled();
+    });
+    
+    // Verify that the fetch was called again for the image and layers, indicating cache was busted
+    const fetchUrls = mockSafeFetch.mock.calls.map(call => call[0]);
+    expect(fetchUrls.some(url => url.includes("/api/images/img1"))).toBe(true);
   });
 });

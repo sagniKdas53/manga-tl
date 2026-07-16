@@ -313,6 +313,10 @@ export const Reader: React.FC<ReaderProps> = ({
               console.log(
                 `SSE event: Reloading page layers due to ${data.type} job completion`,
               );
+              
+              // Bust cache for this image so fresh data is fetched
+              delete pageDetailsCache.current[data.imageId];
+              
               // Force refetch of page details by clearing the loaded image ID
               Promise.resolve().then(() => {
                 setLoadedImageId(null);

@@ -43,3 +43,20 @@ Object.defineProperty(window, "ResizeObserver", {
   value: ResizeObserverMock,
   writable: true,
 });
+
+class MockEventSource {
+  constructor(url: string) {}
+  close() {}
+  addEventListener() {}
+  removeEventListener() {}
+}
+
+Object.defineProperty(global, "EventSource", {
+  value: MockEventSource,
+  writable: true,
+});
+
+Object.defineProperty(window, "EventSource", {
+  value: MockEventSource,
+  writable: true,
+});
