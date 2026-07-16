@@ -1,8 +1,6 @@
 spring:
   application:
     name: manga-library-backend
-  flyway:
-    baseline-on-migrate: true
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
