@@ -260,7 +260,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           setItemStatus(
             queueItemId,
             "failed",
-            err instanceof Error ? err.message : String(err)
+            err instanceof Error ? err.message : String(err),
           );
           showError(`Failed to upload ${file.name}`);
         }
@@ -274,7 +274,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           const data: Page[] = await r.json();
           setPages(data);
           if (successCount > 0) {
-            showToast(`Successfully uploaded ${successCount} page(s)`, "success");
+            showToast(
+              `Successfully uploaded ${successCount} page(s)`,
+              "success",
+            );
           }
           if (failCount > 0) {
             showError(`Failed to upload ${failCount} page(s)`);
@@ -443,9 +446,21 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
   if (isLoadingDetails || !selectedSeries || !selectedChapter) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 8 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          mt: 8,
+        }}
+      >
         <CircularProgress />
-        <Typography sx={{ mt: 2 }} color="text.secondary">Loading chapter details...</Typography>
+        <Typography
+          sx={{ mt: 2 }}
+          color="text.secondary"
+        >
+          Loading chapter details...
+        </Typography>
       </Box>
     );
   }
@@ -540,42 +555,74 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container
+      maxWidth="xl"
+      sx={{ py: 4 }}
+    >
       <Box sx={{ mb: 4 }}>
         <Button
           variant="outlined"
           startIcon={<ArrowBackIcon />}
           onClick={() => {
             setSelectedChapter(null);
-            navigate(`/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`);
+            navigate(
+              `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`,
+            );
           }}
           sx={{ mb: 3 }}
         >
           Back to Series
         </Button>
-        
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+            gap: 2,
+          }}
+        >
           <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="h4" component="h1" fontWeight="bold">
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography
+                variant="h4"
+                component="h1"
+                fontWeight="bold"
+              >
                 Chapter {selectedChapter.chapterNumber}
               </Typography>
               <Tooltip title="Edit Chapter">
-                <IconButton onClick={handleEditClick} size="small" color="inherit">
+                <IconButton
+                  onClick={handleEditClick}
+                  size="small"
+                  color="inherit"
+                >
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             </Box>
-            <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              variant="body1"
+              color="text.secondary"
+              sx={{ mt: 0.5 }}
+            >
               {selectedSeries.title} / {selectedChapter.title || "Untitled"}
             </Typography>
           </Box>
-          
-          <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+
+          <Stack
+            direction="row"
+            spacing={2}
+            flexWrap="wrap"
+            useFlexGap
+          >
             <Button
               variant="outlined"
               startIcon={<FileUploadIcon />}
-              onClick={() => document.getElementById("project-import-upload")?.click()}
+              onClick={() =>
+                document.getElementById("project-import-upload")?.click()
+              }
               disabled={isImportingProject}
             >
               {isImportingProject ? "Importing..." : "Import Project"}
@@ -614,26 +661,43 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         onChange={handleProjectImportUpload}
       />
 
-      <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ mb: 3 }}>
+      <Typography
+        variant="h5"
+        fontWeight="bold"
+        gutterBottom
+        sx={{ mb: 3 }}
+      >
         Uploaded Pages ({pages.length})
       </Typography>
-      
-      <ImageList cols={4} gap={16} sx={{ mb: 8, gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)', lg: 'repeat(5, 1fr)' } }}>
+
+      <ImageList
+        cols={4}
+        gap={16}
+        sx={{
+          mb: 8,
+          gridTemplateColumns: {
+            xs: "repeat(2, 1fr)",
+            sm: "repeat(3, 1fr)",
+            md: "repeat(4, 1fr)",
+            lg: "repeat(5, 1fr)",
+          },
+        }}
+      >
         {pages.map((p, idx) => (
-          <ImageListItem 
-            key={p.id} 
-            sx={{ 
-              cursor: 'pointer',
+          <ImageListItem
+            key={p.id}
+            sx={{
+              cursor: "pointer",
               borderRadius: 2,
-              overflow: 'hidden',
+              overflow: "hidden",
               boxShadow: 2,
-              position: 'relative',
-              '&:hover .actions': {
+              position: "relative",
+              "&:hover .actions": {
                 opacity: 1,
               },
-              '&:hover img': {
-                transform: 'scale(1.02)',
-              }
+              "&:hover img": {
+                transform: "scale(1.02)",
+              },
             }}
             onClick={() => {
               onSelectPage(p);
@@ -646,69 +710,83 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
               src={p.thumbnailUrl || `${p.url}?token=${user.token}`}
               alt={`Page ${p.pageNumber}`}
               loading="lazy"
-              style={{ 
-                aspectRatio: '2/3', 
-                objectFit: 'cover',
-                transition: 'transform 0.2s ease-in-out'
+              style={{
+                aspectRatio: "2/3",
+                objectFit: "cover",
+                transition: "transform 0.2s ease-in-out",
               }}
             />
             <ImageListItemBar
               title={`Page ${p.pageNumber}`}
               position="bottom"
-              sx={{ background: 'rgba(0,0,0,0.6)' }}
+              sx={{ background: "rgba(0,0,0,0.6)" }}
             />
-            
-            <Box 
+
+            <Box
               className="actions"
-              sx={{ 
-                position: 'absolute', 
-                top: 0, 
-                left: 0, 
-                right: 0, 
-                bottom: 0, 
-                backgroundColor: 'rgba(0,0,0,0.3)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
+              sx={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0,0,0,0.3)",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
                 opacity: 0,
-                transition: 'opacity 0.2s ease-in-out',
-                p: 1
+                transition: "opacity 0.2s ease-in-out",
+                p: 1,
               }}
             >
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                 <Tooltip title="Delete Page">
-                  <IconButton 
-                    size="small" 
-                    color="error" 
+                  <IconButton
+                    size="small"
+                    color="error"
                     onClick={(e) => handleDeletePage(p.id, e)}
-                    sx={{ backgroundColor: 'rgba(0,0,0,0.6)', '&:hover': { backgroundColor: 'error.main' } }}
+                    sx={{
+                      backgroundColor: "rgba(0,0,0,0.6)",
+                      "&:hover": { backgroundColor: "error.main" },
+                    }}
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
               </Box>
-              
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }} onClick={(e) => e.stopPropagation()}>
+
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 4 }}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <Tooltip title="Move Left">
                   <span>
-                    <IconButton 
+                    <IconButton
                       size="small"
                       disabled={idx === 0}
                       onClick={() => handleMovePage(idx, "left")}
-                      sx={{ color: 'white', backgroundColor: 'rgba(0,0,0,0.6)', '&:hover': { backgroundColor: 'primary.main' } }}
+                      sx={{
+                        color: "white",
+                        backgroundColor: "rgba(0,0,0,0.6)",
+                        "&:hover": { backgroundColor: "primary.main" },
+                      }}
                     >
                       <ArrowBackIosNewIcon fontSize="small" />
                     </IconButton>
                   </span>
                 </Tooltip>
-                
+
                 <Tooltip title="Move Right">
                   <span>
-                    <IconButton 
+                    <IconButton
                       size="small"
                       disabled={idx === pages.length - 1}
                       onClick={() => handleMovePage(idx, "right")}
-                      sx={{ color: 'white', backgroundColor: 'rgba(0,0,0,0.6)', '&:hover': { backgroundColor: 'primary.main' } }}
+                      sx={{
+                        color: "white",
+                        backgroundColor: "rgba(0,0,0,0.6)",
+                        "&:hover": { backgroundColor: "primary.main" },
+                      }}
                     >
                       <ArrowForwardIosIcon fontSize="small" />
                     </IconButton>
@@ -751,11 +829,17 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
               boxShadow: 24,
             }}
           >
-            <UploadFileIcon sx={{ fontSize: 64, color: 'primary.main' }} />
-            <Typography variant="h4" fontWeight="bold">
+            <UploadFileIcon sx={{ fontSize: 64, color: "primary.main" }} />
+            <Typography
+              variant="h4"
+              fontWeight="bold"
+            >
               Drop Manga Pages Anywhere
             </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
+            <Typography
+              variant="subtitle1"
+              color="text.secondary"
+            >
               Release to add files to Chapter {selectedChapter.chapterNumber}
             </Typography>
           </Box>

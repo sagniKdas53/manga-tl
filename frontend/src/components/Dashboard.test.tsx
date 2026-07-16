@@ -100,7 +100,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const card = screen.getByText("One Piece").closest(".manga-card");
+    const card = screen.getByText("One Piece").closest("button");
     expect(card).not.toBeNull();
     fireEvent.click(card!);
 
@@ -130,7 +130,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    const newBtn = screen.getByRole("button", { name: /new series/i });
     fireEvent.click(newBtn);
 
     expect(screen.getByText("Create New Series")).toBeInTheDocument();
@@ -184,7 +184,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const editBtn = screen.getAllByTitle("Edit Series")[0];
+    const editBtn = screen.getAllByRole("button", { name: "Edit Series" })[0];
     fireEvent.click(editBtn);
 
     expect(screen.getByText("Edit Series")).toBeInTheDocument();
@@ -232,13 +232,15 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    const newBtn = screen.getByRole("button", { name: /new series/i });
     fireEvent.click(newBtn);
 
     const cancelBtn = screen.getByRole("button", { name: /cancel/i });
     fireEvent.click(cancelBtn);
 
-    expect(screen.queryByText("Create New Series")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("Create New Series")).not.toBeInTheDocument(),
+    );
   });
 
   it("handles error when creating a series", async () => {
@@ -256,7 +258,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    const newBtn = screen.getByRole("button", { name: /new series/i });
     fireEvent.click(newBtn);
 
     const titleInput = screen.getByPlaceholderText("e.g. My Hero Academia");
@@ -287,11 +289,13 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const deleteBtn = screen.getAllByTitle("Delete Series")[0];
+    const deleteBtn = screen.getAllByRole("button", {
+      name: "Delete Series",
+    })[0];
     fireEvent.click(deleteBtn);
 
     expect(
-      screen.getByText("Delete Series", { selector: "h3" }),
+      screen.getByText("Delete Series", { selector: "h2" }),
     ).toBeInTheDocument();
 
     const confirmBtns = screen.getAllByRole("button", {
@@ -321,7 +325,9 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const deleteBtn = screen.getAllByTitle("Delete Series")[0];
+    const deleteBtn = screen.getAllByRole("button", {
+      name: "Delete Series",
+    })[0];
     fireEvent.click(deleteBtn);
 
     const confirmBtns = screen.getAllByRole("button", {
@@ -331,7 +337,10 @@ describe("Dashboard Component", () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(mockShowToast).toHaveBeenCalledWith("Failed to delete series", "error");
+      expect(mockShowToast).toHaveBeenCalledWith(
+        "Failed to delete series",
+        "error",
+      );
     });
   });
 
@@ -350,7 +359,9 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const deleteBtn = screen.getAllByTitle("Delete Series")[0];
+    const deleteBtn = screen.getAllByRole("button", {
+      name: "Delete Series",
+    })[0];
     fireEvent.click(deleteBtn);
 
     const confirmBtns = screen.getAllByRole("button", {
@@ -391,7 +402,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    const newBtn = screen.getByRole("button", { name: /new series/i });
     fireEvent.click(newBtn);
 
     fireEvent.change(screen.getByPlaceholderText("e.g. My Hero Academia"), {
@@ -399,15 +410,19 @@ describe("Dashboard Component", () => {
     });
 
     // Change selects
-    const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
-    const sourceSelect = selects[0];
-    fireEvent.change(sourceSelect, { target: { value: "ko" } });
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.mouseDown(selects[0]); // source
+    fireEvent.click(screen.getByRole("option", { name: "Korean (ko)" }));
 
-    const targetSelect = selects[1];
-    fireEvent.change(targetSelect, { target: { value: "zh-TW" } });
+    fireEvent.mouseDown(selects[1]); // target
+    fireEvent.click(
+      screen.getByRole("option", { name: "Traditional Chinese (zh-TW)" }),
+    );
 
-    const directionSelect = selects[2];
-    fireEvent.change(directionSelect, { target: { value: "ltr" } });
+    fireEvent.mouseDown(selects[2]); // direction
+    fireEvent.click(
+      screen.getByRole("option", { name: "Left to Right (Comics)" }),
+    );
 
     const submitBtn = screen.getByRole("button", { name: /create/i });
     fireEvent.click(submitBtn);

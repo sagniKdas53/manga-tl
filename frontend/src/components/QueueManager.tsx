@@ -9,7 +9,8 @@ interface Job {
   traceId?: string;
   type: string;
   imageId: string;
-  status: "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
+  status:
+    "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
   payload: string | null;
   error: string | null;
   attempt: number;
@@ -20,55 +21,128 @@ interface Job {
 }
 
 const IconPlay = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polygon points="5 3 19 12 5 21 5 3" />
   </svg>
 );
 
 const IconPause = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="6" y="4" width="4" height="16" />
-    <rect x="14" y="4" width="4" height="16" />
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect
+      x="6"
+      y="4"
+      width="4"
+      height="16"
+    />
+    <rect
+      x="14"
+      y="4"
+      width="4"
+      height="16"
+    />
   </svg>
 );
 
 const IconRetry = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
     <path d="M3 3v5h5" />
   </svg>
 );
 
 const IconDelete = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line
+      x1="18"
+      y1="6"
+      x2="6"
+      y2="18"
+    />
+    <line
+      x1="6"
+      y1="6"
+      x2="18"
+      y2="18"
+    />
   </svg>
 );
 
 const getPipelineProgress = (jobType: string) => {
-  const stages = ["panel-detection", "ocr", "layout", "translation", "render", "qa"];
+  const stages = [
+    "panel-detection",
+    "ocr",
+    "layout",
+    "translation",
+    "render",
+    "qa",
+  ];
   let currentIndex = stages.indexOf(jobType);
-  
+
   // If it's not a standard pipeline stage, don't show the dots (or map it loosely)
   if (currentIndex === -1) {
     if (jobType === "qa-re-ocr") currentIndex = 1;
     else if (jobType === "region-redo") currentIndex = 1;
     else return null;
   }
-  
+
   return (
-    <div style={{ display: "flex", gap: "3px", marginTop: "4px", marginBottom: "4px" }}>
+    <div
+      style={{
+        display: "flex",
+        gap: "3px",
+        marginTop: "4px",
+        marginBottom: "4px",
+      }}
+    >
       {stages.map((stage, i) => (
-        <div 
-          key={i} 
-          style={{ 
-            width: "6px", 
-            height: "6px", 
-            borderRadius: "50%", 
-            backgroundColor: i <= currentIndex ? "var(--primary-color, #2196f3)" : "var(--border-color, #ccc)",
-            opacity: i === currentIndex ? 1 : i < currentIndex ? 0.7 : 0.3
-          }} 
+        <div
+          key={i}
+          style={{
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            backgroundColor:
+              i <= currentIndex
+                ? "var(--primary-color, #2196f3)"
+                : "var(--border-color, #ccc)",
+            opacity: i === currentIndex ? 1 : i < currentIndex ? 0.7 : 0.3,
+          }}
           title={stage}
         />
       ))}
@@ -232,38 +306,43 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       if (res.ok) {
         const data = await res.json();
         setIsPaused(data.isPaused);
-        
+
         setJobs((prevJobs) => {
-          const newJobsList: Array<Omit<Job, 'jobCreatedAt'>> = data.jobs;
+          const newJobsList: Array<Omit<Job, "jobCreatedAt">> = data.jobs;
           const pipelinesMap = new Map<string, Job>();
-          
+
           // Seed with existing to preserve pipeline-level createdAt
-          prevJobs.forEach(p => pipelinesMap.set(p.imageId, p));
-          
-          newJobsList.forEach(job => {
+          prevJobs.forEach((p) => pipelinesMap.set(p.imageId, p));
+
+          newJobsList.forEach((job) => {
             const existing = pipelinesMap.get(job.imageId);
-            if (!existing || new Date(job.createdAt) >= new Date(existing.jobCreatedAt)) {
+            if (
+              !existing ||
+              new Date(job.createdAt) >= new Date(existing.jobCreatedAt)
+            ) {
               pipelinesMap.set(job.imageId, {
                 ...job,
                 jobCreatedAt: job.createdAt,
-                createdAt: existing ? existing.createdAt : job.createdAt
+                createdAt: existing ? existing.createdAt : job.createdAt,
               });
             }
           });
-          
+
           const activeImageIds = new Set(newJobsList.map((j) => j.imageId));
           const now = Date.now();
-          
-          const finalPipelines = Array.from(pipelinesMap.values()).filter((p) => {
-            if (!activeImageIds.has(p.imageId)) return false;
-            // Filter out completed pipelines lingering in API response (> 10s old)
-            if (p.status === "COMPLETED") {
-              const updatedAt = new Date(p.updatedAt).getTime();
-              if (now - updatedAt > 10000) return false;
-            }
-            return true;
-          });
-          
+
+          const finalPipelines = Array.from(pipelinesMap.values()).filter(
+            (p) => {
+              if (!activeImageIds.has(p.imageId)) return false;
+              // Filter out completed pipelines lingering in API response (> 10s old)
+              if (p.status === "COMPLETED") {
+                const updatedAt = new Date(p.updatedAt).getTime();
+                if (now - updatedAt > 10000) return false;
+              }
+              return true;
+            },
+          );
+
           return sortJobs(finalPipelines);
         });
       }
@@ -288,7 +367,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   // Handle SSE events
   useEffect(() => {
     if (!token) return;
-    
+
     return subscribe((event) => {
       if (event.type === "job_update") {
         try {
@@ -306,11 +385,17 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
 
             if (existingIndex !== -1) {
               const existing = updated[existingIndex];
-              
+
               const dataId = data.jobId || data.id;
               const isSameJob = dataId === existing.id;
-              const isNewerJob = data.createdAt && new Date(data.createdAt) > new Date(existing.jobCreatedAt);
-              const isSameJobButNewer = isSameJob && (!existing.updatedAt || !data.updatedAt || new Date(data.updatedAt) >= new Date(existing.updatedAt));
+              const isNewerJob =
+                data.createdAt &&
+                new Date(data.createdAt) > new Date(existing.jobCreatedAt);
+              const isSameJobButNewer =
+                isSameJob &&
+                (!existing.updatedAt ||
+                  !data.updatedAt ||
+                  new Date(data.updatedAt) >= new Date(existing.updatedAt));
 
               if (isNewerJob || isSameJobButNewer) {
                 updated[existingIndex] = {
@@ -318,7 +403,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                   ...data,
                   id: dataId,
                   jobCreatedAt: data.createdAt || existing.jobCreatedAt,
-                  createdAt: existing.createdAt // preserve pipeline creation time
+                  createdAt: existing.createdAt, // preserve pipeline creation time
                 };
               }
             } else {
@@ -340,7 +425,11 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
         try {
           const data = JSON.parse(event.data);
           // If we receive the global processing complete notification, gracefully remove the pipeline from UI
-          if (data.type === "SUCCESS" && data.title === "Page Processing Complete" && data.imageId) {
+          if (
+            data.type === "SUCCESS" &&
+            data.title === "Page Processing Complete" &&
+            data.imageId
+          ) {
             setJobs((prev) => prev.filter((p) => p.imageId !== data.imageId));
           }
         } catch (e) {
@@ -375,7 +464,8 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
     setConfirmModal({
       isOpen: true,
       title: "Clear Queue",
-      message: "Are you sure you want to clear the queue? This will delete all pending, paused, and failed jobs.",
+      message:
+        "Are you sure you want to clear the queue? This will delete all pending, paused, and failed jobs.",
       isDangerous: true,
       action: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
@@ -398,7 +488,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
           console.error("Failed to clear queue", err);
           showToast("Error clearing queue", "error");
         }
-      }
+      },
     });
   };
 
@@ -409,12 +499,13 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       setConfirmModal({
         isOpen: true,
         title: "Pause Queue",
-        message: "Are you sure you want to pause the queue? All pending jobs will be paused.",
+        message:
+          "Are you sure you want to pause the queue? All pending jobs will be paused.",
         isDangerous: true,
         action: () => {
           setConfirmModal((prev) => ({ ...prev, isOpen: false }));
           performPauseResumeQueue();
-        }
+        },
       });
     }
   };
@@ -441,9 +532,9 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       setJobs((prev) =>
         sortJobs(
           prev.map((j) =>
-            j.id === jobId ? { ...j, status: "PENDING", attempt: 1 } : j
-          )
-        )
+            j.id === jobId ? { ...j, status: "PENDING", attempt: 1 } : j,
+          ),
+        ),
       );
       await safeFetch(`/api/jobs/${jobId}/retry`, {
         method: "POST",
@@ -457,12 +548,18 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   const handleToggleJobPause = async (job: Job) => {
     if (!token) return;
     try {
-      const endpoint = job.status === "PAUSED" ? `/api/jobs/${job.id}/resume` : `/api/jobs/${job.id}/pause`;
-      const newStatus: Job["status"] = job.status === "PAUSED" ? "PENDING" : "PAUSED";
-      
+      const endpoint =
+        job.status === "PAUSED"
+          ? `/api/jobs/${job.id}/resume`
+          : `/api/jobs/${job.id}/pause`;
+      const newStatus: Job["status"] =
+        job.status === "PAUSED" ? "PENDING" : "PAUSED";
+
       // Optimistic update
       setJobs((prev) =>
-        sortJobs(prev.map((j) => (j.id === job.id ? { ...j, status: newStatus } : j)))
+        sortJobs(
+          prev.map((j) => (j.id === job.id ? { ...j, status: newStatus } : j)),
+        ),
       );
 
       await safeFetch(endpoint, {
@@ -543,12 +640,42 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <line x1="8" y1="6" x2="21" y2="6" />
-          <line x1="8" y1="12" x2="21" y2="12" />
-          <line x1="8" y1="18" x2="21" y2="18" />
-          <line x1="3" y1="6" x2="3.01" y2="6" />
-          <line x1="3" y1="12" x2="3.01" y2="12" />
-          <line x1="3" y1="18" x2="3.01" y2="18" />
+          <line
+            x1="8"
+            y1="6"
+            x2="21"
+            y2="6"
+          />
+          <line
+            x1="8"
+            y1="12"
+            x2="21"
+            y2="12"
+          />
+          <line
+            x1="8"
+            y1="18"
+            x2="21"
+            y2="18"
+          />
+          <line
+            x1="3"
+            y1="6"
+            x2="3.01"
+            y2="6"
+          />
+          <line
+            x1="3"
+            y1="12"
+            x2="3.01"
+            y2="12"
+          />
+          <line
+            x1="3"
+            y1="18"
+            x2="3.01"
+            y2="18"
+          />
         </svg>
         {jobs.length > 0 && (
           <span
@@ -632,7 +759,15 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                 className="btn btn-secondary"
                 style={{ fontSize: "12px", padding: "4px 8px" }}
               >
-                {isPaused ? <><IconPlay /> Resume</> : <><IconPause /> Pause</>}
+                {isPaused ? (
+                  <>
+                    <IconPlay /> Resume
+                  </>
+                ) : (
+                  <>
+                    <IconPause /> Pause
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -668,7 +803,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                       borderRadius: "50%",
                       backgroundColor: getStatusColor(job.status),
                       marginTop: "4px",
-                      boxShadow: `0 0 8px ${getStatusColor(job.status)}66`
+                      boxShadow: `0 0 8px ${getStatusColor(job.status)}66`,
                     }}
                   />
                   <div style={{ flex: 1 }}>
@@ -680,10 +815,16 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                         color: "var(--text-main)",
                         display: "flex",
                         justifyContent: "space-between",
-                        alignItems: "center"
+                        alignItems: "center",
                       }}
                     >
-                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "2px",
+                        }}
+                      >
                         <span>
                           {job.type === "panel-detection"
                             ? "Panel Detection"
@@ -701,7 +842,13 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                         </span>
                         {getPipelineProgress(job.type)}
                       </div>
-                      <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "normal" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "var(--text-muted)",
+                          fontWeight: "normal",
+                        }}
+                      >
                         Attempt {job.attempt}/{job.maxAttempts}
                       </span>
                     </div>
@@ -712,7 +859,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                         color: getStatusColor(job.status),
                         marginTop: "4px",
                         marginBottom: "4px",
-                        fontWeight: "600"
+                        fontWeight: "600",
                       }}
                     >
                       {getDisplayStatus(job.status)}
@@ -731,38 +878,60 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                       </div>
                     )}
                     <div
-                      style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        marginTop: "8px",
+                        justifyContent: "flex-end",
+                      }}
                     >
                       {job.status === "FAILED" && (
                         <>
                           <button
                             onClick={() => handleRetryJob(job.id)}
                             className="btn btn-secondary"
-                            style={{ fontSize: "11px", padding: "4px 8px", display: "flex", alignItems: "center", gap: "4px" }}
+                            style={{
+                              fontSize: "11px",
+                              padding: "4px 8px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
                             title="Retry"
                           >
                             <IconRetry />
                           </button>
                         </>
                       )}
-                      {(job.status === "PENDING" || job.status === "PAUSED") && (
+                      {(job.status === "PENDING" ||
+                        job.status === "PAUSED") && (
                         <>
                           <button
                             onClick={() => handleToggleJobPause(job)}
                             className="btn btn-secondary"
-                            style={{ 
-                              fontSize: "11px", 
-                              padding: "4px 8px", 
-                              display: "flex", 
-                              alignItems: "center", 
+                            style={{
+                              fontSize: "11px",
+                              padding: "4px 8px",
+                              display: "flex",
+                              alignItems: "center",
                               gap: "4px",
                               opacity: isPaused ? 0.5 : 1,
-                              cursor: isPaused ? "not-allowed" : "pointer"
+                              cursor: isPaused ? "not-allowed" : "pointer",
                             }}
-                            title={isPaused ? "Queue is globally paused" : (job.status === "PAUSED" ? "Resume" : "Pause")}
+                            title={
+                              isPaused
+                                ? "Queue is globally paused"
+                                : job.status === "PAUSED"
+                                  ? "Resume"
+                                  : "Pause"
+                            }
                             disabled={isPaused}
                           >
-                            {(job.status === "PAUSED" || isPaused) ? <IconPlay /> : <IconPause />}
+                            {job.status === "PAUSED" || isPaused ? (
+                              <IconPlay />
+                            ) : (
+                              <IconPause />
+                            )}
                           </button>
                         </>
                       )}
@@ -777,7 +946,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                             color: "#f44336",
                             display: "flex",
                             alignItems: "center",
-                            gap: "4px"
+                            gap: "4px",
                           }}
                           title="Delete"
                         >

@@ -9,6 +9,9 @@ const mockShowToast = vi.fn();
 vi.mock("./ToastContext", () => ({
   useToast: () => ({
     showToast: mockShowToast,
+    showError: mockShowToast,
+    showSuccess: mockShowToast,
+    showInfo: mockShowToast,
   }),
 }));
 

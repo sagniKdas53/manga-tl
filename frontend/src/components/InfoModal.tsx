@@ -1,3 +1,5 @@
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import React from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
@@ -25,7 +27,8 @@ const InfoModal: React.FC<InfoModalProps> = ({
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
   return (
-    <Dialog fullScreen={fullScreen}
+    <Dialog
+      fullScreen={fullScreen}
       open={isOpen}
       onClose={onClose}
       aria-labelledby="info-dialog-title"
@@ -34,13 +37,21 @@ const InfoModal: React.FC<InfoModalProps> = ({
       fullWidth
     >
       <DialogContent sx={{ p: 0 }}>
-        <Alert severity={type} variant="standard" sx={{ p: 3, m: 0 }}>
+        <Alert
+          severity={type}
+          variant="standard"
+          sx={{ p: 3, m: 0 }}
+        >
           <AlertTitle id="info-dialog-title">{title}</AlertTitle>
           <span id="info-dialog-description">{message}</span>
         </Alert>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
-        <Button onClick={onClose} variant="contained" autoFocus>
+        <Button
+          onClick={onClose}
+          variant="contained"
+          autoFocus
+        >
           OK
         </Button>
       </DialogActions>

@@ -1,4 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import React, { useState, useEffect } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -52,7 +54,9 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
     if (isOpen) {
       if (initialData) {
         setTitle(initialData.title);
-        setSourceLang(initialData.sourceLanguage || initialData.originalLanguage || "ja");
+        setSourceLang(
+          initialData.sourceLanguage || initialData.originalLanguage || "ja",
+        );
         setTargetLang(initialData.targetLanguage || "en");
         setReadingDirection(initialData.readingDirection);
         setOcrProvider(initialData.ocrProvider || "");
@@ -132,11 +136,24 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
     (qaMode || settings?.qaMode) === "none";
 
   return (
-    <Dialog fullScreen={fullScreen} open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      fullScreen={fullScreen}
+      open={isOpen}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+    >
       <form onSubmit={handleSubmit}>
-        <DialogTitle>{initialData ? "Edit Series" : "Create New Series"}</DialogTitle>
+        <DialogTitle>
+          {initialData ? "Edit Series" : "Create New Series"}
+        </DialogTitle>
         <DialogContent dividers>
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
+          <Box
+            display="flex"
+            flexDirection="column"
+            gap={2}
+            mt={1}
+          >
             <TextField
               label="Series Title"
               value={title}
@@ -184,12 +201,19 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
               <MenuItem value="ttb">Top to Bottom (Webtoons)</MenuItem>
             </TextField>
 
-            <Accordion variant="outlined" sx={{ mt: 1 }}>
+            <Accordion
+              variant="outlined"
+              sx={{ mt: 1 }}
+            >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography>Model Overrides (Optional)</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
+                <Box
+                  display="grid"
+                  gridTemplateColumns="1fr 1fr"
+                  gap={2}
+                >
                   <TextField
                     select
                     label="OCR Provider"
@@ -199,7 +223,10 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {ocrProviders.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -218,11 +245,17 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
                       </MenuItem>
                     ) : (
                       [
-                        <MenuItem key="inherit" value="">
+                        <MenuItem
+                          key="inherit"
+                          value=""
+                        >
                           -- Inherit --
                         </MenuItem>,
                         ...(settings?.ocrVlmModelList || []).map((m) => (
-                          <MenuItem key={m} value={m}>
+                          <MenuItem
+                            key={m}
+                            value={m}
+                          >
                             {m}
                           </MenuItem>
                         )),
@@ -239,7 +272,10 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {providers.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -253,7 +289,10 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.tlLlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -268,7 +307,10 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {providers.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -298,7 +340,10 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.qaLlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -313,7 +358,10 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.qaVlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -324,10 +372,17 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose} variant="outlined" color="inherit">
+          <Button
+            onClick={onClose}
+            variant="outlined"
+            color="inherit"
+          >
             Cancel
           </Button>
-          <Button type="submit" variant="contained">
+          <Button
+            type="submit"
+            variant="contained"
+          >
             {initialData ? "Save" : "Create"}
           </Button>
         </DialogActions>

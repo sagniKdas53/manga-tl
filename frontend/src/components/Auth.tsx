@@ -92,21 +92,45 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <Container maxWidth="xs" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', py: 4 }}>
-      <Card elevation={4} sx={{ width: '100%', borderRadius: 3 }}>
+    <Container
+      maxWidth="xs"
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        py: 4,
+      }}
+    >
+      <Card
+        elevation={4}
+        sx={{ width: "100%", borderRadius: 3 }}
+      >
         <CardContent sx={{ p: 4 }}>
-          <Box sx={{ mb: 4, textAlign: 'center' }}>
-            <Typography variant="h4" component="h1" fontWeight="bold" gutterBottom>
+          <Box sx={{ mb: 4, textAlign: "center" }}>
+            <Typography
+              variant="h4"
+              component="h1"
+              fontWeight="bold"
+              gutterBottom
+            >
               {isLogin ? "Welcome Back" : "Create Account"}
             </Typography>
-            <Typography variant="body1" color="text.secondary">
+            <Typography
+              variant="body1"
+              color="text.secondary"
+            >
               {isLogin
                 ? "Access your translation workspace"
                 : "Get started by creating a local user"}
             </Typography>
           </Box>
-          
-          <Box component="form" onSubmit={handleAuthSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+
+          <Box
+            component="form"
+            onSubmit={handleAuthSubmit}
+            sx={{ display: "flex", flexDirection: "column", gap: 3 }}
+          >
             {!isLogin && (
               <>
                 <TextField
@@ -118,10 +142,11 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   fullWidth
                   required
                 />
-                
+
                 {isSetupRequired ? (
                   <Alert severity="warning">
-                    <strong>Administrator</strong> (First user registration forces Admin privileges)
+                    <strong>Administrator</strong> (First user registration
+                    forces Admin privileges)
                   </Alert>
                 ) : (
                   <FormControl fullWidth>
@@ -139,7 +164,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 )}
               </>
             )}
-            
+
             <TextField
               label="Email Address"
               type="email"
@@ -150,7 +175,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               fullWidth
               required
             />
-            
+
             <TextField
               label="Password"
               type="password"
@@ -162,11 +187,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               required
             />
 
-            {authError && (
-              <Alert severity="error">
-                {authError}
-              </Alert>
-            )}
+            {authError && <Alert severity="error">{authError}</Alert>}
 
             <Button
               type="submit"
@@ -176,7 +197,16 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               disabled={loading}
               sx={{ mt: 1 }}
             >
-              {loading ? <CircularProgress size={24} color="inherit" /> : (isLogin ? "Sign In" : "Sign Up")}
+              {loading ? (
+                <CircularProgress
+                  size={24}
+                  color="inherit"
+                />
+              ) : isLogin ? (
+                "Sign In"
+              ) : (
+                "Sign Up"
+              )}
             </Button>
 
             <Button

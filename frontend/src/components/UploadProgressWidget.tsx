@@ -52,7 +52,8 @@ export const UploadProgressWidget: React.FC = () => {
               height: "8px",
               borderRadius: "50%",
               backgroundColor: uploadQueue.some(
-                (item) => item.status === "uploading" || item.status === "pending",
+                (item) =>
+                  item.status === "uploading" || item.status === "pending",
               )
                 ? "var(--warning)"
                 : "var(--success)",
@@ -67,7 +68,8 @@ export const UploadProgressWidget: React.FC = () => {
             }}
           >
             {uploadQueue.some(
-              (item) => item.status === "uploading" || item.status === "pending",
+              (item) =>
+                item.status === "uploading" || item.status === "pending",
             )
               ? `Uploading ${uploadQueue.filter((item) => item.status === "uploading" || item.status === "pending").length} file(s)...`
               : "Uploads Completed"}

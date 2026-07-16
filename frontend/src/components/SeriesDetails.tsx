@@ -55,11 +55,11 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   });
 
   const [showSeriesModal, setShowSeriesModal] = useState(false);
-  
+
   const [showChapterModal, setShowChapterModal] = useState(false);
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
   const [chapterError, setChapterError] = useState("");
-  
+
   const { showToast, showError } = useToast();
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
 
@@ -104,9 +104,21 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   if (isLoadingDetails || !selectedSeries) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 8 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          mt: 8,
+        }}
+      >
         <CircularProgress />
-        <Typography sx={{ mt: 2 }} color="text.secondary">Loading series details...</Typography>
+        <Typography
+          sx={{ mt: 2 }}
+          color="text.secondary"
+        >
+          Loading series details...
+        </Typography>
       </Box>
     );
   }
@@ -257,7 +269,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       if (res.ok) {
         const savedData: Chapter = await res.json();
         if (isEdit) {
-          setChapters((prev) => prev.map((c) => (c.id === savedData.id ? savedData : c)));
+          setChapters((prev) =>
+            prev.map((c) => (c.id === savedData.id ? savedData : c)),
+          );
         } else {
           setChapters((prev) => [...prev, savedData]);
         }
@@ -320,7 +334,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container
+      maxWidth="xl"
+      sx={{ py: 4 }}
+    >
       <Box sx={{ mb: 4 }}>
         <Button
           variant="outlined"
@@ -332,17 +349,43 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         </Button>
       </Box>
 
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4, mb: 6 }}>
-        <Box sx={{ width: { xs: '100%', md: '300px' }, flexShrink: 0 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          gap: 4,
+          mb: 6,
+        }}
+      >
+        <Box sx={{ width: { xs: "100%", md: "300px" }, flexShrink: 0 }}>
           {selectedSeries.coverImageUrl ? (
             <img
               src={selectedSeries.coverImageUrl}
               alt={selectedSeries.title}
-              style={{ width: '100%', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+              style={{
+                width: "100%",
+                borderRadius: "12px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+              }}
             />
           ) : (
-            <Box sx={{ width: '100%', aspectRatio: '2/3', bgcolor: 'action.hover', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Typography variant="h6" color="text.secondary" textAlign="center" px={2}>
+            <Box
+              sx={{
+                width: "100%",
+                aspectRatio: "2/3",
+                bgcolor: "action.hover",
+                borderRadius: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Typography
+                variant="h6"
+                color="text.secondary"
+                textAlign="center"
+                px={2}
+              >
                 {selectedSeries.title}
               </Typography>
             </Box>
@@ -350,30 +393,85 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         </Box>
 
         <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="h3" component="h1" fontWeight="bold" gutterBottom>
+          <Typography
+            variant="h3"
+            component="h1"
+            fontWeight="bold"
+            gutterBottom
+          >
             {selectedSeries.title}
           </Typography>
 
-          <Stack spacing={2} sx={{ mb: 4, maxWidth: '400px' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
-              <Typography color="text.secondary" fontWeight="bold">Language:</Typography>
-              <Chip 
+          <Stack
+            spacing={2}
+            sx={{ mb: 4, maxWidth: "400px" }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                borderBottom: 1,
+                borderColor: "divider",
+                pb: 1,
+              }}
+            >
+              <Typography
+                color="text.secondary"
+                fontWeight="bold"
+              >
+                Language:
+              </Typography>
+              <Chip
                 size="small"
                 color="primary"
-                label={`${selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja"} → ${selectedSeries.targetLanguage || "en"} ${(selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja") === (selectedSeries.targetLanguage || "en") ? " (Reader Mode)" : ""}`} 
+                label={`${selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja"} → ${selectedSeries.targetLanguage || "en"} ${(selectedSeries.sourceLanguage || selectedSeries.originalLanguage || "ja") === (selectedSeries.targetLanguage || "en") ? " (Reader Mode)" : ""}`}
               />
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
-              <Typography color="text.secondary" fontWeight="bold">Direction:</Typography>
-              <Chip size="small" label={selectedSeries.readingDirection} />
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                borderBottom: 1,
+                borderColor: "divider",
+                pb: 1,
+              }}
+            >
+              <Typography
+                color="text.secondary"
+                fontWeight="bold"
+              >
+                Direction:
+              </Typography>
+              <Chip
+                size="small"
+                label={selectedSeries.readingDirection}
+              />
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
-              <Typography color="text.secondary" fontWeight="bold">Chapters:</Typography>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                borderBottom: 1,
+                borderColor: "divider",
+                pb: 1,
+              }}
+            >
+              <Typography
+                color="text.secondary"
+                fontWeight="bold"
+              >
+                Chapters:
+              </Typography>
               <Typography fontWeight="bold">{chapters.length}</Typography>
             </Box>
           </Stack>
 
-          <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+          <Stack
+            direction="row"
+            spacing={2}
+            flexWrap="wrap"
+            useFlexGap
+          >
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -408,8 +506,19 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" component="h2" fontWeight="bold">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Typography
+          variant="h5"
+          component="h2"
+          fontWeight="bold"
+        >
           Chapters ({chapters.length})
         </Typography>
         <Button
@@ -427,7 +536,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         </Button>
       </Box>
 
-      <Grid container spacing={2}>
+      <Grid
+        container
+        spacing={2}
+      >
         {[...chapters]
           .sort((a, b) =>
             sortAsc
@@ -435,15 +547,22 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
               : b.chapterNumber - a.chapterNumber,
           )
           .map((c) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={c.id}>
-              <Card 
-                sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={4}
+              lg={3}
+              key={c.id}
+            >
+              <Card
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
                   p: 1.5,
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                  '&:hover': { bgcolor: 'action.hover' }
+                  cursor: "pointer",
+                  transition: "background-color 0.2s",
+                  "&:hover": { bgcolor: "action.hover" },
                 }}
                 onClick={() => {
                   onSelectChapter(c);
@@ -452,42 +571,80 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                   );
                 }}
               >
-                <Box sx={{ position: 'relative', width: 60, height: 80, flexShrink: 0, mr: 2, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                <Box
+                  sx={{
+                    position: "relative",
+                    width: 60,
+                    height: 80,
+                    flexShrink: 0,
+                    mr: 2,
+                    borderRadius: 1,
+                    overflow: "hidden",
+                    bgcolor: "action.hover",
+                  }}
+                >
                   {c.coverImageUrl || selectedSeries.coverImageUrl ? (
                     <img
                       src={c.coverImageUrl || selectedSeries.coverImageUrl}
                       alt={c.title || `Chapter ${c.chapterNumber}`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
                     />
                   ) : (
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-                      <Typography variant="caption" fontWeight="bold">C{c.chapterNumber}</Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        fontWeight="bold"
+                      >
+                        C{c.chapterNumber}
+                      </Typography>
                     </Box>
                   )}
                 </Box>
-                
-                <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-                  <Typography variant="subtitle1" fontWeight="bold" noWrap>
+
+                <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
+                  <Typography
+                    variant="subtitle1"
+                    fontWeight="bold"
+                    noWrap
+                  >
                     Chapter {c.chapterNumber}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" noWrap>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    noWrap
+                  >
                     {c.title || "Untitled"}
                   </Typography>
                 </Box>
 
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Box
+                  sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                >
                   <Tooltip title="Edit Chapter">
-                    <IconButton 
-                      size="small" 
+                    <IconButton
+                      size="small"
                       onClick={(e) => handleEditChapterClick(c, e)}
                     >
                       <EditIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Delete Chapter">
-                    <IconButton 
-                      size="small" 
-                      color="error" 
+                    <IconButton
+                      size="small"
+                      color="error"
                       onClick={(e) => handleDeleteChapter(c.id, e)}
                     >
                       <DeleteIcon fontSize="small" />
@@ -517,7 +674,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         onSave={handleSaveChapter}
         initialData={editingChapter}
         defaultChapterNumber={
-          chapters.reduce((max, c) => (c.chapterNumber > max ? c.chapterNumber : max), 0) + 1
+          chapters.reduce(
+            (max, c) => (c.chapterNumber > max ? c.chapterNumber : max),
+            0,
+          ) + 1
         }
         settings={settings}
         error={chapterError}
@@ -528,7 +688,10 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         onClose={() => setShowImportModal(false)}
         onImport={handleImportSubmit}
         defaultChapterNumber={
-          chapters.reduce((max, c) => (c.chapterNumber > max ? c.chapterNumber : max), 0) + 1
+          chapters.reduce(
+            (max, c) => (c.chapterNumber > max ? c.chapterNumber : max),
+            0,
+          ) + 1
         }
         settings={settings}
         error={importError}

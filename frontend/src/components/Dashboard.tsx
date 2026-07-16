@@ -135,7 +135,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             setSeriesList((prev) => prev.filter((s) => s.id !== seriesId));
             showToast("Series deleted successfully", "success");
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this series.", "error");
+            showToast(
+              "You don't have permission to delete this series.",
+              "error",
+            );
           } else {
             showToast("Failed to delete series", "error");
           }
@@ -148,13 +151,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+    <Container
+      maxWidth="lg"
+      sx={{ py: 4 }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4,
+          flexWrap: "wrap",
+          gap: 2,
+        }}
+      >
         <Box>
-          <Typography variant="h4" component="h1" fontWeight="bold">
+          <Typography
+            variant="h4"
+            component="h1"
+            fontWeight="bold"
+          >
             My Manga Library
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography
+            variant="body1"
+            color="text.secondary"
+          >
             Manage translation projects and OCR workflows
           </Typography>
         </Box>
@@ -167,25 +189,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </Button>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid
+        container
+        spacing={3}
+      >
         {seriesList.map((s) => (
-          <Grid item xs={12} sm={6} md={4} key={s.id}>
-            <Card 
-              sx={{ 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column',
-                transition: 'transform 0.2s',
-                '&:hover': { transform: 'translateY(-4px)' },
-                position: 'relative',
+          <Grid
+            item
+            xs={12}
+            sm={6}
+            md={4}
+            key={s.id}
+          >
+            <Card
+              sx={{
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                transition: "transform 0.2s",
+                "&:hover": { transform: "translateY(-4px)" },
+                position: "relative",
               }}
             >
-              <CardActionArea 
+              <CardActionArea
                 onClick={() => {
                   onSelectSeries(s);
                   navigate(`/series/${s.id}/${toSlug(s.title)}`);
                 }}
-                sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
+                sx={{
+                  flexGrow: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                }}
               >
                 {s.coverImageUrl ? (
                   <CardMedia
@@ -193,56 +229,95 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     height="200"
                     image={s.coverImageUrl}
                     alt={s.title}
-                    sx={{ objectFit: 'cover' }}
+                    sx={{ objectFit: "cover" }}
                   />
                 ) : (
-                  <Box sx={{ height: 200, width: '100%', bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Typography variant="body1" color="text.secondary">No Cover</Typography>
+                  <Box
+                    sx={{
+                      height: 200,
+                      width: "100%",
+                      bgcolor: "action.hover",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Typography
+                      variant="body1"
+                      color="text.secondary"
+                    >
+                      No Cover
+                    </Typography>
                   </Box>
                 )}
-                
-                <CardContent sx={{ width: '100%' }}>
-                  <Typography gutterBottom variant="h6" component="h3" noWrap title={s.title}>
+
+                <CardContent sx={{ width: "100%" }}>
+                  <Typography
+                    gutterBottom
+                    variant="h6"
+                    component="h3"
+                    noWrap
+                    title={s.title}
+                  >
                     {s.title}
                   </Typography>
-                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                    <Chip 
-                      size="small" 
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ mt: 1 }}
+                  >
+                    <Chip
+                      size="small"
                       label={`${s.sourceLanguage || s.originalLanguage || "ja"} → ${s.targetLanguage || "en"}`}
-                      color={(s.sourceLanguage || s.originalLanguage || "ja") === (s.targetLanguage || "en") ? "secondary" : "primary"}
+                      color={
+                        (s.sourceLanguage || s.originalLanguage || "ja") ===
+                        (s.targetLanguage || "en")
+                          ? "secondary"
+                          : "primary"
+                      }
                       variant="outlined"
                     />
-                    <Chip size="small" label={s.readingDirection} variant="outlined" />
+                    <Chip
+                      size="small"
+                      label={s.readingDirection}
+                      variant="outlined"
+                    />
                   </Stack>
                 </CardContent>
               </CardActionArea>
-              
-              <Box 
-                sx={{ 
-                  position: 'absolute', 
-                  top: 8, 
-                  right: 8, 
-                  display: 'flex', 
+
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  display: "flex",
                   gap: 0.5,
-                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  backgroundColor: "rgba(0,0,0,0.6)",
                   borderRadius: 1,
-                  p: 0.5
+                  p: 0.5,
                 }}
               >
                 <Tooltip title="Edit Series">
-                  <IconButton 
-                    size="small" 
+                  <IconButton
+                    size="small"
                     onClick={(e) => handleEditSeriesClick(s, e)}
-                    sx={{ color: 'white', '&:hover': { backgroundColor: 'primary.main' } }}
+                    sx={{
+                      color: "white",
+                      "&:hover": { backgroundColor: "primary.main" },
+                    }}
                   >
                     <EditIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
                 <Tooltip title="Delete Series">
-                  <IconButton 
-                    size="small" 
+                  <IconButton
+                    size="small"
                     onClick={(e) => handleDeleteSeries(s.id, e)}
-                    sx={{ color: 'white', '&:hover': { backgroundColor: 'error.main' } }}
+                    sx={{
+                      color: "white",
+                      "&:hover": { backgroundColor: "error.main" },
+                    }}
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>

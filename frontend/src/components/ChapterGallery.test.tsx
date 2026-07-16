@@ -229,8 +229,6 @@ describe("ChapterGallery Component", () => {
     });
   });
 
-
-
   it("handles exporting chapter zip", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,

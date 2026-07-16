@@ -14,7 +14,11 @@ interface UploadStoreState {
   isQueueExpanded: boolean;
   addItems: (items: UploadQueueItem[]) => void;
   updateItemProgress: (id: string, progress: number) => void;
-  setItemStatus: (id: string, status: UploadQueueItem["status"], error?: string) => void;
+  setItemStatus: (
+    id: string,
+    status: UploadQueueItem["status"],
+    error?: string,
+  ) => void;
   clearQueue: () => void;
   setShowQueuePanel: (show: boolean) => void;
   setIsQueueExpanded: (expanded: boolean) => void;
@@ -35,7 +39,7 @@ export const useUploadStore = create<UploadStoreState>((set) => ({
   updateItemProgress: (id, progress) =>
     set((state) => ({
       uploadQueue: state.uploadQueue.map((item) =>
-        item.id === id ? { ...item, progress } : item
+        item.id === id ? { ...item, progress } : item,
       ),
     })),
 
@@ -51,7 +55,7 @@ export const useUploadStore = create<UploadStoreState>((set) => ({
                 ...(error ? { error } : {}),
                 ...(isCompleted ? { progress: 100 } : {}),
               }
-            : item
+            : item,
         ),
       };
     }),

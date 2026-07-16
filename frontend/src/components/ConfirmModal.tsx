@@ -1,3 +1,5 @@
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import React from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -33,7 +35,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
   return (
-    <Dialog fullScreen={fullScreen}
+    <Dialog
+      fullScreen={fullScreen}
       open={isOpen}
       onClose={onCancel}
       aria-labelledby="confirm-dialog-title"
@@ -58,7 +61,11 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
         </DialogContentText>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onCancel} variant="outlined" color="inherit">
+        <Button
+          onClick={onCancel}
+          variant="outlined"
+          color="inherit"
+        >
           {cancelText}
         </Button>
         <Button

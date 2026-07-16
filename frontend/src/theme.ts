@@ -1,41 +1,41 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme } from "@mui/material/styles";
 
 const darkPalette = {
-  primary: { main: '#ee2553' },
-  secondary: { main: '#f1af5f' },
+  primary: { main: "#ee2553" },
+  secondary: { main: "#f1af5f" },
   background: {
-    default: '#1f1f1f',
-    paper: '#2a2a2a',
+    default: "#1f1f1f",
+    paper: "#2a2a2a",
   },
   text: {
-    primary: '#fefefe',
-    secondary: '#afafaf',
-    disabled: '#6c6c6c',
+    primary: "#fefefe",
+    secondary: "#afafaf",
+    disabled: "#6c6c6c",
   },
-  divider: 'rgba(254,254,254,0.12)',
-  error: { main: '#ee2553' }, // reuse primary as error in dark
-  warning: { main: '#f1af5f' },
-  success: { main: '#10b981' },
-  info: { main: '#6ac2fd' },
+  divider: "rgba(254,254,254,0.12)",
+  error: { main: "#ee2553" }, // reuse primary as error in dark
+  warning: { main: "#f1af5f" },
+  success: { main: "#10b981" },
+  info: { main: "#6ac2fd" },
 };
 
 const lightPalette = {
-  primary: { main: '#0197fc' },
-  secondary: { main: '#e4a243' },
+  primary: { main: "#0197fc" },
+  secondary: { main: "#e4a243" },
   background: {
-    default: '#f5f5f5',
-    paper: '#ffffff',
+    default: "#f5f5f5",
+    paper: "#ffffff",
   },
   text: {
-    primary: '#343333',
-    secondary: '#b0b0b0',
-    disabled: '#786e6a',
+    primary: "#343333",
+    secondary: "#b0b0b0",
+    disabled: "#786e6a",
   },
-  divider: 'rgba(52,51,51,0.12)',
-  error: { main: '#fd4060' },
-  warning: { main: '#e4a243' },
-  success: { main: '#10b981' },
-  info: { main: '#0197fc' },
+  divider: "rgba(52,51,51,0.12)",
+  error: { main: "#fd4060" },
+  warning: { main: "#e4a243" },
+  success: { main: "#10b981" },
+  info: { main: "#0197fc" },
 };
 
 const theme = createTheme({
@@ -64,7 +64,7 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          textTransform: 'none', // keep our existing casing style
+          textTransform: "none", // keep our existing casing style
           borderRadius: 8,
         },
       },

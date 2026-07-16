@@ -1,4 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import React, { useState, useEffect } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -134,12 +136,32 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
     (qaMode || settings?.qaMode) === "none";
 
   return (
-    <Dialog fullScreen={fullScreen} open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      fullScreen={fullScreen}
+      open={isOpen}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+    >
       <form onSubmit={handleSubmit}>
-        <DialogTitle>{initialData ? "Edit Chapter" : "Add Chapter"}</DialogTitle>
+        <DialogTitle>
+          {initialData ? "Edit Chapter" : "Add Chapter"}
+        </DialogTitle>
         <DialogContent dividers>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
+          {error && (
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+            >
+              {error}
+            </Alert>
+          )}
+          <Box
+            display="flex"
+            flexDirection="column"
+            gap={2}
+            mt={1}
+          >
             <TextField
               label="Chapter Number"
               type="number"
@@ -166,19 +188,30 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
               label={
                 <Box>
                   <Typography variant="body1">Use Context Memory</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Pass previous pages as context to the LLM for better consistency.
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    Pass previous pages as context to the LLM for better
+                    consistency.
                   </Typography>
                 </Box>
               }
             />
 
-            <Accordion variant="outlined" sx={{ mt: 1 }}>
+            <Accordion
+              variant="outlined"
+              sx={{ mt: 1 }}
+            >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography>Model Overrides (Optional)</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
+                <Box
+                  display="grid"
+                  gridTemplateColumns="1fr 1fr"
+                  gap={2}
+                >
                   <TextField
                     select
                     label="OCR Provider"
@@ -188,7 +221,10 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {ocrProviders.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -207,11 +243,17 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
                       </MenuItem>
                     ) : (
                       [
-                        <MenuItem key="inherit" value="">
+                        <MenuItem
+                          key="inherit"
+                          value=""
+                        >
                           -- Inherit --
                         </MenuItem>,
                         ...(settings?.ocrVlmModelList || []).map((m) => (
-                          <MenuItem key={m} value={m}>
+                          <MenuItem
+                            key={m}
+                            value={m}
+                          >
                             {m}
                           </MenuItem>
                         )),
@@ -228,7 +270,10 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {providers.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -242,7 +287,10 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.tlLlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -257,7 +305,10 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {providers.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -287,7 +338,10 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.qaLlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -302,7 +356,10 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.qaVlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -313,10 +370,17 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose} variant="outlined" color="inherit">
+          <Button
+            onClick={onClose}
+            variant="outlined"
+            color="inherit"
+          >
             Cancel
           </Button>
-          <Button type="submit" variant="contained">
+          <Button
+            type="submit"
+            variant="contained"
+          >
             {initialData ? "Save" : "Create"}
           </Button>
         </DialogActions>

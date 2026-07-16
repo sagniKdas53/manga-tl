@@ -1,4 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import React, { useState, useEffect } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -121,12 +123,30 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     (qaMode || settings?.qaMode) === "none";
 
   return (
-    <Dialog fullScreen={fullScreen} open={isOpen} onClose={!isImporting ? onClose : undefined} maxWidth="sm" fullWidth>
+    <Dialog
+      fullScreen={fullScreen}
+      open={isOpen}
+      onClose={!isImporting ? onClose : undefined}
+      maxWidth="sm"
+      fullWidth
+    >
       <form onSubmit={handleSubmit}>
         <DialogTitle>Import Chapter (ZIP / ePub)</DialogTitle>
         <DialogContent dividers>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
+          {error && (
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+            >
+              {error}
+            </Alert>
+          )}
+          <Box
+            display="flex"
+            flexDirection="column"
+            gap={2}
+            mt={1}
+          >
             <TextField
               type="file"
               onChange={(e) => {
@@ -158,12 +178,19 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
               fullWidth
             />
 
-            <Accordion variant="outlined" sx={{ mt: 1 }}>
+            <Accordion
+              variant="outlined"
+              sx={{ mt: 1 }}
+            >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography>Model Overrides (Optional)</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
+                <Box
+                  display="grid"
+                  gridTemplateColumns="1fr 1fr"
+                  gap={2}
+                >
                   <TextField
                     select
                     label="OCR Provider"
@@ -173,7 +200,10 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {ocrProviders.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -192,11 +222,17 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                       </MenuItem>
                     ) : (
                       [
-                        <MenuItem key="inherit" value="">
+                        <MenuItem
+                          key="inherit"
+                          value=""
+                        >
                           -- Inherit --
                         </MenuItem>,
                         ...(settings?.ocrVlmModelList || []).map((m) => (
-                          <MenuItem key={m} value={m}>
+                          <MenuItem
+                            key={m}
+                            value={m}
+                          >
                             {m}
                           </MenuItem>
                         )),
@@ -213,7 +249,10 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {providers.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -227,7 +266,10 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.tlLlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -242,7 +284,10 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {providers.map((p) => (
-                      <MenuItem key={p} value={p}>
+                      <MenuItem
+                        key={p}
+                        value={p}
+                      >
                         {p}
                       </MenuItem>
                     ))}
@@ -272,7 +317,10 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.qaLlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -287,7 +335,10 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.qaVlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
                         {m}
                       </MenuItem>
                     ))}
@@ -298,11 +349,27 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose} variant="outlined" color="inherit" disabled={isImporting}>
+          <Button
+            onClick={onClose}
+            variant="outlined"
+            color="inherit"
+            disabled={isImporting}
+          >
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={isImporting || !file}>
-            {isImporting ? <CircularProgress size={24} color="inherit" /> : "Import"}
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isImporting || !file}
+          >
+            {isImporting ? (
+              <CircularProgress
+                size={24}
+                color="inherit"
+              />
+            ) : (
+              "Import"
+            )}
           </Button>
         </DialogActions>
       </form>

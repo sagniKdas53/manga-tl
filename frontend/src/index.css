@@ -4,56 +4,68 @@
     0 10px 40px rgba(15, 23, 42, 0.08),
     0 0 0 1px rgba(15, 23, 42, 0.03);
   border-color: rgba(124, 58, 237, 0.2);
-}:root.light .floating-reader-toolbar:hover,
+}
+:root.light .floating-reader-toolbar:hover,
 :root.light .floating-zoom-toolbar:hover {
   border-color: rgba(124, 58, 237, 0.4);
-}:root.light .toolbar-toggle-handle {
+}
+:root.light .toolbar-toggle-handle {
   box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.04);
   border-color: rgba(124, 58, 237, 0.2);
-}:root.light .zoom-toggle-handle {
+}
+:root.light .zoom-toggle-handle {
   box-shadow: -8px 0 20px rgba(15, 23, 42, 0.04);
   border-color: rgba(124, 58, 237, 0.2);
-}.svg-overlay {
+}
+.svg-overlay {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
-}.svg-panel-box {
+}
+.svg-panel-box {
   fill: rgba(139, 92, 246, 0.05);
   stroke: var(--primary);
   stroke-width: 2px;
   stroke-dasharray: 4px;
   pointer-events: visiblePainted;
   cursor: crosshair;
-}.svg-panel-box:hover {
+}
+.svg-panel-box:hover {
   fill: var(--primary-alpha-mid);
-}.svg-ocr-box:hover {
+}
+.svg-ocr-box:hover {
   fill: var(--primary-glow);
-}.svg-ocr-box {
+}
+.svg-ocr-box {
   fill: rgba(16, 185, 129, 0.15);
   stroke: var(--success);
   stroke-width: 1.5px;
   pointer-events: visiblePainted;
   cursor: pointer;
   transition: all 0.2s ease;
-}.svg-ocr-box:hover {
+}
+.svg-ocr-box:hover {
   fill: rgba(16, 185, 129, 0.35);
   stroke-width: 2.5px;
   filter: drop-shadow(0 0 6px var(--success));
-}.svg-conv-box {
+}
+.svg-conv-box {
   fill: rgba(59, 130, 246, 0.15);
   stroke: var(--conversation);
   stroke-width: 1.5px;
   pointer-events: visiblePainted;
   cursor: pointer;
   transition: all 0.2s ease;
-}.svg-conv-box:hover {
+}
+.svg-conv-box:hover {
   fill: rgba(59, 130, 246, 0.35);
   stroke-width: 2.5px;
   filter: drop-shadow(0 0 6px var(--conversation));
-}.spinner {
+}
+.spinner {
   border: 3px solid var(--border-color);
   width: 36px;
   height: 36px;
@@ -61,7 +73,8 @@
   border-left-color: var(--primary);
   animation: spin 1s linear infinite;
   margin: 20px auto;
-}.reader-canvas-area {
+}
+.reader-canvas-area {
   flex: 1;
   display: flex;
   align-items: center;
@@ -71,7 +84,8 @@
   overflow: auto;
   padding: 24px;
   box-sizing: border-box;
-}.floating-reader-toolbar {
+}
+.floating-reader-toolbar {
   position: absolute;
   bottom: 24px;
   left: 50%;
@@ -91,11 +105,14 @@
   transition:
     transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
     border-color 0.3s ease;
-}.floating-reader-toolbar:hover {
+}
+.floating-reader-toolbar:hover {
   border-color: rgba(139, 92, 246, 0.45);
-}.floating-reader-toolbar.collapsed {
+}
+.floating-reader-toolbar.collapsed {
   transform: translate(-50%, calc(100% + 24px));
-}.toolbar-toggle-handle {
+}
+.toolbar-toggle-handle {
   position: absolute;
   top: 0;
   left: 50%;
@@ -122,19 +139,23 @@
   box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.3);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
-}.toolbar-toggle-handle:hover {
+}
+.toolbar-toggle-handle:hover {
   background: var(--primary);
   color: #ffffff;
   border-color: var(--primary);
   box-shadow: 0 -8px 20px rgba(139, 92, 246, 0.2);
-}.floating-reader-toolbar.collapsed .toolbar-content {
+}
+.floating-reader-toolbar.collapsed .toolbar-content {
   opacity: 0;
   transform: translateY(10px);
   pointer-events: none;
-}.floating-reader-toolbar.expanded .toolbar-content {
+}
+.floating-reader-toolbar.expanded .toolbar-content {
   opacity: 1;
   transform: translateY(0);
-}.floating-zoom-toolbar {
+}
+.floating-zoom-toolbar {
   position: absolute;
   right: 24px;
   top: 50%;
@@ -154,11 +175,14 @@
   transition:
     transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
     border-color 0.3s ease;
-}.floating-zoom-toolbar:hover {
+}
+.floating-zoom-toolbar:hover {
   border-color: rgba(139, 92, 246, 0.45);
-}.floating-zoom-toolbar.collapsed {
+}
+.floating-zoom-toolbar.collapsed {
   transform: translate(calc(100% + 24px), -50%);
-}.zoom-toggle-handle {
+}
+.zoom-toggle-handle {
   position: absolute;
   left: 0;
   top: 50%;
@@ -186,19 +210,23 @@
   box-shadow: -8px 0 20px rgba(0, 0, 0, 0.3);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
-}.zoom-toggle-handle:hover {
+}
+.zoom-toggle-handle:hover {
   background: var(--primary);
   color: #ffffff;
   border-color: var(--primary);
   box-shadow: -8px 0 20px rgba(139, 92, 246, 0.2);
-}.floating-zoom-toolbar.collapsed .zoom-content {
+}
+.floating-zoom-toolbar.collapsed .zoom-content {
   opacity: 0;
   transform: translateX(10px);
   pointer-events: none;
-}.floating-zoom-toolbar.expanded .zoom-content {
+}
+.floating-zoom-toolbar.expanded .zoom-content {
   opacity: 1;
   transform: translateX(0);
-}.manga-cover-placeholder {
+}
+.manga-cover-placeholder {
   width: 100%;
   height: 100%;
   display: flex;
@@ -212,7 +240,8 @@
   box-sizing: border-box;
   text-align: center;
   font-size: 14px;
-}.reader-navbar-nhentai,
+}
+.reader-navbar-nhentai,
 .reader-footer-nhentai {
   display: flex;
   justify-content: space-between;
@@ -224,11 +253,13 @@
   height: 42px;
   box-sizing: border-box;
   flex-shrink: 0;
-}.reader-footer-nhentai {
+}
+.reader-footer-nhentai {
   border-bottom: none;
   border-top: 1px solid var(--border-color);
   justify-content: center;
-}.spinner-mini {
+}
+.spinner-mini {
   border: 2px solid rgba(255, 255, 255, 0.2);
   width: 12px;
   height: 12px;

@@ -34,8 +34,6 @@ import LightModeIcon from "@mui/icons-material/LightMode";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LogoutIcon from "@mui/icons-material/Logout";
 
-
-
 // Static import for NotificationCenter (always present in nav)
 import { NotificationCenter } from "./components/NotificationCenter";
 import { QueueManager } from "./components/QueueManager";
@@ -45,9 +43,15 @@ import logoLight from "./assets/logo-light.svg";
 
 // Lazy-loaded route components
 const Auth = React.lazy(() => import("./components/Auth"));
-const Dashboard = React.memo(React.lazy(() => import("./components/Dashboard")));
-const SeriesDetails = React.memo(React.lazy(() => import("./components/SeriesDetails")));
-const ChapterGallery = React.memo(React.lazy(() => import("./components/ChapterGallery")));
+const Dashboard = React.memo(
+  React.lazy(() => import("./components/Dashboard")),
+);
+const SeriesDetails = React.memo(
+  React.lazy(() => import("./components/SeriesDetails")),
+);
+const ChapterGallery = React.memo(
+  React.lazy(() => import("./components/ChapterGallery")),
+);
 const Reader = React.memo(React.lazy(() => import("./components/Reader")));
 const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
 
@@ -171,7 +175,9 @@ function AppContent() {
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-  const [anchorElUser, setAnchorElUser] = React.useState<null | HTMLElement>(null);
+  const [anchorElUser, setAnchorElUser] = React.useState<null | HTMLElement>(
+    null,
+  );
 
   // Theme State via MUI
   const { mode, setMode } = useColorScheme();
@@ -333,7 +339,12 @@ function AppContent() {
         <div className="app-container">
           {/* Navigation Bar */}
           {!readerMatch && (
-            <AppBar position="sticky" color="default" elevation={1} sx={{ backgroundColor: 'background.paper', mb: 3 }}>
+            <AppBar
+              position="sticky"
+              color="default"
+              elevation={1}
+              sx={{ backgroundColor: "background.paper", mb: 3 }}
+            >
               <Toolbar>
                 <Box
                   onClick={() => user && navigate("/")}
@@ -350,27 +361,48 @@ function AppContent() {
                     alt="tl-hub logo"
                     style={{ height: "32px", width: "auto" }}
                   />
-                  <Typography variant="h6" component="div" sx={{ fontWeight: 700 }}>
+                  <Typography
+                    variant="h6"
+                    component="div"
+                    sx={{ fontWeight: 700 }}
+                  >
                     tl-hub
                   </Typography>
                 </Box>
-                
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                  <IconButton onClick={() => setMode(theme === "dark" ? "light" : "dark")} color="inherit" title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}>
+
+                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                  <IconButton
+                    onClick={() => setMode(theme === "dark" ? "light" : "dark")}
+                    color="inherit"
+                    title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+                  >
                     {theme === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
                   </IconButton>
 
                   {user && (
                     <>
-                      <IconButton onClick={() => setIsSettingsOpen(true)} color="inherit" title="Settings">
+                      <IconButton
+                        onClick={() => setIsSettingsOpen(true)}
+                        color="inherit"
+                        title="Settings"
+                      >
                         <SettingsIcon />
                       </IconButton>
-                      
+
                       <QueueManager token={user?.token} />
                       <NotificationCenter />
-                      
-                      <IconButton onClick={(e) => setAnchorElUser(e.currentTarget)} color="inherit">
-                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+
+                      <IconButton
+                        onClick={(e) => setAnchorElUser(e.currentTarget)}
+                        color="inherit"
+                      >
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            bgcolor: "primary.main",
+                          }}
+                        >
                           {user.displayName.charAt(0).toUpperCase()}
                         </Avatar>
                       </IconButton>
@@ -380,10 +412,20 @@ function AppContent() {
                         onClose={() => setAnchorElUser(null)}
                       >
                         <MenuItem disabled>
-                          <Typography variant="body2">{user.displayName}</Typography>
+                          <Typography variant="body2">
+                            {user.displayName}
+                          </Typography>
                         </MenuItem>
-                        <MenuItem onClick={() => { setAnchorElUser(null); handleLogout(); }}>
-                          <LogoutIcon fontSize="small" sx={{ mr: 1 }} />
+                        <MenuItem
+                          onClick={() => {
+                            setAnchorElUser(null);
+                            handleLogout();
+                          }}
+                        >
+                          <LogoutIcon
+                            fontSize="small"
+                            sx={{ mr: 1 }}
+                          />
                           Sign Out
                         </MenuItem>
                       </Menu>
