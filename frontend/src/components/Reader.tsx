@@ -175,6 +175,8 @@ export const Reader: React.FC<ReaderProps> = ({
   });
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
+  const pageDetailsCache = useRef<Record<string, any>>({});
+  const prefetchQueue = useRef<Set<string>>(new Set());
   const [zoom, setZoom] = useState(() => {
     const saved = localStorage.getItem("manga_zoom");
     const parsed = parseFloat(saved || "1.0");
@@ -612,56 +614,96 @@ export const Reader: React.FC<ReaderProps> = ({
     return Math.round((targetWidth / refWidth) * 100);
   }, [fitMode, zoom, containerSize, imageDims]);
 
+  // Helper to fetch and cache a page
+  const fetchPageDetails = useCallback(
+    async (imageId: string) => {
+      if (pageDetailsCache.current[imageId]) {
+        return pageDetailsCache.current[imageId];
+      }
+
+      const [detailsRes, layersRes] = await Promise.all([
+        safeFetch(`/api/images/${imageId}`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        }),
+        safeFetch(`/api/images/${imageId}/layers`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        }),
+      ]);
+
+      if (!detailsRes.ok) throw new Error("Image details fetch failed");
+      if (!layersRes.ok) throw new Error("Layers fetch failed");
+
+      const detailsData = await detailsRes.json();
+      const layersData = await layersRes.json();
+
+      const cachedData = {
+        panels: detailsData.panels || [],
+        ocrRegions: detailsData.ocrRegions || [],
+        conversations: detailsData.conversations || [],
+        layers: layersData || [],
+      };
+
+      pageDetailsCache.current[imageId] = cachedData;
+      return cachedData;
+    },
+    [user.token]
+  );
+
   // Fetch page details (panels, OCR regions, conversations) when page selection updates
   useEffect(() => {
     if (selectedPage && loadedImageId !== selectedPage.imageId) {
-      // Defer loading indicator setting to satisfy StrictEffect synchronous state update limits
+      const currentImageId = selectedPage.imageId;
+
+      // Defer loading indicator setting
       Promise.resolve().then(() => {
-        setIsLoadingPageDetails(true);
+        if (!pageDetailsCache.current[currentImageId]) {
+          setIsLoadingPageDetails(true);
+        }
       });
 
-      safeFetch(`/api/images/${selectedPage.imageId}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("Image details fetch failed");
-          return res.json();
-        })
+      fetchPageDetails(currentImageId)
         .then((data) => {
-          setPanels(data.panels || []);
-          setOcrRegions(data.ocrRegions || []);
-          setConversations(data.conversations || []);
-          setSelectedItem(null);
-          setLoadedImageId(selectedPage.imageId);
-          setIsLoadingPageDetails(false);
-        })
-        .catch((err) => {
-          console.error("Error loading page details:", err);
-          setIsLoadingPageDetails(false);
-        });
-
-      // Fetch layers
-      safeFetch(`/api/images/${selectedPage.imageId}/layers`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("Layers fetch failed");
-          return res.json();
-        })
-        .then((layersData) => {
-          const data = layersData || [];
-          setLayers(data);
-          if (data.length > 0) {
-            setActiveLayerId(data[0].layer.id);
-          } else {
-            setActiveLayerId(null);
+          if (selectedPage.imageId === currentImageId) {
+            setPanels(data.panels);
+            setOcrRegions(data.ocrRegions);
+            setConversations(data.conversations);
+            setLayers(data.layers);
+            if (data.layers.length > 0) {
+              setActiveLayerId(data.layers[0].layer.id);
+            } else {
+              setActiveLayerId(null);
+            }
+            setSelectedItem(null);
+            setLoadedImageId(currentImageId);
+            setIsLoadingPageDetails(false);
           }
         })
         .catch((err) => {
-          console.error("Error loading layers:", err);
+          console.error("Error loading page details:", err);
+          if (selectedPage.imageId === currentImageId) {
+            setIsLoadingPageDetails(false);
+          }
         });
+
+      // --- PREFETCH NEXT 2 PAGES ---
+      const currentPageIndex = pages.findIndex((p) => p.imageId === currentImageId);
+      if (currentPageIndex !== -1) {
+        const pagesToPrefetch = pages.slice(currentPageIndex + 1, currentPageIndex + 3);
+        pagesToPrefetch.forEach((p) => {
+          if (!pageDetailsCache.current[p.imageId] && !prefetchQueue.current.has(p.imageId)) {
+            prefetchQueue.current.add(p.imageId);
+
+            // Prefetch image itself
+            const img = new Image();
+            img.src = `${p.url}?token=${user.token}`;
+
+            // Prefetch details
+            fetchPageDetails(p.imageId).catch((e) => console.error("Prefetch error", e));
+          }
+        });
+      }
     }
-  }, [selectedPage, loadedImageId, user.token]);
+  }, [selectedPage, loadedImageId, pages, fetchPageDetails, user.token]);
 
   // Reset pan/zoom on page changes
   useEffect(() => {
@@ -2691,14 +2733,14 @@ export const Reader: React.FC<ReaderProps> = ({
     });
   };
 
-  if (isLoadingPageDetails || !selectedPage) {
+  if (!selectedPage) {
     return (
       <div
         className="reader-container-nhentai"
         style={{ alignItems: "center", justifyContent: "center" }}
       >
         <div className="spinner"></div>
-        <p>Loading page details...</p>
+        <p>Loading page...</p>
       </div>
     );
   }
@@ -3040,7 +3082,31 @@ export const Reader: React.FC<ReaderProps> = ({
         )}
 
         {/* Center Canvas */}
-        <div className="reader-main-nhentai">
+        <div className="reader-main-nhentai" style={{ position: "relative" }}>
+          {isLoadingPageDetails && (
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                zIndex: 1000,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "rgba(0,0,0,0.4)",
+                color: "white",
+              }}
+            >
+              <div
+                className="spinner"
+                style={{ borderColor: "rgba(255,255,255,0.3)", borderTopColor: "white", marginBottom: "10px" }}
+              ></div>
+              <div>Loading page details...</div>
+            </div>
+          )}
           <div
             ref={canvasAreaRef}
             className="reader-canvas-area"
