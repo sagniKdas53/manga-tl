@@ -14,6 +14,8 @@ public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"series"})
   Optional<Chapter> findWithSeriesById(UUID id);
 
-  @org.springframework.data.jpa.repository.Query("SELECT MIN(c.chapterNumber) FROM Chapter c WHERE c.series.id = :seriesId AND c.coverImageId IS NOT NULL")
-  Double findMinChapterNumberWithCoverBySeriesId(@org.springframework.data.repository.query.Param("seriesId") UUID seriesId);
+  @org.springframework.data.jpa.repository.Query(
+      "SELECT MIN(c.chapterNumber) FROM Chapter c WHERE c.series.id = :seriesId AND c.coverImageId IS NOT NULL")
+  Double findMinChapterNumberWithCoverBySeriesId(
+      @org.springframework.data.repository.query.Param("seriesId") UUID seriesId);
 }

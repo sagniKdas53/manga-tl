@@ -72,8 +72,6 @@ public class SeriesController {
     return dto;
   }
 
-
-
   @PostMapping
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<SeriesDto> createSeries(
@@ -100,10 +98,7 @@ public class SeriesController {
   public ResponseEntity<List<SeriesDto>> listSeries() {
     List<Series> seriesList = seriesRepository.findAll();
 
-    List<SeriesDto> list =
-        seriesList.stream()
-            .map(this::toDto)
-            .collect(Collectors.toList());
+    List<SeriesDto> list = seriesList.stream().map(this::toDto).collect(Collectors.toList());
     return ResponseEntity.ok(list);
   }
 
@@ -301,6 +296,9 @@ public class SeriesController {
               }
               Objects.requireNonNull(c, "chapter cannot be null");
               c = chapterRepository.save(c);
+
+              pageService.recalculateSeriesCover(c.getSeries().getId());
+
               dto.setId(c.getId());
               dto.setSeriesId(c.getSeries().getId());
               if (c.getCoverImageId() != null) {
@@ -320,7 +318,10 @@ public class SeriesController {
         .findById(chapterId)
         .map(
             chapter -> {
+              UUID seriesId = chapter.getSeries().getId();
               chapterRepository.delete(chapter);
+              chapterRepository.flush();
+              pageService.recalculateSeriesCover(seriesId);
               return ResponseEntity.ok().<Void>build();
             })
         .orElse(ResponseEntity.notFound().build());

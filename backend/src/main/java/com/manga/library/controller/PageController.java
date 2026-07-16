@@ -297,6 +297,10 @@ public class PageController {
               }
               page.setImage(image);
               page = pageRepository.save(page);
+              if (page.getPageNumber() == 1) {
+                pageRepository.flush();
+                pageService.recalculateChapterCover(chapter.getId());
+              }
             }
           } else {
             if (existingImageOpt.isPresent()) {
@@ -329,7 +333,8 @@ public class PageController {
                       pageNumber,
                       fileHash,
                       user);
-              pageService.generateAndSaveThumbnailAsync(page.getImage().getId(), uuid, originalImageBytes);
+              pageService.generateAndSaveThumbnailAsync(
+                  page.getImage().getId(), uuid, originalImageBytes);
             }
           }
 
@@ -805,8 +810,9 @@ public class PageController {
       if (storagePath == null || storagePath.trim().isEmpty()) {
         return ResponseEntity.notFound().build();
       }
-      
-      if (storagePath.toLowerCase().endsWith(".jpg") || storagePath.toLowerCase().endsWith(".jpeg")) {
+
+      if (storagePath.toLowerCase().endsWith(".jpg")
+          || storagePath.toLowerCase().endsWith(".jpeg")) {
         contentType = "image/jpeg";
       }
 
@@ -902,6 +908,8 @@ public class PageController {
         pageRepository.save(p);
       }
       pageRepository.flush();
+
+      pageService.recalculateChapterCover(chapterId);
 
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -1126,6 +1134,10 @@ public class PageController {
             }
             page.setImage(image);
             page = pageRepository.save(page);
+            if (page.getPageNumber() == 1) {
+              pageRepository.flush();
+              pageService.recalculateChapterCover(chapter.getId());
+            }
           }
         }
       } else {
@@ -1169,7 +1181,8 @@ public class PageController {
                 pageNumber,
                 fileHash,
                 user);
-        pageService.generateAndSaveThumbnailAsync(page.getImage().getId(), uuid, originalImageBytes);
+        pageService.generateAndSaveThumbnailAsync(
+            page.getImage().getId(), uuid, originalImageBytes);
       }
 
       int importedLayersCount = 0;

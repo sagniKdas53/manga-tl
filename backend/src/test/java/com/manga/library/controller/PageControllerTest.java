@@ -297,7 +297,7 @@ public class PageControllerTest {
     zos.finish();
 
     Image image = Image.builder().id(UUID.randomUUID()).build();
-    Page page = Page.builder().id(UUID.randomUUID()).image(image).build();
+    Page page = Page.builder().id(UUID.randomUUID()).image(image).pageNumber(1).build();
 
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
@@ -348,7 +348,7 @@ public class PageControllerTest {
     zos.finish();
 
     Image image = Image.builder().id(UUID.randomUUID()).build();
-    Page page = Page.builder().id(UUID.randomUUID()).image(image).build();
+    Page page = Page.builder().id(UUID.randomUUID()).image(image).pageNumber(1).build();
 
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
@@ -741,5 +741,34 @@ public class PageControllerTest {
                 .param("chapterId", chapterId.toString())
                 .param("pageNumber", "1"))
         .andExpect(status().isOk());
+  }
+
+  @Test
+  public void testReorderPagesCoverRecalculation() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    UUID pageId1 = UUID.randomUUID();
+    UUID pageId2 = UUID.randomUUID();
+
+    Page page1 = new Page();
+    page1.setId(pageId1);
+    page1.setPageNumber(1);
+
+    Page page2 = new Page();
+    page2.setId(pageId2);
+    page2.setPageNumber(2);
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(java.util.List.of(page1, page2));
+
+    String payload = "[\"" + pageId2.toString() + "\", \"" + pageId1.toString() + "\"]";
+
+    mockMvc
+        .perform(
+            put("/api/chapters/" + chapterId + "/pages/reorder")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+        .andExpect(status().isOk());
+
+    verify(pageService, times(1)).recalculateChapterCover(chapterId);
   }
 }
