@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+code = """import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Container from "@mui/material/Container";
 import Box from "@mui/material/Box";
@@ -6,7 +6,9 @@ import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
-
+import CardActionArea from "@mui/material/CardActionArea";
+import CardMedia from "@mui/material/CardMedia";
+import CardContent from "@mui/material/CardContent";
 import IconButton from "@mui/material/IconButton";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
@@ -549,3 +551,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 };
 
 export default SeriesDetails;
+"""
+with open("/home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/SeriesDetails.tsx", "w") as f:
+    f.write(code)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+code = """import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Container from "@mui/material/Container";
 import Box from "@mui/material/Box";
@@ -157,7 +157,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleEditSubmit = async (data: any) => {
     if (!selectedChapter) return;
     setEditError("");
@@ -789,3 +788,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 };
 
 export default React.memo(ChapterGallery);
+"""
+with open("/home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/ChapterGallery.tsx", "w") as f:
+    f.write(code)

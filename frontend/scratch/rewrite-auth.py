@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+code = """import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Container from "@mui/material/Container";
 import Box from "@mui/material/Box";
@@ -196,3 +196,6 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 };
 
 export default Auth;
+"""
+with open("/home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/Auth.tsx", "w") as f:
+    f.write(code)

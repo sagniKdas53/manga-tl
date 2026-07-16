@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+code = """import React, { useEffect, useState } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -307,3 +307,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 };
 
 export default React.memo(SettingsModal);
+"""
+with open("/home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/SettingsModal.tsx", "w") as f:
+    f.write(code)

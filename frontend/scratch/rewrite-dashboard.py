@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+code = """import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Container from "@mui/material/Container";
 import Typography from "@mui/material/Typography";
@@ -274,3 +274,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 };
 
 export default Dashboard;
+"""
+with open("/home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/Dashboard.tsx", "w") as f:
+    f.write(code)

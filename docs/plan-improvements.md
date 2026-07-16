@@ -512,9 +512,9 @@ Per `examples/chapter-cards.jpg`:
 
 **Files**: `App.tsx` (or new `UploadContext.tsx`), `ChapterGallery.tsx`
 
-- Lift the upload progress widget state to app-level context
-- Opening the Reader or navigating to Series page should not destroy the upload progress indicator
-- The widget should float in a corner and survive route changes
+- **Architectural Update**: Use Zustand for the upload widget state so it can subscribe to progress updates outside the React render cycle.
+- Opening the Reader or navigating to Series page should not destroy the upload progress indicator.
+- The widget should float in a corner and survive route changes without forcing `App.tsx` or main route components to re-render continuously.
 
 ### D.7 User Management Modal
 
@@ -589,21 +589,6 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 
 **Files**: `package.json`, all `.tsx` components, `index.css` → MUI theme files
 
-### D.14 React.memo on All Route Components (Performance Fix)
-
-**Files**: `App.tsx`
-
-- **Problem**: `App.tsx` holds 8 `useState` hooks and passes all state as props. When *any* state changes, **every route component re-renders** — even if its specific props didn't change. No component is wrapped in `React.memo`. This is the primary cause of the "laggy tab" experience.
-- **Fix**: Wrap Dashboard, SeriesDetails, ChapterGallery, Reader in `React.memo`:
-  ```tsx
-  const MemoizedDashboard = React.memo(Dashboard);
-  const MemoizedSeriesDetails = React.memo(SeriesDetails);
-  const MemoizedChapterGallery = React.memo(ChapterGallery);
-  const MemoizedReader = React.memo(Reader);
-  ```
-- **Impact**: 60-80% fewer re-renders on route navigation. Zero risk. One-liner per component.
-- **Do this BEFORE any MUI migration** to establish a solid rendering baseline.
-
 - **Motivation**: The current transparent/glassmorphism design doesn't feel polished. Adopting MUI gives us a battle-tested component library with consistent design language.
 - **Dependencies**:
   - [`@mui/material`](https://mui.com/material-ui/getting-started/) — core components
@@ -613,11 +598,13 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
   - Create a custom MUI `ThemeProvider` with two themes:
     - **Dark mode**: nHentai palette (from D.8) applied as MUI theme tokens
     - **Light mode**: Pixiv palette (from D.8) applied as MUI theme tokens
+  - **Architectural Update**: Move the theme state and `<ThemeProvider>` into a separate component (e.g., `RootThemeProvider`) that wraps `<App />`. This isolates theme renders from application state renders, ensuring that `App.tsx` re-renders do not recreate the theme object.
   - This replaces the manual CSS variable approach in D.8 — the palettes are now injected via `createTheme()`
   - Persist theme preference in `localStorage` (integrate with existing dark/light toggle)
 - **Migration strategy** — incremental, not big-bang:
-  1. Install MUI + wrap `App.tsx` in `ThemeProvider`
+  1. Install MUI + wrap `App.tsx` in `ThemeProvider` (via the wrapper)
   2. Replace primitive elements first: buttons → `Button`, inputs → `TextField`, dialogs → `Dialog`, modals → `Modal`
+     - **Architectural Update**: Manually update all `onChange` handlers and type definitions to match MUI's specific event signatures during this incremental migration.
   3. Replace layout: use `Container`, `Grid`, `Card`, `AppBar`, `Drawer` for page structure
   4. Replace feedback: toasts → `Snackbar`/`Alert`, confirms → `Dialog`, loading → `CircularProgress`/`Skeleton`
   5. Use MUI `DataGrid` or `Table` for the Queue Manager (A.3)
@@ -625,6 +612,24 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - **Use pre-built MUI components wherever possible** to reduce custom CSS and offload design decisions to MUI's defaults
 - **Remove** most of `index.css` once migration is complete — keep only truly custom styles
 - D.8 (theme improvements) is **subsumed** by this item — the palette work becomes MUI theme configuration
+
+### D.14 React.memo on All Route Components (Performance Fix)
+
+**Files**: `App.tsx`
+
+- **Problem**: `App.tsx` holds 8 `useState` hooks and passes all state as props. When *any* state changes, **every route component re-renders** — even if its specific props didn't change. No component is wrapped in `React.memo`. This is the primary cause of the "laggy tab" experience.
+- **Fix**: Wrap Dashboard, SeriesDetails, ChapterGallery, Reader in `React.memo`:
+
+  ```tsx
+  const MemoizedDashboard = React.memo(Dashboard);
+  const MemoizedSeriesDetails = React.memo(SeriesDetails);
+  const MemoizedChapterGallery = React.memo(ChapterGallery);
+  const MemoizedReader = React.memo(Reader);
+  ```
+
+- **Architectural Update**: In addition to `React.memo`, move rapidly changing state (like upload progress) out of `App.tsx` into a dedicated state manager (Zustand), so `App.tsx` doesn't trigger re-renders in the first place. For any remaining state passed as props, ensure callback functions are wrapped in `useCallback` and objects in `useMemo`.
+- **Impact**: 60-80% fewer re-renders on route navigation. Zero risk. One-liner per component.
+- **Do this BEFORE any MUI migration** to establish a solid rendering baseline.
 
 ### D.13 Global Toast Notifications for Deletion Restrictions
 

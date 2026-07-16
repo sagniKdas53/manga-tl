@@ -16,6 +16,7 @@ import { fitTextInBox } from "../utils/fitText";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
 import { ColorPicker } from "./ColorPicker";
+
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import JSZip from "jszip";
@@ -473,7 +474,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Popover States
   const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
-  const [isRedoing, setIsRedoing] = useState(false);
+  const [isRedoingOcrRegion, setIsRedoingOcrRegion] = useState(false);
+  const [isRedoingTlRegion, setIsRedoingTlRegion] = useState(false);
 
   const visibleOcrRegionIds = React.useMemo(() => {
     const ids = new Set<string>();
@@ -2624,8 +2626,9 @@ export const Reader: React.FC<ReaderProps> = ({
     r: OcrRegion,
     forceType?: "ocr" | "translation",
   ) => {
-    setIsRedoing(true);
     const type = forceType || (showTranslations ? "translation" : "ocr");
+    if (type === "ocr") setIsRedoingOcrRegion(true);
+    else setIsRedoingTlRegion(true);
 
     try {
       const res = await safeFetch(
@@ -2647,7 +2650,8 @@ export const Reader: React.FC<ReaderProps> = ({
         attempts++;
         if (attempts > 20) {
           clearInterval(interval);
-          setIsRedoing(false);
+          setIsRedoingOcrRegion(false);
+          setIsRedoingTlRegion(false);
           showInfo(
             "Redo Timed Out",
             "The redo operation timed out. Please try again.",
@@ -2680,7 +2684,8 @@ export const Reader: React.FC<ReaderProps> = ({
                 if (activeRegion && activeRegion.id === r.id) {
                   setActiveRegion(freshRegion);
                 }
-                setIsRedoing(false);
+                setIsRedoingOcrRegion(false);
+          setIsRedoingTlRegion(false);
               }
             }
           }
@@ -2690,7 +2695,8 @@ export const Reader: React.FC<ReaderProps> = ({
       }, 500);
     } catch (err) {
       console.error("Error redoing region:", err);
-      setIsRedoing(false);
+      setIsRedoingOcrRegion(false);
+          setIsRedoingTlRegion(false);
       showInfo("Redo Failed", "Failed to start redo job.", "error");
     }
   };
@@ -4303,7 +4309,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         padding: "8px 6px",
                         height: "36px",
                       }}
-                      disabled={isRedoing}
+                      disabled={isRedoingOcrRegion || (selectedItem?.isLayerElement && selectedItem.layerType === "translation")}
                       onClick={() => {
                         const actualRegion = ocrRegions.find(
                           (r) => r.id === selectedItem.regionId,
@@ -4343,7 +4349,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         padding: "8px 6px",
                         height: "36px",
                       }}
-                      disabled={isRedoing}
+                      disabled={isRedoingTlRegion}
                       onClick={() => {
                         const actualRegion = ocrRegions.find(
                           (r) => r.id === selectedItem.regionId,

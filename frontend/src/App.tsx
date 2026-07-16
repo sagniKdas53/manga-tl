@@ -17,6 +17,24 @@ import { safeFetch, getContextPath } from "./utils";
 // Providers
 import { NotificationProvider } from "./components/NotificationContext";
 import { ToastProvider, useToast } from "./components/ToastContext";
+import { RootThemeProvider } from "./providers/RootThemeProvider";
+import { useColorScheme } from "@mui/material/styles";
+
+import AppBar from "@mui/material/AppBar";
+import Toolbar from "@mui/material/Toolbar";
+import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
+import Box from "@mui/material/Box";
+
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import Avatar from "@mui/material/Avatar";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import SettingsIcon from "@mui/icons-material/Settings";
+import LogoutIcon from "@mui/icons-material/Logout";
+
+
 
 // Static import for NotificationCenter (always present in nav)
 import { NotificationCenter } from "./components/NotificationCenter";
@@ -27,11 +45,13 @@ import logoLight from "./assets/logo-light.svg";
 
 // Lazy-loaded route components
 const Auth = React.lazy(() => import("./components/Auth"));
-const Dashboard = React.lazy(() => import("./components/Dashboard"));
-const SeriesDetails = React.lazy(() => import("./components/SeriesDetails"));
-const ChapterGallery = React.lazy(() => import("./components/ChapterGallery"));
-const Reader = React.lazy(() => import("./components/Reader"));
+const Dashboard = React.memo(React.lazy(() => import("./components/Dashboard")));
+const SeriesDetails = React.memo(React.lazy(() => import("./components/SeriesDetails")));
+const ChapterGallery = React.memo(React.lazy(() => import("./components/ChapterGallery")));
+const Reader = React.memo(React.lazy(() => import("./components/Reader")));
 const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
+
+import { UploadProgressWidget } from "./components/UploadProgressWidget";
 
 function LoadingSpinner() {
   return (
@@ -106,6 +126,9 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Stable empty function for onSelectPage
+  const noop = React.useCallback(() => {}, []);
+
   // Match URL params for deep routing
   const seriesMatch =
     matchPath({ path: "/series/:seriesId/*" }, location.pathname) ||
@@ -148,21 +171,11 @@ function AppContent() {
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [anchorElUser, setAnchorElUser] = React.useState<null | HTMLElement>(null);
 
-  // Theme State & Persistence
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    const saved = localStorage.getItem("manga_theme");
-    return saved === "light" ? "light" : "dark";
-  });
-
-  useEffect(() => {
-    if (theme === "light") {
-      document.documentElement.classList.add("light");
-    } else {
-      document.documentElement.classList.remove("light");
-    }
-    localStorage.setItem("manga_theme", theme);
-  }, [theme]);
+  // Theme State via MUI
+  const { mode, setMode } = useColorScheme();
+  const theme = (mode as "light" | "dark") || "dark";
 
   // Load user session redirect
   useEffect(() => {
@@ -320,155 +333,68 @@ function AppContent() {
         <div className="app-container">
           {/* Navigation Bar */}
           {!readerMatch && (
-            <nav className="nav-bar">
-              <div
-                className="logo"
-                onClick={() => user && navigate("/")}
-                style={{
-                  cursor: user ? "pointer" : "default",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <img
-                  src={theme === "dark" ? logoDark : logoLight}
-                  alt="tl-hub logo"
-                  style={{ height: "32px", width: "auto" }}
-                />
-                <span style={{ fontWeight: 700 }}>tl-hub</span>
-              </div>
-              <div className="nav-actions">
-                {/* Theme Toggle Button */}
-                <button
-                  className="theme-toggle-btn"
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+            <AppBar position="sticky" color="default" elevation={1} sx={{ backgroundColor: 'background.paper', mb: 3 }}>
+              <Toolbar>
+                <Box
+                  onClick={() => user && navigate("/")}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    cursor: user ? "pointer" : "default",
+                    flexGrow: 1,
+                  }}
                 >
-                  {theme === "dark" ? (
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="5"
-                      ></circle>
-                      <line
-                        x1="12"
-                        y1="1"
-                        x2="12"
-                        y2="3"
-                      ></line>
-                      <line
-                        x1="12"
-                        y1="21"
-                        x2="12"
-                        y2="23"
-                      ></line>
-                      <line
-                        x1="4.22"
-                        y1="4.22"
-                        x2="5.64"
-                        y2="5.64"
-                      ></line>
-                      <line
-                        x1="18.36"
-                        y1="18.36"
-                        x2="19.78"
-                        y2="19.78"
-                      ></line>
-                      <line
-                        x1="1"
-                        y1="12"
-                        x2="3"
-                        y2="12"
-                      ></line>
-                      <line
-                        x1="21"
-                        y1="12"
-                        x2="23"
-                        y2="12"
-                      ></line>
-                      <line
-                        x1="4.22"
-                        y1="19.78"
-                        x2="5.64"
-                        y2="18.36"
-                      ></line>
-                      <line
-                        x1="18.36"
-                        y1="5.64"
-                        x2="19.78"
-                        y2="4.22"
-                      ></line>
-                    </svg>
-                  ) : (
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                    </svg>
-                  )}
-                </button>
+                  <img
+                    src={theme === "dark" ? logoDark : logoLight}
+                    alt="tl-hub logo"
+                    style={{ height: "32px", width: "auto" }}
+                  />
+                  <Typography variant="h6" component="div" sx={{ fontWeight: 700 }}>
+                    tl-hub
+                  </Typography>
+                </Box>
+                
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <IconButton onClick={() => setMode(theme === "dark" ? "light" : "dark")} color="inherit" title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}>
+                    {theme === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
+                  </IconButton>
 
-                {user && (
-                  <>
-                    <button
-                      className="theme-toggle-btn"
-                      onClick={() => setIsSettingsOpen(true)}
-                      title="Settings"
-                    >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                  {user && (
+                    <>
+                      <IconButton onClick={() => setIsSettingsOpen(true)} color="inherit" title="Settings">
+                        <SettingsIcon />
+                      </IconButton>
+                      
+                      <QueueManager token={user?.token} />
+                      <NotificationCenter />
+                      
+                      <IconButton onClick={(e) => setAnchorElUser(e.currentTarget)} color="inherit">
+                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                          {user.displayName.charAt(0).toUpperCase()}
+                        </Avatar>
+                      </IconButton>
+                      <Menu
+                        anchorEl={anchorElUser}
+                        open={Boolean(anchorElUser)}
+                        onClose={() => setAnchorElUser(null)}
                       >
-                        <circle
-                          cx="12"
-                          cy="12"
-                          r="3"
-                        ></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                      </svg>
-                    </button>
-                    <QueueManager token={user?.token} />
-                    <NotificationCenter />
-                    <div className="user-badge">
-                      <span className="user-dot"></span>
-                      {user.displayName}
-                    </div>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={handleLogout}
-                      style={{ padding: "6px 12px" }}
-                    >
-                      Sign Out
-                    </button>
-                  </>
-                )}
-              </div>
-            </nav>
+                        <MenuItem disabled>
+                          <Typography variant="body2">{user.displayName}</Typography>
+                        </MenuItem>
+                        <MenuItem onClick={() => { setAnchorElUser(null); handleLogout(); }}>
+                          <LogoutIcon fontSize="small" sx={{ mr: 1 }} />
+                          Sign Out
+                        </MenuItem>
+                      </Menu>
+                    </>
+                  )}
+                </Box>
+              </Toolbar>
+            </AppBar>
           )}
+
+          <UploadProgressWidget />
 
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
@@ -532,7 +458,7 @@ function AppContent() {
                       setSelectedChapter={setSelectedChapter}
                       pages={pages}
                       setPages={setPages}
-                      onSelectPage={() => {}}
+                      onSelectPage={noop}
                       isLoadingDetails={isLoadingDetails}
                     />
                   ) : null
@@ -549,7 +475,7 @@ function AppContent() {
                       setSelectedChapter={setSelectedChapter}
                       pages={pages}
                       setPages={setPages}
-                      onSelectPage={() => {}}
+                      onSelectPage={noop}
                       isLoadingDetails={isLoadingDetails}
                     />
                   ) : null
@@ -607,9 +533,11 @@ function App() {
   const cleanBaseName = getContextPath() || "/";
 
   return (
-    <BrowserRouter basename={cleanBaseName}>
-      <AppContent />
-    </BrowserRouter>
+    <RootThemeProvider>
+      <BrowserRouter basename={cleanBaseName}>
+        <AppContent />
+      </BrowserRouter>
+    </RootThemeProvider>
   );
 }
 
