@@ -175,7 +175,12 @@ export const Reader: React.FC<ReaderProps> = ({
   });
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
-  const pageDetailsCache = useRef<Record<string, any>>({});
+  const pageDetailsCache = useRef<Record<string, {
+    panels: Panel[];
+    ocrRegions: OcrRegion[];
+    conversations: Conversation[];
+    layers: { layer: Layer; elements: LayerElement[] }[];
+  }>>({});
   const prefetchQueue = useRef<Set<string>>(new Set());
   const [zoom, setZoom] = useState(() => {
     const saved = localStorage.getItem("manga_zoom");
@@ -657,52 +662,84 @@ export const Reader: React.FC<ReaderProps> = ({
   useEffect(() => {
     if (selectedPage && loadedImageId !== selectedPage.imageId) {
       const currentImageId = selectedPage.imageId;
-
-      // Defer loading indicator setting
-      Promise.resolve().then(() => {
-        if (!pageDetailsCache.current[currentImageId]) {
-          setIsLoadingPageDetails(true);
-        }
-      });
-
-      fetchPageDetails(currentImageId)
-        .then((data) => {
-          if (selectedPage.imageId === currentImageId) {
-            setPanels(data.panels);
-            setOcrRegions(data.ocrRegions);
-            setConversations(data.conversations);
-            setLayers(data.layers);
-            if (data.layers.length > 0) {
-              setActiveLayerId(data.layers[0].layer.id);
-            } else {
-              setActiveLayerId(null);
-            }
-            setSelectedItem(null);
-            setLoadedImageId(currentImageId);
-            setIsLoadingPageDetails(false);
-          }
-        })
-        .catch((err) => {
-          console.error("Error loading page details:", err);
-          if (selectedPage.imageId === currentImageId) {
-            setIsLoadingPageDetails(false);
-          }
-        });
-
-      // --- PREFETCH NEXT 2 PAGES ---
       const currentPageIndex = pages.findIndex((p) => p.imageId === currentImageId);
+
+      // --- SYNCHRONOUS CACHE HIT ---
+      if (pageDetailsCache.current[currentImageId]) {
+        const data = pageDetailsCache.current[currentImageId];
+        setPanels(data.panels);
+        setOcrRegions(data.ocrRegions);
+        setConversations(data.conversations);
+        setLayers(data.layers);
+        if (data.layers.length > 0) {
+          setActiveLayerId(data.layers[0].layer.id);
+        } else {
+          setActiveLayerId(null);
+        }
+        setSelectedItem(null);
+        setLoadedImageId(currentImageId);
+        setIsLoadingPageDetails(false);
+      } else {
+        setIsLoadingPageDetails(true);
+        fetchPageDetails(currentImageId)
+          .then((data) => {
+            if (selectedPage.imageId === currentImageId) {
+              setPanels(data.panels);
+              setOcrRegions(data.ocrRegions);
+              setConversations(data.conversations);
+              setLayers(data.layers);
+              if (data.layers.length > 0) {
+                setActiveLayerId(data.layers[0].layer.id);
+              } else {
+                setActiveLayerId(null);
+              }
+              setSelectedItem(null);
+              setLoadedImageId(currentImageId);
+              setIsLoadingPageDetails(false);
+            }
+          })
+          .catch((err) => {
+            console.error("Error loading page details:", err);
+            if (selectedPage.imageId === currentImageId) {
+              setIsLoadingPageDetails(false);
+            }
+          });
+      }
+
+      // --- STRICT SLIDING WINDOW PREFETCH & EVICTION ---
       if (currentPageIndex !== -1) {
+        // 1. Prefetch next 2 pages (N+1, N+2)
         const pagesToPrefetch = pages.slice(currentPageIndex + 1, currentPageIndex + 3);
         pagesToPrefetch.forEach((p) => {
           if (!pageDetailsCache.current[p.imageId] && !prefetchQueue.current.has(p.imageId)) {
             prefetchQueue.current.add(p.imageId);
 
-            // Prefetch image itself
+            // Prefetch image itself (lightweight progressive loading)
             const img = new Image();
             img.src = `${p.url}?token=${user.token}`;
 
             // Prefetch details
             fetchPageDetails(p.imageId).catch((e) => console.error("Prefetch error", e));
+          }
+        });
+
+        // 2. Evict pages outside of window [N, N+1, N+2] to save memory
+        const activeWindowIds = new Set([
+          currentImageId,
+          ...pagesToPrefetch.map(p => p.imageId)
+        ]);
+
+        // Evict from cache
+        Object.keys(pageDetailsCache.current).forEach(cachedId => {
+          if (!activeWindowIds.has(cachedId)) {
+            delete pageDetailsCache.current[cachedId];
+          }
+        });
+
+        // Evict from prefetchQueue tracking
+        prefetchQueue.current.forEach(queuedId => {
+          if (!activeWindowIds.has(queuedId)) {
+            prefetchQueue.current.delete(queuedId);
           }
         });
       }

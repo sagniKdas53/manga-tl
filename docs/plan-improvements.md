@@ -406,6 +406,17 @@ Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPi
 > 2. When a new `Page` is uploaded and determined to be the "first" page (e.g., Chapter 1, Page 1), have the `PageService` / `PageController` directly update the `cover_image_id` of the parent `Chapter` and `Series`.
 > 3. Update the `SeriesController` and `ChapterController` to simply read this pre-computed column, eliminating the heavy SQL joins entirely.
 
+### C.5 Future Optimization: Background Image Decoding for Instant Transitions
+
+> [!NOTE]
+> Currently, we pre-fetch the next 2 pages in JavaScript using `new Image().src = ...`. This downloads the file in the background, but the browser often defers *decoding/rendering* it until it's actually shown on screen. 
+> 
+> **The Tradeoff:**
+> - **Current approach (JS fetch only):** Keeps memory usage low and provides progressive rendering visual feedback (the image loads top-to-bottom like "assembling parts") which users on slower connections prefer to see.
+> - **Future approach (Hidden DOM elements):** If we ever want 100% instant, seamless transitions, we could render hidden `<img />` tags for the pre-fetched pages in the DOM. This forces the browser to do the heavy decoding and rasterizing early. 
+> 
+> For now, we are intentionally sticking to the lightweight JS fetch to retain progressive rendering, but this is documented here as an easy switch if the UX requirements change.
+
 ### ✅ Checkpoint C — Thumbnails
 
 **Bugs Found & Resolved:**

@@ -45,7 +45,8 @@ Object.defineProperty(window, "ResizeObserver", {
 });
 
 class MockEventSource {
-  constructor(url: string) {}
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  constructor(_url: string) {}
   close() {}
   addEventListener() {}
   removeEventListener() {}
