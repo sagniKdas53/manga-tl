@@ -195,7 +195,7 @@ services:
       - LOCAL_VLM_MODEL=${LOCAL_VLM_MODEL:-qwen2.5-vl-3b-instruct}
       - QA_MODE=${QA_MODE:-auto}
       - RENDER_CACHE_DIR=/app/rendered_cache
-      # Finally the remote workers, to distibute load to shouldn't this be added to the back-end
+      # Finally the remote workers, to distribute load to shouldn't this be added to the back-end
       - CONCURRENT_JOBS=${CONCURRENT_JOBS:-2}
       - MAX_HEAVY_SLOTS=${MAX_HEAVY_SLOTS:-}
       - MAX_LIGHT_SLOTS=${MAX_LIGHT_SLOTS:-}
