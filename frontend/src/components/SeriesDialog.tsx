@@ -31,6 +31,9 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
   initialData,
   settings,
 }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [title, setTitle] = useState("");
   const [sourceLang, setSourceLang] = useState("ja");
   const [targetLang, setTargetLang] = useState("en");
@@ -129,7 +132,7 @@ const SeriesDialog: React.FC<SeriesDialogProps> = ({
     (qaMode || settings?.qaMode) === "none";
 
   return (
-    <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog fullScreen={fullScreen} open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
       <form onSubmit={handleSubmit}>
         <DialogTitle>{initialData ? "Edit Series" : "Create New Series"}</DialogTitle>
         <DialogContent dividers>

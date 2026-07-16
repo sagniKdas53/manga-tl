@@ -36,6 +36,9 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
   error,
   isImporting,
 }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [chapterNum, setChapterNum] = useState<number>(1);
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -118,7 +121,7 @@ const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     (qaMode || settings?.qaMode) === "none";
 
   return (
-    <Dialog open={isOpen} onClose={!isImporting ? onClose : undefined} maxWidth="sm" fullWidth>
+    <Dialog fullScreen={fullScreen} open={isOpen} onClose={!isImporting ? onClose : undefined} maxWidth="sm" fullWidth>
       <form onSubmit={handleSubmit}>
         <DialogTitle>Import Chapter (ZIP / ePub)</DialogTitle>
         <DialogContent dividers>

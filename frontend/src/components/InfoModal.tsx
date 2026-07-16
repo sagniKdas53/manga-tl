@@ -21,8 +21,11 @@ const InfoModal: React.FC<InfoModalProps> = ({
   type = "info",
   onClose,
 }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
   return (
-    <Dialog
+    <Dialog fullScreen={fullScreen}
       open={isOpen}
       onClose={onClose}
       aria-labelledby="info-dialog-title"

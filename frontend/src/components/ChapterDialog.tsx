@@ -38,6 +38,9 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
   settings,
   error,
 }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [chapterNum, setChapterNum] = useState<number>(1);
   const [title, setTitle] = useState("");
   const [useContextMemory, setUseContextMemory] = useState<boolean>(true);
@@ -131,7 +134,7 @@ const ChapterDialog: React.FC<ChapterDialogProps> = ({
     (qaMode || settings?.qaMode) === "none";
 
   return (
-    <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog fullScreen={fullScreen} open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
       <form onSubmit={handleSubmit}>
         <DialogTitle>{initialData ? "Edit Chapter" : "Add Chapter"}</DialogTitle>
         <DialogContent dividers>

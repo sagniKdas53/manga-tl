@@ -29,8 +29,11 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
   return (
-    <Dialog
+    <Dialog fullScreen={fullScreen}
       open={isOpen}
       onClose={onCancel}
       aria-labelledby="confirm-dialog-title"

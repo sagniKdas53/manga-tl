@@ -47,6 +47,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   token,
 }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -117,7 +120,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onClose={saving ? undefined : onClose} fullWidth maxWidth="md">
+    <Dialog fullScreen={fullScreen} open={isOpen} onClose={saving ? undefined : onClose} fullWidth maxWidth="md">
       <DialogTitle>System Settings</DialogTitle>
       
       <DialogContent dividers>
