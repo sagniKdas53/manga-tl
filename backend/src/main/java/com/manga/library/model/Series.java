@@ -23,6 +23,9 @@ public class Series {
   @Column(nullable = false)
   private String title;
 
+  @Column(name = "cover_image_id")
+  private UUID coverImageId;
+
   @Column(name = "original_language", nullable = false)
   private String originalLanguage;
 

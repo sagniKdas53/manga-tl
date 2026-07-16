@@ -32,6 +32,9 @@ public class Chapter {
 
   private String title;
 
+  @Column(name = "cover_image_id")
+  private UUID coverImageId;
+
   @Column(name = "summary_json")
   @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
   private String summaryJson;

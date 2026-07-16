@@ -63,8 +63,6 @@ public class SeriesControllerTest {
   public void testListSeries_Success() throws Exception {
     Series series = Series.builder().id(UUID.randomUUID()).title("Test Series").build();
     when(seriesRepository.findAll()).thenReturn(java.util.List.of(series));
-    when(pageRepository.findDefaultCoverImageIds()).thenReturn(new java.util.ArrayList<>());
-
     mockMvc.perform(get("/api/series")).andExpect(status().isOk());
   }
 

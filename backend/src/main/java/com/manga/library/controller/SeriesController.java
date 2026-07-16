@@ -66,53 +66,13 @@ public class SeriesController {
     dto.setQaLlmModel(s.getQaLlmModel());
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
-    // Find default cover image (first page of first chapter)
-    try {
-      List<Chapter> chapters = chapterRepository.findBySeriesId(s.getId());
-      if (chapters != null && !chapters.isEmpty()) {
-        chapters.sort(Comparator.comparing(Chapter::getChapterNumber));
-        Chapter firstChapter = chapters.get(0);
-        
-        List<Object[]> covers = pageRepository.findFirstPageImageIdsBySeriesId(s.getId());
-        for (Object[] row : covers) {
-          UUID chapId = (UUID) row[0];
-          if (firstChapter.getId().equals(chapId)) {
-            String thumbPath = (String) row[2];
-            if (thumbPath != null) {
-              dto.setCoverImageUrl(getImageUrl((UUID) row[1]));
-            }
-            break;
-          }
-        }
-      }
-    } catch (Exception e) {
-      log.debug("Ignore fallback exception in toDto", e);
+    if (s.getCoverImageId() != null) {
+      dto.setCoverImageUrl(getImageUrl(s.getCoverImageId()));
     }
     return dto;
   }
 
-  private SeriesDto toDtoWithDefaultCovers(Series s, Map<UUID, UUID> defaultCovers) {
-    SeriesDto dto = new SeriesDto();
-    dto.setId(s.getId());
-    dto.setTitle(s.getTitle());
-    dto.setOriginalLanguage(s.getOriginalLanguage());
-    dto.setSourceLanguage(s.getSourceLanguage());
-    dto.setTargetLanguage(s.getTargetLanguage());
-    dto.setReadingDirection(s.getReadingDirection());
-    dto.setOcrProvider(s.getOcrProvider());
-    dto.setOcrModel(s.getOcrModel());
-    dto.setTlProvider(s.getTlProvider());
-    dto.setTlModel(s.getTlModel());
-    dto.setQaProvider(s.getQaProvider());
-    dto.setQaLlmModel(s.getQaLlmModel());
-    dto.setQaVlmModel(s.getQaVlmModel());
-    dto.setQaMode(s.getQaMode());
-    UUID imageId = defaultCovers.get(s.getId());
-    if (imageId != null) {
-      dto.setCoverImageUrl(getImageUrl(imageId));
-    }
-    return dto;
-  }
+
 
   @PostMapping
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
@@ -140,25 +100,9 @@ public class SeriesController {
   public ResponseEntity<List<SeriesDto>> listSeries() {
     List<Series> seriesList = seriesRepository.findAll();
 
-    Map<UUID, UUID> defaultCovers = new HashMap<>();
-    boolean needsDefaultCovers = true;
-    if (needsDefaultCovers) {
-      try {
-        List<Object[]> covers = pageRepository.findDefaultCoverImageIds();
-        for (Object[] row : covers) {
-          String thumbPath = (String) row[2];
-          if (thumbPath != null) {
-            defaultCovers.put((UUID) row[0], (UUID) row[1]);
-          }
-        }
-      } catch (Exception e) {
-        log.debug("Ignore query exception in listSeries", e);
-      }
-    }
-
     List<SeriesDto> list =
         seriesList.stream()
-            .map(s -> toDtoWithDefaultCovers(s, defaultCovers))
+            .map(this::toDto)
             .collect(Collectors.toList());
     return ResponseEntity.ok(list);
   }
@@ -220,19 +164,6 @@ public class SeriesController {
   public ResponseEntity<List<ChapterDto>> listChapters(@PathVariable UUID seriesId) {
     List<Chapter> chapters = chapterRepository.findBySeriesId(seriesId);
 
-    Map<UUID, UUID> chapterCovers = new HashMap<>();
-    try {
-      List<Object[]> covers = pageRepository.findFirstPageImageIdsBySeriesId(seriesId);
-      for (Object[] row : covers) {
-        String thumbPath = (String) row[2];
-        if (thumbPath != null) {
-          chapterCovers.put((UUID) row[0], (UUID) row[1]);
-        }
-      }
-    } catch (Exception e) {
-      log.debug("Ignore query exception in listChapters", e);
-    }
-
     List<ChapterDto> list =
         chapters.stream()
             .map(
@@ -251,9 +182,8 @@ public class SeriesController {
                   dto.setQaVlmModel(c.getQaVlmModel());
                   dto.setQaMode(c.getQaMode());
                   dto.setUseContextMemory(c.getUseContextMemory());
-                  UUID imageId = chapterCovers.get(c.getId());
-                  if (imageId != null) {
-                    dto.setCoverImageUrl(getImageUrl(imageId));
+                  if (c.getCoverImageId() != null) {
+                    dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
                   }
                   return dto;
                 })
@@ -282,16 +212,8 @@ public class SeriesController {
               dto.setQaVlmModel(c.getQaVlmModel());
               dto.setQaMode(c.getQaMode());
               dto.setUseContextMemory(c.getUseContextMemory());
-              try {
-                List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
-                if (pages != null && !pages.isEmpty()) {
-                  Image firstImg = pages.get(0).getImage();
-                  if (firstImg.getThumbnailStoragePath() != null) {
-                    dto.setCoverImageUrl(getImageUrl(firstImg.getId()));
-                  }
-                }
-              } catch (Exception e) {
-                log.debug("Ignore fallback exception in getChapter", e);
+              if (c.getCoverImageId() != null) {
+                dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
               }
               return ResponseEntity.ok(dto);
             })
@@ -381,16 +303,8 @@ public class SeriesController {
               c = chapterRepository.save(c);
               dto.setId(c.getId());
               dto.setSeriesId(c.getSeries().getId());
-              try {
-                List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(c.getId());
-                if (pages != null && !pages.isEmpty()) {
-                  Image firstImg = pages.get(0).getImage();
-                  if (firstImg.getThumbnailStoragePath() != null) {
-                    dto.setCoverImageUrl(getImageUrl(firstImg.getId()));
-                  }
-                }
-              } catch (Exception e) {
-                log.debug("Ignore fallback exception in updateChapter", e);
+              if (c.getCoverImageId() != null) {
+                dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
               }
               return ResponseEntity.ok(dto);
             })

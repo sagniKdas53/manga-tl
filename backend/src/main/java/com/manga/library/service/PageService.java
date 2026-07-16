@@ -19,6 +19,7 @@ public class PageService {
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
   private final SeriesRepository seriesRepository;
+  private final ChapterRepository chapterRepository;
   private final MinioService minioService;
 
   @Transactional
@@ -49,7 +50,21 @@ public class PageService {
 
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(image).build();
     Objects.requireNonNull(page, "page cannot be null");
-    return pageRepository.save(page);
+    page = pageRepository.save(page);
+    
+    if (pageNumber == 1) {
+      chapter.setCoverImageId(image.getId());
+      chapterRepository.save(chapter);
+
+      Series series = chapter.getSeries();
+      Double minChapterNum = chapterRepository.findMinChapterNumberWithCoverBySeriesId(series.getId());
+      if (minChapterNum == null || chapter.getChapterNumber() <= minChapterNum) {
+        series.setCoverImageId(image.getId());
+        seriesRepository.save(series);
+      }
+    }
+    
+    return page;
   }
 
   @Transactional
@@ -68,7 +83,21 @@ public class PageService {
 
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(existingImage).build();
     Objects.requireNonNull(page, "page cannot be null");
-    return pageRepository.save(page);
+    page = pageRepository.save(page);
+    
+    if (pageNumber == 1) {
+      chapter.setCoverImageId(existingImage.getId());
+      chapterRepository.save(chapter);
+
+      Series series = chapter.getSeries();
+      Double minChapterNum = chapterRepository.findMinChapterNumberWithCoverBySeriesId(series.getId());
+      if (minChapterNum == null || chapter.getChapterNumber() <= minChapterNum) {
+        series.setCoverImageId(existingImage.getId());
+        seriesRepository.save(series);
+      }
+    }
+    
+    return page;
   }
 
   private void shiftPagesUp(UUID chapterId, Integer startingPageNumber) {
