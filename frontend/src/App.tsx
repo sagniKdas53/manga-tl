@@ -196,7 +196,12 @@ function AppContent() {
   useEffect(() => {
     if (user && seriesId) {
       Promise.resolve().then(() => {
-        setIsLoadingDetails(true);
+        setSelectedSeries((prev) => {
+          if (!prev || prev.id !== seriesId) {
+            setIsLoadingDetails(true);
+          }
+          return prev;
+        });
       });
 
       Promise.all([
@@ -231,7 +236,12 @@ function AppContent() {
   useEffect(() => {
     if (user && chapterId) {
       Promise.resolve().then(() => {
-        setIsLoadingDetails(true);
+        setSelectedChapter((prev) => {
+          if (!prev || prev.id !== chapterId) {
+            setIsLoadingDetails(true);
+          }
+          return prev;
+        });
       });
 
       safeFetch(`/api/series/chapters/${chapterId}`, {
