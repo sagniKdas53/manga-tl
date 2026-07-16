@@ -230,7 +230,7 @@ function AppContent() {
           setIsLoadingDetails(false);
         });
     }
-  }, [seriesId, user?.token]);
+  }, [seriesId, user]);
 
   // Load chapter details and pages when chapterId is active in route
   useEffect(() => {
@@ -280,7 +280,7 @@ function AppContent() {
           setIsLoadingDetails(false);
         });
     }
-  }, [chapterId, user?.token]);
+  }, [chapterId, user]);
 
   // Dynamically manage browser tab title
   useEffect(() => {
