@@ -456,6 +456,9 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 
 ## Phase D — Frontend UI Fixes & Redesign
 
+> [!IMPORTANT]
+> **Recommended execution order**: D.14 (React.memo) → D.12 Phase 0 (MUI setup) → D.12 remaining phases (which encompass D.1–D.11, D.13) → D.9 (infinite scroll, needs backend) → D.15 (mobile, stretch goal)
+
 ### D.1 Remove Cover Image URL Field from Dialogs
 
 Per `examples/remove-custom-thumbnails.jpg`:
@@ -582,9 +585,24 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 > [!IMPORTANT]
 > This is a **foundational change** that affects all of Phase D. It should be tackled early (ideally first in Phase D) so that subsequent UI items (D.1–D.11) are built on MUI components rather than vanilla CSS that will be replaced later.
 >
-> **Full plan**: [docs/plan-mui-migration.md](plan-mui-migration.md) — 9-phase incremental migration with component mapping, palette extraction, CSS tracking sheet, and phase dependency graph.
+> **Full plan**: [docs/plan-mui-migration.md](plan-mui-migration.md) — 9-phase incremental migration with component mapping, palette extraction, CSS tracking sheet, performance analysis, mobile plan, and phase dependency graph.
 
 **Files**: `package.json`, all `.tsx` components, `index.css` → MUI theme files
+
+### D.14 React.memo on All Route Components (Performance Fix)
+
+**Files**: `App.tsx`
+
+- **Problem**: `App.tsx` holds 8 `useState` hooks and passes all state as props. When *any* state changes, **every route component re-renders** — even if its specific props didn't change. No component is wrapped in `React.memo`. This is the primary cause of the "laggy tab" experience.
+- **Fix**: Wrap Dashboard, SeriesDetails, ChapterGallery, Reader in `React.memo`:
+  ```tsx
+  const MemoizedDashboard = React.memo(Dashboard);
+  const MemoizedSeriesDetails = React.memo(SeriesDetails);
+  const MemoizedChapterGallery = React.memo(ChapterGallery);
+  const MemoizedReader = React.memo(Reader);
+  ```
+- **Impact**: 60-80% fewer re-renders on route navigation. Zero risk. One-liner per component.
+- **Do this BEFORE any MUI migration** to establish a solid rendering baseline.
 
 - **Motivation**: The current transparent/glassmorphism design doesn't feel polished. Adopting MUI gives us a battle-tested component library with consistent design language.
 - **Dependencies**:
@@ -616,6 +634,19 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - Migrated all `alert()` usage in deletion workflows to the custom `useToast()` hook.
 - Modified `safeFetch` to only auto-logout on `401 Unauthorized` responses instead of `403 Forbidden`, preventing abrupt logouts and allowing the application to display a clear toast message explaining the permission issue instead.
 
+### D.15 Mobile: tl-hub Lite (Stretch Goal)
+
+> [!NOTE]
+> The full desktop Reader (5292 lines, SVG overlays, polygon editing, dual sidebars, floating toolbars, zoom/pan/drag) is fundamentally unsuitable for mobile. This is a separate single-purpose flow, not responsive desktop.
+
+**New file**: `frontend/src/components/MobileApp.tsx`
+
+- **New route**: `/mobile` → independent component, no dependency on Reader/Dashboard
+- **Flow**: Upload image → SSE progress bar (6 pipeline dots) → side-by-side preview → download rendered PNG
+- **Components**: MUI `MobileStepper` + `LinearProgress` + `CardMedia` + `Button`
+- **Reuses existing APIs**: `POST /api/images`, SSE notification stream, `GET /api/series/chapters/{id}/export`
+- **Excludes**: No layer editing, no sidebars, no OCR regions, no zoom/pan — pure upload → process → export
+
 ### ✅ Checkpoint D — UI Polish
 
 **Manual checks:**
@@ -632,6 +663,8 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 10. Open chapter/series settings → model picker should show resolved model name next to `--Inherit--` (e.g., `google/gemini-2.5-flash (global)`)
 11. Verify model overrides show a clear hierarchy and "Reset to Default" works
 12. Verify all major components render as MUI components (buttons, dialogs, inputs, cards) — no vanilla HTML elements for interactive controls
+13. Open React DevTools → check that Dashboard doesn't re-render when Reader state changes (D.14)
+14. Visit `/mobile` on a phone-width viewport → upload → verify progress bar → export result
 
 **🔒 Quality Gate** (run before manual checks):
 
@@ -846,8 +879,10 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 | D.9 | `Dashboard.tsx`, `SeriesDetails.tsx` | Lazy loading / infinite scroll |
 | D.10 | `SettingsModal.tsx`, model picker components | Show resolved model names with inheritance source |
 | D.11 | `SettingsModal.tsx`, model picker components | Model override UX redesign with visual hierarchy |
-| D.12 | All `.tsx` components, `package.json` | Migrate to Material UI (MUI) with custom theme |
+| D.12 | All `.tsx` components, `package.json` | Migrate to Material UI (MUI) with custom theme (see [full plan](plan-mui-migration.md)) |
 | D.13 | `SeriesDetails.tsx`, `utils.ts`, etc. | Global toast notifications for deletion restrictions |
+| D.14 | `App.tsx` | React.memo on all route components (performance — do first) |
+| D.15 | `[NEW] MobileApp.tsx` | tl-hub Lite: mobile upload → process → export flow (stretch goal) |
 | E.1 | `[NEW] ProviderChain.py`, `config.py` | Cross-provider failover |
 | E.2 | Worker HTTP call sites | Strict timeouts |
 | E.3 | Worker cost utils, `JobCoordinatorService.java` | Move cost tracking from `costs.json` to PostgreSQL |

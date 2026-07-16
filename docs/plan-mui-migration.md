@@ -11,6 +11,9 @@
 
 Migrate the entire frontend from vanilla CSS + glassmorphism to Material UI v7. This is a **foundational change** that affects all D items — it should be done early in Phase D so subsequent UI work (D.1–D.11) is built on MUI components.
 
+> **Cross-reference**: [Gemini's screenshot-derived MUI plan](../examples/screenshots/mui_migration_plan.md) — provides screenshot-confirmed layout details and Reader bugs not visible from code alone.  
+> **UX flow**: [Gemini's UX flow report](../examples/screenshots/UX_FLOW_REPORT.md) — traces the full user journey from Dashboard → SeriesDetails → ChapterGallery → Editor.
+
 ### Why MUI v7?
 
 - Battle-tested component library with WCAG 2.1 accessibility compliance
@@ -373,6 +376,7 @@ Replace all custom modal implementations with MUI `Dialog`.
 - Remove manual `createPortal`, `backdrop-filter: blur()`, `keydown` listener
 - Keep the same API (title, message, confirmText, onConfirm, onCancel, isDanger, isOpen)
 - Add proper `aria-labelledby` and `aria-describedby` via MUI's built-in support
+- **Screenshot insight**: Audit the entire codebase for any remaining `window.confirm()` calls — the Queue Manager and reader frequently need destructive confirmations for clearing queues or deleting pages. Replace ALL of them with this MUI ConfirmModal.
 
 #### 2.2 Replace `InfoModal`
 
@@ -423,7 +427,7 @@ Redesign the Queue Manager using MUI components. This covers D.3 queue UI refine
 |--------|-------|
 | Custom job card divs | `<Card>` + `<CardContent>` + `<CardActions>` |
 | Status text | `<Chip>` with color-coded labels |
-| Manual status dots | `<Chip>` `avatar` prop with colored `<Avatar>` or `<Badge>` |
+| Manual status dots | **Enlarged `<Badge>` or `<Avatar>`** — screenshot analysis shows current dots are too small; make them prominent per `examples/redesign-the-job-queue.jpg` |
 | Text buttons for queue actions | `<ButtonGroup>` with `<Button>` variants |
 | Per-job play/pause | `<IconButton>` with `PlayArrow`/`Pause` icons |
 | Per-job retry | `<IconButton>` with `Refresh` icon |
@@ -433,6 +437,8 @@ Redesign the Queue Manager using MUI components. This covers D.3 queue UI refine
 | Global pause/resume/clear | `<ButtonGroup variant="outlined">` |
 | Queue header | MUI `Paper` with `Stack` layout |
 | Sorted by status | `<Tabs>` or `<ToggleButtonGroup>` for filtering |
+
+**Screenshot-confirmed behavior**: When global "Pause Queue" is pressed, ALL pending jobs must immediately update to yellow "Paused" dots. This is the existing Phase A behavior — MUI migration must preserve it.
 
 **Icons needed:**
 - `PlayArrow`, `Pause`, `Refresh`, `Delete`, `ClearAll`, `FilterList`
@@ -455,6 +461,7 @@ Redesign the Dashboard series grid and cards.
 | Manual grid layout | `<Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>` |
 | Series title in card | `<CardHeader>` or `<Typography variant="h6">` |
 | Page count overlay | `<Chip>` positioned over `<CardMedia>` |
+| AI model info on card | `<Stack>` of `<Chip>` labels showing OCR model, TL model — **screenshot insight**: models currently only visible in settings/chapter, make them visible on Dashboard cards for quick scanning |
 | Create Series button | `<Button variant="contained" startIcon={<AddIcon />}>` |
 | Sort dropdown | `<Select>` or `<ToggleButtonGroup>` |
 | Cover image viewer | MUI `Dialog` with full-size image |
@@ -509,7 +516,7 @@ Replace all form inputs and settings with MUI components.
 
 | Before | After |
 |--------|-------|
-| Custom modal | `<Dialog fullWidth maxWidth="md">` (fixes overflow natively) |
+| Custom modal | `<Dialog fullWidth maxWidth="md">` with `<DialogContent dividers>` — **screenshot insight**: current settings modal overflows with an ugly window-level scrollbar ("no scroll bar plz"). Using `<DialogContent dividers>` ensures only the inner content scrolls, not the entire dialog. |
 | Model picker selects | `<Select>` with `<MenuItem>` |
 | Provider/model groups | `<Accordion>` per category (OCR, TL, QA) |
 | Custom toggle switches | `<Switch>` |
@@ -598,6 +605,8 @@ The Reader is 5292 lines — the most complex component. Migration must be surgi
 | Processing status badges | `<Chip size="small" color="..." />` |
 | Redo OCR / Redo TL buttons | `<ButtonGroup>` or `<SpeedDial>` |
 
+**UX improvement — Quick page switcher**: Per the UX flow report, add a `<Drawer>` or `<Popover>` with a thumbnail grid of all pages in the chapter. The user can click any thumbnail to jump directly to that page without navigating back to Chapter Gallery. Use `<ImageList>` for the thumbnail grid. This replaces the current text-only `<< < 3/20 > >>` navigation with visual thumbnails.
+
 #### 7.2 What to KEEP (vanilla CSS/SVG — cannot migrate)
 
 These elements are deeply tied to the canvas/SVG rendering and would break if restructured:
@@ -621,7 +630,24 @@ These elements are deeply tied to the canvas/SVG rendering and would break if re
 - Layer panel item styles → replace with MUI `ListItem`
 - Reader toolbar icon styles → replace with MUI icons
 
-#### 7.4 Icons Needed for Reader
+#### 7.4 Reader Bugs Found via Screenshot Analysis
+
+These were discovered by Gemini's visual analysis of `examples/region-redo.jpg` and confirmed against the code. Fix during Phase 7:
+
+**Bug 7.4.1 — Shared State Bug on Redo Buttons**
+- **Symptom**: Clicking "Redo OCR" also shows a loading spinner on "Redo TL" (and vice versa). Both buttons share the same state.
+- **Root cause**: Lines 219-221 in Reader.tsx — `isRedoingPageOcr` and `isRedoingPageTranslation` are separate but the per-region redo buttons (popover) likely share a single `isRedoing` state (line 476).
+- **Fix**: Split `setIsRedoing` into `setIsRedoingOcr` and `setIsRedoingTl` for per-region actions. The page-level `isRedoingPageOcr`/`isRedoingPageTranslation` are already separate — verify the popover uses the correct one.
+
+**Bug 7.4.2 — Redo OCR Should Be Disabled on Translation Layer**
+- **Symptom**: When user selects an element on the *translation* layer, "Redo OCR" button is still enabled. Clicking it either fails silently or acts on the wrong layer.
+- **Fix**: When the selected item belongs to a translation layer, disable the "Redo OCR" button in the Element Inspector and show a tooltip: "Select an OCR layer element to redo OCR."
+
+**Bug 7.4.3 — Redo-Region Adds Layers Instead of Mutating**
+- **Symptom**: "Redo Region OCR" or "Redo Region TL" currently mutates the existing layer element. It should instead create a NEW layer stacked on top with just the re-processed region.
+- **Fix**: In the redo-region flow, ensure the backend creates a new layer (`Layer`) + `LayerElement` pair rather than updating the existing element in-place. The frontend already handles new layers arriving via SSE (Phase B) — verify the layer creation path works for per-region redos.
+
+#### 7.5 Icons Needed for Reader
 
 - `NavigateBefore`, `NavigateNext` (page nav)
 - `ZoomIn`, `ZoomOut`, `FitScreen` (zoom)
@@ -679,17 +705,16 @@ After all phases complete, `index.css` should shrink from 1813 lines to ~200-300
 - All card styles
 - All toast styles
 
-#### 9.2 Remove Google Fonts Import
+#### 9.2 Remove Unused Google Fonts
 
 Current `index.css` line 1 loads 5 Google Fonts:
 ```css
 @import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Comic+Neue:wght@300;400;700&family=Bangers&family=Luckiest+Guy&display=swap");
 ```
 
-**Keep:** `Outfit` (headings), `Plus Jakarta Sans` (body)  
-**Remove:** `Comic Neue`, `Bangers`, `Luckiest Guy` — check usage first. If used only in Reader for preview text styles, keep them scoped to Reader component.
-
-Replace the `@import` with `<link>` tags in `index.html` for better performance (or use `@fontsource` packages).
+- **Keep**: `Outfit` (headings), `Plus Jakarta Sans` (body)
+- **Screenshot insight**: `Comic Neue`, `Bangers`, `Luckiest Guy` are only used in the Reader for font preview selection in the Element Inspector. Keep them scoped to the Reader component's font picker, not loaded globally.
+- Replace the `@import` with `<link>` tags in `index.html` for `Outfit` + `Plus Jakarta Sans` only. Load the 3 display fonts lazily when the Reader mounts.
 
 #### 9.3 Accessibility Pass
 
