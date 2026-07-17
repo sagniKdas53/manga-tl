@@ -55,26 +55,35 @@ describe("InfoModal", () => {
 
   it("calls onClose when Escape key is pressed", () => {
     render(<InfoModal {...defaultProps} />);
-    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(defaultProps.onClose).toHaveBeenCalled();
   });
 
-  it("closes on clicking backdrop overlay but not modal body", () => {
-    const { container } = render(<InfoModal {...defaultProps} />);
-
-    // Backdrop is the outer div (first child)
-    const backdrop = container.firstChild as HTMLElement;
+  it("closes on clicking the backdrop overlay", () => {
+    const onClose = vi.fn();
+    render(
+      <InfoModal
+        isOpen={true}
+        title="Test"
+        message="Test"
+        type="info"
+        onClose={onClose}
+      />,
+    );
+    const backdrop = document.querySelector(".MuiBackdrop-root") as HTMLElement;
+    expect(backdrop).not.toBeNull();
     fireEvent.click(backdrop);
-    expect(defaultProps.onClose).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
   });
 
-  it("handles button hover style changes", () => {
-    render(<InfoModal {...defaultProps} />);
-    const okBtn = screen.getByRole("button", { name: /ok/i });
+  it("renders with different type icons", () => {
+    const { rerender } = render(<InfoModal {...defaultProps} />);
+    expect(screen.getByText("Info Title")).toBeInTheDocument();
 
-    fireEvent.mouseEnter(okBtn);
-    expect(okBtn.style.opacity).toBe("0.88");
-    fireEvent.mouseLeave(okBtn);
-    expect(okBtn.style.opacity).toBe("1");
+    rerender(<InfoModal {...defaultProps} type="success" />);
+    expect(screen.getByText("Info Title")).toBeInTheDocument();
+
+    rerender(<InfoModal {...defaultProps} type="error" />);
+    expect(screen.getByText("Info Title")).toBeInTheDocument();
   });
 });

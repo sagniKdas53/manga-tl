@@ -33,6 +33,10 @@
     <title>tl-hub</title>
   </head>
   <body>
+    <script>
+      var _m = localStorage.getItem("manga_theme");
+      if (_m === "light") document.documentElement.dataset.muiColorScheme = "light";
+    </script>
     <div id="root"></div>
     <script
       type="module"

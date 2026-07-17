@@ -154,7 +154,7 @@ describe("SeriesDetails Component", () => {
     const titleInput = screen.getByPlaceholderText("e.g. The Beginning");
     fireEvent.change(titleInput, { target: { value: "The Man Luffy" } });
 
-    const submitBtn = screen.getByRole("button", { name: "Add" });
+    const submitBtn = screen.getByRole("button", { name: "Create Chapter" });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -219,7 +219,7 @@ describe("SeriesDetails Component", () => {
     const checkbox = screen.getByLabelText(/inject context memory/i);
     fireEvent.click(checkbox);
 
-    const submitBtn = screen.getByRole("button", { name: "Add" });
+    const submitBtn = screen.getByRole("button", { name: "Create Chapter" });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -276,7 +276,7 @@ describe("SeriesDetails Component", () => {
     const titleInput = screen.getByDisplayValue("One Piece");
     fireEvent.change(titleInput, { target: { value: "One Piece Changed" } });
 
-    const saveBtn = screen.getByRole("button", { name: "Save" });
+    const saveBtn = screen.getByRole("button", { name: /save/i });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -408,7 +408,7 @@ describe("SeriesDetails Component", () => {
     fireEvent.change(titleInput, { target: { value: "Romance Dawn Updated" } });
 
     // Ensure we get the correct 'Save' button in case there are multiple
-    const saveBtn = screen.getByRole("button", { name: "Save" });
+    const saveBtn = screen.getByRole("button", { name: "Update Chapter" });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {

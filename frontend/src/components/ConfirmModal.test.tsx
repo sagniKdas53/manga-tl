@@ -48,31 +48,25 @@ describe("ConfirmModal", () => {
 
   it("closes on Escape key down", () => {
     render(<ConfirmModal {...defaultProps} />);
-    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(defaultProps.onCancel).toHaveBeenCalled();
   });
 
-  it("renders isDangerous mode and handles button hover states", () => {
+  it("renders isDangerous mode and closes on backdrop click", () => {
+    const onCancel = vi.fn();
     render(
       <ConfirmModal
-        {...defaultProps}
+        isOpen={true}
+        title="Test"
+        message="Test"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
         isDangerous={true}
       />,
     );
-
-    const cancelBtn = screen.getByRole("button", { name: /cancel/i });
-    const confirmBtn = screen.getByRole("button", { name: /confirm/i });
-
-    // Hover events for cancel button
-    fireEvent.mouseEnter(cancelBtn);
-    expect(cancelBtn.style.background).toBe("var(--bg-hover-more)");
-    fireEvent.mouseLeave(cancelBtn);
-    expect(cancelBtn.style.background).toBe("var(--bg-hover)");
-
-    // Hover events for confirm button
-    fireEvent.mouseEnter(confirmBtn);
-    expect(confirmBtn.style.opacity).toBe("0.88");
-    fireEvent.mouseLeave(confirmBtn);
-    expect(confirmBtn.style.opacity).toBe("1");
+    const backdrop = document.querySelector(".MuiBackdrop-root") as HTMLElement;
+    expect(backdrop).not.toBeNull();
+    fireEvent.click(backdrop);
+    expect(onCancel).toHaveBeenCalled();
   });
 });

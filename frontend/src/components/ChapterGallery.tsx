@@ -1551,4 +1551,4 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   );
 };
 
-export default ChapterGallery;
+export default React.memo(ChapterGallery);

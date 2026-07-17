@@ -133,7 +133,7 @@ describe("Dashboard Component", () => {
     const newBtn = screen.getByRole("button", { name: /\+ new series/i });
     fireEvent.click(newBtn);
 
-    expect(screen.getByText("Create New Series")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create Series" })).toBeInTheDocument();
 
     const titleInput = screen.getByPlaceholderText("e.g. My Hero Academia");
     fireEvent.change(titleInput, { target: { value: "Bleach" } });
@@ -187,13 +187,13 @@ describe("Dashboard Component", () => {
     const editBtn = screen.getAllByTitle("Edit Series")[0];
     fireEvent.click(editBtn);
 
-    expect(screen.getByText("Edit Series")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Edit Series" })).toBeInTheDocument();
 
     const titleInput = screen.getByPlaceholderText("e.g. My Hero Academia");
     expect(titleInput).toHaveValue("One Piece");
     fireEvent.change(titleInput, { target: { value: "One Piece Updated" } });
 
-    const saveBtn = screen.getByRole("button", { name: /save/i });
+    const saveBtn = screen.getByRole("button", { name: /update/i });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -222,7 +222,7 @@ describe("Dashboard Component", () => {
     });
   });
 
-  it("cancels series modal without saving", () => {
+  it("cancels series modal without saving", async () => {
     render(
       <Dashboard
         user={mockUser}
@@ -238,14 +238,15 @@ describe("Dashboard Component", () => {
     const cancelBtn = screen.getByRole("button", { name: /cancel/i });
     fireEvent.click(cancelBtn);
 
-    expect(screen.queryByText("Create New Series")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Create Series" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("handles error when creating a series", async () => {
     mockSafeFetch.mockRejectedValueOnce(new Error("Network Error"));
-    const consoleErrorSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
 
     render(
       <Dashboard
@@ -266,13 +267,11 @@ describe("Dashboard Component", () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "Error saving series:",
-        expect.any(Error),
+      expect(mockShowToast).toHaveBeenCalledWith(
+        "Failed to save series",
+        "error",
       );
     });
-
-    consoleErrorSpy.mockRestore();
   });
 
   it("deletes a series successfully", async () => {
@@ -291,7 +290,7 @@ describe("Dashboard Component", () => {
     fireEvent.click(deleteBtn);
 
     expect(
-      screen.getByText("Delete Series", { selector: "h3" }),
+      screen.getByRole("heading", { name: "Delete Series" }),
     ).toBeInTheDocument();
 
     const confirmBtns = screen.getAllByRole("button", {
@@ -398,16 +397,18 @@ describe("Dashboard Component", () => {
       target: { value: "New Manga" },
     });
 
-    // Change selects
-    const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
-    const sourceSelect = selects[0];
-    fireEvent.change(sourceSelect, { target: { value: "ko" } });
+    // MUI Select interaction: mouseDown opens the listbox, then click the option
+    const comboboxes = document.querySelectorAll('[role="combobox"]');
+    fireEvent.mouseDown(comboboxes[0]);
+    fireEvent.click(screen.getByRole("option", { name: "ko" }));
 
-    const targetSelect = selects[1];
-    fireEvent.change(targetSelect, { target: { value: "zh-TW" } });
+    fireEvent.mouseDown(comboboxes[1]);
+    fireEvent.click(screen.getByRole("option", { name: "zh-TW" }));
 
-    const directionSelect = selects[2];
-    fireEvent.change(directionSelect, { target: { value: "ltr" } });
+    fireEvent.mouseDown(comboboxes[2]);
+    fireEvent.click(
+      screen.getByRole("option", { name: "Left to Right — Comics" }),
+    );
 
     const submitBtn = screen.getByRole("button", { name: /create/i });
     fireEvent.click(submitBtn);

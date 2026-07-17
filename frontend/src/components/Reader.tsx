@@ -5289,4 +5289,4 @@ export const Reader: React.FC<ReaderProps> = ({
   );
 };
 
-export default Reader;
+export default React.memo(Reader);

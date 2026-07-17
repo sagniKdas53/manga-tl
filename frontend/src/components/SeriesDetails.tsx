@@ -4,6 +4,7 @@ import { useToast } from "./ToastContext";
 import type { User, Series, Chapter, SystemSettingsDto } from "../types";
 import { safeFetch, toSlug } from "../utils";
 import ConfirmModal from "./ConfirmModal";
+import CreateChapterDialog from "./CreateChapterDialog";
 
 interface SeriesDetailsProps {
   user: User;
@@ -41,11 +42,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   // Local states for chapter create/edit modal
   const [showChapterModal, setShowChapterModal] = useState(false);
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
-  const [newChapterNum, setNewChapterNum] = useState<number>(1);
-  const [newChapterTitle, setNewChapterTitle] = useState("");
-  const [newChapterUseContextMemory, setNewChapterUseContextMemory] =
-    useState<boolean>(true);
-  const [chapterError, setChapterError] = useState("");
+  const [chapterCreateCounter, setChapterCreateCounter] = useState(0);
   const { showToast } = useToast();
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
@@ -69,8 +66,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   const [showSeriesModelOverrides, setShowSeriesModelOverrides] =
     useState(false);
-  const [showChapterModelOverrides, setShowChapterModelOverrides] =
-    useState(false);
 
   // Model overrides for Series
   const [newSeriesOcrProvider, setNewSeriesOcrProvider] = useState("");
@@ -81,16 +76,6 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [newSeriesQaLlmModel, setNewSeriesQaLlmModel] = useState("");
   const [newSeriesQaVlmModel, setNewSeriesQaVlmModel] = useState("");
   const [newSeriesQaMode, setNewSeriesQaMode] = useState("");
-
-  // Model overrides for Chapter
-  const [newChapOcrProvider, setNewChapOcrProvider] = useState("");
-  const [newChapOcrModel, setNewChapOcrModel] = useState("");
-  const [newChapTlProvider, setNewChapTlProvider] = useState("");
-  const [newChapTlModel, setNewChapTlModel] = useState("");
-  const [newChapQaProvider, setNewChapQaProvider] = useState("");
-  const [newChapQaLlmModel, setNewChapQaLlmModel] = useState("");
-  const [newChapQaVlmModel, setNewChapQaVlmModel] = useState("");
-  const [newChapQaMode, setNewChapQaMode] = useState("");
 
   // Model overrides for Import
   const [importOcrProvider, setImportOcrProvider] = useState("");
@@ -248,48 +233,18 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const handleEditChapterClick = (c: Chapter, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingChapter(c);
-    setNewChapterNum(c.chapterNumber);
-    setNewChapterTitle(c.title || "");
-    setNewChapterUseContextMemory(c.useContextMemory !== false);
-    setChapterError("");
-    setNewChapOcrProvider(c.ocrProvider || "");
-    setNewChapOcrModel(c.ocrModel || "");
-    setNewChapTlProvider(c.tlProvider || "");
-    setNewChapTlModel(c.tlModel || "");
-    setNewChapQaProvider(c.qaProvider || "");
-    setNewChapQaLlmModel(c.qaLlmModel || "");
-    setNewChapQaVlmModel(c.qaVlmModel || "");
-    setNewChapQaMode(c.qaMode || "");
-    setShowChapterModelOverrides(false);
     setShowChapterModal(true);
   };
 
   const handleNewChapterClick = () => {
     setEditingChapter(null);
-    const maxNum = chapters.reduce(
-      (max, c) => (c.chapterNumber > max ? c.chapterNumber : max),
-      0,
-    );
-    setNewChapterNum(maxNum + 1);
-    setNewChapterTitle("");
-    setNewChapterUseContextMemory(true);
-    setChapterError("");
-    setNewChapOcrProvider("");
-    setNewChapOcrModel("");
-    setNewChapTlProvider("");
-    setNewChapTlModel("");
-    setNewChapQaProvider("");
-    setNewChapQaLlmModel("");
-    setNewChapQaVlmModel("");
-    setShowChapterModelOverrides(false);
+    setChapterCreateCounter((c) => c + 1);
     setShowChapterModal(true);
   };
 
   const handleCancelChapterModal = () => {
     setShowChapterModal(false);
     setEditingChapter(null);
-    setNewChapterTitle("");
-    setChapterError("");
   };
 
   const handleImportChapterClick = () => {
@@ -374,68 +329,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     }
   };
 
-  const handleCreateChapter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setChapterError("");
-    try {
-      const isEdit = !!editingChapter;
-      const url = isEdit
-        ? `/api/series/chapters/${editingChapter.id}`
-        : `/api/series/${selectedSeries.id}/chapters`;
-      const method = isEdit ? "PUT" : "POST";
-
-      const res = await safeFetch(url, {
-        method: method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`,
-        },
-        body: JSON.stringify({
-          chapterNumber: newChapterNum,
-          title: newChapterTitle,
-          useContextMemory: newChapterUseContextMemory,
-          ocrProvider: newChapOcrProvider || null,
-          ocrModel: newChapOcrModel || null,
-          tlProvider: newChapTlProvider || null,
-          tlModel: newChapTlModel || null,
-          qaProvider: newChapQaProvider || null,
-          qaLlmModel: newChapQaLlmModel || null,
-          qaVlmModel: newChapQaVlmModel || null,
-          qaMode: newChapQaMode || null,
-        }),
-      });
-      if (res.ok) {
-        const data: Chapter = await res.json();
-        if (isEdit) {
-          setChapters((prev) => prev.map((c) => (c.id === data.id ? data : c)));
-        } else {
-          setChapters((prev) => [...prev, data]);
-        }
-        setShowChapterModal(false);
-        setEditingChapter(null);
-        setNewChapterTitle("");
-        setChapterError("");
-      } else {
-        let errMsg = "Failed to save chapter";
-        try {
-          const text = await res.text();
-          if (text) {
-            try {
-              const parsed = JSON.parse(text);
-              errMsg = parsed.message || parsed.error || errMsg;
-            } catch {
-              errMsg = text;
-            }
-          }
-        } catch (readErr) {
-          console.error(readErr);
-        }
-        setChapterError(errMsg);
-      }
-    } catch (err) {
-      console.error("Error saving chapter:", err);
-      setChapterError(err instanceof Error ? err.message : String(err));
+  const handleChapterSuccess = (data: Chapter) => {
+    if (editingChapter) {
+      setChapters((prev) => prev.map((c) => (c.id === data.id ? data : c)));
+    } else {
+      setChapters((prev) => [...prev, data]);
     }
+  };
+
+  const handleChapterError = (msg: string) => {
+    showToast(msg, "error");
   };
 
   const handleDeleteChapter = (chapterId: string, e: React.MouseEvent) => {
@@ -1133,450 +1036,17 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         </div>
       )}
 
-      {showChapterModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            className="glass"
-            style={{ padding: "32px", width: "100%", maxWidth: "400px" }}
-          >
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                marginBottom: "24px",
-              }}
-            >
-              {editingChapter ? "Edit Chapter" : "Add Chapter"}
-            </h2>
-            <form onSubmit={handleCreateChapter}>
-              <div className="form-group">
-                <label className="form-label">Chapter Number</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="form-input"
-                  value={newChapterNum}
-                  onChange={(e) =>
-                    setNewChapterNum(parseFloat(e.target.value) || 0)
-                  }
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Chapter Title</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={newChapterTitle}
-                  onChange={(e) => setNewChapterTitle(e.target.value)}
-                  placeholder="e.g. The Beginning"
-                />
-              </div>
-
-              <div className="form-group">
-                <label
-                  className="form-label"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={newChapterUseContextMemory}
-                    onChange={(e) =>
-                      setNewChapterUseContextMemory(e.target.checked)
-                    }
-                    style={{
-                      marginRight: "10px",
-                      width: "16px",
-                      height: "16px",
-                      accentColor: "var(--primary-color)",
-                    }}
-                  />
-                  Inject Context Memory (from previous chapter/page)
-                </label>
-              </div>
-
-              <div
-                style={{
-                  marginTop: "16px",
-                  padding: "16px",
-                  background: "var(--bg-hover)",
-                  borderRadius: "8px",
-                }}
-              >
-                <div
-                  onClick={() =>
-                    setShowChapterModelOverrides(!showChapterModelOverrides)
-                  }
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  <h4 style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>
-                    Model Overrides (Optional)
-                  </h4>
-                  <span style={{ fontSize: "12px", opacity: 0.6 }}>
-                    {showChapterModelOverrides ? "▲" : "▼"}
-                  </span>
-                </div>
-
-                {showChapterModelOverrides && (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "12px",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        OCR Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newChapOcrProvider}
-                        onChange={(e) => setNewChapOcrProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {ocrProviders.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        OCR VLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...(newChapOcrProvider === "local" ||
-                          (newChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={
-                          newChapOcrProvider === "local" ||
-                          (newChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                            ? settings?.localOcrModel || "local"
-                            : newChapOcrModel || ""
-                        }
-                        onChange={(e) => setNewChapOcrModel(e.target.value)}
-                        disabled={
-                          newChapOcrProvider === "local" ||
-                          (newChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                        }
-                      >
-                        {newChapOcrProvider === "local" ||
-                        (newChapOcrProvider === "" &&
-                          (selectedSeries?.ocrProvider === "local" ||
-                            (!selectedSeries?.ocrProvider &&
-                              settings?.ocrProvider === "local"))) ? (
-                          <option value={settings?.localOcrModel || "local"}>
-                            {settings?.localOcrModel || "Local Worker Model"}
-                          </option>
-                        ) : (
-                          <>
-                            <option value="">-- Inherit --</option>
-                            {settings?.ocrVlmModelList.map((m) => (
-                              <option
-                                key={m}
-                                value={m}
-                              >
-                                {m}
-                              </option>
-                            ))}
-                          </>
-                        )}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        TL Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newChapTlProvider}
-                        onChange={(e) => setNewChapTlProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {providers.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        TL LLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newChapTlModel}
-                        onChange={(e) => setNewChapTlModel(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.tlLlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newChapQaProvider}
-                        onChange={(e) => setNewChapQaProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {providers.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Mode
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newChapQaMode}
-                        onChange={(e) => setNewChapQaMode(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        <option value="auto">auto</option>
-                        <option value="llm">llm</option>
-                        <option value="vlm">vlm</option>
-                        <option value="hybrid">hybrid</option>
-                        <option value="none">none</option>
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA LLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...((newChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "vlm" ||
-                          (newChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={newChapQaLlmModel}
-                        onChange={(e) => setNewChapQaLlmModel(e.target.value)}
-                        disabled={
-                          (newChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "vlm" ||
-                          (newChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                        }
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.qaLlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA VLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...((newChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "llm" ||
-                          (newChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={newChapQaVlmModel}
-                        onChange={(e) => setNewChapQaVlmModel(e.target.value)}
-                        disabled={
-                          (newChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "llm" ||
-                          (newChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                        }
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.qaVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {chapterError && (
-                <div
-                  style={{
-                    color: "var(--error, #ff4d4f)",
-                    fontSize: "13px",
-                    marginTop: "16px",
-                    textAlign: "center",
-                  }}
-                >
-                  {chapterError}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={handleCancelChapterModal}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                >
-                  {editingChapter ? "Save" : "Add"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateChapterDialog
+        key={editingChapter?.id ?? `new-${chapterCreateCounter}`}
+        open={showChapterModal}
+        editingChapter={editingChapter}
+        user={user}
+        selectedSeries={selectedSeries}
+        chapters={chapters}
+        onClose={handleCancelChapterModal}
+        onSuccess={handleChapterSuccess}
+        onError={handleChapterError}
+      />
       {showImportModal && (
         <div
           style={{
@@ -1989,4 +1459,4 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   );
 };
 
-export default SeriesDetails;
+export default React.memo(SeriesDetails);
