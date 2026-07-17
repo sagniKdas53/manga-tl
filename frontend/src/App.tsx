@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, useCallback } from "react";
+import React, { useState, useEffect, Suspense, useCallback, useMemo } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -9,9 +9,8 @@ import {
 } from "react-router-dom";
 
 import { ThemeProvider } from "@mui/material/styles";
-import CssBaseline from "@mui/material/CssBaseline";
-import { useColorScheme } from "@mui/material/styles";
-import theme from "./theme";
+import Box from "@mui/material/Box";
+import { themeObj } from "./theme";
 
 // Types
 import type { User, Series, Chapter, Page } from "./types";
@@ -40,17 +39,6 @@ const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
 
 // Stable identity for props that don't need per-render identities — keeps React.memo effective
 const NOOP = () => undefined;
-
-/** Bridges MUI's color scheme to the legacy :root.light CSS class.
- *  Remove this component in Phase 9 when the :root.light rules are deleted. */
-function ThemeSync() {
-  const { mode } = useColorScheme();
-  const resolved = mode ?? "dark";
-  useEffect(() => {
-    document.documentElement.classList.toggle("light", resolved === "light");
-  }, [resolved]);
-  return null;
-}
 
 function LoadingSpinner() {
   return (
@@ -168,9 +156,17 @@ function AppContent() {
   const [pages, setPages] = useState<Page[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
-  // Theme via MUI colorSchemes — default dark, persisted by ThemeProvider via modeStorageKey
-  const { mode, setMode } = useColorScheme();
-  const currentMode: "light" | "dark" = mode === "light" ? "light" : "dark";
+  // Theme via MUI — recreate palette on toggle, bridge :root.light for legacy CSS
+  const [mode, setMode] = useState<"light" | "dark">(() => {
+    const saved = localStorage.getItem("manga_theme");
+    return saved === "light" ? "light" : "dark";
+  });
+  const appliedTheme = useMemo(() => themeObj(mode), [mode]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", mode === "light");
+    localStorage.setItem("manga_theme", mode);
+  }, [mode]);
 
   // Load user session redirect
   useEffect(() => {
@@ -323,10 +319,17 @@ function AppContent() {
   const handleSettingsClose = useCallback(() => setIsSettingsOpen(false), []);
 
   return (
-    <NotificationProvider token={user?.token || null}>
-      <ToastProvider>
-        <GlobalErrorListener />
-        <TranslationToastWatcher />
+    <ThemeProvider theme={appliedTheme}>
+      <Box
+        sx={{
+          bgcolor: "background.default",
+          minHeight: "100vh",
+        }}
+      >
+        <NotificationProvider token={user?.token || null}>
+          <ToastProvider>
+            <GlobalErrorListener />
+            <TranslationToastWatcher />
         <div className="app-container">
           {/* Navigation Bar */}
           {!readerMatch && (
@@ -342,7 +345,7 @@ function AppContent() {
                 }}
               >
                 <img
-                  src={currentMode === "dark" ? logoDark : logoLight}
+                  src={mode === "dark" ? logoDark : logoLight}
                   alt="tl-hub logo"
                   style={{ height: "32px", width: "auto" }}
                 />
@@ -352,10 +355,10 @@ function AppContent() {
                 {/* Theme Toggle Button */}
                 <button
                   className="theme-toggle-btn"
-onClick={() => setMode(currentMode === "dark" ? "light" : "dark")}
-                       title={`Switch to ${currentMode === "dark" ? "Light" : "Dark"} Mode`}
+onClick={() => setMode(mode === "dark" ? "light" : "dark")}
+                       title={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
                 >
-                  {currentMode === "dark" ? (
+                  {mode === "dark" ? (
                     <svg
                       width="18"
                       height="18"
@@ -575,7 +578,7 @@ onClick={() => setMode(currentMode === "dark" ? "light" : "dark")}
                       selectedChapter={selectedChapter}
                       chapters={chapters}
                       pages={pages}
-                      theme={currentMode}
+                      theme={mode}
                     />
                   ) : null
                 }
@@ -590,7 +593,7 @@ onClick={() => setMode(currentMode === "dark" ? "light" : "dark")}
                       selectedChapter={selectedChapter}
                       chapters={chapters}
                       pages={pages}
-                      theme={currentMode}
+                      theme={mode}
                     />
                   ) : null
                 }
@@ -610,6 +613,8 @@ onClick={() => setMode(currentMode === "dark" ? "light" : "dark")}
         </div>
       </ToastProvider>
     </NotificationProvider>
+      </Box>
+    </ThemeProvider>
   );
 }
 
@@ -618,11 +623,7 @@ function App() {
 
   return (
     <BrowserRouter basename={cleanBaseName}>
-      <ThemeProvider theme={theme} defaultMode="dark" modeStorageKey="manga_theme">
-        <CssBaseline />
-        <ThemeSync />
-        <AppContent />
-      </ThemeProvider>
+      <AppContent />
     </BrowserRouter>
   );
 }
