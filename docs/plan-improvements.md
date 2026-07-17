@@ -457,7 +457,9 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 ## Phase D — Frontend UI Fixes & Redesign
 
 > [!IMPORTANT]
-> **Recommended execution order**: D.14 (React.memo) → D.12 Phase 0 (MUI setup) → D.12 remaining phases (which encompass D.1–D.11, D.13) → D.9 (infinite scroll, needs backend) → D.15 (mobile, stretch goal)
+> **Recommended execution order**: D.14 (render-hygiene foundation) → D.12 Phase 0 (MUI v9 setup) → D.12 Phase 2 (modals) → Phase 1 (nav) → Phase 8 (auth) → Phase 5 (forms/settings: D.2, D.10, D.11) → Phase 4 (dashboard/cards: D.1, D.3, D.4) → Phase 6 (stacked toasts: D.13) → Phase 3 (queue: MUI Table) → Phase 7 (reader + bugs 7.4.1/7.4.2) → D.9 (infinite scroll, needs backend) → Phase 9 (cleanup) → D.15 (mobile, stretch goal)
+>
+> **Audited decisions (2026-07-17)**: MUI **v9** (not v7 — TS 6 compat) · toasts stay **stacked** (not single-queue) · Queue Manager uses **MUI Table** (not DataGrid/Cards) · D.10 resolves **client-side** (no new endpoint; backend enrichment planned separately) · Reader bugs **7.4.1 + 7.4.2 only** (7.4.3 deferred — it is a backend change) · D.14 **re-scoped** to context memoization + prop stabilization + memo (see D.14)
 
 ### D.1 Remove Cover Image URL Field from Dialogs
 
@@ -554,13 +556,14 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - Currently, when a chapter/series inherits a model setting, the UI shows `--Inherit--` with no indication of what model is actually being used
 - **Change**: resolve the inheritance chain and display the effective model name with provenance:
   - e.g., `tencent/hy3:free (inherited from series)` or `google/gemini-2.5-flash (inherited from global)`
+- **Decision (2026-07-17)**: resolve the chain **client-side** for now — a `resolveModel(chain)` frontend utility with unit tests, using settings + series/chapter data the UI already fetches. No new backend endpoint in this phase. The series/chapter APIs are planned to return resolved settings directly **later**; when they do, the utility becomes a one-line delete — do not build further logic on top of it.
 - In the model picker dropdowns:
   - The `--Inherit--` option should show a subtitle with the resolved model name
   - When a chapter inherits from series, and series inherits from global, display the full chain
 - In chapter cards (D.3) and Reader metadata:
   - Display the resolved model name for OCR, Translation, and QA
   - Use a subtle label like `(inherited)` or `(global)` to indicate the source
-- Backend may need a new endpoint or enrichment: `GET /api/chapters/{id}/resolved-settings` that returns the fully resolved model configuration with source annotations
+- ~~Backend may need a new endpoint or enrichment: `GET /api/chapters/{id}/resolved-settings`~~ — **superseded by the client-side decision above**; a future backend enrichment (series/chapter DTOs carrying resolved settings) will be planned as its own item outside Phase D
 
 ### D.11 Model Override UX Redesign
 
@@ -589,25 +592,29 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 
 **Files**: `package.json`, all `.tsx` components, `index.css` → MUI theme files
 
-### D.14 React.memo on All Route Components (Performance Fix)
+### D.14 Render-Hygiene Foundation (Performance Fix — Do First)
 
-**Files**: `App.tsx`
+**Files**: `App.tsx`, `ToastContext.tsx`, `NotificationContext.tsx`, the 4 route component files
 
-- **Problem**: `App.tsx` holds 8 `useState` hooks and passes all state as props. When *any* state changes, **every route component re-renders** — even if its specific props didn't change. No component is wrapped in `React.memo`. This is the primary cause of the "laggy tab" experience.
-- **Fix**: Wrap Dashboard, SeriesDetails, ChapterGallery, Reader in `React.memo`:
-  ```tsx
-  const MemoizedDashboard = React.memo(Dashboard);
-  const MemoizedSeriesDetails = React.memo(SeriesDetails);
-  const MemoizedChapterGallery = React.memo(ChapterGallery);
-  const MemoizedReader = React.memo(Reader);
-  ```
-- **Impact**: 60-80% fewer re-renders on route navigation. Zero risk. One-liner per component.
+- **Problem**: `App.tsx` holds 8 `useState` hooks and passes all state as props. When *any* state changes, **every route component re-renders** — even if its specific props didn't change. This is the primary cause of the "laggy tab" experience.
+- **Why a bare `React.memo` wrap does NOT fix it** (audit, 2026-07-17 — original "zero-risk one-liner" framing was wrong):
+  1. `ChapterGallery` receives `onSelectPage={() => {}}` (App.tsx:535, :552) — a new function identity every render, defeating memo on that route.
+  2. Both context values are unmemoized inline literals (`ToastContext.tsx:99`, `NotificationContext.tsx:82–89`), and both providers render inside `AppContent`. **Any** AppContent state change re-renders every `useToast`/`useNotifications` consumer (Reader, QueueManager, Dashboard, SeriesDetails, ChapterGallery) regardless of memo — context propagation bypasses it.
+  3. Route components are `React.lazy` (App.tsx:29–34); `React.memo(Dashboard)` in App.tsx doesn't compose — memo must be applied at each component's export site.
+  4. `NotificationProvider` owns the app's only EventSource — a remount drops the SSE connection (Phase A/B behavior at risk).
+- **Fix (in order)**:
+  1. **Memoize context values** — `useMemo` the `ToastContext` value; `useMemo` + `useCallback` (`markAsRead`, `markAllAsRead`, `clearAll` — currently plain functions) for the `NotificationContext` value.
+  2. **Stabilize props** — hoist `onSelectPage` to a module-level `noop` constant; `useCallback` for SettingsModal `onClose`. Do **not** wrap setState dispatches in `useCallback` — they are already referentially stable.
+  3. **Memo at export sites** — `export default React.memo(Dashboard)` (same for SeriesDetails, ChapterGallery, Reader) inside each component file, composing cleanly with `React.lazy`.
+  4. **SSE remount guard** — `NotificationProvider` stays mounted above `<Routes>`; no `key` props; token changes only on login/logout. Rule applies to all later phases (D.6's `UploadContext` must ship with a memoized value from day one).
+- **Impact**: 60-80% fewer re-renders on route navigation — but only with steps 1–2 done; memo alone delivers a fraction of it.
+- **Verification**: React DevTools Profiler — Dashboard render count stays flat while Reader state changes (Checkpoint D item 13 is a *measured* check).
 - **Do this BEFORE any MUI migration** to establish a solid rendering baseline.
 
 - **Motivation**: The current transparent/glassmorphism design doesn't feel polished. Adopting MUI gives us a battle-tested component library with consistent design language.
-- **Dependencies**:
-  - [`@mui/material`](https://mui.com/material-ui/getting-started/) — core components
-  - [`@mui/icons-material`](https://mui.com/material-ui/material-icons/) — icon library
+- **Dependencies** (updated 2026-07-17 — target **v9**, the current stable; v7 predates TypeScript 6.0):
+  - [`@mui/material@^9`](https://mui.com/material-ui/getting-started/) — core components
+  - [`@mui/icons-material@^9`](https://mui.com/material-ui/material-icons/) — icon library (import via direct paths, e.g. `@mui/icons-material/PlayArrow` — no barrel imports)
   - `@emotion/react`, `@emotion/styled` — MUI's styling engine
 - **Theme setup**:
   - Create a custom MUI `ThemeProvider` with two themes:
@@ -619,8 +626,8 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
   1. Install MUI + wrap `App.tsx` in `ThemeProvider`
   2. Replace primitive elements first: buttons → `Button`, inputs → `TextField`, dialogs → `Dialog`, modals → `Modal`
   3. Replace layout: use `Container`, `Grid`, `Card`, `AppBar`, `Drawer` for page structure
-  4. Replace feedback: toasts → `Snackbar`/`Alert`, confirms → `Dialog`, loading → `CircularProgress`/`Skeleton`
-  5. Use MUI `DataGrid` or `Table` for the Queue Manager (A.3)
+  4. Replace feedback: toasts → **stacked** `Snackbar`/`Alert` (preserve current multi-toast behavior — see Phase 6 of the migration plan), confirms → `Dialog`, loading → `CircularProgress`/`Skeleton`
+  5. Use MUI **`Table` (`size="small"`)** for the Queue Manager (A.3) — decision 2026-07-17: **not** DataGrid (extra `@mui/x-data-grid` dependency, doesn't fit a dropdown), **not** Cards; the dropdown widens or converts to a right-anchored `Drawer` — see migration plan Phase 3
   6. Use MUI `Select`, `Accordion`, `Tabs` for model overrides (D.10, D.11)
 - **Use pre-built MUI components wherever possible** to reduce custom CSS and offload design decisions to MUI's defaults
 - **Remove** most of `index.css` once migration is complete — keep only truly custom styles
@@ -879,9 +886,9 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 | D.9 | `Dashboard.tsx`, `SeriesDetails.tsx` | Lazy loading / infinite scroll |
 | D.10 | `SettingsModal.tsx`, model picker components | Show resolved model names with inheritance source |
 | D.11 | `SettingsModal.tsx`, model picker components | Model override UX redesign with visual hierarchy |
-| D.12 | All `.tsx` components, `package.json` | Migrate to Material UI (MUI) with custom theme (see [full plan](plan-mui-migration.md)) |
+| D.12 | All `.tsx` components, `package.json` | Migrate to Material UI (MUI) **v9** with custom theme (see [full plan](plan-mui-migration.md)) |
 | D.13 | `SeriesDetails.tsx`, `utils.ts`, etc. | Global toast notifications for deletion restrictions |
-| D.14 | `App.tsx` | React.memo on all route components (performance — do first) |
+| D.14 | `App.tsx`, `ToastContext.tsx`, `NotificationContext.tsx`, route components | Render-hygiene foundation: memoize context values, stabilize props, React.memo at export sites (performance — do first) |
 | D.15 | `[NEW] MobileApp.tsx` | tl-hub Lite: mobile upload → process → export flow (stretch goal) |
 | E.1 | `[NEW] ProviderChain.py`, `config.py` | Cross-provider failover |
 | E.2 | Worker HTTP call sites | Strict timeouts |
