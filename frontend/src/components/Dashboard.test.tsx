@@ -222,7 +222,7 @@ describe("Dashboard Component", () => {
     });
   });
 
-  it("cancels series modal without saving", () => {
+  it("cancels series modal without saving", async () => {
     render(
       <Dashboard
         user={mockUser}

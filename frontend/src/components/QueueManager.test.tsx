@@ -15,9 +15,13 @@ vi.mock("./useNotifications", () => ({
   useNotifications: vi.fn(),
 }));
 
+const mockShowToast = vi.fn();
 vi.mock("./ToastContext", () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: mockShowToast,
+    showError: mockShowToast,
+    showSuccess: mockShowToast,
+    showInfo: mockShowToast,
   }),
 }));
 
