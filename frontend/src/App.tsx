@@ -11,7 +11,6 @@ import {
 import { ThemeProvider } from "@mui/material/styles";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
@@ -19,6 +18,7 @@ import Typography from "@mui/material/Typography";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import SettingsIcon from "@mui/icons-material/Settings";
+import LogoutIcon from '@mui/icons-material/Logout';
 import { themeObj } from "./theme";
 
 // Types
@@ -339,199 +339,199 @@ function AppContent() {
           <ToastProvider>
             <GlobalErrorListener />
             <TranslationToastWatcher />
-<div className="app-container">
-          {/* Navigation Bar */}
-          {!readerMatch && (
-            <AppBar position="sticky" color="inherit" sx={{ bgcolor: "background.paper" }}>
-              <Toolbar variant="dense">
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    cursor: user ? "pointer" : "default",
-                    flexGrow: 1,
-                  }}
-                  onClick={() => user && navigate("/")}
-                >
-                  <img
-                    src={(mode === "dark" ? logoDark : logoLight) as string}
-                    alt="tl-hub"
-                    style={{ height: 28, width: "auto" }}
-                  />
-                  <Typography
-                    variant="h6"
-                    sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 700 }}
-                  >
-                    tl-hub
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <IconButton
-                    onClick={() =>
-                      setMode(mode === "dark" ? "light" : "dark")
-                    }
-                    color="inherit"
-                    title={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
-                  >
-                    {mode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
-                  </IconButton>
-                  {user && (
-                    <>
+            <div className="app-container">
+              {/* Navigation Bar */}
+              {!readerMatch && (
+                <AppBar position="sticky" color="inherit" sx={{ bgcolor: "background.paper" }}>
+                  <Toolbar variant="dense">
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        cursor: user ? "pointer" : "default",
+                        flexGrow: 1,
+                      }}
+                      onClick={() => user && navigate("/")}
+                    >
+                      <img
+                        src={(mode === "dark" ? logoDark : logoLight) as string}
+                        alt="tl-hub"
+                        style={{ height: 28, width: "auto" }}
+                      />
+                      <Typography
+                        variant="h6"
+                        sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 700, color: mode === "dark" ? "white" : "black" }}
+                      >
+                        tl-hub
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1}>
                       <IconButton
-                        onClick={() => setIsSettingsOpen(true)}
-                        title="Settings"
-                        color="inherit"
+                        onClick={() =>
+                          setMode(mode === "dark" ? "light" : "dark")
+                        }
+                        sx={{ color: mode === "dark" ? "white" : "black" }}
+                        title={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
                       >
-                        <SettingsIcon />
+                        {mode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
                       </IconButton>
-                      <QueueManager token={user?.token} />
-                      <NotificationCenter />
-                      <Button
-                        onClick={handleLogout}
-                        color="inherit"
-                        size="small"
-                        sx={{ minWidth: "auto" }}
-                      >
-                        Sign Out
-                      </Button>
-                    </>
-                  )}
-                </Stack>
-              </Toolbar>
-            </AppBar>
-          )}
+                      {user && (
+                        <>
+                          <IconButton
+                            onClick={() => setIsSettingsOpen(true)}
+                            title="Settings"
+                            sx={{ color: mode === "dark" ? "white" : "black" }}
+                          >
+                            <SettingsIcon />
+                          </IconButton>
+                          <QueueManager token={user?.token} mode={mode} />
+                          <NotificationCenter mode={mode} />
+                          <IconButton
+                            onClick={handleLogout}
+                            size="small"
+                            sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
+                            title="Sign Out"
+                          >
+                            <LogoutIcon />
+                          </IconButton>
+                        </>
+                      )}
+                    </Stack>
+                  </Toolbar>
+                </AppBar>
+              )}
 
-          <Suspense fallback={<LoadingSpinner />}>
-            <Routes>
-              <Route
-                path="/login"
-                element={<Auth onLoginSuccess={setUser} />}
-              />
-              <Route
-                path="/"
-                element={
-                  user ? (
-                    <Dashboard
-                      user={user}
-                      seriesList={seriesList}
-                      setSeriesList={setSeriesList}
-                      onSelectSeries={setSelectedSeries}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/series/:seriesId"
-                element={
-                  user ? (
-                    <SeriesDetails
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      setSelectedSeries={setSelectedSeries}
-                      chapters={chapters}
-                      setChapters={setChapters}
-                      onSelectChapter={setSelectedChapter}
-                      isLoadingDetails={isLoadingDetails}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/series/:seriesId/:slug"
-                element={
-                  user ? (
-                    <SeriesDetails
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      setSelectedSeries={setSelectedSeries}
-                      chapters={chapters}
-                      setChapters={setChapters}
-                      onSelectChapter={setSelectedChapter}
-                      isLoadingDetails={isLoadingDetails}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/chapters/:chapterId"
-                element={
-                  user ? (
-                    <ChapterGallery
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      selectedChapter={selectedChapter}
-                      setSelectedChapter={setSelectedChapter}
-                      pages={pages}
-                      setPages={setPages}
-                       onSelectPage={NOOP}
-                       isLoadingDetails={isLoadingDetails}
-                     />
-                   ) : null
-                 }
-               />
-               <Route
-                 path="/chapters/:chapterId/:slug"
-                 element={
-                   user ? (
-                     <ChapterGallery
-                       user={user}
-                       selectedSeries={selectedSeries}
-                       selectedChapter={selectedChapter}
-                       setSelectedChapter={setSelectedChapter}
-                       pages={pages}
-                       setPages={setPages}
-                       onSelectPage={NOOP}
-                      isLoadingDetails={isLoadingDetails}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/chapters/:chapterId/reader/:pageNumber"
-                element={
-                  user ? (
-                    <Reader
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      selectedChapter={selectedChapter}
-                      chapters={chapters}
-                      pages={pages}
-                      theme={mode}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/chapters/:chapterId/:slug/reader/:pageNumber"
-                element={
-                  user ? (
-                    <Reader
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      selectedChapter={selectedChapter}
-                      chapters={chapters}
-                      pages={pages}
-                      theme={mode}
-                    />
-                  ) : null
-                }
-              />
-            </Routes>
-          </Suspense>
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route
+                    path="/login"
+                    element={<Auth onLoginSuccess={setUser} />}
+                  />
+                  <Route
+                    path="/"
+                    element={
+                      user ? (
+                        <Dashboard
+                          user={user}
+                          seriesList={seriesList}
+                          setSeriesList={setSeriesList}
+                          onSelectSeries={setSelectedSeries}
+                        />
+                      ) : null
+                    }
+                  />
+                  <Route
+                    path="/series/:seriesId"
+                    element={
+                      user ? (
+                        <SeriesDetails
+                          user={user}
+                          selectedSeries={selectedSeries}
+                          setSelectedSeries={setSelectedSeries}
+                          chapters={chapters}
+                          setChapters={setChapters}
+                          onSelectChapter={setSelectedChapter}
+                          isLoadingDetails={isLoadingDetails}
+                        />
+                      ) : null
+                    }
+                  />
+                  <Route
+                    path="/series/:seriesId/:slug"
+                    element={
+                      user ? (
+                        <SeriesDetails
+                          user={user}
+                          selectedSeries={selectedSeries}
+                          setSelectedSeries={setSelectedSeries}
+                          chapters={chapters}
+                          setChapters={setChapters}
+                          onSelectChapter={setSelectedChapter}
+                          isLoadingDetails={isLoadingDetails}
+                        />
+                      ) : null
+                    }
+                  />
+                  <Route
+                    path="/chapters/:chapterId"
+                    element={
+                      user ? (
+                        <ChapterGallery
+                          user={user}
+                          selectedSeries={selectedSeries}
+                          selectedChapter={selectedChapter}
+                          setSelectedChapter={setSelectedChapter}
+                          pages={pages}
+                          setPages={setPages}
+                          onSelectPage={NOOP}
+                          isLoadingDetails={isLoadingDetails}
+                        />
+                      ) : null
+                    }
+                  />
+                  <Route
+                    path="/chapters/:chapterId/:slug"
+                    element={
+                      user ? (
+                        <ChapterGallery
+                          user={user}
+                          selectedSeries={selectedSeries}
+                          selectedChapter={selectedChapter}
+                          setSelectedChapter={setSelectedChapter}
+                          pages={pages}
+                          setPages={setPages}
+                          onSelectPage={NOOP}
+                          isLoadingDetails={isLoadingDetails}
+                        />
+                      ) : null
+                    }
+                  />
+                  <Route
+                    path="/chapters/:chapterId/reader/:pageNumber"
+                    element={
+                      user ? (
+                        <Reader
+                          user={user}
+                          selectedSeries={selectedSeries}
+                          selectedChapter={selectedChapter}
+                          chapters={chapters}
+                          pages={pages}
+                          theme={mode}
+                        />
+                      ) : null
+                    }
+                  />
+                  <Route
+                    path="/chapters/:chapterId/:slug/reader/:pageNumber"
+                    element={
+                      user ? (
+                        <Reader
+                          user={user}
+                          selectedSeries={selectedSeries}
+                          selectedChapter={selectedChapter}
+                          chapters={chapters}
+                          pages={pages}
+                          theme={mode}
+                        />
+                      ) : null
+                    }
+                  />
+                </Routes>
+              </Suspense>
 
-          <Suspense fallback={null}>
-            {isSettingsOpen && (
-              <SettingsModal
-                isOpen={isSettingsOpen}
-                onClose={handleSettingsClose}
-                token={user?.token}
-              />
-            )}
-          </Suspense>
-        </div>
-      </ToastProvider>
-    </NotificationProvider>
+              <Suspense fallback={null}>
+                {isSettingsOpen && (
+                  <SettingsModal
+                    isOpen={isSettingsOpen}
+                    onClose={handleSettingsClose}
+                    token={user?.token}
+                  />
+                )}
+              </Suspense>
+            </div>
+          </ToastProvider>
+        </NotificationProvider>
       </Box>
     </ThemeProvider>
   );
