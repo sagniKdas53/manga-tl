@@ -114,11 +114,11 @@ public class JobCoordinatorService {
   }
 
   private void enqueueJob(String jobType, UUID imageId) {
-    enqueueJob(jobType, imageId, null, "normal", job -> {});
+    enqueueJob(jobType, imageId, null, job -> {});
   }
 
   private void enqueueJob(String jobType, UUID imageId, UUID chapterId) {
-    enqueueJob(jobType, imageId, chapterId, "normal", job -> {});
+    enqueueJob(jobType, imageId, chapterId, job -> {});
   }
 
   private void enqueueJob(
@@ -133,9 +133,8 @@ public class JobCoordinatorService {
       String jobType,
       UUID imageId,
       UUID chapterId,
-      String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
-    enqueueJobDirectly(jobType, imageId, chapterId, priority, payloadCustomizer);
+    enqueueJobDirectly(jobType, imageId, chapterId, "normal", payloadCustomizer);
   }
 
   private void enqueueJobDirectly(

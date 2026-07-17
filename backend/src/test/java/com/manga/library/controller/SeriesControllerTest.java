@@ -383,7 +383,7 @@ public class SeriesControllerTest {
   }
 
   @Test
-  public void testCreateChapter_SeriesNotFound() throws Exception {
+  public void testCreateChapter_SeriesNotFound() {
     UUID seriesId = UUID.randomUUID();
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.empty());
 
@@ -430,7 +430,7 @@ public class SeriesControllerTest {
   }
 
   @Test
-  public void testExportChapter_NotFound() throws Exception {
+  public void testExportChapter_NotFound() {
     UUID chapterId = UUID.randomUUID();
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.empty());
 

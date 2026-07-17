@@ -2,11 +2,15 @@ package com.manga.library.service;
 
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+
+import io.minio.errors.MinioException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -235,11 +239,7 @@ public class PageService {
                 imageRepository.save(img);
               });
       log.info("Successfully generated and uploaded WebP thumbnail to {}", thumbnailStoragePath);
-    } catch (java.io.IOException
-        | RuntimeException
-        | io.minio.errors.MinioException
-        | java.security.NoSuchAlgorithmException
-        | java.security.InvalidKeyException e) {
+    } catch (IOException | RuntimeException | MinioException e) {
       log.error("Failed to generate async thumbnail for image {}", imageId, e);
     }
   }

@@ -8,8 +8,13 @@ import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.SseService;
+
+import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import io.minio.errors.MinioException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -652,11 +657,7 @@ public class PageController {
       }
       log.error("Bad request", e);
       return ResponseEntity.badRequest().body(new UploadResponse(null, null, e.getMessage()));
-    } catch (java.io.IOException
-        | java.security.NoSuchAlgorithmException
-        | java.security.InvalidKeyException
-        | io.minio.errors.MinioException
-        | RuntimeException e) {
+    } catch (IOException | NoSuchAlgorithmException | MinioException | RuntimeException e) {
       log.error("Failed to upload page", e);
       return ResponseEntity.internalServerError().build();
     }
@@ -1311,11 +1312,7 @@ public class PageController {
           importedElementsCount);
 
       return ResponseEntity.ok(Map.of("status", "success", "pageId", page.getId().toString()));
-    } catch (java.io.IOException
-        | java.security.NoSuchAlgorithmException
-        | java.security.InvalidKeyException
-        | io.minio.errors.MinioException
-        | RuntimeException e) {
+    } catch (IOException | NoSuchAlgorithmException | MinioException | RuntimeException e) {
       log.error("Failed to import project zip", e);
       return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
     }

@@ -23,7 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 public class WorkerDispatcherServiceTest {
 
   @Mock private StringRedisTemplate redisTemplate;
-  private ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper = new ObjectMapper();
   @Mock private HttpClient httpClient;
   @Mock private ValueOperations<String, String> valueOps;
   @Mock private ListOperations<String, String> listOps;

@@ -28,7 +28,7 @@ public class NotificationControllerTest {
   @MockBean private JwtAuthFilter jwtAuthFilter;
 
   @Test
-  public void testStream_Unauthorized() throws Exception {
+  public void testStream_Unauthorized() {
     org.springframework.security.core.context.SecurityContextHolder.clearContext();
     Exception exception =
         org.junit.jupiter.api.Assertions.assertThrows(
@@ -58,7 +58,7 @@ public class NotificationControllerTest {
   }
 
   @Test
-  public void testStream_UserNotFound() throws Exception {
+  public void testStream_UserNotFound() {
     org.springframework.security.core.Authentication auth =
         mock(org.springframework.security.core.Authentication.class);
     when(auth.isAuthenticated()).thenReturn(true);
