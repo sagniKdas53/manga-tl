@@ -1,5 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Button from "@mui/material/Button";
+import Stack from "@mui/material/Stack";
+import AddIcon from "@mui/icons-material/Add";
+import ImportExportIcon from "@mui/icons-material/ImportExport";
+import UploadIcon from "@mui/icons-material/Upload";
 import { useToast } from "./ToastContext";
 import type { User, Series, Chapter, SystemSettingsDto } from "../types";
 import { safeFetch, toSlug } from "../utils";
@@ -375,15 +380,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   return (
     <div className="dashboard-content nhentai-style">
-      <div className="mb-8">
-        <button
-          className="btn btn-secondary"
+      <Button
           onClick={() => navigate("/")}
-          style={{ padding: "8px 16px", marginBottom: "16px" }}
+          variant="outlined"
+          size="small"
+          sx={{ mb: 2 }}
         >
-          &larr; Back to Library
-        </button>
-      </div>
+          ← Back to Library
+        </Button>
 
       <div className="series-details-container">
         <div className="series-cover-column">
@@ -435,72 +439,28 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
           </div>
 
           <div className="series-actions-row">
-            <button
-              className="btn-nhentai btn-nhentai-primary"
-              onClick={handleNewChapterClick}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleNewChapterClick}
               >
-                <line
-                  x1="12"
-                  y1="5"
-                  x2="12"
-                  y2="19"
-                ></line>
-                <line
-                  x1="5"
-                  y1="12"
-                  x2="19"
-                  y2="12"
-                ></line>
-              </svg>
-              Add Chapter
-            </button>
-            <button
-              className="btn-nhentai btn-nhentai-secondary"
-              onClick={handleImportChapterClick}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                Add Chapter
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<UploadIcon />}
+                onClick={handleImportChapterClick}
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line
-                  x1="12"
-                  y1="3"
-                  x2="12"
-                  y2="15"
-                ></line>
-              </svg>
-              Import Chapter (ZIP/ePub)
-            </button>
-            <button
-              className="btn-nhentai btn-nhentai-secondary"
-              onClick={handleEditSeriesClick}
-            >
-              Edit Series
-            </button>
-            <button
-              className="btn-nhentai btn-nhentai-danger"
-              onClick={handleDeleteSeries}
-            >
-              Delete Series
-            </button>
+                Import Chapter (ZIP)
+              </Button>
+              <Button variant="outlined" onClick={handleEditSeriesClick}>
+                Edit Series
+              </Button>
+              <Button variant="outlined" color="error" onClick={handleDeleteSeries}>
+                Delete Series
+              </Button>
+            </Stack>
           </div>
         </div>
       </div>
@@ -514,17 +474,18 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         }}
       >
         <h2>Chapters ({chapters.length})</h2>
-        <button
-          className="btn-nhentai btn-nhentai-secondary"
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<ImportExportIcon />}
           onClick={() => {
             const nextSort = !sortAsc;
             setSortAsc(nextSort);
             localStorage.setItem("chapters_sort_asc", String(nextSort));
           }}
-          style={{ padding: "6px 12px", fontSize: "13px" }}
         >
           Sort: {sortAsc ? "Ascending ↑" : "Descending ↓"}
-        </button>
+        </Button>
       </div>
 
       <div className="chapters-grid">
@@ -1072,7 +1033,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 marginBottom: "24px",
               }}
             >
-              Import Chapter (ZIP/ePub)
+              Import Chapter (ZIP)
             </h2>
             <form onSubmit={handleImportSubmit}>
               <div className="form-group">

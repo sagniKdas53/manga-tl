@@ -1,5 +1,17 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import CardActions from "@mui/material/CardActions";
+import CardContent from "@mui/material/CardContent";
+import CardMedia from "@mui/material/CardMedia";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Typography from "@mui/material/Typography";
 import { useToast } from "./ToastContext";
 import type { User, Series } from "../types";
 import { safeFetch, toSlug } from "../utils";
@@ -105,103 +117,116 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <div className="dashboard-content">
-      <div className="page-header">
-        <div>
-          <h1>My Manga Library</h1>
-          <p style={{ color: "var(--text-muted)", margin: "8px 0 0" }}>
+    <Box sx={{ flex: 1, p: 3, maxWidth: 1200, mx: "auto", width: "100%" }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Box>
+          <Typography variant="h4" sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600 }}>
+            My Manga Library
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Manage translation projects and OCR workflows
-          </p>
-        </div>
-        <button
-          className="btn btn-primary"
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
           onClick={handleNewSeriesClick}
         >
-          + New Series
-        </button>
-      </div>
+          New Series
+        </Button>
+      </Box>
 
-      <div className="grid-cols-3">
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          gap: 2,
+        }}
+      >
         {seriesList.map((s) => (
-          <div
+          <Card
             key={s.id}
-            className="manga-card glass"
+            sx={{
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              transition: "transform 0.2s, box-shadow 0.2s",
+              "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: 4,
+              },
+            }}
             onClick={() => {
               onSelectSeries(s);
               navigate(`/series/${s.id}/${toSlug(s.title)}`);
             }}
           >
-            <div className="manga-cover-container">
-              {s.coverImageUrl ? (
-                <img
-                  src={s.coverImageUrl}
-                  className="manga-cover-img"
-                  alt={s.title}
-                />
-              ) : (
-                <div className="manga-cover-placeholder">{s.title}</div>
-              )}
-              <div
-                className="manga-card-actions"
-                onClick={(e) => e.stopPropagation()}
+            {s.coverImageUrl ? (
+              <CardMedia
+                component="img"
+                image={s.coverImageUrl}
+                alt={s.title}
+                sx={{ aspectRatio: "2/3", objectFit: "cover", bgcolor: "#000" }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  aspectRatio: "2/3",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  bgcolor: "grey.900",
+                  color: "text.secondary",
+                  fontFamily: '"Outfit", sans-serif',
+                  fontWeight: 700,
+                  p: 2,
+                  textAlign: "center",
+                  fontSize: 14,
+                }}
               >
-                <button
-                  className="action-btn-small"
-                  onClick={(e) => handleEditSeriesClick(s, e)}
-                  title="Edit Series"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
-                <button
-                  className="action-btn-small delete-btn"
-                  onClick={(e) => handleDeleteSeries(s.id, e)}
-                  title="Delete Series"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="manga-card-content">
-              <h3>{s.title}</h3>
-              <div className="manga-meta">
-                <span className="meta-badge">
-                  {s.sourceLanguage || s.originalLanguage || "ja"} →{" "}
-                  {s.targetLanguage || "en"}
-                  {(s.sourceLanguage || s.originalLanguage || "ja") ===
-                  (s.targetLanguage || "en")
-                    ? " (Reader Mode)"
-                    : ""}
-                </span>
-                <span className="meta-badge">{s.readingDirection}</span>
-              </div>
-            </div>
-          </div>
+                {s.title}
+              </Box>
+            )}
+            <CardContent sx={{ flex: 1, py: 1.5, "&:last-child": { pb: 1.5 } }}>
+              <Typography variant="subtitle2" noWrap fontWeight={600}>
+                {s.title}
+              </Typography>
+              <Box sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}>
+                <Chip
+                  label={`${s.sourceLanguage || s.originalLanguage || "ja"} → ${s.targetLanguage || "en"}`}
+                  size="small"
+                  variant="outlined"
+                />
+                <Chip label={s.readingDirection} size="small" variant="outlined" />
+              </Box>
+            </CardContent>
+            <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
+              <IconButton
+                size="small"
+                title="Edit Series"
+                onClick={(e) => handleEditSeriesClick(s, e)}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                title="Delete Series"
+                color="error"
+                onClick={(e) => handleDeleteSeries(s.id, e)}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </CardActions>
+          </Card>
         ))}
-      </div>
+      </Box>
 
       <CreateSeriesDialog
         key={editingSeries?.id ?? `create-${createCounter}`}
@@ -220,7 +245,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onConfirm={confirmModal.onConfirm}
         onCancel={closeConfirmModal}
       />
-    </div>
+    </Box>
   );
 };
 

@@ -1415,13 +1415,13 @@ input:checked + .slider:before {
 }
 
 .btn-nhentai-secondary {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-hover);
   color: var(--text-main);
   border-color: var(--border-color);
 }
 
 .btn-nhentai-secondary:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover-more);
   transform: translateY(-1px);
 }
 

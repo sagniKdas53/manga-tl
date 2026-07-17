@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Stack from "@mui/material/Stack";
+import EditIcon from "@mui/icons-material/Edit";
 import type { User, Series, Chapter, Page, SystemSettingsDto } from "../types";
 import { safeFetch, toSlug, getContextPath } from "../utils";
 import ConfirmModal from "./ConfirmModal";
@@ -624,90 +628,62 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
   return (
     <div className="dashboard-content">
-      <div className="mb-8">
-        <button
-          className="btn btn-secondary"
+      <div>
+        <Button
+          variant="outlined"
+          size="small"
           onClick={() => {
             setSelectedChapter(null);
             navigate(
               `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`,
             );
           }}
-          style={{ padding: "8px 16px", marginBottom: "16px" }}
+          sx={{ mb: 2 }}
         >
-          &larr; Back to Series
-        </button>
+          ← Back to Series
+        </Button>
         <div className="page-header">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <h1>Chapter {selectedChapter.chapterNumber}</h1>
-              <button
-                className="action-btn-small"
+              <IconButton
                 onClick={handleEditClick}
                 title="Edit Chapter Name & Number"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "6px",
-                  padding: "6px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--text-muted)",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "#fff";
-                  e.currentTarget.style.background = "rgba(255,255,255,0.1)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                }}
+                size="small"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
+                <EditIcon fontSize="small" />
+              </IconButton>
             </div>
             <p style={{ color: "var(--text-muted)", margin: "8px 0 0" }}>
               {selectedSeries.title} / {selectedChapter.title || "Untitled"}
             </p>
           </div>
-          <div style={{ display: "flex", gap: "12px" }}>
-            <button
-              className="btn btn-secondary"
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              size="small"
               onClick={() =>
                 document.getElementById("project-import-upload")?.click()
               }
               disabled={isImportingProject}
             >
               {isImportingProject ? "Importing..." : "Import Project (ZIP)"}
-            </button>
-            <button
-              className="btn btn-secondary"
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
               onClick={handleExportChapterZip}
             >
               Export Chapter (ZIP)
-            </button>
-            <button
-              className="btn btn-primary"
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
               onClick={() => document.getElementById("file-upload")?.click()}
             >
               Upload Page
-            </button>
-          </div>
+            </Button>
+          </Stack>
         </div>
       </div>
 

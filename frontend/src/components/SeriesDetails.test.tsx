@@ -461,12 +461,12 @@ describe("SeriesDetails Component", () => {
     );
 
     const importBtn = screen.getByRole("button", {
-      name: /import chapter \(zip\/epub\)/i,
+      name: /import chapter \(zip\)/i,
     });
     fireEvent.click(importBtn);
 
     expect(
-      screen.getByRole("heading", { name: "Import Chapter (ZIP/ePub)" }),
+      screen.getByRole("heading", { name: "Import Chapter (ZIP)" }),
     ).toBeInTheDocument();
 
     // Use document.querySelector or something if getByLabelText fails, actually there's no id so we can use placeholder or type="file"
