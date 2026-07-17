@@ -355,7 +355,7 @@ function AppContent() {
                   onClick={() => user && navigate("/")}
                 >
                   <img
-                    src={mode === "dark" ? logoDark : logoLight}
+                    src={(mode === "dark" ? logoDark : logoLight) as string}
                     alt="tl-hub"
                     style={{ height: 28, width: "auto" }}
                   />

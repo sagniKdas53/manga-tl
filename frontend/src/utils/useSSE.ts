@@ -25,7 +25,7 @@ export function useSSE(
     const sseUrl = `${url}?token=${encodeURIComponent(token)}`;
     const eventSource = new EventSource(sseUrl);
     eventSourceRef.current = eventSource;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
 
     const updateEvent = (type: string, data: string) => {
       console.log(`[SSE Event Received] ${type}:`, data);

@@ -544,6 +544,11 @@ public class PageController {
             nextNum++;
           }
 
+          if (firstPage == null) {
+            return ResponseEntity.badRequest()
+                .body(new UploadResponse(null, null, "error: no pages were created"));
+          }
+
           return ResponseEntity.ok(
               new UploadResponse(firstPage.getId(), firstPage.getImage().getId(), "zip_imported"));
         }

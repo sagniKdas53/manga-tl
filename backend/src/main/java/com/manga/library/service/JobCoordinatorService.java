@@ -114,7 +114,7 @@ public class JobCoordinatorService {
   }
 
   private void enqueueJob(String jobType, UUID imageId) {
-    enqueueJob(jobType, imageId, null, job -> {});
+    enqueueJob(jobType, imageId, (UUID) null, job -> {});
   }
 
   private void enqueueJob(String jobType, UUID imageId, UUID chapterId) {
@@ -1012,7 +1012,7 @@ public class JobCoordinatorService {
 
     // Set correct layer visibility: latest translation visible, others invisible. OCR invisible.
     for (Layer l : layers) {
-      boolean shouldBeVisible = false;
+      boolean shouldBeVisible;
       if ("translation".equalsIgnoreCase(l.getType())) {
         shouldBeVisible =
             (latestTranslationLayer != null && l.getId().equals(latestTranslationLayer.getId()));
