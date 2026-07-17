@@ -30,6 +30,7 @@ import { safeFetch, getContextPath } from "./utils";
 // Providers
 import { NotificationProvider } from "./components/NotificationContext";
 import { ToastProvider, useToast } from "./components/ToastContext";
+import { UploadProvider } from "./components/UploadContext";
 
 // Static import for NotificationCenter (always present in nav)
 import { NotificationCenter } from "./components/NotificationCenter";
@@ -337,6 +338,7 @@ function AppContent() {
       >
         <NotificationProvider token={user?.token || null}>
           <ToastProvider>
+            <UploadProvider>
             <GlobalErrorListener />
             <TranslationToastWatcher />
             <div className="app-container">
@@ -530,6 +532,7 @@ function AppContent() {
                 )}
               </Suspense>
             </div>
+          </UploadProvider>
           </ToastProvider>
         </NotificationProvider>
       </Box>

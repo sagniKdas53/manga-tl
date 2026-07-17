@@ -1,19 +1,29 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Badge from "@mui/material/Badge";
+import Box from "@mui/material/Box";
+import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
 import ChecklistIcon from '@mui/icons-material/Checklist';
+import ClearAllIcon from '@mui/icons-material/ClearAll';
+import ClearIcon from '@mui/icons-material/Clear';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import CloseIcon from '@mui/icons-material/Close';
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import ClearIcon from '@mui/icons-material/Clear';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-import ClearAllIcon from '@mui/icons-material/ClearAll';
 
 interface Job {
-  id: string; // Tracks the current job's ID
+  id: string;
   traceId?: string;
   type: string;
   imageId: string;
@@ -22,154 +32,94 @@ interface Job {
   error: string | null;
   attempt: number;
   maxAttempts: number;
-  createdAt: string; // Pipeline start time
-  jobCreatedAt: string; // Current job start time
+  createdAt: string;
+  jobCreatedAt: string;
   updatedAt: string;
 }
 
-const getPipelineProgress = (jobType: string) => {
-  const stages = ["panel-detection", "ocr", "layout", "translation", "render", "qa"];
-  let currentIndex = stages.indexOf(jobType);
+const statusColor: Record<string, string> = {
+  PROCESSING: "#4caf50",
+  PENDING: "#2196f3",
+  COMPLETED: "#2196f3",
+  FAILED: "#f44336",
+  PAUSED: "#ffc107",
+};
 
-  // If it's not a standard pipeline stage, don't show the dots (or map it loosely)
+const pipelineStages = ["panel-detection", "ocr", "layout", "translation", "render", "qa"];
+
+const getPipelineProgress = (jobType: string) => {
+  let currentIndex = pipelineStages.indexOf(jobType);
   if (currentIndex === -1) {
     if (jobType === "qa-re-ocr") currentIndex = 1;
     else if (jobType === "region-redo") currentIndex = 1;
     else return null;
   }
-
   return (
-    <div style={{ display: "flex", gap: "3px", marginTop: "4px", marginBottom: "4px" }}>
-      {stages.map((stage, i) => (
-        <div
+    <Box sx={{ display: "flex", gap: "3px", mt: 0.5, mb: 0.5 }}>
+      {pipelineStages.map((stage, i) => (
+        <Box
           key={i}
-          style={{
-            width: "6px",
-            height: "6px",
+          sx={{
+            width: 6,
+            height: 6,
             borderRadius: "50%",
-            backgroundColor: i <= currentIndex ? "var(--primary-color, #2196f3)" : "var(--border-color, #ccc)",
-            opacity: i === currentIndex ? 1 : i < currentIndex ? 0.7 : 0.3
+            backgroundColor: i <= currentIndex ? "primary.main" : "divider",
+            opacity: i === currentIndex ? 1 : i < currentIndex ? 0.7 : 0.3,
           }}
           title={stage}
         />
       ))}
-    </div>
+    </Box>
   );
 };
 
-const renderJobDetails = (job: Job) => {
+const formatJobType = (type: string) => {
+  const map: Record<string, string> = {
+    "panel-detection": "Panel Detection",
+    "ocr": "OCR Processing",
+    "translation": "Translation",
+    "qa": "Quality Assurance",
+    "qa-re-ocr": "QA Re-OCR",
+    "region-redo": "Region Redo",
+  };
+  return map[type] || type.toUpperCase();
+};
+
+const renderJobLocation = (job: Job) => {
   if (!job.payload) return null;
   try {
     const payload = JSON.parse(job.payload);
-    let providerModel = "";
-    let location = "";
-
-    if (
-      payload.chapterNumber !== undefined &&
-      payload.pageNumber !== undefined
-    ) {
-      const seriesContext = payload.seriesTitle
-        ? `${payload.seriesTitle} - `
-        : "";
-      const chapterContext = payload.chapterTitle
-        ? `${payload.chapterTitle} (Ch.${payload.chapterNumber})`
-        : `Ch.${payload.chapterNumber}`;
-      location = `${seriesContext}${chapterContext} › Page ${payload.pageNumber}`;
+    const parts: string[] = [];
+    if (payload.seriesTitle) parts.push(payload.seriesTitle);
+    if (payload.chapterTitle) {
+      parts.push(`${payload.chapterTitle} (Ch.${payload.chapterNumber})`);
+    } else if (payload.chapterNumber !== undefined) {
+      parts.push(`Ch.${payload.chapterNumber}`);
     }
-
-    if (job.type === "ocr") {
-      if (payload.ocrProvider) {
-        providerModel = `${payload.ocrProvider} / ${payload.ocrModel || "default"}`;
-      }
-    } else if (job.type === "translation") {
-      if (payload.tlProvider) {
-        providerModel = `${payload.tlProvider} / ${payload.tlModel || "default"}`;
-      }
-    } else if (job.type === "qa") {
-      if (payload.qaMode === "none") {
-        providerModel = `Skipped / none`;
-      } else {
-        const model =
-          payload.qaMode === "vlm" ? payload.qaVlmModel : payload.qaLlmModel;
-        if (payload.qaProvider) {
-          providerModel = `${payload.qaProvider} / ${model || "default"}`;
-        }
-      }
-    } else if (job.type === "qa-re-ocr") {
-      if (payload.ocrProvider) {
-        providerModel = `${payload.ocrProvider} / ${payload.ocrModel || "default"}`;
-      }
-    } else if (job.type === "region-redo") {
-      providerModel = `Redo: ${payload.redoType || "manual"}`;
-    }
-
-    return (
-      <div
-        style={{
-          fontSize: "11px",
-          color: "var(--text-muted)",
-          marginTop: "2px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "2px",
-        }}
-      >
-        {location && (
-          <span style={{ fontWeight: "500", color: "var(--primary, #ed2553)" }}>
-            {location}
-          </span>
-        )}
-        {providerModel && (
-          <span>
-            Using:{" "}
-            <strong style={{ color: "var(--text-main)" }}>
-              {providerModel}
-            </strong>
-          </span>
-        )}
-      </div>
-    );
+    if (payload.pageNumber !== undefined) parts.push(`Page ${payload.pageNumber}`);
+    return parts.length ? parts.join(" › ") : null;
   } catch {
     return null;
   }
 };
 
-const formatErrorMessage = (error: string, status: string) => {
+const formatErrorMessage = (error: string) => {
   if (!error) return "";
-  const prefix = status === "FAILED" ? "Job failed: " : "Error: ";
-
-  if (
-    error.includes("Max retries exceeded") ||
-    error.includes("NameResolutionError") ||
-    error.includes("Failed to resolve") ||
-    error.includes("ConnectionError")
-  ) {
-    return prefix + "Could not connect to internal service (Network Error).";
+  if (error.includes("Max retries exceeded") || error.includes("NameResolutionError") || error.includes("Failed to resolve") || error.includes("ConnectionError")) {
+    return "Could not connect to internal service (Network Error).";
   }
-  if (
-    error.includes("500 Server Error") ||
-    error.includes("500 Internal Server Error")
-  ) {
-    return prefix + "Internal API returned 500 error.";
+  if (error.includes("500 Server Error") || error.includes("500 Internal Server Error")) {
+    return "Internal API returned 500 error.";
   }
-
-  let cleanError = error;
   const match = error.match(/([a-zA-Z]+Error):\s*(.+)/);
-  if (match) {
-    cleanError = `${match[1]}: ${match[2]}`;
-  }
-
-  if (cleanError.length > 100) {
-    cleanError = cleanError.substring(0, 100) + "...";
-  }
-  return cleanError;
+  if (match) return `${match[1]}: ${match[2].substring(0, 100)}`;
+  return error.length > 100 ? error.substring(0, 100) + "..." : error;
 };
 
-export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dark" }> = ({ token, mode }) => {
+export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dark" }> = ({ token, mode }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const { subscribe } = useNotifications();
   const { showToast } = useToast();
 
@@ -184,14 +134,14 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
     title: "",
     message: "",
     isDangerous: false,
-    action: () => { },
+    action: () => {},
   });
 
   const sortJobs = (jobsList: Job[]) => {
     const statusOrder: Record<string, number> = {
       PROCESSING: 1,
       PENDING: 1,
-      COMPLETED: 1, // Keep completed items on the same level (transitioning between stages)
+      COMPLETED: 1,
       PAUSED: 2,
       FAILED: 3,
     };
@@ -199,7 +149,6 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
       const orderA = statusOrder[a.status] || 99;
       const orderB = statusOrder[b.status] || 99;
       if (orderA !== orderB) return orderA - orderB;
-      // Stable sort purely by pipeline creation time
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
   };
@@ -215,19 +164,17 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
         setIsPaused(data.isPaused);
 
         setJobs((prevJobs) => {
-          const newJobsList: Array<Omit<Job, 'jobCreatedAt'>> = data.jobs;
           const pipelinesMap = new Map<string, Job>();
+          prevJobs.forEach((p) => pipelinesMap.set(p.imageId, p));
 
-          // Seed with existing to preserve pipeline-level createdAt
-          prevJobs.forEach(p => pipelinesMap.set(p.imageId, p));
-
-          newJobsList.forEach(job => {
+          const newJobsList: Array<Omit<Job, 'jobCreatedAt'>> = data.jobs;
+          newJobsList.forEach((job) => {
             const existing = pipelinesMap.get(job.imageId);
             if (!existing || new Date(job.createdAt) >= new Date(existing.jobCreatedAt)) {
               pipelinesMap.set(job.imageId, {
                 ...job,
                 jobCreatedAt: job.createdAt,
-                createdAt: existing ? existing.createdAt : job.createdAt
+                createdAt: existing ? existing.createdAt : job.createdAt,
               });
             }
           });
@@ -237,7 +184,6 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
 
           const finalPipelines = Array.from(pipelinesMap.values()).filter((p) => {
             if (!activeImageIds.has(p.imageId)) return false;
-            // Filter out completed pipelines lingering in API response (> 10s old)
             if (p.status === "COMPLETED") {
               const updatedAt = new Date(p.updatedAt).getTime();
               if (now - updatedAt > 10000) return false;
@@ -253,30 +199,25 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
     }
   }, [token]);
 
-  // Initial fetch and 30s heartbeat
   useEffect(() => {
     if (!token) return;
-    const timeout = setTimeout(() => {
-      fetchJobs();
-    }, 0);
-    const interval = setInterval(fetchJobs, 30000); // Heartbeat
+    const timeout = setTimeout(() => fetchJobs(), 0);
+    const interval = setInterval(fetchJobs, 30000);
     return () => {
       clearTimeout(timeout);
       clearInterval(interval);
     };
   }, [token, fetchJobs]);
 
-  // Handle SSE events
   useEffect(() => {
     if (!token) return;
-
     return subscribe((event) => {
       if (event.type === "job_update") {
         try {
           const data = JSON.parse(event.data);
           setJobs((prev) => {
             const imageId = data.imageId;
-            if (!imageId) return prev; // Ignore un-groupable jobs
+            if (!imageId) return prev;
 
             if (data.status === "DELETED") {
               return prev.filter((p) => p.imageId !== imageId);
@@ -287,7 +228,6 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
 
             if (existingIndex !== -1) {
               const existing = updated[existingIndex];
-
               const dataId = data.jobId || data.id;
               const isSameJob = dataId === existing.id;
               const isNewerJob = data.createdAt && new Date(data.createdAt) > new Date(existing.jobCreatedAt);
@@ -299,11 +239,10 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
                   ...data,
                   id: dataId,
                   jobCreatedAt: data.createdAt || existing.jobCreatedAt,
-                  createdAt: existing.createdAt // preserve pipeline creation time
+                  createdAt: existing.createdAt,
                 };
               }
             } else {
-              // New pipeline tracking
               updated.push({
                 ...data,
                 id: data.jobId || data.id,
@@ -320,7 +259,6 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
       } else if (event.type === "notification") {
         try {
           const data = JSON.parse(event.data);
-          // If we receive the global processing complete notification, gracefully remove the pipeline from UI
           if (data.type === "SUCCESS" && data.title === "Page Processing Complete" && data.imageId) {
             setJobs((prev) => prev.filter((p) => p.imageId !== data.imageId));
           }
@@ -337,21 +275,6 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
     });
   }, [token, subscribe]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const toggleDropdown = () => setIsOpen(!isOpen);
-
   const handleClearQueue = () => {
     setConfirmModal({
       isOpen: true,
@@ -367,7 +290,6 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
             headers: { Authorization: `Bearer ${token}` },
           });
           if (res.ok) {
-            // Optimistic UI update
             setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
             showToast("Queue cleared successfully", "success");
           } else if (res.status === 403) {
@@ -379,7 +301,7 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
           console.error("Failed to clear queue", err);
           showToast("Error clearing queue", "error");
         }
-      }
+      },
     });
   };
 
@@ -395,7 +317,7 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
         action: () => {
           setConfirmModal((prev) => ({ ...prev, isOpen: false }));
           performPauseResumeQueue();
-        }
+        },
       });
     }
   };
@@ -408,7 +330,6 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Optimistic update
       setIsPaused(!isPaused);
     } catch (err) {
       console.error("Failed to toggle queue state", err);
@@ -418,13 +339,8 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
   const handleRetryJob = async (jobId: string) => {
     if (!token) return;
     try {
-      // Optimistic update
       setJobs((prev) =>
-        sortJobs(
-          prev.map((j) =>
-            j.id === jobId ? { ...j, status: "PENDING", attempt: 1 } : j
-          )
-        )
+        sortJobs(prev.map((j) => (j.id === jobId ? { ...j, status: "PENDING", attempt: 1 } : j)))
       );
       await safeFetch(`/api/jobs/${jobId}/retry`, {
         method: "POST",
@@ -440,12 +356,7 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
     try {
       const endpoint = job.status === "PAUSED" ? `/api/jobs/${job.id}/resume` : `/api/jobs/${job.id}/pause`;
       const newStatus: Job["status"] = job.status === "PAUSED" ? "PENDING" : "PAUSED";
-
-      // Optimistic update
-      setJobs((prev) =>
-        sortJobs(prev.map((j) => (j.id === job.id ? { ...j, status: newStatus } : j)))
-      );
-
+      setJobs((prev) => sortJobs(prev.map((j) => (j.id === job.id ? { ...j, status: newStatus } : j))));
       await safeFetch(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -463,7 +374,6 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        // Optimistic update
         setJobs((prev) => prev.filter((j) => j.id !== jobId));
         showToast("Job deleted successfully", "success");
       } else if (res.status === 403) {
@@ -483,32 +393,15 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
     return status;
   };
 
-  const getStatusColor = (status: string) => {
-    if (isPaused && status === "PENDING") return "#ffc107";
-    switch (status) {
-      case "PROCESSING":
-        return "#4caf50";
-      case "PENDING":
-        return "#2196f3";
-      case "COMPLETED":
-        return "#2196f3"; // Visual consistency for transitioning pipelines
-      case "FAILED":
-        return "#f44336";
-      case "PAUSED":
-        return "#ffc107";
-      default:
-        return "#9e9e9e";
-    }
+  const getJobStatusColor = (job: Job) => {
+    if (isPaused && job.status === "PENDING") return statusColor.PAUSED;
+    return statusColor[job.status] || "#9e9e9e";
   };
 
   return (
-    <div
-      className="queue-manager"
-      ref={dropdownRef}
-      style={{ position: "relative", display: "flex", alignItems: "center" }}
-    >
-      <Badge badgeContent={jobs.length} color="primary" invisible={jobs.length === 0} >
-        <IconButton onClick={toggleDropdown} color="inherit" size="small" title="Queue Manager">
+    <>
+      <Badge badgeContent={jobs.length} color="primary" invisible={jobs.length === 0}>
+        <IconButton onClick={() => setIsOpen(true)} color="inherit" size="small" title="Queue Manager">
           <ChecklistIcon sx={{ color: mode === "dark" ? "white" : "black" }} />
         </IconButton>
       </Badge>
@@ -522,213 +415,163 @@ export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dar
         onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
       />
 
-      {isOpen && (
-        <div
-          className="glass"
-          style={{
-            position: "absolute",
-            top: "100%",
-            right: 0,
-            marginTop: "12px",
-            width: "360px",
-            maxHeight: "450px",
-            overflowY: "auto",
-            zIndex: 1000,
-            display: "flex",
-            flexDirection: "column",
-            color: "var(--text-main)",
-          }}
-        >
-          <div
-            style={{
-              padding: "12px",
-              borderBottom: "1px solid var(--border-color)",
+      <Drawer
+        anchor="right"
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        PaperProps={{ sx: { width: 520 } }}
+      >
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <Box
+            sx={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              px: 2,
+              py: 1,
+              borderBottom: 1,
+              borderColor: "divider",
             }}
           >
-            <h3
-              style={{ margin: 0, fontSize: "16px", color: "var(--text-main)" }}
-            >
+            <Typography variant="h6" sx={{ fontSize: "16px", fontWeight: 600 }}>
               Queue Manager
-            </h3>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <IconButton
-                onClick={handleClearQueue}
-                size="small"
-                sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
-                title="Clear Queue"
-              >
-                <ClearAllIcon sx={{ color: mode === "dark" ? "white" : "black" }} />
-              </IconButton>
-              <IconButton
-                onClick={handlePauseResumeQueue}
-                sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
-                title={isPaused ? "Resume Queue" : "Pause Queue"}
-              >
-                {isPaused ?
-                  <PlayArrowIcon sx={{ color: mode === "dark" ? "white" : "black" }} /> :
-                  <PauseIcon sx={{ color: mode === "dark" ? "white" : "black" }} />}
-              </IconButton>
-            </div>
-          </div>
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Tooltip title="Clear Queue">
+                <IconButton size="small" onClick={handleClearQueue} title="Clear Queue">
+                  <ClearAllIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={isPaused ? "Resume Queue" : "Pause Queue"}>
+                <IconButton size="small" onClick={handlePauseResumeQueue} title={isPaused ? "Resume" : "Pause"}>
+                  {isPaused ? <PlayArrowIcon fontSize="small" /> : <PauseIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Close">
+                <IconButton size="small" onClick={() => setIsOpen(false)}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
 
           {jobs.length === 0 ? (
-            <div
-              style={{
-                padding: "24px",
-                textAlign: "center",
-                color: "var(--text-muted)",
-              }}
-            >
+            <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "text.secondary" }}>
               No active jobs
-            </div>
+            </Box>
           ) : (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {jobs.map((job) => (
-                <li
-                  key={job.id}
-                  style={{
-                    padding: "12px",
-                    borderBottom: "1px solid var(--border-color)",
-                    backgroundColor: "transparent",
-                    display: "flex",
-                    gap: "12px",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "12px",
-                      height: "12px",
-                      borderRadius: "50%",
-                      backgroundColor: getStatusColor(job.status),
-                      marginTop: "4px",
-                      boxShadow: `0 0 8px ${getStatusColor(job.status)}66`
-                    }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontWeight: "bold",
-                        fontSize: "14px",
-                        marginBottom: "2px",
-                        color: "var(--text-main)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center"
-                      }}
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ px: 2 }}>Job</TableCell>
+                  <TableCell sx={{ px: 2 }}>Context</TableCell>
+                  <TableCell sx={{ px: 2 }} align="center">
+                    Status
+                  </TableCell>
+                  <TableCell sx={{ px: 2 }} align="right">
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {jobs.map((job) => {
+                  const color = getJobStatusColor(job);
+                  const location = renderJobLocation(job);
+                  return (
+                    <TableRow
+                      key={job.id}
+                      sx={{ "&:last-child td, &:last-child th": { borderBottom: 0 } }}
                     >
-                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                        <span>
-                          {job.type === "panel-detection"
-                            ? "Panel Detection"
-                            : job.type === "ocr"
-                              ? "OCR Processing"
-                              : job.type === "translation"
-                                ? "Translation"
-                                : job.type === "qa"
-                                  ? "Quality Assurance"
-                                  : job.type === "qa-re-ocr"
-                                    ? "QA Re-OCR"
-                                    : job.type === "region-redo"
-                                      ? "Region Redo"
-                                      : job.type.toUpperCase()}
-                        </span>
-                        {getPipelineProgress(job.type)}
-                      </div>
-                      <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "normal" }}>
-                        Attempt {job.attempt}/{job.maxAttempts}
-                      </span>
-                    </div>
-                    {renderJobDetails(job)}
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: getStatusColor(job.status),
-                        marginTop: "4px",
-                        marginBottom: "4px",
-                        fontWeight: "600"
-                      }}
-                    >
-                      {getDisplayStatus(job.status)}
-                    </div>
-                    {job.error && (
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          color: "#f44336",
-                          marginBottom: "4px",
-                          wordBreak: "break-all",
-                        }}
-                        title={job.error}
-                      >
-                        {formatErrorMessage(job.error, job.status)}
-                      </div>
-                    )}
-                    <div
-                      style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}
-                    >
-                      {job.status === "FAILED" && (
-                        <>
-                          <button
-                            onClick={() => handleRetryJob(job.id)}
-                            className="btn btn-secondary"
-                            style={{ fontSize: "11px", padding: "4px 8px", display: "flex", alignItems: "center", gap: "4px" }}
-                            title="Retry"
-                          >
-                            <RestartAltIcon />
-                          </button>
-                        </>
-                      )}
-                      {(job.status === "PENDING" || job.status === "PAUSED") && (
-                        <>
-                          <button
-                            onClick={() => handleToggleJobPause(job)}
-                            className="btn btn-secondary"
-                            style={{
-                              fontSize: "11px",
-                              padding: "4px 8px",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              opacity: isPaused ? 0.5 : 1,
-                              cursor: isPaused ? "not-allowed" : "pointer"
+                      <TableCell sx={{ px: 2 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Box
+                            sx={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: "50%",
+                              backgroundColor: color,
+                              boxShadow: `0 0 6px ${color}66`,
+                              flexShrink: 0,
                             }}
-                            title={isPaused ? "Queue is globally paused" : (job.status === "PAUSED" ? "Resume" : "Pause")}
-                            disabled={isPaused}
-                          >
-                            {(job.status === "PAUSED" || isPaused) ? <PlayArrowIcon /> : <PauseIcon />}
-                          </button>
-                        </>
-                      )}
-                      {job.status !== "PROCESSING" && (
-                        <button
-                          onClick={() => handleDeleteJob(job.id)}
-                          className="btn btn-secondary"
-                          style={{
-                            fontSize: "11px",
-                            padding: "4px 8px",
-                            borderColor: "#f44336",
-                            color: "#f44336",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px"
-                          }}
-                          title="Delete"
+                          />
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "13px" }}>
+                              {formatJobType(job.type)}
+                            </Typography>
+                            {getPipelineProgress(job.type)}
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ px: 2 }}>
+                        {location && (
+                          <Typography variant="caption" sx={{ display: "block", color: "text.secondary", fontSize: "11px" }}>
+                            {location}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" sx={{ color: "text.disabled", fontSize: "10px" }}>
+                          Attempt {job.attempt}/{job.maxAttempts}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ px: 2 }} align="center">
+                        <Typography
+                          variant="caption"
+                          sx={{ color, fontWeight: 600, fontSize: "11px", textTransform: "uppercase" }}
                         >
-                          <ClearIcon />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                          {getDisplayStatus(job.status)}
+                        </Typography>
+                        {job.error && (
+                          <Tooltip title={job.error}>
+                            <Typography
+                              variant="caption"
+                              sx={{ display: "block", color: "error.main", fontSize: "10px", mt: 0.25 }}
+                            >
+                              {formatErrorMessage(job.error)}
+                            </Typography>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ px: 2 }} align="right">
+                        <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+                          {job.status === "FAILED" && (
+                            <Tooltip title="Retry">
+                              <IconButton size="small" onClick={() => handleRetryJob(job.id)} title="Retry">
+                                <RestartAltIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {(job.status === "PENDING" || job.status === "PAUSED") && (
+                            <Tooltip title={isPaused ? "Queue is globally paused" : job.status === "PAUSED" ? "Resume" : "Pause"}>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleToggleJobPause(job)}
+                                disabled={isPaused}
+                                title={job.status === "PAUSED" ? "Resume" : "Pause"}
+                              >
+                                {job.status === "PAUSED" || isPaused ? (
+                                  <PlayArrowIcon fontSize="small" />
+                                ) : (
+                                  <PauseIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {job.status !== "PROCESSING" && (
+                            <Tooltip title="Delete">
+                              <IconButton size="small" color="error" onClick={() => handleDeleteJob(job.id)} title="Delete">
+                                <ClearIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
-        </div>
-      )}
-    </div>
+        </Box>
+      </Drawer>
+    </>
   );
 };

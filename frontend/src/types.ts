@@ -22,6 +22,8 @@ export interface Series {
   qaLlmModel?: string;
   qaVlmModel?: string;
   qaMode?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Chapter {
@@ -38,6 +40,10 @@ export interface Chapter {
   qaLlmModel?: string;
   qaVlmModel?: string;
   qaMode?: string;
+  useContextMemory?: boolean;
+  pageCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Page {

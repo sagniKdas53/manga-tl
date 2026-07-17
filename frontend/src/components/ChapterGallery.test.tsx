@@ -38,6 +38,14 @@ vi.mock("./ToastContext", () => ({
   }),
 }));
 
+vi.mock("./UploadContext", () => ({
+  useUploadQueue: () => ({
+    addItems: vi.fn(),
+    updateItem: vi.fn(),
+  }),
+  UploadQueueItem: {} as unknown,
+}));
+
 describe("ChapterGallery Component", () => {
   const mockUser = {
     id: "1",
