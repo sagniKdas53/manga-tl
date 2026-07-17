@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, ReactNode } from "react";
+import React, { useState, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { useSSE } from "../utils/useSSE";
 import { getContextPath } from "../utils";
 import { NotificationContext, type Notification } from "./useNotifications";
@@ -61,33 +61,36 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
     }
   });
 
-  const markAsRead = (id: string) => {
+  const markAsRead = useCallback((id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
-  };
+  }, []);
 
-  const markAllAsRead = () => {
+  const markAllAsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
+  }, []);
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     setNotifications([]);
-  };
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const value = useMemo(
+    () => ({
+      notifications,
+      unreadCount,
+      markAsRead,
+      markAllAsRead,
+      clearAll,
+      subscribe,
+    }),
+    [notifications, unreadCount, markAsRead, markAllAsRead, clearAll, subscribe],
+  );
+
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        markAsRead,
-        markAllAsRead,
-        clearAll,
-        subscribe,
-      }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   );

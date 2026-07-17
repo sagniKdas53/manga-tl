@@ -4,6 +4,7 @@ import React, {
   useContext,
   useState,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 
@@ -94,10 +95,13 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     [showToast],
   );
 
+  const value = useMemo(
+    () => ({ showToast, showSuccess, showError, showInfo }),
+    [showToast, showSuccess, showError, showInfo],
+  );
+
   return (
-    <ToastContext.Provider
-      value={{ showToast, showSuccess, showError, showInfo }}
-    >
+    <ToastContext.Provider value={value}>
       {children}
 
       {/* Fixed toast container */}

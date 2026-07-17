@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense, useCallback } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -7,6 +7,11 @@ import {
   useLocation,
   matchPath,
 } from "react-router-dom";
+
+import { ThemeProvider } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
+import { useColorScheme } from "@mui/material/styles";
+import theme from "./theme";
 
 // Types
 import type { User, Series, Chapter, Page } from "./types";
@@ -32,6 +37,20 @@ const SeriesDetails = React.lazy(() => import("./components/SeriesDetails"));
 const ChapterGallery = React.lazy(() => import("./components/ChapterGallery"));
 const Reader = React.lazy(() => import("./components/Reader"));
 const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
+
+// Stable identity for props that don't need per-render identities — keeps React.memo effective
+const NOOP = () => undefined;
+
+/** Bridges MUI's color scheme to the legacy :root.light CSS class.
+ *  Remove this component in Phase 9 when the :root.light rules are deleted. */
+function ThemeSync() {
+  const { mode } = useColorScheme();
+  const resolved = mode ?? "dark";
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", resolved === "light");
+  }, [resolved]);
+  return null;
+}
 
 function LoadingSpinner() {
   return (
@@ -149,20 +168,9 @@ function AppContent() {
   const [pages, setPages] = useState<Page[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
-  // Theme State & Persistence
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    const saved = localStorage.getItem("manga_theme");
-    return saved === "light" ? "light" : "dark";
-  });
-
-  useEffect(() => {
-    if (theme === "light") {
-      document.documentElement.classList.add("light");
-    } else {
-      document.documentElement.classList.remove("light");
-    }
-    localStorage.setItem("manga_theme", theme);
-  }, [theme]);
+  // Theme via MUI colorSchemes — default dark, persisted by ThemeProvider via modeStorageKey
+  const { mode, setMode } = useColorScheme();
+  const currentMode: "light" | "dark" = mode === "light" ? "light" : "dark";
 
   // Load user session redirect
   useEffect(() => {
@@ -312,6 +320,8 @@ function AppContent() {
     navigate("/login");
   };
 
+  const handleSettingsClose = useCallback(() => setIsSettingsOpen(false), []);
+
   return (
     <NotificationProvider token={user?.token || null}>
       <ToastProvider>
@@ -332,7 +342,7 @@ function AppContent() {
                 }}
               >
                 <img
-                  src={theme === "dark" ? logoDark : logoLight}
+                  src={currentMode === "dark" ? logoDark : logoLight}
                   alt="tl-hub logo"
                   style={{ height: "32px", width: "auto" }}
                 />
@@ -342,10 +352,10 @@ function AppContent() {
                 {/* Theme Toggle Button */}
                 <button
                   className="theme-toggle-btn"
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+onClick={() => setMode(currentMode === "dark" ? "light" : "dark")}
+                       title={`Switch to ${currentMode === "dark" ? "Light" : "Dark"} Mode`}
                 >
-                  {theme === "dark" ? (
+                  {currentMode === "dark" ? (
                     <svg
                       width="18"
                       height="18"
@@ -532,24 +542,24 @@ function AppContent() {
                       setSelectedChapter={setSelectedChapter}
                       pages={pages}
                       setPages={setPages}
-                      onSelectPage={() => {}}
-                      isLoadingDetails={isLoadingDetails}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/chapters/:chapterId/:slug"
-                element={
-                  user ? (
-                    <ChapterGallery
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      selectedChapter={selectedChapter}
-                      setSelectedChapter={setSelectedChapter}
-                      pages={pages}
-                      setPages={setPages}
-                      onSelectPage={() => {}}
+                       onSelectPage={NOOP}
+                       isLoadingDetails={isLoadingDetails}
+                     />
+                   ) : null
+                 }
+               />
+               <Route
+                 path="/chapters/:chapterId/:slug"
+                 element={
+                   user ? (
+                     <ChapterGallery
+                       user={user}
+                       selectedSeries={selectedSeries}
+                       selectedChapter={selectedChapter}
+                       setSelectedChapter={setSelectedChapter}
+                       pages={pages}
+                       setPages={setPages}
+                       onSelectPage={NOOP}
                       isLoadingDetails={isLoadingDetails}
                     />
                   ) : null
@@ -565,7 +575,7 @@ function AppContent() {
                       selectedChapter={selectedChapter}
                       chapters={chapters}
                       pages={pages}
-                      theme={theme}
+                      theme={currentMode}
                     />
                   ) : null
                 }
@@ -580,7 +590,7 @@ function AppContent() {
                       selectedChapter={selectedChapter}
                       chapters={chapters}
                       pages={pages}
-                      theme={theme}
+                      theme={currentMode}
                     />
                   ) : null
                 }
@@ -592,7 +602,7 @@ function AppContent() {
             {isSettingsOpen && (
               <SettingsModal
                 isOpen={isSettingsOpen}
-                onClose={() => setIsSettingsOpen(false)}
+                onClose={handleSettingsClose}
                 token={user?.token}
               />
             )}
@@ -608,7 +618,11 @@ function App() {
 
   return (
     <BrowserRouter basename={cleanBaseName}>
-      <AppContent />
+      <ThemeProvider theme={theme} defaultMode="dark" modeStorageKey="manga_theme">
+        <CssBaseline />
+        <ThemeSync />
+        <AppContent />
+      </ThemeProvider>
     </BrowserRouter>
   );
 }
