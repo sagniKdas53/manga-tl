@@ -10,7 +10,7 @@ import ImportExportIcon from "@mui/icons-material/ImportExport";
 import UploadIcon from "@mui/icons-material/Upload";
 import { useToast } from "./ToastContext";
 import type { User, Series, Chapter, SystemSettingsDto } from "../types";
-import { safeFetch, toSlug, resolveOverride, formatResolverHint } from "../utils";
+import { safeFetch, toSlug } from "../utils";
 import ConfirmModal from "./ConfirmModal";
 import CreateChapterDialog from "./CreateChapterDialog";
 
@@ -575,7 +575,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 >
                   {c.title || "Untitled"}
                 </div>
-                {(settings || c.pageCount || c.useContextMemory) && (
+                {(c.pageCount || c.useContextMemory !== undefined || c.resolvedOcr || c.resolvedTranslation) && (
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.75 }}>
                     {c.pageCount !== undefined && c.pageCount > 0 && (
                       <Chip
@@ -594,19 +594,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                         title={c.useContextMemory ? "Context memory enabled" : "Context memory disabled"}
                       />
                     )}
-                    {settings && (() => {
-                      const ocr = resolveOverride(c.ocrProvider, selectedSeries?.ocrProvider, settings.ocrProvider);
-                      const tl = resolveOverride(c.tlProvider, selectedSeries?.tlProvider, settings.tlProvider);
-                      const hasAnyOverride = ocr.source !== "global" || tl.source !== "global";
-                      if (!hasAnyOverride) return null;
-                      return (
-                        <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "10px", lineHeight: "20px" }}>
-                          {ocr.source !== "global" ? `OCR: ${ocr.value} ${formatResolverHint(ocr.source)}` : ""}
-                          {ocr.source !== "global" && tl.source !== "global" ? " | " : ""}
-                          {tl.source !== "global" ? `TL: ${tl.value} ${formatResolverHint(tl.source)}` : ""}
-                        </Typography>
-                      );
-                    })()}
+                    {(c.resolvedOcr || c.resolvedTranslation) && (
+                      <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "10px", lineHeight: "20px" }}>
+                        {c.resolvedOcr && c.resolvedOcr.source !== "global" ? `OCR: ${c.resolvedOcr.provider}${c.resolvedOcr.model ? " / " + c.resolvedOcr.model : ""} (${c.resolvedOcr.source})` : ""}
+                        {c.resolvedOcr && c.resolvedOcr.source !== "global" && c.resolvedTranslation && c.resolvedTranslation.source !== "global" ? " | " : ""}
+                        {c.resolvedTranslation && c.resolvedTranslation.source !== "global" ? `TL: ${c.resolvedTranslation.provider}${c.resolvedTranslation.model ? " / " + c.resolvedTranslation.model : ""} (${c.resolvedTranslation.source})` : ""}
+                      </Typography>
+                    )}
                   </Box>
                 )}
               </div>

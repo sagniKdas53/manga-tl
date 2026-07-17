@@ -2,11 +2,12 @@ package com.manga.library.controller;
 
 import com.manga.library.dto.ChapterDto;
 import com.manga.library.dto.SeriesDto;
+import com.manga.library.dto.SystemSettingsDto;
 import com.manga.library.dto.ZipImageEntry;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.*;
-
+import io.minio.errors.MinioException;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -17,8 +18,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
-import io.minio.errors.MinioException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +41,7 @@ public class SeriesController {
   private final MinioService minioService;
   private final JobCoordinatorService jobCoordinatorService;
   private final ChapterExportService chapterExportService;
+  private final SystemSettingsService systemSettingsService;
   private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
@@ -71,10 +71,104 @@ public class SeriesController {
     dto.setQaLlmModel(s.getQaLlmModel());
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
+    dto.setCreatedAt(s.getCreatedAt());
+    dto.setUpdatedAt(s.getUpdatedAt());
     if (s.getCoverImageId() != null) {
       dto.setCoverImageUrl(getImageUrl(s.getCoverImageId()));
     }
     return dto;
+  }
+
+  private void populateChapterDto(ChapterDto dto, Chapter c, SystemSettingsDto globalSettings) {
+    dto.setId(c.getId());
+    dto.setSeriesId(c.getSeries() != null ? c.getSeries().getId() : null);
+    dto.setChapterNumber(c.getChapterNumber());
+    dto.setTitle(c.getTitle());
+    dto.setOcrProvider(c.getOcrProvider());
+    dto.setOcrModel(c.getOcrModel());
+    dto.setTlProvider(c.getTlProvider());
+    dto.setTlModel(c.getTlModel());
+    dto.setQaProvider(c.getQaProvider());
+    dto.setQaLlmModel(c.getQaLlmModel());
+    dto.setQaVlmModel(c.getQaVlmModel());
+    dto.setQaMode(c.getQaMode());
+    dto.setUseContextMemory(c.getUseContextMemory());
+    dto.setCreatedAt(c.getCreatedAt());
+    dto.setUpdatedAt(c.getUpdatedAt());
+    dto.setPageCount((int) pageRepository.countByChapterId(c.getId()));
+    if (c.getCoverImageId() != null) {
+      dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
+    }
+
+    Series series = c.getSeries();
+    String gOcrProvider = globalSettings != null ? globalSettings.getOcrProvider() : null;
+    String gOcrModel = globalSettings != null ? globalSettings.getOcrModel() : null;
+    String gTlProvider = globalSettings != null ? globalSettings.getTlProvider() : null;
+    String gTlModel = globalSettings != null ? globalSettings.getTlModel() : null;
+    String gQaProvider = globalSettings != null ? globalSettings.getQaProvider() : null;
+    String gQaLlmModel = globalSettings != null ? globalSettings.getQaLlmModel() : null;
+    String gQaVlmModel = globalSettings != null ? globalSettings.getQaVlmModel() : null;
+    String gQaMode = globalSettings != null ? globalSettings.getQaMode() : null;
+
+    String ocrProv = c.getOcrProvider();
+    String ocrMod = c.getOcrModel();
+    String ocrSrc = "global";
+    if (ocrProv == null && series != null) {
+      ocrProv = series.getOcrProvider();
+      ocrMod = series.getOcrModel();
+      ocrSrc = "series";
+    }
+    if (ocrProv == null) {
+      ocrProv = gOcrProvider;
+      ocrMod = gOcrModel;
+      ocrSrc = "global";
+    } else if (c.getOcrProvider() != null) {
+      ocrSrc = "chapter";
+    }
+    dto.setResolvedOcr(new ChapterDto.ResolvedModelSlot(ocrProv, ocrMod, ocrSrc));
+
+    String tlProv = c.getTlProvider();
+    String tlMod = c.getTlModel();
+    String tlSrc = "global";
+    if (tlProv == null && series != null) {
+      tlProv = series.getTlProvider();
+      tlMod = series.getTlModel();
+      tlSrc = "series";
+    }
+    if (tlProv == null) {
+      tlProv = gTlProvider;
+      tlMod = gTlModel;
+      tlSrc = "global";
+    } else if (c.getTlProvider() != null) {
+      tlSrc = "chapter";
+    }
+    dto.setResolvedTranslation(new ChapterDto.ResolvedModelSlot(tlProv, tlMod, tlSrc));
+
+    String qaProv = c.getQaProvider();
+    String qaLlm = c.getQaLlmModel();
+    String qaVlm = c.getQaVlmModel();
+    String qaMod = c.getQaMode();
+    String qaSrc = "global";
+    if (qaProv == null && qaLlm == null && qaVlm == null && qaMod == null && series != null) {
+      qaProv = series.getQaProvider();
+      qaLlm = series.getQaLlmModel();
+      qaVlm = series.getQaVlmModel();
+      qaMod = series.getQaMode();
+      qaSrc = "series";
+    }
+    if (qaProv == null && qaLlm == null && qaVlm == null && qaMod == null) {
+      qaProv = gQaProvider;
+      qaLlm = gQaLlmModel;
+      qaVlm = gQaVlmModel;
+      qaMod = gQaMode;
+      qaSrc = "global";
+    } else if (c.getQaProvider() != null
+        || c.getQaLlmModel() != null
+        || c.getQaVlmModel() != null
+        || c.getQaMode() != null) {
+      qaSrc = "chapter";
+    }
+    dto.setResolvedQa(new ChapterDto.ResolvedQaSlot(qaProv, qaLlm, qaVlm, qaMod, qaSrc));
   }
 
   @PostMapping
@@ -163,28 +257,14 @@ public class SeriesController {
   @GetMapping("/{seriesId}/chapters")
   public ResponseEntity<List<ChapterDto>> listChapters(@PathVariable UUID seriesId) {
     List<Chapter> chapters = chapterRepository.findBySeriesId(seriesId);
+    SystemSettingsDto globalSettings = systemSettingsService.getSettings();
 
     List<ChapterDto> list =
         chapters.stream()
             .map(
                 c -> {
                   ChapterDto dto = new ChapterDto();
-                  dto.setId(c.getId());
-                  dto.setSeriesId(c.getSeries().getId());
-                  dto.setChapterNumber(c.getChapterNumber());
-                  dto.setTitle(c.getTitle());
-                  dto.setOcrProvider(c.getOcrProvider());
-                  dto.setOcrModel(c.getOcrModel());
-                  dto.setTlProvider(c.getTlProvider());
-                  dto.setTlModel(c.getTlModel());
-                  dto.setQaProvider(c.getQaProvider());
-                  dto.setQaLlmModel(c.getQaLlmModel());
-                  dto.setQaVlmModel(c.getQaVlmModel());
-                  dto.setQaMode(c.getQaMode());
-                  dto.setUseContextMemory(c.getUseContextMemory());
-                  if (c.getCoverImageId() != null) {
-                    dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
-                  }
+                  populateChapterDto(dto, c, globalSettings);
                   return dto;
                 })
             .collect(Collectors.toList());
@@ -199,22 +279,7 @@ public class SeriesController {
         .map(
             c -> {
               ChapterDto dto = new ChapterDto();
-              dto.setId(c.getId());
-              dto.setSeriesId(c.getSeries().getId());
-              dto.setChapterNumber(c.getChapterNumber());
-              dto.setTitle(c.getTitle());
-              dto.setOcrProvider(c.getOcrProvider());
-              dto.setOcrModel(c.getOcrModel());
-              dto.setTlProvider(c.getTlProvider());
-              dto.setTlModel(c.getTlModel());
-              dto.setQaProvider(c.getQaProvider());
-              dto.setQaLlmModel(c.getQaLlmModel());
-              dto.setQaVlmModel(c.getQaVlmModel());
-              dto.setQaMode(c.getQaMode());
-              dto.setUseContextMemory(c.getUseContextMemory());
-              if (c.getCoverImageId() != null) {
-                dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
-              }
+              populateChapterDto(dto, c, systemSettingsService.getSettings());
               return ResponseEntity.ok(dto);
             })
         .orElse(ResponseEntity.notFound().build());
@@ -502,19 +567,7 @@ public class SeriesController {
       }
 
       ChapterDto responseDto = new ChapterDto();
-      responseDto.setId(chapter.getId());
-      responseDto.setSeriesId(seriesId);
-      responseDto.setChapterNumber(chapter.getChapterNumber());
-      responseDto.setTitle(chapter.getTitle());
-      responseDto.setOcrProvider(chapter.getOcrProvider());
-      responseDto.setOcrModel(chapter.getOcrModel());
-      responseDto.setTlProvider(chapter.getTlProvider());
-      responseDto.setTlModel(chapter.getTlModel());
-      responseDto.setQaProvider(chapter.getQaProvider());
-      responseDto.setQaLlmModel(chapter.getQaLlmModel());
-      responseDto.setQaVlmModel(chapter.getQaVlmModel());
-      responseDto.setQaMode(chapter.getQaMode());
-      responseDto.setUseContextMemory(chapter.getUseContextMemory());
+      populateChapterDto(responseDto, chapter, systemSettingsService.getSettings());
       return ResponseEntity.ok(responseDto);
 
     } catch (IOException | NoSuchAlgorithmException | MinioException | RuntimeException e) {

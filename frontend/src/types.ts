@@ -26,6 +26,20 @@ export interface Series {
   updatedAt?: string;
 }
 
+export interface ResolvedModelSlot {
+  provider: string;
+  model: string;
+  source: "global" | "series" | "chapter";
+}
+
+export interface ResolvedQaSlot {
+  provider: string;
+  llmModel: string;
+  vlmModel: string;
+  mode: string;
+  source: "global" | "series" | "chapter";
+}
+
 export interface Chapter {
   id: string;
   seriesId: string;
@@ -44,6 +58,9 @@ export interface Chapter {
   pageCount?: number;
   createdAt?: string;
   updatedAt?: string;
+  resolvedOcr?: ResolvedModelSlot;
+  resolvedTranslation?: ResolvedModelSlot;
+  resolvedQa?: ResolvedQaSlot;
 }
 
 export interface Page {

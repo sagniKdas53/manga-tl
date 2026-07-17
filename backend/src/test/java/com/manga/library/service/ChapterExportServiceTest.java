@@ -1,7 +1,6 @@
 package com.manga.library.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -16,7 +15,6 @@ import com.manga.library.repository.LayerElementRepository;
 import com.manga.library.repository.LayerRepository;
 import com.manga.library.repository.PageRepository;
 import java.io.ByteArrayInputStream;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -73,8 +71,7 @@ public class ChapterExportServiceTest {
     page.setImage(image);
 
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
-        .thenReturn(List.of(page));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId)).thenReturn(List.of(page));
     when(minioService.fileExists(anyString())).thenReturn(false);
     com.manga.library.model.Layer layer = new com.manga.library.model.Layer();
     layer.setId(UUID.randomUUID());
@@ -82,18 +79,19 @@ public class ChapterExportServiceTest {
     layer.setTargetLanguage("en");
     layer.setVisible(true);
 
-    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    com.fasterxml.jackson.databind.ObjectMapper mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper();
     com.fasterxml.jackson.databind.node.ObjectNode meta = mapper.createObjectNode();
     meta.put("model", "test-model");
-    
+
     com.fasterxml.jackson.databind.node.ObjectNode costNode = mapper.createObjectNode();
     costNode.put("estimated_cost", 0.05);
     meta.set("cost", costNode);
-    
+
     com.fasterxml.jackson.databind.node.ObjectNode qaNode = mapper.createObjectNode();
     qaNode.put("status", "manual_review");
     meta.set("qa", qaNode);
-    
+
     layer.setMetadataJson(meta);
 
     when(layerRepository.findByImageId(image.getId())).thenReturn(List.of(layer));
@@ -134,8 +132,7 @@ public class ChapterExportServiceTest {
     page.setImage(image);
 
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
-        .thenReturn(List.of(page));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId)).thenReturn(List.of(page));
     com.manga.library.model.Layer layer = new com.manga.library.model.Layer();
     layer.setId(UUID.randomUUID());
     layer.setType("translation");
@@ -143,7 +140,8 @@ public class ChapterExportServiceTest {
     layer.setVisible(true);
     when(layerRepository.findByImageId(image.getId())).thenReturn(List.of(layer));
 
-    // Fake the hash check for cache hit by mocking minioService.fileExists to true when it matches the hash
+    // Fake the hash check for cache hit by mocking minioService.fileExists to true when it matches
+    // the hash
     // We'll just return true for any fileExists call that starts with "exports/"
     when(minioService.fileExists(anyString()))
         .thenAnswer(

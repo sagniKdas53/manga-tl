@@ -15,6 +15,7 @@ import com.manga.library.repository.SeriesRepository;
 import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.PageService;
+import com.manga.library.service.SystemSettingsService;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ public class SeriesControllerTest {
   @MockBean private MinioService minioService;
   @MockBean private JobCoordinatorService jobCoordinatorService;
   @MockBean private com.manga.library.service.ChapterExportService chapterExportService;
+  @MockBean private SystemSettingsService systemSettingsService;
   @MockBean private JwtAuthFilter jwtAuthFilter;
 
   @Test
@@ -129,6 +131,7 @@ public class SeriesControllerTest {
             .id(UUID.randomUUID())
             .chapterNumber(1.0)
             .title("Ch 1")
+            .series(series)
             .build();
 
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
@@ -232,6 +235,7 @@ public class SeriesControllerTest {
             .id(UUID.randomUUID())
             .chapterNumber(1.0)
             .title("Ch 1")
+            .series(series)
             .build();
 
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
@@ -256,6 +260,10 @@ public class SeriesControllerTest {
         com.manga.library.model.Page.builder().id(UUID.randomUUID()).image(image).build();
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
+    doNothing().when(pageService).generateAndSaveThumbnailAsync(any(), any(), any());
+    when(minioService.uploadFile(anyString(), any(), anyString())).thenReturn("path/to/file.png");
+    doNothing().when(jobCoordinatorService).startPipeline(any(), any());
+    when(systemSettingsService.getSettings()).thenReturn(null);
 
     mockMvc
         .perform(
@@ -450,6 +458,7 @@ public class SeriesControllerTest {
             .id(UUID.randomUUID())
             .chapterNumber(1.0)
             .title("Ch 1")
+            .series(series)
             .build();
 
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
@@ -553,6 +562,7 @@ public class SeriesControllerTest {
             .id(UUID.randomUUID())
             .chapterNumber(1.0)
             .title("Ch 1")
+            .series(series)
             .build();
     when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
 

@@ -14,4 +14,6 @@ public interface PageRepository extends JpaRepository<Page, UUID> {
   Optional<Page> findByChapterIdAndPageNumber(UUID chapterId, Integer pageNumber);
 
   Optional<Page> findByChapterIdAndImageId(UUID chapterId, UUID imageId);
+
+  long countByChapterId(UUID chapterId);
 }

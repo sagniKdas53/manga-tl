@@ -74,15 +74,25 @@ public class Series {
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
 
+  @Column(name = "updated_at", nullable = false)
+  private OffsetDateTime updatedAt;
+
   @PrePersist
   protected void onCreate() {
-    createdAt = OffsetDateTime.now();
+    OffsetDateTime now = OffsetDateTime.now();
+    createdAt = now;
+    updatedAt = now;
     if (sourceLanguage == null) {
       sourceLanguage = originalLanguage != null ? originalLanguage : "ja";
     }
     if (targetLanguage == null) {
       targetLanguage = "en";
     }
+  }
+
+  @PreUpdate
+  protected void onUpdate() {
+    updatedAt = OffsetDateTime.now();
   }
 
   @PostLoad
