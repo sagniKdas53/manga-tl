@@ -74,22 +74,22 @@ html, body, #root {
 }
 
 :root.light {
-  /* Light Theme overrides */
-  --bg-base: #f8fafc;
+  /* Light Theme overrides — Pixiv palette */
+  --bg-base: #f5f5f5;
   --bg-surface: #ffffff;
   --bg-card: rgba(255, 255, 255, 0.95);
-  --border-color: rgba(15, 23, 42, 0.12);
+  --border-color: rgba(52, 51, 51, 0.12);
 
-  --primary: #7c3aed;
-  --primary-hover: #6d28d9;
-  --primary-glow: rgba(124, 58, 237, 0.08);
+  --primary: #0197fc;
+  --primary-hover: #0185e0;
+  --primary-glow: rgba(1, 151, 252, 0.08);
 
   --success: #10b981;
   --success-glow: rgba(16, 185, 129, 0.08);
 
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --text-dim: #64748b;
+  --text-main: #343333;
+  --text-muted: #b0b0b0;
+  --text-dim: #786e6a;
 
   --bg-nav: var(--bg-surface);
   --bg-overlay-glass: var(--bg-surface);
@@ -100,13 +100,13 @@ html, body, #root {
   --bg-card-content: rgba(255, 255, 255, 0.9);
   --bg-chapter-info: rgba(255, 255, 255, 0.95);
 
-  --primary-glow-selected: rgba(124, 58, 237, 0.25);
-  --primary-glow-approved: rgba(124, 58, 237, 0.08);
+  --primary-glow-selected: rgba(1, 151, 252, 0.2);
+  --primary-glow-approved: rgba(1, 151, 252, 0.08);
   --success-glow: rgba(16, 185, 129, 0.08);
 
   --conversation: #2563eb;
   --conversation-glow: rgba(37, 99, 235, 0.08);
-  --conversation-glow-selected: rgba(37, 99, 235, 0.25);
+  --conversation-glow-selected: rgba(37, 99, 235, 0.2);
   --conversation-glow-approved: rgba(37, 99, 235, 0.08);
 }
 
@@ -121,22 +121,22 @@ html, body, #root {
   box-shadow:
     0 10px 40px rgba(15, 23, 42, 0.08),
     0 0 0 1px rgba(15, 23, 42, 0.03);
-  border-color: rgba(124, 58, 237, 0.2);
+  border-color: rgba(1, 151, 252, 0.2);
 }
 
 :root.light .floating-reader-toolbar:hover,
 :root.light .floating-zoom-toolbar:hover {
-  border-color: rgba(124, 58, 237, 0.4);
+  border-color: rgba(1, 151, 252, 0.4);
 }
 
 :root.light .toolbar-toggle-handle {
   box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.04);
-  border-color: rgba(124, 58, 237, 0.2);
+  border-color: rgba(1, 151, 252, 0.2);
 }
 
 :root.light .zoom-toggle-handle {
   box-shadow: -8px 0 20px rgba(15, 23, 42, 0.04);
-  border-color: rgba(124, 58, 237, 0.2);
+  border-color: rgba(1, 151, 252, 0.2);
 }
 
 body {

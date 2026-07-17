@@ -641,7 +641,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - Migrated all `alert()` usage in deletion workflows to the custom `useToast()` hook.
 - Modified `safeFetch` to only auto-logout on `401 Unauthorized` responses instead of `403 Forbidden`, preventing abrupt logouts and allowing the application to display a clear toast message explaining the permission issue instead.
 
-### D.15 Mobile: tl-hub Lite (Stretch Goal)
+### ~~D.15 Mobile: tl-hub Lite (Stretch Goal)~~
 
 > [!NOTE]
 > The full desktop Reader (5292 lines, SVG overlays, polygon editing, dual sidebars, floating toolbars, zoom/pan/drag) is fundamentally unsuitable for mobile. This is a separate single-purpose flow, not responsive desktop.

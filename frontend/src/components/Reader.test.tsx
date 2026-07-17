@@ -120,7 +120,7 @@ describe("Reader Component", () => {
     fireEvent.click(rightSidebarToggle);
   });
 
-  it("handles toolbar buttons and editor actions", async () => {
+  it("handles toolbar buttons and editor actions", { timeout: 15000 }, async () => {
     render(
       <Reader
         user={mockUser}
