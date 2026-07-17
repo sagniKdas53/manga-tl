@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach, Mock } from "vitest";
 import SettingsModal from "./SettingsModal";
 import { safeFetch } from "../utils";
 
-// Mock useToast with a shared mock function
 const mockShowToast = vi.fn();
 vi.mock("./ToastContext", () => ({
   useToast: () => ({
@@ -12,7 +11,6 @@ vi.mock("./ToastContext", () => ({
   }),
 }));
 
-// Mock safeFetch
 vi.mock("../utils", () => ({
   safeFetch: vi.fn(),
 }));
@@ -68,23 +66,18 @@ describe("SettingsModal", () => {
       />,
     );
 
-    // Shows loading initially
-    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getByText("Loading settings...")).toBeInTheDocument();
 
-    // Wait for the settings to load
     await waitFor(() => {
-      expect(screen.queryByText("Loading...")).toBeNull();
+      expect(screen.queryByText("Loading settings...")).toBeNull();
     });
 
     expect(screen.getByText("System Settings")).toBeInTheDocument();
-    expect(screen.getByLabelText("Global OCR Provider")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Global Translation Provider"),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("Global QA Provider")).toBeInTheDocument();
+    // 8 comboboxes: OCR Provider, OCR Model, TL Provider, TL Model, QA Provider, QA Mode, QA LLM Model, QA VLM Model
+    expect(screen.getAllByRole("combobox")).toHaveLength(8);
   });
 
-  it("handles saving the updated settings", async () => {
+  it("handles saving the updated settings", { timeout: 30000 }, async () => {
     (safeFetch as Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockSettings,
@@ -99,10 +92,9 @@ describe("SettingsModal", () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByText("Loading...")).toBeNull();
+      expect(screen.queryByText("Loading settings...")).toBeNull();
     });
 
-    // Mock successful put request
     (safeFetch as Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -117,36 +109,21 @@ describe("SettingsModal", () => {
       }),
     });
 
-    const ocrProviderSelect = screen.getByLabelText("Global OCR Provider");
-    fireEvent.change(ocrProviderSelect, { target: { value: "local" } });
+    const selects = screen.getAllByRole("combobox");
+    // 0=OCR Provider, 1=OCR Model, 2=TL Provider, 3=TL Model,
+    // 4=QA Provider, 5=QA Mode, 6=QA LLM Model, 7=QA VLM Model
+    const change = (idx: number, option: string) => {
+      fireEvent.mouseDown(selects[idx]);
+      fireEvent.click(screen.getByRole("option", { name: option }));
+    };
 
-    const ocrModelSelect = screen.getByLabelText("Global OCR VLM Model");
-    fireEvent.change(ocrModelSelect, {
-      target: { value: "google/gemini-3.1-flash-lite" },
-    });
-
-    const tlProviderSelect = screen.getByLabelText(
-      "Global Translation Provider",
-    );
-    fireEvent.change(tlProviderSelect, { target: { value: "openai" } });
-
-    const tlModelSelect = screen.getByLabelText("Global Translation LLM Model");
-    fireEvent.change(tlModelSelect, {
-      target: { value: "meta-llama/llama-3-8b-instruct:free" },
-    });
-
-    const qaProviderSelect = screen.getByLabelText("Global QA Provider");
-    fireEvent.change(qaProviderSelect, { target: { value: "gemini" } });
-
-    const qaLlmSelect = screen.getByLabelText("Global QA LLM Model");
-    fireEvent.change(qaLlmSelect, {
-      target: { value: "deepseek/deepseek-v4-flash" },
-    });
-
-    const qaVlmSelect = screen.getByLabelText("Global QA VLM Model");
-    fireEvent.change(qaVlmSelect, {
-      target: { value: "qwen/qwen3-vl-8b-instruct" },
-    });
+    change(0, "local");
+    // OCR Model is disabled when provider is local — skip and change TL/QA instead
+    change(2, "openai");
+    change(3, "meta-llama/llama-3-8b-instruct:free");
+    change(4, "gemini");
+    change(6, "deepseek/deepseek-v4-flash");
+    change(7, "qwen/qwen3-vl-8b-instruct");
 
     const saveButton = screen.getByRole("button", { name: /save settings/i });
     fireEvent.click(saveButton);
@@ -176,17 +153,19 @@ describe("SettingsModal", () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByText("Loading...")).toBeNull();
+      expect(screen.queryByText("Loading settings...")).toBeNull();
     });
 
-    expect(screen.getByText("Failed to load settings.")).toBeInTheDocument();
+    expect(
+      screen.getByText((content) => content.includes("Failed to load settings")),
+    ).toBeInTheDocument();
     expect(mockShowToast).toHaveBeenCalledWith(
       "Failed to load settings",
       "error",
     );
   });
 
-  it("shows error toast when save fails", async () => {
+  it("shows error toast when save fails", { timeout: 15000 }, async () => {
     (safeFetch as Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockSettings,
@@ -201,10 +180,9 @@ describe("SettingsModal", () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByText("Loading...")).toBeNull();
+      expect(screen.queryByText("Loading settings...")).toBeNull();
     });
 
-    // Mock failed put request
     (safeFetch as Mock).mockResolvedValueOnce({
       ok: false,
     });

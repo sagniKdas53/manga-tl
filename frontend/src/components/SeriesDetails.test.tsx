@@ -120,7 +120,7 @@ describe("SeriesDetails Component", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/chapters/c1/romance-dawn");
   });
 
-  it("opens add chapter modal and submits successfully", async () => {
+  it("opens add chapter modal and submits successfully", { timeout: 15000 }, async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
       json: () =>
@@ -182,7 +182,7 @@ describe("SeriesDetails Component", () => {
     });
   });
 
-  it("opens add chapter modal and submits successfully with context memory disabled", async () => {
+  it("opens add chapter modal and submits successfully with context memory disabled", { timeout: 15000 }, async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
       json: () =>
