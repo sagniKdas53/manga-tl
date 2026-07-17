@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import Badge from "@mui/material/Badge";
+import IconButton from "@mui/material/IconButton";
+import QueueMusicIcon from "@mui/icons-material/QueueMusic";
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
@@ -526,53 +529,11 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       ref={dropdownRef}
       style={{ position: "relative", display: "flex", alignItems: "center" }}
     >
-      <button
-        className="theme-toggle-btn"
-        onClick={toggleDropdown}
-        style={{ position: "relative" }}
-        title="Queue Manager"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="8" y1="6" x2="21" y2="6" />
-          <line x1="8" y1="12" x2="21" y2="12" />
-          <line x1="8" y1="18" x2="21" y2="18" />
-          <line x1="3" y1="6" x2="3.01" y2="6" />
-          <line x1="3" y1="12" x2="3.01" y2="12" />
-          <line x1="3" y1="18" x2="3.01" y2="18" />
-        </svg>
-        {jobs.length > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: 2,
-              right: 2,
-              backgroundColor: "#2196f3",
-              color: "white",
-              borderRadius: "50%",
-              width: "14px",
-              height: "14px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "9px",
-              fontWeight: "bold",
-              lineHeight: 1,
-            }}
-          >
-            {jobs.length}
-          </span>
-        )}
-      </button>
+      <Badge badgeContent={jobs.length} color="primary" invisible={jobs.length === 0}>
+        <IconButton onClick={toggleDropdown} color="inherit" size="small" title="Queue Manager">
+          <QueueMusicIcon fontSize="small" />
+        </IconButton>
+      </Badge>
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}

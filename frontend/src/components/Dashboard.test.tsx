@@ -100,7 +100,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const card = screen.getByText("One Piece").closest(".manga-card");
+    const card = screen.getByText("One Piece").closest(".MuiCard-root");
     expect(card).not.toBeNull();
     fireEvent.click(card!);
 
@@ -130,7 +130,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    const newBtn = screen.getByRole("button", { name: /new series/i });
     fireEvent.click(newBtn);
 
     expect(screen.getByRole("heading", { name: "Create Series" })).toBeInTheDocument();
@@ -232,7 +232,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    const newBtn = screen.getByRole("button", { name: /new series/i });
     fireEvent.click(newBtn);
 
     const cancelBtn = screen.getByRole("button", { name: /cancel/i });
@@ -259,7 +259,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    const newBtn = screen.getByRole("button", { name: /new series/i });
     fireEvent.click(newBtn);
 
     const titleInput = screen.getByPlaceholderText("e.g. My Hero Academia");
@@ -392,7 +392,7 @@ describe("Dashboard Component", () => {
       />,
     );
 
-    const newBtn = screen.getByRole("button", { name: /\+ new series/i });
+    const newBtn = screen.getByRole("button", { name: /new series/i });
     fireEvent.click(newBtn);
 
     fireEvent.change(screen.getByPlaceholderText("e.g. My Hero Academia"), {
