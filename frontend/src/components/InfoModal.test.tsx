@@ -80,10 +80,20 @@ describe("InfoModal", () => {
     const { rerender } = render(<InfoModal {...defaultProps} />);
     expect(screen.getByText("Info Title")).toBeInTheDocument();
 
-    rerender(<InfoModal {...defaultProps} type="success" />);
+    rerender(
+      <InfoModal
+        {...defaultProps}
+        type="success"
+      />,
+    );
     expect(screen.getByText("Info Title")).toBeInTheDocument();
 
-    rerender(<InfoModal {...defaultProps} type="error" />);
+    rerender(
+      <InfoModal
+        {...defaultProps}
+        type="error"
+      />,
+    );
     expect(screen.getByText("Info Title")).toBeInTheDocument();
   });
 });

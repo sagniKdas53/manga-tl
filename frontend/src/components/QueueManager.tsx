@@ -10,13 +10,13 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import ChecklistIcon from '@mui/icons-material/Checklist';
-import ClearAllIcon from '@mui/icons-material/ClearAll';
-import ClearIcon from '@mui/icons-material/Clear';
-import PauseIcon from '@mui/icons-material/Pause';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import CloseIcon from '@mui/icons-material/Close';
+import ChecklistIcon from "@mui/icons-material/Checklist";
+import ClearAllIcon from "@mui/icons-material/ClearAll";
+import ClearIcon from "@mui/icons-material/Clear";
+import PauseIcon from "@mui/icons-material/Pause";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import CloseIcon from "@mui/icons-material/Close";
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
@@ -27,7 +27,8 @@ interface Job {
   traceId?: string;
   type: string;
   imageId: string;
-  status: "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
+  status:
+    "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
   payload: string | null;
   error: string | null;
   attempt: number;
@@ -45,7 +46,14 @@ const statusColor: Record<string, string> = {
   PAUSED: "#ffc107",
 };
 
-const pipelineStages = ["panel-detection", "ocr", "layout", "translation", "render", "qa"];
+const pipelineStages = [
+  "panel-detection",
+  "ocr",
+  "layout",
+  "translation",
+  "render",
+  "qa",
+];
 
 const getPipelineProgress = (jobType: string) => {
   let currentIndex = pipelineStages.indexOf(jobType);
@@ -76,9 +84,9 @@ const getPipelineProgress = (jobType: string) => {
 const formatJobType = (type: string) => {
   const map: Record<string, string> = {
     "panel-detection": "Panel Detection",
-    "ocr": "OCR Processing",
-    "translation": "Translation",
-    "qa": "Quality Assurance",
+    ocr: "OCR Processing",
+    translation: "Translation",
+    qa: "Quality Assurance",
     "qa-re-ocr": "QA Re-OCR",
     "region-redo": "Region Redo",
   };
@@ -96,7 +104,8 @@ const renderJobLocation = (job: Job) => {
     } else if (payload.chapterNumber !== undefined) {
       parts.push(`Ch.${payload.chapterNumber}`);
     }
-    if (payload.pageNumber !== undefined) parts.push(`Page ${payload.pageNumber}`);
+    if (payload.pageNumber !== undefined)
+      parts.push(`Page ${payload.pageNumber}`);
     return parts.length ? parts.join(" › ") : null;
   } catch {
     return null;
@@ -105,10 +114,18 @@ const renderJobLocation = (job: Job) => {
 
 const formatErrorMessage = (error: string) => {
   if (!error) return "";
-  if (error.includes("Max retries exceeded") || error.includes("NameResolutionError") || error.includes("Failed to resolve") || error.includes("ConnectionError")) {
+  if (
+    error.includes("Max retries exceeded") ||
+    error.includes("NameResolutionError") ||
+    error.includes("Failed to resolve") ||
+    error.includes("ConnectionError")
+  ) {
     return "Could not connect to internal service (Network Error).";
   }
-  if (error.includes("500 Server Error") || error.includes("500 Internal Server Error")) {
+  if (
+    error.includes("500 Server Error") ||
+    error.includes("500 Internal Server Error")
+  ) {
     return "Internal API returned 500 error.";
   }
   const match = error.match(/([a-zA-Z]+Error):\s*(.+)/);
@@ -116,10 +133,23 @@ const formatErrorMessage = (error: string) => {
   return error.length > 100 ? error.substring(0, 100) + "..." : error;
 };
 
-export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dark" }> = ({ token, mode }) => {
+interface QueueManagerProps {
+  token: string | null;
+  mode: "light" | "dark";
+  forceOpen: boolean;
+  onRequestOpen: () => void;
+  onClose: () => void;
+}
+
+export const QueueManager: React.FC<QueueManagerProps> = ({
+  token,
+  mode,
+  forceOpen,
+  onRequestOpen,
+  onClose,
+}) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isPaused, setIsPaused] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
   const { subscribe } = useNotifications();
   const { showToast } = useToast();
 
@@ -167,10 +197,13 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
           const pipelinesMap = new Map<string, Job>();
           prevJobs.forEach((p) => pipelinesMap.set(p.imageId, p));
 
-          const newJobsList: Array<Omit<Job, 'jobCreatedAt'>> = data.jobs;
+          const newJobsList: Array<Omit<Job, "jobCreatedAt">> = data.jobs;
           newJobsList.forEach((job) => {
             const existing = pipelinesMap.get(job.imageId);
-            if (!existing || new Date(job.createdAt) >= new Date(existing.jobCreatedAt)) {
+            if (
+              !existing ||
+              new Date(job.createdAt) >= new Date(existing.jobCreatedAt)
+            ) {
               pipelinesMap.set(job.imageId, {
                 ...job,
                 jobCreatedAt: job.createdAt,
@@ -182,14 +215,16 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
           const activeImageIds = new Set(newJobsList.map((j) => j.imageId));
           const now = Date.now();
 
-          const finalPipelines = Array.from(pipelinesMap.values()).filter((p) => {
-            if (!activeImageIds.has(p.imageId)) return false;
-            if (p.status === "COMPLETED") {
-              const updatedAt = new Date(p.updatedAt).getTime();
-              if (now - updatedAt > 10000) return false;
-            }
-            return true;
-          });
+          const finalPipelines = Array.from(pipelinesMap.values()).filter(
+            (p) => {
+              if (!activeImageIds.has(p.imageId)) return false;
+              if (p.status === "COMPLETED") {
+                const updatedAt = new Date(p.updatedAt).getTime();
+                if (now - updatedAt > 10000) return false;
+              }
+              return true;
+            },
+          );
 
           return sortJobs(finalPipelines);
         });
@@ -230,8 +265,14 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
               const existing = updated[existingIndex];
               const dataId = data.jobId || data.id;
               const isSameJob = dataId === existing.id;
-              const isNewerJob = data.createdAt && new Date(data.createdAt) > new Date(existing.jobCreatedAt);
-              const isSameJobButNewer = isSameJob && (!existing.updatedAt || !data.updatedAt || new Date(data.updatedAt) >= new Date(existing.updatedAt));
+              const isNewerJob =
+                data.createdAt &&
+                new Date(data.createdAt) > new Date(existing.jobCreatedAt);
+              const isSameJobButNewer =
+                isSameJob &&
+                (!existing.updatedAt ||
+                  !data.updatedAt ||
+                  new Date(data.updatedAt) >= new Date(existing.updatedAt));
 
               if (isNewerJob || isSameJobButNewer) {
                 updated[existingIndex] = {
@@ -259,7 +300,11 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
       } else if (event.type === "notification") {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === "SUCCESS" && data.title === "Page Processing Complete" && data.imageId) {
+          if (
+            data.type === "SUCCESS" &&
+            data.title === "Page Processing Complete" &&
+            data.imageId
+          ) {
             setJobs((prev) => prev.filter((p) => p.imageId !== data.imageId));
           }
         } catch (e) {
@@ -279,7 +324,8 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
     setConfirmModal({
       isOpen: true,
       title: "Clear Queue",
-      message: "Are you sure you want to clear the queue? This will delete all pending, paused, and failed jobs.",
+      message:
+        "Are you sure you want to clear the queue? This will delete all pending, paused, and failed jobs.",
       isDangerous: true,
       action: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
@@ -312,7 +358,8 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
       setConfirmModal({
         isOpen: true,
         title: "Pause Queue",
-        message: "Are you sure you want to pause the queue? All pending jobs will be paused.",
+        message:
+          "Are you sure you want to pause the queue? All pending jobs will be paused.",
         isDangerous: true,
         action: () => {
           setConfirmModal((prev) => ({ ...prev, isOpen: false }));
@@ -340,7 +387,11 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
     if (!token) return;
     try {
       setJobs((prev) =>
-        sortJobs(prev.map((j) => (j.id === jobId ? { ...j, status: "PENDING", attempt: 1 } : j)))
+        sortJobs(
+          prev.map((j) =>
+            j.id === jobId ? { ...j, status: "PENDING", attempt: 1 } : j,
+          ),
+        ),
       );
       await safeFetch(`/api/jobs/${jobId}/retry`, {
         method: "POST",
@@ -354,9 +405,17 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
   const handleToggleJobPause = async (job: Job) => {
     if (!token) return;
     try {
-      const endpoint = job.status === "PAUSED" ? `/api/jobs/${job.id}/resume` : `/api/jobs/${job.id}/pause`;
-      const newStatus: Job["status"] = job.status === "PAUSED" ? "PENDING" : "PAUSED";
-      setJobs((prev) => sortJobs(prev.map((j) => (j.id === job.id ? { ...j, status: newStatus } : j))));
+      const endpoint =
+        job.status === "PAUSED"
+          ? `/api/jobs/${job.id}/resume`
+          : `/api/jobs/${job.id}/pause`;
+      const newStatus: Job["status"] =
+        job.status === "PAUSED" ? "PENDING" : "PAUSED";
+      setJobs((prev) =>
+        sortJobs(
+          prev.map((j) => (j.id === job.id ? { ...j, status: newStatus } : j)),
+        ),
+      );
       await safeFetch(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -400,8 +459,17 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
 
   return (
     <>
-      <Badge badgeContent={jobs.length} color="primary" invisible={jobs.length === 0}>
-        <IconButton onClick={() => setIsOpen(true)} color="inherit" size="small" title="Queue Manager">
+      <Badge
+        badgeContent={jobs.length}
+        color="primary"
+        invisible={jobs.length === 0}
+      >
+        <IconButton
+          onClick={onRequestOpen}
+          color="inherit"
+          size="small"
+          title="Queue Manager"
+        >
           <ChecklistIcon sx={{ color: mode === "dark" ? "white" : "black" }} />
         </IconButton>
       </Badge>
@@ -417,9 +485,9 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
 
       <Drawer
         anchor="right"
-        open={isOpen}
-        onClose={() => setIsOpen(false)}
-        PaperProps={{ sx: { width: 520 } }}
+        open={forceOpen}
+        onClose={onClose}
+        slotProps={{ paper: { sx: { width: 520 } } }}
       >
         <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <Box
@@ -433,22 +501,40 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
               borderColor: "divider",
             }}
           >
-            <Typography variant="h6" sx={{ fontSize: "16px", fontWeight: 600 }}>
+            <Typography
+              variant="h6"
+              sx={{ fontSize: "16px", fontWeight: 600 }}
+            >
               Queue Manager
             </Typography>
             <Box sx={{ display: "flex", gap: 1 }}>
               <Tooltip title="Clear Queue">
-                <IconButton size="small" onClick={handleClearQueue} title="Clear Queue">
+                <IconButton
+                  size="small"
+                  onClick={handleClearQueue}
+                  title="Clear Queue"
+                >
                   <ClearAllIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title={isPaused ? "Resume Queue" : "Pause Queue"}>
-                <IconButton size="small" onClick={handlePauseResumeQueue} title={isPaused ? "Resume" : "Pause"}>
-                  {isPaused ? <PlayArrowIcon fontSize="small" /> : <PauseIcon fontSize="small" />}
+                <IconButton
+                  size="small"
+                  onClick={handlePauseResumeQueue}
+                  title={isPaused ? "Resume" : "Pause"}
+                >
+                  {isPaused ? (
+                    <PlayArrowIcon fontSize="small" />
+                  ) : (
+                    <PauseIcon fontSize="small" />
+                  )}
                 </IconButton>
               </Tooltip>
               <Tooltip title="Close">
-                <IconButton size="small" onClick={() => setIsOpen(false)}>
+                <IconButton
+                  size="small"
+                  onClick={onClose}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -456,19 +542,36 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
           </Box>
 
           {jobs.length === 0 ? (
-            <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "text.secondary" }}>
+            <Box
+              sx={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "text.secondary",
+              }}
+            >
               No active jobs
             </Box>
           ) : (
-            <Table size="small" stickyHeader>
+            <Table
+              size="small"
+              stickyHeader
+            >
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ px: 2 }}>Job</TableCell>
                   <TableCell sx={{ px: 2 }}>Context</TableCell>
-                  <TableCell sx={{ px: 2 }} align="center">
+                  <TableCell
+                    sx={{ px: 2 }}
+                    align="center"
+                  >
                     Status
                   </TableCell>
-                  <TableCell sx={{ px: 2 }} align="right">
+                  <TableCell
+                    sx={{ px: 2 }}
+                    align="right"
+                  >
                     Actions
                   </TableCell>
                 </TableRow>
@@ -480,10 +583,14 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
                   return (
                     <TableRow
                       key={job.id}
-                      sx={{ "&:last-child td, &:last-child th": { borderBottom: 0 } }}
+                      sx={{
+                        "&:last-child td, &:last-child th": { borderBottom: 0 },
+                      }}
                     >
                       <TableCell sx={{ px: 2 }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
                           <Box
                             sx={{
                               width: 10,
@@ -495,7 +602,10 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
                             }}
                           />
                           <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "13px" }}>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 600, fontSize: "13px" }}
+                            >
                               {formatJobType(job.type)}
                             </Typography>
                             {getPipelineProgress(job.type)}
@@ -504,18 +614,36 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
                       </TableCell>
                       <TableCell sx={{ px: 2 }}>
                         {location && (
-                          <Typography variant="caption" sx={{ display: "block", color: "text.secondary", fontSize: "11px" }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              display: "block",
+                              color: "text.secondary",
+                              fontSize: "11px",
+                            }}
+                          >
                             {location}
                           </Typography>
                         )}
-                        <Typography variant="caption" sx={{ color: "text.disabled", fontSize: "10px" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{ color: "text.disabled", fontSize: "10px" }}
+                        >
                           Attempt {job.attempt}/{job.maxAttempts}
                         </Typography>
                       </TableCell>
-                      <TableCell sx={{ px: 2 }} align="center">
+                      <TableCell
+                        sx={{ px: 2 }}
+                        align="center"
+                      >
                         <Typography
                           variant="caption"
-                          sx={{ color, fontWeight: 600, fontSize: "11px", textTransform: "uppercase" }}
+                          sx={{
+                            color,
+                            fontWeight: 600,
+                            fontSize: "11px",
+                            textTransform: "uppercase",
+                          }}
                         >
                           {getDisplayStatus(job.status)}
                         </Typography>
@@ -523,29 +651,58 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
                           <Tooltip title={job.error}>
                             <Typography
                               variant="caption"
-                              sx={{ display: "block", color: "error.main", fontSize: "10px", mt: 0.25 }}
+                              sx={{
+                                display: "block",
+                                color: "error.main",
+                                fontSize: "10px",
+                                mt: 0.25,
+                              }}
                             >
                               {formatErrorMessage(job.error)}
                             </Typography>
                           </Tooltip>
                         )}
                       </TableCell>
-                      <TableCell sx={{ px: 2 }} align="right">
-                        <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+                      <TableCell
+                        sx={{ px: 2 }}
+                        align="right"
+                      >
+                        <Box
+                          sx={{
+                            display: "flex",
+                            gap: 0.5,
+                            justifyContent: "flex-end",
+                          }}
+                        >
                           {job.status === "FAILED" && (
                             <Tooltip title="Retry">
-                              <IconButton size="small" onClick={() => handleRetryJob(job.id)} title="Retry">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRetryJob(job.id)}
+                                title="Retry"
+                              >
                                 <RestartAltIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           )}
-                          {(job.status === "PENDING" || job.status === "PAUSED") && (
-                            <Tooltip title={isPaused ? "Queue is globally paused" : job.status === "PAUSED" ? "Resume" : "Pause"}>
+                          {(job.status === "PENDING" ||
+                            job.status === "PAUSED") && (
+                            <Tooltip
+                              title={
+                                isPaused
+                                  ? "Queue is globally paused"
+                                  : job.status === "PAUSED"
+                                    ? "Resume"
+                                    : "Pause"
+                              }
+                            >
                               <IconButton
                                 size="small"
                                 onClick={() => handleToggleJobPause(job)}
                                 disabled={isPaused}
-                                title={job.status === "PAUSED" ? "Resume" : "Pause"}
+                                title={
+                                  job.status === "PAUSED" ? "Resume" : "Pause"
+                                }
                               >
                                 {job.status === "PAUSED" || isPaused ? (
                                   <PlayArrowIcon fontSize="small" />
@@ -557,7 +714,12 @@ export const QueueManager: React.FC<{ token: string | null; mode: "light" | "dar
                           )}
                           {job.status !== "PROCESSING" && (
                             <Tooltip title="Delete">
-                              <IconButton size="small" color="error" onClick={() => handleDeleteJob(job.id)} title="Delete">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteJob(job.id)}
+                                title="Delete"
+                              >
                                 <ClearIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, Suspense, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  Suspense,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   BrowserRouter,
   Routes,
@@ -18,8 +24,8 @@ import Typography from "@mui/material/Typography";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import SettingsIcon from "@mui/icons-material/Settings";
-import LogoutIcon from '@mui/icons-material/Logout';
-import PersonIcon from '@mui/icons-material/Person';
+import LogoutIcon from "@mui/icons-material/Logout";
+import PersonIcon from "@mui/icons-material/Person";
 import { themeObj } from "./theme";
 
 // Types
@@ -47,7 +53,9 @@ const SeriesDetails = React.lazy(() => import("./components/SeriesDetails"));
 const ChapterGallery = React.lazy(() => import("./components/ChapterGallery"));
 const Reader = React.lazy(() => import("./components/Reader"));
 const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
-const UserManagementModal = React.lazy(() => import("./components/UserManagementModal"));
+const UserManagementModal = React.lazy(
+  () => import("./components/UserManagementModal"),
+);
 
 // Stable identity for props that don't need per-render identities — keeps React.memo effective
 const NOOP = () => undefined;
@@ -175,6 +183,10 @@ function AppContent() {
     return saved === "light" ? "light" : "dark";
   });
   const appliedTheme = useMemo(() => themeObj(mode), [mode]);
+
+  const [activeDrawer, setActiveDrawer] = useState<
+    "none" | "queue" | "notifications"
+  >("none");
 
   useEffect(() => {
     document.documentElement.classList.toggle("light", mode === "light");
@@ -342,220 +354,261 @@ function AppContent() {
         <NotificationProvider token={user?.token || null}>
           <ToastProvider>
             <UploadProvider>
-            <GlobalErrorListener />
-            <TranslationToastWatcher />
-            <div className="app-container">
-              {/* Navigation Bar */}
-              {!readerMatch && (
-                <AppBar position="sticky" color="inherit" sx={{ bgcolor: "background.paper" }}>
-                  <Toolbar variant="dense">
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        cursor: user ? "pointer" : "default",
-                        flexGrow: 1,
+              <GlobalErrorListener />
+              <TranslationToastWatcher />
+              <div className="app-container">
+                {/* Navigation Bar */}
+                {!readerMatch && (
+                  <AppBar
+                    position="sticky"
+                    color="inherit"
+                    sx={{ bgcolor: "background.paper" }}
+                  >
+                    <Toolbar variant="dense">
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          cursor: user ? "pointer" : "default",
+                          flexGrow: 1,
+                        }}
+                        onClick={() => user && navigate("/")}
+                      >
+                        <img
+                          src={
+                            (mode === "dark" ? logoDark : logoLight) as string
+                          }
+                          alt="tl-hub"
+                          style={{ height: 28, width: "auto" }}
+                        />
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontFamily: '"Outfit", sans-serif',
+                            fontWeight: 700,
+                            color: mode === "dark" ? "white" : "black",
+                          }}
+                        >
+                          tl-hub
+                        </Typography>
+                      </Box>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                      >
+                        <IconButton
+                          onClick={() =>
+                            setMode(mode === "dark" ? "light" : "dark")
+                          }
+                          sx={{ color: mode === "dark" ? "white" : "black" }}
+                          title={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
+                        >
+                          {mode === "dark" ? (
+                            <LightModeIcon />
+                          ) : (
+                            <DarkModeIcon />
+                          )}
+                        </IconButton>
+                        {user && (
+                          <>
+                            <IconButton
+                              onClick={() => setIsSettingsOpen(true)}
+                              title="Settings"
+                              sx={{
+                                color: mode === "dark" ? "white" : "black",
+                              }}
+                            >
+                              <SettingsIcon />
+                            </IconButton>
+                            <QueueManager
+                              token={user?.token}
+                              mode={mode}
+                              forceOpen={activeDrawer === "queue"}
+                              onRequestOpen={() => setActiveDrawer("queue")}
+                              onClose={() => setActiveDrawer("none")}
+                            />
+                            <NotificationCenter
+                              mode={mode}
+                              forceOpen={activeDrawer === "notifications"}
+                              onRequestOpen={() =>
+                                setActiveDrawer("notifications")
+                              }
+                              onClose={() => setActiveDrawer("none")}
+                            />
+                            <IconButton
+                              onClick={() => setIsUserModalOpen(true)}
+                              size="small"
+                              sx={{
+                                minWidth: "auto",
+                                color: mode === "dark" ? "white" : "black",
+                              }}
+                              title="Account"
+                            >
+                              <PersonIcon />
+                            </IconButton>
+                            <IconButton
+                              onClick={handleLogout}
+                              size="small"
+                              sx={{
+                                minWidth: "auto",
+                                color: mode === "dark" ? "white" : "black",
+                              }}
+                              title="Sign Out"
+                            >
+                              <LogoutIcon />
+                            </IconButton>
+                          </>
+                        )}
+                      </Stack>
+                    </Toolbar>
+                  </AppBar>
+                )}
+
+                <Suspense fallback={<LoadingSpinner />}>
+                  <Routes>
+                    <Route
+                      path="/login"
+                      element={<Auth onLoginSuccess={setUser} />}
+                    />
+                    <Route
+                      path="/"
+                      element={
+                        user ? (
+                          <Dashboard
+                            user={user}
+                            seriesList={seriesList}
+                            setSeriesList={setSeriesList}
+                            onSelectSeries={setSelectedSeries}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/series/:seriesId"
+                      element={
+                        user ? (
+                          <SeriesDetails
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            setSelectedSeries={setSelectedSeries}
+                            chapters={chapters}
+                            setChapters={setChapters}
+                            onSelectChapter={setSelectedChapter}
+                            isLoadingDetails={isLoadingDetails}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/series/:seriesId/:slug"
+                      element={
+                        user ? (
+                          <SeriesDetails
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            setSelectedSeries={setSelectedSeries}
+                            chapters={chapters}
+                            setChapters={setChapters}
+                            onSelectChapter={setSelectedChapter}
+                            isLoadingDetails={isLoadingDetails}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/chapters/:chapterId"
+                      element={
+                        user ? (
+                          <ChapterGallery
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            selectedChapter={selectedChapter}
+                            setSelectedChapter={setSelectedChapter}
+                            pages={pages}
+                            setPages={setPages}
+                            onSelectPage={NOOP}
+                            isLoadingDetails={isLoadingDetails}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/chapters/:chapterId/:slug"
+                      element={
+                        user ? (
+                          <ChapterGallery
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            selectedChapter={selectedChapter}
+                            setSelectedChapter={setSelectedChapter}
+                            pages={pages}
+                            setPages={setPages}
+                            onSelectPage={NOOP}
+                            isLoadingDetails={isLoadingDetails}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/chapters/:chapterId/reader/:pageNumber"
+                      element={
+                        user ? (
+                          <Reader
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            selectedChapter={selectedChapter}
+                            chapters={chapters}
+                            pages={pages}
+                            theme={mode}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/chapters/:chapterId/:slug/reader/:pageNumber"
+                      element={
+                        user ? (
+                          <Reader
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            selectedChapter={selectedChapter}
+                            chapters={chapters}
+                            pages={pages}
+                            theme={mode}
+                          />
+                        ) : null
+                      }
+                    />
+                  </Routes>
+                </Suspense>
+
+                <Suspense fallback={null}>
+                  {isSettingsOpen && (
+                    <SettingsModal
+                      isOpen={isSettingsOpen}
+                      onClose={handleSettingsClose}
+                      token={user?.token}
+                    />
+                  )}
+                  {isUserModalOpen && user && (
+                    <UserManagementModal
+                      open={isUserModalOpen}
+                      onClose={() => setIsUserModalOpen(false)}
+                      user={user}
+                      onUserUpdate={(updated) => {
+                        setUser(updated);
+                        localStorage.setItem(
+                          "manga_user",
+                          JSON.stringify(updated),
+                        );
                       }}
-                      onClick={() => user && navigate("/")}
-                    >
-                      <img
-                        src={(mode === "dark" ? logoDark : logoLight) as string}
-                        alt="tl-hub"
-                        style={{ height: 28, width: "auto" }}
-                      />
-                      <Typography
-                        variant="h6"
-                        sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 700, color: mode === "dark" ? "white" : "black" }}
-                      >
-                        tl-hub
-                      </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1}>
-                      <IconButton
-                        onClick={() =>
-                          setMode(mode === "dark" ? "light" : "dark")
-                        }
-                        sx={{ color: mode === "dark" ? "white" : "black" }}
-                        title={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
-                      >
-                        {mode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
-                      </IconButton>
-                      {user && (
-                        <>
-                          <IconButton
-                            onClick={() => setIsSettingsOpen(true)}
-                            title="Settings"
-                            sx={{ color: mode === "dark" ? "white" : "black" }}
-                          >
-                            <SettingsIcon />
-                          </IconButton>
-                          <QueueManager token={user?.token} mode={mode} />
-                          <NotificationCenter mode={mode} />
-                          <IconButton
-                            onClick={() => setIsUserModalOpen(true)}
-                            size="small"
-                            sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
-                            title="Account"
-                          >
-                            <PersonIcon />
-                          </IconButton>
-                          <IconButton
-                            onClick={handleLogout}
-                            size="small"
-                            sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
-                            title="Sign Out"
-                          >
-                            <LogoutIcon />
-                          </IconButton>
-                        </>
-                      )}
-                    </Stack>
-                  </Toolbar>
-                </AppBar>
-              )}
-
-              <Suspense fallback={<LoadingSpinner />}>
-                <Routes>
-                  <Route
-                    path="/login"
-                    element={<Auth onLoginSuccess={setUser} />}
-                  />
-                  <Route
-                    path="/"
-                    element={
-                      user ? (
-                        <Dashboard
-                          user={user}
-                          seriesList={seriesList}
-                          setSeriesList={setSeriesList}
-                          onSelectSeries={setSelectedSeries}
-                        />
-                      ) : null
-                    }
-                  />
-                  <Route
-                    path="/series/:seriesId"
-                    element={
-                      user ? (
-                        <SeriesDetails
-                          user={user}
-                          selectedSeries={selectedSeries}
-                          setSelectedSeries={setSelectedSeries}
-                          chapters={chapters}
-                          setChapters={setChapters}
-                          onSelectChapter={setSelectedChapter}
-                          isLoadingDetails={isLoadingDetails}
-                        />
-                      ) : null
-                    }
-                  />
-                  <Route
-                    path="/series/:seriesId/:slug"
-                    element={
-                      user ? (
-                        <SeriesDetails
-                          user={user}
-                          selectedSeries={selectedSeries}
-                          setSelectedSeries={setSelectedSeries}
-                          chapters={chapters}
-                          setChapters={setChapters}
-                          onSelectChapter={setSelectedChapter}
-                          isLoadingDetails={isLoadingDetails}
-                        />
-                      ) : null
-                    }
-                  />
-                  <Route
-                    path="/chapters/:chapterId"
-                    element={
-                      user ? (
-                        <ChapterGallery
-                          user={user}
-                          selectedSeries={selectedSeries}
-                          selectedChapter={selectedChapter}
-                          setSelectedChapter={setSelectedChapter}
-                          pages={pages}
-                          setPages={setPages}
-                          onSelectPage={NOOP}
-                          isLoadingDetails={isLoadingDetails}
-                        />
-                      ) : null
-                    }
-                  />
-                  <Route
-                    path="/chapters/:chapterId/:slug"
-                    element={
-                      user ? (
-                        <ChapterGallery
-                          user={user}
-                          selectedSeries={selectedSeries}
-                          selectedChapter={selectedChapter}
-                          setSelectedChapter={setSelectedChapter}
-                          pages={pages}
-                          setPages={setPages}
-                          onSelectPage={NOOP}
-                          isLoadingDetails={isLoadingDetails}
-                        />
-                      ) : null
-                    }
-                  />
-                  <Route
-                    path="/chapters/:chapterId/reader/:pageNumber"
-                    element={
-                      user ? (
-                        <Reader
-                          user={user}
-                          selectedSeries={selectedSeries}
-                          selectedChapter={selectedChapter}
-                          chapters={chapters}
-                          pages={pages}
-                          theme={mode}
-                        />
-                      ) : null
-                    }
-                  />
-                  <Route
-                    path="/chapters/:chapterId/:slug/reader/:pageNumber"
-                    element={
-                      user ? (
-                        <Reader
-                          user={user}
-                          selectedSeries={selectedSeries}
-                          selectedChapter={selectedChapter}
-                          chapters={chapters}
-                          pages={pages}
-                          theme={mode}
-                        />
-                      ) : null
-                    }
-                  />
-                </Routes>
-              </Suspense>
-
-              <Suspense fallback={null}>
-                {isSettingsOpen && (
-                  <SettingsModal
-                    isOpen={isSettingsOpen}
-                    onClose={handleSettingsClose}
-                    token={user?.token}
-                  />
-                )}
-                {isUserModalOpen && user && (
-                  <UserManagementModal
-                    open={isUserModalOpen}
-                    onClose={() => setIsUserModalOpen(false)}
-                    user={user}
-                    onUserUpdate={(updated) => {
-                      setUser(updated);
-                      localStorage.setItem("manga_user", JSON.stringify(updated));
-                    }}
-                    onLogout={handleLogout}
-                  />
-                )}
-              </Suspense>
-            </div>
-          </UploadProvider>
+                      onLogout={handleLogout}
+                    />
+                  )}
+                </Suspense>
+              </div>
+            </UploadProvider>
           </ToastProvider>
         </NotificationProvider>
       </Box>

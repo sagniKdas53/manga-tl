@@ -40,7 +40,8 @@ const UploadContext = createContext<UploadContextValue | null>(null);
 
 export const useUploadQueue = (): UploadContextValue => {
   const ctx = useContext(UploadContext);
-  if (!ctx) throw new Error("useUploadQueue must be used inside <UploadProvider>");
+  if (!ctx)
+    throw new Error("useUploadQueue must be used inside <UploadProvider>");
   return ctx;
 };
 
@@ -59,12 +60,19 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
     setIsExpanded(true);
   }, []);
 
-  const updateItem = useCallback((id: string, update: Partial<UploadQueueItem>) => {
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...update } : item)));
-  }, []);
+  const updateItem = useCallback(
+    (id: string, update: Partial<UploadQueueItem>) => {
+      setItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, ...update } : item)),
+      );
+    },
+    [],
+  );
 
   const clearCompleted = useCallback(() => {
-    setItems((prev) => prev.filter((i) => i.status !== "completed" && i.status !== "failed"));
+    setItems((prev) =>
+      prev.filter((i) => i.status !== "completed" && i.status !== "failed"),
+    );
     if (items.every((i) => i.status === "completed" || i.status === "failed")) {
       setShowPanel(false);
     }
@@ -76,8 +84,25 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
   }, []);
 
   const value = useMemo(
-    () => ({ items, showPanel, isExpanded, setIsExpanded, addItems, updateItem, clearCompleted, dismiss }),
-    [items, showPanel, isExpanded, addItems, updateItem, clearCompleted, dismiss],
+    () => ({
+      items,
+      showPanel,
+      isExpanded,
+      setIsExpanded,
+      addItems,
+      updateItem,
+      clearCompleted,
+      dismiss,
+    }),
+    [
+      items,
+      showPanel,
+      isExpanded,
+      addItems,
+      updateItem,
+      clearCompleted,
+      dismiss,
+    ],
   );
 
   return (
@@ -115,32 +140,67 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  bgcolor: items.some((i) => i.status === "uploading" || i.status === "pending")
+                  bgcolor: items.some(
+                    (i) => i.status === "uploading" || i.status === "pending",
+                  )
                     ? "warning.main"
                     : "success.main",
                 }}
               />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {items.some((i) => i.status === "uploading" || i.status === "pending")
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 600 }}
+              >
+                {items.some(
+                  (i) => i.status === "uploading" || i.status === "pending",
+                )
                   ? `Uploading ${items.filter((i) => i.status === "uploading" || i.status === "pending").length} file(s)...`
                   : "Uploads Completed"}
               </Typography>
             </Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }} onClick={(e) => e.stopPropagation()}>
-              <IconButton size="small" onClick={() => setIsExpanded(!isExpanded)}>
-                {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+            <Box
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <IconButton
+                size="small"
+                onClick={() => setIsExpanded(!isExpanded)}
+              >
+                {isExpanded ? (
+                  <ExpandLessIcon fontSize="small" />
+                ) : (
+                  <ExpandMoreIcon fontSize="small" />
+                )}
               </IconButton>
-              <IconButton size="small" onClick={dismiss}>
+              <IconButton
+                size="small"
+                onClick={dismiss}
+              >
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Box>
           </Box>
 
           <Collapse in={isExpanded}>
-            <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 1.5, maxHeight: 300, overflowY: "auto" }}>
+            <Box
+              sx={{
+                p: 2,
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+                maxHeight: 300,
+                overflowY: "auto",
+              }}
+            >
               {items.map((item) => (
                 <Box key={item.id}>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <Typography
                       variant="caption"
                       sx={{
@@ -165,7 +225,9 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
                               : "text.secondary",
                       }}
                     >
-                      {item.status === "uploading" ? `${item.progress}%` : item.status}
+                      {item.status === "uploading"
+                        ? `${item.progress}%`
+                        : item.status}
                     </Typography>
                   </Box>
                   <LinearProgress

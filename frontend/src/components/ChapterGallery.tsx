@@ -4,8 +4,9 @@ import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import EditIcon from "@mui/icons-material/Edit";
-import type { User, Series, Chapter, Page, SystemSettingsDto } from "../types";
+import type { User, Series, Chapter, Page } from "../types";
 import { safeFetch, toSlug, getContextPath } from "../utils";
+import CreateChapterDialog from "./CreateChapterDialog";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastContext";
 import { useUploadQueue, type UploadQueueItem } from "./UploadContext";
@@ -118,130 +119,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
   // Chapter editing modal state
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editChapterNum, setEditChapterNum] = useState<number>(1.0);
-  const [editChapterTitle, setEditChapterTitle] = useState("");
-  const [editChapterUseContextMemory, setEditChapterUseContextMemory] =
-    useState<boolean>(true);
-  const [editError, setEditError] = useState("");
-
-  const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
-  const providers = settings?.activeProviders || [
-    "openrouter",
-    "gemini",
-    "nvidia",
-    "openai",
-    "anthropic",
-    "ollama",
-    "lmstudio",
-  ];
-  const ocrProviders = settings?.activeOcrProviders || [
-    "local",
-    "openrouter",
-    "gemini",
-    "nvidia",
-    "ollama",
-    "lmstudio",
-  ];
-
-  const [showModelOverrides, setShowModelOverrides] = useState(false);
-
-  // Model overrides for Chapter
-  const [editChapOcrProvider, setEditChapOcrProvider] = useState("");
-  const [editChapOcrModel, setEditChapOcrModel] = useState("");
-  const [editChapTlProvider, setEditChapTlProvider] = useState("");
-  const [editChapTlModel, setEditChapTlModel] = useState("");
-  const [editChapQaProvider, setEditChapQaProvider] = useState("");
-  const [editChapQaLlmModel, setEditChapQaLlmModel] = useState("");
-  const [editChapQaVlmModel, setEditChapQaVlmModel] = useState("");
-  const [editChapQaMode, setEditChapQaMode] = useState("");
-
-  React.useEffect(() => {
-    if (showEditModal && !settings) {
-      safeFetch("/api/settings", {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => setSettings(data))
-        .catch(console.error);
-    }
-  }, [showEditModal, settings, user.token]);
-
-  const handleEditClick = () => {
-    if (selectedChapter) {
-      setEditChapterNum(selectedChapter.chapterNumber);
-      setEditChapterTitle(selectedChapter.title || "");
-      setEditChapterUseContextMemory(
-        selectedChapter.useContextMemory !== false,
-      );
-      setEditError("");
-      setEditChapOcrProvider(selectedChapter.ocrProvider || "");
-      setEditChapOcrModel(selectedChapter.ocrModel || "");
-      setEditChapTlProvider(selectedChapter.tlProvider || "");
-      setEditChapTlModel(selectedChapter.tlModel || "");
-      setEditChapQaProvider(selectedChapter.qaProvider || "");
-      setEditChapQaLlmModel(selectedChapter.qaLlmModel || "");
-      setEditChapQaVlmModel(selectedChapter.qaVlmModel || "");
-      setEditChapQaMode(selectedChapter.qaMode || "");
-      setShowModelOverrides(false);
-      setShowEditModal(true);
-    }
-  };
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedChapter) return;
-    setEditError("");
-    try {
-      const res = await safeFetch(
-        `/api/series/chapters/${selectedChapter.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
-          },
-          body: JSON.stringify({
-            chapterNumber: editChapterNum,
-            title: editChapterTitle,
-            useContextMemory: editChapterUseContextMemory,
-            ocrProvider: editChapOcrProvider || null,
-            ocrModel: editChapOcrModel || null,
-            tlProvider: editChapTlProvider || null,
-            tlModel: editChapTlModel || null,
-            qaProvider: editChapQaProvider || null,
-            qaLlmModel: editChapQaLlmModel || null,
-            qaVlmModel: editChapQaVlmModel || null,
-            qaMode: editChapQaMode || null,
-          }),
-        },
-      );
-      if (res.ok) {
-        const data: Chapter = await res.json();
-        setSelectedChapter(data);
-        setShowEditModal(false);
-        setEditError("");
-      } else {
-        let errMsg = "Failed to update chapter";
-        try {
-          const text = await res.text();
-          if (text) {
-            try {
-              const parsed = JSON.parse(text);
-              errMsg = parsed.message || parsed.error || errMsg;
-            } catch {
-              errMsg = text;
-            }
-          }
-        } catch (readErr) {
-          console.error(readErr);
-        }
-        setEditError(errMsg);
-      }
-    } catch (err) {
-      console.error("Error updating chapter:", err);
-      setEditError(err instanceof Error ? err.message : String(err));
-    }
-  };
+  const [editCounter, setEditCounter] = useState(0);
 
   const processUploadedFiles = React.useCallback(
     async (files: FileList) => {
@@ -534,7 +412,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
               }
             }
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this page.", "error");
+            showToast(
+              "You don't have permission to delete this page.",
+              "error",
+            );
           } else {
             showToast("Failed to delete page", "error");
           }
@@ -615,7 +496,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <h1>Chapter {selectedChapter.chapterNumber}</h1>
               <IconButton
-                onClick={handleEditClick}
+                onClick={() => {
+                  setShowEditModal(true);
+                  setEditCounter((c) => c + 1);
+                }}
                 title="Edit Chapter Name & Number"
                 size="small"
               >
@@ -626,7 +510,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
               {selectedSeries.title} / {selectedChapter.title || "Untitled"}
             </p>
           </div>
-          <Stack direction="row" spacing={1}>
+          <Stack
+            direction="row"
+            spacing={1}
+          >
             <Button
               variant="outlined"
               size="small"
@@ -831,452 +718,23 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         onCancel={closeConfirmModal}
       />
 
-      {/* Edit Chapter Modal */}
-      {showEditModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            className="glass"
-            style={{ padding: "32px", width: "100%", maxWidth: "400px" }}
-          >
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                marginBottom: "24px",
-              }}
-            >
-              Edit Chapter
-            </h2>
-            <form onSubmit={handleEditSubmit}>
-              <div className="form-group">
-                <label className="form-label">Chapter Number</label>
-                <input
-                  type="number"
-                  step="any"
-                  className="form-input"
-                  value={editChapterNum}
-                  onChange={(e) =>
-                    setEditChapterNum(parseFloat(e.target.value) || 0)
-                  }
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Chapter Title</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={editChapterTitle}
-                  onChange={(e) => setEditChapterTitle(e.target.value)}
-                  placeholder="e.g. The Beginning"
-                />
-              </div>
-
-              <div className="form-group">
-                <label
-                  className="form-label"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editChapterUseContextMemory}
-                    onChange={(e) =>
-                      setEditChapterUseContextMemory(e.target.checked)
-                    }
-                    style={{
-                      marginRight: "10px",
-                      width: "16px",
-                      height: "16px",
-                      accentColor: "var(--primary-color)",
-                    }}
-                  />
-                  Inject Context Memory (from previous chapter/page)
-                </label>
-              </div>
-
-              <div
-                style={{
-                  marginTop: "16px",
-                  padding: "16px",
-                  background: "var(--bg-hover)",
-                  borderRadius: "8px",
-                }}
-              >
-                <div
-                  onClick={() => setShowModelOverrides(!showModelOverrides)}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  <h4 style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>
-                    Model Overrides (Optional)
-                  </h4>
-                  <span style={{ fontSize: "12px", opacity: 0.6 }}>
-                    {showModelOverrides ? "▲" : "▼"}
-                  </span>
-                </div>
-
-                {showModelOverrides && (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "12px",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        OCR Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapOcrProvider}
-                        onChange={(e) => setEditChapOcrProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {ocrProviders.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        OCR VLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...(editChapOcrProvider === "local" ||
-                          (editChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={
-                          editChapOcrProvider === "local" ||
-                          (editChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                            ? settings?.localOcrModel || "local"
-                            : editChapOcrModel || ""
-                        }
-                        onChange={(e) => setEditChapOcrModel(e.target.value)}
-                        disabled={
-                          editChapOcrProvider === "local" ||
-                          (editChapOcrProvider === "" &&
-                            (selectedSeries?.ocrProvider === "local" ||
-                              (!selectedSeries?.ocrProvider &&
-                                settings?.ocrProvider === "local")))
-                        }
-                      >
-                        {editChapOcrProvider === "local" ||
-                        (editChapOcrProvider === "" &&
-                          (selectedSeries?.ocrProvider === "local" ||
-                            (!selectedSeries?.ocrProvider &&
-                              settings?.ocrProvider === "local"))) ? (
-                          <option value={settings?.localOcrModel || "local"}>
-                            {settings?.localOcrModel || "Local Worker Model"}
-                          </option>
-                        ) : (
-                          <>
-                            <option value="">-- Inherit --</option>
-                            {settings?.ocrVlmModelList.map((m) => (
-                              <option
-                                key={m}
-                                value={m}
-                              >
-                                {m}
-                              </option>
-                            ))}
-                          </>
-                        )}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        TL Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapTlProvider}
-                        onChange={(e) => setEditChapTlProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {providers.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        TL LLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapTlModel}
-                        onChange={(e) => setEditChapTlModel(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.tlLlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapQaProvider}
-                        onChange={(e) => setEditChapQaProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {providers.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Mode
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={editChapQaMode}
-                        onChange={(e) => setEditChapQaMode(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        <option value="auto">auto</option>
-                        <option value="llm">llm</option>
-                        <option value="vlm">vlm</option>
-                        <option value="hybrid">hybrid</option>
-                        <option value="none">none</option>
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA LLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...((editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "vlm" ||
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={editChapQaLlmModel}
-                        onChange={(e) => setEditChapQaLlmModel(e.target.value)}
-                        disabled={
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "vlm" ||
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                        }
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.qaLlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA VLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...((editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "llm" ||
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={editChapQaVlmModel}
-                        onChange={(e) => setEditChapQaVlmModel(e.target.value)}
-                        disabled={
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "llm" ||
-                          (editChapQaMode ||
-                            selectedSeries.qaMode ||
-                            settings?.qaMode) === "none"
-                        }
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.qaVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {editError && (
-                <div
-                  style={{
-                    color: "var(--error, #ff4d4f)",
-                    fontSize: "13px",
-                    marginTop: "16px",
-                    textAlign: "center",
-                  }}
-                >
-                  {editError}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditError("");
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                >
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateChapterDialog
+        key={selectedChapter?.id ?? `edit-${editCounter}`}
+        open={showEditModal}
+        editingChapter={selectedChapter}
+        user={user}
+        selectedSeries={selectedSeries}
+        chapters={[]}
+        onClose={() => {
+          setShowEditModal(false);
+        }}
+        onSuccess={(data) => {
+          setSelectedChapter(data);
+        }}
+        onError={(msg) => {
+          showToast(msg, "error");
+        }}
+      />
 
       {/* Toasts rendered globally by ToastProvider in App.tsx */}
 

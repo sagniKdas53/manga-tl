@@ -125,7 +125,9 @@ export function resolveOverride(
   return { value: globalVal ?? "", source: "global" };
 }
 
-export function formatResolverHint(source: "global" | "series" | "chapter"): string {
+export function formatResolverHint(
+  source: "global" | "series" | "chapter",
+): string {
   if (source === "series") return "(inherited from series)";
   if (source === "global") return "(global)";
   return "";

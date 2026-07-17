@@ -52,7 +52,10 @@ interface ToastProviderProps {
   children: ReactNode;
 }
 
-const alertSeverity: Record<"success" | "error" | "info", "success" | "error" | "info"> = {
+const alertSeverity: Record<
+  "success" | "error" | "info",
+  "success" | "error" | "info"
+> = {
   success: "success",
   error: "error",
   info: "info",
@@ -78,7 +81,10 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
         }
       }
 
-      setToasts((prev) => [...prev, { id, text, type, duration, action: options?.action }]);
+      setToasts((prev) => [
+        ...prev,
+        { id, text, type, duration, action: options?.action },
+      ]);
 
       if (duration > 0) {
         setTimeout(() => {
@@ -137,7 +143,9 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
                   size="small"
                   onClick={() => {
                     t.action!.onClick();
-                    setToasts((prev) => prev.filter((toast) => toast.id !== t.id));
+                    setToasts((prev) =>
+                      prev.filter((toast) => toast.id !== t.id),
+                    );
                   }}
                 >
                   {t.action.label}

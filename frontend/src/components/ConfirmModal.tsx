@@ -60,7 +60,10 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
         </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} autoFocus>
+        <Button
+          onClick={onCancel}
+          autoFocus
+        >
           {cancelText}
         </Button>
         <Button

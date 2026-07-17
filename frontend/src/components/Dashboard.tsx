@@ -99,9 +99,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const handleSeriesSuccess = (data: Series) => {
     if (editingSeries) {
-      setSeriesList((prev) =>
-        prev.map((s) => (s.id === data.id ? data : s)),
-      );
+      setSeriesList((prev) => prev.map((s) => (s.id === data.id ? data : s)));
     } else {
       setSeriesList((prev) => [...prev, data]);
     }
@@ -127,7 +125,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             setSeriesList((prev) => prev.filter((s) => s.id !== seriesId));
             showToast("Series deleted successfully", "success");
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this series.", "error");
+            showToast(
+              "You don't have permission to delete this series.",
+              "error",
+            );
           } else {
             showToast("Failed to delete series", "error");
           }
@@ -150,15 +151,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }}
       >
         <Box>
-          <Typography variant="h4" sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600 }}>
+          <Typography
+            variant="h4"
+            sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600 }}
+          >
             My Manga Library
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 0.5 }}
+          >
             Manage translation projects and OCR workflows
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+        >
+          <FormControl
+            size="small"
+            sx={{ minWidth: 160 }}
+          >
             <Select
               value={`${sortBy}-${sortDir}`}
               onChange={(e) => {
@@ -237,16 +252,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </Box>
             )}
             <CardContent sx={{ flex: 1, py: 1.5, "&:last-child": { pb: 1.5 } }}>
-              <Typography variant="subtitle2" noWrap fontWeight={600}>
+              <Typography
+                variant="subtitle2"
+                noWrap
+                fontWeight={600}
+              >
                 {s.title}
               </Typography>
-              <Box sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}>
+              <Box
+                sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}
+              >
                 <Chip
                   label={`${s.sourceLanguage || s.originalLanguage || "ja"} → ${s.targetLanguage || "en"}`}
                   size="small"
                   variant="outlined"
                 />
-                <Chip label={s.readingDirection} size="small" variant="outlined" />
+                <Chip
+                  label={s.readingDirection}
+                  size="small"
+                  variant="outlined"
+                />
               </Box>
             </CardContent>
             <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
