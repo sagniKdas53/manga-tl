@@ -1,9 +1,11 @@
 # Plan: MUI Migration — Frontend Redesign
 
 > **Phase D.12** from `docs/plan-improvements.md`  
-> Dependencies: `@mui/material@^7.x`, `@mui/icons-material`, `@emotion/react`, `@emotion/styled`  
-> Target: React 19.2.6 + TypeScript 6.0  
-> Last updated: 2026-07-16
+> Dependencies: `@mui/material@^9.x`, `@mui/icons-material@^9.x`, `@emotion/react`, `@emotion/styled`  
+> Target: React 19.2.7 + TypeScript 6.0  
+> Last updated: 2026-07-17 (grilled & amended — see decisions below)
+
+> **Audited decisions (2026-07-17):** Target **MUI v9** (v7 predates TypeScript 6.0) · Toasts stay **stacked** multi-Snackbar (Phase A bugfix #3 parity) · Queue Manager uses **MUI Table**, not DataGrid/Cards · D.10 model resolution is **client-side** (backend enrichment planned separately) · Reader fixes **7.4.1 + 7.4.2 only, with new tests**; 7.4.3 deferred (backend change) · D.14 re-scoped: context memoization + prop stabilization + memo at export sites (see `plan-improvements.md` D.14) · `ThemeSync` must keep toggling `:root.light` until Phase 9.
 
 ---
 
@@ -98,12 +100,12 @@ These are not in the Pixiv/nHentai palettes but needed for the app:
 
 ```bash
 cd frontend
-npm install @mui/material@^7.0.0 @mui/icons-material @emotion/react @emotion/styled
+npm install @mui/material@^9 @mui/icons-material@^9 @emotion/react @emotion/styled
 ```
 
 No extra peer dependencies needed — React 19 is already installed and compatible.
 
-Verify: `npm ls @mui/material --depth=0` shows `@mui/material@7.x`
+Verify: `npm ls @mui/material --depth=0` shows `@mui/material@9.x` and `npm run build` passes against TypeScript 6.0.
 
 #### 0.2 Remove Unused `App.css`
 
@@ -233,21 +235,27 @@ import theme from './theme';
 import { useColorScheme } from '@mui/material/styles';
 ```
 
-2. Create a `ThemeSync` component that syncs MUI's `useColorScheme()` with localStorage and the old `:root.light` class (for gradual migration):
+2. Create a `ThemeSync` component. **Its real job during coexistence (Phases 0–9) is keeping the legacy `:root.light` class in sync** — the original draft removed `classList.toggle` while claiming the class was "still respected"; respected yes, but nothing would ever *apply* it, leaving every unmigrated component dark-forever in light mode:
+
 ```tsx
 function ThemeSync() {
-  const { mode, setMode } = useColorScheme();
+  const { mode } = useColorScheme();
+  const resolved = mode ?? 'dark'; // useColorScheme() is undefined on first render
   useEffect(() => {
-    const saved = localStorage.getItem('manga_theme');
-    if (saved === 'light' && mode !== 'light') setMode('light');
-    else if (!saved && mode !== 'dark') setMode('dark');
-  }, []);
-  useEffect(() => {
-    if (mode) localStorage.setItem('manga_theme', mode);
-  }, [mode]);
+    // Legacy CSS bridge — REMOVE in Phase 9 when :root.light rules are deleted
+    document.documentElement.classList.toggle('light', resolved === 'light');
+  }, [resolved]);
   return null;
 }
 ```
+
+3. **Storage: exactly one writer.** Do NOT reimplement localStorage sync — MUI's `ThemeProvider` already persists the mode. Point it at the *existing* key so legacy saved preferences carry over (values are compatible: `'light'`/`'dark'`):
+
+```tsx
+<ThemeProvider theme={theme} defaultMode="dark" modeStorageKey="manga_theme">
+```
+
+> Verify the exact prop name against the v9 docs during implementation (`modeStorageKey` in v6/v7; confirm for v9). If v9 renamed it, use the v9 equivalent — the requirement (reuse `manga_theme`, single writer, `defaultMode="dark"` to match the current default in App.tsx:153–156) is unchanged.
 
 3. Remove the local `theme` state and manual `classList.toggle("light")`:
 ```tsx
@@ -265,21 +273,31 @@ function ThemeSync() {
 4. Add `ThemeSync` and use `useColorScheme` for the toggle:
 ```tsx
 const { mode, setMode } = useColorScheme();
-const toggleTheme = () => setMode(mode === 'dark' ? 'light' : 'dark');
+const current = mode ?? 'dark'; // undefined on first render — never branch on raw `mode`
+const toggleTheme = () => setMode(current === 'dark' ? 'light' : 'dark');
 ```
 
 5. Wrap everything:
 ```tsx
-<ThemeProvider theme={theme}>
+<ThemeProvider theme={theme} defaultMode="dark" modeStorageKey="manga_theme">
   <CssBaseline />
   <ThemeSync />
   {/* existing app content */}
 </ThemeProvider>
 ```
 
-6. Update the theme toggle button to use `mode` from `useColorScheme()` instead of the old `toggleTheme`.
+6. Update the theme toggle button to use `current` from step 4 instead of the old `theme` state.
 
-> **Important:** The `ThemeSync` component + `useColorScheme` handles the localStorage sync. The `:root.light` class is still respected by existing CSS for backward compat during migration. Remove `:root.light` rules from `index.css` when migration is complete.
+7. **First-paint flash (Vite SPA):** with no SSR, MUI applies the scheme only after React boots — a dark-default user may see a light flash. Add a tiny blocking inline script to `index.html` before the module script:
+```html
+<script>
+  document.documentElement.dataset.muiColorScheme =
+    localStorage.getItem('manga_theme') === 'light' ? 'light' : 'dark';
+</script>
+```
+(The SPA analogue of `InitColorSchemeScript`; verify the attribute name v9 reads — it may be `data-mui-color-scheme` — and match it.)
+
+> **Important:** The `:root.light` class bridge in `ThemeSync` is load-bearing for the whole migration: every unmigrated component reads CSS vars overridden by `:root.light` (index.css:55–125). Remove the class toggle **only** in Phase 9, in the same PR that deletes those rules.
 
 #### 0.5 Remove `body { background-image }` Radial Gradients
 
@@ -423,29 +441,39 @@ Redesign the Queue Manager using MUI components. This covers D.3 queue UI refine
 
 **File: `QueueManager.tsx`**
 
+**Decision (2026-07-17): MUI `Table`, not Cards and not DataGrid.** `plan-improvements.md` D.12 said "DataGrid or Table" — resolved to `Table size="small"`: `@mui/x-data-grid` is an extra dependency that cannot sensibly live in a dropdown. The 360px dropdown either widens to ~640px or converts to a right-anchored `Drawer` (decide in the PR; Drawer is preferred — it gives the table room without fighting the nav layout).
+
 | Before | After |
 |--------|-------|
-| Custom job card divs | `<Card>` + `<CardContent>` + `<CardActions>` |
+| Custom job card `<li>` (inline styles) | `<Table size="small">` rows: status dot · Series→Ch→Page · attempt · pipeline dots · actions |
 | Status text | `<Chip>` with color-coded labels |
-| Manual status dots | **Enlarged `<Badge>` or `<Avatar>`** — screenshot analysis shows current dots are too small; make them prominent per `examples/redesign-the-job-queue.jpg` |
+| Manual status dots | **Prominent dot** (`Box sx` circle or `<Badge>`) — screenshot analysis shows current dots are too small; make them prominent per `examples/redesign-the-job-queue.jpg` |
 | Text buttons for queue actions | `<ButtonGroup>` with `<Button>` variants |
-| Per-job play/pause | `<IconButton>` with `PlayArrow`/`Pause` icons |
-| Per-job retry | `<IconButton>` with `Refresh` icon |
-| Per-job delete | `<IconButton>` with `Delete` icon, color="error" |
+| Per-job play/pause | `<IconButton>` with `PlayArrow`/`Pause` icons — **keep the `title` attribute** (tests assert via `getAllByTitle`; MUI `Tooltip` does NOT render `title`, so Tooltip is opt-in extra, not a replacement) |
+| Per-job retry | `<IconButton>` with `Refresh` icon + `title` |
+| Per-job delete | `<IconButton>` with `Delete` icon, color="error" + `title` |
 | Attempt counter | `<Typography variant="caption">` |
-| Series→Chapter→Page context | `<Breadcrumbs>` or `<Stack>` with `Typography` |
 | Global pause/resume/clear | `<ButtonGroup variant="outlined">` |
 | Queue header | MUI `Paper` with `Stack` layout |
-| Sorted by status | `<Tabs>` or `<ToggleButtonGroup>` for filtering |
 
-**Screenshot-confirmed behavior**: When global "Pause Queue" is pressed, ALL pending jobs must immediately update to yellow "Paused" dots. This is the existing Phase A behavior — MUI migration must preserve it.
+#### Phase A behavior contract (MUST NOT regress)
 
-**Icons needed:**
-- `PlayArrow`, `Pause`, `Refresh`, `Delete`, `ClearAll`, `FilterList`
+The Phase A bugfixes (plan-improvements.md "Bugs and fixes (phase A)") are the acceptance criteria for this phase. Add a test assertion for any that lack one:
+
+1. **Patch-in-place by jobId** — SSE events update existing rows, never spawn duplicates (#1)
+2. **SSE metadata merge** — incoming `job_update` merges with existing job state; series/chapter/attempt info survives updates (#2)
+3. **Every event surfaces** — subscriber pattern from `useNotifications().subscribe`; no last-write-wins (#3)
+4. **Sort weights `PAUSED == PENDING`** (`sortJobs`, QueueManager.tsx:209–224) — paused jobs keep queue position, `createdAt` tiebreak (#4)
+5. **Global pause → all PENDING rows show yellow "PAUSED"** immediately (#5)
+6. **Unified `{ isPaused, jobs }` fetch shape** (#6)
+7. **Per-job buttons disabled with "Queue is globally paused" tooltip** when `isPaused` (#7)
+8. **Optimistic per-job actions**, confirmed via SSE
+9. **30s heartbeat fallback** — and skip the REST poll when SSE is connected (P8)
+
+**Icons needed:** `PlayArrow`, `Pause`, `Refresh`, `Delete`, `ClearAll`, `FilterList` — import via direct paths (`@mui/icons-material/PlayArrow`).
 
 **CSS to remove:**
-- All `.queue-*` styles
-- `.queue-manager`, `.queue-header`, `.queue-list`, `.job-card`, `.job-dot`, etc.
+- All `.queue-*` styles (note: job "cards" are currently inline-styled `<li>` elements — most cleanup is deleting inline style objects, not CSS)
 
 ---
 
@@ -514,6 +542,8 @@ Replace all form inputs and settings with MUI components.
 
 **File: `SettingsModal.tsx`** (covers D.2 overflow fix, D.10 resolved model display, D.11 model override UX)
 
+> **D.10 decision (2026-07-17):** resolve the global→series→chapter inheritance chain **client-side** via a `resolveModel(chain)` utility with unit tests — no new backend endpoint in this phase. The backend is planned to return resolved settings directly later; keep the utility isolated so it deletes cleanly.
+
 | Before | After |
 |--------|-------|
 | Custom modal | `<Dialog fullWidth maxWidth="md">` with `<DialogContent dividers>` — **screenshot insight**: current settings modal overflows with an ugly window-level scrollbar ("no scroll bar plz"). Using `<DialogContent dividers>` ensures only the inner content scrolls, not the entire dialog. |
@@ -555,16 +585,18 @@ Components to use:
 
 Replace custom Toast/Notification systems with MUI components.
 
-#### 6.1 ToastContext → MUI Snackbar (D.13 partial)
+#### 6.1 ToastContext → Stacked MUI Snackbars (D.13 partial)
 
 **File: `ToastContext.tsx`**
 
-- Replace custom toast rendering with a **single** `<Snackbar>` + `<Alert>` 
-- The context provider manages a queue of notifications (only one shown at a time)
-- `showToast(message, options)` → enqueue to MUI Snackbar
-- `showSuccess` / `showError` / `showInfo` → `<Alert severity="success|error|info">`
+**Decision (2026-07-17): keep the current stacked multi-toast behavior.** The original draft's "single Snackbar, one at a time" would have re-introduced Phase A bugfix #3 ("missed notifications for fast events") — simultaneous job completions each need a visible toast.
+
+- Render **multiple simultaneous** `<Snackbar>` + `<Alert>` notifications, stacked with vertical offsets (e.g. `anchorOrigin={{ vertical: 'top', horizontal: 'left' }}` with per-index `sx={{ mt: i * 7 }}`, or a fixed `<Stack>` of `<Alert>`s in a container — pick in the PR)
+- Keep the existing context API unchanged (`showToast` / `showSuccess` / `showError` / `showInfo`) — consumers are untouched
+- Preserve current durations: 6s error / 4s default / 10s when an `action` is attached; `duration <= 0` persists
 - Action buttons → `<Alert action={<Button>...</Button>}>`
-- Auto-dismiss → Snackbar's `autoHideDuration`
+- **Context value must be `useMemo`'d** (prerequisite done in D.14 — do not regress it here)
+- **New regression test:** three toasts fired in the same tick → all three render
 
 This also covers the toast theme fix (current toasts don't respect light theme — MUI handles this automatically)
 
@@ -632,20 +664,24 @@ These elements are deeply tied to the canvas/SVG rendering and would break if re
 
 #### 7.4 Reader Bugs Found via Screenshot Analysis
 
-These were discovered by Gemini's visual analysis of `examples/region-redo.jpg` and confirmed against the code. Fix during Phase 7:
+These were discovered by Gemini's visual analysis of `examples/region-redo.jpg` and confirmed against the code.
 
-**Bug 7.4.1 — Shared State Bug on Redo Buttons**
+**Decision (2026-07-17): fix 7.4.1 and 7.4.2 in this phase — each with NEW tests added to `Reader.test.tsx`.** Reader.tsx is excluded from the coverage gate, so these must not land untested. **7.4.3 is deferred** — it changes backend layer-creation semantics and belongs to a separate workstream, not a UI migration.
+
+**Bug 7.4.1 — Shared State Bug on Redo Buttons** (fix in this phase)
 - **Symptom**: Clicking "Redo OCR" also shows a loading spinner on "Redo TL" (and vice versa). Both buttons share the same state.
 - **Root cause**: Lines 219-221 in Reader.tsx — `isRedoingPageOcr` and `isRedoingPageTranslation` are separate but the per-region redo buttons (popover) likely share a single `isRedoing` state (line 476).
 - **Fix**: Split `setIsRedoing` into `setIsRedoingOcr` and `setIsRedoingTl` for per-region actions. The page-level `isRedoingPageOcr`/`isRedoingPageTranslation` are already separate — verify the popover uses the correct one.
+- **Test**: trigger region redo-OCR → assert the redo-TL control does not enter loading state.
 
-**Bug 7.4.2 — Redo OCR Should Be Disabled on Translation Layer**
+**Bug 7.4.2 — Redo OCR Should Be Disabled on Translation Layer** (fix in this phase)
 - **Symptom**: When user selects an element on the *translation* layer, "Redo OCR" button is still enabled. Clicking it either fails silently or acts on the wrong layer.
 - **Fix**: When the selected item belongs to a translation layer, disable the "Redo OCR" button in the Element Inspector and show a tooltip: "Select an OCR layer element to redo OCR."
+- **Test**: select a translation-layer element → assert Redo OCR is disabled with the explanatory tooltip.
 
-**Bug 7.4.3 — Redo-Region Adds Layers Instead of Mutating**
+**Bug 7.4.3 — Redo-Region Adds Layers Instead of Mutating** (DEFERRED — backend workstream)
 - **Symptom**: "Redo Region OCR" or "Redo Region TL" currently mutates the existing layer element. It should instead create a NEW layer stacked on top with just the re-processed region.
-- **Fix**: In the redo-region flow, ensure the backend creates a new layer (`Layer`) + `LayerElement` pair rather than updating the existing element in-place. The frontend already handles new layers arriving via SSE (Phase B) — verify the layer creation path works for per-region redos.
+- **Why deferred**: requires the backend to create a new `Layer` + `LayerElement` pair rather than updating in place — a logic/API change outside the UI-only scope of this migration. Track as its own item; the frontend already handles new layers arriving via SSE (Phase B), so the frontend half of the verification can reuse that path when the backend work lands.
 
 #### 7.5 Icons Needed for Reader
 
@@ -756,7 +792,7 @@ Phases 1-8 are independent of each other (can be parallelized across PRs) once P
 Phase 2 should be done before Phase 3-8 since all components use modals/dialogs.  
 Phase 9 MUST be last — it removes CSS that is still needed by non-migrated components.
 
-**Recommended execution order:** 0 → 2 → 1 → 8 → 5 → 4 → 6 → 3 → 7 → 9
+**Recommended execution order:** D.14 (render-hygiene, see plan-improvements.md) → 0 → 2 → 1 → 8 → 5 → 4 → 6 → 3 → 7 → D.9 → 9
 
 ---
 
@@ -799,24 +835,33 @@ npm run build         # TypeScript compilation — must succeed
 
 ### Unit Tests to Update
 
-Every component test that uses `document.querySelector('.some-class')` or checks class names will need to be updated to use MUI's rendering patterns. Key things:
+> **Corrected premise (audit, 2026-07-17):** the original draft assumed the suite was class-selector-coupled ("Every component test that uses `document.querySelector('.some-class')`… will need updating"). Reality: the suite has **3 `querySelector` calls total** (all hidden `<input type="file">` in ChapterGallery/SeriesDetails tests) and **zero `toHaveClass`** — it is already role/text/label-based and largely MUI-friendly. Tests must be **upgraded, not reshaped**: behavioral assertions stay, and each phase adds assertions for the behaviors it must preserve.
 
-- Use `@testing-library/react` queries (`getByRole`, `getByText`, `getByLabelText`) instead of class selectors
-- MUI components render with specific ARIA roles (e.g., `Button` → `role="button"`, `Dialog` → `role="dialog"`)
-- Text queries (`getByText`, `findByText`) are more reliable than class selectors
-- For MUI `<TextField>`, query by label: `screen.getByLabelText("Series Title")`
-- For MUI `<Button>`, query by role + name: `screen.getByRole("button", { name: "Create" })`
-- For MUI `<Dialog>`, query by role: `screen.getByRole("dialog")`
+The real MUI migration hazards and their rules:
+
+| Hazard | Rule |
+|--------|------|
+| MUI `Tooltip` does NOT render a `title` attribute | Keep the `title` prop on `IconButton`s — `getAllByTitle` assertions (QueueManager ×5, Dashboard ×3, SeriesDetails ×2) stay valid behavioral queries |
+| MUI `Select` is not a native `<select>` | Wire `InputLabel id` + `labelId` so `getByLabelText` (SettingsModal ×10) keeps working; interactions change from `selectOptions` to `mouseDown` + listbox `click` |
+| MUI `Dialog` portals to `document.body` | Query via `screen.*`, never `container.*` |
+| MUI `TextField` label association | Query by label: `screen.getByLabelText("Series Title")` — works if `label` prop is used |
+| MUI `Button` / `Dialog` roles | `screen.getByRole("button", { name: "Create" })`, `screen.getByRole("dialog")` |
+
+**New assertions per phase (behaviors, not markup):**
+- Phase 0: theme persists to `manga_theme`; `:root.light` class tracks MUI mode (bridge works until Phase 9)
+- Phase 3: Phase A contract — sort weights keep paused jobs in position; SSE updates merge metadata; global pause disables per-job buttons
+- Phase 6: three toasts fired in one tick → all three render (Phase A #3 regression guard)
+- Phase 7: 7.4.1 redo-spinner isolation; 7.4.2 disabled Redo-OCR on TL layer
+- D.14: context-value stability — consumer render count does not increase on unrelated AppContent state changes
 
 ### Test Coverage Thresholds
 
-Existing: 79% line coverage  
-Target: maintain ≥79%. MUI migration should not reduce coverage — it may increase it as dialogs become more testable (MUI Dialog has proper ARIA roles making `getByRole` queries robust).
+Enforced (vite.config.ts): **79% lines**. Docs previously said 80 — **aligned decision: keep 79 through the migration; bump the gate to 80 in Phase 9** as the exit condition, only if green. MUI migration should not reduce coverage — it may increase it as dialogs become more testable (MUI Dialog has proper ARIA roles making `getByRole` queries robust).
 
 ### Files Excluded from Coverage
 
 Current excludes (from `vite.config.ts`): `Reader.tsx`, `App.tsx`, `main.tsx`, `types.ts`, test files.  
-Do NOT change these exclusions during migration.
+Do NOT change these exclusions during migration. (Phase 7's 7.4.1/7.4.2 fixes still ship with explicit tests in `Reader.test.tsx` — exclusion from the gate is not exemption from testing.)
 
 ---
 
@@ -826,8 +871,10 @@ Do NOT change these exclusions during migration.
 2. **Do one phase per PR** — each PR is independently reviewable and revertible.
 3. **Use MUI `sx` prop for one-off styles** instead of adding new CSS classes.
 4. **Reader component is highest risk** — treat Phase 7 with extra care. The SVG overlay system must not break.
-5. **Test dark/light mode after every phase** — MUI's `useColorScheme()` behaves differently from the old manual toggle.
-6. **Check bundle size** — MUI is tree-shakeable but v7 is large. Monitor with `npm run build` and check output sizes.
+5. **Test dark/light mode after every phase** — and specifically verify unmigrated components still follow the toggle via the `:root.light` bridge (see Phase 0.4). MUI's `useColorScheme()` behaves differently from the old manual toggle.
+6. **Check bundle size** — MUI is tree-shakeable but v9 is large. Monitor with `npm run build` and check output sizes. **Import icons via direct paths** (`@mui/icons-material/PlayArrow`), never the barrel (`@mui/icons-material`).
+7. **z-index coexistence map** (legacy inline → MUI theme): toasts 10001 → `zIndex.snackbar` 1400 · modals 9999 → `zIndex.modal` 1300 · nav dropdowns 1000 → Popover/Menu 1300 · floating toolbars 90–100 → unchanged (below everything MUI, which is correct for overlays). Legacy toasts staying above MUI dialogs preserves current parity — don't "fix" it.
+8. **Emotion vs index.css specificity** — class names don't overlap, so default injection order is fine; if a specificity tie appears during coexistence, reach for `StyledEngineProvider injectFirst` rather than `!important`.
 
 ---
 
@@ -917,14 +964,7 @@ The following bottlenecks were found during audit. Address these **before or alo
 />
 ```
 
-**Fix**: Wrap route components in `React.memo` and use `useCallback` for setter props. The `setSeriesList` / `setChapters` / `setPages` are React dispatch functions — they're stable references, but the linter may complain if not wrapped.
-
-```tsx
-const MemoizedDashboard = React.memo(Dashboard);
-const MemoizedSeriesDetails = React.memo(SeriesDetails);
-const MemoizedChapterGallery = React.memo(ChapterGallery);
-const MemoizedReader = React.memo(Reader);
-```
+**Fix**: This is **D.14 (re-scoped 2026-07-17)** — see `plan-improvements.md` D.14 for the full fix. In short: (1) memoize the `ToastContext`/`NotificationContext` values (context propagation bypasses `React.memo`), (2) stabilize the inline `onSelectPage={() => {}}` prop, (3) wrap route components in `React.memo` at their export sites (they are `React.lazy`-loaded; `React.memo(Dashboard)` in App.tsx does not compose). Note: `setSeriesList` / `setChapters` / `setPages` are React dispatch functions — already referentially stable, do **not** wrap them in `useCallback`.
 
 **Impact**: 60-80% fewer re-renders on route navigation. High impact, zero risk.
 
