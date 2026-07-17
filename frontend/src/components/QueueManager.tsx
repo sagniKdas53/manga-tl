@@ -1,11 +1,16 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Badge from "@mui/material/Badge";
 import IconButton from "@mui/material/IconButton";
-import QueueMusicIcon from "@mui/icons-material/QueueMusic";
+import ChecklistIcon from '@mui/icons-material/Checklist';
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import ClearIcon from '@mui/icons-material/Clear';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
+import ClearAllIcon from '@mui/icons-material/ClearAll';
 
 interface Job {
   id: string; // Tracks the current job's ID
@@ -22,56 +27,29 @@ interface Job {
   updatedAt: string;
 }
 
-const IconPlay = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="5 3 19 12 5 21 5 3" />
-  </svg>
-);
-
-const IconPause = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="6" y="4" width="4" height="16" />
-    <rect x="14" y="4" width="4" height="16" />
-  </svg>
-);
-
-const IconRetry = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-    <path d="M3 3v5h5" />
-  </svg>
-);
-
-const IconDelete = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
 const getPipelineProgress = (jobType: string) => {
   const stages = ["panel-detection", "ocr", "layout", "translation", "render", "qa"];
   let currentIndex = stages.indexOf(jobType);
-  
+
   // If it's not a standard pipeline stage, don't show the dots (or map it loosely)
   if (currentIndex === -1) {
     if (jobType === "qa-re-ocr") currentIndex = 1;
     else if (jobType === "region-redo") currentIndex = 1;
     else return null;
   }
-  
+
   return (
     <div style={{ display: "flex", gap: "3px", marginTop: "4px", marginBottom: "4px" }}>
       {stages.map((stage, i) => (
-        <div 
-          key={i} 
-          style={{ 
-            width: "6px", 
-            height: "6px", 
-            borderRadius: "50%", 
+        <div
+          key={i}
+          style={{
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
             backgroundColor: i <= currentIndex ? "var(--primary-color, #2196f3)" : "var(--border-color, #ccc)",
             opacity: i === currentIndex ? 1 : i < currentIndex ? 0.7 : 0.3
-          }} 
+          }}
           title={stage}
         />
       ))}
@@ -187,7 +165,7 @@ const formatErrorMessage = (error: string, status: string) => {
   return cleanError;
 };
 
-export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
+export const QueueManager: React.FC<{ token: string | null, mode: "light" | "dark" }> = ({ token, mode }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -206,7 +184,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
     title: "",
     message: "",
     isDangerous: false,
-    action: () => {},
+    action: () => { },
   });
 
   const sortJobs = (jobsList: Job[]) => {
@@ -235,14 +213,14 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       if (res.ok) {
         const data = await res.json();
         setIsPaused(data.isPaused);
-        
+
         setJobs((prevJobs) => {
           const newJobsList: Array<Omit<Job, 'jobCreatedAt'>> = data.jobs;
           const pipelinesMap = new Map<string, Job>();
-          
+
           // Seed with existing to preserve pipeline-level createdAt
           prevJobs.forEach(p => pipelinesMap.set(p.imageId, p));
-          
+
           newJobsList.forEach(job => {
             const existing = pipelinesMap.get(job.imageId);
             if (!existing || new Date(job.createdAt) >= new Date(existing.jobCreatedAt)) {
@@ -253,10 +231,10 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
               });
             }
           });
-          
+
           const activeImageIds = new Set(newJobsList.map((j) => j.imageId));
           const now = Date.now();
-          
+
           const finalPipelines = Array.from(pipelinesMap.values()).filter((p) => {
             if (!activeImageIds.has(p.imageId)) return false;
             // Filter out completed pipelines lingering in API response (> 10s old)
@@ -266,7 +244,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
             }
             return true;
           });
-          
+
           return sortJobs(finalPipelines);
         });
       }
@@ -291,7 +269,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
   // Handle SSE events
   useEffect(() => {
     if (!token) return;
-    
+
     return subscribe((event) => {
       if (event.type === "job_update") {
         try {
@@ -309,7 +287,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
 
             if (existingIndex !== -1) {
               const existing = updated[existingIndex];
-              
+
               const dataId = data.jobId || data.id;
               const isSameJob = dataId === existing.id;
               const isNewerJob = data.createdAt && new Date(data.createdAt) > new Date(existing.jobCreatedAt);
@@ -462,7 +440,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
     try {
       const endpoint = job.status === "PAUSED" ? `/api/jobs/${job.id}/resume` : `/api/jobs/${job.id}/pause`;
       const newStatus: Job["status"] = job.status === "PAUSED" ? "PENDING" : "PAUSED";
-      
+
       // Optimistic update
       setJobs((prev) =>
         sortJobs(prev.map((j) => (j.id === job.id ? { ...j, status: newStatus } : j)))
@@ -529,9 +507,9 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
       ref={dropdownRef}
       style={{ position: "relative", display: "flex", alignItems: "center" }}
     >
-      <Badge badgeContent={jobs.length} color="primary" invisible={jobs.length === 0}>
+      <Badge badgeContent={jobs.length} color="primary" invisible={jobs.length === 0} >
         <IconButton onClick={toggleDropdown} color="inherit" size="small" title="Queue Manager">
-          <QueueMusicIcon fontSize="small" />
+          <ChecklistIcon sx={{ color: mode === "dark" ? "white" : "black" }} />
         </IconButton>
       </Badge>
 
@@ -576,25 +554,23 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
               Queue Manager
             </h3>
             <div style={{ display: "flex", gap: "8px" }}>
-              <button
+              <IconButton
                 onClick={handleClearQueue}
-                className="btn btn-secondary"
-                style={{
-                  fontSize: "12px",
-                  padding: "4px 8px",
-                  borderColor: "#f44336",
-                  color: "#f44336",
-                }}
+                size="small"
+                sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
+                title="Clear Queue"
               >
-                Clear Queue
-              </button>
-              <button
+                <ClearAllIcon sx={{ color: mode === "dark" ? "white" : "black" }} />
+              </IconButton>
+              <IconButton
                 onClick={handlePauseResumeQueue}
-                className="btn btn-secondary"
-                style={{ fontSize: "12px", padding: "4px 8px" }}
+                sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
+                title={isPaused ? "Resume Queue" : "Pause Queue"}
               >
-                {isPaused ? <><IconPlay /> Resume</> : <><IconPause /> Pause</>}
-              </button>
+                {isPaused ?
+                  <PlayArrowIcon sx={{ color: mode === "dark" ? "white" : "black" }} /> :
+                  <PauseIcon sx={{ color: mode === "dark" ? "white" : "black" }} />}
+              </IconButton>
             </div>
           </div>
 
@@ -702,7 +678,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                             style={{ fontSize: "11px", padding: "4px 8px", display: "flex", alignItems: "center", gap: "4px" }}
                             title="Retry"
                           >
-                            <IconRetry />
+                            <RestartAltIcon />
                           </button>
                         </>
                       )}
@@ -711,11 +687,11 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                           <button
                             onClick={() => handleToggleJobPause(job)}
                             className="btn btn-secondary"
-                            style={{ 
-                              fontSize: "11px", 
-                              padding: "4px 8px", 
-                              display: "flex", 
-                              alignItems: "center", 
+                            style={{
+                              fontSize: "11px",
+                              padding: "4px 8px",
+                              display: "flex",
+                              alignItems: "center",
                               gap: "4px",
                               opacity: isPaused ? 0.5 : 1,
                               cursor: isPaused ? "not-allowed" : "pointer"
@@ -723,7 +699,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                             title={isPaused ? "Queue is globally paused" : (job.status === "PAUSED" ? "Resume" : "Pause")}
                             disabled={isPaused}
                           >
-                            {(job.status === "PAUSED" || isPaused) ? <IconPlay /> : <IconPause />}
+                            {(job.status === "PAUSED" || isPaused) ? <PlayArrowIcon /> : <PauseIcon />}
                           </button>
                         </>
                       )}
@@ -742,7 +718,7 @@ export const QueueManager: React.FC<{ token: string | null }> = ({ token }) => {
                           }}
                           title="Delete"
                         >
-                          <IconDelete />
+                          <ClearIcon />
                         </button>
                       )}
                     </div>

@@ -5,7 +5,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useNotifications, type Notification } from "./useNotifications";
 import { safeFetch } from "../utils";
 
-export const NotificationCenter: React.FC = () => {
+export const NotificationCenter: React.FC<{ mode: "light" | "dark" }> = ({ mode }) => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
     useNotifications();
   const [isOpen, setIsOpen] = useState(false);
@@ -46,7 +46,7 @@ export const NotificationCenter: React.FC = () => {
     >
       <Badge badgeContent={unreadCount} color="primary" invisible={unreadCount === 0}>
         <IconButton onClick={toggleDropdown} color="inherit" size="small" title="Notifications">
-          <NotificationsIcon fontSize="small" />
+          <NotificationsIcon sx={{ color: mode === "dark" ? "white" : "black" }} />
         </IconButton>
       </Badge>
 
