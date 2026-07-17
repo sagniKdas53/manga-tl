@@ -41,8 +41,7 @@ public class MinioService {
   }
 
   public String uploadFile(String objectPath, MultipartFile file)
-      throws io.minio.errors.MinioException,
-          java.io.IOException {
+      throws io.minio.errors.MinioException, java.io.IOException {
     try (InputStream is = file.getInputStream()) {
       minioClient.putObject(
           PutObjectArgs.builder().bucket(bucketName).object(objectPath).stream(
@@ -54,8 +53,7 @@ public class MinioService {
   }
 
   public String uploadFile(String objectPath, byte[] bytes, String contentType)
-      throws io.minio.errors.MinioException,
-          java.io.IOException {
+      throws io.minio.errors.MinioException, java.io.IOException {
     try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(bytes)) {
       minioClient.putObject(
           PutObjectArgs.builder().bucket(bucketName).object(objectPath).stream(
@@ -66,8 +64,7 @@ public class MinioService {
     }
   }
 
-  public InputStream downloadFile(String objectPath)
-      throws io.minio.errors.MinioException {
+  public InputStream downloadFile(String objectPath) throws io.minio.errors.MinioException {
     return minioClient.getObject(
         GetObjectArgs.builder().bucket(bucketName).object(objectPath).build());
   }
@@ -92,8 +89,7 @@ public class MinioService {
     }
   }
 
-  public InputStream getFileStream(String objectPath)
-      throws io.minio.errors.MinioException {
+  public InputStream getFileStream(String objectPath) throws io.minio.errors.MinioException {
     return minioClient.getObject(
         GetObjectArgs.builder().bucket(bucketName).object(objectPath).build());
   }

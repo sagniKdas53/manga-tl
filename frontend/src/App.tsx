@@ -19,6 +19,7 @@ import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LogoutIcon from '@mui/icons-material/Logout';
+import PersonIcon from '@mui/icons-material/Person';
 import { themeObj } from "./theme";
 
 // Types
@@ -46,6 +47,7 @@ const SeriesDetails = React.lazy(() => import("./components/SeriesDetails"));
 const ChapterGallery = React.lazy(() => import("./components/ChapterGallery"));
 const Reader = React.lazy(() => import("./components/Reader"));
 const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
+const UserManagementModal = React.lazy(() => import("./components/UserManagementModal"));
 
 // Stable identity for props that don't need per-render identities — keeps React.memo effective
 const NOOP = () => undefined;
@@ -161,6 +163,7 @@ function AppContent() {
   const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
@@ -390,6 +393,14 @@ function AppContent() {
                           <QueueManager token={user?.token} mode={mode} />
                           <NotificationCenter mode={mode} />
                           <IconButton
+                            onClick={() => setIsUserModalOpen(true)}
+                            size="small"
+                            sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
+                            title="Account"
+                          >
+                            <PersonIcon />
+                          </IconButton>
+                          <IconButton
                             onClick={handleLogout}
                             size="small"
                             sx={{ minWidth: "auto", color: mode === "dark" ? "white" : "black" }}
@@ -528,6 +539,18 @@ function AppContent() {
                     isOpen={isSettingsOpen}
                     onClose={handleSettingsClose}
                     token={user?.token}
+                  />
+                )}
+                {isUserModalOpen && user && (
+                  <UserManagementModal
+                    open={isUserModalOpen}
+                    onClose={() => setIsUserModalOpen(false)}
+                    user={user}
+                    onUserUpdate={(updated) => {
+                      setUser(updated);
+                      localStorage.setItem("manga_user", JSON.stringify(updated));
+                    }}
+                    onLogout={handleLogout}
                   />
                 )}
               </Suspense>
