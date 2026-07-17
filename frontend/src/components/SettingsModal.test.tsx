@@ -157,7 +157,9 @@ describe("SettingsModal", () => {
     });
 
     expect(
-      screen.getByText((content) => content.includes("Failed to load settings")),
+      screen.getByText((content) =>
+        content.includes("Failed to load settings"),
+      ),
     ).toBeInTheDocument();
     expect(mockShowToast).toHaveBeenCalledWith(
       "Failed to load settings",

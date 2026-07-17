@@ -74,13 +74,21 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [title, setTitle] = useState(editingSeries ? editingSeries.title || "" : "");
+  const [title, setTitle] = useState(
+    editingSeries ? editingSeries.title || "" : "",
+  );
   const [lang, setLang] = useState(editingSeries?.originalLanguage || "ja");
-  const [targetLang, setTargetLang] = useState(editingSeries?.targetLanguage || "en");
-  const [direction, setDirection] = useState(editingSeries?.readingDirection || "rtl");
+  const [targetLang, setTargetLang] = useState(
+    editingSeries?.targetLanguage || "en",
+  );
+  const [direction, setDirection] = useState(
+    editingSeries?.readingDirection || "rtl",
+  );
   const [showOverrides, setShowOverrides] = useState(false);
 
-  const [ocrProvider, setOcrProvider] = useState(editingSeries?.ocrProvider || "");
+  const [ocrProvider, setOcrProvider] = useState(
+    editingSeries?.ocrProvider || "",
+  );
   const [ocrModel, setOcrModel] = useState(editingSeries?.ocrModel || "");
   const [tlProvider, setTlProvider] = useState(editingSeries?.tlProvider || "");
   const [tlModel, setTlModel] = useState(editingSeries?.tlModel || "");
@@ -156,7 +164,12 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>
         {editingSeries ? "Edit Series" : "Create Series"}
       </DialogTitle>
@@ -170,7 +183,10 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           margin="normal"
           placeholder="e.g. My Hero Academia"
         />
-        <FormControl fullWidth margin="normal">
+        <FormControl
+          fullWidth
+          margin="normal"
+        >
           <InputLabel>Source Language</InputLabel>
           <Select
             value={lang}
@@ -178,13 +194,19 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
             onChange={(e) => setLang(e.target.value)}
           >
             {LANG_OPTS.map((l) => (
-              <MenuItem key={l} value={l}>
+              <MenuItem
+                key={l}
+                value={l}
+              >
                 {l}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
-        <FormControl fullWidth margin="normal">
+        <FormControl
+          fullWidth
+          margin="normal"
+        >
           <InputLabel>Target Language</InputLabel>
           <Select
             value={targetLang}
@@ -192,13 +214,19 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
             onChange={(e) => setTargetLang(e.target.value)}
           >
             {TARGET_OPTS.map((l) => (
-              <MenuItem key={l} value={l}>
+              <MenuItem
+                key={l}
+                value={l}
+              >
                 {l}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
-        <FormControl fullWidth margin="normal">
+        <FormControl
+          fullWidth
+          margin="normal"
+        >
           <InputLabel>Reading Direction</InputLabel>
           <Select
             value={direction}
@@ -206,7 +234,10 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
             onChange={(e) => setDirection(e.target.value)}
           >
             {DIR_OPTS.map((d) => (
-              <MenuItem key={d.value} value={d.value}>
+              <MenuItem
+                key={d.value}
+                value={d.value}
+              >
                 {d.label}
               </MenuItem>
             ))}
@@ -219,12 +250,13 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           sx={{ mt: 2 }}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="body2">
-              Model Overrides (Optional)
-            </Typography>
+            <Typography variant="body2">Model Overrides (Optional)</Typography>
           </AccordionSummary>
           <AccordionDetails>
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>OCR Provider</InputLabel>
               <Select
                 value={ocrProvider}
@@ -233,13 +265,20 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {ocrProviders.map((p) => (
-                  <MenuItem key={p} value={p}>
+                  <MenuItem
+                    key={p}
+                    value={p}
+                  >
                     {p}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense" disabled={ocrDisabled}>
+            <FormControl
+              fullWidth
+              margin="dense"
+              disabled={ocrDisabled}
+            >
               <InputLabel>OCR VLM Model</InputLabel>
               <Select
                 value={ocrModel}
@@ -253,7 +292,10 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                   </MenuItem>
                 ) : (
                   (settings?.ocrVlmModelList || []).map((m) => (
-                    <MenuItem key={m} value={m}>
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
                       {m}
                     </MenuItem>
                   ))
@@ -261,7 +303,10 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               </Select>
             </FormControl>
 
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>TL Provider</InputLabel>
               <Select
                 value={tlProvider}
@@ -270,13 +315,19 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {providers.map((p) => (
-                  <MenuItem key={p} value={p}>
+                  <MenuItem
+                    key={p}
+                    value={p}
+                  >
                     {p}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>TL LLM Model</InputLabel>
               <Select
                 value={tlModel}
@@ -285,14 +336,20 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {(settings?.tlLlmModelList || []).map((m) => (
-                  <MenuItem key={m} value={m}>
+                  <MenuItem
+                    key={m}
+                    value={m}
+                  >
                     {m}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
 
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>QA Provider</InputLabel>
               <Select
                 value={qaProvider}
@@ -301,13 +358,19 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {providers.map((p) => (
-                  <MenuItem key={p} value={p}>
+                  <MenuItem
+                    key={p}
+                    value={p}
+                  >
                     {p}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>QA Mode</InputLabel>
               <Select
                 value={qaMode}
@@ -316,13 +379,20 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {QA_MODES.map((m) => (
-                  <MenuItem key={m} value={m}>
+                  <MenuItem
+                    key={m}
+                    value={m}
+                  >
                     {m}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense" disabled={qaLlmDisabled}>
+            <FormControl
+              fullWidth
+              margin="dense"
+              disabled={qaLlmDisabled}
+            >
               <InputLabel>QA LLM Model</InputLabel>
               <Select
                 value={qaLlmModel}
@@ -331,13 +401,20 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {(settings?.qaLlmModelList || []).map((m) => (
-                  <MenuItem key={m} value={m}>
+                  <MenuItem
+                    key={m}
+                    value={m}
+                  >
                     {m}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense" disabled={qaVlmDisabled}>
+            <FormControl
+              fullWidth
+              margin="dense"
+              disabled={qaVlmDisabled}
+            >
               <InputLabel>QA VLM Model</InputLabel>
               <Select
                 value={qaVlmModel}
@@ -346,7 +423,10 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {(settings?.qaVlmModelList || []).map((m) => (
-                  <MenuItem key={m} value={m}>
+                  <MenuItem
+                    key={m}
+                    value={m}
+                  >
                     {m}
                   </MenuItem>
                 ))}

@@ -97,7 +97,9 @@ describe("useSSE", () => {
 
   it("handles connection error and attempts reconnection", () => {
     const onMessage = vi.fn();
-    const { result } = renderHook(() => useSSE("/api/sse", "token123", onMessage));
+    const { result } = renderHook(() =>
+      useSSE("/api/sse", "token123", onMessage),
+    );
     const instance = mockEventSourceInstances[0];
 
     act(() => {

@@ -69,7 +69,12 @@ describe("QueueManager", () => {
   });
 
   it("renders closed state by default", () => {
-    render(<QueueManager token={mockToken} mode="dark" />);
+    render(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
     const button = screen.getByTitle("Queue Manager");
     expect(button).toBeInTheDocument();
     expect(screen.queryByText("Queue Manager")).toBeNull();
@@ -86,7 +91,12 @@ describe("QueueManager", () => {
       return Promise.reject(new Error("Unknown URL"));
     });
 
-    render(<QueueManager token={mockToken} mode="dark" />);
+    render(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -108,7 +118,10 @@ describe("QueueManager", () => {
     (safeFetch as Mock).mockImplementation(
       (url: string, init?: RequestInit) => {
         if (url === "/api/jobs") {
-          return Promise.resolve({ ok: true, json: async () => ({ isPaused: false, jobs: [] }) });
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ isPaused: false, jobs: [] }),
+          });
         }
         if (url === "/api/jobs/pause" && init?.method === "POST") {
           return Promise.resolve({ ok: true });
@@ -117,7 +130,12 @@ describe("QueueManager", () => {
       },
     );
 
-    render(<QueueManager token={mockToken} mode="dark" />);
+    render(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -127,7 +145,11 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByLabelText("Pause Queue"));
 
     await waitFor(() => {
-      expect(screen.getByText("Are you sure you want to pause the queue? All pending jobs will be paused.")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Are you sure you want to pause the queue? All pending jobs will be paused.",
+        ),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText("Confirm"));
@@ -146,7 +168,10 @@ describe("QueueManager", () => {
     (safeFetch as Mock).mockImplementation(
       (url: string, init?: RequestInit) => {
         if (url === "/api/jobs") {
-          return Promise.resolve({ ok: true, json: async () => ({ isPaused: false, jobs: mockJobs }) });
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ isPaused: false, jobs: mockJobs }),
+          });
         }
         if (url === "/api/jobs/job-1" && init?.method === "DELETE") {
           return Promise.resolve({ ok: true });
@@ -155,7 +180,12 @@ describe("QueueManager", () => {
       },
     );
 
-    render(<QueueManager token={mockToken} mode="dark" />);
+    render(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -185,7 +215,12 @@ describe("QueueManager", () => {
       return Promise.reject(new Error("Unknown URL"));
     });
 
-    const { rerender } = render(<QueueManager token={mockToken} mode="dark" />);
+    const { rerender } = render(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -193,7 +228,8 @@ describe("QueueManager", () => {
       expect(screen.getByLabelText("Pause")).toBeInTheDocument();
     });
 
-    const subscribeMock = (useNotifications as Mock).mock.results[0].value.subscribe;
+    const subscribeMock = (useNotifications as Mock).mock.results[0].value
+      .subscribe;
     const callback = subscribeMock.mock.calls[0][0];
 
     callback({
@@ -205,7 +241,12 @@ describe("QueueManager", () => {
       }),
     });
 
-    rerender(<QueueManager token={mockToken} mode="dark" />);
+    rerender(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
 
     await waitFor(() => {
       expect(screen.getByText("PROCESSING")).toBeInTheDocument();
@@ -215,17 +256,27 @@ describe("QueueManager", () => {
   });
 
   it("handles retrying a failed job", async () => {
-    (safeFetch as Mock).mockImplementation((url: string, init?: RequestInit) => {
-      if (url === "/api/jobs") {
-        return Promise.resolve({ ok: true, json: async () => ({ isPaused: false, jobs: mockJobs }) });
-      }
-      if (url === "/api/jobs/job-2/retry" && init?.method === "POST") {
-        return Promise.resolve({ ok: true });
-      }
-      return Promise.reject(new Error("Unknown URL"));
-    });
+    (safeFetch as Mock).mockImplementation(
+      (url: string, init?: RequestInit) => {
+        if (url === "/api/jobs") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ isPaused: false, jobs: mockJobs }),
+          });
+        }
+        if (url === "/api/jobs/job-2/retry" && init?.method === "POST") {
+          return Promise.resolve({ ok: true });
+        }
+        return Promise.reject(new Error("Unknown URL"));
+      },
+    );
 
-    render(<QueueManager token={mockToken} mode="dark" />);
+    render(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -237,23 +288,33 @@ describe("QueueManager", () => {
     await waitFor(() => {
       expect(safeFetch).toHaveBeenCalledWith(
         "/api/jobs/job-2/retry",
-        expect.objectContaining({ method: "POST" })
+        expect.objectContaining({ method: "POST" }),
       );
     });
   });
 
   it("handles pausing a pending job", async () => {
-    (safeFetch as Mock).mockImplementation((url: string, init?: RequestInit) => {
-      if (url === "/api/jobs") {
-        return Promise.resolve({ ok: true, json: async () => ({ isPaused: false, jobs: mockJobs }) });
-      }
-      if (url === "/api/jobs/job-1/pause" && init?.method === "POST") {
-        return Promise.resolve({ ok: true });
-      }
-      return Promise.reject(new Error("Unknown URL"));
-    });
+    (safeFetch as Mock).mockImplementation(
+      (url: string, init?: RequestInit) => {
+        if (url === "/api/jobs") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ isPaused: false, jobs: mockJobs }),
+          });
+        }
+        if (url === "/api/jobs/job-1/pause" && init?.method === "POST") {
+          return Promise.resolve({ ok: true });
+        }
+        return Promise.reject(new Error("Unknown URL"));
+      },
+    );
 
-    render(<QueueManager token={mockToken} mode="dark" />);
+    render(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -266,7 +327,7 @@ describe("QueueManager", () => {
     await waitFor(() => {
       expect(safeFetch).toHaveBeenCalledWith(
         "/api/jobs/job-1/pause",
-        expect.objectContaining({ method: "POST" })
+        expect.objectContaining({ method: "POST" }),
       );
     });
   });
@@ -299,12 +360,23 @@ describe("QueueManager", () => {
 
     (safeFetch as Mock).mockImplementation((url: string) => {
       if (url === "/api/jobs") {
-        return Promise.resolve({ ok: true, json: async () => ({ isPaused: false, jobs: [oldCompletedJob, recentCompletedJob] }) });
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            isPaused: false,
+            jobs: [oldCompletedJob, recentCompletedJob],
+          }),
+        });
       }
       return Promise.reject(new Error("Unknown URL"));
     });
 
-    render(<QueueManager token={mockToken} mode="dark" />);
+    render(
+      <QueueManager
+        token={mockToken}
+        mode="dark"
+      />,
+    );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {

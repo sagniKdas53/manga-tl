@@ -108,12 +108,19 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             >
               {isLogin ? "Welcome Back" : "Create Account"}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 3 }}
+            >
               {isLogin
                 ? "Access your translation workspace"
                 : "Get started by creating a local user"}
             </Typography>
-            <Box component="form" onSubmit={handleAuthSubmit}>
+            <Box
+              component="form"
+              onSubmit={handleAuthSubmit}
+            >
               {!isLogin && (
                 <>
                   <TextField
@@ -126,12 +133,18 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     margin="normal"
                   />
                   {isSetupRequired ? (
-                    <Alert severity="warning" sx={{ mt: 1, mb: 1 }}>
+                    <Alert
+                      severity="warning"
+                      sx={{ mt: 1, mb: 1 }}
+                    >
                       <strong>Administrator</strong> (First user registration
                       forces Admin privileges)
                     </Alert>
                   ) : (
-                    <FormControl fullWidth margin="normal">
+                    <FormControl
+                      fullWidth
+                      margin="normal"
+                    >
                       <InputLabel>Account Role</InputLabel>
                       <Select
                         value={role}
@@ -166,12 +179,22 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 margin="normal"
               />
               {authError && (
-                <Alert severity="error" sx={{ mt: 2 }}>
+                <Alert
+                  severity="error"
+                  sx={{ mt: 2 }}
+                >
                   {authError}
                 </Alert>
               )}
-              <Stack spacing={2} sx={{ mt: 3 }}>
-                <Button type="submit" variant="contained" fullWidth>
+              <Stack
+                spacing={2}
+                sx={{ mt: 3 }}
+              >
+                <Button
+                  type="submit"
+                  variant="contained"
+                  fullWidth
+                >
                   {isLogin ? "Sign In" : "Sign Up"}
                 </Button>
                 <Button

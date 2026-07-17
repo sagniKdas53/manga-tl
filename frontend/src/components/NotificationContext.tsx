@@ -1,4 +1,10 @@
-import React, { useState, useRef, useCallback, useMemo, type ReactNode } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { useSSE } from "../utils/useSSE";
 import { getContextPath } from "../utils";
 import { NotificationContext, type Notification } from "./useNotifications";
@@ -86,7 +92,14 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       clearAll,
       subscribe,
     }),
-    [notifications, unreadCount, markAsRead, markAllAsRead, clearAll, subscribe],
+    [
+      notifications,
+      unreadCount,
+      markAsRead,
+      markAllAsRead,
+      clearAll,
+      subscribe,
+    ],
   );
 
   return (

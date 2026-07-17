@@ -175,12 +175,17 @@ export const Reader: React.FC<ReaderProps> = ({
   });
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
-  const pageDetailsCache = useRef<Record<string, {
-    panels: Panel[];
-    ocrRegions: OcrRegion[];
-    conversations: Conversation[];
-    layers: { layer: Layer; elements: LayerElement[] }[];
-  }>>({});
+  const pageDetailsCache = useRef<
+    Record<
+      string,
+      {
+        panels: Panel[];
+        ocrRegions: OcrRegion[];
+        conversations: Conversation[];
+        layers: { layer: Layer; elements: LayerElement[] }[];
+      }
+    >
+  >({});
   const prefetchQueue = useRef<Set<string>>(new Set());
   const [zoom, setZoom] = useState(() => {
     const saved = localStorage.getItem("manga_zoom");
@@ -318,10 +323,10 @@ export const Reader: React.FC<ReaderProps> = ({
               console.log(
                 `SSE event: Reloading page layers due to ${data.type} job completion`,
               );
-              
+
               // Bust cache for this image so fresh data is fetched
               delete pageDetailsCache.current[data.imageId];
-              
+
               // Force refetch of page details by clearing the loaded image ID
               Promise.resolve().then(() => {
                 setLoadedImageId(null);
@@ -656,14 +661,16 @@ export const Reader: React.FC<ReaderProps> = ({
       pageDetailsCache.current[imageId] = cachedData;
       return cachedData;
     },
-    [user.token]
+    [user.token],
   );
 
   // Fetch page details (panels, OCR regions, conversations) when page selection updates
   useEffect(() => {
     if (selectedPage && loadedImageId !== selectedPage.imageId) {
       const currentImageId = selectedPage.imageId;
-      const currentPageIndex = pages.findIndex((p) => p.imageId === currentImageId);
+      const currentPageIndex = pages.findIndex(
+        (p) => p.imageId === currentImageId,
+      );
 
       // --- SYNCHRONOUS CACHE HIT ---
       if (pageDetailsCache.current[currentImageId]) {
@@ -710,9 +717,15 @@ export const Reader: React.FC<ReaderProps> = ({
       // --- STRICT SLIDING WINDOW PREFETCH & EVICTION ---
       if (currentPageIndex !== -1) {
         // 1. Prefetch next 2 pages (N+1, N+2)
-        const pagesToPrefetch = pages.slice(currentPageIndex + 1, currentPageIndex + 3);
+        const pagesToPrefetch = pages.slice(
+          currentPageIndex + 1,
+          currentPageIndex + 3,
+        );
         pagesToPrefetch.forEach((p) => {
-          if (!pageDetailsCache.current[p.imageId] && !prefetchQueue.current.has(p.imageId)) {
+          if (
+            !pageDetailsCache.current[p.imageId] &&
+            !prefetchQueue.current.has(p.imageId)
+          ) {
             prefetchQueue.current.add(p.imageId);
 
             // Prefetch image itself (lightweight progressive loading)
@@ -720,25 +733,27 @@ export const Reader: React.FC<ReaderProps> = ({
             img.src = `${p.url}?token=${user.token}`;
 
             // Prefetch details
-            fetchPageDetails(p.imageId).catch((e) => console.error("Prefetch error", e));
+            fetchPageDetails(p.imageId).catch((e) =>
+              console.error("Prefetch error", e),
+            );
           }
         });
 
         // 2. Evict pages outside of window [N, N+1, N+2] to save memory
         const activeWindowIds = new Set([
           currentImageId,
-          ...pagesToPrefetch.map(p => p.imageId)
+          ...pagesToPrefetch.map((p) => p.imageId),
         ]);
 
         // Evict from cache
-        Object.keys(pageDetailsCache.current).forEach(cachedId => {
+        Object.keys(pageDetailsCache.current).forEach((cachedId) => {
           if (!activeWindowIds.has(cachedId)) {
             delete pageDetailsCache.current[cachedId];
           }
         });
 
         // Evict from prefetchQueue tracking
-        prefetchQueue.current.forEach(queuedId => {
+        prefetchQueue.current.forEach((queuedId) => {
           if (!activeWindowIds.has(queuedId)) {
             prefetchQueue.current.delete(queuedId);
           }
@@ -1721,7 +1736,10 @@ export const Reader: React.FC<ReaderProps> = ({
             setSelectedItem(null);
             showToast("Element deleted successfully", "success");
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this element.", "error");
+            showToast(
+              "You don't have permission to delete this element.",
+              "error",
+            );
           } else {
             showToast("Failed to delete layer element", "error");
           }
@@ -1823,7 +1841,10 @@ export const Reader: React.FC<ReaderProps> = ({
             setLayers((prev) => prev.filter((l) => l.layer.id !== layerId));
             showToast("Layer deleted successfully", "success");
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this layer.", "error");
+            showToast(
+              "You don't have permission to delete this layer.",
+              "error",
+            );
           } else {
             showToast("Failed to delete layer", "error");
           }
@@ -3128,7 +3149,10 @@ export const Reader: React.FC<ReaderProps> = ({
         )}
 
         {/* Center Canvas */}
-        <div className="reader-main-nhentai" style={{ position: "relative" }}>
+        <div
+          className="reader-main-nhentai"
+          style={{ position: "relative" }}
+        >
           {isLoadingPageDetails && (
             <div
               style={{
@@ -3148,7 +3172,11 @@ export const Reader: React.FC<ReaderProps> = ({
             >
               <div
                 className="spinner"
-                style={{ borderColor: "rgba(255,255,255,0.3)", borderTopColor: "white", marginBottom: "10px" }}
+                style={{
+                  borderColor: "rgba(255,255,255,0.3)",
+                  borderTopColor: "white",
+                  marginBottom: "10px",
+                }}
               ></div>
               <div>Loading page details...</div>
             </div>
@@ -4308,8 +4336,21 @@ export const Reader: React.FC<ReaderProps> = ({
                         padding: "8px 6px",
                         height: "36px",
                       }}
-                      disabled={isRedoingRegionOcr || (selectedItem && "layerType" in selectedItem && (selectedItem.layerType === "translation" || selectedItem.layerType === "tl"))}
-                      title={selectedItem && "layerType" in selectedItem && (selectedItem.layerType === "translation" || selectedItem.layerType === "tl") ? "Select an OCR layer element to redo OCR" : undefined}
+                      disabled={
+                        isRedoingRegionOcr ||
+                        (selectedItem &&
+                          "layerType" in selectedItem &&
+                          (selectedItem.layerType === "translation" ||
+                            selectedItem.layerType === "tl"))
+                      }
+                      title={
+                        selectedItem &&
+                        "layerType" in selectedItem &&
+                        (selectedItem.layerType === "translation" ||
+                          selectedItem.layerType === "tl")
+                          ? "Select an OCR layer element to redo OCR"
+                          : undefined
+                      }
                       onClick={() => {
                         const actualRegion = ocrRegions.find(
                           (r) => r.id === selectedItem.regionId,

@@ -22,10 +22,21 @@ export interface SettingsModalProps {
 }
 
 const PROVIDERS = [
-  "openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio",
+  "openrouter",
+  "gemini",
+  "nvidia",
+  "openai",
+  "anthropic",
+  "ollama",
+  "lmstudio",
 ];
 const OCR_PROVIDERS = [
-  "local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio",
+  "local",
+  "openrouter",
+  "gemini",
+  "nvidia",
+  "ollama",
+  "lmstudio",
 ];
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
@@ -112,19 +123,35 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       <DialogTitle id="settings-dialog-title">System Settings</DialogTitle>
       <DialogContent dividers>
         {loading ? (
-          <Typography align="center" sx={{ py: 4 }}>
-            <CircularProgress size={28} sx={{ mb: 1 }} />
+          <Typography
+            align="center"
+            sx={{ py: 4 }}
+          >
+            <CircularProgress
+              size={28}
+              sx={{ mb: 1 }}
+            />
             <br />
             Loading settings...
           </Typography>
         ) : !settings ? (
-          <Typography align="center" color="error" sx={{ py: 4 }}>
+          <Typography
+            align="center"
+            color="error"
+            sx={{ py: 4 }}
+          >
             Failed to load settings.
           </Typography>
         ) : (
-          <Grid container spacing={2}>
+          <Grid
+            container
+            spacing={2}
+          >
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>Global OCR Provider</InputLabel>
                 <Select
                   value={settings.ocrProvider || ""}
@@ -132,7 +159,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => handleChange("ocrProvider", e.target.value)}
                 >
                   {ocrProviders.map((p) => (
-                    <MenuItem key={p} value={p}>
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
                       {p}
                     </MenuItem>
                   ))}
@@ -162,11 +192,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     </MenuItem>
                   ) : (
                     [
-                      <MenuItem key="_empty" value="">
+                      <MenuItem
+                        key="_empty"
+                        value=""
+                      >
                         -- Default / Inherit Env --
                       </MenuItem>,
                       ...settings.ocrVlmModelList.map((m) => (
-                        <MenuItem key={m} value={m}>
+                        <MenuItem
+                          key={m}
+                          value={m}
+                        >
                           {m}
                         </MenuItem>
                       )),
@@ -180,14 +216,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <Typography
                 variant="overline"
                 color="text.disabled"
-                sx={{ display: "block", borderTop: 1, borderColor: "divider", pt: 1 }}
+                sx={{
+                  display: "block",
+                  borderTop: 1,
+                  borderColor: "divider",
+                  pt: 1,
+                }}
               >
                 Translation
               </Typography>
             </Grid>
 
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>Global Translation Provider</InputLabel>
                 <Select
                   value={settings.tlProvider || ""}
@@ -195,7 +239,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => handleChange("tlProvider", e.target.value)}
                 >
                   {providers.map((p) => (
-                    <MenuItem key={p} value={p}>
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
                       {p}
                     </MenuItem>
                   ))}
@@ -204,7 +251,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </Grid>
 
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>Global Translation LLM Model</InputLabel>
                 <Select
                   value={settings.tlModel || ""}
@@ -213,7 +263,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <MenuItem value="">-- Default / Inherit Env --</MenuItem>
                   {settings.tlLlmModelList.map((m) => (
-                    <MenuItem key={m} value={m}>
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
                       {m}
                     </MenuItem>
                   ))}
@@ -225,14 +278,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <Typography
                 variant="overline"
                 color="text.disabled"
-                sx={{ display: "block", borderTop: 1, borderColor: "divider", pt: 1 }}
+                sx={{
+                  display: "block",
+                  borderTop: 1,
+                  borderColor: "divider",
+                  pt: 1,
+                }}
               >
                 Quality Assurance
               </Typography>
             </Grid>
 
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>Global QA Provider</InputLabel>
                 <Select
                   value={settings.qaProvider || ""}
@@ -240,7 +301,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => handleChange("qaProvider", e.target.value)}
                 >
                   {providers.map((p) => (
-                    <MenuItem key={p} value={p}>
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
                       {p}
                     </MenuItem>
                   ))}
@@ -249,7 +313,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </Grid>
 
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>Global QA Mode</InputLabel>
                 <Select
                   value={settings.qaMode || ""}
@@ -257,7 +324,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => handleChange("qaMode", e.target.value)}
                 >
                   {QA_MODES.map((m) => (
-                    <MenuItem key={m} value={m}>
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
                       {m}
                     </MenuItem>
                   ))}
@@ -281,7 +351,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <MenuItem value="">-- Default / Inherit Env --</MenuItem>
                   {settings.qaLlmModelList.map((m) => (
-                    <MenuItem key={m} value={m}>
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
                       {m}
                     </MenuItem>
                   ))}
@@ -305,7 +378,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <MenuItem value="">-- Default / Inherit Env --</MenuItem>
                   {settings.qaVlmModelList.map((m) => (
-                    <MenuItem key={m} value={m}>
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
                       {m}
                     </MenuItem>
                   ))}
@@ -316,7 +392,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>
+        <Button
+          onClick={onClose}
+          disabled={saving}
+        >
           Cancel
         </Button>
         <Button

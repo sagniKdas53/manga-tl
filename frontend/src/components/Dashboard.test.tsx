@@ -108,65 +108,71 @@ describe("Dashboard Component", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/series/s1/one-piece");
   });
 
-  it("opens modal on clicking New Series and submits successfully", { timeout: 15000 }, async () => {
-    mockSafeFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          id: "s3",
-          title: "Bleach",
-          readingDirection: "rtl",
-          sourceLanguage: "ja",
-          targetLanguage: "en",
-        }),
-    });
-
-    render(
-      <Dashboard
-        user={mockUser}
-        seriesList={initialSeries}
-        setSeriesList={mockSetSeriesList}
-        onSelectSeries={mockOnSelectSeries}
-      />,
-    );
-
-    const newBtn = screen.getByRole("button", { name: /new series/i });
-    fireEvent.click(newBtn);
-
-    expect(screen.getByRole("heading", { name: "Create Series" })).toBeInTheDocument();
-
-    const titleInput = screen.getByPlaceholderText("e.g. My Hero Academia");
-    fireEvent.change(titleInput, { target: { value: "Bleach" } });
-
-    const submitBtn = screen.getByRole("button", { name: /create/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer token123`,
-        },
-        body: JSON.stringify({
-          title: "Bleach",
-          originalLanguage: "ja",
-          sourceLanguage: "ja",
-          targetLanguage: "en",
-          readingDirection: "rtl",
-          ocrProvider: null,
-          ocrModel: null,
-          tlProvider: null,
-          tlModel: null,
-          qaProvider: null,
-          qaLlmModel: null,
-          qaVlmModel: null,
-          qaMode: null,
-        }),
+  it(
+    "opens modal on clicking New Series and submits successfully",
+    { timeout: 15000 },
+    async () => {
+      mockSafeFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "s3",
+            title: "Bleach",
+            readingDirection: "rtl",
+            sourceLanguage: "ja",
+            targetLanguage: "en",
+          }),
       });
-      expect(mockSetSeriesList).toHaveBeenCalled();
-    });
-  });
+
+      render(
+        <Dashboard
+          user={mockUser}
+          seriesList={initialSeries}
+          setSeriesList={mockSetSeriesList}
+          onSelectSeries={mockOnSelectSeries}
+        />,
+      );
+
+      const newBtn = screen.getByRole("button", { name: /new series/i });
+      fireEvent.click(newBtn);
+
+      expect(
+        screen.getByRole("heading", { name: "Create Series" }),
+      ).toBeInTheDocument();
+
+      const titleInput = screen.getByPlaceholderText("e.g. My Hero Academia");
+      fireEvent.change(titleInput, { target: { value: "Bleach" } });
+
+      const submitBtn = screen.getByRole("button", { name: /create/i });
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(mockSafeFetch).toHaveBeenCalledWith("/api/series", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer token123`,
+          },
+          body: JSON.stringify({
+            title: "Bleach",
+            originalLanguage: "ja",
+            sourceLanguage: "ja",
+            targetLanguage: "en",
+            readingDirection: "rtl",
+            ocrProvider: null,
+            ocrModel: null,
+            tlProvider: null,
+            tlModel: null,
+            qaProvider: null,
+            qaLlmModel: null,
+            qaVlmModel: null,
+            qaMode: null,
+          }),
+        });
+        expect(mockSetSeriesList).toHaveBeenCalled();
+      });
+    },
+  );
 
   it("opens edit series modal and performs changes", async () => {
     mockSafeFetch.mockResolvedValueOnce({
@@ -187,7 +193,9 @@ describe("Dashboard Component", () => {
     const editBtn = screen.getAllByTitle("Edit Series")[0];
     fireEvent.click(editBtn);
 
-    expect(screen.getByRole("heading", { name: "Edit Series" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Edit Series" }),
+    ).toBeInTheDocument();
 
     const titleInput = screen.getByPlaceholderText("e.g. My Hero Academia");
     expect(titleInput).toHaveValue("One Piece");
@@ -332,7 +340,10 @@ describe("Dashboard Component", () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(mockShowToast).toHaveBeenCalledWith("Failed to delete series", "error");
+      expect(mockShowToast).toHaveBeenCalledWith(
+        "Failed to delete series",
+        "error",
+      );
     });
   });
 
@@ -370,92 +381,98 @@ describe("Dashboard Component", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it.skip("creates a new series with language and reading direction changed", { timeout: 15000 }, async () => {
-    mockSafeFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          id: "s4",
-          title: "New Manga",
-          readingDirection: "ltr",
-          sourceLanguage: "ko",
-          targetLanguage: "zh-TW",
-        }),
-    });
-
-    render(
-      <Dashboard
-        user={mockUser}
-        seriesList={initialSeries}
-        setSeriesList={mockSetSeriesList}
-        onSelectSeries={mockOnSelectSeries}
-      />,
-    );
-
-    const newBtn = screen.getByRole("button", { name: /new series/i });
-    fireEvent.click(newBtn);
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText("e.g. My Hero Academia")).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByPlaceholderText("e.g. My Hero Academia"), {
-      target: { value: "New Manga" },
-    });
-
-    await waitFor(() => {
-      const combos = document.querySelectorAll('[role="combobox"]');
-      expect(combos.length).toBeGreaterThanOrEqual(3);
-    });
-
-    const comboboxes = document.querySelectorAll('[role="combobox"]');
-    fireEvent.mouseDown(comboboxes[0]);
-    await waitFor(() => {
-      expect(screen.getByRole("listbox")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole("option", { name: "ko" }));
-
-    fireEvent.mouseDown(comboboxes[1]);
-    await waitFor(() => {
-      expect(screen.getByRole("listbox")).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole("option", { name: "zh-TW" }));
-
-    fireEvent.mouseDown(comboboxes[2]);
-    await waitFor(() => {
-      expect(screen.getByRole("listbox")).toBeInTheDocument();
-    });
-    fireEvent.click(
-      screen.getByRole("option", { name: "Left to Right (Comics)" }),
-    );
-
-    const submitBtn = screen.getByRole("button", { name: /create/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/series", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer token123`,
-        },
-        body: JSON.stringify({
-          title: "New Manga",
-          originalLanguage: "ko",
-          sourceLanguage: "ko",
-          targetLanguage: "zh-TW",
-          readingDirection: "ltr",
-          ocrProvider: null,
-          ocrModel: null,
-          tlProvider: null,
-          tlModel: null,
-          qaProvider: null,
-          qaLlmModel: null,
-          qaVlmModel: null,
-          qaMode: null,
-        }),
+  it.skip(
+    "creates a new series with language and reading direction changed",
+    { timeout: 15000 },
+    async () => {
+      mockSafeFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "s4",
+            title: "New Manga",
+            readingDirection: "ltr",
+            sourceLanguage: "ko",
+            targetLanguage: "zh-TW",
+          }),
       });
-      expect(mockSetSeriesList).toHaveBeenCalled();
-    });
-  });
+
+      render(
+        <Dashboard
+          user={mockUser}
+          seriesList={initialSeries}
+          setSeriesList={mockSetSeriesList}
+          onSelectSeries={mockOnSelectSeries}
+        />,
+      );
+
+      const newBtn = screen.getByRole("button", { name: /new series/i });
+      fireEvent.click(newBtn);
+
+      await waitFor(() => {
+        expect(
+          screen.getByPlaceholderText("e.g. My Hero Academia"),
+        ).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("e.g. My Hero Academia"), {
+        target: { value: "New Manga" },
+      });
+
+      await waitFor(() => {
+        const combos = document.querySelectorAll('[role="combobox"]');
+        expect(combos.length).toBeGreaterThanOrEqual(3);
+      });
+
+      const comboboxes = document.querySelectorAll('[role="combobox"]');
+      fireEvent.mouseDown(comboboxes[0]);
+      await waitFor(() => {
+        expect(screen.getByRole("listbox")).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole("option", { name: "ko" }));
+
+      fireEvent.mouseDown(comboboxes[1]);
+      await waitFor(() => {
+        expect(screen.getByRole("listbox")).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole("option", { name: "zh-TW" }));
+
+      fireEvent.mouseDown(comboboxes[2]);
+      await waitFor(() => {
+        expect(screen.getByRole("listbox")).toBeInTheDocument();
+      });
+      fireEvent.click(
+        screen.getByRole("option", { name: "Left to Right (Comics)" }),
+      );
+
+      const submitBtn = screen.getByRole("button", { name: /create/i });
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(mockSafeFetch).toHaveBeenCalledWith("/api/series", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer token123`,
+          },
+          body: JSON.stringify({
+            title: "New Manga",
+            originalLanguage: "ko",
+            sourceLanguage: "ko",
+            targetLanguage: "zh-TW",
+            readingDirection: "ltr",
+            ocrProvider: null,
+            ocrModel: null,
+            tlProvider: null,
+            tlModel: null,
+            qaProvider: null,
+            qaLlmModel: null,
+            qaVlmModel: null,
+            qaMode: null,
+          }),
+        });
+        expect(mockSetSeriesList).toHaveBeenCalled();
+      });
+    },
+  );
 });

@@ -20,9 +20,7 @@ export function themeObj(mode: "light" | "dark") {
         disabled: mode === "dark" ? "#6c6c6c" : "#786e6a",
       },
       divider:
-        mode === "dark"
-          ? "rgba(254,254,254,0.12)"
-          : "rgba(52,51,51,0.12)",
+        mode === "dark" ? "rgba(254,254,254,0.12)" : "rgba(52,51,51,0.12)",
       conversation: {
         main: mode === "dark" ? "#3b82f6" : "#2563eb",
       },

@@ -118,26 +118,59 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   };
 
-  const initials = (user.displayName || user.email || "?").substring(0, 2).toUpperCase();
+  const initials = (user.displayName || user.email || "?")
+    .substring(0, 2)
+    .toUpperCase();
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>Account Settings</DialogTitle>
       <DialogContent dividers>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
-          <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: "primary.main" }}>
+          <Avatar
+            sx={{
+              width: 56,
+              height: 56,
+              fontSize: 24,
+              bgcolor: "primary.main",
+            }}
+          >
             {initials}
           </Avatar>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>{user.displayName}</Typography>
-            <Typography variant="body2" color="text.secondary">{user.email}</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: "capitalize" }}>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 600 }}
+            >
+              {user.displayName}
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+            >
+              {user.email}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ textTransform: "capitalize" }}
+            >
               Role: {user.role}
             </Typography>
           </Box>
         </Box>
 
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Display Name</Typography>
+        <Typography
+          variant="subtitle1"
+          sx={{ fontWeight: 600, mb: 1 }}
+        >
+          Display Name
+        </Typography>
         <Box sx={{ display: "flex", gap: 1, mb: 3 }}>
           <TextField
             size="small"
@@ -146,14 +179,23 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             fullWidth
             placeholder="Your display name"
           />
-          <Button variant="outlined" size="small" onClick={handleUpdateProfile}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleUpdateProfile}
+          >
             Save
           </Button>
         </Box>
 
         <Divider sx={{ my: 2 }} />
 
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Change Password</Typography>
+        <Typography
+          variant="subtitle1"
+          sx={{ fontWeight: 600, mb: 1 }}
+        >
+          Change Password
+        </Typography>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <TextField
             size="small"
@@ -172,15 +214,32 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             fullWidth
             helperText="At least 6 characters"
           />
-          {passwordError && <Alert severity="error" sx={{ py: 0 }}>{passwordError}</Alert>}
-          <Button variant="outlined" color="primary" size="small" onClick={handleChangePassword}>
+          {passwordError && (
+            <Alert
+              severity="error"
+              sx={{ py: 0 }}
+            >
+              {passwordError}
+            </Alert>
+          )}
+          <Button
+            variant="outlined"
+            color="primary"
+            size="small"
+            onClick={handleChangePassword}
+          >
             Change Password
           </Button>
         </Box>
 
         <Divider sx={{ my: 2 }} />
 
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "error.main", mb: 1 }}>Danger Zone</Typography>
+        <Typography
+          variant="subtitle1"
+          sx={{ fontWeight: 600, color: "error.main", mb: 1 }}
+        >
+          Danger Zone
+        </Typography>
         {!showDeleteConfirm ? (
           <Button
             variant="outlined"
@@ -193,7 +252,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <DialogContentText>
-              Type <strong>DELETE</strong> to confirm account deletion. This action cannot be undone.
+              Type <strong>DELETE</strong> to confirm account deletion. This
+              action cannot be undone.
             </DialogContentText>
             <TextField
               size="small"
@@ -232,3 +292,5 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     </Dialog>
   );
 };
+
+export default UserManagementModal;

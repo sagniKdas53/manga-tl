@@ -45,10 +45,21 @@ interface CreateChapterDialogProps {
 }
 
 const DEFAULT_PROVIDERS = [
-  "openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio",
+  "openrouter",
+  "gemini",
+  "nvidia",
+  "openai",
+  "anthropic",
+  "ollama",
+  "lmstudio",
 ];
 const DEFAULT_OCR_PROVIDERS = [
-  "local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio",
+  "local",
+  "openrouter",
+  "gemini",
+  "nvidia",
+  "ollama",
+  "lmstudio",
 ];
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
@@ -65,7 +76,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const defaultNum = editingChapter
     ? editingChapter.chapterNumber
     : chapters.reduce((m, c) => Math.max(m, c.chapterNumber), 0) +
-        (chapters.length > 0 ? 1 : 1);
+      (chapters.length > 0 ? 1 : 1);
   const [number, setNumber] = useState(defaultNum);
   const [title, setTitle] = useState(editingChapter?.title || "");
   const [useContextMemory, setUseContextMemory] = useState(
@@ -77,9 +88,13 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     editingChapter?.ocrProvider || "",
   );
   const [ocrModel, setOcrModel] = useState(editingChapter?.ocrModel || "");
-  const [tlProvider, setTlProvider] = useState(editingChapter?.tlProvider || "");
+  const [tlProvider, setTlProvider] = useState(
+    editingChapter?.tlProvider || "",
+  );
   const [tlModel, setTlModel] = useState(editingChapter?.tlModel || "");
-  const [qaProvider, setQaProvider] = useState(editingChapter?.qaProvider || "");
+  const [qaProvider, setQaProvider] = useState(
+    editingChapter?.qaProvider || "",
+  );
   const [qaLlmModel, setQaLlmModel] = useState(
     editingChapter?.qaLlmModel || "",
   );
@@ -109,12 +124,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     ocrProvider || selectedSeries?.ocrProvider || settings?.ocrProvider;
   const ocrDisabled = resolvedOcrProvider === "local";
 
-  const resolvedQaMode =
-    qaMode || selectedSeries?.qaMode || settings?.qaMode;
-  const qaLlmDisabled =
-    resolvedQaMode === "vlm" || resolvedQaMode === "none";
-  const qaVlmDisabled =
-    resolvedQaMode === "llm" || resolvedQaMode === "none";
+  const resolvedQaMode = qaMode || selectedSeries?.qaMode || settings?.qaMode;
+  const qaLlmDisabled = resolvedQaMode === "vlm" || resolvedQaMode === "none";
+  const qaVlmDisabled = resolvedQaMode === "llm" || resolvedQaMode === "none";
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -146,7 +158,11 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       if (!res.ok) {
         const body = await res.text();
         let msg = body;
-        try { msg = JSON.parse(body).message || body; } catch { /* */ }
+        try {
+          msg = JSON.parse(body).message || body;
+        } catch {
+          /* */
+        }
         onError(msg);
         setSaving(false);
         return;
@@ -160,7 +176,12 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>
         {editingChapter ? "Edit Chapter" : "Add Chapter"}
       </DialogTitle>
@@ -202,7 +223,10 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
             <Typography variant="body2">Model Overrides (Optional)</Typography>
           </AccordionSummary>
           <AccordionDetails>
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>OCR Provider</InputLabel>
               <Select
                 value={ocrProvider}
@@ -211,11 +235,20 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {ocrProviders.map((p) => (
-                  <MenuItem key={p} value={p}>{p}</MenuItem>
+                  <MenuItem
+                    key={p}
+                    value={p}
+                  >
+                    {p}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense" disabled={ocrDisabled}>
+            <FormControl
+              fullWidth
+              margin="dense"
+              disabled={ocrDisabled}
+            >
               <InputLabel>OCR VLM Model</InputLabel>
               <Select
                 value={ocrModel}
@@ -229,12 +262,20 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                   </MenuItem>
                 ) : (
                   (settings?.ocrVlmModelList || []).map((m) => (
-                    <MenuItem key={m} value={m}>{m}</MenuItem>
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
+                      {m}
+                    </MenuItem>
                   ))
                 )}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>TL Provider</InputLabel>
               <Select
                 value={tlProvider}
@@ -243,11 +284,19 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {providers.map((p) => (
-                  <MenuItem key={p} value={p}>{p}</MenuItem>
+                  <MenuItem
+                    key={p}
+                    value={p}
+                  >
+                    {p}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>TL LLM Model</InputLabel>
               <Select
                 value={tlModel}
@@ -256,11 +305,19 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {(settings?.tlLlmModelList || []).map((m) => (
-                  <MenuItem key={m} value={m}>{m}</MenuItem>
+                  <MenuItem
+                    key={m}
+                    value={m}
+                  >
+                    {m}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>QA Provider</InputLabel>
               <Select
                 value={qaProvider}
@@ -269,11 +326,19 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {providers.map((p) => (
-                  <MenuItem key={p} value={p}>{p}</MenuItem>
+                  <MenuItem
+                    key={p}
+                    value={p}
+                  >
+                    {p}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense">
+            <FormControl
+              fullWidth
+              margin="dense"
+            >
               <InputLabel>QA Mode</InputLabel>
               <Select
                 value={qaMode}
@@ -282,11 +347,20 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {QA_MODES.map((m) => (
-                  <MenuItem key={m} value={m}>{m}</MenuItem>
+                  <MenuItem
+                    key={m}
+                    value={m}
+                  >
+                    {m}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense" disabled={qaLlmDisabled}>
+            <FormControl
+              fullWidth
+              margin="dense"
+              disabled={qaLlmDisabled}
+            >
               <InputLabel>QA LLM Model</InputLabel>
               <Select
                 value={qaLlmModel}
@@ -295,11 +369,20 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {(settings?.qaLlmModelList || []).map((m) => (
-                  <MenuItem key={m} value={m}>{m}</MenuItem>
+                  <MenuItem
+                    key={m}
+                    value={m}
+                  >
+                    {m}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth margin="dense" disabled={qaVlmDisabled}>
+            <FormControl
+              fullWidth
+              margin="dense"
+              disabled={qaVlmDisabled}
+            >
               <InputLabel>QA VLM Model</InputLabel>
               <Select
                 value={qaVlmModel}
@@ -308,7 +391,12 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               >
                 <MenuItem value="">-- Inherit --</MenuItem>
                 {(settings?.qaVlmModelList || []).map((m) => (
-                  <MenuItem key={m} value={m}>{m}</MenuItem>
+                  <MenuItem
+                    key={m}
+                    value={m}
+                  >
+                    {m}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>

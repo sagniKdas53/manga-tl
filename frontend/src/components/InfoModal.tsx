@@ -53,7 +53,11 @@ const InfoModal: React.FC<InfoModalProps> = ({
         </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="contained" autoFocus>
+        <Button
+          onClick={onClose}
+          variant="contained"
+          autoFocus
+        >
           OK
         </Button>
       </DialogActions>

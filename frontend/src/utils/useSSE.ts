@@ -8,12 +8,12 @@ type SSEEvent = {
 export function useSSE(
   url: string,
   token: string | null,
-  onMessage?: (event: SSEEvent) => void
+  onMessage?: (event: SSEEvent) => void,
 ) {
   const [isConnected, setIsConnected] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
-  
+
   const onMessageRef = useRef(onMessage);
   useEffect(() => {
     onMessageRef.current = onMessage;
