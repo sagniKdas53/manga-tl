@@ -354,11 +354,14 @@ describe("ChapterGallery Component", () => {
       if (this.onload) this.onload();
     });
 
-    const XHRMock = vi.fn().mockImplementation(function (this: XMLHttpRequest) {
+    const XHRMock = vi.fn().mockImplementation(function (this: any) {
       this.open = vi.fn();
       this.send = sendMock;
       this.setRequestHeader = vi.fn();
-      this.upload = { onprogress: null };
+      Object.defineProperty(this, "upload", {
+        value: { onprogress: null },
+        writable: true,
+      });
       this.status = 200;
       this.onload = null;
     });

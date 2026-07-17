@@ -429,7 +429,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0];
-    if (!file || !selectedChapter) return;
+    if (!file || !selectedChapter || !user) return;
 
     // Reset input value so onChange triggers again for same file if needed
     e.target.value = "";
@@ -449,7 +449,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             Authorization: `Bearer ${user.token}`,
           },
           body: formData,
-        },
+        } as RequestInit,
       );
 
       if (res.ok) {

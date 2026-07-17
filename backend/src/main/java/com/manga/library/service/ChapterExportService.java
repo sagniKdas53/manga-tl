@@ -57,7 +57,7 @@ public class ChapterExportService {
         Map<String, Object> pageMeta = new HashMap<>();
         pageMeta.put("pageNumber", page.getPageNumber());
         pageMeta.put("imageId", imageId.toString());
-        pageMeta.put("originalFilename", page.getImage().getFilename());
+        pageMeta.put("originalFilename", filename);
         pageMeta.put("hasRendered", hasRendered);
 
         List<Layer> imageLayers = layerRepository.findByImageId(imageId);
@@ -87,7 +87,7 @@ public class ChapterExportService {
             layerMeta.put("elements", elements);
           }
 
-          String modelName = null;
+          String modelName;
 
           if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
             com.fasterxml.jackson.databind.node.ObjectNode metaNode =

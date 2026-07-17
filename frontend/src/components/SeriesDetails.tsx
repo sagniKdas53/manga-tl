@@ -302,7 +302,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
             Authorization: `Bearer ${user.token}`,
           },
           body: formData,
-        },
+        } as RequestInit,
       );
 
       if (res.ok) {
