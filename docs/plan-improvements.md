@@ -563,7 +563,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 - In chapter cards (D.3) and Reader metadata:
   - Display the resolved model name for OCR, Translation, and QA
   - Use a subtle label like `(inherited)` or `(global)` to indicate the source
-- ~~Backend may need a new endpoint or enrichment: `GET /api/chapters/{id}/resolved-settings`~~ — **superseded by the client-side decision above**; a future backend enrichment (series/chapter DTOs carrying resolved settings) will be planned as its own item outside Phase D
+- Backend may need a new endpoint or enrichment: `GET /api/chapters/{id}/resolved-settings` — **superseded by the client-side decision above**; a future backend enrichment (series/chapter DTOs carrying resolved settings) will be planned as its own item outside Phase D
 
 ### D.11 Model Override UX Redesign
 
@@ -676,7 +676,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 | **Theme + CSS** | ✅ Done | **Deviation from plan**: yt-diff design patterns adopted retroactively. `MuiPaper backgroundImage: "none"` + conditional `boxShadow`. `MuiTableCell` border override. `MuiTable defaultProps size="small"`. Custom scrollbar (6px, dark). All `backdrop-filter`/glass/transparency removed — solid backgrounds everywhere. Pixiv palette applied to `:root.light` CSS vars. nHentai dark mode palette (#0d0d0d background). Button hover backgrounds made 2.4× more visible. Nav bar + series container + chapter grid padding/margins reduced ~25–40%. All 4 barrel MUI imports converted to direct-path (tree-shakeable). |
 | **Back/action buttons** | ✅ Done | "← Back to Library/Series" + "Add Chapter" + "Edit Series" + "Delete Series" + "Import/Export/Upload" all converted to MUI Button components with `startIcon`. `mb-8` dead wrapper divs removed (32px wasted margin). |
 
-### Deferred
+### Resume from here
 
 | Item | Reason |
 |------|--------|
@@ -684,7 +684,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 | **D.5** (Reader full-reload fix) | Reader is excluded from coverage; will fix alongside Phase 7. |
 | **D.6** (UploadContext persist) | Needs app-level context (new provider). Deferred to follow D.14 memoization pattern. |
 | **D.7** (User management modal) | New component. Lowest priority among remaining D items. |
-| **D.9** (Infinite scroll) | Requires backend pagination support (`GET /api/series?page=&size=`). Backend dependency. |
+| **D.9** (Infinite scroll) (will do this later, skip for now) | Requires backend pagination support (`GET /api/series?page=&size=`). Backend dependency. |
 | **D.10** (Resolved model display) | Client-side `resolveModel(chain)` utility planned but not yet implemented. Backend enrichment coming later. |
 | **D.11** (Model override UX) | Builds on D.10. Accordion/Tabs redesign deferred. |
 | **D.3 rich metadata** | Language pair, model info, context memory badges on chapter cards — not yet added. |
@@ -692,7 +692,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 | **D.12 P3** (Queue Manager → Table) | Still styled with inline elements. MUI Table conversion deferred. Phase A behavior contract documented in migration plan. |
 | **D.12 P7** (Reader) | 5292-line component, highest risk. JSX swap + 7.4.1/7.4.2 with tests deferred. |
 | **D.12 P9** (CSS cleanup) | index.css still ~1800 lines. Cleanup happens after all MUI phases complete. |
-| **D.15** (Mobile) | Stretch goal. |
+| **D.15** (Mobile) (will do this later, skip for now) | Stretch goal. |
 
 ### Design decisions with rationale
 

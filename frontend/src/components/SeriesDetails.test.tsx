@@ -35,6 +35,16 @@ vi.mock("../utils", () => ({
     return mockSafeFetch(url, ...args);
   },
   toSlug: (s: string) => s.toLowerCase().replace(/\s+/g, "-"),
+  resolveOverride: (
+    chapterVal: string | null | undefined,
+    seriesVal: string | null | undefined,
+    globalVal: string | null | undefined,
+  ) => ({
+    value: chapterVal || seriesVal || globalVal || "",
+    source: chapterVal ? "chapter" : seriesVal ? "series" : "global",
+  }),
+  formatResolverHint: (source: string) =>
+    source === "series" ? "(inherited from series)" : source === "global" ? "(global)" : "",
 }));
 
 describe("SeriesDetails Component", () => {

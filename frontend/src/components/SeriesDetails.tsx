@@ -1,13 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
 import ImportExportIcon from "@mui/icons-material/ImportExport";
 import UploadIcon from "@mui/icons-material/Upload";
 import { useToast } from "./ToastContext";
 import type { User, Series, Chapter, SystemSettingsDto } from "../types";
-import { safeFetch, toSlug } from "../utils";
+import { safeFetch, toSlug, resolveOverride, formatResolverHint } from "../utils";
 import ConfirmModal from "./ConfirmModal";
 import CreateChapterDialog from "./CreateChapterDialog";
 
@@ -102,22 +105,14 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const [importError, setImportError] = useState("");
   const [isImporting, setIsImporting] = useState(false);
 
-  React.useEffect(() => {
-    if ((showSeriesModal || showChapterModal || showImportModal) && !settings) {
-      safeFetch("/api/settings", {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => setSettings(data))
-        .catch(console.error);
-    }
-  }, [
-    showSeriesModal,
-    showChapterModal,
-    showImportModal,
-    settings,
-    user.token,
-  ]);
+  useEffect(() => {
+    safeFetch("/api/settings", {
+      headers: { Authorization: `Bearer ${user.token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setSettings(data))
+      .catch(console.error);
+  }, [user.token]);
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -580,6 +575,40 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
                 >
                   {c.title || "Untitled"}
                 </div>
+                {(settings || c.pageCount || c.useContextMemory) && (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.75 }}>
+                    {c.pageCount !== undefined && c.pageCount > 0 && (
+                      <Chip
+                        label={`${c.pageCount} pages`}
+                        size="small"
+                        variant="outlined"
+                        title="Total pages in this chapter"
+                      />
+                    )}
+                    {c.useContextMemory !== undefined && (
+                      <Chip
+                        label={c.useContextMemory ? "Context" : "No Context"}
+                        size="small"
+                        variant="outlined"
+                        color={c.useContextMemory ? "primary" : "default"}
+                        title={c.useContextMemory ? "Context memory enabled" : "Context memory disabled"}
+                      />
+                    )}
+                    {settings && (() => {
+                      const ocr = resolveOverride(c.ocrProvider, selectedSeries?.ocrProvider, settings.ocrProvider);
+                      const tl = resolveOverride(c.tlProvider, selectedSeries?.tlProvider, settings.tlProvider);
+                      const hasAnyOverride = ocr.source !== "global" || tl.source !== "global";
+                      if (!hasAnyOverride) return null;
+                      return (
+                        <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "10px", lineHeight: "20px" }}>
+                          {ocr.source !== "global" ? `OCR: ${ocr.value} ${formatResolverHint(ocr.source)}` : ""}
+                          {ocr.source !== "global" && tl.source !== "global" ? " | " : ""}
+                          {tl.source !== "global" ? `TL: ${tl.value} ${formatResolverHint(tl.source)}` : ""}
+                        </Typography>
+                      );
+                    })()}
+                  </Box>
+                )}
               </div>
             </div>
           ))}

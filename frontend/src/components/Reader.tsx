@@ -473,7 +473,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Popover States
   const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
-  const [isRedoing, setIsRedoing] = useState(false);
+  const [isRedoingRegionOcr, setIsRedoingRegionOcr] = useState(false);
+  const [isRedoingRegionTl, setIsRedoingRegionTl] = useState(false);
 
   const visibleOcrRegionIds = React.useMemo(() => {
     const ids = new Set<string>();
@@ -2624,8 +2625,9 @@ export const Reader: React.FC<ReaderProps> = ({
     r: OcrRegion,
     forceType?: "ocr" | "translation",
   ) => {
-    setIsRedoing(true);
     const type = forceType || (showTranslations ? "translation" : "ocr");
+    if (type === "ocr") setIsRedoingRegionOcr(true);
+    else setIsRedoingRegionTl(true);
 
     try {
       const res = await safeFetch(
@@ -2647,7 +2649,8 @@ export const Reader: React.FC<ReaderProps> = ({
         attempts++;
         if (attempts > 20) {
           clearInterval(interval);
-          setIsRedoing(false);
+          if (type === "ocr") setIsRedoingRegionOcr(false);
+          else setIsRedoingRegionTl(false);
           showInfo(
             "Redo Timed Out",
             "The redo operation timed out. Please try again.",
@@ -2680,7 +2683,8 @@ export const Reader: React.FC<ReaderProps> = ({
                 if (activeRegion && activeRegion.id === r.id) {
                   setActiveRegion(freshRegion);
                 }
-                setIsRedoing(false);
+                if (type === "ocr") setIsRedoingRegionOcr(false);
+                else setIsRedoingRegionTl(false);
               }
             }
           }
@@ -2690,7 +2694,8 @@ export const Reader: React.FC<ReaderProps> = ({
       }, 500);
     } catch (err) {
       console.error("Error redoing region:", err);
-      setIsRedoing(false);
+      if (type === "ocr") setIsRedoingRegionOcr(false);
+      else setIsRedoingRegionTl(false);
       showInfo("Redo Failed", "Failed to start redo job.", "error");
     }
   };
@@ -4303,7 +4308,8 @@ export const Reader: React.FC<ReaderProps> = ({
                         padding: "8px 6px",
                         height: "36px",
                       }}
-                      disabled={isRedoing}
+                      disabled={isRedoingRegionOcr || (selectedItem && "layerType" in selectedItem && (selectedItem.layerType === "translation" || selectedItem.layerType === "tl"))}
+                      title={selectedItem && "layerType" in selectedItem && (selectedItem.layerType === "translation" || selectedItem.layerType === "tl") ? "Select an OCR layer element to redo OCR" : undefined}
                       onClick={() => {
                         const actualRegion = ocrRegions.find(
                           (r) => r.id === selectedItem.regionId,
@@ -4311,7 +4317,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         if (actualRegion) handleRedoRegion(actualRegion, "ocr");
                       }}
                     >
-                      {isRedoing ? (
+                      {isRedoingRegionOcr ? (
                         <div
                           className="spinner"
                           style={{ width: "12px", height: "12px" }}
@@ -4343,7 +4349,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         padding: "8px 6px",
                         height: "36px",
                       }}
-                      disabled={isRedoing}
+                      disabled={isRedoingRegionTl}
                       onClick={() => {
                         const actualRegion = ocrRegions.find(
                           (r) => r.id === selectedItem.regionId,
@@ -4352,7 +4358,7 @@ export const Reader: React.FC<ReaderProps> = ({
                           handleRedoRegion(actualRegion, "translation");
                       }}
                     >
-                      {isRedoing ? (
+                      {isRedoingRegionTl ? (
                         <div
                           className="spinner"
                           style={{ width: "12px", height: "12px" }}

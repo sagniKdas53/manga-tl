@@ -10,7 +10,11 @@ import CardActions from "@mui/material/CardActions";
 import CardContent from "@mui/material/CardContent";
 import CardMedia from "@mui/material/CardMedia";
 import Chip from "@mui/material/Chip";
+import FormControl from "@mui/material/FormControl";
 import IconButton from "@mui/material/IconButton";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { useToast } from "./ToastContext";
 import type { User, Series } from "../types";
@@ -33,6 +37,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
+
+  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt">(() => {
+    const saved = localStorage.getItem("dashboard_sort_by");
+    return saved === "createdAt" ? "createdAt" : "updatedAt";
+  });
+
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(() => {
+    const saved = localStorage.getItem("dashboard_sort_dir");
+    return saved === "asc" ? "asc" : "desc";
+  });
+
+  const sortedSeriesList = [...seriesList].sort((a, b) => {
+    const field = sortBy;
+    const aVal = a[field];
+    const bVal = b[field];
+    if (!aVal || !bVal) return 0;
+    const cmp = new Date(aVal).getTime() - new Date(bVal).getTime();
+    return sortDir === "asc" ? cmp : -cmp;
+  });
 
   // Series modal state
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -134,13 +157,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
             Manage translation projects and OCR workflows
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleNewSeriesClick}
-        >
-          New Series
-        </Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <Select
+              value={`${sortBy}-${sortDir}`}
+              onChange={(e) => {
+                const [field, dir] = (e.target.value as string).split("-");
+                setSortBy(field as "createdAt" | "updatedAt");
+                setSortDir(dir as "asc" | "desc");
+                localStorage.setItem("dashboard_sort_by", field);
+                localStorage.setItem("dashboard_sort_dir", dir);
+              }}
+            >
+              <MenuItem value="updatedAt-desc">Last Updated ↓</MenuItem>
+              <MenuItem value="updatedAt-asc">Last Updated ↑</MenuItem>
+              <MenuItem value="createdAt-desc">Created Date ↓</MenuItem>
+              <MenuItem value="createdAt-asc">Created Date ↑</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleNewSeriesClick}
+          >
+            New Series
+          </Button>
+        </Stack>
       </Box>
 
       <Box
@@ -150,7 +192,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           gap: 2,
         }}
       >
-        {seriesList.map((s) => (
+        {sortedSeriesList.map((s) => (
           <Card
             key={s.id}
             sx={{
