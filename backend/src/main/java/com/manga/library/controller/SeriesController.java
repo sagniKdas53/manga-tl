@@ -6,6 +6,9 @@ import com.manga.library.dto.ZipImageEntry;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.*;
+
+import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -14,6 +17,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import io.minio.errors.MinioException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -512,11 +517,7 @@ public class SeriesController {
       responseDto.setUseContextMemory(chapter.getUseContextMemory());
       return ResponseEntity.ok(responseDto);
 
-    } catch (java.io.IOException
-        | java.security.NoSuchAlgorithmException
-        | java.security.InvalidKeyException
-        | io.minio.errors.MinioException
-        | RuntimeException e) {
+    } catch (IOException | NoSuchAlgorithmException | MinioException | RuntimeException e) {
       log.error("Failed to import chapter", e);
       return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
     }

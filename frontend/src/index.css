@@ -371,7 +371,7 @@ body {
   color: var(--text-muted);
   margin-bottom: 6px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .form-input {
@@ -687,10 +687,6 @@ body {
   cursor: crosshair;
 }
 
-.svg-panel-box:hover {
-  fill: var(--primary-alpha-mid);
-}
-
 .svg-ocr-box:hover {
   fill: var(--primary-glow);
 }
@@ -698,7 +694,7 @@ body {
 .svg-ocr-box {
   fill: rgba(16, 185, 129, 0.15);
   stroke: var(--success);
-  stroke-width: 1.5px;
+  stroke-width: 2px;
   pointer-events: visiblePainted;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -706,14 +702,14 @@ body {
 
 .svg-ocr-box:hover {
   fill: rgba(16, 185, 129, 0.35);
-  stroke-width: 2.5px;
+  stroke-width: 3px;
   filter: drop-shadow(0 0 6px var(--success));
 }
 
 .svg-conv-box {
   fill: rgba(59, 130, 246, 0.15);
   stroke: var(--conversation);
-  stroke-width: 1.5px;
+  stroke-width: 2px;
   pointer-events: visiblePainted;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -721,7 +717,7 @@ body {
 
 .svg-conv-box:hover {
   fill: rgba(59, 130, 246, 0.35);
-  stroke-width: 2.5px;
+  stroke-width: 3px;
   filter: drop-shadow(0 0 6px var(--conversation));
 }
 
@@ -769,7 +765,7 @@ body {
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   margin-bottom: 12px;
 }
 
@@ -1379,7 +1375,7 @@ input:checked + .slider:before {
   font-weight: 700;
   text-transform: uppercase;
   color: var(--primary-hover);
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .series-actions-row {
@@ -1537,7 +1533,7 @@ input:checked + .slider:before {
   font-weight: 700;
   color: var(--primary-hover);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .chapter-card-title-nhentai {

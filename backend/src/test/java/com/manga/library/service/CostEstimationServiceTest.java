@@ -211,7 +211,7 @@ public class CostEstimationServiceTest {
   }
 
   @Test
-  public void testEstimateCost_FileCacheException() throws Exception {
+  public void testEstimateCost_FileCacheException() {
     // If cache file path is invalid or causes security exception
     ReflectionTestUtils.setField(costEstimationService, "costCachePath", "\u0000invalid-path");
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
