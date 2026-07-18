@@ -21,6 +21,7 @@ import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
+import { useDependencyLogger } from "../hooks/useDependencyLogger";
 
 interface Job {
   id: string;
@@ -197,6 +198,16 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     isDangerous: false,
     action: () => { },
   });
+
+  useDependencyLogger(
+    {
+      forceOpen,
+      isPaused,
+      jobsLength: jobs.length,
+      confirmModalOpen: confirmModal.isOpen,
+    },
+    "QueueManager"
+  );
 
   const sortJobs = (jobsList: Job[]) => {
     const statusOrder: Record<string, number> = {
