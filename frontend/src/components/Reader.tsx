@@ -18,42 +18,7 @@ import InfoModal from "./InfoModal";
 import ReaderTopNav from "./ReaderTopNav";
 import ReaderLeftSidebar from "./ReaderLeftSidebar";
 import ReaderRightSidebar from "./ReaderRightSidebar";
-import { ReaderPageNavigation, ReaderPrevNextChapters } from "./ReaderPageNavigation";
-import { ColorPicker } from "./ColorPicker";
-import { useNotifications } from "./useNotifications";
-import { useToast } from "./ToastContext";
-import JSZip from "jszip";
-import {
-  type Point,
-  type Polygon,
-  polygonBBox,
-  polygonCentroid,
-  rectToPolygon,
-  ellipseToPolygon,
-  rotatePolygon,
-  translatePolygon,
-  isVertexMoveValid,
-  isRotationValid,
-} from "../utils/polygonUtils";
-import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
-import IconButton from "@mui/material/IconButton";
-import FitScreenIcon from "@mui/icons-material/FitScreen";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import ColorizeIcon from "@mui/icons-material/Colorize";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import DeleteIcon from "@mui/icons-material/Delete";
-import UndoIcon from "@mui/icons-material/Undo";
-import OpenWithIcon from "@mui/icons-material/OpenWith";
-import CropIcon from "@mui/icons-material/Crop";
-import WidthFullIcon from '@mui/icons-material/WidthFull';
-import HeightIcon from '@mui/icons-material/Height';
 
 interface ReaderProps {
   user: User;
@@ -189,9 +154,7 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   }, [selectedChapter, user.token, setPages]);
 
-  // Find selected page based on route param
   const curPageNum = parseInt(pageNumber || "1");
-  const totalPages = pages.length;
   const selectedPage = pages.find((p) => p.pageNumber === curPageNum);
 
   // Reader States
@@ -320,10 +283,7 @@ export const Reader: React.FC<ReaderProps> = ({
   // Detected once at component initialization — never changes after mount
   const isTouchScreen =
     "ontouchstart" in window || navigator.maxTouchPoints > 0;
-  const [containerSize, setContainerSize] = useState({
-    width: 800,
-    height: 600,
-  });
+
 
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const touchStartDist = useRef<number | null>(null);
@@ -453,29 +413,12 @@ export const Reader: React.FC<ReaderProps> = ({
       ? sortedChapters.at(currentChapterIdx + 1) || null
       : null;
 
-  const navigateToChapter = (chapter: Chapter) => {
-    const slugPart = chapter.title
-      ? `${toSlug(chapter.title)}/`
-      : `chapter-${chapter.chapterNumber}/`;
-    navigate(`/chapters/${chapter.id}/${slugPart}reader/1`);
-  };
+
 
   // isTouchScreen is detected once at mount — no effect needed, computed directly
   // (avoids react-hooks/set-state-in-effect lint error)
 
-  useEffect(() => {
-    if (!canvasAreaRef.current) return;
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerSize({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
-      }
-    });
-    resizeObserver.observe(canvasAreaRef.current);
-    return () => resizeObserver.disconnect();
-  }, []);
+
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -653,25 +596,7 @@ export const Reader: React.FC<ReaderProps> = ({
     conversationsWithRegions,
   ]);
 
-  // Dynamic calculation of the absolute zoom percentage
-  const displayedZoom = React.useMemo(() => {
-    if (imageDims.w <= 0 || imageDims.h <= 0) return 100;
-    const aspectRatio = imageDims.w / imageDims.h;
-    const vh = window.innerHeight;
-    const containerWidth = Math.max(100, containerSize.width - 48); // 24px padding on each side
-    const refWidth = Math.min(containerWidth, vh * 0.8 * aspectRatio);
 
-    let targetWidth = refWidth;
-    if (fitMode === "page") {
-      targetWidth = refWidth * zoom;
-    } else if (fitMode === "width") {
-      targetWidth = containerWidth * zoom;
-    } else if (fitMode === "height") {
-      targetWidth = vh * 0.85 * aspectRatio * zoom;
-    }
-
-    return Math.round((targetWidth / refWidth) * 100);
-  }, [fitMode, zoom, containerSize, imageDims]);
 
   // Helper to fetch and cache a page
   const fetchPageDetails = useCallback(
@@ -1763,9 +1688,9 @@ export const Reader: React.FC<ReaderProps> = ({
       showToast("Page deleted successfully", "success");
       // Refresh pages
       await fetchPages();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err.message || "Failed to delete page", "error");
+      showToast((err as Error).message || "Failed to delete page", "error");
     }
   }, [fetchPages, showToast, user.token]);
 
@@ -1792,9 +1717,9 @@ export const Reader: React.FC<ReaderProps> = ({
           { replace: true }
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err.message || "Failed to update page number", "error");
+      showToast((err as Error).message || "Failed to update page number", "error");
     }
   }, [fetchPages, showToast, navigate, selectedPage, selectedChapter, user.token]);
 

@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { vi } from "vitest";
 import ReaderLeftSidebar from "./ReaderLeftSidebar";
-import { Page, Chapter } from "../types";
+import { Page } from "../types";
 
 describe("ReaderLeftSidebar Component", () => {
   const mockHandleDeletePage = vi.fn();
