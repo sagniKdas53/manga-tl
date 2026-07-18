@@ -56,10 +56,11 @@ export const NavBar: React.FC<NavBarProps> = ({
           }}
           onClick={() => user && navigate("/")}
         >
-          <img
+          <Box
+            component="img"
             src={(mode === "dark" ? logoDark : logoLight) as string}
             alt="tl-hub"
-            style={{ height: 28, width: "auto" }}
+            sx={{ height: 28, width: "auto" }}
           />
           <Typography
             variant="h6"

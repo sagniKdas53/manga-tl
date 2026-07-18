@@ -3,6 +3,12 @@ import {
   IconButton,
   Button,
   CircularProgress,
+  TextField,
+  Select,
+  MenuItem,
+  Checkbox,
+  FormControlLabel,
+  Slider,
 } from "@mui/material";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -472,21 +478,21 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   }}
                 >
                   <span>Element Inspector</span>
-                  <button
+                  <Button
+                    variant="outlined"
+                    size="small"
                     onClick={() => setSelectedItem(null)}
-                    style={{
-                      background: "transparent",
-                      border: "1px solid var(--border-color)",
+                    sx={{
+                      borderColor: "var(--border-color)",
                       color: "var(--text-main)",
-                      borderRadius: "6px",
-                      padding: "4px 8px",
-                      cursor: "pointer",
                       fontSize: "11px",
                       fontWeight: 600,
+                      minWidth: "auto",
+                      padding: "2px 8px",
                     }}
                   >
                     Deselect
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Text Content */}
@@ -506,24 +512,23 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   >
                     Text Content
                   </label>
-                  <textarea
-                    style={{
-                      width: "100%",
-                      minHeight: "80px",
-                      backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "4px",
-                      color: "var(--text-main)",
-                      padding: "6px",
-                      fontSize: "13px",
-                      resize: "vertical",
-                      outline: "none",
-                      fontFamily: "inherit",
-                    }}
+                  <TextField
+                    multiline
+                    minRows={3}
+                    fullWidth
+                    variant="outlined"
+                    size="small"
                     value={selectedItem.text || ""}
                     onChange={(e) =>
                       handleUpdateSelectedElement({ text: e.target.value })
                     }
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))",
+                        fontSize: "13px",
+                        fontFamily: "inherit",
+                      },
+                    }}
                   />
                 </div>
 
@@ -648,16 +653,16 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     >
                       X Position
                     </label>
-                    <input
+                    <TextField
                       type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
+                      size="small"
                       value={selectedItem.x}
                       onChange={(e) =>
                         handleUpdateSelectedElement({
                           x: parseFloat(e.target.value) || 0,
                         })
                       }
+                      sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
                     />
                   </div>
                   <div
@@ -676,16 +681,16 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     >
                       Y Position
                     </label>
-                    <input
+                    <TextField
                       type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
+                      size="small"
                       value={selectedItem.y}
                       onChange={(e) =>
                         handleUpdateSelectedElement({
                           y: parseFloat(e.target.value) || 0,
                         })
                       }
+                      sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
                     />
                   </div>
                 </div>
@@ -714,16 +719,16 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     >
                       Max Width
                     </label>
-                    <input
+                    <TextField
                       type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
+                      size="small"
                       value={selectedItem.maxWidth || 0}
                       onChange={(e) =>
                         handleUpdateSelectedElement({
                           maxWidth: parseInt(e.target.value) || 0,
                         })
                       }
+                      sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
                     />
                   </div>
                   <div
@@ -742,16 +747,16 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     >
                       Max Height
                     </label>
-                    <input
+                    <TextField
                       type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
+                      size="small"
                       value={selectedItem.maxHeight || 0}
                       onChange={(e) =>
                         handleUpdateSelectedElement({
                           maxHeight: parseInt(e.target.value) || 0,
                         })
                       }
+                      sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
                     />
                   </div>
                 </div>
@@ -845,25 +850,24 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     >
                       Font Family
                     </label>
-                    <select
-                      className="form-input"
-                      style={{
-                        padding: "4px 8px",
-                        fontSize: "13px",
-                        height: "38px",
-                        backgroundColor: "var(--bg-surface)",
-                      }}
+                    <Select
+                      size="small"
                       value={selectedItem.font || "Comic Neue"}
                       onChange={(e) =>
                         handleUpdateSelectedElement({ font: e.target.value })
                       }
+                      sx={{
+                        fontSize: "13px",
+                        height: "38px",
+                        backgroundColor: "var(--bg-surface)",
+                      }}
                     >
-                      <option value="Comic Neue">Comic Neue</option>
-                      <option value="Bangers">Bangers</option>
-                      <option value="Luckiest Guy">Luckiest Guy</option>
-                      <option value="Arial">Arial</option>
-                      <option value="Courier New">Courier New</option>
-                    </select>
+                      <MenuItem value="Comic Neue">Comic Neue</MenuItem>
+                      <MenuItem value="Bangers">Bangers</MenuItem>
+                      <MenuItem value="Luckiest Guy">Luckiest Guy</MenuItem>
+                      <MenuItem value="Arial">Arial</MenuItem>
+                      <MenuItem value="Courier New">Courier New</MenuItem>
+                    </Select>
                   </div>
                   <div
                     style={{
@@ -881,10 +885,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     >
                       Font Size (pt)
                     </label>
-                    <input
+                    <TextField
                       type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
+                      size="small"
                       value={selectedItem.size || 16}
                       onChange={(e) =>
                         handleUpdateSelectedElement({
@@ -892,6 +895,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                           autoSize: false,
                         })
                       }
+                      sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
                     />
                   </div>
                 </div>
@@ -920,24 +924,23 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     >
                       Font Weight
                     </label>
-                    <select
-                      className="form-input"
-                      style={{
-                        padding: "4px 8px",
+                    <Select
+                      size="small"
+                      value={selectedItem.fontWeight || "normal"}
+                      onChange={(e) =>
+                        handleUpdateSelectedElement({
+                          fontWeight: e.target.value as string,
+                        })
+                      }
+                      sx={{
                         fontSize: "13px",
                         height: "38px",
                         backgroundColor: "var(--bg-surface)",
                       }}
-                      value={selectedItem.fontWeight || "normal"}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          fontWeight: e.target.value,
-                        })
-                      }
                     >
-                      <option value="normal">Normal</option>
-                      <option value="bold">Bold</option>
-                    </select>
+                      <MenuItem value="normal">Normal</MenuItem>
+                      <MenuItem value="bold">Bold</MenuItem>
+                    </Select>
                   </div>
                   <div
                     style={{
@@ -955,24 +958,23 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     >
                       Font Style
                     </label>
-                    <select
-                      className="form-input"
-                      style={{
-                        padding: "4px 8px",
+                    <Select
+                      size="small"
+                      value={selectedItem.fontStyle || "normal"}
+                      onChange={(e) =>
+                        handleUpdateSelectedElement({
+                          fontStyle: e.target.value as string,
+                        })
+                      }
+                      sx={{
                         fontSize: "13px",
                         height: "38px",
                         backgroundColor: "var(--bg-surface)",
                       }}
-                      value={selectedItem.fontStyle || "normal"}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          fontStyle: e.target.value,
-                        })
-                      }
                     >
-                      <option value="normal">Normal</option>
-                      <option value="italic">Italic</option>
-                    </select>
+                      <MenuItem value="normal">Normal</MenuItem>
+                      <MenuItem value="italic">Italic</MenuItem>
+                    </Select>
                   </div>
                 </div>
 
@@ -993,24 +995,21 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   >
                     Box Shape
                   </label>
-                  <select
-                    className="form-input"
-                    style={{
-                      padding: "4px 8px",
+                  <Select
+                    size="small"
+                    value={selectedItem.boxShape || "rectangular"}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({ boxShape: e.target.value as string })
+                    }
+                    sx={{
                       fontSize: "13px",
                       height: "38px",
                       backgroundColor: "var(--bg-surface)",
                     }}
-                    value={selectedItem.boxShape || "rectangular"}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({ boxShape: e.target.value })
-                    }
                   >
-                    <option value="rectangular">Rectangular</option>
-                    <option value="elliptical">
-                      Elliptical (Contour-Based)
-                    </option>
-                  </select>
+                    <MenuItem value="rectangular">Rectangular</MenuItem>
+                    <MenuItem value="elliptical">Elliptical (Contour-Based)</MenuItem>
+                  </Select>
                 </div>
 
                 {/* Mask Background Color (only relevant if clean background mask is enabled) */}
@@ -1071,17 +1070,17 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   >
                     Rotation ({selectedItem.rotation || 0}°)
                   </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="360"
+                  <Slider
+                    size="small"
+                    min={0}
+                    max={360}
                     value={selectedItem.rotation || 0}
-                    onChange={(e) =>
+                    onChange={(_, val) =>
                       handleUpdateSelectedElement({
-                        rotation: parseFloat(e.target.value) || 0,
+                        rotation: val as number,
                       })
                     }
-                    style={{ width: "100%" }}
+                    sx={{ width: "100%", mt: 1 }}
                   />
                 </div>
 
@@ -1095,80 +1094,50 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     paddingTop: "10px",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="autoSizeCheck"
-                      checked={selectedItem.autoSize}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          autoSize: e.target.checked,
-                        })
-                      }
-                    />
-                    <label
-                      htmlFor="autoSizeCheck"
-                      style={{ fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Auto-size text to fit bubble
-                    </label>
-                  </div>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={selectedItem.autoSize}
+                        onChange={(e) =>
+                          handleUpdateSelectedElement({
+                            autoSize: e.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label={<span style={{ fontSize: "12px" }}>Auto-size text to fit bubble</span>}
+                  />
 
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="visibleCheck"
-                      checked={selectedItem.visible}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          visible: e.target.checked,
-                        })
-                      }
-                    />
-                    <label
-                      htmlFor="visibleCheck"
-                      style={{ fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Visible
-                    </label>
-                  </div>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={selectedItem.visible}
+                        onChange={(e) =>
+                          handleUpdateSelectedElement({
+                            visible: e.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label={<span style={{ fontSize: "12px" }}>Visible</span>}
+                  />
 
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="maskCheck"
-                      checked={selectedItem.wordWrap}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          wordWrap: e.target.checked,
-                        })
-                      }
-                    />
-                    <label
-                      htmlFor="maskCheck"
-                      style={{ fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Clean background mask
-                    </label>
-                  </div>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={selectedItem.wordWrap}
+                        onChange={(e) =>
+                          handleUpdateSelectedElement({
+                            wordWrap: e.target.checked,
+                          })
+                        }
+                      />
+                    }
+                    label={<span style={{ fontSize: "12px" }}>Clean background mask</span>}
+                  />
                 </div>
 
                 {/* Action Buttons */}
@@ -1242,21 +1211,21 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       ? "Conversation Inspector"
                       : "Region Inspector"}
                   </span>
-                  <button
+                  <Button
+                    variant="outlined"
+                    size="small"
                     onClick={() => setSelectedItem(null)}
-                    style={{
-                      background: "transparent",
-                      border: "1px solid var(--border-color)",
+                    sx={{
+                      borderColor: "var(--border-color)",
                       color: "var(--text-main)",
-                      borderRadius: "6px",
-                      padding: "4px 8px",
-                      cursor: "pointer",
                       fontSize: "11px",
                       fontWeight: 600,
+                      minWidth: "auto",
+                      padding: "2px 8px",
                     }}
                   >
                     Deselect
-                  </button>
+                  </Button>
                 </div>
 
                 <div

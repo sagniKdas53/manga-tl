@@ -312,7 +312,8 @@ public class PageService {
 
     // Shift other pages
     if (newPageNumber > oldPageNumber) {
-        for (Page p : pages) {
+        for (int i = 0; i < pages.size(); i++) {
+            Page p = pages.get(i);
             if (p.getId().equals(pageId)) continue;
             if (p.getPageNumber() > oldPageNumber && p.getPageNumber() <= newPageNumber) {
                 p.setPageNumber(p.getPageNumber() - 1);
@@ -320,7 +321,8 @@ public class PageService {
             }
         }
     } else {
-        for (Page p : pages) {
+        for (int i = pages.size() - 1; i >= 0; i--) {
+            Page p = pages.get(i);
             if (p.getId().equals(pageId)) continue;
             if (p.getPageNumber() >= newPageNumber && p.getPageNumber() < oldPageNumber) {
                 p.setPageNumber(p.getPageNumber() + 1);
