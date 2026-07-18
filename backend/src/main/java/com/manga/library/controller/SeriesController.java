@@ -255,6 +255,7 @@ public class SeriesController {
   }
 
   @GetMapping("/{seriesId}/chapters")
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
   public ResponseEntity<List<ChapterDto>> listChapters(@PathVariable UUID seriesId) {
     List<Chapter> chapters = chapterRepository.findBySeriesId(seriesId);
     SystemSettingsDto globalSettings = systemSettingsService.getSettings();
@@ -272,6 +273,7 @@ public class SeriesController {
   }
 
   @GetMapping("/chapters/{chapterId}")
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
   public ResponseEntity<ChapterDto> getChapter(@PathVariable UUID chapterId) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository

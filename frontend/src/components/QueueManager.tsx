@@ -28,7 +28,7 @@ interface Job {
   type: string;
   imageId: string;
   status:
-    "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
+  "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
   payload: string | null;
   error: string | null;
   attempt: number;
@@ -164,7 +164,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     title: "",
     message: "",
     isDangerous: false,
-    action: () => {},
+    action: () => { },
   });
 
   const sortJobs = (jobsList: Job[]) => {
@@ -462,6 +462,10 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       <Badge
         badgeContent={jobs.length}
         color="primary"
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
         invisible={jobs.length === 0}
       >
         <IconButton
@@ -687,31 +691,31 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                           )}
                           {(job.status === "PENDING" ||
                             job.status === "PAUSED") && (
-                            <Tooltip
-                              title={
-                                isPaused
-                                  ? "Queue is globally paused"
-                                  : job.status === "PAUSED"
-                                    ? "Resume"
-                                    : "Pause"
-                              }
-                            >
-                              <IconButton
-                                size="small"
-                                onClick={() => handleToggleJobPause(job)}
-                                disabled={isPaused}
+                              <Tooltip
                                 title={
-                                  job.status === "PAUSED" ? "Resume" : "Pause"
+                                  isPaused
+                                    ? "Queue is globally paused"
+                                    : job.status === "PAUSED"
+                                      ? "Resume"
+                                      : "Pause"
                                 }
                               >
-                                {job.status === "PAUSED" || isPaused ? (
-                                  <PlayArrowIcon fontSize="small" />
-                                ) : (
-                                  <PauseIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </Tooltip>
-                          )}
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleToggleJobPause(job)}
+                                  disabled={isPaused}
+                                  title={
+                                    job.status === "PAUSED" ? "Resume" : "Pause"
+                                  }
+                                >
+                                  {job.status === "PAUSED" || isPaused ? (
+                                    <PlayArrowIcon fontSize="small" />
+                                  ) : (
+                                    <PauseIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
+                            )}
                           {job.status !== "PROCESSING" && (
                             <Tooltip title="Delete">
                               <IconButton

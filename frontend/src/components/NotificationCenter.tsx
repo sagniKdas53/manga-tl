@@ -54,7 +54,7 @@ export const NotificationCenter: React.FC<Props> = ({
     title: "",
     message: "",
     isDangerous: false,
-    action: () => {},
+    action: () => { },
   });
 
   const handleClearAll = () => {
@@ -115,6 +115,10 @@ export const NotificationCenter: React.FC<Props> = ({
       <Badge
         badgeContent={unreadCount}
         color="primary"
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
         invisible={unreadCount === 0}
       >
         <IconButton

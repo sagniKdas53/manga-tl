@@ -10,6 +10,7 @@ import CreateChapterDialog from "./CreateChapterDialog";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastContext";
 import { useUploadQueue, type UploadQueueItem } from "./UploadContext";
+import Typography from "@mui/material/Typography";
 
 interface ChapterGalleryProps {
   user: User;
@@ -20,6 +21,7 @@ interface ChapterGalleryProps {
   setPages: React.Dispatch<React.SetStateAction<Page[]>>;
   onSelectPage: (page: Page) => void;
   isLoadingDetails: boolean;
+  mode: "light" | "dark";
 }
 
 export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
@@ -31,6 +33,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   setPages,
   onSelectPage,
   isLoadingDetails,
+  mode
 }) => {
   const navigate = useNavigate();
 
@@ -111,7 +114,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     isOpen: false,
     title: "",
     message: "",
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const closeConfirmModal = () =>
@@ -348,7 +351,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         const data = await res.json();
         showToast(
           data.message ||
-            "Export started in the background. You will be notified when it is ready.",
+          "Export started in the background. You will be notified when it is ready.",
           "info",
         );
         return;
@@ -494,7 +497,12 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         <div className="page-header">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <h1>Chapter {selectedChapter.chapterNumber}</h1>
+              <Typography
+                variant="h4"
+                sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: mode === "dark" ? "white" : "black" }}
+              >
+                Chapter {selectedChapter.chapterNumber}
+              </Typography>
               <IconButton
                 onClick={() => {
                   setShowEditModal(true);
@@ -559,9 +567,12 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         onChange={handleProjectImportUpload}
       />
 
-      <h2 style={{ fontFamily: "var(--font-display)", fontSize: "22px" }}>
-        Uploaded Pages ({pages.length})
-      </h2>
+      <Typography
+        variant="h5"
+        sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: mode === "dark" ? "white" : "black" }}
+      >
+        Pages ({pages.length})
+      </Typography>
       <div className="pages-grid">
         {pages.map((p, idx) => (
           <div
