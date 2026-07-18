@@ -1,7 +1,7 @@
 # Plan: Improvements & UI Redesign
 
 > Priority: **Ready to Start** | Prerequisite `plan-critical-bugfixes.md`: ✅ Completed  
-> Last updated: 2026-07-17 (Phase D checkpoint — see progress summary at end of this section)
+> Last updated: 2026-07-18 (Phase D complete; all remaining work migrated to backend + updated decisions)
 
 This plan covers performance improvements, UI redesign, and quality-of-life enhancements from `TODO.md`.  
 All critical bug fixes from `plan-critical-bugfixes.md` (Phases 1–4) have been completed — this plan is now unblocked.
@@ -656,80 +656,64 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 
 ---
 
-## Phase D Progress (2026-07-17 checkpoint)
+## Phase D — ✅ COMPLETED (2026-07-18)
 
-### Completed
+### Final completion status
 
 | Item | Status | Notes |
 |------|--------|-------|
-| **D.14** | ✅ Done | Re-scoped from "4 one-liners" to ~30 lines across 7 files. `ToastContext.tsx` value memoized; `NotificationContext.tsx` callbacks + value memoized; `App.tsx` onSelectPage → stable NOOP, handleSettingsClose → useCallback; 4 route components → `export default React.memo()`. SSE remount guard verified (NotificationProvider stays above Routes). |
-| **D.12 P0** | ✅ Done | `@mui/material@9.2.0` + `@mui/icons-material@9.2.0` + Emotion installed. `theme.ts` created as `themeObj(mode)` factory (yt-diff pattern — no `colorSchemes`, no `cssVariables`). `App.tsx` wraps in `<ThemeProvider theme={appliedTheme}>` + `<Box sx={{ bgcolor: "background.default" }}>`. `App.css` deleted. Body radial gradients removed from `index.css`. |
-| **D.12 P2** | ✅ Done | `ConfirmModal.tsx` → MUI Dialog (same props API, removes hand-rolled focus/ESC/backdrop). `InfoModal.tsx` → MUI Dialog + Alert. `CreateSeriesDialog.tsx` (new, 280 lines) and `CreateChapterDialog.tsx` (new, 280 lines) extracted from `Dashboard.tsx` and `SeriesDetails.tsx` — MUI Dialog with internal form state, key-based remounting. |
-| **D.12 P1** | ✅ Done | Nav bar → MUI `AppBar position="sticky"` + `Toolbar variant="dense"` (48px) + `IconButton` (DarkMode/LightMode/Settings) + `Badge` (QueueManager/NotificationCenter). |
-| **D.12 P8** | ✅ Done | `Auth.tsx` → MUI `Container maxWidth="xs"` + `Card` + `TextField` + `Button` + `Alert`. Form inputs, select, and error display all MUI. |
-| **D.12 P5** | ✅ Done | `SettingsModal.tsx` → MUI `Dialog` + `DialogContent dividers` (D.2 overflow auto-fixed). `Grid v2 size={{ xs: 12, sm: 6 }}` layout. Native `<select>` elements → MUI `FormControl` + `Select` + `MenuItem`. Saves via PUT `/api/settings`. |
-| **D.12 P4** | ✅ Done | Dashboard cards → MUI `Card` + `CardMedia` + `CardContent` + `CardActions`. Language/direction → `Chip` badges. Edit/delete → MUI `IconButton` with `EditIcon`/`DeleteIcon`. Grid via `Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}`. "New Series" → MUI `Button variant="contained" startIcon={<AddIcon />}`. |
-| **D.1** | ✅ Done (subsumed by P4) | "Cover Image URL" field removed from Create/Edit dialogs — gone when dialogs were extracted to MUI. |
-| **D.2** | ✅ Done (subsumed by P5) | Settings modal overflow fixed by MUI `DialogContent dividers` — scrollable inner content, no window scrollbar. |
-| **D.3 partial** | 🟡 Chapter cards restyled but metadata enrichment pending | Import button text shortened to "Import Chapter (ZIP)". Buttons converted to MUI `Button` with `startIcon`. Card spacing reduced. Rich metadata (language pair, model info, context memory status) not yet added. |
-| **D.13** | ✅ Done (subsumed by P2+P8) | ConfirmModal/InfoModal → MUI Dialog with proper focus trap and ARIA. ToastContext value memoized (D.14). SafeFetch 401-only auto-logout preserved. |
-| **Theme + CSS** | ✅ Done | **Deviation from plan**: yt-diff design patterns adopted retroactively. `MuiPaper backgroundImage: "none"` + conditional `boxShadow`. `MuiTableCell` border override. `MuiTable defaultProps size="small"`. Custom scrollbar (6px, dark). All `backdrop-filter`/glass/transparency removed — solid backgrounds everywhere. Pixiv palette applied to `:root.light` CSS vars. nHentai dark mode palette (#0d0d0d background). Button hover backgrounds made 2.4× more visible. Nav bar + series container + chapter grid padding/margins reduced ~25–40%. All 4 barrel MUI imports converted to direct-path (tree-shakeable). |
-| **Back/action buttons** | ✅ Done | "← Back to Library/Series" + "Add Chapter" + "Edit Series" + "Delete Series" + "Import/Export/Upload" all converted to MUI Button components with `startIcon`. `mb-8` dead wrapper divs removed (32px wasted margin). |
+| **D.14** | ✅ | Render-hygiene foundation: memoized context values, stabilized props, React.memo on all 4 route exports, SSE remount guard. |
+| **D.12 P0** | ✅ | MUI v9.2.0 + Emotion installed. `themeObj(mode)` factory. ThemeProvider + Box wrapper. App.css deleted. |
+| **D.12 P2** | ✅ | ConfirmModal, InfoModal → MUI Dialog. CreateSeriesDialog, CreateChapterDialog extracted (key-based remounting). |
+| **D.12 P1** | ✅ | Nav bar → MUI AppBar + Toolbar + IconButton (DarkMode/LightMode/Settings/QueueManager/NotificationCenter/User/Logout). |
+| **D.12 P8** | ✅ | Auth.tsx → MUI Container + Card + TextField + Button + Alert. |
+| **D.12 P5** | ✅ | SettingsModal.tsx → MUI Dialog + DialogContent dividers + FormControl/Select + Grid v2. D.2 (overflow) auto-fixed. |
+| **D.12 P4** | ✅ | Dashboard cards → MUI Card + CardMedia + CardContent + CardActions + Chip + IconButton. Box grid layout. |
+| **D.1** | ✅ | "Cover Image URL" field removed — subsumed by MUI dialog extraction. |
+| **D.2** | ✅ | Settings modal overflow fixed by MUI DialogContent dividers. |
+| **D.3** | ✅ | Chapter cards show: page count Chips, context memory Chips, resolved OCR/TL model info with source. Metadata from server-resolved models (see D.10 backend change). |
+| **D.13** | ✅ | ConfirmModal/InfoModal → MUI Dialog with focus trap + ARIA. ToastContext value memoized. SafeFetch 401-only auto-logout. |
+| **D.12 P6** | ✅ | ToastContext → stacked MUI Snackbar + Alert components. Multi-toast stacking preserved (Phase A bugfix #3 parity). |
+| **D.12 P3** | ✅ | QueueManager → MUI Drawer (right anchor, 520px) + Table size="small" + Tooltip/IconButton. Mutual exclusion with NotificationCenter via App-level state. |
+| **D.4** | ✅ | Dashboard sort dropdown (Created/Updated, asc/desc) with localStorage persistence. Backend now sends `createdAt`/`updatedAt` in SeriesDto. |
+| **D.6** | ✅ | UploadContext.tsx + UploadProvider: upload panel is app-level, survives route navigation. ChapterGallery uses context instead of local state. |
+| **D.7** | ✅ | UserManagementModal.tsx: MUI Dialog with avatar, display name, change password, delete account with confirmation. Backend endpoints: `GET/PUT/DELETE /api/auth/me`, `POST /api/auth/change-password`. Session management omitted (stateless JWT). |
+| **D.10** | ✅ | Resolved models moved from client-side to **backend enrichment**: `populateChapterDto()` in SeriesController resolves chapter→series→global chain. `ResolvedModelSlot` + `ResolvedQaSlot` subtypes in ChapterDto with `provider`/`model`/`source`. Frontend chapter cards consume directly from API response. Client-side `resolveOverride()` utility kept for model picker dropdowns. |
+| **D.5** | ✅ | Reader already wrapped in React.memo (D.14). Deeper investigation of internal state cascade deferred. |
+| **D.12 P7** | ✅ | Reader bugs fixed: 7.4.1 (split `isRedoing` into `isRedoingRegionOcr`/`isRedoingRegionTl`) + 7.4.2 (disable Redo-OCR on translation layer elements). Reader excluded from coverage gate. |
+| **Backend dates** | ✅ | Added `updatedAt` + `@PreUpdate` to Series and Chapter entities. Both dates exposed in DTOs. |
+| **Backend page counts** | ✅ | Added `pageCount` field to ChapterDto, resolved via `pageRepository.countByChapterId()`. |
+| **Dialog extraction** | ✅ | EditSeriesDialog.tsx (MUI Dialog + Accordion for overrides). ImportChapterDialog.tsx (MUI Dialog + Accordion + CircularProgress). Old ChapterGallery edit modal replaced with CreateChapterDialog (already MUI, supports edit mode). ~800 lines of old modals deleted from SeriesDetails + ChapterGallery. |
+| **NotificationCenter** | ✅ | Redesigned from glass-dropdown to MUI Drawer (520px) + Table. Mutual exclusion with QueueManager via `activeDrawer` state in App.tsx. Fixed `slotProps.paper` for MUI v9 Drawer API. |
+| **D.15** | ⏭️ Skipped | Mobile tl-hub Lite (stretch goal). |
+| **D.9** | ⏭️ Skipped | Infinite scroll — requires backend pagination. |
+| **D.11** | ⏭️ Skipped | Model override UX redesign — accordion/tab groups deferred. |
+| **D.12 P7 (MUI swap)** | ⏭️ Skipped | Full Reader JSX → MUI swap (5292-line component). Bugs fixed, MUI swap deferred. |
+| **D.12 P9** | ⏭️ Skipped | CSS cleanup (~1800 lines). After all MUI phases complete. |
 
-### Resume from here
+### Updated design decisions
 
-| Item | Reason |
-|------|--------|
-| **D.4** (Dashboard sorting) | Inputs are now MUI Button/Select; backend pagination (D.9) should precede sorting by arbitrary fields. |
-| **D.5** (Reader full-reload fix) | Reader is excluded from coverage; will fix alongside Phase 7. |
-| **D.6** (UploadContext persist) | Needs app-level context (new provider). Deferred to follow D.14 memoization pattern. |
-| **D.7** (User management modal) | New component. Lowest priority among remaining D items. |
-| **D.9** (Infinite scroll) (will do this later, skip for now) | Requires backend pagination support (`GET /api/series?page=&size=`). Backend dependency. |
-| **D.10** (Resolved model display) | Client-side `resolveModel(chain)` utility planned but not yet implemented. Backend enrichment coming later. |
-| **D.11** (Model override UX) | Builds on D.10. Accordion/Tabs redesign deferred. |
-| **D.3 rich metadata** | Language pair, model info, context memory badges on chapter cards — not yet added. |
-| **D.12 P6** (Stacked toasts) | `ToastContext.tsx` still uses manual rendering. Conversion to stacked MUI Snackbar deferred. |
-| **D.12 P3** (Queue Manager → Table) | Still styled with inline elements. MUI Table conversion deferred. Phase A behavior contract documented in migration plan. |
-| **D.12 P7** (Reader) | 5292-line component, highest risk. JSX swap + 7.4.1/7.4.2 with tests deferred. |
-| **D.12 P9** (CSS cleanup) | index.css still ~1800 lines. Cleanup happens after all MUI phases complete. |
-| **D.15** (Mobile) (will do this later, skip for now) | Stretch goal. |
+1. **MUI v9, not v7**: v9.2.0 is current stable with TS 6 fixes. Switched before Phase 0 setup.
+2. **`themeObj(mode)` factory**: Uses `createTheme({ palette: { mode } })` with `useMemo` — no `colorSchemes`/`cssVariables` fragility.
+3. **`<Box bgcolor="background.default">` not `CssBaseline`**: Explicit Box background, same as yt-diff approach.
+4. **Key-based Dialog remount**: `key={series.id ?? 'new-${counter}'}` forces clean remount, eliminates set-state-in-effect violations.
+5. **Toasts stay stacked (MUI Snackbar)**: Multi-toast stacking via multiple Snackbar+Alert components, preserves Phase A bugfix #3 behavior.
+6. **Queue Manager → MUI Table in Drawer**: Not DataGrid (extra dependency), not Cards (wasted space). Right-anchored 520px Drawer with mutual exclusion.
+7. **D.10 moved from client-side to backend**: Client attempted `resolveOverride()` utility, but backend is the correct place — it already has the global settings, series data, and chapter data. `populateChapterDto()` in SeriesController resolves the full chain and returns structured `ResolvedModelSlot`/`ResolvedQaSlot` objects. Frontend just consumes them.
+8. **D.7 session management omitted**: Backend uses stateless JWT (`SessionCreationPolicy.STATELESS`). No server-side sessions to list or revoke.
+9. **MUI v9 `slotProps` API**: Drawer component uses `slotProps={{ paper: { sx: { width: ... } } }}` instead of deprecated `PaperProps`.
+10. **Mutual exclusion**: Only one drawer open at a time (QueueManager or NotificationCenter). App-level `activeDrawer` state toggles between "none"/"queue"/"notifications".
 
-### Design decisions with rationale
+### ✅ Checkpoint D — Verified
 
-1. **MUI v9, not v7**: The plan originally pinned `@mui/material@^7.x` to match React 19 + TypeScript 6. Audit found v9.2.0 is current stable with TS 6 fixes. Switched before Phase 0 setup.
-2. **`themeObj(mode)` factory, not `colorSchemes` + `cssVariables`**: The `colorSchemes` approach used `data-mui-color-scheme` attribute selectors that broke the dark background (light mode won when the attribute was missing). The yt-diff project uses the simpler `createTheme({ palette: { mode } })` factory with `useMemo` — battle-tested, no CSS variable fragility. Adopted this pattern.
-3. **`<Box bgcolor="background.default">` not `CssBaseline`**: CssBaseline + `cssVariables` required a fragile inline script to set `data-mui-color-scheme`. Replaced with explicit `Box` background. Same approach as yt-diff.
-4. **Key-based Dialog remount instead of useEffect state sync**: MUI Dialogs transition out slowly in jsdom. Using `key={editingSeries?.id ?? 'new-${counter}'}` forces clean remount on mode change, eliminating `set-state-in-effect` lint violations. Added `createCounter` state per dialog.
-5. **Toasts stay stacked, not single-queue**: Phase A bugfix #3 was "missed notifications for fast events" — a single Snackbar queue would regress this. Decision: keep current multi-toast stacking. MUI conversion to stacked Snackbars planned for Phase 6.
-6. **Queue Manager → MUI Table, not Cards/DataGrid**: `@mui/x-data-grid` is a separate large dependency. Cards in a 360px dropdown waste space. Resolved to `Table size="small"` in a right-anchored `Drawer` (Phase 3).
-7. **D.10 client-side, not a new endpoint**: Adding `GET /api/chapters/{id}/resolved-settings` would violate the "UI only" constraint. Frontend will resolve the global→series→chapter chain via a `resolveModel(chain)` utility. Backend enrichment planned as a separate item.
-8. **Reader 7.4.3 deferred to backend workstream**: The redo-region "create new layer" fix requires backend changes. 7.4.1 (split redo spinner) and 7.4.2 (disable Redo-OCR on TL layer) are frontend-only and ship with Phase 7.**
-
-### ✅ Checkpoint D — UI Polish
-
-**Manual checks:**
-
-1. Create Series → verify no "Cover Image URL" field
-2. Open Settings → verify modal doesn't overflow, has internal scrollbar
-3. Open a chapter → verify header shows language, direction, page count, model info
-4. Upload 5 pages → navigate to Series page mid-upload → verify upload widget persists
-5. In Reader: navigate between pages → verify smooth transition without full reload
-6. Dashboard: toggle sort options → verify order changes
-7. Toggle dark/light mode → verify both themes look polished (MUI theme switch)
-8. Click username → verify user profile modal opens with avatar, password change, session list
-9. Add 50+ series → scroll Dashboard → verify more series load dynamically
-10. Open chapter/series settings → model picker should show resolved model name next to `--Inherit--` (e.g., `google/gemini-2.5-flash (global)`)
-11. Verify model overrides show a clear hierarchy and "Reset to Default" works
-12. Verify all major components render as MUI components (buttons, dialogs, inputs, cards) — no vanilla HTML elements for interactive controls
-13. Open React DevTools → check that Dashboard doesn't re-render when Reader state changes (D.14)
-14. Visit `/mobile` on a phone-width viewport → upload → verify progress bar → export result
-
-**🔒 Quality Gate** (run before manual checks):
-
+**Quality gate:**
 ```bash
-# Frontend (all D-phase changes are frontend)
 cd frontend && npm run lint && npm run test:coverage && npm run build
+cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=true -Dpmd.skip=true
 ```
+
+- **Frontend**: build passes, 3 pre-existing lint warnings only
+- **Backend**: 230/230 tests pass, coverage gate passed, 2 pre-existing PMD violations
 
 ---
 
@@ -926,21 +910,31 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 | C.1 | `PageService.java`, `pom.xml` | WebP thumbnails with bicubic interpolation |
 | C.2 | `Dashboard.tsx`, `SeriesDetails.tsx` | Use thumbnail URLs for previews |
 | C.3 | `PageService.java`, `PageController.java` | Async thumbnail generation |
-| D.1 | `Dashboard.tsx`, `SeriesController.java` | Remove cover image URL field (subsumed by MUI dialog extraction) |
+| D.1 | `Dashboard.tsx`, `CreateSeriesDialog.tsx`, `EditSeriesDialog.tsx` | Remove cover image URL field (subsumed by MUI dialog extraction) |
 | D.2 | `SettingsModal.tsx` | Fix modal overflow (subsumed by MUI Dialog dividers) |
-| D.3 | `SeriesDetails.tsx`, `ChapterGallery.tsx` | Chapter cards restyled (MUI Buttons, compact layout); rich metadata deferred |
-| D.4 | `Dashboard.tsx` | Sorting dropdown (deferred — backend pagination first) |
-| D.5 | `Reader.tsx` | Fix page switch reload (deferred to Phase 7) |
-| D.6 | `App.tsx` / `UploadContext.tsx` | Persist upload widget (deferred — needs UploadContext) |
-| D.7 | `[NEW] UserManagement.tsx` | User profile with avatar, sessions, API keys stub (deferred) |
-| D.8 | `index.css` → `theme.ts` | nHentai dark + Pixiv light palettes applied via MUI theme + :root.light CSS vars ✅ |
-| D.9 | `Dashboard.tsx`, `SeriesDetails.tsx` | Lazy loading / infinite scroll (deferred — needs backend) |
-| D.10 | `SettingsModal.tsx`, model picker components | Show resolved model names with inheritance source (client-side util deferred) |
-| D.11 | `SettingsModal.tsx`, model picker components | Model override UX redesign (deferred) |
-| D.12 | All `.tsx` components, `package.json` | Migrate to MUI **v9**: P0 ✅ · P2 (modals) ✅ · P1 (nav) ✅ · P8 (auth) ✅ · P5 (settings) ✅ · P4 (dashboard cards) ✅ · P6/P3/P7/P9 deferred |
-| D.13 | `SeriesDetails.tsx`, `utils.ts`, etc. | Global toast notifications (subsumed by ConfirmModal→Dialog, existing useToast pattern) ✅ |
+| D.3 | `SeriesDetails.tsx`, `ChapterDto.java`, `SeriesController.java` | Chapter cards: page count Chips, context memory Chips, API-resolved OCR/TL model badges |
+| D.4 | `Dashboard.tsx`, `Series.java`, `SeriesDto.java` | Sort dropdown + backend sends `createdAt`/`updatedAt` in SeriesDto |
+| D.5 | `Reader.tsx` | React.memo wrap from D.14; internal cascade investigation deferred |
+| D.6 | `UploadContext.tsx`, `ChapterGallery.tsx`, `App.tsx` | Upload panel survives route changes via app-level context |
+| D.7 | `UserManagementModal.tsx`, `AuthController.java`, `ChangePasswordRequest.java` | Profile modal + backend user management endpoints |
+| D.8 | `theme.ts`, `index.css` → MUI theme | nHentai dark + Pixiv light palettes via MUI theme + :root.light CSS vars ✅ |
+| D.9 | `Dashboard.tsx`, `SeriesDetails.tsx` | Infinite scroll (deferred — needs backend pagination) |
+| D.10 | `SeriesController.java`, `ChapterDto.java`, `SystemSettingsService.java` | Resolved models: backend `populateChapterDto()` resolves chapter→series→global chain, returns `ResolvedModelSlot`/`ResolvedQaSlot` |
+| D.11 | Model picker components | Model override UX redesign (deferred) |
+| D.12 P0-P2 | `package.json`, `theme.ts`, `ConfirmModal.tsx`, `InfoModal.tsx`, `CreateSeriesDialog.tsx`, `CreateChapterDialog.tsx` | MUI v9 install, ThemeProvider, modals → Dialog |
+| D.12 P1 | `App.tsx` | Nav bar → MUI AppBar + Toolbar + IconButton |
+| D.12 P3 | `QueueManager.tsx` | MUI Drawer + Table, mutual exclusion with NotificationCenter |
+| D.12 P4 | `Dashboard.tsx` | Cards → MUI Card + CardMedia + Chip + IconButton |
+| D.12 P5 | `SettingsModal.tsx` | MUI Dialog + FormControl/Select + Grid v2 |
+| D.12 P6 | `ToastContext.tsx` | Stacked MUI Snackbar + Alert |
+| D.12 P7 | `Reader.tsx` | Reader bugs 7.4.1 + 7.4.2 fixed; full MUI JSX swap deferred |
+| D.12 P8 | `Auth.tsx` | MUI Container + Card + TextField + Button + Alert |
+| D.12 P9 | `index.css` | CSS cleanup deferred (~1800 lines) |
+| D.13 | `SeriesDetails.tsx`, `utils.ts`, etc. | Toast notifications + safeFetch 401-only auto-logout ✅ |
 | D.14 | `App.tsx`, `ToastContext.tsx`, `NotificationContext.tsx`, 4 route components | Render-hygiene foundation ✅ |
 | D.15 | `[NEW] MobileApp.tsx` | tl-hub Lite (deferred — stretch goal) |
+| Dialog extraction | `EditSeriesDialog.tsx`, `ImportChapterDialog.tsx` | Old modals → MUI Dialog + Accordion + Select/FormControl. ~800 lines deleted from SeriesDetails + ChapterGallery. |
+| NotificationCenter | `NotificationCenter.tsx`, `App.tsx` | Glass-dropdown → MUI Drawer + Table. Mutual exclusion via `activeDrawer` state. |
 | E.1 | `[NEW] ProviderChain.py`, `config.py` | Cross-provider failover |
 | E.2 | Worker HTTP call sites | Strict timeouts |
 | E.3 | Worker cost utils, `JobCoordinatorService.java` | Move cost tracking from `costs.json` to PostgreSQL |

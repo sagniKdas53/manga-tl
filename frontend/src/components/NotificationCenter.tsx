@@ -142,7 +142,7 @@ export const NotificationCenter: React.FC<Props> = ({
         anchor="right"
         open={forceOpen}
         onClose={onClose}
-                slotProps={{ paper: { sx: { width: 520 } } }}
+        slotProps={{ paper: { sx: { width: 520 } } }}
       >
         <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <Box
