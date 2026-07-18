@@ -15,6 +15,11 @@ import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
+import FormHelperText from "@mui/material/FormHelperText";
+import IconButton from "@mui/material/IconButton";
+import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import type { User, Chapter, Series } from "../types";
 import { safeFetch } from "../utils";
@@ -120,6 +125,22 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const providers = settings?.activeProviders || DEFAULT_PROVIDERS;
   const ocrProviders = settings?.activeOcrProviders || DEFAULT_OCR_PROVIDERS;
 
+  const inheritedOcrProvider = selectedSeries?.ocrProvider || settings?.ocrProvider;
+  const inheritedOcrModel = selectedSeries?.ocrModel || settings?.ocrModel;
+  const inheritedTlProvider = selectedSeries?.tlProvider || settings?.tlProvider;
+  const inheritedTlModel = selectedSeries?.tlModel || settings?.tlModel;
+  const inheritedQaProvider = selectedSeries?.qaProvider || settings?.qaProvider;
+  const inheritedQaMode = selectedSeries?.qaMode || settings?.qaMode;
+  const inheritedQaLlmModel = selectedSeries?.qaLlmModel || settings?.qaLlmModel;
+  const inheritedQaVlmModel = selectedSeries?.qaVlmModel || settings?.qaVlmModel;
+
+  const overrideFields = [
+    ocrProvider, ocrModel, tlProvider, tlModel,
+    qaProvider, qaMode, qaLlmModel, qaVlmModel,
+  ];
+  const overriddenCount = overrideFields.filter((v) => v !== "").length;
+  const inheritedCount = overrideFields.length - overriddenCount;
+
   const resolvedOcrProvider =
     ocrProvider || selectedSeries?.ocrProvider || settings?.ocrProvider;
   const ocrDisabled = resolvedOcrProvider === "local";
@@ -221,185 +242,287 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography variant="body2">Model Overrides (Optional)</Typography>
+            <Chip
+              size="small"
+              label={`${overriddenCount} overridden, ${inheritedCount} inherited`}
+              variant="outlined"
+              sx={{ ml: 1 }}
+            />
           </AccordionSummary>
           <AccordionDetails>
-            <FormControl
-              fullWidth
-              margin="dense"
-            >
-              <InputLabel>OCR Provider</InputLabel>
-              <Select
-                value={ocrProvider}
-                label="OCR Provider"
-                onChange={(e) => setOcrProvider(e.target.value)}
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+              <FormControl
+                fullWidth
+                margin="dense"
               >
-                <MenuItem value="">-- Inherit --</MenuItem>
-                {ocrProviders.map((p) => (
-                  <MenuItem
-                    key={p}
-                    value={p}
-                  >
-                    {p}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl
-              fullWidth
-              margin="dense"
-              disabled={ocrDisabled}
-            >
-              <InputLabel>OCR VLM Model</InputLabel>
-              <Select
-                value={ocrModel}
-                label="OCR VLM Model"
-                onChange={(e) => setOcrModel(e.target.value)}
+                <InputLabel>OCR Provider</InputLabel>
+                <Select
+                  value={ocrProvider}
+                  label="OCR Provider"
+                  onChange={(e) => setOcrProvider(e.target.value)}
+                >
+                  <MenuItem value="">-- Inherit --</MenuItem>
+                  {ocrProviders.map((p) => (
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
+                      {p}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {ocrProvider === "" && inheritedOcrProvider && (
+                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
+                    Resolved: {inheritedOcrProvider}
+                  </FormHelperText>
+                )}
+              </FormControl>
+              {ocrProvider !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrProvider("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+              <FormControl
+                fullWidth
+                margin="dense"
+                disabled={ocrDisabled}
               >
-                <MenuItem value="">-- Inherit --</MenuItem>
-                {ocrDisabled && settings?.localOcrModel ? (
-                  <MenuItem value={settings.localOcrModel}>
-                    {settings.localOcrModel}
-                  </MenuItem>
-                ) : (
-                  (settings?.ocrVlmModelList || []).map((m) => (
+                <InputLabel>OCR VLM Model</InputLabel>
+                <Select
+                  value={ocrModel}
+                  label="OCR VLM Model"
+                  onChange={(e) => setOcrModel(e.target.value)}
+                >
+                  <MenuItem value="">-- Inherit --</MenuItem>
+                  {ocrDisabled && settings?.localOcrModel ? (
+                    <MenuItem value={settings.localOcrModel}>
+                      {settings.localOcrModel}
+                    </MenuItem>
+                  ) : (
+                    (settings?.ocrVlmModelList || []).map((m) => (
+                      <MenuItem
+                        key={m}
+                        value={m}
+                      >
+                        {m}
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+                {ocrModel === "" && inheritedOcrModel && (
+                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
+                    Resolved: {inheritedOcrModel}
+                  </FormHelperText>
+                )}
+              </FormControl>
+              {ocrModel !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrModel("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+              <FormControl
+                fullWidth
+                margin="dense"
+              >
+                <InputLabel>TL Provider</InputLabel>
+                <Select
+                  value={tlProvider}
+                  label="TL Provider"
+                  onChange={(e) => setTlProvider(e.target.value)}
+                >
+                  <MenuItem value="">-- Inherit --</MenuItem>
+                  {providers.map((p) => (
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
+                      {p}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {tlProvider === "" && inheritedTlProvider && (
+                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
+                    Resolved: {inheritedTlProvider}
+                  </FormHelperText>
+                )}
+              </FormControl>
+              {tlProvider !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlProvider("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+              <FormControl
+                fullWidth
+                margin="dense"
+              >
+                <InputLabel>TL LLM Model</InputLabel>
+                <Select
+                  value={tlModel}
+                  label="TL LLM Model"
+                  onChange={(e) => setTlModel(e.target.value)}
+                >
+                  <MenuItem value="">-- Inherit --</MenuItem>
+                  {(settings?.tlLlmModelList || []).map((m) => (
                     <MenuItem
                       key={m}
                       value={m}
                     >
                       {m}
                     </MenuItem>
-                  ))
+                  ))}
+                </Select>
+                {tlModel === "" && inheritedTlModel && (
+                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
+                    Resolved: {inheritedTlModel}
+                  </FormHelperText>
                 )}
-              </Select>
-            </FormControl>
-            <FormControl
-              fullWidth
-              margin="dense"
-            >
-              <InputLabel>TL Provider</InputLabel>
-              <Select
-                value={tlProvider}
-                label="TL Provider"
-                onChange={(e) => setTlProvider(e.target.value)}
+              </FormControl>
+              {tlModel !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlModel("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+              <FormControl
+                fullWidth
+                margin="dense"
               >
-                <MenuItem value="">-- Inherit --</MenuItem>
-                {providers.map((p) => (
-                  <MenuItem
-                    key={p}
-                    value={p}
-                  >
-                    {p}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl
-              fullWidth
-              margin="dense"
-            >
-              <InputLabel>TL LLM Model</InputLabel>
-              <Select
-                value={tlModel}
-                label="TL LLM Model"
-                onChange={(e) => setTlModel(e.target.value)}
+                <InputLabel>QA Provider</InputLabel>
+                <Select
+                  value={qaProvider}
+                  label="QA Provider"
+                  onChange={(e) => setQaProvider(e.target.value)}
+                >
+                  <MenuItem value="">-- Inherit --</MenuItem>
+                  {providers.map((p) => (
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
+                      {p}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {qaProvider === "" && inheritedQaProvider && (
+                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
+                    Resolved: {inheritedQaProvider}
+                  </FormHelperText>
+                )}
+              </FormControl>
+              {qaProvider !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaProvider("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+              <FormControl
+                fullWidth
+                margin="dense"
               >
-                <MenuItem value="">-- Inherit --</MenuItem>
-                {(settings?.tlLlmModelList || []).map((m) => (
-                  <MenuItem
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl
-              fullWidth
-              margin="dense"
-            >
-              <InputLabel>QA Provider</InputLabel>
-              <Select
-                value={qaProvider}
-                label="QA Provider"
-                onChange={(e) => setQaProvider(e.target.value)}
+                <InputLabel>QA Mode</InputLabel>
+                <Select
+                  value={qaMode}
+                  label="QA Mode"
+                  onChange={(e) => setQaMode(e.target.value)}
+                >
+                  <MenuItem value="">-- Inherit --</MenuItem>
+                  {QA_MODES.map((m) => (
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {qaMode === "" && inheritedQaMode && (
+                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
+                    Resolved: {inheritedQaMode}
+                  </FormHelperText>
+                )}
+              </FormControl>
+              {qaMode !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaMode("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+              <FormControl
+                fullWidth
+                margin="dense"
+                disabled={qaLlmDisabled}
               >
-                <MenuItem value="">-- Inherit --</MenuItem>
-                {providers.map((p) => (
-                  <MenuItem
-                    key={p}
-                    value={p}
-                  >
-                    {p}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl
-              fullWidth
-              margin="dense"
-            >
-              <InputLabel>QA Mode</InputLabel>
-              <Select
-                value={qaMode}
-                label="QA Mode"
-                onChange={(e) => setQaMode(e.target.value)}
+                <InputLabel>QA LLM Model</InputLabel>
+                <Select
+                  value={qaLlmModel}
+                  label="QA LLM Model"
+                  onChange={(e) => setQaLlmModel(e.target.value)}
+                >
+                  <MenuItem value="">-- Inherit --</MenuItem>
+                  {(settings?.qaLlmModelList || []).map((m) => (
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {qaLlmModel === "" && inheritedQaLlmModel && (
+                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
+                    Resolved: {inheritedQaLlmModel}
+                  </FormHelperText>
+                )}
+              </FormControl>
+              {qaLlmModel !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaLlmModel("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+              <FormControl
+                fullWidth
+                margin="dense"
+                disabled={qaVlmDisabled}
               >
-                <MenuItem value="">-- Inherit --</MenuItem>
-                {QA_MODES.map((m) => (
-                  <MenuItem
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl
-              fullWidth
-              margin="dense"
-              disabled={qaLlmDisabled}
-            >
-              <InputLabel>QA LLM Model</InputLabel>
-              <Select
-                value={qaLlmModel}
-                label="QA LLM Model"
-                onChange={(e) => setQaLlmModel(e.target.value)}
-              >
-                <MenuItem value="">-- Inherit --</MenuItem>
-                {(settings?.qaLlmModelList || []).map((m) => (
-                  <MenuItem
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl
-              fullWidth
-              margin="dense"
-              disabled={qaVlmDisabled}
-            >
-              <InputLabel>QA VLM Model</InputLabel>
-              <Select
-                value={qaVlmModel}
-                label="QA VLM Model"
-                onChange={(e) => setQaVlmModel(e.target.value)}
-              >
-                <MenuItem value="">-- Inherit --</MenuItem>
-                {(settings?.qaVlmModelList || []).map((m) => (
-                  <MenuItem
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                <InputLabel>QA VLM Model</InputLabel>
+                <Select
+                  value={qaVlmModel}
+                  label="QA VLM Model"
+                  onChange={(e) => setQaVlmModel(e.target.value)}
+                >
+                  <MenuItem value="">-- Inherit --</MenuItem>
+                  {(settings?.qaVlmModelList || []).map((m) => (
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {qaVlmModel === "" && inheritedQaVlmModel && (
+                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
+                    Resolved: {inheritedQaVlmModel}
+                  </FormHelperText>
+                )}
+              </FormControl>
+              {qaVlmModel !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaVlmModel("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
           </AccordionDetails>
         </Accordion>
       </DialogContent>
