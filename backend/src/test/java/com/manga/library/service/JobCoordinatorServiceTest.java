@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@SuppressWarnings("null")
+@SuppressWarnings({"null", "unchecked", "rawtypes", "unused"})
 public class JobCoordinatorServiceTest {
 
   @Autowired private JobCoordinatorService jobCoordinatorService;

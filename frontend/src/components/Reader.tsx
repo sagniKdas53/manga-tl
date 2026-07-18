@@ -2962,7 +2962,7 @@ export const Reader: React.FC<ReaderProps> = ({
                   onClick={() => setFitMode("height")}
                   title="Fit Height"
                 >
-                  <ZoomInIcon fontSize="small" /> Height
+                  <HeightIcon fontSize="small" /> Height
                 </Button>
               </div>
               <Button

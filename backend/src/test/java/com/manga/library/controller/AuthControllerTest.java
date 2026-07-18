@@ -26,7 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@SuppressWarnings("null")
+@SuppressWarnings({"null", "unchecked", "rawtypes", "unused"})
 public class AuthControllerTest {
 
   @Autowired private MockMvc mockMvc;
