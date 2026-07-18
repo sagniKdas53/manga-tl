@@ -35,6 +35,7 @@ import { UploadProvider } from "./components/UploadContext";
 import { useNotifications } from "./components/useNotifications";
 import { NavBar } from "./components/NavBar";
 import { useColorMode } from "./hooks/useColorMode";
+import { useDependencyLogger } from "./hooks/useDependencyLogger";
 
 // Lazy-loaded route components
 const Auth = React.lazy(() => import("./components/Auth"));
@@ -178,6 +179,22 @@ function AppContent() {
     document.documentElement.classList.toggle("light", mode === "light");
     localStorage.setItem("manga_theme", mode);
   }, [mode]);
+
+  useDependencyLogger(
+    {
+      user,
+      seriesId,
+      chapterId,
+      seriesList,
+      selectedSeries,
+      chapters,
+      selectedChapter,
+      pages,
+      isLoadingDetails,
+      activeDrawer,
+    },
+    "AppContent"
+  );
 
   // Load user session redirect
   useEffect(() => {

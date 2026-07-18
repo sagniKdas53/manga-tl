@@ -318,6 +318,7 @@ public class PageService {
             if (p.getPageNumber() > oldPageNumber && p.getPageNumber() <= newPageNumber) {
                 p.setPageNumber(p.getPageNumber() - 1);
                 pageRepository.save(Objects.requireNonNull(p));
+                pageRepository.flush();
             }
         }
     } else {
@@ -327,10 +328,10 @@ public class PageService {
             if (p.getPageNumber() >= newPageNumber && p.getPageNumber() < oldPageNumber) {
                 p.setPageNumber(p.getPageNumber() + 1);
                 pageRepository.save(Objects.requireNonNull(p));
+                pageRepository.flush();
             }
         }
     }
-    pageRepository.flush();
 
     page.setPageNumber(newPageNumber);
     pageRepository.save(Objects.requireNonNull(page));

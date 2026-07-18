@@ -28,7 +28,9 @@ export function useSSE(
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const updateEvent = (type: string, data: string) => {
-      console.log(`[SSE Event Received] ${type}:`, data);
+      if (import.meta.env.DEV) {
+        console.log(`[SSE Event Received] ${type}:`, data);
+      }
       if (onMessageRef.current) {
         onMessageRef.current({ type, data });
       }
@@ -36,7 +38,9 @@ export function useSSE(
 
     eventSource.onopen = () => {
       setIsConnected(true);
-      console.log("SSE connection opened");
+      if (import.meta.env.DEV) {
+        console.log("SSE connection opened");
+      }
     };
 
     const listeners = [
@@ -55,7 +59,9 @@ export function useSSE(
     });
 
     eventSource.onerror = (error) => {
-      console.error("SSE error", error);
+      if (import.meta.env.DEV) {
+        console.error("SSE error", error);
+      }
       setIsConnected(false);
       updateEvent("error", "Connection lost. Retrying...");
       eventSource.close();

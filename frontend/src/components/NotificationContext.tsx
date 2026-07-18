@@ -65,9 +65,13 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
         console.error("Failed to parse notification payload", e);
       }
     } else if (event.type === "connected") {
-      console.log("SSE notification stream: Connection established.");
+      if (import.meta.env.DEV) {
+        console.log("SSE notification stream: Connection established.");
+      }
     } else if (event.type === "error") {
-      console.error("SSE notification stream error:", event.data);
+      if (import.meta.env.DEV) {
+        console.error("SSE notification stream error:", event.data);
+      }
     }
   });
 
