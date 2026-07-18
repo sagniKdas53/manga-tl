@@ -14,6 +14,8 @@ import HeightIcon from "@mui/icons-material/Height";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { ReaderPageNavigation, ReaderPrevNextChapters } from "./ReaderPageNavigation";
+import ConfirmModal from "./ConfirmModal";
+import { useToast } from "./ToastContext";
 
 import type { Chapter, Page } from "../types";
 
@@ -50,6 +52,14 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
 
   // Local state for the "Change Page Number" input
   const [targetPageInput, setTargetPageInput] = React.useState<string>("");
+  const { showToast } = useToast();
+  const [confirmModal, setConfirmModal] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    isDangerous?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
 
   React.useEffect(() => {
     // Reset target page input when current page changes
@@ -63,7 +73,28 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
     if (!props.selectedPage) return;
     const newPageNum = parseInt(targetPageInput, 10);
     if (!isNaN(newPageNum)) {
-      props.handleChangePageNumber(props.selectedPage.id, newPageNum);
+      if (newPageNum < 0) {
+        showToast("Page number cannot be negative", "error");
+        return;
+      }
+      if (newPageNum > props.totalPages) {
+        showToast(`Cannot move page to ${newPageNum}. The chapter only has ${props.totalPages} pages.`, "error");
+        return;
+      }
+
+      if (newPageNum === 0) {
+        setConfirmModal({
+          isOpen: true,
+          title: "Move to End",
+          message: "Do you want to move this page to the end of the chapter?",
+          onConfirm: () => {
+            props.handleChangePageNumber(props.selectedPage!.id, 0);
+            setConfirmModal(null);
+          },
+        });
+      } else {
+        props.handleChangePageNumber(props.selectedPage.id, newPageNum);
+      }
     }
   };
 
@@ -213,6 +244,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
               placeholder="Move to..."
               value={targetPageInput}
               onChange={(e) => setTargetPageInput(e.target.value)}
+              inputProps={{ min: 0 }}
               sx={{ flex: 1, "& .MuiInputBase-input": { padding: "8px 10px", fontSize: "13px" } }}
             />
             <Button
@@ -220,7 +252,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
               variant="contained"
               size="small"
               startIcon={<SwapHorizIcon />}
-              disabled={!props.selectedPage || targetPageInput === props.selectedPage.pageNumber.toString()}
+              disabled={!props.selectedPage || props.totalPages <= 1 || targetPageInput === props.selectedPage.pageNumber.toString()}
               sx={{ fontSize: "11px", fontWeight: 600 }}
             >
               Move
@@ -235,9 +267,16 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             startIcon={<DeleteIcon />}
             onClick={() => {
               if (props.selectedPage) {
-                if (window.confirm("Are you sure you want to delete this page? This cannot be undone.")) {
-                  props.handleDeletePage(props.selectedPage.id);
-                }
+                setConfirmModal({
+                  isOpen: true,
+                  title: "Delete Page",
+                  message: "Are you sure you want to delete this page? This action cannot be undone.",
+                  isDangerous: true,
+                  onConfirm: () => {
+                    props.handleDeletePage(props.selectedPage!.id);
+                    setConfirmModal(null);
+                  },
+                });
               }
             }}
             disabled={!props.selectedPage}
@@ -247,6 +286,16 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
           </Button>
         </Box>
       </div>
+      {confirmModal && (
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          isDangerous={confirmModal.isDangerous}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   );
 });

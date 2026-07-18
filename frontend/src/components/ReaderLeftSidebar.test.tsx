@@ -1,8 +1,12 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { vi } from "vitest";
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import ReaderLeftSidebar from "./ReaderLeftSidebar";
 import { Page } from "../types";
+
+vi.mock("./ToastContext", () => ({
+  useToast: () => ({ showToast: vi.fn() }),
+}));
 
 describe("ReaderLeftSidebar Component", () => {
   const mockHandleDeletePage = vi.fn();
@@ -48,12 +52,15 @@ describe("ReaderLeftSidebar Component", () => {
   });
 
   it("calls handleDeletePage when delete button is clicked and confirmed", () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => true);
     render(<ReaderLeftSidebar {...defaultProps} />);
     const deleteBtn = screen.getByRole("button", { name: /Delete page/i });
     fireEvent.click(deleteBtn);
+    
+    // The ConfirmModal should open. Click "Confirm".
+    const confirmBtn = screen.getByRole("button", { name: /Confirm/i });
+    fireEvent.click(confirmBtn);
+    
     expect(mockHandleDeletePage).toHaveBeenCalledWith("page-123");
-    confirmSpy.mockRestore();
   });
 
   it("calls handleChangePageNumber when form is submitted with new page number", () => {
