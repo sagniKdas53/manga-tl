@@ -10,6 +10,7 @@ import {
   Checkbox,
   FormControlLabel,
   Slider,
+  Typography,
 } from "@mui/material";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -91,10 +92,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
   } = props;
 
   return (
-    <Box className="reader-right-sidebar-nhentai">
+    <Grid className="reader-right-sidebar-nhentai">
       {!selectedItem && (
         <>
-          <div
+          <Grid
             style={{
               color: "var(--text-muted)",
               fontSize: "13px",
@@ -106,11 +107,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           >
             Select an OCR region or a text layer to inspect and edit
             details.
-          </div>
+          </Grid>
 
           {/* Translation Layers Section */}
-          <Box className="panel-section">
-            <Box
+          <Grid className="panel-section">
+            <Grid
               className="panel-section-title"
               style={{
                 display: "flex",
@@ -119,7 +120,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               }}
             >
               <span>Layers</span>
-              <div
+              <Grid
                 style={{
                   display: "flex",
                   gap: "4px",
@@ -162,7 +163,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   <KeyboardArrowDownIcon fontSize="small" />
                 </IconButton>
                 {/* Divider */}
-                <div
+                <Grid
                   style={{
                     width: "1px",
                     height: "14px",
@@ -191,11 +192,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 >
                   SFX
                 </Button>
-              </div>
-            </div>
+              </Grid>
+            </Grid>
 
             {sortedLayers.length === 0 ? (
-              <div
+              <Grid
                 style={{
                   fontSize: "11px",
                   color: "var(--text-muted)",
@@ -203,14 +204,14 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 }}
               >
                 No active layers.
-              </div>
+              </Grid>
             ) : (
               [...sortedLayers].reverse().map((lData, idx) => {
                 const isActive = lData.layer.id === activeLayerId;
                 const stackNumber = sortedLayers.length - idx;
                 const stackLabel = `#${stackNumber}`;
                 return (
-                  <div
+                  <Grid
                     key={lData.layer.id}
                     className="overlay-toggle"
                     onClick={() => setActiveLayerId(lData.layer.id)}
@@ -230,7 +231,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         : "none",
                     }}
                   >
-                    <Box
+                    <Grid
                       style={{
                         display: "flex",
                         flexDirection: "column",
@@ -264,8 +265,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       >
                         {lData.elements.length} elements
                       </span>
-                    </Box>
-                    <div
+                    </Grid>
+                    <Grid
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -305,17 +306,17 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
-                    </div>
-                  </div>
+                    </Grid>
+                  </Grid>
                 );
               })
             )}
-          </Box>
+          </Grid>
 
           {/* Editor Tools Section */}
-          <Box className="panel-section">
+          <Grid className="panel-section">
             <Typography variant="overline" component="div" className="panel-section-title">Editor Tools</Typography>
-            <div
+            <Grid
               style={{ display: "flex", gap: "8px", marginBottom: "8px" }}
             >
               <Button
@@ -356,7 +357,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               >
                 Add Mask
               </Button>
-            </div>
+            </Grid>
             <Button
               variant="outlined"
               size="small"
@@ -374,10 +375,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               Color Dropper
             </Button>
-          </Box>
+          </Grid>
 
           {/* Page Actions Section */}
-          <Box className="panel-section">
+          <Grid className="panel-section">
             <Typography variant="overline" component="div" className="panel-section-title">Page Actions</Typography>
             <Button
               variant="outlined"
@@ -419,10 +420,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               ) : null}
               Redo Page Translation
             </Button>
-          </Box>
+          </Grid>
 
           {/* Export Section */}
-          <div
+          <Grid
             className="panel-section"
             style={{ paddingBottom: "40px" }}
           >
@@ -459,12 +460,12 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               Export Project (ZIP)
             </Button>
-          </div>
+          </Grid>
         </>
       )}
 
       {selectedItem && selectedItem.isLayerElement && (
-        <Box
+        <Grid
           className="ocr-detail-card"
           style={{
             flex: 1,
@@ -473,7 +474,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             gap: "12px",
           }}
         >
-          <Box
+          <Grid
             className="panel-section-title"
             style={{
               display: "flex",
@@ -498,10 +499,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               Deselect
             </Button>
-          </Box>
+          </Grid>
 
           {/* Text Content */}
-          <div
+          <Grid
             style={{
               display: "flex",
               flexDirection: "column",
@@ -535,7 +536,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 },
               }}
             />
-          </div>
+          </Grid>
 
           {/* Manual Region Redo Section */}
           {selectedItem.regionId && (
@@ -728,7 +729,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           </Grid>
 
           {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
-          <Box style={{ margin: "4px 0", display: "flex", gap: "6px" }}>
+          <Grid style={{ margin: "4px 0", display: "flex", gap: "6px" }}>
             {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
             {interactionMode === "reshape" ? (
               <Button
@@ -790,7 +791,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
               </Button>
             )}
-          </Box>
+          </Grid>
 
           {/* Font & Style settings */}
           <Grid container spacing={1}>
@@ -909,7 +910,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           </Grid>
 
           {/* Box Shape selection */}
-          <div
+          <Grid
             style={{
               display: "flex",
               flexDirection: "column",
@@ -940,7 +941,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               <MenuItem value="rectangular">Rectangular</MenuItem>
               <MenuItem value="elliptical">Elliptical (Contour-Based)</MenuItem>
             </Select>
-          </div>
+          </Grid>
 
           {/* Mask Background Color (only relevant if clean background mask is enabled) */}
           {selectedItem.wordWrap && (
@@ -984,7 +985,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             )}
 
           {/* Rotation Slider */}
-          <div
+          <Grid
             style={{
               display: "flex",
               flexDirection: "column",
@@ -1012,10 +1013,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               }
               sx={{ width: "100%", mt: 1 }}
             />
-          </div>
+          </Grid>
 
           {/* Checkboxes Row */}
-          <Box
+          <Grid
             style={{
               display: "flex",
               flexDirection: "column",
@@ -1068,10 +1069,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               }
               label={<span style={{ fontSize: "12px" }}>Clean background mask</span>}
             />
-          </Box>
+          </Grid>
 
           {/* Action Buttons */}
-          <Box style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+          <Grid style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
             <Button
               variant="contained"
               color="primary"
@@ -1113,12 +1114,12 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               Delete
             </Button>
-          </div>
-        </div>
+          </Grid>
+        </Grid>
       )}
 
       {selectedItem && !selectedItem.isLayerElement && (
-        <div
+        <Grid
           className="ocr-detail-card"
           style={{
             flex: 1,
@@ -1127,7 +1128,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             gap: "12px",
           }}
         >
-          <div
+          <Grid
             className="panel-section-title"
             style={{
               display: "flex",
@@ -1156,9 +1157,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               Deselect
             </Button>
-          </div>
+          </Grid>
 
-          <div
+          <Grid
             style={{
               display: "flex",
               flexWrap: "wrap",
@@ -1207,9 +1208,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 Approved
               </span>
             )}
-          </div>
+          </Grid>
 
-          <div
+          <Grid
             style={{
               fontSize: "12px",
               color: "var(--text-muted)",
@@ -1218,9 +1219,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           >
             Position: x={selectedItem.bboxX}, y={selectedItem.bboxY} (
             {selectedItem.bboxW}x{selectedItem.bboxH})
-          </div>
+          </Grid>
 
-          <div
+          <Grid
             style={{
               overflowY: "auto",
               flex: 1,
@@ -1230,7 +1231,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             }}
           >
             {selectedItem.regions.map((reg: OcrRegion, idx: number) => (
-              <div
+              <Grid
                 key={reg.id}
                 style={{
                   borderBottom:
@@ -1240,7 +1241,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   paddingBottom: "12px",
                 }}
               >
-                <div
+                <Grid
                   style={{
                     fontSize: "10px",
                     fontWeight: 700,
@@ -1250,17 +1251,17 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   }}
                 >
                   Region #{idx + 1} Original
-                </div>
-                <div
+                </Grid>
+                <Grid
                   className="ocr-text-preview"
                   style={{ marginBottom: "8px" }}
                 >
                   {reg.text}
-                </div>
+                </Grid>
 
                 {reg.translatedText && (
                   <>
-                    <div
+                    <Grid
                       style={{
                         fontSize: "10px",
                         fontWeight: 700,
@@ -1270,8 +1271,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       }}
                     >
                       Region #{idx + 1} Translation
-                    </div>
-                    <div
+                    </Grid>
+                    <Grid
                       className="ocr-text-preview"
                       style={{
                         color: "var(--primary-hover)",
@@ -1279,15 +1280,15 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       }}
                     >
                       {reg.translatedText}
-                    </div>
+                    </Grid>
                   </>
                 )}
-              </div>
+              </Grid>
             ))}
-          </div>
-        </div>
+          </Grid>
+        </Grid>
       )}
-    </Box>
+    </Grid>
   );
 };
 
