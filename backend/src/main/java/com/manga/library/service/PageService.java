@@ -280,4 +280,60 @@ public class PageService {
 
     recalculateSeriesCover(chapter.getSeries().getId());
   }
+
+  @Transactional
+  public void updatePageNumber(UUID pageId, int newPageNumber) {
+    Objects.requireNonNull(pageId, "pageId cannot be null");
+    Page page = pageRepository.findById(pageId)
+            .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+    
+    int oldPageNumber = page.getPageNumber();
+    if (oldPageNumber == newPageNumber) return;
+
+    UUID chapterId = page.getChapter().getId();
+    List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
+    int totalPages = pages.size();
+
+    // Clamp newPageNumber
+    if (newPageNumber < 1) {
+        newPageNumber = 1;
+    } else if (newPageNumber > totalPages || newPageNumber == -1) {
+        newPageNumber = totalPages;
+    }
+
+    if (oldPageNumber == newPageNumber) return;
+
+    // Temporarily set to a high number to avoid unique constraint violations
+    page.setPageNumber(10000 + newPageNumber);
+    pageRepository.save(Objects.requireNonNull(page));
+    pageRepository.flush();
+
+    // Shift other pages
+    if (newPageNumber > oldPageNumber) {
+        for (Page p : pages) {
+            if (p.getId().equals(pageId)) continue;
+            if (p.getPageNumber() > oldPageNumber && p.getPageNumber() <= newPageNumber) {
+                p.setPageNumber(p.getPageNumber() - 1);
+                pageRepository.save(Objects.requireNonNull(p));
+            }
+        }
+    } else {
+        for (Page p : pages) {
+            if (p.getId().equals(pageId)) continue;
+            if (p.getPageNumber() >= newPageNumber && p.getPageNumber() < oldPageNumber) {
+                p.setPageNumber(p.getPageNumber() + 1);
+                pageRepository.save(Objects.requireNonNull(p));
+            }
+        }
+    }
+    pageRepository.flush();
+
+    page.setPageNumber(newPageNumber);
+    pageRepository.save(Objects.requireNonNull(page));
+    pageRepository.flush();
+
+    if (oldPageNumber == 1 || newPageNumber == 1) {
+        recalculateChapterCover(chapterId);
+    }
+  }
 }

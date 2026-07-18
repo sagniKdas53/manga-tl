@@ -921,6 +921,32 @@ public class PageController {
     }
   }
 
+  @PutMapping("/pages/{pageId}/number")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  public ResponseEntity<?> updatePageNumber(
+      @PathVariable UUID pageId, @RequestBody Map<String, Object> payload) {
+    log.info("Received request to update page number for page {}: {}", pageId, payload);
+    try {
+      if (!payload.containsKey("newNumber")) {
+        return ResponseEntity.badRequest().body("Missing 'newNumber' in payload");
+      }
+      
+      int newNumber;
+      Object newNumObj = payload.get("newNumber");
+      if (newNumObj instanceof Number) {
+        newNumber = ((Number) newNumObj).intValue();
+      } else {
+        newNumber = Integer.parseInt(newNumObj.toString());
+      }
+      
+      pageService.updatePageNumber(pageId, newNumber);
+      return ResponseEntity.ok().build();
+    } catch (Exception e) {
+      log.error("Failed to update page number", e);
+      return ResponseEntity.internalServerError().body(e.getMessage());
+    }
+  }
+
   @PutMapping("/ocr-regions/{id}")
   @Transactional
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")

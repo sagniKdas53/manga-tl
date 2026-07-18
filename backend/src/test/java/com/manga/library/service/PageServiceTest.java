@@ -36,6 +36,7 @@ public class PageServiceTest {
   @Test
   public void testCreatePageAndImage() {
     Chapter chapter = new Chapter();
+    chapter.setId(UUID.randomUUID());
     chapter.setChapterNumber(1.0);
     Series series = new Series();
     series.setId(UUID.randomUUID());
@@ -65,6 +66,7 @@ public class PageServiceTest {
   @Test
   public void testCreatePageWithExistingImage() {
     Chapter chapter = new Chapter();
+    chapter.setId(UUID.randomUUID());
     chapter.setChapterNumber(1.0);
     Series series = new Series();
     series.setId(UUID.randomUUID());
@@ -233,5 +235,53 @@ public class PageServiceTest {
     verify(chapterRepository, times(1)).save(chapter);
     assertEquals(imageId, chapter.getCoverImageId());
     verify(seriesRepository, times(1)).save(series);
+  }
+
+  @Test
+  public void testUpdatePageNumber_MoveForward() {
+    UUID chapterId = UUID.randomUUID();
+    Chapter chapter = new Chapter();
+    chapter.setId(chapterId);
+
+    Page p1 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(1).build();
+    Page p2 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(2).build();
+    Page p3 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(3).build();
+    Page p4 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(4).build();
+
+    when(pageRepository.findById(p2.getId())).thenReturn(java.util.Optional.of(p2));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(java.util.List.of(p1, p2, p3, p4));
+
+    pageService.updatePageNumber(p2.getId(), 4);
+
+    // p2 is moved to 4. p3 and p4 shift down to 2 and 3.
+    // p2 is saved twice (once temporarily, once final)
+    verify(pageRepository, times(1)).save(argThat(p -> p.getId().equals(p3.getId())));
+    verify(pageRepository, times(1)).save(argThat(p -> p.getId().equals(p4.getId())));
+    verify(pageRepository, times(2)).save(argThat(p -> p.getId().equals(p2.getId())));
+  }
+
+  @Test
+  public void testUpdatePageNumber_MoveBackward() {
+    UUID chapterId = UUID.randomUUID();
+    Chapter chapter = new Chapter();
+    chapter.setId(chapterId);
+
+    Page p1 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(1).build();
+    Page p2 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(2).build();
+    Page p3 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(3).build();
+    Page p4 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(4).build();
+
+    when(pageRepository.findById(p4.getId())).thenReturn(java.util.Optional.of(p4));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(java.util.List.of(p1, p2, p3, p4));
+
+    pageService.updatePageNumber(p4.getId(), 2);
+
+    // p4 is moved to 2. p2 and p3 shift up to 3 and 4.
+    // p4 is saved twice (once temporarily, once final)
+    verify(pageRepository, times(1)).save(argThat(p -> p.getId().equals(p2.getId())));
+    verify(pageRepository, times(1)).save(argThat(p -> p.getId().equals(p3.getId())));
+    verify(pageRepository, times(2)).save(argThat(p -> p.getId().equals(p4.getId())));
   }
 }
