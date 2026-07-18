@@ -457,24 +457,21 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
 
   return (
     <>
-      <Badge
-        badgeContent={jobs.length}
-        color="primary"
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'left',
-        }}
-        invisible={jobs.length === 0}
+
+      <IconButton
+        onClick={onRequestOpen}
+        color="inherit"
+        size="small"
+        title="Queue Manager"
       >
-        <IconButton
-          onClick={onRequestOpen}
-          color="inherit"
-          size="small"
-          title="Queue Manager"
+        <Badge
+          badgeContent={jobs.length}
+          color="primary"
+          invisible={jobs.length === 0}
         >
           <ChecklistIcon />
-        </IconButton>
-      </Badge>
+        </Badge>
+      </IconButton>
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
