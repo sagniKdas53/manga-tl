@@ -524,7 +524,7 @@ describe("SeriesDetails Component", () => {
     });
   });
 
-  it("cancels series editing", () => {
+  it("cancels series editing", async () => {
     render(
       <SeriesDetails
         user={mockUser}
@@ -543,8 +543,10 @@ describe("SeriesDetails Component", () => {
     const cancelBtn = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelBtn);
 
-    expect(
-      screen.queryByRole("heading", { name: "Edit Series" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Edit Series" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

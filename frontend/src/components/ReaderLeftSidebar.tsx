@@ -15,7 +15,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { ReaderPageNavigation, ReaderPrevNextChapters } from "./ReaderPageNavigation";
 
-import { Chapter, Page } from "../types";
+import type { Chapter, Page } from "../types";
 
 interface ReaderLeftSidebarProps {
   showPanels: boolean;

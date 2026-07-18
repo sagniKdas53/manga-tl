@@ -32,9 +32,10 @@ vi.mock("../utils", () => ({
   getContextPath: () => "",
 }));
 
+const mockShowToast = vi.fn();
 vi.mock("./ToastContext", () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: mockShowToast,
   }),
 }));
 
@@ -96,6 +97,7 @@ describe("ChapterGallery Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSafeFetch.mockReset();
+    mockShowToast.mockReset();
   });
 
   it("renders chapter details and pages", () => {
@@ -170,7 +172,7 @@ describe("ChapterGallery Component", () => {
     const titleInput = screen.getByDisplayValue("Romance Dawn");
     fireEvent.change(titleInput, { target: { value: "Romance Dawn Updated" } });
 
-    const saveBtn = screen.getByRole("button", { name: "Save" });
+    const saveBtn = screen.getByRole("button", { name: "Update Chapter" });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -450,11 +452,11 @@ describe("ChapterGallery Component", () => {
     const titleInput = screen.getByDisplayValue("Romance Dawn");
     fireEvent.change(titleInput, { target: { value: "Romance Dawn Failed" } });
 
-    const saveBtn = screen.getByRole("button", { name: "Save" });
+    const saveBtn = screen.getByRole("button", { name: "Update Chapter" });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
-      expect(screen.getByText("Validation error")).toBeInTheDocument();
+      expect(mockShowToast).toHaveBeenCalledWith("Validation error", "error");
     });
   });
 });
