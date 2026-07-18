@@ -31,7 +31,7 @@ public class ChapterExportService {
     try {
       Chapter chapter =
           chapterRepository
-              .findById(chapterId)
+              .findById(Objects.requireNonNull(chapterId))
               .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
 
       List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);

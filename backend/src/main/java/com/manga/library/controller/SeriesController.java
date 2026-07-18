@@ -187,7 +187,7 @@ public class SeriesController {
             .createdBy(user)
             .build();
     Objects.requireNonNull(series, "series cannot be null");
-    series = seriesRepository.save(series);
+    series = seriesRepository.save(Objects.requireNonNull(series));
 
     return ResponseEntity.ok(toDto(series));
   }
@@ -204,7 +204,7 @@ public class SeriesController {
   public ResponseEntity<SeriesDto> getSeries(@PathVariable UUID seriesId) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     return seriesRepository
-        .findById(seriesId)
+        .findById(Objects.requireNonNull(seriesId))
         .map(s -> ResponseEntity.ok(toDto(s)))
         .orElse(ResponseEntity.notFound().build());
   }
@@ -215,7 +215,7 @@ public class SeriesController {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     Series series =
         seriesRepository
-            .findById(seriesId)
+            .findById(Objects.requireNonNull(seriesId))
             .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
 
     if (chapterRepository
@@ -246,7 +246,7 @@ public class SeriesController {
             .useContextMemory(dto.getUseContextMemory() == null || dto.getUseContextMemory())
             .build();
     Objects.requireNonNull(chapter, "chapter cannot be null");
-    chapter = chapterRepository.save(chapter);
+    chapter = chapterRepository.save(Objects.requireNonNull(chapter));
 
     dto.setId(chapter.getId());
     dto.setSeriesId(seriesId);
@@ -276,7 +276,7 @@ public class SeriesController {
   public ResponseEntity<ChapterDto> getChapter(@PathVariable UUID chapterId) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
-        .findById(chapterId)
+        .findById(Objects.requireNonNull(chapterId))
         .map(
             c -> {
               ChapterDto dto = new ChapterDto();
@@ -292,7 +292,7 @@ public class SeriesController {
       @PathVariable UUID seriesId, @RequestBody SeriesDto dto) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     return seriesRepository
-        .findById(seriesId)
+        .findById(Objects.requireNonNull(seriesId))
         .map(
             s -> {
               s.setTitle(dto.getTitle());
@@ -314,7 +314,7 @@ public class SeriesController {
               s.setQaVlmModel(dto.getQaVlmModel());
               s.setQaMode(dto.getQaMode());
               Objects.requireNonNull(s, "series cannot be null");
-              s = seriesRepository.save(s);
+              s = seriesRepository.save(Objects.requireNonNull(s));
               return ResponseEntity.ok(toDto(s));
             })
         .orElse(ResponseEntity.notFound().build());
@@ -325,7 +325,7 @@ public class SeriesController {
   public ResponseEntity<Void> deleteSeries(@PathVariable UUID seriesId) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     if (seriesRepository.existsById(seriesId)) {
-      seriesRepository.deleteById(seriesId);
+      seriesRepository.deleteById(Objects.requireNonNull(seriesId));
       return ResponseEntity.ok().build();
     }
     return ResponseEntity.notFound().build();
@@ -337,7 +337,7 @@ public class SeriesController {
       @PathVariable UUID chapterId, @RequestBody ChapterDto dto) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
-        .findById(chapterId)
+        .findById(Objects.requireNonNull(chapterId))
         .map(
             c -> {
               java.util.Optional<Chapter> existing =
@@ -366,7 +366,7 @@ public class SeriesController {
                 c.setUseContextMemory(dto.getUseContextMemory());
               }
               Objects.requireNonNull(c, "chapter cannot be null");
-              c = chapterRepository.save(c);
+              c = chapterRepository.save(Objects.requireNonNull(c));
 
               pageService.recalculateSeriesCover(c.getSeries().getId());
 
@@ -386,11 +386,11 @@ public class SeriesController {
   public ResponseEntity<Void> deleteChapter(@PathVariable UUID chapterId) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
-        .findById(chapterId)
+        .findById(Objects.requireNonNull(chapterId))
         .map(
             chapter -> {
               UUID seriesId = chapter.getSeries().getId();
-              chapterRepository.delete(chapter);
+              chapterRepository.delete(Objects.requireNonNull(chapter));
               chapterRepository.flush();
               pageService.recalculateSeriesCover(seriesId);
               return ResponseEntity.ok().<Void>build();
@@ -420,7 +420,7 @@ public class SeriesController {
     try {
       Series series =
           seriesRepository
-              .findById(seriesId)
+              .findById(Objects.requireNonNull(seriesId))
               .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
 
       if (chapterRepository.findBySeriesIdAndChapterNumber(seriesId, chapterNumber).isPresent()) {
@@ -444,7 +444,7 @@ public class SeriesController {
               .qaVlmModel(qaVlmModel)
               .qaMode(qaMode)
               .build();
-      chapter = chapterRepository.save(chapter);
+      chapter = chapterRepository.save(Objects.requireNonNull(chapter));
 
       // 2. Read ZIP/ePub entries
       List<ZipImageEntry> imageEntries = new ArrayList<>();
@@ -475,7 +475,7 @@ public class SeriesController {
       }
 
       if (imageEntries.isEmpty()) {
-        chapterRepository.delete(chapter);
+        chapterRepository.delete(Objects.requireNonNull(chapter));
         return ResponseEntity.badRequest()
             .body(Map.of("message", "Archive contains no valid image files."));
       }
@@ -587,7 +587,7 @@ public class SeriesController {
 
     // Verify chapter exists before exporting
     chapterRepository
-        .findById(chapterId)
+        .findById(Objects.requireNonNull(chapterId))
         .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
 
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
