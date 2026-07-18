@@ -76,7 +76,7 @@ interface RenderItem {
   /** Only present for standalone regions */
   originalRegion?: OcrRegion;
   /** Only present for conversation items */
-  conversationData?: Conversation & {
+  conversationData?: Omit<Conversation, "regions"> & {
     regions: OcrRegion[];
     bboxX: number;
     bboxY: number;
@@ -89,7 +89,9 @@ interface RenderItem {
 }
 
 type SelectedItemType =
-  (RenderItem & LayerElement) | RenderItem | LayerElement | null;
+  | (RenderItem & Partial<Omit<LayerElement, keyof RenderItem>>)
+  | (LayerElement & Partial<Omit<RenderItem, keyof LayerElement>>)
+  | null;
 
 async function saveElementChanges(
   element: LayerElement,
@@ -462,8 +464,10 @@ export const Reader: React.FC<ReaderProps> = ({
     title: string;
     message: string;
     confirmText?: string;
+    cancelText?: string;
     isDangerous?: boolean;
     onConfirm: () => void;
+    onCancel?: () => void;
   }>({
     isOpen: false,
     title: "",
@@ -1220,13 +1224,13 @@ export const Reader: React.FC<ReaderProps> = ({
               elements: l.elements.map((el) =>
                 el.id === draggedElement.id
                   ? {
-                      ...el,
-                      x: newX,
-                      y: newY,
-                      ...(newMaskPolygon !== undefined
-                        ? { maskPolygon: newMaskPolygon }
-                        : {}),
-                    }
+                    ...el,
+                    x: newX,
+                    y: newY,
+                    ...(newMaskPolygon !== undefined
+                      ? { maskPolygon: newMaskPolygon }
+                      : {}),
+                  }
                   : el,
               ),
             };
@@ -1411,13 +1415,13 @@ export const Reader: React.FC<ReaderProps> = ({
       setSelectedItem((prev) =>
         prev && prev.id === draggedVertex.elementId
           ? {
-              ...prev,
-              maskPolygon: newMaskPolygon,
-              x: bbox.x,
-              y: bbox.y,
-              maxWidth: bbox.w,
-              maxHeight: bbox.h,
-            }
+            ...prev,
+            maskPolygon: newMaskPolygon,
+            x: bbox.x,
+            y: bbox.y,
+            maxWidth: bbox.w,
+            maxHeight: bbox.h,
+          }
           : prev,
       );
       setLayers((prev) =>
@@ -1426,13 +1430,13 @@ export const Reader: React.FC<ReaderProps> = ({
           elements: l.elements.map((el) =>
             el.id === draggedVertex.elementId
               ? {
-                  ...el,
-                  maskPolygon: newMaskPolygon,
-                  x: bbox.x,
-                  y: bbox.y,
-                  maxWidth: bbox.w,
-                  maxHeight: bbox.h,
-                }
+                ...el,
+                maskPolygon: newMaskPolygon,
+                x: bbox.x,
+                y: bbox.y,
+                maxWidth: bbox.w,
+                maxHeight: bbox.h,
+              }
               : el,
           ),
         })),
@@ -1560,13 +1564,13 @@ export const Reader: React.FC<ReaderProps> = ({
       setSelectedItem((prev) =>
         prev && prev.id === rotationDrag.elementId
           ? {
-              ...prev,
-              maskPolygon: newMaskPolygon,
-              x: bbox.x,
-              y: bbox.y,
-              maxWidth: bbox.w,
-              maxHeight: bbox.h,
-            }
+            ...prev,
+            maskPolygon: newMaskPolygon,
+            x: bbox.x,
+            y: bbox.y,
+            maxWidth: bbox.w,
+            maxHeight: bbox.h,
+          }
           : prev,
       );
       setLayers((prev) =>
@@ -1575,13 +1579,13 @@ export const Reader: React.FC<ReaderProps> = ({
           elements: l.elements.map((el) =>
             el.id === rotationDrag.elementId
               ? {
-                  ...el,
-                  maskPolygon: newMaskPolygon,
-                  x: bbox.x,
-                  y: bbox.y,
-                  maxWidth: bbox.w,
-                  maxHeight: bbox.h,
-                }
+                ...el,
+                maskPolygon: newMaskPolygon,
+                x: bbox.x,
+                y: bbox.y,
+                maxWidth: bbox.w,
+                maxHeight: bbox.h,
+              }
               : el,
           ),
         })),
@@ -1912,7 +1916,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // Compute new cloned layer name
       const getLayerName = (l: Layer) => {
-        if (l.metadataJson?.layer_name) return l.metadataJson.layer_name;
+        if (typeof l.metadataJson?.layer_name === "string") return l.metadataJson.layer_name;
         if (l.type === "translation")
           return `Translation (${l.targetLanguage?.toUpperCase() || "EN"})`;
         if (l.type === "sfx") return "SFX Layer";
@@ -2365,22 +2369,12 @@ export const Reader: React.FC<ReaderProps> = ({
       // 4. project.json
       let totalCostVal = 0.0;
       layers.forEach((lData) => {
-        const meta = lData.layer.metadataJson;
+        const meta = lData.layer.metadataJson as { cost?: { estimated_cost?: number }, qa?: { cost?: { estimated_cost?: number } } } | null;
         if (meta && typeof meta === "object") {
-          if (
-            meta.cost &&
-            typeof meta.cost === "object" &&
-            typeof meta.cost.estimated_cost === "number"
-          ) {
+          if (typeof meta.cost?.estimated_cost === "number") {
             totalCostVal += meta.cost.estimated_cost;
           }
-          if (
-            meta.qa &&
-            typeof meta.qa === "object" &&
-            meta.qa.cost &&
-            typeof meta.qa.cost === "object" &&
-            typeof meta.qa.cost.estimated_cost === "number"
-          ) {
+          if (typeof meta.qa?.cost?.estimated_cost === "number") {
             totalCostVal += meta.qa.cost.estimated_cost;
           }
         }
@@ -3233,8 +3227,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
                     const relatedRegion = element.regionId
                       ? filteredOcrRegions.find(
-                          (r) => r.id === element.regionId,
-                        )
+                        (r) => r.id === element.regionId,
+                      )
                       : null;
                     const elQaStatus = relatedRegion
                       ? relatedRegion.qaStatus
@@ -3351,7 +3345,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? "var(--primary)"
                                 : elQaStatus === "failed" ||
-                                    elQaStatus === "manual_review"
+                                  elQaStatus === "manual_review"
                                   ? "#ef4444"
                                   : elQaStatus === "direct_fix"
                                     ? "#f59e0b"
@@ -3361,7 +3355,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? 2
                                 : elQaStatus === "failed" ||
-                                    elQaStatus === "manual_review"
+                                  elQaStatus === "manual_review"
                                   ? 2
                                   : 1
                             }
@@ -3369,7 +3363,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? "none"
                                 : elQaStatus === "failed" ||
-                                    elQaStatus === "manual_review"
+                                  elQaStatus === "manual_review"
                                   ? "none"
                                   : "4 4"
                             }
@@ -3567,7 +3561,7 @@ export const Reader: React.FC<ReaderProps> = ({
                                 {fit.lines.map((line, i) => {
                                   const lineCenterX =
                                     fit.lineCenters &&
-                                    fit.lineCenters.at(i) !== undefined
+                                      fit.lineCenters.at(i) !== undefined
                                       ? (fit.lineCenters.at(i) ??
                                         element.x + width / 2)
                                       : element.x + width / 2;
@@ -3677,7 +3671,7 @@ export const Reader: React.FC<ReaderProps> = ({
                           sortedLayers.findIndex(
                             (l) => l.layer.id === activeLayerId,
                           ) ===
-                            sortedLayers.length - 1
+                          sortedLayers.length - 1
                         }
                         onClick={() =>
                           activeLayerId && handleMoveLayer(activeLayerId, "up")
@@ -3719,7 +3713,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         onClick={handleCreateTranslationLayer}
                         title="Add Translation Layer"
                       >
-                        + TL
+                        TL
                       </Button>
                       <Button
                         variant="outlined"
@@ -3729,7 +3723,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         onClick={handleCreateSfxLayer}
                         title="Add SFX Layer"
                       >
-                        + SFX
+                        SFX
                       </Button>
                     </div>
                   </div>
@@ -3787,7 +3781,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               }}
                             >
                               {stackLabel}{" "}
-                              {lData.layer.metadataJson?.layer_name ||
+                              {typeof lData.layer.metadataJson?.layer_name === "string" ? lData.layer.metadataJson.layer_name :
                                 (lData.layer.type === "translation"
                                   ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
                                   : lData.layer.type === "sfx"
@@ -3908,7 +3902,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       justifyContent: "center",
                       gap: "8px",
                     }}
-                    onClick={handleLaunchEyeDropper}
+                    onClick={() => handleLaunchEyeDropper("backgroundColor")}
                     disabled={!selectedItem || !selectedItem.isLayerElement}
                     title="Sample color from screen to apply to selected element's background"
                   >
@@ -4105,9 +4099,9 @@ export const Reader: React.FC<ReaderProps> = ({
                       }
                       title={
                         selectedItem &&
-                        "layerType" in selectedItem &&
-                        (selectedItem.layerType === "translation" ||
-                          selectedItem.layerType === "tl")
+                          "layerType" in selectedItem &&
+                          (selectedItem.layerType === "translation" ||
+                            selectedItem.layerType === "tl")
                           ? "Select an OCR layer element to redo OCR"
                           : undefined
                       }
@@ -4568,7 +4562,7 @@ export const Reader: React.FC<ReaderProps> = ({
                     label="Mask Background Color"
                     value={
                       selectedItem.backgroundColor !== undefined &&
-                      selectedItem.backgroundColor !== null
+                        selectedItem.backgroundColor !== null
                         ? selectedItem.backgroundColor
                         : "#ffffff"
                     }
@@ -4589,7 +4583,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       label="Text Color"
                       value={
                         selectedItem.textColor !== undefined &&
-                        selectedItem.textColor !== null
+                          selectedItem.textColor !== null
                           ? selectedItem.textColor
                           : "#000000"
                       }
@@ -4734,7 +4728,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         ? "1px solid var(--warning, #eab308)"
                         : undefined,
                     }}
-                    onClick={() => handleSaveElementChanges(selectedItem)}
+                    onClick={() => handleSaveElementChanges(selectedItem as LayerElement)}
                   >
                     Save
                     {dirtyElements.has(selectedItem.id) && (

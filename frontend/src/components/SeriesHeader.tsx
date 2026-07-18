@@ -76,8 +76,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
           <Stack
             direction="row"
             spacing={1}
-            flexWrap="wrap"
-            useFlexGap
+            sx={{ flexWrap: "wrap" }}
           >
             <Button
               variant="contained"
