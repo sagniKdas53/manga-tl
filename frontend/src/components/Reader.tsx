@@ -62,6 +62,7 @@ interface ReaderProps {
   chapters: Chapter[];
   pages: Page[];
   theme: "light" | "dark";
+  setPages?: React.Dispatch<React.SetStateAction<Page[]>>;
 }
 
 /** A single renderable item in the reader — either a conversation group or a standalone region. */
@@ -162,6 +163,7 @@ export const Reader: React.FC<ReaderProps> = ({
   selectedChapter,
   chapters,
   pages,
+  setPages,
   theme,
 }) => {
   const navigate = useNavigate();
@@ -171,6 +173,21 @@ export const Reader: React.FC<ReaderProps> = ({
   if (theme) {
     // theme-dependent checks
   }
+
+  const fetchPages = useCallback(async () => {
+    if (!setPages || !selectedChapter) return;
+    try {
+      const res = await safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      if (res.ok) {
+        const pagesData = await res.json();
+        setPages(pagesData);
+      }
+    } catch (e) {
+      console.error("Failed to fetch pages:", e);
+    }
+  }, [selectedChapter, user.token, setPages]);
 
   // Find selected page based on route param
   const curPageNum = parseInt(pageNumber || "1");

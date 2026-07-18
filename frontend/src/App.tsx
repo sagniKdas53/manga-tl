@@ -454,6 +454,7 @@ function AppContent() {
                             selectedChapter={selectedChapter}
                             chapters={chapters}
                             pages={pages}
+                            setPages={setPages}
                             theme={mode}
                           />
                         ) : null
@@ -469,6 +470,7 @@ function AppContent() {
                             selectedChapter={selectedChapter}
                             chapters={chapters}
                             pages={pages}
+                            setPages={setPages}
                             theme={mode}
                           />
                         ) : null
