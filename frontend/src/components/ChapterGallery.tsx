@@ -1,21 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import IconButton from "@mui/material/IconButton";
-import Stack from "@mui/material/Stack";
-import CloseIcon from "@mui/icons-material/Close";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import EditIcon from "@mui/icons-material/Edit";
+import CircularProgress from "@mui/material/CircularProgress";
+import Typography from "@mui/material/Typography";
 import type { User, Series, Chapter, Page } from "../types";
 import { safeFetch, toSlug, getContextPath } from "../utils";
 import CreateChapterDialog from "./CreateChapterDialog";
 import ConfirmModal from "./ConfirmModal";
+import ChapterHeader from "./ChapterHeader";
+import ChapterPageGrid from "./ChapterPageGrid";
+import ChapterDragOverlay from "./ChapterDragOverlay";
 import { useToast } from "./ToastContext";
 import { useUploadQueue, type UploadQueueItem } from "./UploadContext";
-import CircularProgress from "@mui/material/CircularProgress";
-import Typography from "@mui/material/Typography";
 
 interface ChapterGalleryProps {
   user: User;
@@ -386,8 +382,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     );
   }
 
-  const handleDeletePage = (pageId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeletePage = (pageId: string) => {
     setConfirmModal({
       isOpen: true,
       title: "Delete Page",
@@ -485,75 +480,27 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto", width: "100%", px: { xs: 2, sm: 3 }, py: 3 }}>
-      <div>
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={() => {
-            setSelectedChapter(null);
-            navigate(
-              `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`,
-            );
-          }}
-          sx={{ mb: 2 }}
-        >
-          ← Back to Series
-        </Button>
-        <div className="page-header">
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <Typography
-                variant="h4"
-                sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: mode === "dark" ? "white" : "black" }}
-              >
-                Chapter {selectedChapter.chapterNumber}
-              </Typography>
-              <IconButton
-                onClick={() => {
-                  setShowEditModal(true);
-                  setEditCounter((c) => c + 1);
-                }}
-                title="Edit Chapter Name & Number"
-                size="small"
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </div>
-            <p style={{ color: "var(--text-muted)", margin: "8px 0 0" }}>
-              {selectedSeries.title} / {selectedChapter.title || "Untitled"}
-            </p>
-          </div>
-          <Stack
-            direction="row"
-            spacing={1}
-          >
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() =>
-                document.getElementById("project-import-upload")?.click()
-              }
-              disabled={isImportingProject}
-            >
-              {isImportingProject ? "Importing..." : "Import Project (ZIP)"}
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={handleExportChapterZip}
-            >
-              Export Chapter (ZIP)
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={() => document.getElementById("file-upload")?.click()}
-            >
-              Upload Page
-            </Button>
-          </Stack>
-        </div>
-      </div>
+      <ChapterHeader
+        selectedSeries={selectedSeries}
+        selectedChapter={selectedChapter}
+        onBack={() => {
+          setSelectedChapter(null);
+          navigate(
+            `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`,
+          );
+        }}
+        onEditClick={() => {
+          setShowEditModal(true);
+          setEditCounter((c) => c + 1);
+        }}
+        onImportClick={() =>
+          document.getElementById("project-import-upload")?.click()
+        }
+        onExportClick={handleExportChapterZip}
+        onUploadClick={() => document.getElementById("file-upload")?.click()}
+        isImporting={isImportingProject}
+        mode={mode}
+      />
 
       {/* Hidden file input for browsing */}
       <input
@@ -572,160 +519,24 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         onChange={handleProjectImportUpload}
       />
 
-      <Typography
-        variant="h5"
-        sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: mode === "dark" ? "white" : "black" }}
-      >
-        Pages ({pages.length})
-      </Typography>
-      <div className="pages-grid">
-        {pages.map((p, idx) => (
-          <div
-            key={p.id}
-            className="page-thumbnail-container glass"
-            onClick={() => {
-              onSelectPage(p);
-              navigate(
-                `/chapters/${selectedChapter.id}/${toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`)}/reader/${p.pageNumber}`,
-              );
-            }}
-            style={{ position: "relative" }}
-          >
-            <img
-              src={p.thumbnailUrl || `${p.url}?token=${user.token}`}
-              className="page-thumbnail"
-              alt={`Page ${p.pageNumber}`}
-            />
-            <span className="page-num-tag">Page {p.pageNumber}</span>
+      <ChapterPageGrid
+        pages={pages}
+        token={user.token}
+        onDeletePage={handleDeletePage}
+        onMovePage={handleMovePage}
+        onSelectPage={(p) => {
+          onSelectPage(p);
+          navigate(
+            `/chapters/${selectedChapter.id}/${toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`)}/reader/${p.pageNumber}`,
+          );
+        }}
+        onNavigate={navigate}
+      />
 
-            <IconButton
-              className="delete-page-btn"
-              onClick={(e) => handleDeletePage(p.id, e)}
-              size="small"
-              sx={{ color: "white" }}
-              title="Delete page"
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-
-            <div
-              className="reorder-controls"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <IconButton
-                className="reorder-btn"
-                onClick={() => handleMovePage(idx, "left")}
-                disabled={idx === 0}
-                size="small"
-                title="Move page left"
-              >
-                <ChevronLeftIcon fontSize="small" />
-              </IconButton>
-              <IconButton
-                className="reorder-btn"
-                onClick={() => handleMovePage(idx, "right")}
-                disabled={idx === pages.length - 1}
-                size="small"
-                title="Move page right"
-              >
-                <ChevronRightIcon fontSize="small" />
-              </IconButton>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Fullscreen Drag Overlay */}
-      {dragCounter > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 10000,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(15, 15, 25, 0.85)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            border: "4px dashed rgba(99, 102, 241, 0.6)",
-            borderRadius: "16px",
-            margin: "16px",
-            pointerEvents: "none",
-            animation: "fadeIn 0.15s ease-out",
-          }}
-        >
-          <div
-            style={{
-              background:
-                "linear-gradient(145deg, rgba(30,30,50,0.95) 0%, rgba(20,20,38,0.95) 100%)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "20px",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
-              padding: "40px 60px",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "16px",
-            }}
-          >
-            <div
-              style={{
-                width: "60px",
-                height: "60px",
-                borderRadius: "16px",
-                background: "rgba(99, 102, 241, 0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                animation: "pulse 2s infinite",
-              }}
-            >
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#818cf8"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line
-                  x1="12"
-                  y1="3"
-                  x2="12"
-                  y2="15"
-                />
-              </svg>
-            </div>
-            <h2
-              style={{
-                color: "#fff",
-                fontSize: "20px",
-                fontWeight: 700,
-                margin: 0,
-              }}
-            >
-              Drop Manga Pages Anywhere
-            </h2>
-            <p
-              style={{
-                color: "rgba(226,232,240,0.7)",
-                fontSize: "14px",
-                margin: 0,
-              }}
-            >
-              Release to add multiple files to Chapter{" "}
-              {selectedChapter.chapterNumber}
-            </p>
-          </div>
-        </div>
-      )}
+      <ChapterDragOverlay
+        visible={dragCounter > 0}
+        chapterNumber={selectedChapter.chapterNumber}
+      />
 
       {/* Confirm Modal */}
       <ConfirmModal

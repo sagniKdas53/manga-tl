@@ -46,6 +46,7 @@ import { QueueManager } from "./components/QueueManager";
 import { useNotifications } from "./components/useNotifications";
 import logoDark from "./assets/logo-dark.svg";
 import logoLight from "./assets/logo-light.svg";
+import { useColorMode } from "./hooks/useColorMode";
 
 // Lazy-loaded route components
 const Auth = React.lazy(() => import("./components/Auth"));
@@ -178,11 +179,7 @@ function AppContent() {
   const [pages, setPages] = useState<Page[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
-  // Theme via MUI — recreate palette on toggle, bridge :root.light for legacy CSS
-  const [mode, setMode] = useState<"light" | "dark">(() => {
-    const saved = localStorage.getItem("manga_theme");
-    return saved === "light" ? "light" : "dark";
-  });
+  const { mode, toggleMode } = useColorMode();
   const appliedTheme = useMemo(() => themeObj(mode), [mode]);
 
   const [activeDrawer, setActiveDrawer] = useState<
@@ -399,10 +396,8 @@ function AppContent() {
                         spacing={1}
                       >
                         <IconButton
-                          onClick={() =>
-                            setMode(mode === "dark" ? "light" : "dark")
-                          }
-                          sx={{ color: mode === "dark" ? "white" : "black" }}
+                          onClick={toggleMode}
+                          color="inherit"
                           title={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
                         >
                           {mode === "dark" ? (
@@ -415,22 +410,18 @@ function AppContent() {
                           <>
                             <IconButton
                               onClick={() => setIsSettingsOpen(true)}
+                              color="inherit"
                               title="Settings"
-                              sx={{
-                                color: mode === "dark" ? "white" : "black",
-                              }}
                             >
                               <SettingsIcon />
                             </IconButton>
                             <QueueManager
                               token={user?.token}
-                              mode={mode}
                               forceOpen={activeDrawer === "queue"}
                               onRequestOpen={() => setActiveDrawer("queue")}
                               onClose={() => setActiveDrawer("none")}
                             />
                             <NotificationCenter
-                              mode={mode}
                               forceOpen={activeDrawer === "notifications"}
                               onRequestOpen={() =>
                                 setActiveDrawer("notifications")
@@ -440,10 +431,8 @@ function AppContent() {
                             <IconButton
                               onClick={() => setIsUserModalOpen(true)}
                               size="small"
-                              sx={{
-                                minWidth: "auto",
-                                color: mode === "dark" ? "white" : "black",
-                              }}
+                              color="inherit"
+                              sx={{ minWidth: "auto" }}
                               title="Account"
                             >
                               <PersonIcon />
@@ -451,10 +440,8 @@ function AppContent() {
                             <IconButton
                               onClick={handleLogout}
                               size="small"
-                              sx={{
-                                minWidth: "auto",
-                                color: mode === "dark" ? "white" : "black",
-                              }}
+                              color="inherit"
+                              sx={{ minWidth: "auto" }}
                               title="Sign Out"
                             >
                               <LogoutIcon />
