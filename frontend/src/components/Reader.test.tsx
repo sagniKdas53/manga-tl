@@ -108,15 +108,18 @@ describe("Reader Component", () => {
     await screen.findByText(/Test Series/);
 
     // By default both sidebars are true (visible)
-    expect(screen.getByText("Navigation")).toBeInTheDocument();
+    expect(screen.getByText("NAVIGATION")).toBeInTheDocument();
 
     // Click left sidebar toggle to hide it
-    const leftSidebarToggle = screen.getByTitle(/Toggle Global Controls/i);
+    const leftSidebarToggle = screen.getAllByRole("button", {
+      name: /Settings/i,
+    })[0]; // Assuming it's the first button with MenuOpenIcon/Settings
     fireEvent.click(leftSidebarToggle);
-    expect(screen.queryByText("Navigation")).not.toBeInTheDocument();
+
+    expect(screen.queryByText("NAVIGATION")).not.toBeInTheDocument();
 
     // Click right sidebar toggle
-    const rightSidebarToggle = screen.getByTitle(/Toggle Property Inspector/i);
+    const rightSidebarToggle = screen.getByTitle(/Right Sidebar/i);
     fireEvent.click(rightSidebarToggle);
   });
 

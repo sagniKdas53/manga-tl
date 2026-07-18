@@ -168,12 +168,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </Typography>
         </Box>
         <Stack
-          direction="row"
-          spacing={1}
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          sx={{ width: { xs: "100%", sm: "auto" } }}
         >
           <FormControl
             size="small"
-            sx={{ minWidth: 160 }}
+            sx={{ minWidth: { xs: "100%", sm: 160 } }}
           >
             <Select
               value={`${sortBy}-${sortDir}`}
@@ -195,6 +196,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleNewSeriesClick}
+            sx={{ width: { xs: "100%", sm: "auto" } }}
           >
             New Series
           </Button>
