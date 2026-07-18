@@ -1,6 +1,10 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import CardActions from "@mui/material/CardActions";
+import CardContent from "@mui/material/CardContent";
+import CardMedia from "@mui/material/CardMedia";
 import Chip from "@mui/material/Chip";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
@@ -61,9 +65,18 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
               : b.chapterNumber - a.chapterNumber,
           )
           .map((c) => (
-            <div
+            <Card
               key={c.id}
-              className="chapter-card-nhentai"
+              sx={{
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: 4,
+                },
+              }}
               onClick={() => {
                 onSelectChapter(c);
                 onNavigate(
@@ -71,120 +84,137 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                 );
               }}
             >
-              <div className="chapter-cover-container-nhentai">
-                {c.coverImageUrl ? (
-                  <img
-                    src={c.coverImageUrl}
-                    className="chapter-cover-img-nhentai"
-                    alt={c.title || `Chapter ${c.chapterNumber}`}
-                  />
-                ) : series.coverImageUrl ? (
-                  <img
-                    src={series.coverImageUrl}
-                    className="chapter-cover-img-nhentai fallback"
-                    alt="Fallback Cover"
-                  />
-                ) : (
-                  <div className="chapter-cover-placeholder-nhentai">
-                    <span>C{c.chapterNumber}</span>
-                  </div>
-                )}
-
-                <div
-                  className="chapter-actions-overlay"
-                  onClick={(e) => e.stopPropagation()}
+              {c.coverImageUrl ? (
+                <CardMedia
+                  component="img"
+                  image={c.coverImageUrl}
+                  alt={c.title || `Chapter ${c.chapterNumber}`}
+                  sx={{ aspectRatio: "2/3", objectFit: "cover", bgcolor: "#000" }}
+                />
+              ) : series.coverImageUrl ? (
+                <CardMedia
+                  component="img"
+                  image={series.coverImageUrl}
+                  alt="Fallback Cover"
+                  sx={{ aspectRatio: "2/3", objectFit: "cover", bgcolor: "#000" }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    aspectRatio: "2/3",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    bgcolor: "grey.900",
+                    color: "text.secondary",
+                    fontFamily: '"Outfit", sans-serif',
+                    fontWeight: 700,
+                    p: 2,
+                    textAlign: "center",
+                    fontSize: 24,
+                  }}
                 >
-                  <IconButton
-                    className="action-btn-small"
-                    onClick={(e) => onEditChapter(c, e)}
-                    size="small"
-                    title="Edit Chapter"
-                  >
-                    <EditIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                  <IconButton
-                    className="action-btn-small delete-btn"
-                    onClick={(e) => onDeleteChapter(c.id, e)}
-                    size="small"
-                    title="Delete Chapter"
-                    color="error"
-                  >
-                    <DeleteIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                </div>
-              </div>
+                  C{c.chapterNumber}
+                </Box>
+              )}
 
-              <div className="chapter-card-info-nhentai">
-                <div className="chapter-card-number-nhentai">
+              <CardContent sx={{ flex: 1, py: 1.5, pb: 1, "&:last-child": { pb: 1.5 } }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ color: "primary.main", fontWeight: 700, textTransform: "uppercase", fontSize: "0.75rem", mb: 0.5 }}
+                >
                   Chapter {c.chapterNumber}
-                </div>
-                <div
-                  className="chapter-card-title-nhentai"
+                </Typography>
+                <Typography
+                  variant="h6"
+                  noWrap
                   title={c.title || "Untitled"}
+                  sx={{ fontSize: "1rem", lineHeight: 1.2, mb: 1 }}
                 >
                   {c.title || "Untitled"}
-                </div>
+                </Typography>
+                
                 {(c.pageCount ||
                   c.useContextMemory !== undefined ||
                   c.resolvedOcr ||
                   c.resolvedTranslation) && (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 0.5,
-                      mt: 0.75,
-                    }}
-                  >
-                    {c.pageCount !== undefined && c.pageCount > 0 && (
-                      <Chip
-                        label={`${c.pageCount} pages`}
-                        size="small"
-                        variant="outlined"
-                        title="Total pages in this chapter"
-                      />
-                    )}
-                    {c.useContextMemory !== undefined && (
-                      <Chip
-                        label={c.useContextMemory ? "Context" : "No Context"}
-                        size="small"
-                        variant="outlined"
-                        color={c.useContextMemory ? "primary" : "default"}
-                        title={
-                          c.useContextMemory
-                            ? "Context memory enabled"
-                            : "Context memory disabled"
-                        }
-                      />
-                    )}
-                    {(c.resolvedOcr || c.resolvedTranslation) && (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: "text.secondary",
-                          fontSize: "10px",
-                          lineHeight: "20px",
-                        }}
-                      >
-                        {c.resolvedOcr && c.resolvedOcr.source !== "global"
-                          ? `OCR: ${c.resolvedOcr.provider}${c.resolvedOcr.model ? " / " + c.resolvedOcr.model : ""} (${c.resolvedOcr.source})`
-                          : ""}
-                        {c.resolvedOcr &&
-                        c.resolvedOcr.source !== "global" &&
-                        c.resolvedTranslation &&
-                        c.resolvedTranslation.source !== "global"
-                          ? " | "
-                          : ""}
-                        {c.resolvedTranslation &&
-                        c.resolvedTranslation.source !== "global"
-                          ? `TL: ${c.resolvedTranslation.provider}${c.resolvedTranslation.model ? " / " + c.resolvedTranslation.model : ""} (${c.resolvedTranslation.source})`
-                          : ""}
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-              </div>
-            </div>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 0.5,
+                        mt: 0.5,
+                      }}
+                    >
+                      {c.pageCount !== undefined && c.pageCount > 0 && (
+                        <Chip
+                          label={`${c.pageCount} pages`}
+                          size="small"
+                          variant="outlined"
+                          title="Total pages in this chapter"
+                        />
+                      )}
+                      {c.useContextMemory !== undefined && (
+                        <Chip
+                          label={c.useContextMemory ? "Context" : "No Context"}
+                          size="small"
+                          variant="outlined"
+                          color={c.useContextMemory ? "primary" : "default"}
+                          title={
+                            c.useContextMemory
+                              ? "Context memory enabled"
+                              : "Context memory disabled"
+                          }
+                        />
+                      )}
+                      {(c.resolvedOcr || c.resolvedTranslation) && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "text.secondary",
+                            fontSize: "10px",
+                            lineHeight: "20px",
+                            width: "100%",
+                            mt: 0.5
+                          }}
+                        >
+                          {c.resolvedOcr && c.resolvedOcr.source !== "global"
+                            ? `OCR: ${c.resolvedOcr.provider}${c.resolvedOcr.model ? " / " + c.resolvedOcr.model : ""} (${c.resolvedOcr.source})`
+                            : ""}
+                          {c.resolvedOcr &&
+                            c.resolvedOcr.source !== "global" &&
+                            c.resolvedTranslation &&
+                            c.resolvedTranslation.source !== "global"
+                            ? " | "
+                            : ""}
+                          {c.resolvedTranslation &&
+                            c.resolvedTranslation.source !== "global"
+                            ? `TL: ${c.resolvedTranslation.provider}${c.resolvedTranslation.model ? " / " + c.resolvedTranslation.model : ""} (${c.resolvedTranslation.source})`
+                            : ""}
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
+              </CardContent>
+
+              <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
+                <IconButton
+                  size="small"
+                  title="Edit Chapter"
+                  onClick={(e) => onEditChapter(c, e)}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  title="Delete Chapter"
+                  color="error"
+                  onClick={(e) => onDeleteChapter(c.id, e)}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </CardActions>
+            </Card>
           ))}
       </div>
     </>

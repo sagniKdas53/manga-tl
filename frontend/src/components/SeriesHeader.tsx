@@ -1,6 +1,7 @@
 import React from "react";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Box from "@mui/material/Box";
 import AddIcon from "@mui/icons-material/Add";
 import UploadIcon from "@mui/icons-material/Upload";
 import type { Series } from "../types";
@@ -26,7 +27,8 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
     <div className="series-details-container">
       <div className="series-cover-column">
         {series.coverImageUrl ? (
-          <img
+          <Box
+            component="img"
             src={series.coverImageUrl}
             className="series-large-cover"
             alt={series.title}

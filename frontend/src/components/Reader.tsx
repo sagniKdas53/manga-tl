@@ -1701,13 +1701,23 @@ export const Reader: React.FC<ReaderProps> = ({
       });
       if (!response.ok) throw new Error("Failed to delete page");
       showToast("Page deleted successfully", "success");
+      
+      const remainingPages = pages.filter(p => p.id !== pageId);
+      if (remainingPages.length === 0) {
+        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}`);
+      } else if (selectedPage?.id === pageId) {
+        const deletedPageIndex = pages.findIndex(p => p.id === pageId);
+        const nextTargetIndex = deletedPageIndex < remainingPages.length ? deletedPageIndex : remainingPages.length - 1;
+        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${remainingPages[nextTargetIndex].pageNumber}`, { replace: true });
+      }
+
       // Refresh pages
       await fetchPages();
     } catch (err: unknown) {
       console.error(err);
       showToast((err as Error).message || "Failed to delete page", "error");
     }
-  }, [fetchPages, showToast, user.token]);
+  }, [fetchPages, showToast, user.token, pages, selectedChapter, selectedPage, navigate]);
 
   const handleChangePageNumber = React.useCallback(async (pageId: string, newNumber: number) => {
     try {
@@ -1727,8 +1737,9 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // Smooth Navigation to the new URL if we moved the current page
       if (selectedPage?.id === pageId) {
+        const targetPageNumber = newNumber === 0 ? pages.length : newNumber;
         navigate(
-          `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${newNumber}`,
+          `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${targetPageNumber}`,
           { replace: true }
         );
       }
@@ -1736,7 +1747,7 @@ export const Reader: React.FC<ReaderProps> = ({
       console.error(err);
       showToast((err as Error).message || "Failed to update page number", "error");
     }
-  }, [fetchPages, showToast, navigate, selectedPage, selectedChapter, user.token]);
+  }, [fetchPages, showToast, navigate, selectedPage, selectedChapter, user.token, pages]);
 
   const handleDeleteElement = async (elementId: string) => {
     setConfirmModal({
