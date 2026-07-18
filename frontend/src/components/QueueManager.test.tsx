@@ -1,6 +1,8 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach, Mock } from "vitest";
+import "@testing-library/jest-dom";
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { Mock } from "vitest";
 import { QueueManager } from "./QueueManager";
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
@@ -314,10 +316,10 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      expect(screen.getAllByTitle("Pause").length).toBeGreaterThan(0);
+      expect(screen.getAllByLabelText("Pause").length).toBeGreaterThan(0);
     });
 
-    const pauseButtons = screen.getAllByTitle("Pause");
+    const pauseButtons = screen.getAllByLabelText("Pause");
     fireEvent.click(pauseButtons[pauseButtons.length - 1]);
 
     await waitFor(() => {

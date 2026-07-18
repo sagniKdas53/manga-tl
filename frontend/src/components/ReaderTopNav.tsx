@@ -67,7 +67,7 @@ export default function ReaderTopNav({
       <IconButton
         className={`reader-nav-btn gear-btn ${rightSidebarOpen ? "active" : ""}`}
         size="small"
-        title="Settings"
+        title="Right Sidebar"
         onClick={onToggleRightSidebar}
       >
         <SettingsIcon fontSize="small" />
