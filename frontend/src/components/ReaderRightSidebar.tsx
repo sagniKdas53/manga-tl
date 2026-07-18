@@ -1,18 +1,8 @@
 import React from 'react';
 import {
-  Box,
-  Typography,
   IconButton,
   Button,
   CircularProgress,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Checkbox,
-  FormControlLabel,
-  Divider,
 } from "@mui/material";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -73,7 +63,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
   const {
     selectedItem, setSelectedItem,
     activeLayerId, setActiveLayerId,
-    sortedLayers, layers, manuallyShownOcrLayers, cleanScanlationView,
+    sortedLayers,
     handleMoveLayer, handleCreateTranslationLayer, handleCreateSfxLayer,
     handleToggleLayerVisibility, handleCloneLayer, handleDeleteLayer,
     handleAddNewElement, handleLaunchEyeDropper,
