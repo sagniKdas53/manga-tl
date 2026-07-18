@@ -110,24 +110,22 @@ export const NotificationCenter: React.FC<Props> = ({
 
   return (
     <>
-      <Badge
-        badgeContent={unreadCount}
-        color="primary"
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'left',
-        }}
-        invisible={unreadCount === 0}
+
+      <IconButton
+        onClick={onRequestOpen}
+        color="inherit"
+        size="small"
+        title="Notifications"
       >
-        <IconButton
-          onClick={onRequestOpen}
-          color="inherit"
-          size="small"
-          title="Notifications"
+        <Badge
+          badgeContent={unreadCount}
+          color="primary"
+          invisible={unreadCount === 0}
         >
           <NotificationsIcon />
-        </IconButton>
-      </Badge>
+        </Badge>
+      </IconButton>
+
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
