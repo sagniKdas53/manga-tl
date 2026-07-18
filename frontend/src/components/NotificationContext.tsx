@@ -7,7 +7,11 @@ import React, {
 } from "react";
 import { useSSE } from "../utils/useSSE";
 import { getContextPath } from "../utils";
-import { NotificationContext, type Notification } from "./useNotifications";
+import {
+  NotificationContext,
+  type Notification,
+  type SSEEvent,
+} from "./useNotifications";
 
 interface NotificationProviderProps {
   children: ReactNode;

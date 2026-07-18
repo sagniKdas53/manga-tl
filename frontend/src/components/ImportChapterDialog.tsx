@@ -134,7 +134,9 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
         try {
           const p = JSON.parse(text);
           msg = p.message || msg;
-        } catch {}
+        } catch {
+          /* JSON parse failed — use raw text */
+        }
         setImportError(msg);
       }
     } catch (err) {
