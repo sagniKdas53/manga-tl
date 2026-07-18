@@ -36,8 +36,6 @@ import {
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
-import ZoomInIcon from "@mui/icons-material/ZoomIn";
-import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import FitScreenIcon from "@mui/icons-material/FitScreen";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
@@ -2942,7 +2940,7 @@ export const Reader: React.FC<ReaderProps> = ({
               >
                 <Button
                   size="small"
-                  color={fitMode === "page" ? "primary" : "default"}
+                  color={fitMode === "page" ? "primary" : "inherit"}
                   onClick={() => setFitMode("page")}
                   title="Fit Page"
                 >
@@ -2950,7 +2948,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 </Button>
                 <Button
                   size="small"
-                  color={fitMode === "width" ? "primary" : "default"}
+                  color={fitMode === "width" ? "primary" : "inherit"}
                   onClick={() => setFitMode("width")}
                   title="Fit Width"
                 >
@@ -2958,7 +2956,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 </Button>
                 <Button
                   size="small"
-                  color={fitMode === "height" ? "primary" : "default"}
+                  color={fitMode === "height" ? "primary" : "inherit"}
                   onClick={() => setFitMode("height")}
                   title="Fit Height"
                 >

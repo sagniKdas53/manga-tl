@@ -18,7 +18,6 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import CloseIcon from "@mui/icons-material/Close";
 import { safeFetch } from "../utils";
-import { useColorMode } from "../hooks/useColorMode";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
@@ -147,7 +146,6 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
   onRequestOpen,
   onClose,
 }) => {
-  const { mode } = useColorMode();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const { subscribe } = useNotifications();
@@ -516,7 +514,6 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                 <IconButton
                   size="small"
                   onClick={handleClearQueue}
-                  title="Clear Queue"
                 >
                   <ClearAllIcon fontSize="small" />
                 </IconButton>
@@ -525,7 +522,6 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                 <IconButton
                   size="small"
                   onClick={handlePauseResumeQueue}
-                  title={isPaused ? "Resume" : "Pause"}
                 >
                   {isPaused ? (
                     <PlayArrowIcon fontSize="small" />
@@ -683,7 +679,6 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                               <IconButton
                                 size="small"
                                 onClick={() => handleRetryJob(job.id)}
-                                title="Retry"
                               >
                                 <RestartAltIcon fontSize="small" />
                               </IconButton>
@@ -704,9 +699,6 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   size="small"
                                   onClick={() => handleToggleJobPause(job)}
                                   disabled={isPaused}
-                                  title={
-                                    job.status === "PAUSED" ? "Resume" : "Pause"
-                                  }
                                 >
                                   {job.status === "PAUSED" || isPaused ? (
                                     <PlayArrowIcon fontSize="small" />
@@ -722,7 +714,6 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 size="small"
                                 color="error"
                                 onClick={() => handleDeleteJob(job.id)}
-                                title="Delete"
                               >
                                 <ClearIcon fontSize="small" />
                               </IconButton>
