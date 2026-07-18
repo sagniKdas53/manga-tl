@@ -1,5 +1,7 @@
 package com.manga.library.service;
 
+import java.util.Objects;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.repository.ImageRepository;
 import java.io.IOException;
@@ -70,7 +72,7 @@ public class SseService {
           }
         }
       }
-      redisTemplate.delete(key);
+      redisTemplate.delete(Objects.requireNonNull(key));
     }
   }
 
@@ -92,7 +94,7 @@ public class SseService {
       emitNotificationToUser(UUID.fromString(userIdStr), type, title, message, imageId, context);
     } else {
       imageRepository
-          .findById(imageId)
+          .findById(Objects.requireNonNull(imageId))
           .ifPresentOrElse(
               image -> {
                 if (image.getCreatedBy() != null) {
@@ -187,7 +189,7 @@ public class SseService {
       emitEventToUser(UUID.fromString(userIdStr), eventName, data);
     } else {
       imageRepository
-          .findById(imageId)
+          .findById(Objects.requireNonNull(imageId))
           .ifPresentOrElse(
               image -> {
                 if (image.getCreatedBy() != null) {

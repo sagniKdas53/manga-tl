@@ -1,5 +1,7 @@
 package com.manga.library.service;
 
+import java.util.Objects;
+
 import com.manga.library.dto.SystemSettingsDto;
 import com.manga.library.model.SystemSetting;
 import com.manga.library.repository.SystemSettingsRepository;
@@ -172,7 +174,7 @@ public class SystemSettingsService {
 
   public String getSettingValue(String key, String defaultValue) {
     return systemSettingsRepository
-        .findById(key)
+        .findById(Objects.requireNonNull(key))
         .map(SystemSetting::getSettingValue)
         .orElse(defaultValue);
   }
@@ -180,9 +182,9 @@ public class SystemSettingsService {
   private void saveSetting(String key, String value) {
     if (value == null) return;
     SystemSetting setting =
-        systemSettingsRepository.findById(key).orElse(new SystemSetting(key, value, null));
+        systemSettingsRepository.findById(Objects.requireNonNull(key)).orElse(new SystemSetting(key, value, null));
     setting.setSettingValue(value);
-    systemSettingsRepository.save(setting);
+    systemSettingsRepository.save(Objects.requireNonNull(setting));
   }
 
   private List<String> parseList(String commaSeparated) {

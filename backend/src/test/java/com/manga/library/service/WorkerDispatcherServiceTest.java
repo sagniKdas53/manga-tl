@@ -57,9 +57,9 @@ public class WorkerDispatcherServiceTest {
 
     when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
 
-    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -76,9 +76,9 @@ public class WorkerDispatcherServiceTest {
 
     when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}");
 
-    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(429);
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -94,12 +94,12 @@ public class WorkerDispatcherServiceTest {
     when(valueOps.get("system:queue:paused")).thenReturn("false");
     when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
 
-    HttpResponse<String> mockResponse1 = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse1 = mockGeneric(HttpResponse.class);
     when(mockResponse1.statusCode()).thenReturn(429);
-    HttpResponse<String> mockResponse2 = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse2 = mockGeneric(HttpResponse.class);
     when(mockResponse2.statusCode()).thenReturn(202);
 
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(mockResponse1)
         .thenReturn(mockResponse2);
 
@@ -118,10 +118,10 @@ public class WorkerDispatcherServiceTest {
     when(valueOps.get("system:queue:paused")).thenReturn("false");
     when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}");
 
-    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(429);
 
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -139,10 +139,10 @@ public class WorkerDispatcherServiceTest {
     when(valueOps.get("system:queue:paused")).thenReturn("false");
     when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
 
-    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
 
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenThrow(new java.io.IOException("Connection refused"))
         .thenReturn(mockResponse);
 
@@ -159,12 +159,12 @@ public class WorkerDispatcherServiceTest {
     when(valueOps.get("system:queue:paused")).thenReturn("false");
     when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
 
-    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
 
     org.mockito.ArgumentCaptor<HttpRequest> requestCaptor =
         org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
-    when(httpClient.send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(requestCaptor.capture(), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -203,12 +203,12 @@ public class WorkerDispatcherServiceTest {
         .thenReturn(null);
 
     // First call (heavy) → 429, second call (light) → 202
-    HttpResponse<String> heavyResponse = mock(HttpResponse.class);
+    HttpResponse<String> heavyResponse = mockGeneric(HttpResponse.class);
     when(heavyResponse.statusCode()).thenReturn(429);
-    HttpResponse<String> lightResponse = mock(HttpResponse.class);
+    HttpResponse<String> lightResponse = mockGeneric(HttpResponse.class);
     when(lightResponse.statusCode()).thenReturn(202);
 
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(heavyResponse)
         .thenReturn(lightResponse);
 
@@ -229,12 +229,12 @@ public class WorkerDispatcherServiceTest {
     when(listOps.leftPop("queue:region-redo-tl")).thenReturn("{\"id\": \"light1\"}");
 
     // First call (heavy) → 202, second call (light) → 429
-    HttpResponse<String> heavyResponse = mock(HttpResponse.class);
+    HttpResponse<String> heavyResponse = mockGeneric(HttpResponse.class);
     when(heavyResponse.statusCode()).thenReturn(202);
-    HttpResponse<String> lightResponse = mock(HttpResponse.class);
+    HttpResponse<String> lightResponse = mockGeneric(HttpResponse.class);
     when(lightResponse.statusCode()).thenReturn(429);
 
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(heavyResponse)
         .thenReturn(lightResponse);
 
@@ -255,9 +255,9 @@ public class WorkerDispatcherServiceTest {
         .thenReturn("{\"id\": \"light1\"}")
         .thenReturn(null);
 
-    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -275,14 +275,24 @@ public class WorkerDispatcherServiceTest {
     when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}");
     when(listOps.leftPop("queue:region-redo-tl")).thenReturn("{\"id\": \"light1\"}");
 
-    HttpResponse<String> mockResponse = mock(HttpResponse.class);
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(429);
-    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
 
     verify(listOps).leftPush("queue:qa-re-ocr", "{\"id\": \"heavy1\"}");
     verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T mockGeneric(Class<?> clazz) {
+      return (T) org.mockito.Mockito.mock(clazz);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T anyGeneric(Class<?> clazz) {
+      return (T) org.mockito.ArgumentMatchers.any(clazz);
   }
 }

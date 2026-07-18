@@ -18,6 +18,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
+import LinearProgress from "@mui/material/LinearProgress";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
@@ -66,6 +67,14 @@ function LoadingSpinner() {
   return (
     <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
       <CircularProgress />
+    </Box>
+  );
+}
+
+function LinearIndeterminate() {
+  return (
+    <Box sx={{ width: '100%' }}>
+      <LinearProgress aria-label="Loading…" />
     </Box>
   );
 }
@@ -574,7 +583,7 @@ function AppContent() {
                   </Routes>
                 </Suspense>
 
-                <Suspense fallback={null}>
+                <Suspense fallback={<LinearIndeterminate />}>
                   {isSettingsOpen && (
                     <SettingsModal
                       isOpen={isSettingsOpen}
