@@ -7,7 +7,6 @@ import {
   Slider,
   Button,
   TextField,
-  Divider,
 } from "@mui/material";
 import FitScreenIcon from "@mui/icons-material/FitScreen";
 import WidthFullIcon from "@mui/icons-material/WidthFull";
@@ -16,15 +15,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { ReaderPageNavigation, ReaderPrevNextChapters } from "./ReaderPageNavigation";
 
-// Types derived from existing usage
-interface Chapter {
-  id: string;
-  chapterNumber: number;
-}
-interface Page {
-  id: string;
-  pageNumber: number;
-}
+import { Chapter, Page } from "../types";
 
 interface ReaderLeftSidebarProps {
   showPanels: boolean;
@@ -222,8 +213,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
               placeholder="Move to..."
               value={targetPageInput}
               onChange={(e) => setTargetPageInput(e.target.value)}
-              sx={{ flex: 1 }}
-              inputProps={{ style: { padding: '8px 10px', fontSize: '13px' } }}
+              sx={{ flex: 1, "& .MuiInputBase-input": { padding: "8px 10px", fontSize: "13px" } }}
             />
             <Button
               type="submit"

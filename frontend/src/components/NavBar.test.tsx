@@ -22,7 +22,7 @@ describe("NavBar", () => {
   
   beforeEach(() => {
     vi.clearAllMocks();
-    (useColorMode as any).mockReturnValue({
+    (useColorMode as import("vitest").Mock).mockReturnValue({
       mode: "dark",
       toggleMode: mockToggleMode,
     });
@@ -56,7 +56,7 @@ describe("NavBar", () => {
   });
 
   it("renders all elements when user is logged in", () => {
-    renderWithRouter(<NavBar {...defaultProps} user={{ id: "1", token: "tok" } as any} />);
+    renderWithRouter(<NavBar {...defaultProps} user={{ id: "1", token: "tok" } as import("../types").User} />);
     
     expect(screen.getByText("tl-hub")).toBeInTheDocument();
     expect(screen.getByTitle("Switch to Light Mode")).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe("NavBar", () => {
   });
 
   it("calls appropriate handlers on click", () => {
-    renderWithRouter(<NavBar {...defaultProps} user={{ id: "1", token: "tok" } as any} />);
+    renderWithRouter(<NavBar {...defaultProps} user={{ id: "1", token: "tok" } as import("../types").User} />);
     
     fireEvent.click(screen.getByTitle("Settings"));
     expect(defaultProps.setIsSettingsOpen).toHaveBeenCalledWith(true);

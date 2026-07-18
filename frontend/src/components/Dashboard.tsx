@@ -34,8 +34,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   user,
   seriesList,
   setSeriesList,
-  onSelectSeries,
-  mode
+  onSelectSeries
 }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();

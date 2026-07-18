@@ -22,10 +22,10 @@ describe("NotificationCenter", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useColorMode as any).mockReturnValue({
+    (useColorMode as import("vitest").Mock).mockReturnValue({
       mode: "dark",
     });
-    (useNotifications as any).mockReturnValue({
+    (useNotifications as import("vitest").Mock).mockReturnValue({
       notifications: [],
       unreadCount: 0,
       markAsRead: mockMarkAsRead,
@@ -43,7 +43,7 @@ describe("NotificationCenter", () => {
     const notifications = [
       { id: "1", type: "INFO", title: "Test Notification", message: "Test Msg", read: false, timestamp: Date.now() }
     ];
-    (useNotifications as any).mockReturnValue({
+    (useNotifications as import("vitest").Mock).mockReturnValue({
       notifications,
       unreadCount: 1,
       markAsRead: mockMarkAsRead,

@@ -17,7 +17,6 @@ import ClearAllIcon from "@mui/icons-material/ClearAll";
 import CloseIcon from "@mui/icons-material/Close";
 import { useNotifications, type Notification } from "./useNotifications";
 import { safeFetch } from "../utils";
-import { useColorMode } from "../hooks/useColorMode";
 import ConfirmModal from "./ConfirmModal";
 
 const severityColor: Record<string, string> = {
@@ -39,7 +38,6 @@ export const NotificationCenter: React.FC<Props> = ({
   onRequestOpen,
   onClose,
 }) => {
-  const { mode } = useColorMode();
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
     useNotifications();
 
