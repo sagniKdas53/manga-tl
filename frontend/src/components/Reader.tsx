@@ -1784,7 +1784,7 @@ export const Reader: React.FC<ReaderProps> = ({
       // Smooth Navigation to the new URL if we moved the current page
       if (selectedPage?.id === pageId) {
         navigate(
-          `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/pages/${pageId}`,
+          `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${newNumber}`,
           { replace: true }
         );
       }
@@ -2922,14 +2922,7 @@ export const Reader: React.FC<ReaderProps> = ({
               setFitMode={setFitMode}
               curPageNum={selectedPage?.pageNumber || 0}
               totalPages={pages.length}
-              navigateToPage={(pageNum) => {
-                const targetPage = pages.find((p) => p.pageNumber === pageNum);
-                if (targetPage) {
-                  navigate(
-                    `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/pages/${targetPage.id}`
-                  );
-                }
-              }}
+              navigateToPage={navigateToPage}
               prevChapter={prevChapter}
               nextChapter={nextChapter}
               navigateToChapter={(chapter) => {
