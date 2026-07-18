@@ -1755,8 +1755,9 @@ export const Reader: React.FC<ReaderProps> = ({
 
   const handleDeletePage = React.useCallback(async (pageId: string) => {
     try {
-      const response = await fetch(`/api/pages/${pageId}`, {
+      const response = await safeFetch(`/api/pages/${pageId}`, {
         method: "DELETE",
+        headers: { Authorization: `Bearer ${user.token}` },
       });
       if (!response.ok) throw new Error("Failed to delete page");
       showToast("Page deleted successfully", "success");
@@ -1766,13 +1767,16 @@ export const Reader: React.FC<ReaderProps> = ({
       console.error(err);
       showToast(err.message || "Failed to delete page", "error");
     }
-  }, [fetchPages, showToast]);
+  }, [fetchPages, showToast, user.token]);
 
   const handleChangePageNumber = React.useCallback(async (pageId: string, newNumber: number) => {
     try {
-      const response = await fetch(`/api/pages/${pageId}/number`, {
+      const response = await safeFetch(`/api/pages/${pageId}/number`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`
+        },
         body: JSON.stringify({ newNumber }),
       });
       if (!response.ok) throw new Error("Failed to update page number");
@@ -1792,7 +1796,7 @@ export const Reader: React.FC<ReaderProps> = ({
       console.error(err);
       showToast(err.message || "Failed to update page number", "error");
     }
-  }, [fetchPages, showToast, navigate, selectedPage, selectedChapter]);
+  }, [fetchPages, showToast, navigate, selectedPage, selectedChapter, user.token]);
 
   const handleDeleteElement = async (elementId: string) => {
     setConfirmModal({
