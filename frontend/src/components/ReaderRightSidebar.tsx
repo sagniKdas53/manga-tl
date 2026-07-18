@@ -236,12 +236,17 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         display: "flex",
                         flexDirection: "column",
                         gap: "2px",
+                        flex: 1,
+                        minWidth: 0,
+                        paddingRight: "8px",
                       }}
                     >
                       <span
                         style={{
-                          fontSize: "12px",
+                          fontSize: "13px",
                           fontWeight: isActive ? 700 : 600,
+                          lineHeight: 1.2,
+                          wordBreak: "break-word",
                           color: isActive
                             ? "var(--primary-hover)"
                             : "inherit",
@@ -270,7 +275,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "8px",
+                        gap: "4px",
+                        flexShrink: 0,
+                        marginRight: "-4px", /* offset the icon button padding to align correctly */
                       }}
                       onClick={(e) => e.stopPropagation()}
                     >
