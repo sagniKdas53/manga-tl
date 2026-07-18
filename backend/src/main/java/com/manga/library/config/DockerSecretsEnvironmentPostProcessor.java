@@ -14,6 +14,7 @@ import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 
+@SuppressWarnings("null")
 public class DockerSecretsEnvironmentPostProcessor implements EnvironmentPostProcessor {
   private static final Logger logger =
       LoggerFactory.getLogger(DockerSecretsEnvironmentPostProcessor.class);

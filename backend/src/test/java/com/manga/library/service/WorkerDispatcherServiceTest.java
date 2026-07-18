@@ -20,6 +20,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
+@SuppressWarnings("null")
 public class WorkerDispatcherServiceTest {
 
   @Mock private StringRedisTemplate redisTemplate;

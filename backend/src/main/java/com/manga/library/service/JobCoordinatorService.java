@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class JobCoordinatorService {
 
   private final HttpClient httpClient =
@@ -577,8 +578,8 @@ public class JobCoordinatorService {
     Series series =
         pageRepository.findByImageId(imageId).stream()
             .findFirst()
-            .map(Page::getChapter)
-            .map(Chapter::getSeries)
+            .map(page -> page.getChapter())
+            .map(chapter -> chapter.getSeries())
             .orElse(null);
     if (series != null
         && series.getSourceLanguage() != null
@@ -587,7 +588,7 @@ public class JobCoordinatorService {
           series.getSourceLanguage().trim().equalsIgnoreCase(series.getTargetLanguage().trim());
     }
 
-    if (isReaderMode) {
+    if (isReaderMode && series != null) {
       log.info(
           "Reader mode detected (source=target={}) for image {}. Skipping translation, render, and QA.",
           series.getSourceLanguage(),
@@ -615,8 +616,8 @@ public class JobCoordinatorService {
     Series series =
         pageRepository.findByImageId(imageId).stream()
             .findFirst()
-            .map(Page::getChapter)
-            .map(Chapter::getSeries)
+            .map(page -> page.getChapter())
+            .map(chapter -> chapter.getSeries())
             .orElse(null);
     String targetLang =
         (series != null && series.getTargetLanguage() != null)

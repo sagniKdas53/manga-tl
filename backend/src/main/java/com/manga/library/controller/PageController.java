@@ -25,9 +25,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api")
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class PageController {
 
-  private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;

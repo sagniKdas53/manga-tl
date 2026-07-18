@@ -52,6 +52,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import UndoIcon from "@mui/icons-material/Undo";
 import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
+import WidthFullIcon from '@mui/icons-material/WidthFull';
+import HeightIcon from '@mui/icons-material/Height';
 
 interface ReaderProps {
   user: User;
@@ -472,7 +474,7 @@ export const Reader: React.FC<ReaderProps> = ({
     isOpen: false,
     title: "",
     message: "",
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const closeConfirm = () =>
@@ -2938,30 +2940,30 @@ export const Reader: React.FC<ReaderProps> = ({
                   marginBottom: "8px",
                 }}
               >
-                <IconButton
+                <Button
                   size="small"
                   color={fitMode === "page" ? "primary" : "default"}
                   onClick={() => setFitMode("page")}
                   title="Fit Page"
                 >
-                  <FitScreenIcon fontSize="small" />
-                </IconButton>
-                <IconButton
+                  <FitScreenIcon fontSize="small" /> Page
+                </Button>
+                <Button
                   size="small"
                   color={fitMode === "width" ? "primary" : "default"}
                   onClick={() => setFitMode("width")}
                   title="Fit Width"
                 >
-                  <ZoomInIcon fontSize="small" />
-                </IconButton>
-                <IconButton
+                  <WidthFullIcon fontSize="small" /> Width
+                </Button>
+                <Button
                   size="small"
                   color={fitMode === "height" ? "primary" : "default"}
                   onClick={() => setFitMode("height")}
                   title="Fit Height"
                 >
-                  <ZoomOutIcon fontSize="small" />
-                </IconButton>
+                  <ZoomInIcon fontSize="small" /> Height
+                </Button>
               </div>
               <Button
                 variant="outlined"

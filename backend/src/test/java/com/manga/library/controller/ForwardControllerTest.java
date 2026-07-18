@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ForwardController.class)
 @AutoConfigureMockMvc(addFilters = false)
+@SuppressWarnings("null")
 public class ForwardControllerTest {
 
   @Autowired private MockMvc mockMvc;

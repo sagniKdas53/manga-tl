@@ -4,6 +4,7 @@ import java.util.UUID;
 import lombok.Data;
 
 @Data
+@SuppressWarnings("null")
 public class SeriesDto {
   private UUID id;
   private String title;

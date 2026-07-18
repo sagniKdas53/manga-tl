@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class AuthController {
 
   private final UserRepository userRepository;
@@ -96,7 +97,7 @@ public class AuthController {
       @AuthenticationPrincipal User user, @RequestBody Map<String, String> body) {
     if (user == null)
       return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
-    User dbUser = userRepository.findById(user.getId()).orElse(null);
+    User dbUser = userRepository.findById(Objects.requireNonNull(user.getId())).orElse(null);
     if (dbUser == null) return ResponseEntity.notFound().build();
 
     String displayName = body.get("displayName");
@@ -115,7 +116,7 @@ public class AuthController {
       @jakarta.validation.Valid @RequestBody ChangePasswordRequest request) {
     if (user == null)
       return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
-    User dbUser = userRepository.findById(user.getId()).orElse(null);
+    User dbUser = userRepository.findById(Objects.requireNonNull(user.getId())).orElse(null);
     if (dbUser == null) return ResponseEntity.notFound().build();
 
     if (!passwordEncoder.matches(request.getCurrentPassword(), dbUser.getPasswordHash())) {
@@ -131,7 +132,7 @@ public class AuthController {
   public ResponseEntity<?> deleteAccount(@AuthenticationPrincipal User user) {
     if (user == null)
       return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
-    User dbUser = userRepository.findById(user.getId()).orElse(null);
+    User dbUser = userRepository.findById(Objects.requireNonNull(user.getId())).orElse(null);
     if (dbUser == null) return ResponseEntity.notFound().build();
 
     userRepository.delete(dbUser);

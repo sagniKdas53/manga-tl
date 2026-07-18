@@ -13,6 +13,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@SuppressWarnings("null")
 public class Panel {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)

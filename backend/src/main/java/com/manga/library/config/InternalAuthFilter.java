@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
+@SuppressWarnings("null")
 public class InternalAuthFilter extends OncePerRequestFilter {
 
   @Value("${internal.api-token:manga-library-internal-token-12345}")

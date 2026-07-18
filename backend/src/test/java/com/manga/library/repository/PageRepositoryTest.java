@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@SuppressWarnings("null")
 public class PageRepositoryTest {
 
   @Autowired private PageRepository pageRepository;
