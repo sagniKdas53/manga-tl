@@ -127,9 +127,7 @@ export const NotificationCenter: React.FC<Props> = ({
           size="small"
           title="Notifications"
         >
-          <NotificationsIcon
-            sx={{ color: mode === "dark" ? "white" : "black" }}
-          />
+          <NotificationsIcon />
         </IconButton>
       </Badge>
 

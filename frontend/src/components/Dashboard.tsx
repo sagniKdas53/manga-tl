@@ -147,22 +147,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <Box
         sx={{
           display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: { xs: "flex-start", sm: "center" },
+          gap: 2,
           mb: 3,
         }}
       >
         <Box>
           <Typography
             variant="h4"
-            sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: mode === "dark" ? "white" : "black" }}
+            sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: "text.primary" }}
           >
             My Manga Library
           </Typography>
           <Typography
             variant="body2"
-            color="text.secondary"
-            sx={{ mt: 0.5, color: mode === "dark" ? "white" : "black" }}
+            sx={{ mt: 0.5, color: "text.secondary" }}
           >
             Manage translation projects and OCR workflows
           </Typography>
