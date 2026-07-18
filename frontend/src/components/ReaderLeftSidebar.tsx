@@ -77,27 +77,11 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
   };
 
   return (
-    <Box
-      className="reader-left-sidebar-nhentai"
-      sx={{
-        width: 300,
-        flexShrink: 0,
-        bgcolor: "background.paper",
-        borderRight: 1,
-        borderColor: "divider",
-        display: "flex",
-        flexDirection: "column",
-        overflowY: "auto",
-        p: 2,
-        gap: 3,
-      }}
-    >
+    <div className="reader-left-sidebar-nhentai">
       {/* Overlays Section */}
-      <Box>
-        <Typography variant="overline" color="text.secondary" fontWeight="bold">
-          OVERLAYS
-        </Typography>
-        <Box sx={{ display: "flex", flexDirection: "column", mt: 1 }}>
+      <div className="panel-section">
+        <div className="panel-section-title">OVERLAYS</div>
+        <Box sx={{ display: "flex", flexDirection: "column" }}>
           <FormControlLabel
             control={
               <Switch
@@ -106,7 +90,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
                 size="small"
               />
             }
-            label="Panel Boundaries"
+            label={<Typography variant="body2">Panel Boundaries</Typography>}
           />
           <FormControlLabel
             control={
@@ -116,7 +100,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
                 size="small"
               />
             }
-            label="OCR Boxes"
+            label={<Typography variant="body2">OCR Boxes</Typography>}
           />
           <FormControlLabel
             control={
@@ -130,7 +114,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
                 color="primary"
               />
             }
-            label="Clean Scanlation"
+            label={<Typography variant="body2">Clean Scanlation</Typography>}
           />
           <FormControlLabel
             control={
@@ -140,19 +124,15 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
                 size="small"
               />
             }
-            label="Group Conversation"
+            label={<Typography variant="body2">Group Conversation</Typography>}
           />
         </Box>
-      </Box>
-
-      <Divider />
+      </div>
 
       {/* Zoom & View Section */}
-      <Box>
-        <Typography variant="overline" color="text.secondary" fontWeight="bold">
-          ZOOM & VIEW
-        </Typography>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: 1 }}>
+      <div className="panel-section">
+        <div className="panel-section-title">ZOOM & VIEW</div>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
           <Slider
             min={0.5}
             max={3.0}
@@ -160,18 +140,19 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             value={props.zoom}
             onChange={(_, val) => props.setZoom(val as number)}
             size="small"
+            sx={{ flex: 1 }}
           />
-          <Typography variant="body2" sx={{ minWidth: "45px", fontWeight: "bold" }}>
+          <Typography variant="body2" sx={{ minWidth: "40px", fontWeight: "bold", textAlign: 'right' }}>
             {displayedZoom}%
           </Typography>
         </Box>
-        <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+        <Box sx={{ display: "flex", gap: 1, mb: 1.5 }}>
           <Button
             size="small"
             variant={props.fitMode === "page" ? "contained" : "outlined"}
             onClick={() => props.setFitMode("page")}
             startIcon={<FitScreenIcon />}
-            sx={{ flex: 1 }}
+            sx={{ flex: 1, fontSize: "11px", fontWeight: 600 }}
           >
             Page
           </Button>
@@ -180,7 +161,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             variant={props.fitMode === "width" ? "contained" : "outlined"}
             onClick={() => props.setFitMode("width")}
             startIcon={<WidthFullIcon />}
-            sx={{ flex: 1 }}
+            sx={{ flex: 1, fontSize: "11px", fontWeight: 600 }}
           >
             Width
           </Button>
@@ -189,7 +170,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             variant={props.fitMode === "height" ? "contained" : "outlined"}
             onClick={() => props.setFitMode("height")}
             startIcon={<HeightIcon />}
-            sx={{ flex: 1 }}
+            sx={{ flex: 1, fontSize: "11px", fontWeight: 600 }}
           >
             Height
           </Button>
@@ -198,25 +179,21 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
           variant="outlined"
           size="small"
           fullWidth
-          sx={{ mt: 1 }}
           onClick={() => {
             props.setZoom(1.0);
             props.setFitMode("page");
           }}
           disabled={props.zoom === 1.0 && props.fitMode === "page"}
+          sx={{ fontSize: "11px", fontWeight: 600 }}
         >
           Reset Zoom
         </Button>
-      </Box>
-
-      <Divider />
+      </div>
 
       {/* Navigation Section */}
-      <Box>
-        <Typography variant="overline" color="text.secondary" fontWeight="bold">
-          NAVIGATION
-        </Typography>
-        <Box sx={{ mt: 1 }}>
+      <div className="panel-section">
+        <div className="panel-section-title">NAVIGATION</div>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <ReaderPageNavigation
             currentPage={props.curPageNum}
             totalPages={props.totalPages}
@@ -232,24 +209,21 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             onNextChapter={() => props.nextChapter && props.navigateToChapter(props.nextChapter)}
           />
         </Box>
-      </Box>
-
-      <Divider />
+      </div>
 
       {/* Page Management Section */}
-      <Box>
-        <Typography variant="overline" color="text.secondary" fontWeight="bold">
-          PAGE MANAGEMENT
-        </Typography>
-        <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 1 }}>
+      <div className="panel-section" style={{ marginBottom: 40 }}>
+        <div className="panel-section-title">PAGE MANAGEMENT</div>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <form onSubmit={onPageMoveSubmit} style={{ display: 'flex', gap: '8px' }}>
             <TextField
               size="small"
               type="number"
-              label="Move to page"
+              placeholder="Move to..."
               value={targetPageInput}
               onChange={(e) => setTargetPageInput(e.target.value)}
               sx={{ flex: 1 }}
+              inputProps={{ style: { padding: '8px 10px', fontSize: '13px' } }}
             />
             <Button
               type="submit"
@@ -257,6 +231,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
               size="small"
               startIcon={<SwapHorizIcon />}
               disabled={!props.selectedPage || targetPageInput === props.selectedPage.pageNumber.toString()}
+              sx={{ fontSize: "11px", fontWeight: 600 }}
             >
               Move
             </Button>
@@ -276,12 +251,13 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
               }
             }}
             disabled={!props.selectedPage}
+            sx={{ fontSize: "11px", fontWeight: 600 }}
           >
             Delete Page
           </Button>
         </Box>
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 });
 
