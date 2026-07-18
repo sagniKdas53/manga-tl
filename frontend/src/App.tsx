@@ -15,19 +15,7 @@ import {
 } from "react-router-dom";
 
 import { ThemeProvider } from "@mui/material/styles";
-import AppBar from "@mui/material/AppBar";
-import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
-import LinearProgress from "@mui/material/LinearProgress";
-import IconButton from "@mui/material/IconButton";
-import Stack from "@mui/material/Stack";
-import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
-import LightModeIcon from "@mui/icons-material/LightMode";
-import SettingsIcon from "@mui/icons-material/Settings";
-import LogoutIcon from "@mui/icons-material/Logout";
-import PersonIcon from "@mui/icons-material/Person";
 import { themeObj } from "./theme";
 
 // Types
@@ -42,11 +30,8 @@ import { ToastProvider, useToast } from "./components/ToastContext";
 import { UploadProvider } from "./components/UploadContext";
 
 // Static import for NotificationCenter (always present in nav)
-import { NotificationCenter } from "./components/NotificationCenter";
-import { QueueManager } from "./components/QueueManager";
 import { useNotifications } from "./components/useNotifications";
-import logoDark from "./assets/logo-dark.svg";
-import logoLight from "./assets/logo-light.svg";
+import { NavBar } from "./components/NavBar";
 import { useColorMode } from "./hooks/useColorMode";
 
 // Lazy-loaded route components
@@ -67,14 +52,6 @@ function LoadingSpinner() {
   return (
     <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
       <CircularProgress />
-    </Box>
-  );
-}
-
-function LinearIndeterminate() {
-  return (
-    <Box sx={{ width: '100%' }}>
-      <LinearProgress aria-label="Loading…" />
     </Box>
   );
 }
@@ -366,100 +343,14 @@ function AppContent() {
               <div className="app-container">
                 {/* Navigation Bar */}
                 {!readerMatch && (
-                  <AppBar
-                    position="sticky"
-                    color="inherit"
-                    sx={{ bgcolor: "background.paper" }}
-                  >
-                    <Toolbar variant="dense">
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 1,
-                          cursor: user ? "pointer" : "default",
-                          flexGrow: 1,
-                        }}
-                        onClick={() => user && navigate("/")}
-                      >
-                        <img
-                          src={
-                            (mode === "dark" ? logoDark : logoLight) as string
-                          }
-                          alt="tl-hub"
-                          style={{ height: 28, width: "auto" }}
-                        />
-                        <Typography
-                          variant="h6"
-                          sx={{
-                            fontFamily: '"Outfit", sans-serif',
-                            fontWeight: 700,
-                            color: mode === "dark" ? "white" : "black",
-                          }}
-                        >
-                          tl-hub
-                        </Typography>
-                      </Box>
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                      >
-                        <IconButton
-                          onClick={toggleMode}
-                          color="inherit"
-                          title={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
-                        >
-                          {mode === "dark" ? (
-                            <LightModeIcon />
-                          ) : (
-                            <DarkModeIcon />
-                          )}
-                        </IconButton>
-                        {user && (
-                          <>
-                            <IconButton
-                              onClick={() => setIsSettingsOpen(true)}
-                              color="inherit"
-                              title="Settings"
-                            >
-                              <SettingsIcon />
-                            </IconButton>
-                            <QueueManager
-                              token={user?.token}
-                              forceOpen={activeDrawer === "queue"}
-                              onRequestOpen={() => setActiveDrawer("queue")}
-                              onClose={() => setActiveDrawer("none")}
-                            />
-                            <NotificationCenter
-                              forceOpen={activeDrawer === "notifications"}
-                              onRequestOpen={() =>
-                                setActiveDrawer("notifications")
-                              }
-                              onClose={() => setActiveDrawer("none")}
-                            />
-                            <IconButton
-                              onClick={() => setIsUserModalOpen(true)}
-                              size="small"
-                              color="inherit"
-                              sx={{ minWidth: "auto" }}
-                              title="Account"
-                            >
-                              <PersonIcon />
-                            </IconButton>
-                            <IconButton
-                              onClick={handleLogout}
-                              size="small"
-                              color="inherit"
-                              sx={{ minWidth: "auto" }}
-                              title="Sign Out"
-                            >
-                              <LogoutIcon />
-                            </IconButton>
-                          </>
-                        )}
-                      </Stack>
-                    </Toolbar>
-                  </AppBar>
+                  <NavBar
+                    user={user}
+                    activeDrawer={activeDrawer}
+                    setActiveDrawer={setActiveDrawer}
+                    setIsSettingsOpen={setIsSettingsOpen}
+                    setIsUserModalOpen={setIsUserModalOpen}
+                    handleLogout={handleLogout}
+                  />
                 )}
 
                 <Suspense fallback={<LoadingSpinner />}>
@@ -583,7 +474,7 @@ function AppContent() {
                   </Routes>
                 </Suspense>
 
-                <Suspense fallback={<LinearIndeterminate />}>
+                <Suspense fallback={<LoadingSpinner />}>
                   {isSettingsOpen && (
                     <SettingsModal
                       isOpen={isSettingsOpen}

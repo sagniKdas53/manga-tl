@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, Mock } from "vitest";
 import { QueueManager } from "./QueueManager";
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
+import { useColorMode } from "../hooks/useColorMode";
 
 vi.mock("../utils", () => ({
   safeFetch: vi.fn(),
@@ -11,6 +12,10 @@ vi.mock("../utils", () => ({
 
 vi.mock("./useNotifications", () => ({
   useNotifications: vi.fn(),
+}));
+
+vi.mock("../hooks/useColorMode", () => ({
+  useColorMode: vi.fn(),
 }));
 
 vi.mock("./ToastContext", () => ({
@@ -61,8 +66,23 @@ describe("QueueManager", () => {
     },
   ];
 
+  const QueueManagerWrapper = ({ token = mockToken }) => {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <QueueManager
+        token={token}
+        forceOpen={open}
+        onRequestOpen={() => setOpen(true)}
+        onClose={() => setOpen(false)}
+      />
+    );
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    (useColorMode as Mock).mockReturnValue({
+      mode: "dark",
+    });
     (useNotifications as Mock).mockReturnValue({
       subscribe: vi.fn(() => () => {}),
     });
@@ -70,10 +90,7 @@ describe("QueueManager", () => {
 
   it("renders closed state by default", () => {
     render(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
     const button = screen.getByTitle("Queue Manager");
     expect(button).toBeInTheDocument();
@@ -92,10 +109,7 @@ describe("QueueManager", () => {
     });
 
     render(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
@@ -131,10 +145,7 @@ describe("QueueManager", () => {
     );
 
     render(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
@@ -181,10 +192,7 @@ describe("QueueManager", () => {
     );
 
     render(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
@@ -216,10 +224,7 @@ describe("QueueManager", () => {
     });
 
     const { rerender } = render(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
@@ -242,10 +247,7 @@ describe("QueueManager", () => {
     });
 
     rerender(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
 
     await waitFor(() => {
@@ -272,10 +274,7 @@ describe("QueueManager", () => {
     );
 
     render(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
@@ -310,10 +309,7 @@ describe("QueueManager", () => {
     );
 
     render(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
@@ -372,10 +368,7 @@ describe("QueueManager", () => {
     });
 
     render(
-      <QueueManager
-        token={mockToken}
-        mode="dark"
-      />,
+      <QueueManagerWrapper />
     );
     fireEvent.click(screen.getByTitle("Queue Manager"));
 

@@ -474,7 +474,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
           size="small"
           title="Queue Manager"
         >
-          <ChecklistIcon sx={{ color: mode === "dark" ? "white" : "black" }} />
+          <ChecklistIcon />
         </IconButton>
       </Badge>
 
