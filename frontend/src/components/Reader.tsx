@@ -15,6 +15,8 @@ import { safeFetch, toSlug, formatCost } from "../utils";
 import { fitTextInBox } from "../utils/fitText";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
+import ReaderTopNav from "./ReaderTopNav";
+import { ReaderPageNavigation, ReaderPrevNextChapters } from "./ReaderPageNavigation";
 import { ColorPicker } from "./ColorPicker";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
@@ -34,18 +36,12 @@ import {
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
-import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
-import NavigateNextIcon from "@mui/icons-material/NavigateNext";
-import FirstPageIcon from "@mui/icons-material/FirstPage";
-import LastPageIcon from "@mui/icons-material/LastPage";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import FitScreenIcon from "@mui/icons-material/FitScreen";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import ColorizeIcon from "@mui/icons-material/Colorize";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import SettingsIcon from "@mui/icons-material/Settings";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import AddIcon from "@mui/icons-material/Add";
@@ -2839,64 +2835,18 @@ export const Reader: React.FC<ReaderProps> = ({
 
   return (
     <div className="reader-container-nhentai">
-      {/* Top Navbar */}
-      <div
-        className="reader-navbar-nhentai"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <IconButton
-            className="reader-nav-btn back-btn"
-            size="small"
-            title="Back"
-            onClick={() =>
-              navigate(
-                `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
-              )
-            }
-          >
-            <ArrowBackIcon fontSize="small" />
-          </IconButton>
-
-          <IconButton
-            className={`reader-nav-btn gear-btn ${showLeftSidebar ? "active" : ""}`}
-            size="small"
-            title="Settings"
-            onClick={() => setShowLeftSidebar((prev) => !prev)}
-          >
-            <SettingsIcon fontSize="small" />
-          </IconButton>
-        </div>
-
-        <div
-          style={{
-            fontWeight: 600,
-            fontSize: "14px",
-            fontFamily: "var(--font-display)",
-            color: "var(--text-main)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            maxWidth: "50%",
-          }}
-        >
-          {selectedSeries ? selectedSeries.title : "Series"} &mdash; Chapter{" "}
-          {selectedChapter?.chapterNumber}
-        </div>
-
-        <IconButton
-          className={`reader-nav-btn gear-btn ${showRightSidebar ? "active" : ""}`}
-          size="small"
-          title="Settings"
-          onClick={() => setShowRightSidebar((prev) => !prev)}
-        >
-          <SettingsIcon fontSize="small" />
-        </IconButton>
-      </div>
+      <ReaderTopNav
+        title={`${selectedSeries ? selectedSeries.title : "Series"} \u2014 Chapter ${selectedChapter?.chapterNumber}`}
+        onBack={() =>
+          navigate(
+            `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
+          )
+        }
+        onToggleLeftSidebar={() => setShowLeftSidebar((prev) => !prev)}
+        onToggleRightSidebar={() => setShowRightSidebar((prev) => !prev)}
+        leftSidebarOpen={showLeftSidebar}
+        rightSidebarOpen={showRightSidebar}
+      />
 
       {/* Main Workspace split */}
       <div className="reader-workspace-frame-nhentai">
@@ -3033,94 +2983,22 @@ export const Reader: React.FC<ReaderProps> = ({
               </Button>
             </div>
 
-            {/* Page & Chapter Navigation */}
             <div className="panel-section">
               <div className="panel-section-title">Navigation</div>
-
-              <div
-                className="reader-page-controls-nhentai"
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  marginBottom: "12px",
-                  gap: "6px",
-                }}
-              >
-                <IconButton
-                  size="small"
-                  onClick={() => navigateToPage(1)}
-                  disabled={curPageNum <= 1}
-                  title="First Page"
-                >
-                  <FirstPageIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => navigateToPage(curPageNum - 1)}
-                  disabled={curPageNum <= 1}
-                  title="Previous Page"
-                >
-                  <NavigateBeforeIcon fontSize="small" />
-                </IconButton>
-
-                <span
-                  className="reader-page-indicator-nhentai"
-                  style={{ margin: "0 4px", fontSize: "12px" }}
-                >
-                  <strong>{curPageNum}</strong> / {totalPages}
-                </span>
-
-                <IconButton
-                  size="small"
-                  onClick={() => navigateToPage(curPageNum + 1)}
-                  disabled={curPageNum >= totalPages}
-                  title="Next Page"
-                >
-                  <NavigateNextIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => navigateToPage(totalPages)}
-                  disabled={curPageNum >= totalPages}
-                  title="Last Page"
-                >
-                  <LastPageIcon fontSize="small" />
-                </IconButton>
-              </div>
-
-              {/* Chapter Navigation */}
-              <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<NavigateBeforeIcon />}
-                  style={{ flex: 1, fontSize: "11px" }}
-                  onClick={() => prevChapter && navigateToChapter(prevChapter)}
-                  disabled={!prevChapter}
-                  title={
-                    prevChapter
-                      ? `Go to Chapter ${prevChapter.chapterNumber}`
-                      : "No previous chapter"
-                  }
-                >
-                  Prev Ch
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<NavigateNextIcon />}
-                  style={{ flex: 1, fontSize: "11px" }}
-                  onClick={() => nextChapter && navigateToChapter(nextChapter)}
-                  disabled={!nextChapter}
-                  title={
-                    nextChapter
-                      ? `Go to Chapter ${nextChapter.chapterNumber}`
-                      : "No next chapter"
-                  }
-                >
-                  Next Ch
-                </Button>
-              </div>
+              <ReaderPageNavigation
+                currentPage={curPageNum}
+                totalPages={totalPages}
+                onFirstPage={() => navigateToPage(1)}
+                onPrevPage={() => navigateToPage(curPageNum - 1)}
+                onNextPage={() => navigateToPage(curPageNum + 1)}
+                onLastPage={() => navigateToPage(totalPages)}
+              />
+              <ReaderPrevNextChapters
+                hasPrevChapter={!!prevChapter}
+                hasNextChapter={!!nextChapter}
+                onPrevChapter={() => prevChapter && navigateToChapter(prevChapter)}
+                onNextChapter={() => nextChapter && navigateToChapter(nextChapter)}
+              />
             </div>
           </div>
         )}

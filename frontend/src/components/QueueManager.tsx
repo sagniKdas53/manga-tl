@@ -18,6 +18,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import CloseIcon from "@mui/icons-material/Close";
 import { safeFetch } from "../utils";
+import { useColorMode } from "../hooks/useColorMode";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
@@ -135,7 +136,6 @@ const formatErrorMessage = (error: string) => {
 
 interface QueueManagerProps {
   token: string | null;
-  mode: "light" | "dark";
   forceOpen: boolean;
   onRequestOpen: () => void;
   onClose: () => void;
@@ -143,11 +143,11 @@ interface QueueManagerProps {
 
 export const QueueManager: React.FC<QueueManagerProps> = ({
   token,
-  mode,
   forceOpen,
   onRequestOpen,
   onClose,
 }) => {
+  const { mode } = useColorMode();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const { subscribe } = useNotifications();

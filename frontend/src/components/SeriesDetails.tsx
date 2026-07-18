@@ -2,23 +2,17 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
-import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
-import ImportExportIcon from "@mui/icons-material/ImportExport";
-import UploadIcon from "@mui/icons-material/Upload";
-import IconButton from "@mui/material/IconButton";
 import { useToast } from "./ToastContext";
 import type { User, Series, Chapter } from "../types";
-import { safeFetch, toSlug } from "../utils";
+import { safeFetch } from "../utils";
 import ConfirmModal from "./ConfirmModal";
 import CreateChapterDialog from "./CreateChapterDialog";
 import EditSeriesDialog from "./EditSeriesDialog";
 import ImportChapterDialog from "./ImportChapterDialog";
+import SeriesHeader from "./SeriesHeader";
+import ChapterCardGrid from "./ChapterCardGrid";
 
 interface SeriesDetailsProps {
   user: User;
@@ -199,251 +193,29 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         ← Back to Library
       </Button>
 
-      <div className="series-details-container">
-        <div className="series-cover-column">
-          {selectedSeries.coverImageUrl ? (
-            <img
-              src={selectedSeries.coverImageUrl}
-              className="series-large-cover"
-              alt={selectedSeries.title}
-            />
-          ) : (
-            <div className="series-large-cover-placeholder">
-              <span>{selectedSeries.title}</span>
-            </div>
-          )}
-        </div>
+      <SeriesHeader
+        series={selectedSeries}
+        chapterCount={chapters.length}
+        onAddChapter={handleNewChapterClick}
+        onImportChapter={() => setShowImportModal(true)}
+        onEditSeries={handleEditSeriesClick}
+        onDeleteSeries={handleDeleteSeries}
+      />
 
-        <div className="series-info-column">
-          <h1 className="series-title">{selectedSeries.title}</h1>
-
-          <div className="nhentai-meta-table">
-            <div className="meta-row">
-              <span className="meta-label">Language:</span>
-              <span className="meta-value">
-                <span className="meta-badge-nhentai">
-                  {selectedSeries.sourceLanguage ||
-                    selectedSeries.originalLanguage ||
-                    "ja"}{" "}
-                  → {selectedSeries.targetLanguage || "en"}
-                  {(selectedSeries.sourceLanguage ||
-                    selectedSeries.originalLanguage ||
-                    "ja") === (selectedSeries.targetLanguage || "en")
-                    ? " (Reader Mode)"
-                    : ""}
-                </span>
-              </span>
-            </div>
-            <div className="meta-row">
-              <span className="meta-label">Direction:</span>
-              <span className="meta-value">
-                <span className="meta-badge-nhentai">
-                  {selectedSeries.readingDirection}
-                </span>
-              </span>
-            </div>
-            <div className="meta-row">
-              <span className="meta-label">Chapters:</span>
-              <span className="meta-value">{chapters.length}</span>
-            </div>
-          </div>
-
-          <div className="series-actions-row">
-            <Stack
-              direction="row"
-              spacing={1}
-              flexWrap="wrap"
-              useFlexGap
-            >
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleNewChapterClick}
-              >
-                Add Chapter
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<UploadIcon />}
-                onClick={() => setShowImportModal(true)}
-              >
-                Import Chapter (ZIP)
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={handleEditSeriesClick}
-              >
-                Edit Series
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={handleDeleteSeries}
-              >
-                Delete Series
-              </Button>
-            </Stack>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="chapters-section-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+      <ChapterCardGrid
+        chapters={chapters}
+        series={selectedSeries}
+        sortAsc={sortAsc}
+        onToggleSort={() => {
+          const nextSort = !sortAsc;
+          setSortAsc(nextSort);
+          localStorage.setItem("chapters_sort_asc", String(nextSort));
         }}
-      >
-        <h2>Chapters ({chapters.length})</h2>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<ImportExportIcon />}
-          onClick={() => {
-            const nextSort = !sortAsc;
-            setSortAsc(nextSort);
-            localStorage.setItem("chapters_sort_asc", String(nextSort));
-          }}
-        >
-          Sort: {sortAsc ? "Ascending ↑" : "Descending ↓"}
-        </Button>
-      </div>
-
-      <div className="chapters-grid">
-        {[...chapters]
-          .sort((a, b) =>
-            sortAsc
-              ? a.chapterNumber - b.chapterNumber
-              : b.chapterNumber - a.chapterNumber,
-          )
-          .map((c) => (
-            <div
-              key={c.id}
-              className="chapter-card-nhentai"
-              onClick={() => {
-                onSelectChapter(c);
-                navigate(
-                  `/chapters/${c.id}/${toSlug(c.title || `chapter-${c.chapterNumber}`)}`,
-                );
-              }}
-            >
-              <div className="chapter-cover-container-nhentai">
-                {c.coverImageUrl ? (
-                  <img
-                    src={c.coverImageUrl}
-                    className="chapter-cover-img-nhentai"
-                    alt={c.title || `Chapter ${c.chapterNumber}`}
-                  />
-                ) : selectedSeries.coverImageUrl ? (
-                  <img
-                    src={selectedSeries.coverImageUrl}
-                    className="chapter-cover-img-nhentai fallback"
-                    alt="Fallback Cover"
-                  />
-                ) : (
-                  <div className="chapter-cover-placeholder-nhentai">
-                    <span>C{c.chapterNumber}</span>
-                  </div>
-                )}
-
-                <div
-                  className="chapter-actions-overlay"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <IconButton
-                    className="action-btn-small"
-                    onClick={(e) => handleEditChapterClick(c, e)}
-                    size="small"
-                    title="Edit Chapter"
-                  >
-                    <EditIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                  <IconButton
-                    className="action-btn-small delete-btn"
-                    onClick={(e) => handleDeleteChapter(c.id, e)}
-                    size="small"
-                    title="Delete Chapter"
-                    color="error"
-                  >
-                    <DeleteIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                </div>
-              </div>
-
-              <div className="chapter-card-info-nhentai">
-                <div className="chapter-card-number-nhentai">
-                  Chapter {c.chapterNumber}
-                </div>
-                <div
-                  className="chapter-card-title-nhentai"
-                  title={c.title || "Untitled"}
-                >
-                  {c.title || "Untitled"}
-                </div>
-                {(c.pageCount ||
-                  c.useContextMemory !== undefined ||
-                  c.resolvedOcr ||
-                  c.resolvedTranslation) && (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 0.5,
-                      mt: 0.75,
-                    }}
-                  >
-                    {c.pageCount !== undefined && c.pageCount > 0 && (
-                      <Chip
-                        label={`${c.pageCount} pages`}
-                        size="small"
-                        variant="outlined"
-                        title="Total pages in this chapter"
-                      />
-                    )}
-                    {c.useContextMemory !== undefined && (
-                      <Chip
-                        label={c.useContextMemory ? "Context" : "No Context"}
-                        size="small"
-                        variant="outlined"
-                        color={c.useContextMemory ? "primary" : "default"}
-                        title={
-                          c.useContextMemory
-                            ? "Context memory enabled"
-                            : "Context memory disabled"
-                        }
-                      />
-                    )}
-                    {(c.resolvedOcr || c.resolvedTranslation) && (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: "text.secondary",
-                          fontSize: "10px",
-                          lineHeight: "20px",
-                        }}
-                      >
-                        {c.resolvedOcr && c.resolvedOcr.source !== "global"
-                          ? `OCR: ${c.resolvedOcr.provider}${c.resolvedOcr.model ? " / " + c.resolvedOcr.model : ""} (${c.resolvedOcr.source})`
-                          : ""}
-                        {c.resolvedOcr &&
-                        c.resolvedOcr.source !== "global" &&
-                        c.resolvedTranslation &&
-                        c.resolvedTranslation.source !== "global"
-                          ? " | "
-                          : ""}
-                        {c.resolvedTranslation &&
-                        c.resolvedTranslation.source !== "global"
-                          ? `TL: ${c.resolvedTranslation.provider}${c.resolvedTranslation.model ? " / " + c.resolvedTranslation.model : ""} (${c.resolvedTranslation.source})`
-                          : ""}
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-              </div>
-            </div>
-          ))}
-      </div>
+        onSelectChapter={onSelectChapter}
+        onEditChapter={handleEditChapterClick}
+        onDeleteChapter={handleDeleteChapter}
+        onNavigate={(path) => navigate(path)}
+      />
 
       <EditSeriesDialog
         open={showSeriesModal}
