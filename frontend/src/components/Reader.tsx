@@ -2830,7 +2830,7 @@ export const Reader: React.FC<ReaderProps> = ({
   return (
     <div className="reader-container-nhentai">
       <ReaderTopNav
-        title={`${selectedSeries ? selectedSeries.title : "Series"} \u2014 Chapter ${selectedChapter?.chapterNumber}`}
+        title={`${selectedSeries ? selectedSeries.title : "Series"} \u2014 Chapter ${selectedChapter?.chapterNumber} \u2014 Page ${selectedPage?.pageNumber}`}
         onBack={() =>
           navigate(
             `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
