@@ -15,7 +15,9 @@ import {
 } from "react-router-dom";
 
 import { ThemeProvider } from "@mui/material/styles";
-import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
+import CssBaseline from "@mui/material/CssBaseline";
+import CircularProgress from "@mui/material/CircularProgress";
 import { themeObj } from "./theme";
 
 // Types
@@ -165,7 +167,7 @@ function AppContent() {
   const [pages, setPages] = useState<Page[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
-  const { mode, toggleMode } = useColorMode();
+  const { mode } = useColorMode();
   const appliedTheme = useMemo(() => themeObj(mode), [mode]);
 
   const [activeDrawer, setActiveDrawer] = useState<
@@ -329,10 +331,11 @@ function AppContent() {
 
   return (
     <ThemeProvider theme={appliedTheme}>
+      <CssBaseline />
       <Box
         sx={{
           bgcolor: "background.default",
-          minHeight: "100vh",
+          minHeight: "100dvh",
         }}
       >
         <NotificationProvider token={user?.token || null}>
