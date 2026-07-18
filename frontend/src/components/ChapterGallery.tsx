@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
+import CloseIcon from "@mui/icons-material/Close";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import EditIcon from "@mui/icons-material/Edit";
 import type { User, Series, Chapter, Page } from "../types";
 import { safeFetch, toSlug, getContextPath } from "../utils";
@@ -10,6 +14,7 @@ import CreateChapterDialog from "./CreateChapterDialog";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastContext";
 import { useUploadQueue, type UploadQueueItem } from "./UploadContext";
+import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
 
 interface ChapterGalleryProps {
@@ -374,10 +379,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
   if (isLoadingDetails || !selectedSeries || !selectedChapter) {
     return (
-      <div className="dashboard-content text-center">
-        <div className="spinner"></div>
-        <p>Loading chapter details...</p>
-      </div>
+      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh", flexDirection: "column", gap: 2 }}>
+        <CircularProgress />
+        <Typography>Loading chapter details...</Typography>
+      </Box>
     );
   }
 
@@ -479,7 +484,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   };
 
   return (
-    <div className="dashboard-content">
+    <Box sx={{ maxWidth: 1200, mx: "auto", width: "100%", px: { xs: 2, sm: 3 }, py: 3 }}>
       <div>
         <Button
           variant="outlined"
@@ -593,34 +598,38 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             />
             <span className="page-num-tag">Page {p.pageNumber}</span>
 
-            <button
+            <IconButton
               className="delete-page-btn"
               onClick={(e) => handleDeletePage(p.id, e)}
+              size="small"
+              sx={{ color: "white" }}
               title="Delete page"
             >
-              &times;
-            </button>
+              <CloseIcon fontSize="small" />
+            </IconButton>
 
             <div
               className="reorder-controls"
               onClick={(e) => e.stopPropagation()}
             >
-              <button
+              <IconButton
                 className="reorder-btn"
                 onClick={() => handleMovePage(idx, "left")}
                 disabled={idx === 0}
+                size="small"
                 title="Move page left"
               >
-                &larr;
-              </button>
-              <button
+                <ChevronLeftIcon fontSize="small" />
+              </IconButton>
+              <IconButton
                 className="reorder-btn"
                 onClick={() => handleMovePage(idx, "right")}
                 disabled={idx === pages.length - 1}
+                size="small"
                 title="Move page right"
               >
-                &rarr;
-              </button>
+                <ChevronRightIcon fontSize="small" />
+              </IconButton>
             </div>
           </div>
         ))}
@@ -755,7 +764,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           50% { transform: scale(1.08); }
         }
       `}</style>
-    </div>
+    </Box>
   );
 };
 

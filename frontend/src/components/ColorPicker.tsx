@@ -1,4 +1,7 @@
 import React, { useState, useRef } from "react";
+import IconButton from "@mui/material/IconButton";
+import TextField from "@mui/material/TextField";
+import ColorizeIcon from "@mui/icons-material/Colorize";
 
 // Convert hex to HSV
 const hexToHsv = (hex: string): { h: number; s: number; v: number } => {
@@ -290,15 +293,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         </button>
 
         {/* Text Input */}
-        <input
-          type="text"
-          className="form-input"
-          style={{
-            flex: 1,
-            padding: "6px 10px",
-            fontSize: "13px",
-            fontFamily: "monospace",
-          }}
+        <TextField
+          size="small"
+          fullWidth
           placeholder={allowTransparent ? "transparent" : "#ffffff"}
           value={normalizedValue}
           onChange={(e) => {
@@ -308,15 +305,13 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         />
 
         {/* Eye Dropper Button */}
-        <button
-          className="btn btn-secondary"
-          style={{ padding: "8px 12px", fontSize: "13px" }}
+        <IconButton
+          size="small"
           onClick={onLaunchEyeDropper}
-          title="Color Dropper"
-          type="button"
+          title="Eye dropper"
         >
-          🧪
-        </button>
+          <ColorizeIcon fontSize="small" />
+        </IconButton>
       </div>
 
       {/* Dropdown Popover */}

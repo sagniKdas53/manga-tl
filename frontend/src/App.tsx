@@ -17,6 +17,7 @@ import {
 import { ThemeProvider } from "@mui/material/styles";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
@@ -62,9 +63,9 @@ const NOOP = () => undefined;
 
 function LoadingSpinner() {
   return (
-    <div className="dashboard-content text-center">
-      <div className="spinner"></div>
-    </div>
+    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
+      <CircularProgress />
+    </Box>
   );
 }
 

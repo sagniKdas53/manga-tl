@@ -32,6 +32,7 @@ import {
   isRotationValid,
 } from "../utils/polygonUtils";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
@@ -43,6 +44,18 @@ import FitScreenIcon from "@mui/icons-material/FitScreen";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import ColorizeIcon from "@mui/icons-material/Colorize";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import SettingsIcon from "@mui/icons-material/Settings";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import AddIcon from "@mui/icons-material/Add";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteIcon from "@mui/icons-material/Delete";
+import UndoIcon from "@mui/icons-material/Undo";
+import OpenWithIcon from "@mui/icons-material/OpenWith";
+import CropIcon from "@mui/icons-material/Crop";
 
 interface ReaderProps {
   user: User;
@@ -2818,7 +2831,7 @@ export const Reader: React.FC<ReaderProps> = ({
         className="reader-container-nhentai"
         style={{ alignItems: "center", justifyContent: "center" }}
       >
-        <div className="spinner"></div>
+        <CircularProgress size={12} />
         <p>Loading page...</p>
       </div>
     );
@@ -2836,63 +2849,27 @@ export const Reader: React.FC<ReaderProps> = ({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button
+          <IconButton
             className="reader-nav-btn back-btn"
+            size="small"
+            title="Back"
             onClick={() =>
               navigate(
                 `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
               )
             }
-            title="Back to Chapter"
           >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line
-                x1="19"
-                y1="12"
-                x2="5"
-                y2="12"
-              ></line>
-              <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
-          </button>
+            <ArrowBackIcon fontSize="small" />
+          </IconButton>
 
-          <button
+          <IconButton
             className={`reader-nav-btn gear-btn ${showLeftSidebar ? "active" : ""}`}
+            size="small"
+            title="Settings"
             onClick={() => setShowLeftSidebar((prev) => !prev)}
-            title="Toggle Global Controls (Left Sidebar)"
           >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-            >
-              <rect
-                x="3"
-                y="3"
-                width="18"
-                height="18"
-                rx="2"
-              />
-              <line
-                x1="9"
-                y1="3"
-                x2="9"
-                y2="21"
-              />
-            </svg>
-          </button>
+            <SettingsIcon fontSize="small" />
+          </IconButton>
         </div>
 
         <div
@@ -2911,34 +2888,14 @@ export const Reader: React.FC<ReaderProps> = ({
           {selectedChapter?.chapterNumber}
         </div>
 
-        <button
+        <IconButton
           className={`reader-nav-btn gear-btn ${showRightSidebar ? "active" : ""}`}
+          size="small"
+          title="Settings"
           onClick={() => setShowRightSidebar((prev) => !prev)}
-          title="Toggle Property Inspector (Right Sidebar)"
         >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-          >
-            <rect
-              x="3"
-              y="3"
-              width="18"
-              height="18"
-              rx="2"
-            />
-            <line
-              x1="15"
-              y1="3"
-              x2="15"
-              y2="21"
-            />
-          </svg>
-        </button>
+          <SettingsIcon fontSize="small" />
+        </IconButton>
       </div>
 
       {/* Main Workspace split */}
@@ -3133,9 +3090,11 @@ export const Reader: React.FC<ReaderProps> = ({
 
               {/* Chapter Navigation */}
               <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, fontSize: "11px", padding: "6px" }}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<NavigateBeforeIcon />}
+                  style={{ flex: 1, fontSize: "11px" }}
                   onClick={() => prevChapter && navigateToChapter(prevChapter)}
                   disabled={!prevChapter}
                   title={
@@ -3144,11 +3103,13 @@ export const Reader: React.FC<ReaderProps> = ({
                       : "No previous chapter"
                   }
                 >
-                  &larr; Prev Ch
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, fontSize: "11px", padding: "6px" }}
+                  Prev Ch
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<NavigateNextIcon />}
+                  style={{ flex: 1, fontSize: "11px" }}
                   onClick={() => nextChapter && navigateToChapter(nextChapter)}
                   disabled={!nextChapter}
                   title={
@@ -3157,8 +3118,8 @@ export const Reader: React.FC<ReaderProps> = ({
                       : "No next chapter"
                   }
                 >
-                  Next Ch &rarr;
-                </button>
+                  Next Ch
+                </Button>
               </div>
             </div>
           </div>
@@ -3186,14 +3147,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 color: "white",
               }}
             >
-              <div
-                className="spinner"
-                style={{
-                  borderColor: "rgba(255,255,255,0.3)",
-                  borderTopColor: "white",
-                  marginBottom: "10px",
-                }}
-              ></div>
+              <CircularProgress size={12} sx={{ color: "white", mb: 1 }} />
               <div>Loading page details...</div>
             </div>
           )}
@@ -3837,9 +3791,9 @@ export const Reader: React.FC<ReaderProps> = ({
                       }}
                     >
                       {/* Up/Down reorder buttons — left group */}
-                      <button
-                        className="btn btn-secondary"
-                        title="Move active layer up (higher in stack)"
+                      <IconButton
+                        size="small"
+                        title="Move layer up"
                         disabled={
                           !activeLayerId ||
                           sortedLayers.findIndex(
@@ -3850,24 +3804,12 @@ export const Reader: React.FC<ReaderProps> = ({
                         onClick={() =>
                           activeLayerId && handleMoveLayer(activeLayerId, "up")
                         }
-                        style={{
-                          padding: "2px 6px",
-                          fontSize: "12px",
-                          opacity:
-                            !activeLayerId ||
-                            sortedLayers.findIndex(
-                              (l) => l.layer.id === activeLayerId,
-                            ) ===
-                              sortedLayers.length - 1
-                              ? 0.4
-                              : 1,
-                        }}
                       >
-                        ↑
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        title="Move active layer down (lower in stack)"
+                        <KeyboardArrowUpIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        title="Move layer down"
                         disabled={
                           !activeLayerId ||
                           sortedLayers.findIndex(
@@ -3878,20 +3820,9 @@ export const Reader: React.FC<ReaderProps> = ({
                           activeLayerId &&
                           handleMoveLayer(activeLayerId, "down")
                         }
-                        style={{
-                          padding: "2px 6px",
-                          fontSize: "12px",
-                          opacity:
-                            !activeLayerId ||
-                            sortedLayers.findIndex(
-                              (l) => l.layer.id === activeLayerId,
-                            ) === 0
-                              ? 0.4
-                              : 1,
-                        }}
                       >
-                        ↓
-                      </button>
+                        <KeyboardArrowDownIcon fontSize="small" />
+                      </IconButton>
                       {/* Divider */}
                       <div
                         style={{
@@ -3902,22 +3833,26 @@ export const Reader: React.FC<ReaderProps> = ({
                         }}
                       />
                       {/* Add layer buttons — right group */}
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: "2px 6px", fontSize: "10px" }}
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<AddIcon />}
+                        style={{ fontSize: "10px" }}
                         onClick={handleCreateTranslationLayer}
                         title="Add Translation Layer"
                       >
                         + TL
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: "2px 6px", fontSize: "10px" }}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<AddIcon />}
+                        style={{ fontSize: "10px" }}
                         onClick={handleCreateSfxLayer}
                         title="Add SFX Layer"
                       >
                         + SFX
-                      </button>
+                      </Button>
                     </div>
                   </div>
 
@@ -4000,117 +3935,38 @@ export const Reader: React.FC<ReaderProps> = ({
                             }}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <button
+                            <IconButton
+                              size="small"
                               onClick={() =>
                                 handleToggleLayerVisibility(lData.layer.id)
                               }
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: lData.layer.visible
-                                  ? "var(--primary)"
-                                  : "var(--text-muted)",
-                                cursor: "pointer",
-                                padding: "2px",
-                                display: "flex",
-                                alignItems: "center",
-                              }}
+                              color={
+                                lData.layer.visible ? "primary" : "default"
+                              }
                               title="Toggle layer visibility"
                             >
                               {lData.layer.visible ? (
-                                <svg
-                                  width="15"
-                                  height="15"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.5"
-                                >
-                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                  <circle
-                                    cx="12"
-                                    cy="12"
-                                    r="3"
-                                  ></circle>
-                                </svg>
+                                <VisibilityIcon fontSize="small" />
                               ) : (
-                                <svg
-                                  width="15"
-                                  height="15"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.5"
-                                >
-                                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                                  <line
-                                    x1="1"
-                                    y1="1"
-                                    x2="23"
-                                    y2="23"
-                                  ></line>
-                                </svg>
+                                <VisibilityOffIcon fontSize="small" />
                               )}
-                            </button>
+                            </IconButton>
 
-                            <button
+                            <IconButton
+                              size="small"
                               onClick={() => handleCloneLayer(lData.layer.id)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "var(--text-muted)",
-                                cursor: "pointer",
-                                padding: "2px",
-                                display: "flex",
-                                alignItems: "center",
-                              }}
                               title="Clone layer (copies above, hides original as backup)"
                             >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                              >
-                                <rect
-                                  x="9"
-                                  y="9"
-                                  width="13"
-                                  height="13"
-                                  rx="2"
-                                  ry="2"
-                                ></rect>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                              </svg>
-                            </button>
+                              <ContentCopyIcon fontSize="small" />
+                            </IconButton>
 
-                            <button
+                            <IconButton
+                              size="small"
                               onClick={() => handleDeleteLayer(lData.layer.id)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "var(--text-muted)",
-                                cursor: "pointer",
-                                padding: "2px",
-                                display: "flex",
-                                alignItems: "center",
-                              }}
                               title="Delete layer"
                             >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                              >
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                              </svg>
-                            </button>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
                           </div>
                         </div>
                       );
@@ -4201,7 +4057,7 @@ export const Reader: React.FC<ReaderProps> = ({
                     }}
                   >
                     {isRedoingPageOcr ? (
-                      <div className="spinner-mini"></div>
+                      <CircularProgress size={12} sx={{ mr: 0.5 }} />
                     ) : null}
                     Redo Page OCR
                   </Button>
@@ -4220,7 +4076,7 @@ export const Reader: React.FC<ReaderProps> = ({
                     }}
                   >
                     {isRedoingPageTranslation ? (
-                      <div className="spinner-mini"></div>
+                      <CircularProgress size={12} sx={{ mr: 0.5 }} />
                     ) : null}
                     Redo Page Translation
                   </Button>
@@ -4385,10 +4241,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       }}
                     >
                       {isRedoingRegionOcr ? (
-                        <div
-                          className="spinner"
-                          style={{ width: "12px", height: "12px" }}
-                        ></div>
+                        <CircularProgress size={12} sx={{ mr: 0.5 }} />
                       ) : (
                         <svg
                           width="12"
@@ -4424,10 +4277,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       }}
                     >
                       {isRedoingRegionTl ? (
-                        <div
-                          className="spinner"
-                          style={{ width: "12px", height: "12px" }}
-                        ></div>
+                        <CircularProgress size={12} sx={{ mr: 0.5 }} />
                       ) : (
                         <svg
                           width="12"
@@ -4581,48 +4431,23 @@ export const Reader: React.FC<ReaderProps> = ({
                 <div style={{ margin: "4px 0", display: "flex", gap: "6px" }}>
                   {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
                   {interactionMode === "reshape" ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "5px",
-                        fontSize: "12px",
-                        padding: "9px 6px",
-                      }}
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UndoIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
                       onClick={handleUndo}
                       disabled={undoStack.length === 0}
                       title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
                     >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <polyline points="1 4 1 10 7 10" />
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                      </svg>
                       Undo
-                    </button>
+                    </Button>
                   ) : (
-                    <button
-                      type="button"
-                      className={`btn ${interactionMode === "drag" ? "btn-primary" : "btn-secondary"}`}
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "5px",
-                        fontSize: "12px",
-                        padding: "9px 6px",
-                      }}
+                    <Button
+                      variant={interactionMode === "drag" ? "contained" : "outlined"}
+                      size="small"
+                      startIcon={<OpenWithIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
                       onClick={() =>
                         setInteractionMode((prev) =>
                           prev === "drag" ? "none" : "drag",
@@ -4630,79 +4455,29 @@ export const Reader: React.FC<ReaderProps> = ({
                       }
                       title="Drag the element to a new position on the image"
                     >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <polyline points="5 9 2 12 5 15" />
-                        <polyline points="9 5 12 2 15 5" />
-                        <polyline points="15 19 12 22 9 19" />
-                        <polyline points="19 9 22 12 19 15" />
-                        <line
-                          x1="2"
-                          y1="12"
-                          x2="22"
-                          y2="12"
-                        />
-                        <line
-                          x1="12"
-                          y1="2"
-                          x2="12"
-                          y2="22"
-                        />
-                      </svg>
                       {interactionMode === "drag" ? "Dragging…" : "Drag"}
-                    </button>
+                    </Button>
                   )}
 
                   {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
                   {interactionMode === "drag" ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "5px",
-                        fontSize: "12px",
-                        padding: "9px 6px",
-                      }}
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UndoIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
                       onClick={handleUndo}
                       disabled={undoStack.length === 0}
                       title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
                     >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <polyline points="1 4 1 10 7 10" />
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                      </svg>
                       Undo
-                    </button>
+                    </Button>
                   ) : (
-                    <button
-                      type="button"
-                      className={`btn ${interactionMode === "reshape" ? "btn-primary" : "btn-secondary"}`}
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "5px",
-                        fontSize: "12px",
-                        padding: "9px 6px",
-                      }}
+                    <Button
+                      variant={interactionMode === "reshape" ? "contained" : "outlined"}
+                      size="small"
+                      startIcon={<CropIcon />}
+                      style={{ flex: 1, fontSize: "12px" }}
                       onClick={() => {
                         if (interactionMode === "reshape") {
                           setInteractionMode("none");
@@ -4712,61 +4487,8 @@ export const Reader: React.FC<ReaderProps> = ({
                       }}
                       title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
                     >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <circle
-                          cx="5"
-                          cy="5"
-                          r="2.5"
-                        />
-                        <circle
-                          cx="19"
-                          cy="5"
-                          r="2.5"
-                        />
-                        <circle
-                          cx="19"
-                          cy="19"
-                          r="2.5"
-                        />
-                        <circle
-                          cx="5"
-                          cy="19"
-                          r="2.5"
-                        />
-                        <line
-                          x1="7.5"
-                          y1="5"
-                          x2="16.5"
-                          y2="5"
-                        />
-                        <line
-                          x1="19"
-                          y1="7.5"
-                          x2="19"
-                          y2="16.5"
-                        />
-                        <line
-                          x1="16.5"
-                          y1="19"
-                          x2="7.5"
-                          y2="19"
-                        />
-                        <line
-                          x1="5"
-                          y1="16.5"
-                          x2="5"
-                          y2="7.5"
-                        />
-                      </svg>
                       {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
-                    </button>
+                    </Button>
                   )}
                 </div>
 
