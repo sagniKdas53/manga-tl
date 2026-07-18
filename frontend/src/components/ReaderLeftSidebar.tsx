@@ -1,6 +1,6 @@
 import React from "react";
+import Grid from "@mui/material/Grid";
 import {
-  Box,
   Typography,
   Switch,
   FormControlLabel,
@@ -99,11 +99,11 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
   };
 
   return (
-    <Box className="reader-left-sidebar-nhentai">
+    <Grid className="reader-left-sidebar-nhentai">
       {/* Overlays Section */}
-      <Box className="panel-section">
-        <Box className="panel-section-title">OVERLAYS</Box>
-        <Box sx={{ display: "flex", flexDirection: "column" }}>
+      <Grid className="panel-section">
+        <Grid className="panel-section-title">OVERLAYS</Grid>
+        <Grid sx={{ display: "flex", flexDirection: "column" }}>
           <FormControlLabel
             control={
               <Switch
@@ -148,13 +148,13 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             }
             label={<Typography variant="body2">Group Conversation</Typography>}
           />
-        </Box>
-      </Box>
+        </Grid>
+      </Grid>
 
       {/* Zoom & View Section */}
-      <Box className="panel-section">
-        <Box className="panel-section-title">ZOOM & VIEW</Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+      <Grid className="panel-section">
+        <Grid className="panel-section-title">ZOOM & VIEW</Grid>
+        <Grid sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
           <Slider
             min={0.5}
             max={3.0}
@@ -167,8 +167,8 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
           <Typography variant="body2" sx={{ minWidth: "40px", fontWeight: "bold", textAlign: 'right' }}>
             {displayedZoom}%
           </Typography>
-        </Box>
-        <Box sx={{ display: "flex", gap: 1, mb: 1.5 }}>
+        </Grid>
+        <Grid sx={{ display: "flex", gap: 1, mb: 1.5 }}>
           <Button
             size="small"
             variant={props.fitMode === "page" ? "contained" : "outlined"}
@@ -196,7 +196,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
           >
             Height
           </Button>
-        </Box>
+        </Grid>
         <Button
           variant="outlined"
           size="small"
@@ -210,12 +210,12 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
         >
           Reset Zoom
         </Button>
-      </Box>
+      </Grid>
 
       {/* Navigation Section */}
-      <Box className="panel-section">
-        <Box className="panel-section-title">NAVIGATION</Box>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Grid className="panel-section">
+        <Grid className="panel-section-title">NAVIGATION</Grid>
+        <Grid sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <ReaderPageNavigation
             currentPage={props.curPageNum}
             totalPages={props.totalPages}
@@ -230,13 +230,13 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             onPrevChapter={() => props.prevChapter && props.navigateToChapter(props.prevChapter)}
             onNextChapter={() => props.nextChapter && props.navigateToChapter(props.nextChapter)}
           />
-        </Box>
-      </Box>
+        </Grid>
+      </Grid>
 
       {/* Page Management Section */}
-      <Box className="panel-section" style={{ marginBottom: 40 }}>
-        <Box className="panel-section-title">PAGE MANAGEMENT</Box>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Grid className="panel-section" style={{ marginBottom: 40 }}>
+        <Grid className="panel-section-title">PAGE MANAGEMENT</Grid>
+        <Grid sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <form onSubmit={onPageMoveSubmit} style={{ display: 'flex', gap: '8px' }}>
             <TextField
               size="small"
@@ -284,8 +284,8 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
           >
             Delete Page
           </Button>
-        </Box>
-      </Box>
+        </Grid>
+      </Grid>
       {confirmModal && (
         <ConfirmModal
           isOpen={confirmModal.isOpen}
@@ -296,7 +296,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
           onCancel={() => setConfirmModal(null)}
         />
       )}
-    </Box>
+    </Grid>
   );
 });
 
