@@ -145,8 +145,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         ) : (
           <Grid
             container
-            spacing={2}
+            spacing={1.5}
           >
+            <Grid size={12} sx={{my:0,py:0}}>
+              <Typography
+                variant="overline"
+                color="text.disabled"
+                sx={{
+                  display: "block",
+                  m:0,
+                  p:0
+                }}
+              >
+                OCR
+              </Typography>
+            </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl
                 fullWidth

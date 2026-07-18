@@ -29,10 +29,10 @@ public class OcrRegion {
   @JoinColumn(name = "panel_id")
   @com.fasterxml.jackson.annotation.JsonIgnore
   private Panel panel;
-
+  @Column(columnDefinition = "TEXT")
   private String text;
 
-  @Column(name = "translated_text")
+  @Column(name = "translated_text", columnDefinition = "TEXT")
   private String translatedText;
 
   @Column(name = "approved")
@@ -96,7 +96,7 @@ public class OcrRegion {
   @Column(name = "qa_score")
   private Double qaScore;
 
-  @Column(name = "qa_feedback")
+  @Column(name = "qa_feedback", columnDefinition = "TEXT")
   private String qaFeedback;
 
   @Column(name = "qa_status")

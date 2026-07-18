@@ -480,6 +480,7 @@ function AppContent() {
                             seriesList={seriesList}
                             setSeriesList={setSeriesList}
                             onSelectSeries={setSelectedSeries}
+                            mode={mode}
                           />
                         ) : null
                       }
@@ -529,6 +530,7 @@ function AppContent() {
                             setPages={setPages}
                             onSelectPage={NOOP}
                             isLoadingDetails={isLoadingDetails}
+                            mode={mode}
                           />
                         ) : null
                       }
@@ -546,6 +548,7 @@ function AppContent() {
                             setPages={setPages}
                             onSelectPage={NOOP}
                             isLoadingDetails={isLoadingDetails}
+                            mode={mode}
                           />
                         ) : null
                       }

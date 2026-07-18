@@ -27,6 +27,7 @@ interface DashboardProps {
   seriesList: Series[];
   setSeriesList: React.Dispatch<React.SetStateAction<Series[]>>;
   onSelectSeries: (series: Series) => void;
+  mode: "light" | "dark";
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -34,6 +35,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   seriesList,
   setSeriesList,
   onSelectSeries,
+  mode
 }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -74,7 +76,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     isOpen: false,
     title: "",
     message: "",
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const closeConfirmModal = () =>
@@ -153,14 +155,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Box>
           <Typography
             variant="h4"
-            sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600 }}
+            sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: mode === "dark" ? "white" : "black" }}
           >
             My Manga Library
           </Typography>
           <Typography
             variant="body2"
             color="text.secondary"
-            sx={{ mt: 0.5 }}
+            sx={{ mt: 0.5, color: mode === "dark" ? "white" : "black" }}
           >
             Manage translation projects and OCR workflows
           </Typography>
@@ -168,7 +170,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Stack
           direction="row"
           spacing={1}
-          alignItems="center"
         >
           <FormControl
             size="small"
@@ -253,9 +254,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             )}
             <CardContent sx={{ flex: 1, py: 1.5, "&:last-child": { pb: 1.5 } }}>
               <Typography
-                variant="subtitle2"
+                variant="h6"
                 noWrap
-                fontWeight={600}
               >
                 {s.title}
               </Typography>
