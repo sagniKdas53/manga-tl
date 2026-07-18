@@ -3,7 +3,6 @@ package com.manga.library.dto;
 import lombok.Data;
 
 @Data
-@SuppressWarnings("null")
 public class LayerElementDto {
   private String text;
   private String font;

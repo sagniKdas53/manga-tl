@@ -9,7 +9,6 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SuppressWarnings("null")
 public class OcrRegionDto {
   private UUID id;
   private String text;

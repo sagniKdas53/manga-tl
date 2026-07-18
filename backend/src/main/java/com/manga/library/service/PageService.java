@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @lombok.extern.slf4j.Slf4j
-@SuppressWarnings("null")
 public class PageService {
 
   private final ImageRepository imageRepository;

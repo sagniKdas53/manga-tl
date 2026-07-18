@@ -23,7 +23,6 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({"null", "unchecked", "rawtypes", "unused"})
 public class CostEstimationServiceTest {
 
   @Mock private StringRedisTemplate redisTemplate;

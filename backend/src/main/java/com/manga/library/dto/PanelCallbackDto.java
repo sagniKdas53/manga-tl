@@ -5,7 +5,6 @@ import java.util.UUID;
 import lombok.Data;
 
 @Data
-@SuppressWarnings("null")
 public class PanelCallbackDto {
   private UUID imageId;
   private List<PanelData> panels;

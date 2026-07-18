@@ -18,7 +18,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SuppressWarnings("null")
 public class SystemSetting {
 
   @Id

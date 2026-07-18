@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @Transactional
 @ActiveProfiles("test")
-@SuppressWarnings({"null", "unchecked", "rawtypes", "unused"})
 public class JwtTest {
 
   @Autowired private MockMvc mockMvc;

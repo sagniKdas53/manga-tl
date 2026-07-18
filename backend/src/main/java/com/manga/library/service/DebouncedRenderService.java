@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@SuppressWarnings("null")
 public class DebouncedRenderService {
 
   private final ImageRepository imageRepository;

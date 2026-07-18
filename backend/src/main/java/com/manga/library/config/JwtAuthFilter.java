@@ -21,7 +21,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class JwtAuthFilter extends OncePerRequestFilter {
 
   private final JwtUtils jwtUtils;

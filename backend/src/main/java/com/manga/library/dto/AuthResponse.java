@@ -6,7 +6,6 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-@SuppressWarnings("null")
 public class AuthResponse {
   private String token;
   private UUID id;

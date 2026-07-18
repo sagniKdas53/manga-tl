@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class AuthController {
 
   private final UserRepository userRepository;

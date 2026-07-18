@@ -23,7 +23,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@SuppressWarnings("null")
 public class JobCoordinatorService {
 
   private final HttpClient httpClient =

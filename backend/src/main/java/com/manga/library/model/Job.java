@@ -21,7 +21,6 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@SuppressWarnings("null")
 public class Job {
   @Id
   @Column(name = "id")
