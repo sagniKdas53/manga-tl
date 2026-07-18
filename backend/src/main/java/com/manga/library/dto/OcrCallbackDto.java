@@ -5,6 +5,7 @@ import java.util.UUID;
 import lombok.Data;
 
 @Data
+@SuppressWarnings("null")
 public class OcrCallbackDto {
   private UUID imageId;
   private String modelIdentifier;

@@ -29,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/series")
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class SeriesController {
 
   private final SeriesRepository seriesRepository;
@@ -36,7 +37,6 @@ public class SeriesController {
   private final PageRepository pageRepository;
   private final ImageRepository imageRepository;
   private final LayerRepository layerRepository;
-  private final LayerElementRepository layerElementRepository;
   private final PageService pageService;
   private final MinioService minioService;
   private final JobCoordinatorService jobCoordinatorService;

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class WorkerDispatcherService {
 
   @Value("${WORKER_URLS:http://worker:9091}")

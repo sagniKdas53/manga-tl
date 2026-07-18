@@ -15,6 +15,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@SuppressWarnings("null")
 public class Page {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)

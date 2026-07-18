@@ -15,6 +15,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @IdClass(ConversationRegion.ConversationRegionId.class)
+@SuppressWarnings("null")
 public class ConversationRegion {
 
   @Id

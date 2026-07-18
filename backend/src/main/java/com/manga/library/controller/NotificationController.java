@@ -16,10 +16,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class NotificationController {
 
   private final SseService sseService;
-  private final UserRepository userRepository;
 
   @GetMapping("/stream")
   public SseEmitter stream() {

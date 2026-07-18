@@ -16,13 +16,13 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/jobs")
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class JobController {
 
   private final JobRepository jobRepository;
   private final JobCoordinatorService jobCoordinatorService;
   private final StringRedisTemplate redisTemplate;
   private final SseService sseService;
-  private final ObjectMapper objectMapper;
 
   private static final String QUEUE_PAUSED_KEY = "system:queue:paused";
 
@@ -64,10 +64,10 @@ public class JobController {
     try {
       List<Job> jobsToClear =
           jobRepository.findByStatusInOrderByCreatedAtAsc(List.of("PENDING", "PAUSED", "FAILED"));
-      jobRepository.deleteAll(jobsToClear);
+      jobRepository.deleteAll(java.util.Objects.requireNonNull(jobsToClear));
 
       // Clear Redis queues
-      redisTemplate.delete(
+      redisTemplate.delete(java.util.Objects.requireNonNull(
           List.of(
               "queue:panel-detection",
               "queue:ocr",
@@ -78,7 +78,7 @@ public class JobController {
               "queue:qa-re-ocr",
               "queue:region-redo",
               "queue:region-redo-ocr",
-              "queue:region-redo-tl"));
+              "queue:region-redo-tl")));
 
       sseService.emitEventToAllUsers(
           "queue_cleared", Map.of("event", "queue_cleared", "clearedCount", jobsToClear.size()));
@@ -92,6 +92,7 @@ public class JobController {
 
   @PostMapping("/{id}/retry")
   public ResponseEntity<?> retryJob(@PathVariable String id) {
+    java.util.Objects.requireNonNull(id, "id cannot be null");
     return jobRepository
         .findById(id)
         .map(
@@ -115,6 +116,7 @@ public class JobController {
 
   @PostMapping("/{id}/pause")
   public ResponseEntity<?> pauseJob(@PathVariable String id) {
+    java.util.Objects.requireNonNull(id, "id cannot be null");
     return jobRepository
         .findById(id)
         .map(
@@ -132,6 +134,7 @@ public class JobController {
 
   @PostMapping("/{id}/resume")
   public ResponseEntity<?> resumeJob(@PathVariable String id) {
+    java.util.Objects.requireNonNull(id, "id cannot be null");
     return jobRepository
         .findById(id)
         .map(
@@ -154,6 +157,7 @@ public class JobController {
 
   @DeleteMapping("/{id}")
   public ResponseEntity<?> deleteJob(@PathVariable String id) {
+    java.util.Objects.requireNonNull(id, "id cannot be null");
     return jobRepository
         .findById(id)
         .map(

@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@SuppressWarnings("null")
 public class SecurityConfigTest {
 
   @Autowired private MockMvc mockMvc;

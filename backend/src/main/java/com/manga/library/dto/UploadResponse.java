@@ -6,6 +6,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
+@SuppressWarnings("null")
 public class UploadResponse {
   private UUID pageId;
   private UUID imageId;

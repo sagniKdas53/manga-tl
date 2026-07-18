@@ -14,6 +14,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@SuppressWarnings("null")
 public class Layer {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)

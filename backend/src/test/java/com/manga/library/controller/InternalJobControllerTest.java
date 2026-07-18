@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(InternalJobController.class)
 @AutoConfigureMockMvc(addFilters = false)
+@SuppressWarnings("null")
 public class InternalJobControllerTest {
 
   @Autowired private MockMvc mockMvc;

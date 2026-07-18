@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/settings")
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class SettingsController {
 
   private final SystemSettingsService systemSettingsService;
