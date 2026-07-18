@@ -30,7 +30,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PageController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@SuppressWarnings({"null", "unchecked", "rawtypes", "unused"})
 public class PageControllerTest {
 
   @Autowired private MockMvc mockMvc;

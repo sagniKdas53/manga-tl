@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @Slf4j
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class InternalJobController {
 
   private final JobCoordinatorService jobCoordinatorService;

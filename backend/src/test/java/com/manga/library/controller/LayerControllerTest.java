@@ -27,7 +27,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(LayerController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@SuppressWarnings({"null", "unchecked", "rawtypes", "unused"})
 public class LayerControllerTest {
 
   @Autowired private MockMvc mockMvc;

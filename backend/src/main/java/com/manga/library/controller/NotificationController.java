@@ -16,7 +16,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 @Slf4j
-@SuppressWarnings("null")
 public class NotificationController {
 
   private final SseService sseService;

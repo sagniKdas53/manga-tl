@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/jobs")
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class JobController {
 
   private final JobRepository jobRepository;

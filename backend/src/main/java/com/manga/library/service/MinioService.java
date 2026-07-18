@@ -13,7 +13,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@SuppressWarnings("null")
 public class MinioService {
 
   private final MinioClient minioClient;

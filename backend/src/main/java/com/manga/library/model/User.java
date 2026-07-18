@@ -14,7 +14,6 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SuppressWarnings("null")
 public class User {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)

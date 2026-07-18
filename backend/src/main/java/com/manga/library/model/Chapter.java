@@ -16,7 +16,6 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SuppressWarnings("null")
 public class Chapter {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)

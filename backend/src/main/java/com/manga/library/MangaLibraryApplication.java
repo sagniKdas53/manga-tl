@@ -11,7 +11,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @SpringBootApplication
 @EnableScheduling
 @EnableAsync
-@SuppressWarnings("null")
 public class MangaLibraryApplication {
   public static void main(String[] args) {
     SpringApplication.run(MangaLibraryApplication.class, args);

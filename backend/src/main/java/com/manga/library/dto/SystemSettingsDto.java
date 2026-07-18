@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@SuppressWarnings("null")
 public class SystemSettingsDto {
   private List<String> ocrVlmModelList;
   private List<String> tlLlmModelList;

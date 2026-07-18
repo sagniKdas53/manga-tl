@@ -29,7 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/series")
 @RequiredArgsConstructor
 @Slf4j
-@SuppressWarnings("null")
 public class SeriesController {
 
   private final SeriesRepository seriesRepository;

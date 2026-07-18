@@ -14,7 +14,6 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SuppressWarnings("null")
 public class LayerEditHistory {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
