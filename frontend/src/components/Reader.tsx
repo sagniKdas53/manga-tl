@@ -31,6 +31,18 @@ import {
   isVertexMoveValid,
   isRotationValid,
 } from "../utils/polygonUtils";
+import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
+import NavigateNextIcon from "@mui/icons-material/NavigateNext";
+import FirstPageIcon from "@mui/icons-material/FirstPage";
+import LastPageIcon from "@mui/icons-material/LastPage";
+import ZoomInIcon from "@mui/icons-material/ZoomIn";
+import ZoomOutIcon from "@mui/icons-material/ZoomOut";
+import FitScreenIcon from "@mui/icons-material/FitScreen";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import ColorizeIcon from "@mui/icons-material/Colorize";
 
 interface ReaderProps {
   user: User;
@@ -3025,30 +3037,34 @@ export const Reader: React.FC<ReaderProps> = ({
                   marginBottom: "8px",
                 }}
               >
-                <button
-                  className={`btn ${fitMode === "page" ? "btn-primary" : "btn-secondary"}`}
-                  style={{ flex: 1, fontSize: "10px", padding: "4px" }}
+                <IconButton
+                  size="small"
+                  color={fitMode === "page" ? "primary" : "default"}
                   onClick={() => setFitMode("page")}
+                  title="Fit Page"
                 >
-                  Page
-                </button>
-                <button
-                  className={`btn ${fitMode === "width" ? "btn-primary" : "btn-secondary"}`}
-                  style={{ flex: 1, fontSize: "10px", padding: "4px" }}
+                  <FitScreenIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  color={fitMode === "width" ? "primary" : "default"}
                   onClick={() => setFitMode("width")}
+                  title="Fit Width"
                 >
-                  Width
-                </button>
-                <button
-                  className={`btn ${fitMode === "height" ? "btn-primary" : "btn-secondary"}`}
-                  style={{ flex: 1, fontSize: "10px", padding: "4px" }}
+                  <ZoomInIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  color={fitMode === "height" ? "primary" : "default"}
                   onClick={() => setFitMode("height")}
+                  title="Fit Height"
                 >
-                  Height
-                </button>
+                  <ZoomOutIcon fontSize="small" />
+                </IconButton>
               </div>
-              <button
-                className="btn btn-secondary"
+              <Button
+                variant="outlined"
+                size="small"
                 style={{ width: "100%", fontSize: "11px", padding: "6px" }}
                 onClick={() => {
                   setZoom(1.0);
@@ -3057,7 +3073,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 disabled={zoom === 1.0 && fitMode === "page"}
               >
                 Reset Zoom
-              </button>
+              </Button>
             </div>
 
             {/* Page & Chapter Navigation */}
@@ -3073,22 +3089,22 @@ export const Reader: React.FC<ReaderProps> = ({
                   gap: "6px",
                 }}
               >
-                <button
-                  className="reader-control-btn"
+                <IconButton
+                  size="small"
                   onClick={() => navigateToPage(1)}
                   disabled={curPageNum <= 1}
                   title="First Page"
                 >
-                  &lt;&lt;
-                </button>
-                <button
-                  className="reader-control-btn"
+                  <FirstPageIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
                   onClick={() => navigateToPage(curPageNum - 1)}
                   disabled={curPageNum <= 1}
                   title="Previous Page"
                 >
-                  &lt;
-                </button>
+                  <NavigateBeforeIcon fontSize="small" />
+                </IconButton>
 
                 <span
                   className="reader-page-indicator-nhentai"
@@ -3097,22 +3113,22 @@ export const Reader: React.FC<ReaderProps> = ({
                   <strong>{curPageNum}</strong> / {totalPages}
                 </span>
 
-                <button
-                  className="reader-control-btn"
+                <IconButton
+                  size="small"
                   onClick={() => navigateToPage(curPageNum + 1)}
                   disabled={curPageNum >= totalPages}
                   title="Next Page"
                 >
-                  &gt;
-                </button>
-                <button
-                  className="reader-control-btn"
+                  <NavigateNextIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
                   onClick={() => navigateToPage(totalPages)}
                   disabled={curPageNum >= totalPages}
                   title="Last Page"
                 >
-                  &gt;&gt;
-                </button>
+                  <LastPageIcon fontSize="small" />
+                </IconButton>
               </div>
 
               {/* Chapter Navigation */}
@@ -4108,8 +4124,9 @@ export const Reader: React.FC<ReaderProps> = ({
                   <div
                     style={{ display: "flex", gap: "8px", marginBottom: "8px" }}
                   >
-                    <button
-                      className="btn btn-secondary"
+                    <Button
+                      variant="outlined"
+                      size="small"
                       style={{
                         flex: 1,
                         padding: "8px",
@@ -4124,10 +4141,11 @@ export const Reader: React.FC<ReaderProps> = ({
                           : "Select or create a layer first"
                       }
                     >
-                      💬 Add Text
-                    </button>
-                    <button
-                      className="btn btn-secondary"
+                      Add Text
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
                       style={{
                         flex: 1,
                         padding: "8px",
@@ -4142,11 +4160,13 @@ export const Reader: React.FC<ReaderProps> = ({
                           : "Select or create a layer first"
                       }
                     >
-                      ⬜ Add Mask
-                    </button>
+                      Add Mask
+                    </Button>
                   </div>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<ColorizeIcon />}
                     style={{
                       width: "100%",
                       display: "flex",
@@ -4158,15 +4178,17 @@ export const Reader: React.FC<ReaderProps> = ({
                     disabled={!selectedItem || !selectedItem.isLayerElement}
                     title="Sample color from screen to apply to selected element's background"
                   >
-                    🧪 Color Dropper
-                  </button>
+                    Color Dropper
+                  </Button>
                 </div>
 
                 {/* Page Actions Section */}
                 <div className="panel-section">
                   <div className="panel-section-title">Page Actions</div>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<RefreshIcon />}
                     onClick={handleRedoPageOcr}
                     disabled={isRedoingPageOcr}
                     style={{
@@ -4182,9 +4204,11 @@ export const Reader: React.FC<ReaderProps> = ({
                       <div className="spinner-mini"></div>
                     ) : null}
                     Redo Page OCR
-                  </button>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<RefreshIcon />}
                     onClick={handleRedoPageTranslation}
                     disabled={isRedoingPageTranslation}
                     style={{
@@ -4199,7 +4223,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       <div className="spinner-mini"></div>
                     ) : null}
                     Redo Page Translation
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Export Section */}
@@ -4208,8 +4232,10 @@ export const Reader: React.FC<ReaderProps> = ({
                   style={{ paddingBottom: "40px" }}
                 >
                   <div className="panel-section-title">Export</div>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<FileDownloadIcon />}
                     onClick={handleExportPng}
                     style={{
                       width: "100%",
@@ -4221,9 +4247,11 @@ export const Reader: React.FC<ReaderProps> = ({
                     }}
                   >
                     Export Page (PNG)
-                  </button>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<FileDownloadIcon />}
                     onClick={handleExportZip}
                     style={{
                       width: "100%",
@@ -4234,7 +4262,7 @@ export const Reader: React.FC<ReaderProps> = ({
                     }}
                   >
                     Export Project (ZIP)
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
@@ -4324,12 +4352,10 @@ export const Reader: React.FC<ReaderProps> = ({
                       marginBottom: "4px",
                     }}
                   >
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
+                    <Button
+                      variant="outlined"
+                      size="small"
                       style={{
-                        display: "flex",
-                        alignItems: "center",
                         justifyContent: "center",
                         gap: "6px",
                         fontSize: "12px",
@@ -4376,14 +4402,12 @@ export const Reader: React.FC<ReaderProps> = ({
                         </svg>
                       )}
                       Redo OCR
-                    </button>
+                    </Button>
 
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
+                    <Button
+                      variant="outlined"
+                      size="small"
                       style={{
-                        display: "flex",
-                        alignItems: "center",
                         justifyContent: "center",
                         gap: "6px",
                         fontSize: "12px",
@@ -4417,7 +4441,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         </svg>
                       )}
                       Redo TL
-                    </button>
+                    </Button>
                   </div>
                 )}
 
@@ -5098,8 +5122,10 @@ export const Reader: React.FC<ReaderProps> = ({
 
                 {/* Action Buttons */}
                 <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                  <button
-                    className="btn btn-primary"
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
                     style={{
                       flex: 1,
                       padding: "8px",
@@ -5124,19 +5150,19 @@ export const Reader: React.FC<ReaderProps> = ({
                         }}
                       />
                     )}
-                  </button>
-                  <button
-                    className="btn btn-secondary"
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
                     style={{
                       flex: 1,
                       padding: "8px",
-                      borderColor: "var(--error, #ef4444)",
-                      color: "var(--error, #ef4444)",
                     }}
                     onClick={() => handleDeleteElement(selectedItem.id)}
                   >
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

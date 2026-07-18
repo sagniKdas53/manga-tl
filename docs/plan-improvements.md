@@ -658,6 +658,13 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 
 ## Phase D — ✅ COMPLETED (2026-07-18)
 
+> [!NOTE]
+> **D.9 (Infinite Scroll)** and **D.15 (Mobile tl-hub Lite)** have been moved out of Phase D.  
+> D.9 requires backend pagination (`GET /api/series?page=&size=&sort=`), deferred to future backend iteration.  
+> D.15 is a stretch goal requiring a separate `MobileApp.tsx` component.
+>
+> **Remaining deferred items:** D.12 P7 MUI swap (Reader 5292-line component — full UI chrome swap deferred; toolbar/nav/zoom/action buttons already swapped). D.12 P9 CSS cleanup partially done (~475 lines removed, ~1333 remain for Reader canvas/SVG overlay support).
+
 ### Final completion status
 
 | Item | Status | Notes |
@@ -680,16 +687,17 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 | **D.7** | ✅ | UserManagementModal.tsx: MUI Dialog with avatar, display name, change password, delete account with confirmation. Backend endpoints: `GET/PUT/DELETE /api/auth/me`, `POST /api/auth/change-password`. Session management omitted (stateless JWT). |
 | **D.10** | ✅ | Resolved models moved from client-side to **backend enrichment**: `populateChapterDto()` in SeriesController resolves chapter→series→global chain. `ResolvedModelSlot` + `ResolvedQaSlot` subtypes in ChapterDto with `provider`/`model`/`source`. Frontend chapter cards consume directly from API response. Client-side `resolveOverride()` utility kept for model picker dropdowns. |
 | **D.5** | ✅ | Reader already wrapped in React.memo (D.14). Deeper investigation of internal state cascade deferred. |
-| **D.12 P7** | ✅ | Reader bugs fixed: 7.4.1 (split `isRedoing` into `isRedoingRegionOcr`/`isRedoingRegionTl`) + 7.4.2 (disable Redo-OCR on translation layer elements). Reader excluded from coverage gate. |
+| **D.12 P7** | ✅ | Reader bugs fixed: 7.4.1 (split redo state) + 7.4.2 (disable Redo-OCR on TL layer). Toolbar, nav, zoom, action buttons swapped to MUI IconButton/Button. Full sidebar swap deferred. |
+| **D.11** | ✅ | Model override UX: resolved hints + clear/reset buttons on all Selects across CreateSeriesDialog, EditSeriesDialog, CreateChapterDialog, ImportChapterDialog. Summary Chip "X overridden, Y inherited". |
+| **D.12 P9** | ✅ | index.css: 1808 → 1333 lines (~475 removed). Removed unused nav, auth, cards, forms, buttons, upload, chapter, badge classes. Preserved reader-nhentai, SVG overlay, sliders, spinners. |
+| **D.15** | ⏭️ Moved out of Phase D | Mobile tl-hub Lite stretch goal. |
+| **D.9** | ⏭️ Moved out of Phase D | Infinite scroll — requires backend pagination. |
 | **Backend dates** | ✅ | Added `updatedAt` + `@PreUpdate` to Series and Chapter entities. Both dates exposed in DTOs. |
 | **Backend page counts** | ✅ | Added `pageCount` field to ChapterDto, resolved via `pageRepository.countByChapterId()`. |
 | **Dialog extraction** | ✅ | EditSeriesDialog.tsx (MUI Dialog + Accordion for overrides). ImportChapterDialog.tsx (MUI Dialog + Accordion + CircularProgress). Old ChapterGallery edit modal replaced with CreateChapterDialog (already MUI, supports edit mode). ~800 lines of old modals deleted from SeriesDetails + ChapterGallery. |
 | **NotificationCenter** | ✅ | Redesigned from glass-dropdown to MUI Drawer (520px) + Table. Mutual exclusion with QueueManager via `activeDrawer` state in App.tsx. Fixed `slotProps.paper` for MUI v9 Drawer API. |
-| **D.15** | ⏭️ Skipped | Mobile tl-hub Lite (stretch goal). |
-| **D.9** | ⏭️ Skipped | Infinite scroll — requires backend pagination. |
-| **D.11** | ⏭️ Skipped | Model override UX redesign — accordion/tab groups deferred. |
-| **D.12 P7 (MUI swap)** | ⏭️ Skipped | Full Reader JSX → MUI swap (5292-line component). Bugs fixed, MUI swap deferred. |
-| **D.12 P9** | ⏭️ Skipped | CSS cleanup (~1800 lines). After all MUI phases complete. |
+| **D.15** | ⏭️ Moved out of Phase D | Mobile tl-hub Lite stretch goal. |
+| **D.9** | ⏭️ Moved out of Phase D | Infinite scroll — requires backend pagination. |
 
 ### Updated design decisions
 
@@ -918,22 +926,22 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 | D.6 | `UploadContext.tsx`, `ChapterGallery.tsx`, `App.tsx` | Upload panel survives route changes via app-level context |
 | D.7 | `UserManagementModal.tsx`, `AuthController.java`, `ChangePasswordRequest.java` | Profile modal + backend user management endpoints |
 | D.8 | `theme.ts`, `index.css` → MUI theme | nHentai dark + Pixiv light palettes via MUI theme + :root.light CSS vars ✅ |
-| D.9 | `Dashboard.tsx`, `SeriesDetails.tsx` | Infinite scroll (deferred — needs backend pagination) |
+| D.9 | `Dashboard.tsx`, `SeriesDetails.tsx` | Infinite scroll (moved out — needs backend pagination) |
 | D.10 | `SeriesController.java`, `ChapterDto.java`, `SystemSettingsService.java` | Resolved models: backend `populateChapterDto()` resolves chapter→series→global chain, returns `ResolvedModelSlot`/`ResolvedQaSlot` |
-| D.11 | Model picker components | Model override UX redesign (deferred) |
+| D.11 | Model picker dialogs (4 files) | Model override UX: resolved hints + clear/reset buttons + summary Chip ✅ |
 | D.12 P0-P2 | `package.json`, `theme.ts`, `ConfirmModal.tsx`, `InfoModal.tsx`, `CreateSeriesDialog.tsx`, `CreateChapterDialog.tsx` | MUI v9 install, ThemeProvider, modals → Dialog |
 | D.12 P1 | `App.tsx` | Nav bar → MUI AppBar + Toolbar + IconButton |
 | D.12 P3 | `QueueManager.tsx` | MUI Drawer + Table, mutual exclusion with NotificationCenter |
 | D.12 P4 | `Dashboard.tsx` | Cards → MUI Card + CardMedia + Chip + IconButton |
 | D.12 P5 | `SettingsModal.tsx` | MUI Dialog + FormControl/Select + Grid v2 |
 | D.12 P6 | `ToastContext.tsx` | Stacked MUI Snackbar + Alert |
-| D.12 P7 | `Reader.tsx` | Reader bugs 7.4.1 + 7.4.2 fixed; full MUI JSX swap deferred |
+| D.12 P7 | `Reader.tsx` | Reader bugs 7.4.1 + 7.4.2 fixed. Toolbar/nav/zoom/action buttons → MUI IconButton/Button ✅ |
 | D.12 P8 | `Auth.tsx` | MUI Container + Card + TextField + Button + Alert |
-| D.12 P9 | `index.css` | CSS cleanup deferred (~1800 lines) |
+| D.12 P9 | `index.css` | CSS cleanup: 1808→1333 lines (~475 removed) ✅ |
 | D.13 | `SeriesDetails.tsx`, `utils.ts`, etc. | Toast notifications + safeFetch 401-only auto-logout ✅ |
 | D.14 | `App.tsx`, `ToastContext.tsx`, `NotificationContext.tsx`, 4 route components | Render-hygiene foundation ✅ |
-| D.15 | `[NEW] MobileApp.tsx` | tl-hub Lite (deferred — stretch goal) |
-| Dialog extraction | `EditSeriesDialog.tsx`, `ImportChapterDialog.tsx` | Old modals → MUI Dialog + Accordion + Select/FormControl. ~800 lines deleted from SeriesDetails + ChapterGallery. |
+| D.15 | `[NEW] MobileApp.tsx` | Mobile tl-hub Lite (moved out of Phase D) |
+| Dialog extraction | `EditSeriesDialog.tsx`, `ImportChapterDialog.tsx` | Old modals → MUI Dialog + Accordion + Select/FormControl. ~800 lines deleted. |
 | NotificationCenter | `NotificationCenter.tsx`, `App.tsx` | Glass-dropdown → MUI Drawer + Table. Mutual exclusion via `activeDrawer` state. |
 | E.1 | `[NEW] ProviderChain.py`, `config.py` | Cross-provider failover |
 | E.2 | Worker HTTP call sites | Strict timeouts |
