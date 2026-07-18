@@ -1,7 +1,7 @@
 
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import SettingsIcon from "@mui/icons-material/Settings";
 import IconButton from "@mui/material/IconButton";
+import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 
 interface ReaderTopNavProps {
   title: string;
@@ -45,7 +45,7 @@ export default function ReaderTopNav({
           title="Settings"
           onClick={onToggleLeftSidebar}
         >
-          <SettingsIcon fontSize="small" />
+          <MenuOpenIcon fontSize="small" sx={{ transform: leftSidebarOpen ? "rotate(0deg)" : "rotate(180deg)" }} />
         </IconButton>
       </div>
 
@@ -70,7 +70,7 @@ export default function ReaderTopNav({
         title="Right Sidebar"
         onClick={onToggleRightSidebar}
       >
-        <SettingsIcon fontSize="small" />
+        <MenuOpenIcon fontSize="small" sx={{ transform: rightSidebarOpen ? "rotate(180deg)" : "rotate(0deg)" }} />
       </IconButton>
     </div>
   );
