@@ -99,10 +99,10 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
   };
 
   return (
-    <div className="reader-left-sidebar-nhentai">
+    <Box className="reader-left-sidebar-nhentai">
       {/* Overlays Section */}
-      <div className="panel-section">
-        <div className="panel-section-title">OVERLAYS</div>
+      <Box className="panel-section">
+        <Box className="panel-section-title">OVERLAYS</Box>
         <Box sx={{ display: "flex", flexDirection: "column" }}>
           <FormControlLabel
             control={
@@ -149,11 +149,11 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             label={<Typography variant="body2">Group Conversation</Typography>}
           />
         </Box>
-      </div>
+      </Box>
 
       {/* Zoom & View Section */}
-      <div className="panel-section">
-        <div className="panel-section-title">ZOOM & VIEW</div>
+      <Box className="panel-section">
+        <Box className="panel-section-title">ZOOM & VIEW</Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
           <Slider
             min={0.5}
@@ -210,11 +210,11 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
         >
           Reset Zoom
         </Button>
-      </div>
+      </Box>
 
       {/* Navigation Section */}
-      <div className="panel-section">
-        <div className="panel-section-title">NAVIGATION</div>
+      <Box className="panel-section">
+        <Box className="panel-section-title">NAVIGATION</Box>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <ReaderPageNavigation
             currentPage={props.curPageNum}
@@ -231,11 +231,11 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             onNextChapter={() => props.nextChapter && props.navigateToChapter(props.nextChapter)}
           />
         </Box>
-      </div>
+      </Box>
 
       {/* Page Management Section */}
-      <div className="panel-section" style={{ marginBottom: 40 }}>
-        <div className="panel-section-title">PAGE MANAGEMENT</div>
+      <Box className="panel-section" style={{ marginBottom: 40 }}>
+        <Box className="panel-section-title">PAGE MANAGEMENT</Box>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <form onSubmit={onPageMoveSubmit} style={{ display: 'flex', gap: '8px' }}>
             <TextField
@@ -244,7 +244,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
               placeholder="Move to..."
               value={targetPageInput}
               onChange={(e) => setTargetPageInput(e.target.value)}
-              inputProps={{ min: 0 }}
+              slotProps={{ htmlInput: { min: 0 } }}
               sx={{ flex: 1, "& .MuiInputBase-input": { padding: "8px 10px", fontSize: "13px" } }}
             />
             <Button
@@ -285,7 +285,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             Delete Page
           </Button>
         </Box>
-      </div>
+      </Box>
       {confirmModal && (
         <ConfirmModal
           isOpen={confirmModal.isOpen}
@@ -296,7 +296,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
           onCancel={() => setConfirmModal(null)}
         />
       )}
-    </div>
+    </Box>
   );
 });
 

@@ -112,6 +112,39 @@ const renderJobLocation = (job: Job) => {
   }
 };
 
+const renderProviderModel = (job: Job) => {
+  if (!job.payload) return null;
+  try {
+    const payload = JSON.parse(job.payload);
+    let providerModel = "";
+
+    if (job.type === "ocr") {
+      if (payload.ocrProvider) {
+        providerModel = `${payload.ocrProvider} / ${payload.ocrModel || "default"}`;
+      }
+    } else if (job.type === "translation") {
+      if (payload.tlProvider) {
+        providerModel = `${payload.tlProvider} / ${payload.tlModel || "default"}`;
+      }
+    } else if (job.type === "qa") {
+      const model = payload.qaMode === "vlm" ? payload.qaVlmModel : payload.qaLlmModel;
+      if (payload.qaProvider) {
+        providerModel = `${payload.qaProvider} / ${model || "default"}`;
+      }
+    } else if (job.type === "qa-re-ocr") {
+      if (payload.ocrProvider) {
+        providerModel = `${payload.ocrProvider} / ${payload.ocrModel || "default"}`;
+      }
+    } else if (job.type === "region-redo") {
+      providerModel = `Redo: ${payload.redoType || "manual"}`;
+    }
+
+    return providerModel || null;
+  } catch {
+    return null;
+  }
+};
+
 const formatErrorMessage = (error: string) => {
   if (!error) return "";
   if (
@@ -577,6 +610,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                 {jobs.map((job) => {
                   const color = getJobStatusColor(job);
                   const location = renderJobLocation(job);
+                  const providerModel = renderProviderModel(job);
                   return (
                     <TableRow
                       key={job.id}
@@ -620,6 +654,18 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                             }}
                           >
                             {location}
+                          </Typography>
+                        )}
+                        {providerModel && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              display: "block",
+                              color: "text.secondary",
+                              fontSize: "11px",
+                            }}
+                          >
+                            Using: <Box component="strong" sx={{ color: "text.primary" }}>{providerModel}</Box>
                           </Typography>
                         )}
                         <Typography
