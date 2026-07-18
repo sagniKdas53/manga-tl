@@ -305,7 +305,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const { showToast, showError } = useToast();
 
   const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
-  const autoSaveTimersRef = useRef<Record<string, any>>({});
+  const autoSaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     const timers = autoSaveTimersRef.current;

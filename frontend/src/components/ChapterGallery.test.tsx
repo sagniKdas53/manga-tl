@@ -360,7 +360,16 @@ describe("ChapterGallery Component", () => {
       if (this.onload) this.onload();
     });
 
-    const XHRMock = vi.fn().mockImplementation(function (this: any) {
+    interface MockXHR {
+      open: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
+      setRequestHeader: ReturnType<typeof vi.fn>;
+      status: number;
+      onload: (() => void) | null;
+      upload: { onprogress: ((e: ProgressEvent) => void) | null };
+    }
+
+    const XHRMock = vi.fn().mockImplementation(function (this: MockXHR) {
       this.open = vi.fn();
       this.send = sendMock;
       this.setRequestHeader = vi.fn();
