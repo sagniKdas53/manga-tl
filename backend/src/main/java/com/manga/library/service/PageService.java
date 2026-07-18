@@ -294,11 +294,13 @@ public class PageService {
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
     int totalPages = pages.size();
 
-    // Clamp newPageNumber
-    if (newPageNumber < 1) {
-        newPageNumber = 1;
-    } else if (newPageNumber > totalPages || newPageNumber == -1) {
+    // Enforce bounds and map 0 to end
+    if (newPageNumber == 0 || newPageNumber == -1) {
         newPageNumber = totalPages;
+    } else if (newPageNumber < 0) {
+        throw new IllegalArgumentException("Page number cannot be negative");
+    } else if (newPageNumber > totalPages) {
+        throw new IllegalArgumentException("Page number cannot be greater than total pages");
     }
 
     if (oldPageNumber == newPageNumber) return;
