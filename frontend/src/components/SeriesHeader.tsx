@@ -45,7 +45,15 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
       .catch(() => {});
   }, [user.token]);
 
-  const resolvedOcr = resolveOverride(null, series.ocrModel, settings?.ocrModel);
+  const resolvedOcrProvider = resolveOverride(null, series.ocrProvider, settings?.ocrProvider);
+  let resolvedOcr = resolveOverride(null, series.ocrModel, settings?.ocrModel);
+  if (resolvedOcrProvider.value === "local") {
+    resolvedOcr = {
+      value: settings?.localOcrModel || "local",
+      source: resolvedOcrProvider.source,
+    };
+  }
+
   const resolvedTl = resolveOverride(null, series.tlModel, settings?.tlModel);
   const resolvedQa = resolveOverride(null, series.qaLlmModel, settings?.qaLlmModel);
   const resolvedQaVlm = resolveOverride(null, series.qaVlmModel, settings?.qaVlmModel);

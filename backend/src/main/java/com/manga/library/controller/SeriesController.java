@@ -124,6 +124,13 @@ public class SeriesController {
     } else if (c.getOcrProvider() != null) {
       ocrSrc = "chapter";
     }
+
+    if ("local".equals(ocrProv)) {
+      ocrMod = globalSettings != null && globalSettings.getLocalOcrModel() != null
+          ? globalSettings.getLocalOcrModel()
+          : "local";
+    }
+
     dto.setResolvedOcr(new ChapterDto.ResolvedModelSlot(ocrProv, ocrMod, ocrSrc));
 
     String tlProv = c.getTlProvider();
@@ -248,9 +255,9 @@ public class SeriesController {
     Objects.requireNonNull(chapter, "chapter cannot be null");
     chapter = chapterRepository.save(Objects.requireNonNull(chapter));
 
-    dto.setId(chapter.getId());
-    dto.setSeriesId(seriesId);
-    return ResponseEntity.ok(dto);
+    ChapterDto responseDto = new ChapterDto();
+    populateChapterDto(responseDto, chapter, systemSettingsService.getSettings());
+    return ResponseEntity.ok(responseDto);
   }
 
   @GetMapping("/{seriesId}/chapters")
@@ -370,12 +377,9 @@ public class SeriesController {
 
               pageService.recalculateSeriesCover(c.getSeries().getId());
 
-              dto.setId(c.getId());
-              dto.setSeriesId(c.getSeries().getId());
-              if (c.getCoverImageId() != null) {
-                dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
-              }
-              return ResponseEntity.ok(dto);
+              ChapterDto responseDto = new ChapterDto();
+              populateChapterDto(responseDto, c, systemSettingsService.getSettings());
+              return ResponseEntity.ok(responseDto);
             })
         .orElse(ResponseEntity.notFound().build());
   }

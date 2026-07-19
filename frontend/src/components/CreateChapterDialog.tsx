@@ -252,16 +252,15 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
           <AccordionDetails
             sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}
           >
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl fullWidth>
                 <InputLabel>OCR Provider</InputLabel>
                 <Select
                   size="small"
-                  value={ocrProvider}
+                  value={ocrProvider || inheritedOcrProvider || ""}
                   label="OCR Provider"
                   onChange={(e) => setOcrProvider(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {ocrProviders.map((p) => (
                     <MenuItem
                       key={p}
@@ -271,11 +270,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {ocrProvider === "" && inheritedOcrProvider && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedOcrProvider}
-                  </FormHelperText>
-                )}
               </FormControl>
               {ocrProvider !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrProvider("")}>
@@ -283,7 +277,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl
                 fullWidth
                 disabled={ocrDisabled}
@@ -291,11 +285,14 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 <InputLabel>OCR VLM Model</InputLabel>
                 <Select
                   size="small"
-                  value={ocrModel}
+                  value={
+                    ocrDisabled
+                      ? settings?.localOcrModel || "local"
+                      : ocrModel || inheritedOcrModel || ""
+                  }
                   label="OCR VLM Model"
                   onChange={(e) => setOcrModel(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {ocrDisabled && settings?.localOcrModel ? (
                     <MenuItem value={settings.localOcrModel}>
                       {settings.localOcrModel}
@@ -311,11 +308,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                     ))
                   )}
                 </Select>
-                {ocrModel === "" && inheritedOcrModel && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedOcrModel}
-                  </FormHelperText>
-                )}
               </FormControl>
               {ocrModel !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrModel("")}>
@@ -323,16 +315,15 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl fullWidth>
                 <InputLabel>TL Provider</InputLabel>
                 <Select
                   size="small"
-                  value={tlProvider}
+                  value={tlProvider || inheritedTlProvider || ""}
                   label="TL Provider"
                   onChange={(e) => setTlProvider(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {providers.map((p) => (
                     <MenuItem
                       key={p}
@@ -342,11 +333,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {tlProvider === "" && inheritedTlProvider && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedTlProvider}
-                  </FormHelperText>
-                )}
               </FormControl>
               {tlProvider !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlProvider("")}>
@@ -354,16 +340,15 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl fullWidth>
                 <InputLabel>TL LLM Model</InputLabel>
                 <Select
                   size="small"
-                  value={tlModel}
+                  value={tlModel || inheritedTlModel || ""}
                   label="TL LLM Model"
                   onChange={(e) => setTlModel(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {(settings?.tlLlmModelList || []).map((m) => (
                     <MenuItem
                       key={m}
@@ -373,11 +358,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {tlModel === "" && inheritedTlModel && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedTlModel}
-                  </FormHelperText>
-                )}
               </FormControl>
               {tlModel !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlModel("")}>
@@ -385,16 +365,15 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl fullWidth>
                 <InputLabel>QA Provider</InputLabel>
                 <Select
                   size="small"
-                  value={qaProvider}
+                  value={qaProvider || inheritedQaProvider || ""}
                   label="QA Provider"
                   onChange={(e) => setQaProvider(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {providers.map((p) => (
                     <MenuItem
                       key={p}
@@ -404,11 +383,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {qaProvider === "" && inheritedQaProvider && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedQaProvider}
-                  </FormHelperText>
-                )}
               </FormControl>
               {qaProvider !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaProvider("")}>
@@ -416,16 +390,15 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl fullWidth>
                 <InputLabel>QA Mode</InputLabel>
                 <Select
                   size="small"
-                  value={qaMode}
+                  value={qaMode || inheritedQaMode || ""}
                   label="QA Mode"
                   onChange={(e) => setQaMode(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {QA_MODES.map((m) => (
                     <MenuItem
                       key={m}
@@ -435,11 +408,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {qaMode === "" && inheritedQaMode && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedQaMode}
-                  </FormHelperText>
-                )}
               </FormControl>
               {qaMode !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaMode("")}>
@@ -447,7 +415,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl
                 fullWidth
                 disabled={qaLlmDisabled}
@@ -455,11 +423,10 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 <InputLabel>QA LLM Model</InputLabel>
                 <Select
                   size="small"
-                  value={qaLlmModel}
+                  value={qaLlmModel || inheritedQaLlmModel || ""}
                   label="QA LLM Model"
                   onChange={(e) => setQaLlmModel(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {(settings?.qaLlmModelList || []).map((m) => (
                     <MenuItem
                       key={m}
@@ -469,11 +436,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {qaLlmModel === "" && inheritedQaLlmModel && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedQaLlmModel}
-                  </FormHelperText>
-                )}
               </FormControl>
               {qaLlmModel !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaLlmModel("")}>
@@ -481,7 +443,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl
                 fullWidth
                 disabled={qaVlmDisabled}
@@ -489,11 +451,10 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 <InputLabel>QA VLM Model</InputLabel>
                 <Select
                   size="small"
-                  value={qaVlmModel}
+                  value={qaVlmModel || inheritedQaVlmModel || ""}
                   label="QA VLM Model"
                   onChange={(e) => setQaVlmModel(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {(settings?.qaVlmModelList || []).map((m) => (
                     <MenuItem
                       key={m}
@@ -503,11 +464,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {qaVlmModel === "" && inheritedQaVlmModel && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedQaVlmModel}
-                  </FormHelperText>
-                )}
               </FormControl>
               {qaVlmModel !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaVlmModel("")}>
