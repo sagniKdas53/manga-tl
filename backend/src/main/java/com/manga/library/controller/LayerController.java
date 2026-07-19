@@ -67,7 +67,10 @@ public class LayerController {
                 if (dto.getBoxShape() != null) element.setBoxShape(dto.getBoxShape());
                 if (dto.getMaskPolygon() != null) element.setMaskPolygon(dto.getMaskPolygon());
                 if (dto.getRegionId() != null) {
-                  OcrRegion region = ocrRegionRepository.findById(Objects.requireNonNull(dto.getRegionId())).orElse(null);
+                  OcrRegion region =
+                      ocrRegionRepository
+                          .findById(Objects.requireNonNull(dto.getRegionId()))
+                          .orElse(null);
                   element.setRegion(region);
                 }
 
@@ -274,7 +277,10 @@ public class LayerController {
             layer -> {
               OcrRegion region = null;
               if (dto.getRegionId() != null) {
-                region = ocrRegionRepository.findById(Objects.requireNonNull(dto.getRegionId())).orElse(null);
+                region =
+                    ocrRegionRepository
+                        .findById(Objects.requireNonNull(dto.getRegionId()))
+                        .orElse(null);
               }
               LayerElement el =
                   LayerElement.builder()

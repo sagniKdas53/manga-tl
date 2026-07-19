@@ -1,6 +1,5 @@
 package com.manga.library.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.model.Job;
 import com.manga.library.repository.JobRepository;
 import com.manga.library.service.JobCoordinatorService;
@@ -66,18 +65,19 @@ public class JobController {
       jobRepository.deleteAll(java.util.Objects.requireNonNull(jobsToClear));
 
       // Clear Redis queues
-      redisTemplate.delete(java.util.Objects.requireNonNull(
-          List.of(
-              "queue:panel-detection",
-              "queue:ocr",
-              "queue:layout",
-              "queue:translation",
-              "queue:render",
-              "queue:qa",
-              "queue:qa-re-ocr",
-              "queue:region-redo",
-              "queue:region-redo-ocr",
-              "queue:region-redo-tl")));
+      redisTemplate.delete(
+          java.util.Objects.requireNonNull(
+              List.of(
+                  "queue:panel-detection",
+                  "queue:ocr",
+                  "queue:layout",
+                  "queue:translation",
+                  "queue:render",
+                  "queue:qa",
+                  "queue:qa-re-ocr",
+                  "queue:region-redo",
+                  "queue:region-redo-ocr",
+                  "queue:region-redo-tl")));
 
       sseService.emitEventToAllUsers(
           "queue_cleared", Map.of("event", "queue_cleared", "clearedCount", jobsToClear.size()));

@@ -1,7 +1,6 @@
 package com.manga.library.controller;
 
 import com.manga.library.model.User;
-import com.manga.library.repository.UserRepository;
 import com.manga.library.service.SseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
