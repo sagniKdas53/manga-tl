@@ -13,7 +13,6 @@ import EditIcon from "@mui/icons-material/Edit";
 import UploadIcon from "@mui/icons-material/Upload";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { Series, Chapter } from "../types";
 
 export interface ChapterHeaderProps {
@@ -39,7 +38,6 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   onUploadClick,
   onDeleteClick,
   isImporting,
-  mode,
 }) => {
   return (
     <Box sx={{ mb: 4 }}>
