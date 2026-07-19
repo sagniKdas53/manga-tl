@@ -11,6 +11,8 @@ import LightModeIcon from "@mui/icons-material/LightMode";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PersonIcon from "@mui/icons-material/Person";
+import PreviewIcon from '@mui/icons-material/Preview';
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 
 import { useColorMode } from "../hooks/useColorMode";
 import type { User } from "../types";
@@ -103,12 +105,16 @@ export const NavBar: React.FC<NavBarProps> = ({
               />
               <IconButton
                 onClick={() => setIsUserModalOpen(true)}
-                size="small"
                 color="inherit"
-                sx={{ minWidth: "auto" }}
                 title="Account"
               >
-                <PersonIcon />
+                {user.role === "admin" ? (
+                  <AdminPanelSettingsIcon />
+                ) : user.role === "translator" ? (
+                  <PersonIcon />
+                ) : (
+                  <PreviewIcon />
+                )}
               </IconButton>
               <IconButton
                 onClick={handleLogout}

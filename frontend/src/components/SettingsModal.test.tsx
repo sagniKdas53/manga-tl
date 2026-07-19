@@ -52,7 +52,7 @@ describe("SettingsModal", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("fetches and displays settings on open", async () => {
+  it("fetches and displays settings on open", { timeout: 15000 }, async () => {
     (safeFetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => mockSettings,

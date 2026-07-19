@@ -114,7 +114,7 @@ describe("ChapterGallery Component", () => {
       />,
     );
 
-    expect(screen.getByText("Chapter 1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Chapter 1" })).toBeInTheDocument();
     expect(screen.getByText("One Piece / Romance Dawn")).toBeInTheDocument();
     expect(screen.getByText("Page 1")).toBeInTheDocument();
   });

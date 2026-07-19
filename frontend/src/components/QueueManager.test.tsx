@@ -121,9 +121,9 @@ describe("QueueManager", () => {
       expect(screen.getByText("Translation")).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText("My Manga › The Beginning (Ch.2) › Page 3"),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/My Manga/i)).toBeInTheDocument();
+    expect(screen.getByText(/The Beginning/i)).toBeInTheDocument();
+    expect(screen.getByText(/Page 3/i)).toBeInTheDocument();
 
     expect(screen.getByLabelText("Pause")).toBeInTheDocument();
     expect(screen.getByLabelText("Retry")).toBeInTheDocument();

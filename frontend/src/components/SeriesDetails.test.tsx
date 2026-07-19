@@ -126,7 +126,7 @@ describe("SeriesDetails Component", () => {
 
     const chapterCard = screen
       .getByText("Romance Dawn")
-      .closest(".chapter-card-nhentai");
+      .closest(".MuiCard-root");
     expect(chapterCard).not.toBeNull();
     fireEvent.click(chapterCard!);
 
@@ -548,5 +548,7 @@ describe("SeriesDetails Component", () => {
         screen.queryByRole("heading", { name: "Edit Series" }),
       ).not.toBeInTheDocument();
     });
+    // Wait for modal transition to finish to prevent act(...) warning
+    await new Promise((r) => setTimeout(r, 300));
   });
 });

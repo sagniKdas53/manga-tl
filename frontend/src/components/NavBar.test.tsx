@@ -7,10 +7,20 @@ import { useColorMode } from "../hooks/useColorMode";
 
 // Mock the components inside NavBar
 vi.mock("./QueueManager", () => ({
-  QueueManager: () => <div data-testid="queue-manager" />
+  QueueManager: ({ onRequestOpen, onClose }: any) => (
+    <div data-testid="queue-manager">
+      <button onClick={onRequestOpen} data-testid="qm-open" />
+      <button onClick={onClose} data-testid="qm-close" />
+    </div>
+  )
 }));
 vi.mock("./NotificationCenter", () => ({
-  NotificationCenter: () => <div data-testid="notification-center" />
+  NotificationCenter: ({ onRequestOpen, onClose }: any) => (
+    <div data-testid="notification-center">
+      <button onClick={onRequestOpen} data-testid="nc-open" />
+      <button onClick={onClose} data-testid="nc-close" />
+    </div>
+  )
 }));
 
 vi.mock("../hooks/useColorMode", () => ({
@@ -83,5 +93,26 @@ describe("NavBar", () => {
     
     fireEvent.click(screen.getByTitle("Switch to Light Mode"));
     expect(mockToggleMode).toHaveBeenCalled();
+  });
+
+  it("handles drawer interactions and navigation", () => {
+    renderWithRouter(<NavBar {...defaultProps} user={{ id: "1", token: "tok" } as import("../types").User} />);
+    
+    // Test navigation click on logo
+    fireEvent.click(screen.getByText("tl-hub"));
+
+    // Test QueueManager interactions
+    fireEvent.click(screen.getByTestId("qm-open"));
+    expect(defaultProps.setActiveDrawer).toHaveBeenCalledWith("queue");
+    
+    fireEvent.click(screen.getByTestId("qm-close"));
+    expect(defaultProps.setActiveDrawer).toHaveBeenCalledWith("none");
+    
+    // Test NotificationCenter interactions
+    fireEvent.click(screen.getByTestId("nc-open"));
+    expect(defaultProps.setActiveDrawer).toHaveBeenCalledWith("notifications");
+    
+    fireEvent.click(screen.getByTestId("nc-close"));
+    expect(defaultProps.setActiveDrawer).toHaveBeenCalledWith("none");
   });
 });
