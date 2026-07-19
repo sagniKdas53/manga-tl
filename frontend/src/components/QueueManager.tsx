@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import Table from "@mui/material/Table";
@@ -56,29 +57,56 @@ const pipelineStages = [
   "qa",
 ];
 
-const getPipelineProgress = (jobType: string) => {
+const stageLabels: Record<string, string> = {
+  "panel-detection": "Panel Detection",
+  ocr: "OCR",
+  layout: "Layout",
+  translation: "Translation",
+  render: "Render",
+  qa: "QA",
+};
+
+const PipelineStepper: React.FC<{
+  jobType: string;
+  jobStatus: string;
+  color: string;
+}> = ({ jobType, jobStatus, color }) => {
   let currentIndex = pipelineStages.indexOf(jobType);
   if (currentIndex === -1) {
-    if (jobType === "qa-re-ocr") currentIndex = 1;
-    else if (jobType === "region-redo") currentIndex = 1;
-    else return null;
+    if (jobType === "qa-re-ocr" || jobType === "region-redo") currentIndex = 1;
   }
+  const isComplete = jobStatus === "COMPLETED";
+  const stageName =
+    currentIndex >= 0
+      ? `Stage ${currentIndex + 1} of ${pipelineStages.length} · ${stageLabels[pipelineStages[currentIndex]]}`
+      : "";
+
   return (
-    <Box sx={{ display: "flex", gap: "3px", mt: 0.5, mb: 0.5 }}>
-      {pipelineStages.map((stage, i) => (
-        <Box
-          key={i}
-          sx={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            backgroundColor: i <= currentIndex ? "primary.main" : "divider",
-            opacity: i === currentIndex ? 1 : i < currentIndex ? 0.7 : 0.3,
-          }}
-          title={stage}
-        />
-      ))}
-    </Box>
+    <Tooltip title={isComplete ? "All stages complete" : stageName} placement="top">
+      <Box sx={{ display: "flex", gap: 0.5, mt: 0.75, maxWidth: 140 }}>
+        {pipelineStages.map((stage, i) => {
+          const isDone = isComplete || (currentIndex >= 0 && i < currentIndex);
+          const isCurrent = !isComplete && i === currentIndex;
+          return (
+            <Box
+              key={stage}
+              sx={{
+                flex: 1,
+                height: 3,
+                borderRadius: 2,
+                backgroundColor: isDone || isCurrent ? color : "action.disabledBackground",
+                opacity: isDone ? 0.4 : 1,
+                animation: isCurrent ? "queuePulse 1.3s ease-in-out infinite" : "none",
+                "@keyframes queuePulse": {
+                  "0%, 100%": { opacity: 1 },
+                  "50%": { opacity: 0.3 },
+                },
+              }}
+            />
+          );
+        })}
+      </Box>
+    </Tooltip>
   );
 };
 
@@ -94,8 +122,13 @@ const formatJobType = (type: string) => {
   return map[type] || type.toUpperCase();
 };
 
-const renderJobLocation = (job: Job) => {
-  if (!job.payload) return null;
+interface JobLocation {
+  chapterPath: string | null;
+  pageLabel: string | null;
+}
+
+const renderJobLocation = (job: Job): JobLocation => {
+  if (!job.payload) return { chapterPath: null, pageLabel: null };
   try {
     const payload = JSON.parse(job.payload);
     const parts: string[] = [];
@@ -105,11 +138,13 @@ const renderJobLocation = (job: Job) => {
     } else if (payload.chapterNumber !== undefined) {
       parts.push(`Ch.${payload.chapterNumber}`);
     }
-    if (payload.pageNumber !== undefined)
-      parts.push(`Page ${payload.pageNumber}`);
-    return parts.length ? parts.join(" › ") : null;
+    return {
+      chapterPath: parts.length ? parts.join(" › ") : null,
+      pageLabel:
+        payload.pageNumber !== undefined ? `Page ${payload.pageNumber}` : null,
+    };
   } catch {
-    return null;
+    return { chapterPath: null, pageLabel: null };
   }
 };
 
@@ -499,6 +534,15 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     return statusColor[job.status] || "#9e9e9e";
   };
 
+  const statusSummary = jobs.reduce((acc, job) => {
+    const label = getDisplayStatus(job.status).replace("...", "");
+    const color = getJobStatusColor(job);
+    const existing = acc.find((s) => s.label === label);
+    if (existing) existing.count += 1;
+    else acc.push({ label, color, count: 1 });
+    return acc;
+  }, [] as { label: string; color: string; count: number }[]);
+
   return (
     <>
 
@@ -582,6 +626,37 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
             </Box>
           </Box>
 
+          {jobs.length > 0 && (
+            <Box
+              sx={{
+                display: "flex",
+                gap: 0.75,
+                flexWrap: "wrap",
+                px: 2,
+                py: 1,
+                borderBottom: 1,
+                borderColor: "divider",
+                backgroundColor: "action.hover",
+              }}
+            >
+              {statusSummary.map((s) => (
+                <Chip
+                  key={s.label}
+                  size="small"
+                  label={`${s.count} ${s.label.charAt(0)}${s.label.slice(1).toLowerCase()}`}
+                  sx={{
+                    height: 22,
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: s.color,
+                    backgroundColor: `${s.color}1A`,
+                    border: `1px solid ${s.color}40`,
+                  }}
+                />
+              ))}
+            </Box>
+          )}
+
           {jobs.length === 0 ? (
             <Box
               sx={{
@@ -602,7 +677,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ px: 2 }}>Job</TableCell>
-                  <TableCell sx={{ px: 2 }}>Context</TableCell>
+                  <TableCell sx={{ px: 2 }}>Model</TableCell>
                   <TableCell
                     sx={{ px: 2 }}
                     align="center"
@@ -618,166 +693,195 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {jobs.map((job) => {
-                  const color = getJobStatusColor(job);
-                  const location = renderJobLocation(job);
-                  const providerModel = renderProviderModel(job);
-                  return (
-                    <TableRow
-                      key={job.id}
-                      sx={{
-                        "&:last-child td, &:last-child th": { borderBottom: 0 },
-                      }}
-                    >
-                      <TableCell sx={{ px: 2 }}>
-                        <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                        >
-                          <Box
-                            sx={{
-                              width: 10,
-                              height: 10,
-                              borderRadius: "50%",
-                              backgroundColor: color,
-                              boxShadow: `0 0 6px ${color}66`,
-                              flexShrink: 0,
-                            }}
-                          />
-                          <Box>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600, fontSize: "13px" }}
-                            >
-                              {formatJobType(job.type)}
-                            </Typography>
-                            {getPipelineProgress(job.type)}
-                          </Box>
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ px: 2 }}>
-                        {location && (
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              display: "block",
-                              color: "text.secondary",
-                              fontSize: "11px",
-                            }}
-                          >
-                            {location}
-                          </Typography>
-                        )}
-                        {providerModel && (
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              display: "block",
-                              color: "text.secondary",
-                              fontSize: "11px",
-                            }}
-                          >
-                            Using: <Box component="strong" sx={{ color: "text.primary" }}>{providerModel}</Box>
-                          </Typography>
-                        )}
-                        <Typography
-                          variant="caption"
-                          sx={{ color: "text.disabled", fontSize: "10px" }}
-                        >
-                          Attempt {job.attempt}/{job.maxAttempts}
-                        </Typography>
-                      </TableCell>
-                      <TableCell
-                        sx={{ px: 2 }}
-                        align="center"
-                      >
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color,
-                            fontWeight: 600,
-                            fontSize: "11px",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {getDisplayStatus(job.status)}
-                        </Typography>
-                        {job.error && (
-                          <Tooltip title={job.error}>
-                            <Typography
-                              variant="caption"
+                {(() => {
+                  let lastChapterPath: string | null = null;
+                  return jobs.map((job) => {
+                    const color = getJobStatusColor(job);
+                    const { chapterPath, pageLabel } = renderJobLocation(job);
+                    const providerModel = renderProviderModel(job);
+                    const showChapterHeader = chapterPath !== lastChapterPath;
+                    lastChapterPath = chapterPath;
+
+                    return (
+                      <React.Fragment key={job.id}>
+                        {showChapterHeader && chapterPath && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={4}
                               sx={{
-                                display: "block",
-                                color: "error.main",
-                                fontSize: "10px",
-                                mt: 0.25,
+                                px: 2,
+                                py: 0.5,
+                                backgroundColor: "action.hover",
+                                borderBottom: 0,
                               }}
                             >
-                              {formatErrorMessage(job.error)}
-                            </Typography>
-                          </Tooltip>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  color: "text.secondary",
+                                  fontSize: "10.5px",
+                                  letterSpacing: 0.2,
+                                }}
+                              >
+                                {chapterPath}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
                         )}
-                      </TableCell>
-                      <TableCell
-                        sx={{ px: 2 }}
-                        align="right"
-                      >
-                        <Box
+                        <TableRow
                           sx={{
-                            display: "flex",
-                            gap: 0.5,
-                            justifyContent: "flex-end",
+                            "&:last-child td, &:last-child th": { borderBottom: 0 },
                           }}
                         >
-                          {job.status === "FAILED" && (
-                            <Tooltip title="Retry">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleRetryJob(job.id)}
-                              >
-                                <RestartAltIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          {(job.status === "PENDING" ||
-                            job.status === "PAUSED") && (
-                              <Tooltip
-                                title={
-                                  isPaused
-                                    ? "Queue is globally paused"
-                                    : job.status === "PAUSED"
-                                      ? "Resume"
-                                      : "Pause"
-                                }
-                              >
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleToggleJobPause(job)}
-                                  disabled={isPaused}
+                          <TableCell sx={{ px: 2 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <Box
+                                sx={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: "50%",
+                                  backgroundColor: color,
+                                  boxShadow: `0 0 6px ${color}66`,
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ fontWeight: 600, fontSize: "13px" }}
                                 >
-                                  {job.status === "PAUSED" || isPaused ? (
-                                    <PlayArrowIcon fontSize="small" />
-                                  ) : (
-                                    <PauseIcon fontSize="small" />
+                                  {formatJobType(job.type)}
+                                  {pageLabel && (
+                                    <Box
+                                      component="span"
+                                      sx={{ color: "text.secondary", fontWeight: 400 }}
+                                    >
+                                      {" "}
+                                      · {pageLabel}
+                                    </Box>
                                   )}
-                                </IconButton>
+                                </Typography>
+                                <PipelineStepper
+                                  jobType={job.type}
+                                  jobStatus={job.status}
+                                  color={color}
+                                />
+                              </Box>
+                            </Box>
+                          </TableCell>
+                          <TableCell sx={{ px: 2, maxWidth: 170 }}>
+                            {providerModel && (
+                              <Tooltip title={providerModel}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display: "block",
+                                    color: "text.primary",
+                                    fontSize: "11px",
+                                    fontWeight: 500,
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }}
+                                >
+                                  {providerModel}
+                                </Typography>
                               </Tooltip>
                             )}
-                          {job.status !== "PROCESSING" && (
-                            <Tooltip title="Delete">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleDeleteJob(job.id)}
-                              >
-                                <ClearIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                            <Typography
+                              variant="caption"
+                              sx={{ display: "block", color: "text.disabled", fontSize: "10px" }}
+                            >
+                              {job.attempt > 1 && `Attempt ${job.attempt}/${job.maxAttempts} · `}
+                              {job.updatedAt &&
+                                new Date(job.updatedAt).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ px: 2 }} align="center">
+                            <Chip
+                              label={getDisplayStatus(job.status)}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                letterSpacing: 0.2,
+                                color,
+                                backgroundColor: `${color}1A`,
+                                border: `1px solid ${color}55`,
+                                "& .MuiChip-label": { px: 1 },
+                              }}
+                            />
+                            {job.error && (
+                              <Tooltip title={job.error}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display: "block",
+                                    color: "error.main",
+                                    fontSize: "10px",
+                                    mt: 0.5,
+                                  }}
+                                >
+                                  {formatErrorMessage(job.error)}
+                                </Typography>
+                              </Tooltip>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ px: 2 }} align="right">
+                            <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+                              {job.status === "FAILED" && (
+                                <Tooltip title="Retry">
+                                  <IconButton size="small" onClick={() => handleRetryJob(job.id)}>
+                                    <RestartAltIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {(job.status === "PENDING" || job.status === "PAUSED") && (
+                                <Tooltip
+                                  title={
+                                    isPaused
+                                      ? "Queue is globally paused"
+                                      : job.status === "PAUSED"
+                                        ? "Resume"
+                                        : "Pause"
+                                  }
+                                >
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleToggleJobPause(job)}
+                                    disabled={isPaused}
+                                  >
+                                    {job.status === "PAUSED" || isPaused ? (
+                                      <PlayArrowIcon fontSize="small" />
+                                    ) : (
+                                      <PauseIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {job.status !== "PROCESSING" && (
+                                <Tooltip title="Delete">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleDeleteJob(job.id)}
+                                  >
+                                    <ClearIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </TableBody>
             </Table>
           )}
