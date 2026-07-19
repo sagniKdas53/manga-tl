@@ -36,12 +36,13 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
       <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
         <Grid container spacing={0}>
           {/* Cover Image Column */}
-          <Grid item xs={12} sm={4} md={3} lg={2.5}>
+          <Grid size={{ xs: 12, sm: 4, md: 3, lg: 2.5 }}>
             <Box
               sx={{
                 width: "100%",
                 height: "100%",
-                minHeight: { xs: 200, sm: 300 },
+                minHeight: { xs: 200, sm: 250 },
+                maxHeight: { xs: 300, sm: 350 },
                 backgroundColor: "background.default",
                 display: "flex",
                 alignItems: "center",
@@ -59,7 +60,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   sx={{
                     width: "100%",
                     height: "100%",
-                    objectFit: "cover",
+                    objectFit: "contain",
                   }}
                 />
               ) : (
@@ -71,7 +72,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
           </Grid>
 
           {/* Info Column */}
-          <Grid item xs={12} sm={8} md={9} lg={9.5}>
+          <Grid size={{ xs: 12, sm: 8, md: 9, lg: 9.5 }}>
             <Box sx={{ p: { xs: 2, sm: 3 }, display: "flex", flexDirection: "column", height: "100%" }}>
               <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: "bold", fontFamily: '"Outfit", sans-serif' }}>
                 {series.title}

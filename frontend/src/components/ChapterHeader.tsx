@@ -44,25 +44,25 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   return (
     <Box sx={{ mb: 4 }}>
       <Button
-        variant="text"
+        variant="outlined"
         size="small"
         onClick={onBack}
-        startIcon={<ArrowBackIcon />}
-        sx={{ mb: 2, color: "text.secondary" }}
+        sx={{ mb: 2 }}
       >
-        Back to Series
+        ← Back to Series
       </Button>
 
       <Card elevation={3}>
         <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
           <Grid container spacing={0}>
             {/* Cover/Thumbnail column matching Series header for uniformity */}
-            <Grid item xs={12} sm={4} md={3} lg={2.5}>
+            <Grid size={{ xs: 12, sm: 4, md: 3, lg: 2.5 }}>
               <Box
                 sx={{
                   width: "100%",
                   height: "100%",
-                  minHeight: { xs: 200, sm: 300 },
+                  minHeight: { xs: 200, sm: 250 },
+                  maxHeight: { xs: 300, sm: 350 },
                   backgroundColor: "background.default",
                   display: "flex",
                   alignItems: "center",
@@ -80,7 +80,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     sx={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "cover",
+                      objectFit: "contain",
                     }}
                   />
                 ) : (
@@ -92,7 +92,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
             </Grid>
 
             {/* Info Column */}
-            <Grid item xs={12} sm={8} md={9} lg={9.5}>
+            <Grid size={{ xs: 12, sm: 8, md: 9, lg: 9.5 }}>
               <Box sx={{ p: { xs: 2, sm: 3 }, display: "flex", flexDirection: "column", height: "100%" }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
                   <Typography variant="h4" component="h1" sx={{ fontWeight: "bold", fontFamily: '"Outfit", sans-serif' }}>
