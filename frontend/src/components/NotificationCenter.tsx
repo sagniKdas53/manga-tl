@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import Table from "@mui/material/Table";
@@ -14,14 +15,15 @@ import Typography from "@mui/material/Typography";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import DoneAllIcon from "@mui/icons-material/DoneAll";
 import ClearAllIcon from "@mui/icons-material/ClearAll";
+import ClearIcon from "@mui/icons-material/Clear";
 import CloseIcon from "@mui/icons-material/Close";
 import { useNotifications, type Notification } from "./useNotifications";
 import { safeFetch } from "../utils";
+import { useToast } from "./ToastContext";
 import ConfirmModal from "./ConfirmModal";
 
-const severityColor: Record<string, string> = {
+const severityColor: Record<Notification["type"], string> = {
   EXPORT_SUCCESS: "#4caf50",
-  SUCCESS: "#4caf50",
   ERROR: "#f44336",
   WARNING: "#ff9800",
   INFO: "#2196f3",
@@ -31,15 +33,25 @@ interface Props {
   forceOpen: boolean;
   onRequestOpen: () => void;
   onClose: () => void;
+  token?: string | null;
 }
 
 export const NotificationCenter: React.FC<Props> = ({
   forceOpen,
   onRequestOpen,
   onClose,
+  token,
 }) => {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
-    useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    clearAll,
+    dismissNotification,
+  } = useNotifications();
+  const { showToast } = useToast();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -74,14 +86,26 @@ export const NotificationCenter: React.FC<Props> = ({
     seriesTitle?: string,
     chapterNumber?: string,
   ) => {
+    setDownloadingId(exportId);
     try {
-      const storedUser = localStorage.getItem("manga_user");
-      if (!storedUser) return;
-      const user = JSON.parse(storedUser);
+      let authToken = token;
+      if (!authToken) {
+        const storedUser = localStorage.getItem("manga_user");
+        if (!storedUser) {
+          showToast("You're signed out — please log in again to download.", "error");
+          return;
+        }
+        try {
+          authToken = JSON.parse(storedUser).token;
+        } catch {
+          showToast("Couldn't read your session — please log in again.", "error");
+          return;
+        }
+      }
       const res = await safeFetch(
         `/api/series/chapters/exports/${exportId}/download`,
         {
-          headers: { Authorization: `Bearer ${user.token}` },
+          headers: { Authorization: `Bearer ${authToken}` },
         },
       );
       if (res.ok) {
@@ -94,9 +118,16 @@ export const NotificationCenter: React.FC<Props> = ({
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
+      } else if (res.status === 404) {
+        showToast("This export has expired or was already cleaned up.", "error");
+      } else {
+        showToast("Failed to download export", "error");
       }
     } catch (err) {
       console.error("Error downloading export", err);
+      showToast("Error downloading export", "error");
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -104,8 +135,8 @@ export const NotificationCenter: React.FC<Props> = ({
     const d = new Date(timestamp);
     const today = new Date();
     const isToday = d.toDateString() === today.toDateString();
-    if (isToday) return d.toLocaleTimeString();
-    return d.toLocaleDateString() + " " + d.toLocaleTimeString();
+    const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return isToday ? time : `${d.toLocaleDateString()} ${time}`;
   };
 
   return (
@@ -297,6 +328,12 @@ export const NotificationCenter: React.FC<Props> = ({
                                   <Button
                                     size="small"
                                     variant="outlined"
+                                    disabled={downloadingId === n.context.exportId}
+                                    startIcon={
+                                      downloadingId === n.context.exportId ? (
+                                        <CircularProgress size={12} color="inherit" />
+                                      ) : undefined
+                                    }
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleDownload(
@@ -306,7 +343,9 @@ export const NotificationCenter: React.FC<Props> = ({
                                       );
                                     }}
                                   >
-                                    Download ZIP
+                                    {downloadingId === n.context.exportId
+                                      ? "Downloading…"
+                                      : "Download ZIP"}
                                   </Button>
                                 </Box>
                               )}
@@ -320,12 +359,25 @@ export const NotificationCenter: React.FC<Props> = ({
                         <Typography
                           variant="caption"
                           sx={{
+                            display: "block",
                             color: "text.disabled",
                             fontSize: "11px",
                           }}
                         >
                           {formatTime(n.timestamp)}
                         </Typography>
+                        <Tooltip title="Dismiss">
+                          <IconButton
+                            size="small"
+                            sx={{ p: 0.25, mt: 0.25 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              dismissNotification(n.id);
+                            }}
+                          >
+                            <ClearIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   );

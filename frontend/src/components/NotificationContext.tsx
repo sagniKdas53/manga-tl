@@ -85,6 +85,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
+  const dismissNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
   const clearAll = useCallback(() => {
     setNotifications([]);
   }, []);
@@ -97,6 +101,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       unreadCount,
       markAsRead,
       markAllAsRead,
+      dismissNotification,
       clearAll,
       subscribe,
     }),
@@ -105,6 +110,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       unreadCount,
       markAsRead,
       markAllAsRead,
+      dismissNotification,
       clearAll,
       subscribe,
     ],
