@@ -284,9 +284,11 @@ public class PageService {
   @Transactional
   public void updatePageNumber(UUID pageId, int newPageNumber) {
     Objects.requireNonNull(pageId, "pageId cannot be null");
-    Page page = pageRepository.findById(pageId)
+    Page page =
+        pageRepository
+            .findById(pageId)
             .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
-    
+
     int oldPageNumber = page.getPageNumber();
     if (oldPageNumber == newPageNumber) return;
 
@@ -296,11 +298,11 @@ public class PageService {
 
     // Enforce bounds and map 0 to end
     if (newPageNumber == 0 || newPageNumber == -1) {
-        newPageNumber = totalPages;
+      newPageNumber = totalPages;
     } else if (newPageNumber < 0) {
-        throw new IllegalArgumentException("Page number cannot be negative");
+      throw new IllegalArgumentException("Page number cannot be negative");
     } else if (newPageNumber > totalPages) {
-        throw new IllegalArgumentException("Page number cannot be greater than total pages");
+      throw new IllegalArgumentException("Page number cannot be greater than total pages");
     }
 
     if (oldPageNumber == newPageNumber) return;
@@ -312,25 +314,25 @@ public class PageService {
 
     // Shift other pages
     if (newPageNumber > oldPageNumber) {
-        for (int i = 0; i < pages.size(); i++) {
-            Page p = pages.get(i);
-            if (p.getId().equals(pageId)) continue;
-            if (p.getPageNumber() > oldPageNumber && p.getPageNumber() <= newPageNumber) {
-                p.setPageNumber(p.getPageNumber() - 1);
-                pageRepository.save(Objects.requireNonNull(p));
-                pageRepository.flush();
-            }
+      for (int i = 0; i < pages.size(); i++) {
+        Page p = pages.get(i);
+        if (p.getId().equals(pageId)) continue;
+        if (p.getPageNumber() > oldPageNumber && p.getPageNumber() <= newPageNumber) {
+          p.setPageNumber(p.getPageNumber() - 1);
+          pageRepository.save(Objects.requireNonNull(p));
+          pageRepository.flush();
         }
+      }
     } else {
-        for (int i = pages.size() - 1; i >= 0; i--) {
-            Page p = pages.get(i);
-            if (p.getId().equals(pageId)) continue;
-            if (p.getPageNumber() >= newPageNumber && p.getPageNumber() < oldPageNumber) {
-                p.setPageNumber(p.getPageNumber() + 1);
-                pageRepository.save(Objects.requireNonNull(p));
-                pageRepository.flush();
-            }
+      for (int i = pages.size() - 1; i >= 0; i--) {
+        Page p = pages.get(i);
+        if (p.getId().equals(pageId)) continue;
+        if (p.getPageNumber() >= newPageNumber && p.getPageNumber() < oldPageNumber) {
+          p.setPageNumber(p.getPageNumber() + 1);
+          pageRepository.save(Objects.requireNonNull(p));
+          pageRepository.flush();
         }
+      }
     }
 
     page.setPageNumber(newPageNumber);
@@ -338,7 +340,7 @@ public class PageService {
     pageRepository.flush();
 
     if (oldPageNumber == 1 || newPageNumber == 1) {
-        recalculateChapterCover(chapterId);
+      recalculateChapterCover(chapterId);
     }
   }
 }

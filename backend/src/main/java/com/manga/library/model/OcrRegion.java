@@ -29,6 +29,7 @@ public class OcrRegion {
   @JoinColumn(name = "panel_id")
   @com.fasterxml.jackson.annotation.JsonIgnore
   private Panel panel;
+
   @Column(columnDefinition = "TEXT")
   private String text;
 

@@ -33,6 +33,7 @@ public class LayerElement {
 
   @Column(columnDefinition = "TEXT")
   private String text;
+
   private String font;
   private Double size;
 

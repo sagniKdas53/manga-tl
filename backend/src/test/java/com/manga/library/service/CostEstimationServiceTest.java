@@ -138,7 +138,9 @@ public class CostEstimationServiceTest {
 
     // OpenRouter fallback: prompt=0.30, completion=2.50 per million
     // Mock the HTTP call for dynamic updates that occurs in fallback
-    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(httpResponse);
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body())
@@ -155,7 +157,9 @@ public class CostEstimationServiceTest {
   @Test
   public void testUpdateModelCosts_Success() throws Exception {
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(httpResponse);
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body())
@@ -175,7 +179,9 @@ public class CostEstimationServiceTest {
 
   @Test
   public void testUpdateModelCosts_HttpError() throws Exception {
-    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(httpResponse);
     when(httpResponse.statusCode()).thenReturn(500);
 
@@ -226,7 +232,9 @@ public class CostEstimationServiceTest {
 
   @Test
   public void testUpdateModelCosts_HttpClientException() throws Exception {
-    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenThrow(new java.io.IOException("Network timeout"));
 
     // Should handle exception gracefully
@@ -242,7 +250,9 @@ public class CostEstimationServiceTest {
         .when(valueOperations)
         .set(anyString(), anyString());
 
-    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(httpResponse);
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body())
@@ -260,7 +270,9 @@ public class CostEstimationServiceTest {
   @Test
   public void testUpdateCaches_FileExists() throws Exception {
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    when(httpClient.send(any(HttpRequest.class), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(httpResponse);
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body())
@@ -289,11 +301,11 @@ public class CostEstimationServiceTest {
 
   @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
-      return (T) org.mockito.Mockito.mock(clazz);
+    return (T) org.mockito.Mockito.mock(clazz);
   }
 
   @SuppressWarnings("unchecked")
   private <T> T anyGeneric(Class<?> clazz) {
-      return (T) org.mockito.ArgumentMatchers.any(clazz);
+    return (T) org.mockito.ArgumentMatchers.any(clazz);
   }
 }

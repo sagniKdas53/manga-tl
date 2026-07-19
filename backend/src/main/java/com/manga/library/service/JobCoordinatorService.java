@@ -301,16 +301,18 @@ public class JobCoordinatorService {
 
   public void requeuePendingJobs() {
     // Clear queues first to prevent duplication
-    redisTemplate.delete(Objects.requireNonNull(List.of(
-            "queue:panel-detection",
-            "queue:ocr",
-            "queue:layout",
-            "queue:translation",
-            "queue:render",
-            "queue:qa",
-            "queue:qa-re-ocr",
-            "queue:region-redo-ocr",
-            "queue:region-redo-tl")));
+    redisTemplate.delete(
+        Objects.requireNonNull(
+            List.of(
+                "queue:panel-detection",
+                "queue:ocr",
+                "queue:layout",
+                "queue:translation",
+                "queue:render",
+                "queue:qa",
+                "queue:qa-re-ocr",
+                "queue:region-redo-ocr",
+                "queue:region-redo-tl")));
 
     List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
     for (Job job : pendingJobs) {
@@ -434,7 +436,8 @@ public class JobCoordinatorService {
               .build();
       regionsToSave.add(region);
     }
-    List<OcrRegion> savedRegions = ocrRegionRepository.saveAll(Objects.requireNonNull(regionsToSave));
+    List<OcrRegion> savedRegions =
+        ocrRegionRepository.saveAll(Objects.requireNonNull(regionsToSave));
 
     // Create default OCR overlay layer
     com.fasterxml.jackson.databind.node.ObjectNode metadata = objectMapper.createObjectNode();
@@ -702,14 +705,16 @@ public class JobCoordinatorService {
     }
 
     final Layer translationLayer =
-        layerRepository.save(Objects.requireNonNull(Layer.builder()
-                .image(image)
-                .type("translation")
-                .targetLanguage(finalTargetLang)
-                .visible(true)
-                .zOrder(nextZOrder)
-                .metadataJson(metadata)
-                .build()));
+        layerRepository.save(
+            Objects.requireNonNull(
+                Layer.builder()
+                    .image(image)
+                    .type("translation")
+                    .targetLanguage(finalTargetLang)
+                    .visible(true)
+                    .zOrder(nextZOrder)
+                    .metadataJson(metadata)
+                    .build()));
 
     if (translations != null) {
       // Find all existing elements for this layer

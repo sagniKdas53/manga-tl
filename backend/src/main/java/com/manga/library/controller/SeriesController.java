@@ -126,9 +126,10 @@ public class SeriesController {
     }
 
     if ("local".equals(ocrProv)) {
-      ocrMod = globalSettings != null && globalSettings.getLocalOcrModel() != null
-          ? globalSettings.getLocalOcrModel()
-          : "local";
+      ocrMod =
+          globalSettings != null && globalSettings.getLocalOcrModel() != null
+              ? globalSettings.getLocalOcrModel()
+              : "local";
     }
 
     dto.setResolvedOcr(new ChapterDto.ResolvedModelSlot(ocrProv, ocrMod, ocrSrc));
@@ -218,6 +219,7 @@ public class SeriesController {
 
   @PostMapping("/{seriesId}/chapters")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<?> createChapter(@PathVariable UUID seriesId, @RequestBody ChapterDto dto) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     Series series =
@@ -340,6 +342,7 @@ public class SeriesController {
 
   @PutMapping("/chapters/{chapterId}")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<?> updateChapter(
       @PathVariable UUID chapterId, @RequestBody ChapterDto dto) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");

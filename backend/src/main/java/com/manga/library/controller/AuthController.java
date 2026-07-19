@@ -27,7 +27,7 @@ public class AuthController {
   @GetMapping("/setup-required")
   public ResponseEntity<?> isSetupRequired() {
     boolean required = userRepository.count() == 0;
-    return ResponseEntity.ok(java.util.Map.of("setupRequired", required));
+    return ResponseEntity.ok(Map.of("setupRequired", required));
   }
 
   @PostMapping("/register")

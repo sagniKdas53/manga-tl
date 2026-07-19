@@ -701,11 +701,11 @@ public class PipelineFlowIntegrationTest {
 
   @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
-      return (T) org.mockito.Mockito.mock(clazz);
+    return (T) org.mockito.Mockito.mock(clazz);
   }
 
   @SuppressWarnings("unchecked")
   private <T> T anyGeneric(Class<?> clazz) {
-      return (T) org.mockito.ArgumentMatchers.any(clazz);
+    return (T) org.mockito.ArgumentMatchers.any(clazz);
   }
 }

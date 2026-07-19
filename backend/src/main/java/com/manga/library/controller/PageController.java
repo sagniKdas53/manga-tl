@@ -121,7 +121,7 @@ public class PageController {
           }
         }
         return new ProcessedImage(baos.toByteArray(), newExt, newFilename);
-      } catch (java.io.IOException e) {
+      } catch (IOException e) {
         log.error("Failed to convert BMP to PNG", e);
         throw new IllegalArgumentException(
             "Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP");
@@ -407,7 +407,10 @@ public class PageController {
                   if (elNode.has("regionId") && !elNode.get("regionId").isNull()) {
                     try {
                       UUID regionId = UUID.fromString(elNode.get("regionId").asText());
-                      region = ocrRegionRepository.findById(Objects.requireNonNull(regionId)).orElse(null);
+                      region =
+                          ocrRegionRepository
+                              .findById(Objects.requireNonNull(regionId))
+                              .orElse(null);
                     } catch (Exception e) {
                       log.warn(
                           "Invalid regionId format or missing region: {}",
@@ -930,7 +933,7 @@ public class PageController {
       if (!payload.containsKey("newNumber")) {
         return ResponseEntity.badRequest().body("Missing 'newNumber' in payload");
       }
-      
+
       int newNumber;
       Object newNumObj = payload.get("newNumber");
       if (newNumObj instanceof Number) {
@@ -938,7 +941,7 @@ public class PageController {
       } else {
         newNumber = Integer.parseInt(newNumObj.toString());
       }
-      
+
       pageService.updatePageNumber(pageId, newNumber);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -1289,7 +1292,8 @@ public class PageController {
               if (elNode.has("regionId") && !elNode.get("regionId").isNull()) {
                 try {
                   UUID regionId = UUID.fromString(elNode.get("regionId").asText());
-                  region = ocrRegionRepository.findById(Objects.requireNonNull(regionId)).orElse(null);
+                  region =
+                      ocrRegionRepository.findById(Objects.requireNonNull(regionId)).orElse(null);
                 } catch (Exception e) {
                   log.warn(
                       "Invalid regionId format or missing region: {}",
