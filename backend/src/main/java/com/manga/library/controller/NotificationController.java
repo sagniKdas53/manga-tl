@@ -19,7 +19,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class NotificationController {
 
   private final SseService sseService;
-  private final UserRepository userRepository;
 
   @GetMapping("/stream")
   public SseEmitter stream() {

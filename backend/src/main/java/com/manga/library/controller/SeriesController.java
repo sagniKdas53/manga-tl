@@ -2,10 +2,14 @@ package com.manga.library.controller;
 
 import com.manga.library.dto.ChapterDto;
 import com.manga.library.dto.SeriesDto;
+import com.manga.library.dto.SystemSettingsDto;
 import com.manga.library.dto.ZipImageEntry;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.*;
+import io.minio.errors.MinioException;
+import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -32,11 +36,11 @@ public class SeriesController {
   private final PageRepository pageRepository;
   private final ImageRepository imageRepository;
   private final LayerRepository layerRepository;
-  private final LayerElementRepository layerElementRepository;
   private final PageService pageService;
   private final MinioService minioService;
   private final JobCoordinatorService jobCoordinatorService;
   private final ChapterExportService chapterExportService;
+  private final SystemSettingsService systemSettingsService;
   private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
@@ -66,10 +70,104 @@ public class SeriesController {
     dto.setQaLlmModel(s.getQaLlmModel());
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
+    dto.setCreatedAt(s.getCreatedAt());
+    dto.setUpdatedAt(s.getUpdatedAt());
     if (s.getCoverImageId() != null) {
       dto.setCoverImageUrl(getImageUrl(s.getCoverImageId()));
     }
     return dto;
+  }
+
+  private void populateChapterDto(ChapterDto dto, Chapter c, SystemSettingsDto globalSettings) {
+    dto.setId(c.getId());
+    dto.setSeriesId(c.getSeries() != null ? c.getSeries().getId() : null);
+    dto.setChapterNumber(c.getChapterNumber());
+    dto.setTitle(c.getTitle());
+    dto.setOcrProvider(c.getOcrProvider());
+    dto.setOcrModel(c.getOcrModel());
+    dto.setTlProvider(c.getTlProvider());
+    dto.setTlModel(c.getTlModel());
+    dto.setQaProvider(c.getQaProvider());
+    dto.setQaLlmModel(c.getQaLlmModel());
+    dto.setQaVlmModel(c.getQaVlmModel());
+    dto.setQaMode(c.getQaMode());
+    dto.setUseContextMemory(c.getUseContextMemory());
+    dto.setCreatedAt(c.getCreatedAt());
+    dto.setUpdatedAt(c.getUpdatedAt());
+    dto.setPageCount((int) pageRepository.countByChapterId(c.getId()));
+    if (c.getCoverImageId() != null) {
+      dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
+    }
+
+    Series series = c.getSeries();
+    String gOcrProvider = globalSettings != null ? globalSettings.getOcrProvider() : null;
+    String gOcrModel = globalSettings != null ? globalSettings.getOcrModel() : null;
+    String gTlProvider = globalSettings != null ? globalSettings.getTlProvider() : null;
+    String gTlModel = globalSettings != null ? globalSettings.getTlModel() : null;
+    String gQaProvider = globalSettings != null ? globalSettings.getQaProvider() : null;
+    String gQaLlmModel = globalSettings != null ? globalSettings.getQaLlmModel() : null;
+    String gQaVlmModel = globalSettings != null ? globalSettings.getQaVlmModel() : null;
+    String gQaMode = globalSettings != null ? globalSettings.getQaMode() : null;
+
+    String ocrProv = c.getOcrProvider();
+    String ocrMod = c.getOcrModel();
+    String ocrSrc = "global";
+    if (ocrProv == null && series != null) {
+      ocrProv = series.getOcrProvider();
+      ocrMod = series.getOcrModel();
+      ocrSrc = "series";
+    }
+    if (ocrProv == null) {
+      ocrProv = gOcrProvider;
+      ocrMod = gOcrModel;
+      ocrSrc = "global";
+    } else if (c.getOcrProvider() != null) {
+      ocrSrc = "chapter";
+    }
+    dto.setResolvedOcr(new ChapterDto.ResolvedModelSlot(ocrProv, ocrMod, ocrSrc));
+
+    String tlProv = c.getTlProvider();
+    String tlMod = c.getTlModel();
+    String tlSrc = "global";
+    if (tlProv == null && series != null) {
+      tlProv = series.getTlProvider();
+      tlMod = series.getTlModel();
+      tlSrc = "series";
+    }
+    if (tlProv == null) {
+      tlProv = gTlProvider;
+      tlMod = gTlModel;
+      tlSrc = "global";
+    } else if (c.getTlProvider() != null) {
+      tlSrc = "chapter";
+    }
+    dto.setResolvedTranslation(new ChapterDto.ResolvedModelSlot(tlProv, tlMod, tlSrc));
+
+    String qaProv = c.getQaProvider();
+    String qaLlm = c.getQaLlmModel();
+    String qaVlm = c.getQaVlmModel();
+    String qaMod = c.getQaMode();
+    String qaSrc = "global";
+    if (qaProv == null && qaLlm == null && qaVlm == null && qaMod == null && series != null) {
+      qaProv = series.getQaProvider();
+      qaLlm = series.getQaLlmModel();
+      qaVlm = series.getQaVlmModel();
+      qaMod = series.getQaMode();
+      qaSrc = "series";
+    }
+    if (qaProv == null && qaLlm == null && qaVlm == null && qaMod == null) {
+      qaProv = gQaProvider;
+      qaLlm = gQaLlmModel;
+      qaVlm = gQaVlmModel;
+      qaMod = gQaMode;
+      qaSrc = "global";
+    } else if (c.getQaProvider() != null
+        || c.getQaLlmModel() != null
+        || c.getQaVlmModel() != null
+        || c.getQaMode() != null) {
+      qaSrc = "chapter";
+    }
+    dto.setResolvedQa(new ChapterDto.ResolvedQaSlot(qaProv, qaLlm, qaVlm, qaMod, qaSrc));
   }
 
   @PostMapping
@@ -89,7 +187,7 @@ public class SeriesController {
             .createdBy(user)
             .build();
     Objects.requireNonNull(series, "series cannot be null");
-    series = seriesRepository.save(series);
+    series = seriesRepository.save(Objects.requireNonNull(series));
 
     return ResponseEntity.ok(toDto(series));
   }
@@ -106,7 +204,7 @@ public class SeriesController {
   public ResponseEntity<SeriesDto> getSeries(@PathVariable UUID seriesId) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     return seriesRepository
-        .findById(seriesId)
+        .findById(Objects.requireNonNull(seriesId))
         .map(s -> ResponseEntity.ok(toDto(s)))
         .orElse(ResponseEntity.notFound().build());
   }
@@ -117,7 +215,7 @@ public class SeriesController {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     Series series =
         seriesRepository
-            .findById(seriesId)
+            .findById(Objects.requireNonNull(seriesId))
             .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
 
     if (chapterRepository
@@ -148,7 +246,7 @@ public class SeriesController {
             .useContextMemory(dto.getUseContextMemory() == null || dto.getUseContextMemory())
             .build();
     Objects.requireNonNull(chapter, "chapter cannot be null");
-    chapter = chapterRepository.save(chapter);
+    chapter = chapterRepository.save(Objects.requireNonNull(chapter));
 
     dto.setId(chapter.getId());
     dto.setSeriesId(seriesId);
@@ -156,30 +254,17 @@ public class SeriesController {
   }
 
   @GetMapping("/{seriesId}/chapters")
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
   public ResponseEntity<List<ChapterDto>> listChapters(@PathVariable UUID seriesId) {
     List<Chapter> chapters = chapterRepository.findBySeriesId(seriesId);
+    SystemSettingsDto globalSettings = systemSettingsService.getSettings();
 
     List<ChapterDto> list =
         chapters.stream()
             .map(
                 c -> {
                   ChapterDto dto = new ChapterDto();
-                  dto.setId(c.getId());
-                  dto.setSeriesId(c.getSeries().getId());
-                  dto.setChapterNumber(c.getChapterNumber());
-                  dto.setTitle(c.getTitle());
-                  dto.setOcrProvider(c.getOcrProvider());
-                  dto.setOcrModel(c.getOcrModel());
-                  dto.setTlProvider(c.getTlProvider());
-                  dto.setTlModel(c.getTlModel());
-                  dto.setQaProvider(c.getQaProvider());
-                  dto.setQaLlmModel(c.getQaLlmModel());
-                  dto.setQaVlmModel(c.getQaVlmModel());
-                  dto.setQaMode(c.getQaMode());
-                  dto.setUseContextMemory(c.getUseContextMemory());
-                  if (c.getCoverImageId() != null) {
-                    dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
-                  }
+                  populateChapterDto(dto, c, globalSettings);
                   return dto;
                 })
             .collect(Collectors.toList());
@@ -187,29 +272,15 @@ public class SeriesController {
   }
 
   @GetMapping("/chapters/{chapterId}")
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
   public ResponseEntity<ChapterDto> getChapter(@PathVariable UUID chapterId) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
-        .findById(chapterId)
+        .findById(Objects.requireNonNull(chapterId))
         .map(
             c -> {
               ChapterDto dto = new ChapterDto();
-              dto.setId(c.getId());
-              dto.setSeriesId(c.getSeries().getId());
-              dto.setChapterNumber(c.getChapterNumber());
-              dto.setTitle(c.getTitle());
-              dto.setOcrProvider(c.getOcrProvider());
-              dto.setOcrModel(c.getOcrModel());
-              dto.setTlProvider(c.getTlProvider());
-              dto.setTlModel(c.getTlModel());
-              dto.setQaProvider(c.getQaProvider());
-              dto.setQaLlmModel(c.getQaLlmModel());
-              dto.setQaVlmModel(c.getQaVlmModel());
-              dto.setQaMode(c.getQaMode());
-              dto.setUseContextMemory(c.getUseContextMemory());
-              if (c.getCoverImageId() != null) {
-                dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
-              }
+              populateChapterDto(dto, c, systemSettingsService.getSettings());
               return ResponseEntity.ok(dto);
             })
         .orElse(ResponseEntity.notFound().build());
@@ -221,7 +292,7 @@ public class SeriesController {
       @PathVariable UUID seriesId, @RequestBody SeriesDto dto) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     return seriesRepository
-        .findById(seriesId)
+        .findById(Objects.requireNonNull(seriesId))
         .map(
             s -> {
               s.setTitle(dto.getTitle());
@@ -243,7 +314,7 @@ public class SeriesController {
               s.setQaVlmModel(dto.getQaVlmModel());
               s.setQaMode(dto.getQaMode());
               Objects.requireNonNull(s, "series cannot be null");
-              s = seriesRepository.save(s);
+              s = seriesRepository.save(Objects.requireNonNull(s));
               return ResponseEntity.ok(toDto(s));
             })
         .orElse(ResponseEntity.notFound().build());
@@ -254,7 +325,7 @@ public class SeriesController {
   public ResponseEntity<Void> deleteSeries(@PathVariable UUID seriesId) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     if (seriesRepository.existsById(seriesId)) {
-      seriesRepository.deleteById(seriesId);
+      seriesRepository.deleteById(Objects.requireNonNull(seriesId));
       return ResponseEntity.ok().build();
     }
     return ResponseEntity.notFound().build();
@@ -266,7 +337,7 @@ public class SeriesController {
       @PathVariable UUID chapterId, @RequestBody ChapterDto dto) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
-        .findById(chapterId)
+        .findById(Objects.requireNonNull(chapterId))
         .map(
             c -> {
               java.util.Optional<Chapter> existing =
@@ -295,7 +366,7 @@ public class SeriesController {
                 c.setUseContextMemory(dto.getUseContextMemory());
               }
               Objects.requireNonNull(c, "chapter cannot be null");
-              c = chapterRepository.save(c);
+              c = chapterRepository.save(Objects.requireNonNull(c));
 
               pageService.recalculateSeriesCover(c.getSeries().getId());
 
@@ -315,11 +386,11 @@ public class SeriesController {
   public ResponseEntity<Void> deleteChapter(@PathVariable UUID chapterId) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
     return chapterRepository
-        .findById(chapterId)
+        .findById(Objects.requireNonNull(chapterId))
         .map(
             chapter -> {
               UUID seriesId = chapter.getSeries().getId();
-              chapterRepository.delete(chapter);
+              chapterRepository.delete(Objects.requireNonNull(chapter));
               chapterRepository.flush();
               pageService.recalculateSeriesCover(seriesId);
               return ResponseEntity.ok().<Void>build();
@@ -349,7 +420,7 @@ public class SeriesController {
     try {
       Series series =
           seriesRepository
-              .findById(seriesId)
+              .findById(Objects.requireNonNull(seriesId))
               .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
 
       if (chapterRepository.findBySeriesIdAndChapterNumber(seriesId, chapterNumber).isPresent()) {
@@ -373,7 +444,7 @@ public class SeriesController {
               .qaVlmModel(qaVlmModel)
               .qaMode(qaMode)
               .build();
-      chapter = chapterRepository.save(chapter);
+      chapter = chapterRepository.save(Objects.requireNonNull(chapter));
 
       // 2. Read ZIP/ePub entries
       List<ZipImageEntry> imageEntries = new ArrayList<>();
@@ -404,7 +475,7 @@ public class SeriesController {
       }
 
       if (imageEntries.isEmpty()) {
-        chapterRepository.delete(chapter);
+        chapterRepository.delete(Objects.requireNonNull(chapter));
         return ResponseEntity.badRequest()
             .body(Map.of("message", "Archive contains no valid image files."));
       }
@@ -497,26 +568,10 @@ public class SeriesController {
       }
 
       ChapterDto responseDto = new ChapterDto();
-      responseDto.setId(chapter.getId());
-      responseDto.setSeriesId(seriesId);
-      responseDto.setChapterNumber(chapter.getChapterNumber());
-      responseDto.setTitle(chapter.getTitle());
-      responseDto.setOcrProvider(chapter.getOcrProvider());
-      responseDto.setOcrModel(chapter.getOcrModel());
-      responseDto.setTlProvider(chapter.getTlProvider());
-      responseDto.setTlModel(chapter.getTlModel());
-      responseDto.setQaProvider(chapter.getQaProvider());
-      responseDto.setQaLlmModel(chapter.getQaLlmModel());
-      responseDto.setQaVlmModel(chapter.getQaVlmModel());
-      responseDto.setQaMode(chapter.getQaMode());
-      responseDto.setUseContextMemory(chapter.getUseContextMemory());
+      populateChapterDto(responseDto, chapter, systemSettingsService.getSettings());
       return ResponseEntity.ok(responseDto);
 
-    } catch (java.io.IOException
-        | java.security.NoSuchAlgorithmException
-        | java.security.InvalidKeyException
-        | io.minio.errors.MinioException
-        | RuntimeException e) {
+    } catch (IOException | NoSuchAlgorithmException | MinioException | RuntimeException e) {
       log.error("Failed to import chapter", e);
       return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
     }
@@ -532,7 +587,7 @@ public class SeriesController {
 
     // Verify chapter exists before exporting
     chapterRepository
-        .findById(chapterId)
+        .findById(Objects.requireNonNull(chapterId))
         .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
 
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);

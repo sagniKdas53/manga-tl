@@ -22,6 +22,22 @@ export interface Series {
   qaLlmModel?: string;
   qaVlmModel?: string;
   qaMode?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ResolvedModelSlot {
+  provider: string;
+  model: string;
+  source: "global" | "series" | "chapter";
+}
+
+export interface ResolvedQaSlot {
+  provider: string;
+  llmModel: string;
+  vlmModel: string;
+  mode: string;
+  source: "global" | "series" | "chapter";
 }
 
 export interface Chapter {
@@ -38,6 +54,13 @@ export interface Chapter {
   qaLlmModel?: string;
   qaVlmModel?: string;
   qaMode?: string;
+  useContextMemory?: boolean;
+  pageCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  resolvedOcr?: ResolvedModelSlot;
+  resolvedTranslation?: ResolvedModelSlot;
+  resolvedQa?: ResolvedQaSlot;
 }
 
 export interface Page {
@@ -80,7 +103,7 @@ export interface OcrRegion {
   bubbleW?: number | null;
   bubbleH?: number | null;
   backgroundColor?: string | null;
-  qaStatus?: "passed" | "failed" | "direct_fix" | null;
+  qaStatus?: "passed" | "failed" | "direct_fix" | "manual_review" | null;
   qaScore?: number | null;
   qaFeedback?: string | null;
   bubbleId?: string | null;

@@ -14,8 +14,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -46,7 +46,7 @@ public class JobCoordinatorServiceTest {
     final Map<String, List<String>> mockRedisListStore = new HashMap<>();
 
     org.springframework.data.redis.core.ValueOperations<String, String> valueOps =
-        org.mockito.Mockito.mock(org.springframework.data.redis.core.ValueOperations.class);
+        mockGeneric(org.springframework.data.redis.core.ValueOperations.class);
     org.mockito.Mockito.when(valueOps.get(org.mockito.Mockito.anyString()))
         .thenAnswer(invocation -> mockRedisValueStore.get(invocation.getArgument(0)));
     org.mockito.Mockito.doAnswer(
@@ -68,7 +68,7 @@ public class JobCoordinatorServiceTest {
             org.mockito.Mockito.any(java.time.Duration.class));
 
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
-        org.mockito.Mockito.mock(org.springframework.data.redis.core.ListOperations.class);
+        mockGeneric(org.springframework.data.redis.core.ListOperations.class);
     org.mockito.Mockito.when(
             listOps.rightPush(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
         .thenAnswer(
@@ -762,5 +762,15 @@ public class JobCoordinatorServiceTest {
     chapterRepository.delete(chapterA);
     chapterRepository.delete(chapterB);
     seriesRepository.delete(series);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T mockGeneric(Class<?> clazz) {
+      return (T) org.mockito.Mockito.mock(clazz);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T anyGeneric(Class<?> clazz) {
+      return (T) org.mockito.ArgumentMatchers.any(clazz);
   }
 }

@@ -8,12 +8,12 @@ type SSEEvent = {
 export function useSSE(
   url: string,
   token: string | null,
-  onMessage?: (event: SSEEvent) => void
+  onMessage?: (event: SSEEvent) => void,
 ) {
   const [isConnected, setIsConnected] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
-  
+
   const onMessageRef = useRef(onMessage);
   useEffect(() => {
     onMessageRef.current = onMessage;
@@ -25,10 +25,12 @@ export function useSSE(
     const sseUrl = `${url}?token=${encodeURIComponent(token)}`;
     const eventSource = new EventSource(sseUrl);
     eventSourceRef.current = eventSource;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const updateEvent = (type: string, data: string) => {
-      console.log(`[SSE Event Received] ${type}:`, data);
+      if (import.meta.env.DEV) {
+        console.log(`[SSE Event Received] ${type}:`, data);
+      }
       if (onMessageRef.current) {
         onMessageRef.current({ type, data });
       }
@@ -36,7 +38,9 @@ export function useSSE(
 
     eventSource.onopen = () => {
       setIsConnected(true);
-      console.log("SSE connection opened");
+      if (import.meta.env.DEV) {
+        console.log("SSE connection opened");
+      }
     };
 
     const listeners = [
@@ -55,7 +59,9 @@ export function useSSE(
     });
 
     eventSource.onerror = (error) => {
-      console.error("SSE error", error);
+      if (import.meta.env.DEV) {
+        console.error("SSE error", error);
+      }
       setIsConnected(false);
       updateEvent("error", "Connection lost. Retrying...");
       eventSource.close();

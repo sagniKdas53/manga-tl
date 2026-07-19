@@ -2,7 +2,10 @@ package com.manga.library.service;
 
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
+import io.minio.errors.MinioException;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -28,7 +31,7 @@ public class ChapterExportService {
     try {
       Chapter chapter =
           chapterRepository
-              .findById(chapterId)
+              .findById(Objects.requireNonNull(chapterId))
               .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
 
       List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
@@ -53,7 +56,7 @@ public class ChapterExportService {
         Map<String, Object> pageMeta = new HashMap<>();
         pageMeta.put("pageNumber", page.getPageNumber());
         pageMeta.put("imageId", imageId.toString());
-        pageMeta.put("originalFilename", page.getImage().getFilename());
+        pageMeta.put("originalFilename", filename);
         pageMeta.put("hasRendered", hasRendered);
 
         List<Layer> imageLayers = layerRepository.findByImageId(imageId);
@@ -83,7 +86,7 @@ public class ChapterExportService {
             layerMeta.put("elements", elements);
           }
 
-          String modelName = null;
+          String modelName;
 
           if (l.getMetadataJson() != null && l.getMetadataJson().isObject()) {
             com.fasterxml.jackson.databind.node.ObjectNode metaNode =
@@ -297,19 +300,11 @@ public class ChapterExportService {
           byte[] imageBytes = null;
           try (java.io.InputStream is = minioService.downloadFile("rendered/" + imageId + ".png")) {
             imageBytes = is.readAllBytes();
-          } catch (RuntimeException
-              | java.io.IOException
-              | java.security.NoSuchAlgorithmException
-              | io.minio.errors.MinioException
-              | java.security.InvalidKeyException e) {
+          } catch (RuntimeException | IOException | MinioException e) {
             try (java.io.InputStream is =
                 minioService.downloadFile(page.getImage().getStoragePath())) {
               imageBytes = is.readAllBytes();
-            } catch (RuntimeException
-                | java.io.IOException
-                | java.security.NoSuchAlgorithmException
-                | io.minio.errors.MinioException
-                | java.security.InvalidKeyException ex) {
+            } catch (RuntimeException | IOException | MinioException ex) {
               log.error("Failed to download original/rendered image for page " + page.getId(), ex);
             }
           }
@@ -344,11 +339,7 @@ public class ChapterExportService {
               ctx);
         }
       }
-    } catch (RuntimeException
-        | java.io.IOException
-        | java.security.NoSuchAlgorithmException
-        | io.minio.errors.MinioException
-        | java.security.InvalidKeyException e) {
+    } catch (RuntimeException | IOException | NoSuchAlgorithmException | MinioException e) {
       log.error("Failed to build export for chapter: " + chapterId, e);
       if (userId != null) {
         sseService.emitNotificationToUser(

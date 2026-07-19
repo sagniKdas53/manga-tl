@@ -68,7 +68,7 @@ public class JobCoordinatorService {
       for (Job job : processingJobs) {
         log.info("Resetting processing job {} to PENDING on startup", job.getId());
         job.setStatus("PENDING");
-        jobRepository.save(job);
+        jobRepository.save(Objects.requireNonNull(job));
       }
     } catch (Exception e) {
       log.error("Failed to reset processing jobs to pending: {}", e.getMessage());
@@ -89,7 +89,7 @@ public class JobCoordinatorService {
               job.getId(),
               job.getUpdatedAt());
           job.setStatus("PENDING");
-          jobRepository.save(job);
+          jobRepository.save(Objects.requireNonNull(job));
           pushPersistedJobIfQueueRunning(job);
         }
       }
@@ -114,11 +114,11 @@ public class JobCoordinatorService {
   }
 
   private void enqueueJob(String jobType, UUID imageId) {
-    enqueueJob(jobType, imageId, null, "normal", job -> {});
+    enqueueJob(jobType, imageId, (UUID) null, job -> {});
   }
 
   private void enqueueJob(String jobType, UUID imageId, UUID chapterId) {
-    enqueueJob(jobType, imageId, chapterId, "normal", job -> {});
+    enqueueJob(jobType, imageId, chapterId, job -> {});
   }
 
   private void enqueueJob(
@@ -133,9 +133,8 @@ public class JobCoordinatorService {
       String jobType,
       UUID imageId,
       UUID chapterId,
-      String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
-    enqueueJobDirectly(jobType, imageId, chapterId, priority, payloadCustomizer);
+    enqueueJobDirectly(jobType, imageId, chapterId, "normal", payloadCustomizer);
   }
 
   private void enqueueJobDirectly(
@@ -248,7 +247,7 @@ public class JobCoordinatorService {
 
       String json = objectMapper.writeValueAsString(job);
       dbJob.setPayload(json);
-      jobRepository.save(dbJob);
+      jobRepository.save(Objects.requireNonNull(dbJob));
 
       // Emit real-time SSE event for the new job
       sseService.emitEventForImage(imageId, "job_update", dbJob);
@@ -302,8 +301,7 @@ public class JobCoordinatorService {
 
   public void requeuePendingJobs() {
     // Clear queues first to prevent duplication
-    redisTemplate.delete(
-        List.of(
+    redisTemplate.delete(Objects.requireNonNull(List.of(
             "queue:panel-detection",
             "queue:ocr",
             "queue:layout",
@@ -312,7 +310,7 @@ public class JobCoordinatorService {
             "queue:qa",
             "queue:qa-re-ocr",
             "queue:region-redo-ocr",
-            "queue:region-redo-tl"));
+            "queue:region-redo-tl")));
 
     List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
     for (Job job : pendingJobs) {
@@ -341,7 +339,7 @@ public class JobCoordinatorService {
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
-            .findById(imageId)
+            .findById(Objects.requireNonNull(imageId))
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     // Delete existing panels if any
@@ -363,7 +361,7 @@ public class JobCoordinatorService {
               .build();
       panelsToSave.add(panel);
     }
-    panelRepository.saveAll(panelsToSave);
+    panelRepository.saveAll(Objects.requireNonNull(panelsToSave));
 
     // Trigger OCR
     enqueueJob("ocr", imageId);
@@ -378,7 +376,7 @@ public class JobCoordinatorService {
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
-            .findById(imageId)
+            .findById(Objects.requireNonNull(imageId))
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     // Keep existing layers and regions for multi-pass history, but hide old OCR layers
@@ -390,7 +388,7 @@ public class JobCoordinatorService {
       }
       if ("ocr".equalsIgnoreCase(layer.getType())) {
         layer.setVisible(false);
-        layerRepository.save(layer);
+        layerRepository.save(Objects.requireNonNull(layer));
       }
     }
     int nextZOrder = maxZ + 1;
@@ -436,7 +434,7 @@ public class JobCoordinatorService {
               .build();
       regionsToSave.add(region);
     }
-    List<OcrRegion> savedRegions = ocrRegionRepository.saveAll(regionsToSave);
+    List<OcrRegion> savedRegions = ocrRegionRepository.saveAll(Objects.requireNonNull(regionsToSave));
 
     // Create default OCR overlay layer
     com.fasterxml.jackson.databind.node.ObjectNode metadata = objectMapper.createObjectNode();
@@ -469,7 +467,7 @@ public class JobCoordinatorService {
             .metadataJson(metadata)
             .build();
     Objects.requireNonNull(ocrLayer, "ocrLayer cannot be null");
-    layerRepository.save(ocrLayer);
+    layerRepository.save(Objects.requireNonNull(ocrLayer));
 
     List<LayerElement> elementsToSave = new ArrayList<>();
     for (OcrRegion region : savedRegions) {
@@ -486,7 +484,7 @@ public class JobCoordinatorService {
               .build();
       elementsToSave.add(element);
     }
-    layerElementRepository.saveAll(elementsToSave);
+    layerElementRepository.saveAll(Objects.requireNonNull(elementsToSave));
 
     // Trigger Layout analysis
     enqueueJob("layout", imageId);
@@ -506,7 +504,7 @@ public class JobCoordinatorService {
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
-            .findById(imageId)
+            .findById(Objects.requireNonNull(imageId))
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     // 1. Update region_type on each OcrRegion
@@ -517,11 +515,11 @@ public class JobCoordinatorService {
           String regionType = rt.get("regionType");
           Objects.requireNonNull(regionId, "regionId cannot be null");
           ocrRegionRepository
-              .findById(regionId)
+              .findById(Objects.requireNonNull(regionId))
               .ifPresent(
                   region -> {
                     region.setRegionType(regionType != null ? regionType : "speech");
-                    ocrRegionRepository.save(region);
+                    ocrRegionRepository.save(Objects.requireNonNull(region));
                   });
         } catch (Exception e) {
           log.error("Error updating region type", e);
@@ -552,7 +550,7 @@ public class JobCoordinatorService {
                   .sceneType(sceneType != null ? sceneType : "dialogue")
                   .build();
           Objects.requireNonNull(conv, "conv cannot be null");
-          conv = conversationRepository.save(conv);
+          conv = conversationRepository.save(Objects.requireNonNull(conv));
 
           if (regionIds != null) {
             int position = 1;
@@ -564,7 +562,7 @@ public class JobCoordinatorService {
                       .position(position++)
                       .build();
               Objects.requireNonNull(cr, "cr cannot be null");
-              conversationRegionRepository.save(cr);
+              conversationRegionRepository.save(Objects.requireNonNull(cr));
             }
           }
         } catch (Exception e) {
@@ -578,8 +576,8 @@ public class JobCoordinatorService {
     Series series =
         pageRepository.findByImageId(imageId).stream()
             .findFirst()
-            .map(Page::getChapter)
-            .map(Chapter::getSeries)
+            .map(page -> page.getChapter())
+            .map(chapter -> chapter.getSeries())
             .orElse(null);
     if (series != null
         && series.getSourceLanguage() != null
@@ -588,7 +586,7 @@ public class JobCoordinatorService {
           series.getSourceLanguage().trim().equalsIgnoreCase(series.getTargetLanguage().trim());
     }
 
-    if (isReaderMode) {
+    if (isReaderMode && series != null) {
       log.info(
           "Reader mode detected (source=target={}) for image {}. Skipping translation, render, and QA.",
           series.getSourceLanguage(),
@@ -610,14 +608,14 @@ public class JobCoordinatorService {
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
-            .findById(imageId)
+            .findById(Objects.requireNonNull(imageId))
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     Series series =
         pageRepository.findByImageId(imageId).stream()
             .findFirst()
-            .map(Page::getChapter)
-            .map(Chapter::getSeries)
+            .map(page -> page.getChapter())
+            .map(chapter -> chapter.getSeries())
             .orElse(null);
     String targetLang =
         (series != null && series.getTargetLanguage() != null)
@@ -639,7 +637,7 @@ public class JobCoordinatorService {
       // Hide old translation layers
       for (Layer old : existingTranslationLayers) {
         old.setVisible(false);
-        layerRepository.save(old);
+        layerRepository.save(Objects.requireNonNull(old));
       }
     }
 
@@ -704,15 +702,14 @@ public class JobCoordinatorService {
     }
 
     final Layer translationLayer =
-        layerRepository.save(
-            Layer.builder()
+        layerRepository.save(Objects.requireNonNull(Layer.builder()
                 .image(image)
                 .type("translation")
                 .targetLanguage(finalTargetLang)
                 .visible(true)
                 .zOrder(nextZOrder)
                 .metadataJson(metadata)
-                .build());
+                .build()));
 
     if (translations != null) {
       // Find all existing elements for this layer
@@ -740,14 +737,14 @@ public class JobCoordinatorService {
 
           Objects.requireNonNull(regionId, "regionId cannot be null");
           ocrRegionRepository
-              .findById(regionId)
+              .findById(Objects.requireNonNull(regionId))
               .ifPresent(
                   region -> {
                     // Update backward-compatible OcrRegion fields
                     region.setTranslatedText(translatedText);
                     region.setTranslationFailed(translationFailed);
                     region.setTranslationScore(translationScore);
-                    ocrRegionRepository.save(region);
+                    ocrRegionRepository.save(Objects.requireNonNull(region));
 
                     // Find or create LayerElement
                     LayerElement element = elementMap.get(regionId);
@@ -817,7 +814,7 @@ public class JobCoordinatorService {
                       }
                     }
                     Objects.requireNonNull(element, "element cannot be null");
-                    layerElementRepository.save(element);
+                    layerElementRepository.save(Objects.requireNonNull(element));
                   });
         } catch (Exception e) {
           log.error("Error saving translation for region", e);
@@ -835,7 +832,7 @@ public class JobCoordinatorService {
     Objects.requireNonNull(regionId, "regionId cannot be null");
     OcrRegion region =
         ocrRegionRepository
-            .findById(regionId)
+            .findById(Objects.requireNonNull(regionId))
             .orElseThrow(() -> new IllegalArgumentException("Region not found: " + regionId));
 
     Image image = region.getImage();
@@ -896,14 +893,14 @@ public class JobCoordinatorService {
           String detectedLanguage = (String) r.get("detectedLanguage");
 
           ocrRegionRepository
-              .findById(regionId)
+              .findById(Objects.requireNonNull(regionId))
               .ifPresent(
                   region -> {
                     region.setText(text);
                     region.setConfidence(confidence);
                     region.setDetectedLanguage(detectedLanguage);
                     region.setQaStatus("re_ocr_completed");
-                    ocrRegionRepository.save(region);
+                    ocrRegionRepository.save(Objects.requireNonNull(region));
                   });
         } catch (Exception e) {
           log.error("Error processing QA Re-OCR result for region", e);
@@ -976,7 +973,7 @@ public class JobCoordinatorService {
           String qaFeedback = (String) r.get("qaFeedback");
 
           ocrRegionRepository
-              .findById(regionId)
+              .findById(Objects.requireNonNull(regionId))
               .ifPresent(
                   region -> {
                     region.setQaStatus(qaStatus);
@@ -998,12 +995,12 @@ public class JobCoordinatorService {
                           if (directFix.containsKey("suggestedFontSize")) {
                             el.setSize(((Number) directFix.get("suggestedFontSize")).doubleValue());
                           }
-                          layerElementRepository.save(el);
+                          layerElementRepository.save(Objects.requireNonNull(el));
                         }
                       }
                       region.setQaStatus("fixed");
                     }
-                    ocrRegionRepository.save(region);
+                    ocrRegionRepository.save(Objects.requireNonNull(region));
                   });
         } catch (Exception e) {
           log.error("Error processing LLM QA hybrid preparation result for region", e);
@@ -1013,7 +1010,7 @@ public class JobCoordinatorService {
 
     // Set correct layer visibility: latest translation visible, others invisible. OCR invisible.
     for (Layer l : layers) {
-      boolean shouldBeVisible = false;
+      boolean shouldBeVisible;
       if ("translation".equalsIgnoreCase(l.getType())) {
         shouldBeVisible =
             (latestTranslationLayer != null && l.getId().equals(latestTranslationLayer.getId()));
@@ -1027,7 +1024,7 @@ public class JobCoordinatorService {
 
       if (l.getVisible() == null || l.getVisible() != shouldBeVisible) {
         l.setVisible(shouldBeVisible);
-        layerRepository.save(l);
+        layerRepository.save(Objects.requireNonNull(l));
       }
     }
   }
@@ -1060,7 +1057,7 @@ public class JobCoordinatorService {
           String qaFeedback = (String) r.get("qaFeedback");
 
           ocrRegionRepository
-              .findById(regionId)
+              .findById(Objects.requireNonNull(regionId))
               .ifPresent(
                   region -> {
                     region.setQaStatus(qaStatus);
@@ -1081,7 +1078,7 @@ public class JobCoordinatorService {
                           if (directFix.containsKey("suggestedFontSize")) {
                             el.setSize(((Number) directFix.get("suggestedFontSize")).doubleValue());
                           }
-                          layerElementRepository.save(el);
+                          layerElementRepository.save(Objects.requireNonNull(el));
                         }
                       }
                       region.setQaStatus("fixed");
@@ -1103,7 +1100,7 @@ public class JobCoordinatorService {
                             ((Number) escalation.get("suggestedReadingOrderIndex")).intValue());
                       }
                     }
-                    ocrRegionRepository.save(region);
+                    ocrRegionRepository.save(Objects.requireNonNull(region));
 
                     stats[0]++;
                     String finalStatus = region.getQaStatus();
@@ -1209,7 +1206,7 @@ public class JobCoordinatorService {
           }
 
           layer.setMetadataJson(metadata);
-          layerRepository.save(layer);
+          layerRepository.save(Objects.requireNonNull(layer));
         }
       }
     } catch (Exception e) {
@@ -1218,7 +1215,7 @@ public class JobCoordinatorService {
 
     if (needsManualIntervention) {
       log.warn("QA requested manual intervention for image {}. Halting pipeline.", imageId);
-      redisTemplate.delete(retryKey);
+      redisTemplate.delete(Objects.requireNonNull(retryKey));
       redisTemplate.delete("pipeline:trace:" + imageId);
       return "MANUAL_REVIEW";
     } else if (needsRetry && retries < 2) {
@@ -1247,7 +1244,7 @@ public class JobCoordinatorService {
       } else {
         log.info("QA passed for image {}. Pipeline complete!", imageId);
       }
-      redisTemplate.delete(retryKey);
+      redisTemplate.delete(Objects.requireNonNull(retryKey));
       redisTemplate.delete("pipeline:trace:" + imageId);
       return "COMPLETED";
     }

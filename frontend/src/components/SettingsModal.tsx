@@ -1,4 +1,16 @@
 import React, { useEffect, useState } from "react";
+import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import FormControl from "@mui/material/FormControl";
+import Grid from "@mui/material/Grid";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import Typography from "@mui/material/Typography";
 import { safeFetch } from "../utils";
 import type { SystemSettingsDto } from "../types";
 import { useToast } from "./ToastContext";
@@ -26,6 +38,7 @@ const OCR_PROVIDERS = [
   "ollama",
   "lmstudio",
 ];
+const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -67,8 +80,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen, token, showToast]);
 
-  if (!isOpen) return null;
-
   const handleSave = async () => {
     if (!settings) return;
     setSaving(true);
@@ -102,388 +113,313 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
-        animation: "fadeIn 0.15s ease-out",
-      }}
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      fullWidth
+      maxWidth="md"
+      aria-labelledby="settings-dialog-title"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="glass"
-        style={{
-          padding: "24px 32px",
-          minWidth: "400px",
-          maxWidth: "550px",
-          width: "90vw",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          animation: "scaleIn 0.18s ease-out",
-        }}
-      >
-        <h2
-          style={{ marginTop: 0, marginBottom: "24px", color: "var(--text)" }}
-        >
-          System Settings
-        </h2>
-
+      <DialogTitle id="settings-dialog-title">System Settings</DialogTitle>
+      <DialogContent dividers>
         {loading ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "20px",
-              color: "var(--text-muted)",
-            }}
+          <Typography
+            align="center"
+            sx={{ py: 4 }}
           >
-            Loading...
-          </div>
+            <CircularProgress
+              size={28}
+              sx={{ mb: 1 }}
+            />
+            <br />
+            Loading settings...
+          </Typography>
         ) : !settings ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "20px",
-              color: "var(--error, #ff4d4f)",
-            }}
+          <Typography
+            align="center"
+            color="error"
+            sx={{ py: 4 }}
           >
             Failed to load settings.
-          </div>
+          </Typography>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "12px",
-            }}
+          <Grid
+            container
+            spacing={1.5}
           >
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="ocrProvider"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
+            <Grid size={12} sx={{my:0,py:0}}>
+              <Typography
+                variant="overline"
+                color="text.disabled"
+                sx={{
+                  display: "block",
+                  m:0,
+                  p:0
                 }}
               >
-                Global OCR Provider
-              </label>
-              <select
-                id="ocrProvider"
-                className="glass-input"
-                value={settings.ocrProvider || ""}
-                onChange={(e) => handleChange("ocrProvider", e.target.value)}
+                OCR
+              </Typography>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
               >
-                {ocrProviders.map((p) => (
-                  <option
-                    key={p}
-                    value={p}
-                  >
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <InputLabel>Global OCR Provider</InputLabel>
+                <Select
+                  value={settings.ocrProvider || ""}
+                  label="Global OCR Provider"
+                  onChange={(e) => handleChange("ocrProvider", e.target.value)}
+                >
+                  {ocrProviders.map((p) => (
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
+                      {p}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
 
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="ocrModel"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
-                }}
-              >
-                Global OCR VLM Model
-              </label>
-              <select
-                id="ocrModel"
-                className="glass-input"
-                value={
-                  settings.ocrProvider === "local"
-                    ? settings.localOcrModel || "local"
-                    : settings.ocrModel || ""
-                }
-                onChange={(e) => handleChange("ocrModel", e.target.value)}
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
                 disabled={settings.ocrProvider === "local"}
-                style={
-                  settings.ocrProvider === "local"
-                    ? { opacity: 0.6, cursor: "not-allowed" }
-                    : {}
-                }
               >
-                {settings.ocrProvider === "local" ? (
-                  <option value={settings.localOcrModel || "local"}>
-                    {settings.localOcrModel || "Local Worker Model"}
-                  </option>
-                ) : (
-                  <>
-                    <option value="">-- Default / Inherit Env --</option>
-                    {settings.ocrVlmModelList.map((m) => (
-                      <option
-                        key={m}
-                        value={m}
+                <InputLabel>Global OCR VLM Model</InputLabel>
+                <Select
+                  value={
+                    settings.ocrProvider === "local"
+                      ? settings.localOcrModel || "local"
+                      : settings.ocrModel || ""
+                  }
+                  label="Global OCR VLM Model"
+                  onChange={(e) => handleChange("ocrModel", e.target.value)}
+                >
+                  {settings.ocrProvider === "local" ? (
+                    <MenuItem value={settings.localOcrModel || "local"}>
+                      {settings.localOcrModel || "Local Worker Model"}
+                    </MenuItem>
+                  ) : (
+                    [
+                      <MenuItem
+                        key="_empty"
+                        value=""
                       >
-                        {m}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-            </div>
+                        -- Default / Inherit Env --
+                      </MenuItem>,
+                      ...settings.ocrVlmModelList.map((m) => (
+                        <MenuItem
+                          key={m}
+                          value={m}
+                        >
+                          {m}
+                        </MenuItem>
+                      )),
+                    ]
+                  )}
+                </Select>
+              </FormControl>
+            </Grid>
 
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                height: "1px",
-                background: "var(--border)",
-                margin: "4px 0",
-              }}
-            ></div>
-
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="tlProvider"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
+            <Grid size={12}>
+              <Typography
+                variant="overline"
+                color="text.disabled"
+                sx={{
+                  display: "block",
+                  borderTop: 1,
+                  borderColor: "divider",
+                  pt: 1,
                 }}
               >
-                Global Translation Provider
-              </label>
-              <select
-                id="tlProvider"
-                className="glass-input"
-                value={settings.tlProvider || ""}
-                onChange={(e) => handleChange("tlProvider", e.target.value)}
-              >
-                {providers.map((p) => (
-                  <option
-                    key={p}
-                    value={p}
-                  >
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
+                Translation
+              </Typography>
+            </Grid>
 
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="tlModel"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
+              >
+                <InputLabel>Global Translation Provider</InputLabel>
+                <Select
+                  value={settings.tlProvider || ""}
+                  label="Global Translation Provider"
+                  onChange={(e) => handleChange("tlProvider", e.target.value)}
+                >
+                  {providers.map((p) => (
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
+                      {p}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
+              >
+                <InputLabel>Global Translation LLM Model</InputLabel>
+                <Select
+                  value={settings.tlModel || ""}
+                  label="Global Translation LLM Model"
+                  onChange={(e) => handleChange("tlModel", e.target.value)}
+                >
+                  <MenuItem value="">-- Default / Inherit Env --</MenuItem>
+                  {settings.tlLlmModelList.map((m) => (
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid size={12}>
+              <Typography
+                variant="overline"
+                color="text.disabled"
+                sx={{
+                  display: "block",
+                  borderTop: 1,
+                  borderColor: "divider",
+                  pt: 1,
                 }}
               >
-                Global Translation LLM Model
-              </label>
-              <select
-                id="tlModel"
-                className="glass-input"
-                value={settings.tlModel || ""}
-                onChange={(e) => handleChange("tlModel", e.target.value)}
-              >
-                <option value="">-- Default / Inherit Env --</option>
-                {settings.tlLlmModelList.map((m) => (
-                  <option
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
+                Quality Assurance
+              </Typography>
+            </Grid>
 
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                height: "1px",
-                background: "var(--border)",
-                margin: "4px 0",
-              }}
-            ></div>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
+              >
+                <InputLabel>Global QA Provider</InputLabel>
+                <Select
+                  value={settings.qaProvider || ""}
+                  label="Global QA Provider"
+                  onChange={(e) => handleChange("qaProvider", e.target.value)}
+                >
+                  {providers.map((p) => (
+                    <MenuItem
+                      key={p}
+                      value={p}
+                    >
+                      {p}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
 
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="qaProvider"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
-                }}
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
               >
-                Global QA Provider
-              </label>
-              <select
-                id="qaProvider"
-                className="glass-input"
-                value={settings.qaProvider || ""}
-                onChange={(e) => handleChange("qaProvider", e.target.value)}
-              >
-                {providers.map((p) => (
-                  <option
-                    key={p}
-                    value={p}
-                  >
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <InputLabel>Global QA Mode</InputLabel>
+                <Select
+                  value={settings.qaMode || ""}
+                  label="Global QA Mode"
+                  onChange={(e) => handleChange("qaMode", e.target.value)}
+                >
+                  {QA_MODES.map((m) => (
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
 
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="qaMode"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
-                }}
-              >
-                Global QA Mode
-              </label>
-              <select
-                id="qaMode"
-                className="glass-input"
-                value={settings.qaMode || ""}
-                onChange={(e) => handleChange("qaMode", e.target.value)}
-              >
-                <option value="auto">auto</option>
-                <option value="llm">llm</option>
-                <option value="vlm">vlm</option>
-                <option value="hybrid">hybrid</option>
-                <option value="none">none</option>
-              </select>
-            </div>
-
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="qaLlmModel"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
-                }}
-              >
-                Global QA LLM Model
-              </label>
-              <select
-                id="qaLlmModel"
-                className="glass-input"
-                value={settings.qaLlmModel || ""}
-                onChange={(e) => handleChange("qaLlmModel", e.target.value)}
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
                 disabled={
                   settings.qaMode === "vlm" || settings.qaMode === "none"
                 }
-                style={
-                  settings.qaMode === "vlm" || settings.qaMode === "none"
-                    ? { opacity: 0.6, cursor: "not-allowed" }
-                    : {}
-                }
               >
-                <option value="">-- Default / Inherit Env --</option>
-                {settings.qaLlmModelList.map((m) => (
-                  <option
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <InputLabel>Global QA LLM Model</InputLabel>
+                <Select
+                  value={settings.qaLlmModel || ""}
+                  label="Global QA LLM Model"
+                  onChange={(e) => handleChange("qaLlmModel", e.target.value)}
+                >
+                  <MenuItem value="">-- Default / Inherit Env --</MenuItem>
+                  {settings.qaLlmModelList.map((m) => (
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
 
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-            >
-              <label
-                htmlFor="qaVlmModel"
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "var(--text)",
-                }}
-              >
-                Global QA VLM Model
-              </label>
-              <select
-                id="qaVlmModel"
-                className="glass-input"
-                value={settings.qaVlmModel || ""}
-                onChange={(e) => handleChange("qaVlmModel", e.target.value)}
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl
+                fullWidth
+                size="small"
                 disabled={
                   settings.qaMode === "llm" || settings.qaMode === "none"
                 }
-                style={
-                  settings.qaMode === "llm" || settings.qaMode === "none"
-                    ? { opacity: 0.6, cursor: "not-allowed" }
-                    : {}
-                }
               >
-                <option value="">-- Default / Inherit Env --</option>
-                {settings.qaVlmModelList.map((m) => (
-                  <option
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+                <InputLabel>Global QA VLM Model</InputLabel>
+                <Select
+                  value={settings.qaVlmModel || ""}
+                  label="Global QA VLM Model"
+                  onChange={(e) => handleChange("qaVlmModel", e.target.value)}
+                >
+                  <MenuItem value="">-- Default / Inherit Env --</MenuItem>
+                  {settings.qaVlmModelList.map((m) => (
+                    <MenuItem
+                      key={m}
+                      value={m}
+                    >
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
         )}
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "12px",
-            marginTop: "24px",
-          }}
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={onClose}
+          disabled={saving}
         >
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleSave}
-            disabled={saving || loading}
-          >
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
-        </div>
-      </div>
-    </div>
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          disabled={saving || loading}
+        >
+          {saving ? "Saving..." : "Save Settings"}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

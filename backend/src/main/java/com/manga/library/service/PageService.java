@@ -2,6 +2,8 @@ package com.manga.library.service;
 
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
+import io.minio.errors.MinioException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -46,11 +48,11 @@ public class PageService {
             .createdBy(user)
             .build();
     Objects.requireNonNull(image, "image cannot be null");
-    image = imageRepository.save(image);
+    image = imageRepository.save(Objects.requireNonNull(image));
 
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(image).build();
     Objects.requireNonNull(page, "page cannot be null");
-    page = pageRepository.save(page);
+    page = pageRepository.save(Objects.requireNonNull(page));
 
     if (pageNumber == 1) {
       pageRepository.flush();
@@ -76,7 +78,7 @@ public class PageService {
 
     Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(existingImage).build();
     Objects.requireNonNull(page, "page cannot be null");
-    page = pageRepository.save(page);
+    page = pageRepository.save(Objects.requireNonNull(page));
 
     if (pageNumber == 1) {
       pageRepository.flush();
@@ -92,7 +94,7 @@ public class PageService {
       Page p = pages.get(i);
       if (p.getPageNumber() >= startingPageNumber) {
         p.setPageNumber(p.getPageNumber() + 1);
-        pageRepository.save(p);
+        pageRepository.save(Objects.requireNonNull(p));
       }
     }
     pageRepository.flush();
@@ -103,7 +105,7 @@ public class PageService {
     Objects.requireNonNull(pageId, "pageId cannot be null");
     Page page =
         pageRepository
-            .findById(pageId)
+            .findById(Objects.requireNonNull(pageId))
             .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
 
     Image image = page.getImage();
@@ -126,12 +128,12 @@ public class PageService {
     }
 
     // 1. Delete page first
-    pageRepository.delete(page);
+    pageRepository.delete(Objects.requireNonNull(page));
 
     // 2. Delete image (triggers cascade delete in Postgres to panels, OCR, layers, etc.) only if
     // last reference
     if (remainingReferences == 1) {
-      imageRepository.delete(image);
+      imageRepository.delete(Objects.requireNonNull(image));
     }
 
     // 3. Flush deletions to DB
@@ -143,7 +145,7 @@ public class PageService {
       Page p = remainingPages.get(i);
       Objects.requireNonNull(p, "page cannot be null");
       p.setPageNumber(i + 1);
-      pageRepository.save(p);
+      pageRepository.save(Objects.requireNonNull(p));
     }
     pageRepository.flush();
 
@@ -228,18 +230,14 @@ public class PageService {
       minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/webp");
 
       imageRepository
-          .findById(imageId)
+          .findById(Objects.requireNonNull(imageId))
           .ifPresent(
               img -> {
                 img.setThumbnailStoragePath(thumbnailStoragePath);
-                imageRepository.save(img);
+                imageRepository.save(Objects.requireNonNull(img));
               });
       log.info("Successfully generated and uploaded WebP thumbnail to {}", thumbnailStoragePath);
-    } catch (java.io.IOException
-        | RuntimeException
-        | io.minio.errors.MinioException
-        | java.security.NoSuchAlgorithmException
-        | java.security.InvalidKeyException e) {
+    } catch (IOException | RuntimeException | MinioException e) {
       log.error("Failed to generate async thumbnail for image {}", imageId, e);
     }
   }
@@ -252,7 +250,7 @@ public class PageService {
 
   @Transactional
   public void recalculateSeriesCover(UUID seriesId) {
-    Series series = seriesRepository.findById(seriesId).orElse(null);
+    Series series = seriesRepository.findById(Objects.requireNonNull(seriesId)).orElse(null);
     if (series == null) return;
 
     Double minChapterNum = chapterRepository.findMinChapterNumberWithCoverBySeriesId(seriesId);
@@ -266,20 +264,81 @@ public class PageService {
     }
 
     series.setCoverImageId(coverImageId);
-    seriesRepository.save(series);
+    seriesRepository.save(Objects.requireNonNull(series));
   }
 
   @Transactional
   public void recalculateChapterCover(UUID chapterId) {
-    Chapter chapter = chapterRepository.findById(chapterId).orElse(null);
+    Chapter chapter = chapterRepository.findById(Objects.requireNonNull(chapterId)).orElse(null);
     if (chapter == null) return;
 
     Optional<Page> firstPage = pageRepository.findByChapterIdAndPageNumber(chapterId, 1);
     UUID coverImageId = firstPage.map(page -> page.getImage().getId()).orElse(null);
 
     chapter.setCoverImageId(coverImageId);
-    chapterRepository.save(chapter);
+    chapterRepository.save(Objects.requireNonNull(chapter));
 
     recalculateSeriesCover(chapter.getSeries().getId());
+  }
+
+  @Transactional
+  public void updatePageNumber(UUID pageId, int newPageNumber) {
+    Objects.requireNonNull(pageId, "pageId cannot be null");
+    Page page = pageRepository.findById(pageId)
+            .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+    
+    int oldPageNumber = page.getPageNumber();
+    if (oldPageNumber == newPageNumber) return;
+
+    UUID chapterId = page.getChapter().getId();
+    List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
+    int totalPages = pages.size();
+
+    // Enforce bounds and map 0 to end
+    if (newPageNumber == 0 || newPageNumber == -1) {
+        newPageNumber = totalPages;
+    } else if (newPageNumber < 0) {
+        throw new IllegalArgumentException("Page number cannot be negative");
+    } else if (newPageNumber > totalPages) {
+        throw new IllegalArgumentException("Page number cannot be greater than total pages");
+    }
+
+    if (oldPageNumber == newPageNumber) return;
+
+    // Temporarily set to a high number to avoid unique constraint violations
+    page.setPageNumber(10000 + newPageNumber);
+    pageRepository.save(Objects.requireNonNull(page));
+    pageRepository.flush();
+
+    // Shift other pages
+    if (newPageNumber > oldPageNumber) {
+        for (int i = 0; i < pages.size(); i++) {
+            Page p = pages.get(i);
+            if (p.getId().equals(pageId)) continue;
+            if (p.getPageNumber() > oldPageNumber && p.getPageNumber() <= newPageNumber) {
+                p.setPageNumber(p.getPageNumber() - 1);
+                pageRepository.save(Objects.requireNonNull(p));
+                pageRepository.flush();
+            }
+        }
+    } else {
+        for (int i = pages.size() - 1; i >= 0; i--) {
+            Page p = pages.get(i);
+            if (p.getId().equals(pageId)) continue;
+            if (p.getPageNumber() >= newPageNumber && p.getPageNumber() < oldPageNumber) {
+                p.setPageNumber(p.getPageNumber() + 1);
+                pageRepository.save(Objects.requireNonNull(p));
+                pageRepository.flush();
+            }
+        }
+    }
+
+    page.setPageNumber(newPageNumber);
+    pageRepository.save(Objects.requireNonNull(page));
+    pageRepository.flush();
+
+    if (oldPageNumber == 1 || newPageNumber == 1) {
+        recalculateChapterCover(chapterId);
+    }
   }
 }

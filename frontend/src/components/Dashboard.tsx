@@ -1,76 +1,67 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import CardActions from "@mui/material/CardActions";
+import CardContent from "@mui/material/CardContent";
+import CardMedia from "@mui/material/CardMedia";
+import Chip from "@mui/material/Chip";
+import FormControl from "@mui/material/FormControl";
+import IconButton from "@mui/material/IconButton";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 import { useToast } from "./ToastContext";
 import type { User, Series } from "../types";
 import { safeFetch, toSlug } from "../utils";
-import type { SystemSettingsDto } from "../types";
 import ConfirmModal from "./ConfirmModal";
+import CreateSeriesDialog from "./CreateSeriesDialog";
 
 interface DashboardProps {
   user: User;
   seriesList: Series[];
   setSeriesList: React.Dispatch<React.SetStateAction<Series[]>>;
   onSelectSeries: (series: Series) => void;
+  mode: "light" | "dark";
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   user,
   seriesList,
   setSeriesList,
-  onSelectSeries,
+  onSelectSeries
 }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  // Series modal form states (fully encapsulated)
+  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt">(() => {
+    const saved = localStorage.getItem("dashboard_sort_by");
+    return saved === "createdAt" ? "createdAt" : "updatedAt";
+  });
+
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(() => {
+    const saved = localStorage.getItem("dashboard_sort_dir");
+    return saved === "asc" ? "asc" : "desc";
+  });
+
+  const sortedSeriesList = [...seriesList].sort((a, b) => {
+    const field = sortBy;
+    const aVal = a[field];
+    const bVal = b[field];
+    if (!aVal || !bVal) return 0;
+    const cmp = new Date(aVal).getTime() - new Date(bVal).getTime();
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  // Series modal state
   const [showSeriesModal, setShowSeriesModal] = useState(false);
   const [editingSeries, setEditingSeries] = useState<Series | null>(null);
-  const [newSeriesTitle, setNewSeriesTitle] = useState("");
-  const [newSeriesLang, setNewSeriesLang] = useState("ja");
-  const [newSeriesTargetLang, setNewSeriesTargetLang] = useState("en");
-  const [newSeriesDirection, setNewSeriesDirection] = useState("rtl");
-
-  // Model overrides
-  const [newOcrProvider, setNewOcrProvider] = useState("");
-  const [newOcrModel, setNewOcrModel] = useState("");
-  const [newTlProvider, setNewTlProvider] = useState("");
-  const [newTlModel, setNewTlModel] = useState("");
-  const [newQaProvider, setNewQaProvider] = useState("");
-  const [newQaLlmModel, setNewQaLlmModel] = useState("");
-  const [newQaVlmModel, setNewQaVlmModel] = useState("");
-  const [newQaMode, setNewQaMode] = useState("");
-
-  const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
-  const [showModelOverrides, setShowModelOverrides] = useState(false);
-
-  const providers = settings?.activeProviders || [
-    "openrouter",
-    "gemini",
-    "nvidia",
-    "openai",
-    "anthropic",
-    "ollama",
-    "lmstudio",
-  ];
-  const ocrProviders = settings?.activeOcrProviders || [
-    "local",
-    "openrouter",
-    "gemini",
-    "nvidia",
-    "ollama",
-    "lmstudio",
-  ];
-
-  React.useEffect(() => {
-    if (showSeriesModal && !settings) {
-      safeFetch("/api/settings", {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => setSettings(data))
-        .catch(console.error);
-    }
-  }, [showSeriesModal, settings, user.token]);
+  const [createCounter, setCreateCounter] = useState(0);
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -84,7 +75,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     isOpen: false,
     title: "",
     message: "",
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const closeConfirmModal = () =>
@@ -93,92 +84,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const handleEditSeriesClick = (s: Series, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingSeries(s);
-    setNewSeriesTitle(s.title);
-    setNewSeriesLang(s.sourceLanguage || s.originalLanguage || "ja");
-    setNewSeriesTargetLang(s.targetLanguage || "en");
-    setNewSeriesDirection(s.readingDirection);
-    setNewOcrProvider(s.ocrProvider || "");
-    setNewOcrModel(s.ocrModel || "");
-    setNewTlProvider(s.tlProvider || "");
-    setNewTlModel(s.tlModel || "");
-    setNewQaProvider(s.qaProvider || "");
-    setNewQaLlmModel(s.qaLlmModel || "");
-    setNewQaVlmModel(s.qaVlmModel || "");
-    setNewQaMode(s.qaMode || "");
-    setShowModelOverrides(false);
     setShowSeriesModal(true);
   };
 
   const handleNewSeriesClick = () => {
     setEditingSeries(null);
-    setNewSeriesTitle("");
-    setNewSeriesLang("ja");
-    setNewSeriesTargetLang("en");
-    setNewSeriesDirection("rtl");
-    setNewOcrProvider("");
-    setNewOcrModel("");
-    setNewTlProvider("");
-    setNewTlModel("");
-    setNewQaProvider("");
-    setNewQaLlmModel("");
-    setNewQaVlmModel("");
-    setNewQaMode("");
-    setShowModelOverrides(false);
+    setCreateCounter((c) => c + 1);
     setShowSeriesModal(true);
   };
 
   const handleCancelSeriesModal = () => {
     setShowSeriesModal(false);
     setEditingSeries(null);
-    setNewSeriesTitle("");
-    setNewSeriesLang("ja");
-    setNewSeriesTargetLang("en");
   };
 
-  const handleCreateSeries = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const isEdit = !!editingSeries;
-      const url = isEdit ? `/api/series/${editingSeries.id}` : "/api/series";
-      const method = isEdit ? "PUT" : "POST";
-
-      const res = await safeFetch(url, {
-        method: method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`,
-        },
-        body: JSON.stringify({
-          title: newSeriesTitle,
-          originalLanguage: newSeriesLang,
-          sourceLanguage: newSeriesLang,
-          targetLanguage: newSeriesTargetLang,
-          readingDirection: newSeriesDirection,
-          ocrProvider: newOcrProvider || null,
-          ocrModel: newOcrModel || null,
-          tlProvider: newTlProvider || null,
-          tlModel: newTlModel || null,
-          qaProvider: newQaProvider || null,
-          qaLlmModel: newQaLlmModel || null,
-          qaVlmModel: newQaVlmModel || null,
-          qaMode: newQaMode || null,
-        }),
-      });
-      if (res.ok) {
-        const data: Series = await res.json();
-        if (isEdit) {
-          setSeriesList((prev) =>
-            prev.map((s) => (s.id === data.id ? data : s)),
-          );
-        } else {
-          setSeriesList((prev) => [...prev, data]);
-        }
-        setShowSeriesModal(false);
-        setEditingSeries(null);
-        setNewSeriesTitle("");
-      }
-    } catch (err) {
-      console.error("Error saving series:", err);
+  const handleSeriesSuccess = (data: Series) => {
+    if (editingSeries) {
+      setSeriesList((prev) => prev.map((s) => (s.id === data.id ? data : s)));
+    } else {
+      setSeriesList((prev) => [...prev, data]);
     }
   };
 
@@ -202,7 +126,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             setSeriesList((prev) => prev.filter((s) => s.id !== seriesId));
             showToast("Series deleted successfully", "success");
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this series.", "error");
+            showToast(
+              "You don't have permission to delete this series.",
+              "error",
+            );
           } else {
             showToast("Failed to delete series", "error");
           }
@@ -215,513 +142,169 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <div className="dashboard-content">
-      <div className="page-header">
-        <div>
-          <h1>My Manga Library</h1>
-          <p style={{ color: "var(--text-muted)", margin: "8px 0 0" }}>
+    <Box sx={{ flex: 1, p: 3, maxWidth: 1200, mx: "auto", width: "100%" }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          justifyContent: "space-between",
+          alignItems: { xs: "flex-start", sm: "center" },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Box>
+          <Typography
+            variant="h4"
+            sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: "text.primary" }}
+          >
+            My Manga Library
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ mt: 0.5, color: "text.secondary" }}
+          >
             Manage translation projects and OCR workflows
-          </p>
-        </div>
-        <button
-          className="btn btn-primary"
-          onClick={handleNewSeriesClick}
+          </Typography>
+        </Box>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          sx={{ width: { xs: "100%", sm: "auto" } }}
         >
-          + New Series
-        </button>
-      </div>
+          <FormControl
+            size="small"
+            sx={{ minWidth: { xs: "100%", sm: 160 } }}
+          >
+            <Select
+              value={`${sortBy}-${sortDir}`}
+              onChange={(e) => {
+                const [field, dir] = (e.target.value as string).split("-");
+                setSortBy(field as "createdAt" | "updatedAt");
+                setSortDir(dir as "asc" | "desc");
+                localStorage.setItem("dashboard_sort_by", field);
+                localStorage.setItem("dashboard_sort_dir", dir);
+              }}
+            >
+              <MenuItem value="updatedAt-desc">Last Updated ↓</MenuItem>
+              <MenuItem value="updatedAt-asc">Last Updated ↑</MenuItem>
+              <MenuItem value="createdAt-desc">Created Date ↓</MenuItem>
+              <MenuItem value="createdAt-asc">Created Date ↑</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleNewSeriesClick}
+            sx={{ width: { xs: "100%", sm: "auto" } }}
+          >
+            New Series
+          </Button>
+        </Stack>
+      </Box>
 
-      <div className="grid-cols-3">
-        {seriesList.map((s) => (
-          <div
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          gap: 2,
+        }}
+      >
+        {sortedSeriesList.map((s) => (
+          <Card
             key={s.id}
-            className="manga-card glass"
+            sx={{
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              transition: "transform 0.2s, box-shadow 0.2s",
+              "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: 4,
+              },
+            }}
             onClick={() => {
               onSelectSeries(s);
               navigate(`/series/${s.id}/${toSlug(s.title)}`);
             }}
           >
-            <div className="manga-cover-container">
-              {s.coverImageUrl ? (
-                <img
-                  src={s.coverImageUrl}
-                  className="manga-cover-img"
-                  alt={s.title}
-                />
-              ) : (
-                <div className="manga-cover-placeholder">{s.title}</div>
-              )}
-              <div
-                className="manga-card-actions"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  className="action-btn-small"
-                  onClick={(e) => handleEditSeriesClick(s, e)}
-                  title="Edit Series"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
-                <button
-                  className="action-btn-small delete-btn"
-                  onClick={(e) => handleDeleteSeries(s.id, e)}
-                  title="Delete Series"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="manga-card-content">
-              <h3>{s.title}</h3>
-              <div className="manga-meta">
-                <span className="meta-badge">
-                  {s.sourceLanguage || s.originalLanguage || "ja"} →{" "}
-                  {s.targetLanguage || "en"}
-                  {(s.sourceLanguage || s.originalLanguage || "ja") ===
-                  (s.targetLanguage || "en")
-                    ? " (Reader Mode)"
-                    : ""}
-                </span>
-                <span className="meta-badge">{s.readingDirection}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showSeriesModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            className="glass"
-            style={{ padding: "32px", width: "100%", maxWidth: "440px" }}
-          >
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                marginBottom: "24px",
-              }}
-            >
-              {editingSeries ? "Edit Series" : "Create New Series"}
-            </h2>
-            <form onSubmit={handleCreateSeries}>
-              <div className="form-group">
-                <label className="form-label">Series Title</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={newSeriesTitle}
-                  onChange={(e) => setNewSeriesTitle(e.target.value)}
-                  placeholder="e.g. My Hero Academia"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Source Language</label>
-                <select
-                  className="form-input"
-                  value={newSeriesLang}
-                  onChange={(e) => setNewSeriesLang(e.target.value)}
-                >
-                  <option value="ja">Japanese (ja)</option>
-                  <option value="zh-TW">Traditional Chinese (zh-TW)</option>
-                  <option value="zh-CN">Simplified Chinese (zh-CN)</option>
-                  <option value="ko">Korean (ko)</option>
-                  <option value="en">English (en)</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Target Language</label>
-                <select
-                  className="form-input"
-                  value={newSeriesTargetLang}
-                  onChange={(e) => setNewSeriesTargetLang(e.target.value)}
-                >
-                  <option value="en">English (en)</option>
-                  <option value="ja">Japanese (ja)</option>
-                  <option value="zh-TW">Traditional Chinese (zh-TW)</option>
-                  <option value="zh-CN">Simplified Chinese (zh-CN)</option>
-                  <option value="ko">Korean (ko)</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Reading Direction</label>
-                <select
-                  className="form-input"
-                  value={newSeriesDirection}
-                  onChange={(e) => setNewSeriesDirection(e.target.value)}
-                >
-                  <option value="rtl">Right to Left (Manga)</option>
-                  <option value="ltr">Left to Right (Comics)</option>
-                  <option value="ttb">Top to Bottom (Webtoons)</option>
-                </select>
-              </div>
-
-              <div
-                style={{
-                  marginTop: "16px",
-                  padding: "16px",
-                  background: "var(--bg-hover)",
-                  borderRadius: "8px",
+            {s.coverImageUrl ? (
+              <CardMedia
+                component="img"
+                image={s.coverImageUrl}
+                alt={s.title}
+                sx={{ aspectRatio: "2/3", objectFit: "cover", bgcolor: "#000" }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  aspectRatio: "2/3",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  bgcolor: "grey.900",
+                  color: "text.secondary",
+                  fontFamily: '"Outfit", sans-serif',
+                  fontWeight: 700,
+                  p: 2,
+                  textAlign: "center",
+                  fontSize: 14,
                 }}
               >
-                <div
-                  onClick={() => setShowModelOverrides(!showModelOverrides)}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  <h4 style={{ margin: 0, fontSize: "14px", opacity: 0.8 }}>
-                    Model Overrides (Optional)
-                  </h4>
-                  <span style={{ fontSize: "12px", opacity: 0.6 }}>
-                    {showModelOverrides ? "▲" : "▼"}
-                  </span>
-                </div>
+                {s.title}
+              </Box>
+            )}
+            <CardContent sx={{ flex: 1, py: 1.5, "&:last-child": { pb: 1.5 } }}>
+              <Typography
+                variant="h6"
+                noWrap
+              >
+                {s.title}
+              </Typography>
+              <Box
+                sx={{ display: "flex", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}
+              >
+                <Chip
+                  label={`${s.sourceLanguage || s.originalLanguage || "ja"} → ${s.targetLanguage || "en"}`}
+                  size="small"
+                  variant="outlined"
+                />
+                <Chip
+                  label={s.readingDirection}
+                  size="small"
+                  variant="outlined"
+                />
+              </Box>
+            </CardContent>
+            <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
+              <IconButton
+                size="small"
+                title="Edit Series"
+                onClick={(e) => handleEditSeriesClick(s, e)}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                title="Delete Series"
+                color="error"
+                onClick={(e) => handleDeleteSeries(s.id, e)}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </CardActions>
+          </Card>
+        ))}
+      </Box>
 
-                {showModelOverrides && (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "12px",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        OCR Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newOcrProvider}
-                        onChange={(e) => setNewOcrProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {ocrProviders.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        OCR VLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...(newOcrProvider === "local" ||
-                          (newOcrProvider === "" &&
-                            settings?.ocrProvider === "local")
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={
-                          newOcrProvider === "local" ||
-                          (newOcrProvider === "" &&
-                            settings?.ocrProvider === "local")
-                            ? settings?.localOcrModel || "local"
-                            : newOcrModel || ""
-                        }
-                        onChange={(e) => setNewOcrModel(e.target.value)}
-                        disabled={
-                          newOcrProvider === "local" ||
-                          (newOcrProvider === "" &&
-                            settings?.ocrProvider === "local")
-                        }
-                      >
-                        {newOcrProvider === "local" ||
-                        (newOcrProvider === "" &&
-                          settings?.ocrProvider === "local") ? (
-                          <option value={settings?.localOcrModel || "local"}>
-                            {settings?.localOcrModel || "Local Worker Model"}
-                          </option>
-                        ) : (
-                          <>
-                            <option value="">-- Inherit --</option>
-                            {settings?.ocrVlmModelList.map((m) => (
-                              <option
-                                key={m}
-                                value={m}
-                              >
-                                {m}
-                              </option>
-                            ))}
-                          </>
-                        )}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        TL Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newTlProvider}
-                        onChange={(e) => setNewTlProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {providers.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        TL LLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newTlModel}
-                        onChange={(e) => setNewTlModel(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.tlLlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Provider
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newQaProvider}
-                        onChange={(e) => setNewQaProvider(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        {providers.map((p) => (
-                          <option
-                            key={p}
-                            value={p}
-                          >
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA Mode
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{ fontSize: "13px", padding: "6px" }}
-                        value={newQaMode}
-                        onChange={(e) => setNewQaMode(e.target.value)}
-                      >
-                        <option value="">-- Inherit --</option>
-                        <option value="auto">auto</option>
-                        <option value="llm">llm</option>
-                        <option value="vlm">vlm</option>
-                        <option value="hybrid">hybrid</option>
-                        <option value="none">none</option>
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA LLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...((newQaMode || settings?.qaMode) === "vlm" ||
-                          (newQaMode || settings?.qaMode) === "none"
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={newQaLlmModel}
-                        onChange={(e) => setNewQaLlmModel(e.target.value)}
-                        disabled={
-                          (newQaMode || settings?.qaMode) === "vlm" ||
-                          (newQaMode || settings?.qaMode) === "none"
-                        }
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.qaLlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      className="form-group"
-                      style={{ marginBottom: 0 }}
-                    >
-                      <label
-                        className="form-label"
-                        style={{ fontSize: "12px" }}
-                      >
-                        QA VLM Model
-                      </label>
-                      <select
-                        className="form-input"
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px",
-                          ...((newQaMode || settings?.qaMode) === "llm" ||
-                          (newQaMode || settings?.qaMode) === "none"
-                            ? { opacity: 0.6, cursor: "not-allowed" }
-                            : {}),
-                        }}
-                        value={newQaVlmModel}
-                        onChange={(e) => setNewQaVlmModel(e.target.value)}
-                        disabled={
-                          (newQaMode || settings?.qaMode) === "llm" ||
-                          (newQaMode || settings?.qaMode) === "none"
-                        }
-                      >
-                        <option value="">-- Inherit --</option>
-                        {settings?.qaVlmModelList.map((m) => (
-                          <option
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={handleCancelSeriesModal}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                >
-                  {editingSeries ? "Save" : "Create"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateSeriesDialog
+        key={editingSeries?.id ?? `create-${createCounter}`}
+        open={showSeriesModal}
+        editingSeries={editingSeries}
+        user={user}
+        onClose={handleCancelSeriesModal}
+        onSuccess={handleSeriesSuccess}
+      />
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
@@ -731,8 +314,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onConfirm={confirmModal.onConfirm}
         onCancel={closeConfirmModal}
       />
-    </div>
+    </Box>
   );
 };
 
-export default Dashboard;
+export default React.memo(Dashboard);

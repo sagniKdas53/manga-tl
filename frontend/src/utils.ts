@@ -109,3 +109,26 @@ export function formatCost(cost: number | null | undefined): string {
   if (cost >= 0.0001) return `$${cost.toFixed(6)}`;
   return `$${cost.toExponential(2)}`;
 }
+
+export interface ResolvedValue {
+  value: string;
+  source: "global" | "series" | "chapter";
+}
+
+export function resolveOverride(
+  chapterVal: string | null | undefined,
+  seriesVal: string | null | undefined,
+  globalVal: string | null | undefined,
+): ResolvedValue {
+  if (chapterVal) return { value: chapterVal, source: "chapter" };
+  if (seriesVal) return { value: seriesVal, source: "series" };
+  return { value: globalVal ?? "", source: "global" };
+}
+
+export function formatResolverHint(
+  source: "global" | "series" | "chapter",
+): string {
+  if (source === "series") return "(inherited from series)";
+  if (source === "global") return "(global)";
+  return "";
+}

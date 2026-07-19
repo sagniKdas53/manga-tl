@@ -8,6 +8,9 @@ import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.SseService;
+import io.minio.errors.MinioException;
+import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +27,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class PageController {
 
-  private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
@@ -252,13 +254,13 @@ public class PageController {
               List<LayerEditHistory> history =
                   layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
               layerEditHistoryRepository.deleteAll(history);
-              layerElementRepository.delete(el);
+              layerElementRepository.delete(Objects.requireNonNull(el));
             }
             layerElementRepository.flush();
 
             List<Layer> existingLayers = layerRepository.findByImageId(oldImage.getId());
             for (Layer l : existingLayers) {
-              layerRepository.delete(l);
+              layerRepository.delete(Objects.requireNonNull(l));
             }
             layerRepository.flush();
 
@@ -292,11 +294,11 @@ public class PageController {
                         .hash(fileHash)
                         .createdBy(user)
                         .build();
-                image = imageRepository.save(image);
+                image = imageRepository.save(Objects.requireNonNull(image));
                 pageService.generateAndSaveThumbnailAsync(image.getId(), uuid, originalImageBytes);
               }
               page.setImage(image);
-              page = pageRepository.save(page);
+              page = pageRepository.save(Objects.requireNonNull(page));
               if (page.getPageNumber() == 1) {
                 pageRepository.flush();
                 pageService.recalculateChapterCover(chapter.getId());
@@ -362,7 +364,7 @@ public class PageController {
                       .visible(visible)
                       .zOrder(zOrder)
                       .build();
-              newLayer = layerRepository.save(newLayer);
+              newLayer = layerRepository.save(Objects.requireNonNull(newLayer));
               importedLayersCount++;
 
               com.fasterxml.jackson.databind.JsonNode elementsNode = layerNode.get("elements");
@@ -405,7 +407,7 @@ public class PageController {
                   if (elNode.has("regionId") && !elNode.get("regionId").isNull()) {
                     try {
                       UUID regionId = UUID.fromString(elNode.get("regionId").asText());
-                      region = ocrRegionRepository.findById(regionId).orElse(null);
+                      region = ocrRegionRepository.findById(Objects.requireNonNull(regionId)).orElse(null);
                     } catch (Exception e) {
                       log.warn(
                           "Invalid regionId format or missing region: {}",
@@ -436,7 +438,7 @@ public class PageController {
                           .boxShape(boxShape)
                           .maskPolygon(maskPolygon)
                           .build();
-                  layerElementRepository.save(newEl);
+                  layerElementRepository.save(Objects.requireNonNull(newEl));
                   importedElementsCount++;
                 }
               }
@@ -537,6 +539,11 @@ public class PageController {
 
             jobCoordinatorService.startPipeline(pg.getImage().getId(), chapter.getId());
             nextNum++;
+          }
+
+          if (firstPage == null) {
+            return ResponseEntity.badRequest()
+                .body(new UploadResponse(null, null, "error: no pages were created"));
           }
 
           return ResponseEntity.ok(
@@ -652,11 +659,7 @@ public class PageController {
       }
       log.error("Bad request", e);
       return ResponseEntity.badRequest().body(new UploadResponse(null, null, e.getMessage()));
-    } catch (java.io.IOException
-        | java.security.NoSuchAlgorithmException
-        | java.security.InvalidKeyException
-        | io.minio.errors.MinioException
-        | RuntimeException e) {
+    } catch (IOException | NoSuchAlgorithmException | MinioException | RuntimeException e) {
       log.error("Failed to upload page", e);
       return ResponseEntity.internalServerError().build();
     }
@@ -698,7 +701,7 @@ public class PageController {
   public ResponseEntity<PageDto> getPage(@PathVariable UUID pageId) {
     Objects.requireNonNull(pageId, "pageId cannot be null");
     return pageRepository
-        .findById(pageId)
+        .findById(Objects.requireNonNull(pageId))
         .map(
             p -> {
               PageDto dto = new PageDto();
@@ -721,7 +724,7 @@ public class PageController {
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
         imageRepository
-            .findById(imageId)
+            .findById(Objects.requireNonNull(imageId))
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     List<Panel> panels = panelRepository.findByImageId(imageId);
@@ -764,7 +767,7 @@ public class PageController {
       Objects.requireNonNull(imageId, "imageId cannot be null");
       Image image =
           imageRepository
-              .findById(imageId)
+              .findById(Objects.requireNonNull(imageId))
               .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
       String contentType = "image/png";
@@ -801,7 +804,7 @@ public class PageController {
       Objects.requireNonNull(imageId, "imageId cannot be null");
       Image image =
           imageRepository
-              .findById(imageId)
+              .findById(Objects.requireNonNull(imageId))
               .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
       String storagePath = image.getThumbnailStoragePath();
@@ -897,7 +900,7 @@ public class PageController {
       for (int i = 0; i < pageIds.size(); i++) {
         Page p = pageMap.get(pageIds.get(i));
         p.setPageNumber(i + 1 + 10000);
-        pageRepository.save(p);
+        pageRepository.save(Objects.requireNonNull(p));
       }
       pageRepository.flush();
 
@@ -905,7 +908,7 @@ public class PageController {
       for (int i = 0; i < pageIds.size(); i++) {
         Page p = pageMap.get(pageIds.get(i));
         p.setPageNumber(i + 1);
-        pageRepository.save(p);
+        pageRepository.save(Objects.requireNonNull(p));
       }
       pageRepository.flush();
 
@@ -914,6 +917,32 @@ public class PageController {
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Failed to reorder pages", e);
+      return ResponseEntity.internalServerError().body(e.getMessage());
+    }
+  }
+
+  @PutMapping("/pages/{pageId}/number")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  public ResponseEntity<?> updatePageNumber(
+      @PathVariable UUID pageId, @RequestBody Map<String, Object> payload) {
+    log.info("Received request to update page number for page {}: {}", pageId, payload);
+    try {
+      if (!payload.containsKey("newNumber")) {
+        return ResponseEntity.badRequest().body("Missing 'newNumber' in payload");
+      }
+      
+      int newNumber;
+      Object newNumObj = payload.get("newNumber");
+      if (newNumObj instanceof Number) {
+        newNumber = ((Number) newNumObj).intValue();
+      } else {
+        newNumber = Integer.parseInt(newNumObj.toString());
+      }
+      
+      pageService.updatePageNumber(pageId, newNumber);
+      return ResponseEntity.ok().build();
+    } catch (Exception e) {
+      log.error("Failed to update page number", e);
       return ResponseEntity.internalServerError().body(e.getMessage());
     }
   }
@@ -943,7 +972,7 @@ public class PageController {
                 region.setConfidence(((Number) payload.get("confidence")).doubleValue());
               }
               Objects.requireNonNull(region, "region cannot be null");
-              ocrRegionRepository.save(region);
+              ocrRegionRepository.save(Objects.requireNonNull(region));
               return ResponseEntity.ok(region);
             })
         .orElse(ResponseEntity.notFound().build());
@@ -1014,7 +1043,7 @@ public class PageController {
     try {
       Chapter chapter =
           chapterRepository
-              .findById(chapterId)
+              .findById(Objects.requireNonNull(chapterId))
               .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
 
       byte[] projectJsonBytes = null;
@@ -1077,13 +1106,13 @@ public class PageController {
           List<LayerEditHistory> history =
               layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
           layerEditHistoryRepository.deleteAll(history);
-          layerElementRepository.delete(el);
+          layerElementRepository.delete(Objects.requireNonNull(el));
         }
         layerElementRepository.flush();
 
         List<Layer> existingLayers = layerRepository.findByImageId(oldImage.getId());
         for (Layer l : existingLayers) {
-          layerRepository.delete(l);
+          layerRepository.delete(Objects.requireNonNull(l));
         }
         layerRepository.flush();
 
@@ -1129,11 +1158,11 @@ public class PageController {
                       .hash(fileHash)
                       .createdBy(user)
                       .build();
-              image = imageRepository.save(image);
+              image = imageRepository.save(Objects.requireNonNull(image));
               pageService.generateAndSaveThumbnailAsync(image.getId(), uuid, originalImageBytes);
             }
             page.setImage(image);
-            page = pageRepository.save(page);
+            page = pageRepository.save(Objects.requireNonNull(page));
             if (page.getPageNumber() == 1) {
               pageRepository.flush();
               pageService.recalculateChapterCover(chapter.getId());
@@ -1213,7 +1242,7 @@ public class PageController {
                   .zOrder(zOrder)
                   .metadataJson(metadataJson)
                   .build();
-          newLayer = layerRepository.save(newLayer);
+          newLayer = layerRepository.save(Objects.requireNonNull(newLayer));
           importedLayersCount++;
 
           com.fasterxml.jackson.databind.JsonNode elementsNode = layerNode.get("elements");
@@ -1260,7 +1289,7 @@ public class PageController {
               if (elNode.has("regionId") && !elNode.get("regionId").isNull()) {
                 try {
                   UUID regionId = UUID.fromString(elNode.get("regionId").asText());
-                  region = ocrRegionRepository.findById(regionId).orElse(null);
+                  region = ocrRegionRepository.findById(Objects.requireNonNull(regionId)).orElse(null);
                 } catch (Exception e) {
                   log.warn(
                       "Invalid regionId format or missing region: {}",
@@ -1292,7 +1321,7 @@ public class PageController {
                       .maskPolygon(maskPolygon)
                       .isManuallyEdited(isManuallyEdited)
                       .build();
-              layerElementRepository.save(newEl);
+              layerElementRepository.save(Objects.requireNonNull(newEl));
               importedElementsCount++;
             }
           }
@@ -1301,7 +1330,7 @@ public class PageController {
 
       if (hasManualEdits) {
         image.setLastEditedAt(java.time.OffsetDateTime.now());
-        imageRepository.save(image);
+        imageRepository.save(Objects.requireNonNull(image));
       }
 
       log.info(
@@ -1311,11 +1340,7 @@ public class PageController {
           importedElementsCount);
 
       return ResponseEntity.ok(Map.of("status", "success", "pageId", page.getId().toString()));
-    } catch (java.io.IOException
-        | java.security.NoSuchAlgorithmException
-        | java.security.InvalidKeyException
-        | io.minio.errors.MinioException
-        | RuntimeException e) {
+    } catch (IOException | NoSuchAlgorithmException | MinioException | RuntimeException e) {
       log.error("Failed to import project zip", e);
       return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
     }

@@ -1,285 +1,340 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
+import Badge from "@mui/material/Badge";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Drawer from "@mui/material/Drawer";
+import IconButton from "@mui/material/IconButton";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import DoneAllIcon from "@mui/icons-material/DoneAll";
+import ClearAllIcon from "@mui/icons-material/ClearAll";
+import CloseIcon from "@mui/icons-material/Close";
 import { useNotifications, type Notification } from "./useNotifications";
 import { safeFetch } from "../utils";
+import ConfirmModal from "./ConfirmModal";
 
-export const NotificationCenter: React.FC = () => {
+const severityColor: Record<string, string> = {
+  EXPORT_SUCCESS: "#4caf50",
+  SUCCESS: "#4caf50",
+  ERROR: "#f44336",
+  WARNING: "#ff9800",
+  INFO: "#2196f3",
+};
+
+interface Props {
+  forceOpen: boolean;
+  onRequestOpen: () => void;
+  onClose: () => void;
+}
+
+export const NotificationCenter: React.FC<Props> = ({
+  forceOpen,
+  onRequestOpen,
+  onClose,
+}) => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } =
     useNotifications();
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    isDangerous: boolean;
+    action: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    isDangerous: false,
+    action: () => { },
+  });
+
+  const handleClearAll = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Clear All Notifications",
+      message:
+        "Are you sure you want to clear all notifications? This cannot be undone.",
+      isDangerous: true,
+      action: () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        clearAll();
+      },
+    });
+  };
+
+  const handleDownload = async (
+    exportId: string,
+    seriesTitle?: string,
+    chapterNumber?: string,
+  ) => {
+    try {
+      const storedUser = localStorage.getItem("manga_user");
+      if (!storedUser) return;
+      const user = JSON.parse(storedUser);
+      const res = await safeFetch(
+        `/api/series/chapters/exports/${exportId}/download`,
+        {
+          headers: { Authorization: `Bearer ${user.token}` },
+        },
+      );
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${seriesTitle || "chapter"} - Chapter ${chapterNumber || "export"}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
       }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const toggleDropdown = () => setIsOpen(!isOpen);
-
-  const getIconColor = (type: string) => {
-    switch (type) {
-      case "ERROR":
-        return "#f44336";
-      case "WARNING":
-        return "#ff9800";
-      case "INFO":
-      default:
-        return "#2196f3";
+    } catch (err) {
+      console.error("Error downloading export", err);
     }
   };
 
+  const formatTime = (timestamp: number) => {
+    const d = new Date(timestamp);
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    if (isToday) return d.toLocaleTimeString();
+    return d.toLocaleDateString() + " " + d.toLocaleTimeString();
+  };
+
   return (
-    <div
-      className="notification-center"
-      ref={dropdownRef}
-      style={{ position: "relative", display: "flex", alignItems: "center" }}
-    >
-      <button
-        className="theme-toggle-btn"
-        onClick={toggleDropdown}
-        style={{ position: "relative" }}
+    <>
+
+      <IconButton
+        onClick={onRequestOpen}
+        color="inherit"
+        size="small"
         title="Notifications"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        <Badge
+          badgeContent={unreadCount}
+          color="primary"
+          invisible={unreadCount === 0}
         >
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-        </svg>
-        {unreadCount > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: 2,
-              right: 2,
-              backgroundColor: "var(--primary, #ed2553)",
-              color: "white",
-              borderRadius: "50%",
-              width: "14px",
-              height: "14px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "9px",
-              fontWeight: "bold",
-              lineHeight: 1,
-            }}
-          >
-            {unreadCount}
-          </span>
-        )}
-      </button>
+          <NotificationsIcon />
+        </Badge>
+      </IconButton>
 
-      {isOpen && (
-        <div
-          className="glass"
-          style={{
-            position: "absolute",
-            top: "100%",
-            right: 0,
-            marginTop: "12px",
-            width: "320px",
-            maxHeight: "400px",
-            overflowY: "auto",
-            zIndex: 1000,
-            display: "flex",
-            flexDirection: "column",
-            color: "var(--text-main)",
-          }}
-        >
-          <div
-            style={{
-              padding: "12px",
-              borderBottom: "1px solid var(--border-color)",
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDangerous={confirmModal.isDangerous}
+        onConfirm={confirmModal.action}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      <Drawer
+        anchor="right"
+        open={forceOpen}
+        onClose={onClose}
+        slotProps={{ paper: { sx: { width: 520 } } }}
+      >
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <Box
+            sx={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              px: 2,
+              py: 1,
+              borderBottom: 1,
+              borderColor: "divider",
             }}
           >
-            <h3
-              style={{ margin: 0, fontSize: "16px", color: "var(--text-main)" }}
+            <Typography
+              variant="h6"
+              sx={{ fontSize: "16px", fontWeight: 600 }}
             >
               Notifications
-            </h3>
-            {notifications.length > 0 && (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Tooltip title="Mark All Read">
+                <IconButton
+                  size="small"
                   onClick={markAllAsRead}
-                  style={{
-                    fontSize: "12px",
-                    background: "none",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                  }}
                 >
-                  Mark all read
-                </button>
-                <button
-                  onClick={clearAll}
-                  style={{
-                    fontSize: "12px",
-                    background: "none",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                  }}
+                  <DoneAllIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Clear All">
+                <IconButton
+                  size="small"
+                  onClick={handleClearAll}
                 >
-                  Clear
-                </button>
-              </div>
-            )}
-          </div>
+                  <ClearAllIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Close">
+                <IconButton
+                  size="small"
+                  onClick={onClose}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
 
           {notifications.length === 0 ? (
-            <div
-              style={{
-                padding: "24px",
-                textAlign: "center",
-                color: "var(--text-muted)",
+            <Box
+              sx={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "text.secondary",
               }}
             >
               No notifications
-            </div>
+            </Box>
           ) : (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {notifications.map((n: Notification) => (
-                <li
-                  key={n.id}
-                  onClick={() => markAsRead(n.id)}
-                  style={{
-                    padding: "12px",
-                    borderBottom: "1px solid var(--border-color)",
-                    backgroundColor: n.read ? "transparent" : "var(--bg-hover)",
-                    cursor: "pointer",
-                    display: "flex",
-                    gap: "12px",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      backgroundColor: getIconColor(n.type),
-                      marginTop: "6px",
-                    }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontWeight: "bold",
-                        fontSize: "14px",
-                        marginBottom: "4px",
-                        color: "var(--text-main)",
+            <Table
+              size="small"
+              stickyHeader
+            >
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ px: 2 }}>Notification</TableCell>
+                  <TableCell
+                    sx={{ px: 2 }}
+                    align="right"
+                  >
+                    Time
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {notifications.map((n: Notification) => {
+                  const color = severityColor[n.type] || "#2196f3";
+                  return (
+                    <TableRow
+                      key={n.id}
+                      onClick={() => markAsRead(n.id)}
+                      sx={{
+                        cursor: "pointer",
+                        bgcolor: n.read ? "transparent" : "action.hover",
+                        "&:last-child td, &:last-child th": {
+                          borderBottom: 0,
+                        },
                       }}
                     >
-                      {n.title}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--text-muted)",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      {n.message}
-                    </div>
-                    {n.context && (
-                      <div
-                        style={{
-                          fontSize: "10px",
-                          color: "var(--primary, var(--text-muted))",
-                          opacity: 0.8,
-                          marginBottom: "4px",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {[
-                          n.context.seriesTitle,
-                          n.context.chapterNumber
-                            ? `Ch.${n.context.chapterNumber}`
-                            : null,
-                          n.context.pageNumber
-                            ? `Page ${n.context.pageNumber}`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" › ")}
-                      </div>
-                    )}
-                    <div style={{ fontSize: "10px", color: "var(--text-dim)" }}>
-                      {new Date(n.timestamp).toLocaleTimeString()}
-                    </div>
-                    {n.type === "EXPORT_SUCCESS" && n.context?.exportId && (
-                      <div style={{ marginTop: "8px" }}>
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              const storedUser =
-                                localStorage.getItem("manga_user");
-                              if (!storedUser) return;
-                              const user = JSON.parse(storedUser);
-                              const res = await safeFetch(
-                                `/api/series/chapters/exports/${n.context.exportId}/download`,
-                                {
-                                  headers: {
-                                    Authorization: `Bearer ${user.token}`,
-                                  },
-                                },
-                              );
-                              if (res.ok) {
-                                const blob = await res.blob();
-                                const url = window.URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                const seriesTitle =
-                                  n.context.seriesTitle || "chapter";
-                                const chapterNumber =
-                                  n.context.chapterNumber || "export";
-                                a.download = `${seriesTitle} - Chapter ${chapterNumber}.zip`;
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                window.URL.revokeObjectURL(url);
-                              } else {
-                                console.error("Failed to download export");
-                              }
-                            } catch (err) {
-                              console.error("Error downloading export", err);
-                            }
+                      <TableCell sx={{ px: 2 }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 1.5,
                           }}
-                          className="btn btn-primary"
-                          style={{ fontSize: "12px", padding: "4px 12px" }}
                         >
-                          Download ZIP
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+                          <Box
+                            sx={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: "50%",
+                              backgroundColor: color,
+                              boxShadow: n.read ? "none" : `0 0 6px ${color}66`,
+                              flexShrink: 0,
+                              mt: 0.6,
+                            }}
+                          />
+                          <Box>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 600, fontSize: "13px" }}
+                            >
+                              {n.title}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                display: "block",
+                                color: "text.secondary",
+                                fontSize: "12px",
+                              }}
+                            >
+                              {n.message}
+                            </Typography>
+                            {n.context && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  display: "block",
+                                  color: "primary.main",
+                                  opacity: 0.8,
+                                  fontSize: "10px",
+                                  mt: 0.25,
+                                }}
+                              >
+                                {[
+                                  n.context.seriesTitle,
+                                  n.context.chapterNumber
+                                    ? `Ch.${n.context.chapterNumber}`
+                                    : null,
+                                  n.context.pageNumber
+                                    ? `Page ${n.context.pageNumber}`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" › ")}
+                              </Typography>
+                            )}
+                            {n.type === "EXPORT_SUCCESS" &&
+                              n.context?.exportId && (
+                                <Box sx={{ mt: 1 }}>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDownload(
+                                        n.context!.exportId!,
+                                        n.context?.seriesTitle,
+                                        n.context?.chapterNumber,
+                                      );
+                                    }}
+                                  >
+                                    Download ZIP
+                                  </Button>
+                                </Box>
+                              )}
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell
+                        sx={{ px: 2 }}
+                        align="right"
+                      >
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "text.disabled",
+                            fontSize: "11px",
+                          }}
+                        >
+                          {formatTime(n.timestamp)}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
-        </div>
-      )}
-    </div>
+        </Box>
+      </Drawer>
+    </>
   );
 };

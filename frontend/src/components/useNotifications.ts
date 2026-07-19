@@ -7,7 +7,7 @@ export type SSEEvent = {
 
 export interface Notification {
   id: string;
-  type: "INFO" | "WARNING" | "ERROR";
+  type: "INFO" | "WARNING" | "ERROR" | "EXPORT_SUCCESS";
   title: string;
   message: string;
   timestamp: number;
@@ -18,6 +18,7 @@ export interface Notification {
     chapterNumber?: string;
     chapterTitle?: string;
     pageNumber?: string;
+    exportId?: string;
   };
 }
 
