@@ -126,8 +126,8 @@ describe("ReaderLeftSidebar Component", () => {
       navigateToPage={navigatePageMock}
       curPageNum={2}
       totalPages={5}
-      prevChapter={{ id: "prev" } as any} 
-      nextChapter={{ id: "next" } as any} 
+      prevChapter={{ id: "prev" } as unknown as import("../types").Chapter} 
+      nextChapter={{ id: "next" } as unknown as import("../types").Chapter} 
     />);
     
     // Test chapter navigation

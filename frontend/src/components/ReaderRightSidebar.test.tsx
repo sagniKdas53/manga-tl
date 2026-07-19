@@ -64,12 +64,12 @@ describe("ReaderRightSidebar", () => {
         setActiveLayerId={vi.fn()}
         sortedLayers={[
           {
-            layer: { id: "l1", type: "translation", visible: true, metadataJson: { layer_name: "Test TL Layer" } } as any,
+            layer: { id: "l1", type: "translation", visible: true, metadataJson: { layer_name: "Test TL Layer" } } as unknown as import("../types").Layer,
             elements: []
           },
           {
-            layer: { id: "l2", type: "sfx", visible: false, targetLanguage: "en" } as any,
-            elements: [{ id: "e1" } as any]
+            layer: { id: "l2", type: "sfx", visible: false, targetLanguage: "en" } as unknown as import("../types").Layer,
+            elements: [{ id: "e1" } as unknown as import("../types").LayerElement]
           }
         ]}
         layers={[]}
@@ -154,7 +154,7 @@ describe("ReaderRightSidebar", () => {
         dirtyElements={new Set(["e1"])}
         handleSaveElementChanges={handleSaveElementChanges}
         handleDeleteElement={vi.fn()}
-        ocrRegions={[{ id: "r1", x: 0, y: 0, w: 10, h: 10 } as any]}
+        ocrRegions={[{ id: "r1", x: 0, y: 0, w: 10, h: 10 } as unknown as import("../types").OcrRegion]}
         isRedoingRegionOcr={false}
         handleRedoRegionOcr={vi.fn()}
         isRedoingRegionTranslation={false}
@@ -268,7 +268,7 @@ describe("ReaderRightSidebar", () => {
     const mockHandleUpdateSelectedElement = vi.fn();
     const mockElement = { id: "e1", isLayerElement: true, text: "Hello", x: 10, y: 10, maxWidth: 100, maxHeight: 100, regionId: "r1", layerType: "ocr" };
 
-    const { getByRole, getByTitle, getAllByRole } = render(
+    const { getByRole, getAllByRole } = render(
       <ReaderRightSidebar
         selectedItem={mockElement}
         setSelectedItem={vi.fn()}
@@ -276,7 +276,7 @@ describe("ReaderRightSidebar", () => {
         setActiveLayerId={vi.fn()}
         sortedLayers={[
           {
-            layer: { id: "l1", type: "translation", visible: true, metadataJson: { layer_name: "Test Layer" } } as any,
+            layer: { id: "l1", type: "translation", visible: true, metadataJson: { layer_name: "Test Layer" } } as unknown as import("../types").Layer,
             elements: [],
           },
         ]}

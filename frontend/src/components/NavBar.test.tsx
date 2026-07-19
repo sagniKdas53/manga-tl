@@ -7,7 +7,7 @@ import { useColorMode } from "../hooks/useColorMode";
 
 // Mock the components inside NavBar
 vi.mock("./QueueManager", () => ({
-  QueueManager: ({ onRequestOpen, onClose }: any) => (
+  QueueManager: ({ onRequestOpen, onClose }: { onRequestOpen: () => void; onClose: () => void }) => (
     <div data-testid="queue-manager">
       <button onClick={onRequestOpen} data-testid="qm-open" />
       <button onClick={onClose} data-testid="qm-close" />
@@ -15,7 +15,7 @@ vi.mock("./QueueManager", () => ({
   )
 }));
 vi.mock("./NotificationCenter", () => ({
-  NotificationCenter: ({ onRequestOpen, onClose }: any) => (
+  NotificationCenter: ({ onRequestOpen, onClose }: { onRequestOpen: () => void; onClose: () => void }) => (
     <div data-testid="notification-center">
       <button onClick={onRequestOpen} data-testid="nc-open" />
       <button onClick={onClose} data-testid="nc-close" />
