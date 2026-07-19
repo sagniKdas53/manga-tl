@@ -454,7 +454,7 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 
 ---
 
-## Phase D — Frontend UI Fixes & Redesign
+## Phase D — Frontend UI Fixes & Redesign ✅ COMPLETED
 
 > [!IMPORTANT]
 > **Recommended execution order**: D.14 (render-hygiene foundation) → D.12 Phase 0 (MUI v9 setup) → D.12 Phase 2 (modals) → Phase 1 (nav) → Phase 8 (auth) → Phase 5 (forms/settings: D.2, D.10, D.11) → Phase 4 (dashboard/cards: D.1, D.3, D.4) → Phase 6 (stacked toasts: D.13) → Phase 3 (queue: MUI Table) → Phase 7 (reader + bugs 7.4.1/7.4.2) → D.9 (infinite scroll, needs backend) → Phase 9 (cleanup) → D.15 (mobile, stretch goal)
@@ -715,6 +715,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 ### ✅ Checkpoint D — Verified
 
 **Quality gate:**
+
 ```bash
 cd frontend && npm run lint && npm run test:coverage && npm run build
 cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=true -Dpmd.skip=true
@@ -812,7 +813,15 @@ cd unified-workers && ruff check . && ruff format --check . && pyright . && pyte
 
 ---
 
-## Phase F — ML Model & Prompt Upgrades
+## Phase F — ML Model & Prompt Upgrades ❌ FAILED (PARTIALLY)
+
+> [!WARNING]
+> **Implementation Failed & Reverted:** The migration to the `ShadowB/Manga109-panel-balloon-text-yolov26-segmentation` YOLO model introduced a severe regression on illustration pages (non-manga pages). The model frequently hallucinates massive speech bubbles that cover the entire page due to complex backgrounds, even with the confidence threshold raised to 0.45.
+> This caused the OCR grouping logic to lump all free-floating text into a single giant brown box spanning the entire image.
+> **Next Steps / Proposed Fix:** If we revisit this phase, we must implement a robust size filter (e.g., rejecting any detected bubble that occupies >40% of the image area) to eliminate these full-page false positives, and carefully re-evaluate the model's accuracy on colored illustrations.
+
+> [!NOTE]
+> **Partial Success:** While the YOLO model upgrade (F.1) was reverted, the VLM OCR prompt improvements (F.2), QA prompt enhancements (F.3), and Translation prompt improvements (F.4) were successfully implemented and retained on top of the original YOLO model.
 
 *Independent of other phases. Can be parallelized.*
 

@@ -1,9 +1,9 @@
 import React from "react";
 import Grid from "@mui/material/Grid";
+import Box from "@mui/material/Box";
 import {
   Typography,
   Switch,
-  FormControlLabel,
   Slider,
   Button,
   TextField,
@@ -46,6 +46,77 @@ interface ReaderLeftSidebarProps {
   handleDeletePage: (pageId: string) => void;
   handleChangePageNumber: (pageId: string, newPage: number) => void;
 }
+
+// --- Shared presentational helpers -----------------------------------------
+
+const SidebarSection: React.FC<{ title: string; children: React.ReactNode; sx?: object }> = ({
+  title,
+  children,
+  sx,
+}) => (
+  <Box
+    sx={{
+      border: "1px solid var(--border-color)",
+      borderRadius: "10px",
+      p: 1.5,
+      mb: 2,
+      backgroundColor: "var(--bg-surface, transparent)",
+      ...sx,
+    }}
+  >
+    <Typography
+      variant="overline"
+      component="div"
+      sx={{
+        fontSize: "10.5px",
+        fontWeight: 700,
+        letterSpacing: "0.08em",
+        color: "var(--text-dim, var(--text-muted))",
+        mb: 1.25,
+      }}
+    >
+      {title}
+    </Typography>
+    {children}
+  </Box>
+);
+
+const ToggleRow: React.FC<{
+  label: string;
+  checked: boolean;
+  onChange: (val: boolean) => void;
+}> = ({ label, checked, onChange }) => (
+  <Box
+    onClick={() => onChange(!checked)}
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      py: 0.5,
+      px: 0.75,
+      mx: -0.75,
+      borderRadius: "6px",
+      cursor: "pointer",
+      "&:hover": { backgroundColor: "var(--bg-input, rgba(0,0,0,0.04))" },
+    }}
+  >
+    <Typography variant="body2" sx={{ fontSize: "13px", color: "var(--text-main)" }}>
+      {label}
+    </Typography>
+    <Switch
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      onClick={(e) => e.stopPropagation()}
+      size="small"
+    />
+  </Box>
+);
+
+const fitModes: { key: "page" | "width" | "height"; label: string; icon: React.ReactNode }[] = [
+  { key: "page", label: "Page", icon: <FitScreenIcon sx={{ fontSize: 15 }} /> },
+  { key: "width", label: "Width", icon: <WidthFullIcon sx={{ fontSize: 15 }} /> },
+  { key: "height", label: "Height", icon: <HeightIcon sx={{ fontSize: 15 }} /> },
+];
 
 const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) => {
   const displayedZoom = Math.round(props.zoom * 100);
@@ -101,60 +172,37 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
   return (
     <Grid className="reader-left-sidebar-nhentai">
       {/* Overlays Section */}
-      <Grid className="panel-section">
-        <Grid className="panel-section-title">OVERLAYS</Grid>
-        <Grid sx={{ display: "flex", flexDirection: "column" }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={props.showPanels}
-                onChange={(e) => props.setShowPanels(e.target.checked)}
-                size="small"
-              />
-            }
-            label={<Typography variant="body2">Panel Boundaries</Typography>}
+      <SidebarSection title="Overlays">
+        <Box sx={{ display: "flex", flexDirection: "column" }}>
+          <ToggleRow
+            label="Panel Boundaries"
+            checked={props.showPanels}
+            onChange={props.setShowPanels}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={props.showOcr}
-                onChange={(e) => props.setShowOcr(e.target.checked)}
-                size="small"
-              />
-            }
-            label={<Typography variant="body2">OCR Boxes</Typography>}
+          <ToggleRow
+            label="OCR Boxes"
+            checked={props.showOcr}
+            onChange={props.setShowOcr}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={props.cleanScanlationView}
-                onChange={(e) => {
-                  props.setCleanScanlationView(e.target.checked);
-                  props.setManuallyShownOcrLayers(new Set());
-                }}
-                size="small"
-                color="primary"
-              />
-            }
-            label={<Typography variant="body2">Clean Scanlation</Typography>}
+          <ToggleRow
+            label="Clean Scanlation"
+            checked={props.cleanScanlationView}
+            onChange={(val) => {
+              props.setCleanScanlationView(val);
+              props.setManuallyShownOcrLayers(new Set());
+            }}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={props.groupByConversation}
-                onChange={(e) => props.setGroupByConversation(e.target.checked)}
-                size="small"
-              />
-            }
-            label={<Typography variant="body2">Group Conversation</Typography>}
+          <ToggleRow
+            label="Group Conversation"
+            checked={props.groupByConversation}
+            onChange={props.setGroupByConversation}
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </SidebarSection>
 
       {/* Zoom & View Section */}
-      <Grid className="panel-section">
-        <Grid className="panel-section-title">ZOOM & VIEW</Grid>
-        <Grid sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+      <SidebarSection title="Zoom & View">
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
           <Slider
             min={0.5}
             max={3.0}
@@ -162,41 +210,71 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             value={props.zoom}
             onChange={(_, val) => props.setZoom(val as number)}
             size="small"
-            sx={{ flex: 1 }}
+            sx={{
+              flex: 1,
+              color: "var(--primary)",
+            }}
           />
-          <Typography variant="body2" sx={{ minWidth: "40px", fontWeight: "bold", textAlign: 'right' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              minWidth: "44px",
+              fontWeight: 700,
+              textAlign: "right",
+              color: "var(--text-main)",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
             {displayedZoom}%
           </Typography>
-        </Grid>
-        <Grid sx={{ display: "flex", gap: 1, mb: 1.5 }}>
-          <Button
-            size="small"
-            variant={props.fitMode === "page" ? "contained" : "outlined"}
-            onClick={() => props.setFitMode("page")}
-            startIcon={<FitScreenIcon />}
-            sx={{ flex: 1, fontSize: "11px", fontWeight: 600 }}
-          >
-            Page
-          </Button>
-          <Button
-            size="small"
-            variant={props.fitMode === "width" ? "contained" : "outlined"}
-            onClick={() => props.setFitMode("width")}
-            startIcon={<WidthFullIcon />}
-            sx={{ flex: 1, fontSize: "11px", fontWeight: 600 }}
-          >
-            Width
-          </Button>
-          <Button
-            size="small"
-            variant={props.fitMode === "height" ? "contained" : "outlined"}
-            onClick={() => props.setFitMode("height")}
-            startIcon={<HeightIcon />}
-            sx={{ flex: 1, fontSize: "11px", fontWeight: 600 }}
-          >
-            Height
-          </Button>
-        </Grid>
+        </Box>
+
+        {/* Fit mode segmented control */}
+        <Box
+          sx={{
+            display: "flex",
+            border: "1px solid var(--border-color)",
+            borderRadius: "8px",
+            overflow: "hidden",
+            mb: 1.5,
+          }}
+        >
+          {fitModes.map((mode, i) => {
+            const active = props.fitMode === mode.key;
+            return (
+              <Box
+                key={mode.key}
+                component="button"
+                type="button"
+                onClick={() => props.setFitMode(mode.key)}
+                sx={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 0.5,
+                  py: 0.75,
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  border: "none",
+                  borderLeft: i > 0 ? "1px solid var(--border-color)" : "none",
+                  backgroundColor: active ? "var(--primary)" : "transparent",
+                  color: active ? "#fff" : "var(--text-muted)",
+                  transition: "background-color 0.15s ease, color 0.15s ease",
+                  "&:hover": {
+                    backgroundColor: active ? "var(--primary)" : "var(--bg-input, rgba(0,0,0,0.05))",
+                  },
+                }}
+              >
+                {mode.icon}
+                {mode.label}
+              </Box>
+            );
+          })}
+        </Box>
+
         <Button
           variant="outlined"
           size="small"
@@ -206,16 +284,21 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             props.setFitMode("page");
           }}
           disabled={props.zoom === 1.0 && props.fitMode === "page"}
-          sx={{ fontSize: "11px", fontWeight: 600 }}
+          sx={{
+            fontSize: "11px",
+            fontWeight: 600,
+            color: "var(--text-muted)",
+            borderColor: "var(--border-color)",
+            "&:hover": { borderColor: "var(--primary)", color: "var(--primary)" },
+          }}
         >
           Reset Zoom
         </Button>
-      </Grid>
+      </SidebarSection>
 
       {/* Navigation Section */}
-      <Grid className="panel-section">
-        <Grid className="panel-section-title">NAVIGATION</Grid>
-        <Grid sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <SidebarSection title="Navigation">
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
           <ReaderPageNavigation
             currentPage={props.curPageNum}
             totalPages={props.totalPages}
@@ -230,14 +313,13 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
             onPrevChapter={() => props.prevChapter && props.navigateToChapter(props.prevChapter)}
             onNextChapter={() => props.nextChapter && props.navigateToChapter(props.nextChapter)}
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </SidebarSection>
 
       {/* Page Management Section */}
-      <Grid className="panel-section" style={{ marginBottom: 40 }}>
-        <Grid className="panel-section-title">PAGE MANAGEMENT</Grid>
-        <Grid sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-          <form onSubmit={onPageMoveSubmit} style={{ display: 'flex', gap: '8px' }}>
+      <SidebarSection title="Page Management" sx={{ mb: 5 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <Box component="form" onSubmit={onPageMoveSubmit} sx={{ display: "flex", gap: 1 }}>
             <TextField
               size="small"
               type="number"
@@ -253,12 +335,12 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
               size="small"
               startIcon={<SwapHorizIcon />}
               disabled={!props.selectedPage || props.totalPages <= 1 || targetPageInput === props.selectedPage.pageNumber.toString()}
-              sx={{ fontSize: "11px", fontWeight: 600 }}
+              sx={{ fontSize: "11px", fontWeight: 600, boxShadow: "none" }}
             >
               Move
             </Button>
-          </form>
-          
+          </Box>
+
           <Button
             variant="outlined"
             color="error"
@@ -284,8 +366,9 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
           >
             Delete Page
           </Button>
-        </Grid>
-      </Grid>
+        </Box>
+      </SidebarSection>
+
       {confirmModal && (
         <ConfirmModal
           isOpen={confirmModal.isOpen}
