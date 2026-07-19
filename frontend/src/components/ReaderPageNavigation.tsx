@@ -1,6 +1,7 @@
-
+import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Button from "@mui/material/Button";
+import Tooltip from "@mui/material/Tooltip";
 import FirstPageIcon from "@mui/icons-material/FirstPage";
 import LastPageIcon from "@mui/icons-material/LastPage";
 import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
@@ -23,57 +24,81 @@ export function ReaderPageNavigation({
   onNextPage,
   onLastPage,
 }: ReaderPageNavigationProps) {
+  const atStart = currentPage <= 1;
+  const atEnd = currentPage >= totalPages;
+
+  const segmentBtnSx = {
+    borderRadius: 0,
+    color: "var(--text-muted)",
+    "&:hover": { backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))", color: "var(--text-main)" },
+    "&.Mui-disabled": { color: "var(--text-dim, var(--text-muted))", opacity: 0.4 },
+  };
+
   return (
-    <div
+    <Box
       className="reader-page-controls-nhentai"
-      style={{
+      sx={{
         display: "flex",
+        alignItems: "stretch",
         justifyContent: "center",
-        marginBottom: "12px",
-        gap: "6px",
+        border: "1px solid var(--border-color)",
+        borderRadius: "8px",
+        overflow: "hidden",
+        width: "100%",
       }}
     >
-      <IconButton
-        size="small"
-        onClick={onFirstPage}
-        disabled={currentPage <= 1}
-        title="First Page"
-      >
-        <FirstPageIcon fontSize="small" />
-      </IconButton>
-      <IconButton
-        size="small"
-        onClick={onPrevPage}
-        disabled={currentPage <= 1}
-        title="Previous Page"
-      >
-        <NavigateBeforeIcon fontSize="small" />
-      </IconButton>
+      <Tooltip title="First Page">
+        <span>
+          <IconButton size="small" onClick={onFirstPage} disabled={atStart} sx={segmentBtnSx}>
+            <FirstPageIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Previous Page">
+        <span>
+          <IconButton size="small" onClick={onPrevPage} disabled={atStart} sx={segmentBtnSx}>
+            <NavigateBeforeIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
 
-      <span
-        className="reader-page-indicator-nhentai"
-        style={{ margin: "0 4px", fontSize: "12px" }}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flex: 1,
+          gap: "3px",
+          fontSize: "12px",
+          borderLeft: "1px solid var(--border-color)",
+          borderRight: "1px solid var(--border-color)",
+          backgroundColor: "var(--bg-input, rgba(0,0,0,0.02))",
+          px: 1,
+        }}
       >
-        <strong>{currentPage}</strong> / {totalPages}
-      </span>
+        <Box component="span" sx={{ fontWeight: 700, color: "var(--text-main)" }}>
+          {currentPage}
+        </Box>
+        <Box component="span" sx={{ color: "var(--text-dim, var(--text-muted))" }}>
+          / {totalPages}
+        </Box>
+      </Box>
 
-      <IconButton
-        size="small"
-        onClick={onNextPage}
-        disabled={currentPage >= totalPages}
-        title="Next Page"
-      >
-        <NavigateNextIcon fontSize="small" />
-      </IconButton>
-      <IconButton
-        size="small"
-        onClick={onLastPage}
-        disabled={currentPage >= totalPages}
-        title="Last Page"
-      >
-        <LastPageIcon fontSize="small" />
-      </IconButton>
-    </div>
+      <Tooltip title="Next Page">
+        <span>
+          <IconButton size="small" onClick={onNextPage} disabled={atEnd} sx={segmentBtnSx}>
+            <NavigateNextIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Last Page">
+        <span>
+          <IconButton size="small" onClick={onLastPage} disabled={atEnd} sx={segmentBtnSx}>
+            <LastPageIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Box>
   );
 }
 
@@ -90,13 +115,26 @@ export function ReaderPrevNextChapters({
   onPrevChapter,
   onNextChapter,
 }: ReaderPrevNextChaptersProps) {
+  const chapterBtnSx = {
+    flex: 1,
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "var(--text-muted)",
+    borderColor: "var(--border-color)",
+    "&:hover": {
+      borderColor: "var(--primary)",
+      color: "var(--primary)",
+      backgroundColor: "var(--primary-glow)",
+    },
+  };
+
   return (
-    <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+    <Box sx={{ display: "flex", gap: 1, width: "100%" }}>
       <Button
         variant="outlined"
         size="small"
         startIcon={<NavigateBeforeIcon />}
-        style={{ flex: 1, fontSize: "11px" }}
+        sx={chapterBtnSx}
         onClick={onPrevChapter}
         disabled={!hasPrevChapter}
       >
@@ -105,13 +143,13 @@ export function ReaderPrevNextChapters({
       <Button
         variant="outlined"
         size="small"
-        startIcon={<NavigateNextIcon />}
-        style={{ flex: 1, fontSize: "11px" }}
+        endIcon={<NavigateNextIcon />}
+        sx={chapterBtnSx}
         onClick={onNextChapter}
         disabled={!hasNextChapter}
       >
         Next Ch
       </Button>
-    </div>
+    </Box>
   );
 }

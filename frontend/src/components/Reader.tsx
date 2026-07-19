@@ -2846,6 +2846,11 @@ export const Reader: React.FC<ReaderProps> = ({
     <div className="reader-container-nhentai">
       <ReaderTopNav
         title={`${selectedSeries ? selectedSeries.title : "Series"} \u2014 Chapter ${selectedChapter?.chapterNumber} \u2014 Page ${selectedPage?.pageNumber}`}
+        segments={[
+          selectedSeries ? selectedSeries.title : "Series",
+          `Ch. ${selectedChapter?.chapterNumber ?? "?"}`,
+          `Page ${selectedPage?.pageNumber ?? "?"}`,
+        ]}
         onBack={() =>
           navigate(
             `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
@@ -2892,7 +2897,12 @@ export const Reader: React.FC<ReaderProps> = ({
         {/* Center Canvas */}
         <div
           className="reader-main-nhentai"
-          style={{ position: "relative" }}
+          style={{
+            position: "relative",
+            backgroundColor: "var(--bg-canvas, #e9e9ec)",
+            backgroundImage:
+              "radial-gradient(ellipse at center, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.07) 100%)",
+          }}
         >
           {isLoadingPageDetails && (
             <div
@@ -2907,12 +2917,16 @@ export const Reader: React.FC<ReaderProps> = ({
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                background: "rgba(0,0,0,0.4)",
+                background: "rgba(20,20,22,0.55)",
+                backdropFilter: "blur(2px)",
                 color: "white",
+                gap: "8px",
               }}
             >
-              <CircularProgress size={12} sx={{ color: "white", mb: 1 }} />
-              <div>Loading page details...</div>
+              <CircularProgress size={22} sx={{ color: "white" }} />
+              <div style={{ fontSize: "13px", fontWeight: 500 }}>
+                Loading page details...
+              </div>
             </div>
           )}
           <div
@@ -2930,6 +2944,8 @@ export const Reader: React.FC<ReaderProps> = ({
               overflow: "hidden",
               cursor: isDraggingCanvas ? "grabbing" : "grab",
               touchAction: isTouchScreen ? "none" : "auto",
+              padding: "32px",
+              boxSizing: "border-box",
             }}
           >
             <div
@@ -2942,6 +2958,8 @@ export const Reader: React.FC<ReaderProps> = ({
                   ? "none"
                   : "transform 0.15s ease-out",
                 userSelect: "none",
+                boxShadow:
+                  "0 1px 3px rgba(0,0,0,0.12), 0 12px 32px rgba(0,0,0,0.18)",
               }}
             >
               <img
@@ -2955,6 +2973,7 @@ export const Reader: React.FC<ReaderProps> = ({
                   height: fitMode === "height" ? "85vh" : "auto",
                   maxHeight: fitMode === "page" ? "80vh" : "none",
                   maxWidth: fitMode === "page" ? "100%" : "none",
+                  display: "block",
                 }}
                 draggable={false}
               />

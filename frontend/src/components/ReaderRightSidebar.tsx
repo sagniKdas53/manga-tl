@@ -1,5 +1,7 @@
 import React from 'react';
 import Grid from "@mui/material/Grid";
+import Box from "@mui/material/Box";
+import Tooltip from "@mui/material/Tooltip";
 import {
   IconButton,
   Button,
@@ -25,8 +27,55 @@ import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import UndoIcon from "@mui/icons-material/Undo";
 import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
+import LayersIcon from "@mui/icons-material/Layers";
 import { ColorPicker } from "./ColorPicker";
 import type { Layer, LayerElement, OcrRegion } from "../types";
+
+// --- Shared presentational helpers -----------------------------------------
+
+const SidebarSection: React.FC<{ title?: string; children: React.ReactNode; sx?: object; headerExtra?: React.ReactNode }> = ({
+  title,
+  children,
+  sx,
+  headerExtra,
+}) => (
+  <Box
+    sx={{
+      border: "1px solid var(--border-color)",
+      borderRadius: "10px",
+      p: 1.5,
+      mb: 2,
+      backgroundColor: "var(--bg-surface, transparent)",
+      ...sx,
+    }}
+  >
+    {title && (
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 1.25,
+        }}
+      >
+        <Typography
+          variant="overline"
+          component="div"
+          sx={{
+            fontSize: "10.5px",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            color: "var(--text-dim, var(--text-muted))",
+          }}
+        >
+          {title}
+        </Typography>
+        {headerExtra}
+      </Box>
+    )}
+    {children}
+  </Box>
+);
 
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure
@@ -95,39 +144,33 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     <Grid className="reader-right-sidebar-nhentai">
       {!selectedItem && (
         <>
-          <Grid
-            style={{
-              color: "var(--text-muted)",
-              fontSize: "13px",
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1,
+              color: "var(--text-dim, var(--text-muted))",
               textAlign: "center",
-              padding: "16px 0 24px",
+              py: 3,
+              mb: 2,
               borderBottom: "1px solid var(--border-color)",
-              marginBottom: "24px",
             }}
           >
-            Select an OCR region or a text layer to inspect and edit
-            details.
-          </Grid>
+            <LayersIcon sx={{ fontSize: 22, opacity: 0.5 }} />
+            <Typography
+              variant="body2"
+              sx={{ fontSize: "12.5px", color: "var(--text-muted)", maxWidth: 210 }}
+            >
+              Select an OCR region or a text layer to inspect and edit details.
+            </Typography>
+          </Box>
 
           {/* Translation Layers Section */}
-          <Grid className="panel-section">
-            <Grid
-              className="panel-section-title"
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span>Layers</span>
-              <Grid
-                style={{
-                  display: "flex",
-                  gap: "4px",
-                  alignItems: "center",
-                }}
-              >
-                {/* Up/Down reorder buttons — left group */}
+          <SidebarSection
+            title="Layers"
+            headerExtra={
+              <Box sx={{ display: "flex", gap: 0.25, alignItems: "center" }}>
                 <IconButton
                   size="small"
                   title="Move layer up"
@@ -141,7 +184,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   onClick={() =>
                     activeLayerId && handleMoveLayer(activeLayerId, "up")
                   }
-                  sx={{ m: 0, p: 0 }}
+                  sx={{ p: 0.25, color: "var(--text-muted)" }}
                 >
                   <KeyboardArrowUpIcon fontSize="small" />
                 </IconButton>
@@ -158,101 +201,127 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     activeLayerId &&
                     handleMoveLayer(activeLayerId, "down")
                   }
-                  sx={{ m: 0, p: 0 }}
+                  sx={{ p: 0.25, color: "var(--text-muted)" }}
                 >
                   <KeyboardArrowDownIcon fontSize="small" />
                 </IconButton>
-                {/* Divider */}
-                <Grid
-                  style={{
+                <Box
+                  sx={{
                     width: "1px",
                     height: "14px",
-                    background: "var(--border-color)",
-                    margin: "0 2px",
+                    backgroundColor: "var(--border-color)",
+                    mx: 0.5,
                   }}
                 />
-                {/* Add layer buttons — right group */}
                 <Button
                   variant="outlined"
                   size="small"
-                  startIcon={<AddIcon />}
-                  style={{ fontSize: "10px" }}
+                  startIcon={<AddIcon sx={{ fontSize: 14 }} />}
                   onClick={handleCreateTranslationLayer}
                   title="Add Translation Layer"
+                  sx={{
+                    fontSize: "10px",
+                    minWidth: 0,
+                    px: 1,
+                    py: 0.25,
+                    color: "var(--text-muted)",
+                    borderColor: "var(--border-color)",
+                  }}
                 >
                   TL
                 </Button>
                 <Button
                   variant="outlined"
                   size="small"
-                  startIcon={<AddIcon />}
-                  style={{ fontSize: "10px" }}
+                  startIcon={<AddIcon sx={{ fontSize: 14 }} />}
                   onClick={handleCreateSfxLayer}
                   title="Add SFX Layer"
+                  sx={{
+                    fontSize: "10px",
+                    minWidth: 0,
+                    px: 1,
+                    py: 0.25,
+                    color: "var(--text-muted)",
+                    borderColor: "var(--border-color)",
+                  }}
                 >
                   SFX
                 </Button>
-              </Grid>
-            </Grid>
-
+              </Box>
+            }
+          >
             {sortedLayers.length === 0 ? (
-              <Grid
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  padding: "4px 0",
-                }}
+              <Typography
+                variant="body2"
+                sx={{ fontSize: "11px", color: "var(--text-dim, var(--text-muted))", py: 0.5 }}
               >
                 No active layers.
-              </Grid>
+              </Typography>
             ) : (
               [...sortedLayers].reverse().map((lData, idx) => {
                 const isActive = lData.layer.id === activeLayerId;
+                const isVisible = lData.layer.visible;
                 const stackNumber = sortedLayers.length - idx;
-                const stackLabel = `#${stackNumber}`;
                 return (
-                  <Grid
+                  <Box
                     key={lData.layer.id}
-                    className="overlay-toggle"
                     onClick={() => setActiveLayerId(lData.layer.id)}
-                    style={{
-                      padding: "6px 8px",
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      p: "6px 8px",
+                      mb: 0.75,
+                      borderRadius: "8px",
+                      cursor: "pointer",
                       border: isActive
                         ? "1px solid var(--primary)"
                         : "1px solid var(--border-color)",
-                      borderRadius: "6px",
-                      marginBottom: "6px",
-                      backgroundColor: isActive
-                        ? "var(--primary-glow)"
-                        : "rgba(255,255,255,0.02)",
-                      cursor: "pointer",
-                      boxShadow: isActive
-                        ? "0 0 8px var(--primary-glow)"
-                        : "none",
+                      backgroundColor: isActive ? "var(--primary-glow)" : "transparent",
+                      boxShadow: isActive ? "0 0 8px var(--primary-glow)" : "none",
+                      opacity: isVisible ? 1 : 0.5,
+                      transition: "opacity 0.15s ease, border-color 0.15s ease",
+                      "&:hover": {
+                        borderColor: isActive ? "var(--primary)" : "var(--text-dim, var(--text-muted))",
+                      },
                     }}
                   >
-                    <Grid
-                      style={{
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 20,
+                        height: 20,
+                        borderRadius: "5px",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        flexShrink: 0,
+                        backgroundColor: isActive ? "var(--primary)" : "var(--bg-input, rgba(0,0,0,0.06))",
+                        color: isActive ? "#fff" : "var(--text-muted)",
+                      }}
+                    >
+                      {stackNumber}
+                    </Box>
+                    <Box
+                      sx={{
                         display: "flex",
                         flexDirection: "column",
                         gap: "2px",
                         flex: 1,
                         minWidth: 0,
-                        paddingRight: "8px",
                       }}
                     >
-                      <span
-                        style={{
+                      <Typography
+                        component="span"
+                        sx={{
                           fontSize: "13px",
                           fontWeight: isActive ? 700 : 600,
                           lineHeight: 1.2,
                           wordBreak: "break-word",
-                          color: isActive
-                            ? "var(--primary-hover)"
-                            : "inherit",
+                          color: isActive ? "var(--primary-hover)" : "var(--text-main)",
                         }}
                       >
-                        {stackLabel}{" "}
                         {typeof lData.layer.metadataJson?.layer_name === "string" ? lData.layer.metadataJson.layer_name :
                           (lData.layer.type === "translation"
                             ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
@@ -261,79 +330,79 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                               : lData.layer.type === "ocr"
                                 ? "OCR Layer"
                                 : `Layer (${lData.layer.type})`)}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "9px",
-                          color: "var(--text-dim)",
-                        }}
+                      </Typography>
+                      <Typography
+                        component="span"
+                        sx={{ fontSize: "9px", color: "var(--text-dim, var(--text-muted))" }}
                       >
-                        {lData.elements.length} elements
-                      </span>
-                    </Grid>
-                    <Grid
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        flexShrink: 0,
-                        marginRight: "-4px", /* offset the icon button padding to align correctly */
-                      }}
+                        {lData.elements.length} elements{!isVisible ? " · hidden" : ""}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <IconButton
-                        size="small"
-                        onClick={() =>
-                          handleToggleLayerVisibility(lData.layer.id)
-                        }
-                        color={
-                          lData.layer.visible ? "primary" : "default"
-                        }
-                        title="Toggle layer visibility"
-                      >
-                        {lData.layer.visible ? (
-                          <VisibilityIcon fontSize="small" />
-                        ) : (
-                          <VisibilityOffIcon fontSize="small" />
-                        )}
-                      </IconButton>
+                      <Tooltip title={isVisible ? "Hide layer" : "Show layer"}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleToggleLayerVisibility(lData.layer.id)}
+                          sx={{ color: isVisible ? "var(--primary)" : "var(--text-dim, var(--text-muted))" }}
+                        >
+                          {isVisible ? (
+                            <VisibilityIcon fontSize="small" />
+                          ) : (
+                            <VisibilityOffIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                      </Tooltip>
 
-                      <IconButton
-                        size="small"
-                        onClick={() => handleCloneLayer(lData.layer.id)}
-                        title="Clone layer (copies above, hides original as backup)"
-                      >
-                        <ContentCopyIcon fontSize="small" />
-                      </IconButton>
+                      <Tooltip title="Clone layer (copies above, hides original as backup)">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleCloneLayer(lData.layer.id)}
+                          sx={{ color: "var(--text-muted)" }}
+                        >
+                          <ContentCopyIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
 
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteLayer(lData.layer.id)}
-                        title="Delete layer"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Grid>
-                  </Grid>
+                      <Tooltip title="Delete layer">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteLayer(lData.layer.id)}
+                          sx={{
+                            color: "var(--text-muted)",
+                            "&:hover": { color: "var(--error)" },
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Box>
                 );
               })
             )}
-          </Grid>
+          </SidebarSection>
 
           {/* Editor Tools Section */}
-          <Grid className="panel-section">
-            <Typography variant="overline" component="div" className="panel-section-title">Editor Tools</Typography>
-            <Grid
-              style={{ display: "flex", gap: "8px", marginBottom: "8px" }}
-            >
+          <SidebarSection title="Editor Tools">
+            <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
               <Button
                 variant="outlined"
                 size="small"
-                style={{
+                sx={{
                   flex: 1,
-                  padding: "8px",
+                  py: 1,
                   fontSize: "11px",
                   fontWeight: 600,
+                  color: "var(--text-main)",
+                  borderColor: "var(--border-color)",
+                  "&:hover": {
+                    borderColor: "var(--primary)",
+                    color: "var(--primary)",
+                    backgroundColor: "var(--primary-glow)",
+                  },
                 }}
                 onClick={() => handleAddNewElement("text")}
                 disabled={!activeLayerId}
@@ -348,11 +417,18 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               <Button
                 variant="outlined"
                 size="small"
-                style={{
+                sx={{
                   flex: 1,
-                  padding: "8px",
+                  py: 1,
                   fontSize: "11px",
                   fontWeight: 600,
+                  color: "var(--text-main)",
+                  borderColor: "var(--border-color)",
+                  "&:hover": {
+                    borderColor: "var(--primary)",
+                    color: "var(--primary)",
+                    backgroundColor: "var(--primary-glow)",
+                  },
                 }}
                 onClick={() => handleAddNewElement("mask")}
                 disabled={!activeLayerId}
@@ -364,17 +440,16 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               >
                 Add Mask
               </Button>
-            </Grid>
+            </Box>
             <Button
               variant="outlined"
               size="small"
               startIcon={<ColorizeIcon />}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
+              fullWidth
+              sx={{
+                color: "var(--text-main)",
+                borderColor: "var(--border-color)",
+                "&:hover": { borderColor: "var(--primary)", color: "var(--primary)" },
               }}
               onClick={() => handleLaunchEyeDropper("backgroundColor")}
               disabled={!selectedItem || !selectedItem.isLayerElement}
@@ -382,71 +457,70 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               Color Dropper
             </Button>
-          </Grid>
+          </SidebarSection>
 
           {/* Page Actions Section */}
-          <Grid className="panel-section">
-            <Typography variant="overline" component="div" className="panel-section-title">Page Actions</Typography>
+          <SidebarSection title="Page Actions">
             <Button
               variant="outlined"
               size="small"
-              startIcon={<RefreshIcon />}
+              startIcon={
+                isRedoingPageOcr ? (
+                  <CircularProgress size={12} sx={{ color: "inherit" }} />
+                ) : (
+                  <RefreshIcon />
+                )
+              }
               onClick={handleRedoPageOcr}
               disabled={isRedoingPageOcr}
-              style={{
-                width: "100%",
-                marginBottom: "8px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
+              fullWidth
+              title="Discards this page's current OCR results and re-runs detection"
+              sx={{
+                mb: 1,
+                color: "var(--warning)",
+                borderColor: "var(--warning)",
+                "&:hover": { backgroundColor: "var(--warning)", color: "#fff" },
               }}
             >
-              {isRedoingPageOcr ? (
-                <CircularProgress size={12} sx={{ mr: 0.5 }} />
-              ) : null}
               Redo Page OCR
             </Button>
             <Button
               variant="outlined"
               size="small"
-              startIcon={<RefreshIcon />}
+              startIcon={
+                isRedoingPageTranslation ? (
+                  <CircularProgress size={12} sx={{ color: "inherit" }} />
+                ) : (
+                  <RefreshIcon />
+                )
+              }
               onClick={handleRedoPageTranslation}
               disabled={isRedoingPageTranslation}
-              style={{
-                width: "100%",
-                marginBottom: "8px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
+              fullWidth
+              title="Discards this page's current translation and re-runs it"
+              sx={{
+                color: "var(--warning)",
+                borderColor: "var(--warning)",
+                "&:hover": { backgroundColor: "var(--warning)", color: "#fff" },
               }}
             >
-              {isRedoingPageTranslation ? (
-                <CircularProgress size={12} sx={{ mr: 0.5 }} />
-              ) : null}
               Redo Page Translation
             </Button>
-          </Grid>
+          </SidebarSection>
 
           {/* Export Section */}
-          <Grid
-            className="panel-section"
-            style={{ paddingBottom: "40px" }}
-          >
-            <Typography variant="overline" component="div" className="panel-section-title">Export</Typography>
+          <SidebarSection title="Export" sx={{ mb: 5 }}>
             <Button
               variant="outlined"
               size="small"
               startIcon={<FileDownloadIcon />}
               onClick={handleExportPng}
-              style={{
-                width: "100%",
-                marginBottom: "8px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
+              fullWidth
+              sx={{
+                mb: 1,
+                color: "var(--primary)",
+                borderColor: "var(--primary)",
+                "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
               }}
             >
               Export Page (PNG)
@@ -456,18 +530,16 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               size="small"
               startIcon={<FileDownloadIcon />}
               onClick={handleExportZip}
-              style={{
-                width: "100%",
-                marginBottom: "8px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
+              fullWidth
+              sx={{
+                color: "var(--primary)",
+                borderColor: "var(--primary)",
+                "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
               }}
             >
               Export Project (ZIP)
             </Button>
-          </Grid>
+          </SidebarSection>
         </>
       )}
 
