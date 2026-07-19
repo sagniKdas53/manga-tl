@@ -128,18 +128,19 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   </Typography>
                   <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
                     {selectedChapter.resolvedOcr?.model && (
-                      <Chip size="small" variant="outlined" label={`OCR: ${selectedChapter.resolvedOcr.model}`} />
+                      <Chip size="small" variant="outlined" label={`OCR: ${selectedChapter.resolvedOcr.model} ${selectedChapter.resolvedOcr.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
                     )}
                     {selectedChapter.resolvedTranslation?.model && (
-                      <Chip size="small" variant="outlined" label={`Translation: ${selectedChapter.resolvedTranslation.model}`} />
+                      <Chip size="small" variant="outlined" label={`Translation: ${selectedChapter.resolvedTranslation.model} ${selectedChapter.resolvedTranslation.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
+                    )}
+                    {selectedChapter.resolvedQa?.mode && (
+                      <Chip size="small" variant="outlined" label={`QA Mode: ${selectedChapter.resolvedQa.mode} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
                     )}
                     {selectedChapter.resolvedQa?.llmModel && (
-                      <Chip size="small" variant="outlined" label={`QA: ${selectedChapter.resolvedQa.llmModel}`} />
+                      <Chip size="small" variant="outlined" label={`QA LLM: ${selectedChapter.resolvedQa.llmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
                     )}
-                    {!selectedChapter.resolvedOcr?.model && !selectedChapter.resolvedTranslation?.model && !selectedChapter.resolvedQa?.llmModel && (
-                      <Typography variant="body2" color="text.disabled">
-                        Using Default Models
-                      </Typography>
+                    {selectedChapter.resolvedQa?.vlmModel && (
+                      <Chip size="small" variant="outlined" label={`QA VLM: ${selectedChapter.resolvedQa.vlmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
                     )}
                   </Stack>
                 </Box>

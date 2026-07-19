@@ -751,24 +751,27 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 
 - **Current problem**: Costs are stored in `costs.json` files under `data/worker/rendered_cache/`. This adds filesystem I/O overhead on every job completion, is fragile (no transactions, no backup), and can't be queried.
 - **Fix**:
-  - Add a `costs` table (or `job_costs` / `layer_costs` columns) in PostgreSQL to store per-job and per-layer cost breakdowns
-  - Worker should POST cost data to the backend API (alongside the existing status callback) instead of writing to `costs.json`
-  - Backend `InternalJobController` or `JobCoordinatorService` persists costs to DB on job completion
-  - Update `ChapterExportService` to read costs from DB instead of `costs.json`
-  - Keep a brief transition period where both sources are checked (DB preferred, `costs.json` fallback)
-  - Once migration is verified, remove the filesystem cost storage entirely
-- **Benefits**: queryable cost analytics, survives container restarts, no filesystem coupling
+  - Add a `costs` table (or `job_costs` / `layer_costs` columns) in PostgreSQL to store per-job and per-layer cost breakdowns.
+  - Add a `provider_pricing` table/cache in PostgreSQL to store the different AI providers, their supported models, and their pricing structures so we can dynamically route requests to the lowest-cost provider (see E.6).
+  - Worker should POST cost data to the backend API (alongside the existing status callback) instead of writing to `costs.json`.
+  - Backend `InternalJobController` or `JobCoordinatorService` persists costs to DB on job completion.
+  - Update `ChapterExportService` to read costs from DB instead of `costs.json`.
+  - Keep a brief transition period where both sources are checked (DB preferred, `costs.json` fallback).
+  - Once migration is verified, remove the filesystem cost storage entirely.
+- **Benefits**: queryable cost analytics, enables dynamic lowest-cost provider routing, survives container restarts, no filesystem coupling.
 
-### E.4 Remove Worker `rendered_cache` QA Images
+### E.4 Configurable Worker `rendered_cache` (Audit Cache)
 
-**Files**: `render.py`, `qa.py`, Docker volume config
+**Files**: `render.py`, `qa.py`, Docker volume config, worker `.env`
 
-- **Current problem**: All images rendered for QA are saved to `data/worker/rendered_cache/`. This is no longer needed since rendered images are already stored in MinIO and can be viewed via the MinIO web GUI.
+- **Current problem**: All images rendered for QA are always saved to `data/worker/rendered_cache/`. This is usually no longer needed since rendered images are already stored in MinIO, but it can be useful as an audit trail.
 - **Fix**:
-  - Remove the local file writes in `render.py` / `qa.py` that save to `rendered_cache/`
-  - The rendered images in MinIO (`rendered/{imageId}.png`) serve as the single source of truth
-  - Remove the `rendered_cache` volume mapping from `docker-compose.yml` (or repurpose it for truly temporary processing only)
-  - Add cleanup logic: on worker startup, delete any stale files in `rendered_cache/` older than 24h
+  - Make the local file writes in `render.py` / `qa.py` configurable via environment variables.
+  - Introduce `ENABLE_QA_AUDIT_CACHE=true/false` (default `false`) to control whether QA images are saved locally.
+  - Introduce `QA_AUDIT_CACHE_DIR` to configure the location of this audit cache.
+  - By default, rely on the rendered images in MinIO (`rendered/{imageId}.png`) as the single source of truth.
+  - If the audit cache is disabled, the worker will not write QA images to disk, reducing unnecessary I/O.
+  - Add cleanup logic: on worker startup, if enabled, delete stale files in `QA_AUDIT_CACHE_DIR` older than 24h.
 - **Note**: `costs.json` files in `rendered_cache/` are addressed separately in E.3
 
 ### E.5 Chapter Export Cleanup
@@ -784,6 +787,41 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
   - Add a "Clear Exports" button in the admin/settings UI (or per-series)
   - Add a per-chapter "Re-export" button that forces regeneration (deletes cached ZIP + rebuilds)
   - Consider showing export cache size in the settings/admin panel
+
+### E.6 Cost-Aware Provider Routing (OpenRouter)
+
+**Files**: `ProviderChain.py` (worker) / OpenRouter API client
+
+- Implement cost calculation logic to filter out the lowest cost providers for a given model.
+- Restrict OpenRouter requests exclusively to these discounted providers to guarantee 79% to 83% discounts.
+- Prevent the system from defaulting to standard pricing by explicitly specifying the provider order and disabling fallbacks.
+
+Here is the precise configuration to lock in the top promotional rates (e.g., for `zhipu/glm-5.2`):
+
+```json
+{
+  "model": "zhipu/glm-5.2",
+  "messages": [
+    {"role": "user", "content": "Hello!"}
+  ],
+  "provider": {
+    "order": ["StreamLake", "NovitaAI", "Baidu Qianfan", "Decart"],
+    "allow_fallbacks": false
+  }
+}
+```
+
+Setting `"allow_fallbacks": false` is the critical step. It restricts the routing exclusively to the specified providers (e.g., StreamLake, NovitaAI, Baidu Qianfan, or Decart). If these specific providers experience downtime or throughput limits, the API call will safely fail (which triggers our standard failover chain from E.1) instead of passing the request to full-price providers further down the list, protecting from unexpected charges.
+
+### E.7 Model Routing Strategy Selector (UI + Backend)
+
+**Files**: `SettingsModal.tsx`, `SeriesDetails.tsx`, backend model override APIs, worker payload parser
+
+- Since we are caching provider pricing (E.3) and have explicit control over routing (E.6), we can expose a user-facing routing preference selector.
+- Add a dropdown setting alongside each model selection (Global, Series, and Chapter overrides) with the following options:
+  - **Lowest Cost (Default)**: Leverages the aggressive filtering from E.6 (sets `"allow_fallbacks": false` and explicitly targets the cheapest providers via the `order` parameter).
+  - **Highest Throughput / Speed**: Instructs OpenRouter (or our internal router) to prioritize `throughput` or `latency` via its `sort` parameter, potentially bypassing cost filters to ensure fast completion.
+- When an API request is built, the worker checks this routing strategy and dynamically adjusts the `provider` configuration (e.g., swapping out the `order` list and `sort` parameter) accordingly.
 
 ### ✅ Checkpoint E — Resilience
 
@@ -955,8 +993,10 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 | E.1 | `[NEW] ProviderChain.py`, `config.py` | Cross-provider failover |
 | E.2 | Worker HTTP call sites | Strict timeouts |
 | E.3 | Worker cost utils, `JobCoordinatorService.java` | Move cost tracking from `costs.json` to PostgreSQL |
-| E.4 | `render.py`, `qa.py`, `docker-compose.yml` | Remove `rendered_cache` QA image writes |
+| E.4 | `render.py`, `qa.py`, `docker-compose.yml` | Make `rendered_cache` QA image writes configurable via ENV vars |
 | E.5 | `[NEW] ExportCleanupService.java` | Scheduled cleanup of stale chapter export ZIPs |
+| E.6 | `ProviderChain.py` / worker clients | Cost-aware provider routing with `allow_fallbacks: false` |
+| E.7 | `SettingsModal.tsx`, backend APIs, worker clients | Model routing strategy selector (Cost vs Speed/Quality) |
 | 0.1 | `ci-python.yml`, `pyproject.toml`, `pyrightconfig.json` | Add ruff + pyright static analysis to Python CI |
 | F.1 | `bubble_detector.py` | YOLO model upgrade |
 | F.2 | `ocr.py` | VLM prompt improvements |

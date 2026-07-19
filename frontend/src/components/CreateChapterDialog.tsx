@@ -249,14 +249,14 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               sx={{ ml: 1 }}
             />
           </AccordionSummary>
-          <AccordionDetails>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+          <AccordionDetails
+            sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}
+          >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <FormControl fullWidth>
                 <InputLabel>OCR Provider</InputLabel>
                 <Select
+                  size="small"
                   value={ocrProvider}
                   label="OCR Provider"
                   onChange={(e) => setOcrProvider(e.target.value)}
@@ -283,14 +283,14 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
               <FormControl
                 fullWidth
-                margin="dense"
                 disabled={ocrDisabled}
               >
                 <InputLabel>OCR VLM Model</InputLabel>
                 <Select
+                  size="small"
                   value={ocrModel}
                   label="OCR VLM Model"
                   onChange={(e) => setOcrModel(e.target.value)}
@@ -323,13 +323,11 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <FormControl fullWidth>
                 <InputLabel>TL Provider</InputLabel>
                 <Select
+                  size="small"
                   value={tlProvider}
                   label="TL Provider"
                   onChange={(e) => setTlProvider(e.target.value)}
@@ -356,13 +354,11 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <FormControl fullWidth>
                 <InputLabel>TL LLM Model</InputLabel>
                 <Select
+                  size="small"
                   value={tlModel}
                   label="TL LLM Model"
                   onChange={(e) => setTlModel(e.target.value)}
@@ -389,13 +385,11 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <FormControl fullWidth>
                 <InputLabel>QA Provider</InputLabel>
                 <Select
+                  size="small"
                   value={qaProvider}
                   label="QA Provider"
                   onChange={(e) => setQaProvider(e.target.value)}
@@ -422,13 +416,11 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <FormControl fullWidth>
                 <InputLabel>QA Mode</InputLabel>
                 <Select
+                  size="small"
                   value={qaMode}
                   label="QA Mode"
                   onChange={(e) => setQaMode(e.target.value)}
@@ -455,14 +447,14 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
               <FormControl
                 fullWidth
-                margin="dense"
                 disabled={qaLlmDisabled}
               >
                 <InputLabel>QA LLM Model</InputLabel>
                 <Select
+                  size="small"
                   value={qaLlmModel}
                   label="QA LLM Model"
                   onChange={(e) => setQaLlmModel(e.target.value)}
@@ -489,14 +481,14 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
               <FormControl
                 fullWidth
-                margin="dense"
                 disabled={qaVlmDisabled}
               >
                 <InputLabel>QA VLM Model</InputLabel>
                 <Select
+                  size="small"
                   value={qaVlmModel}
                   label="QA VLM Model"
                   onChange={(e) => setQaVlmModel(e.target.value)}

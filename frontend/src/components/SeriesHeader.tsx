@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
@@ -12,11 +12,13 @@ import AddIcon from "@mui/icons-material/Add";
 import UploadIcon from "@mui/icons-material/Upload";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import type { Series } from "../types";
+import type { Series, User, SystemSettingsDto } from "../types";
+import { safeFetch, resolveOverride } from "../utils";
 
 interface SeriesHeaderProps {
   series: Series;
   chapterCount: number;
+  user: User;
   onAddChapter: () => void;
   onImportChapter: () => void;
   onEditSeries: () => void;
@@ -26,11 +28,29 @@ interface SeriesHeaderProps {
 export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
   series,
   chapterCount,
+  user,
   onAddChapter,
   onImportChapter,
   onEditSeries,
   onDeleteSeries,
 }) => {
+  const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
+
+  useEffect(() => {
+    safeFetch("/api/settings", {
+      headers: { Authorization: `Bearer ${user.token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => setSettings(d))
+      .catch(() => {});
+  }, [user.token]);
+
+  const resolvedOcr = resolveOverride(null, series.ocrModel, settings?.ocrModel);
+  const resolvedTl = resolveOverride(null, series.tlModel, settings?.tlModel);
+  const resolvedQa = resolveOverride(null, series.qaLlmModel, settings?.qaLlmModel);
+  const resolvedQaVlm = resolveOverride(null, series.qaVlmModel, settings?.qaVlmModel);
+  const resolvedQaMode = resolveOverride(null, series.qaMode, settings?.qaMode);
+
   return (
     <Card elevation={3} sx={{ mb: 4, overflow: "visible" }}>
       <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
@@ -110,19 +130,20 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   Configured Models
                 </Typography>
                 <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
-                  {series.ocrModel && (
-                    <Chip size="small" variant="outlined" label={`OCR: ${series.ocrModel}`} />
+                  {resolvedOcr.value && (
+                    <Chip size="small" variant="outlined" label={`OCR: ${resolvedOcr.value} ${resolvedOcr.source === "series" ? "(overridden)" : "(inherited)"}`} />
                   )}
-                  {series.tlModel && (
-                    <Chip size="small" variant="outlined" label={`Translation: ${series.tlModel}`} />
+                  {resolvedTl.value && (
+                    <Chip size="small" variant="outlined" label={`Translation: ${resolvedTl.value} ${resolvedTl.source === "series" ? "(overridden)" : "(inherited)"}`} />
                   )}
-                  {series.qaLlmModel && (
-                    <Chip size="small" variant="outlined" label={`QA: ${series.qaLlmModel}`} />
+                  {resolvedQaMode.value && (
+                    <Chip size="small" variant="outlined" label={`QA Mode: ${resolvedQaMode.value} ${resolvedQaMode.source === "series" ? "(overridden)" : "(inherited)"}`} />
                   )}
-                  {!series.ocrModel && !series.tlModel && !series.qaLlmModel && (
-                    <Typography variant="body2" color="text.disabled">
-                      Using Global Defaults
-                    </Typography>
+                  {resolvedQa.value && (
+                    <Chip size="small" variant="outlined" label={`QA LLM: ${resolvedQa.value} ${resolvedQa.source === "series" ? "(overridden)" : "(inherited)"}`} />
+                  )}
+                  {resolvedQaVlm.value && (
+                    <Chip size="small" variant="outlined" label={`QA VLM: ${resolvedQaVlm.value} ${resolvedQaVlm.source === "series" ? "(overridden)" : "(inherited)"}`} />
                   )}
                 </Stack>
               </Box>

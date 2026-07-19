@@ -196,6 +196,7 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
       <SeriesHeader
         series={selectedSeries}
         chapterCount={chapters.length}
+        user={user}
         onAddChapter={handleNewChapterClick}
         onImportChapter={() => setShowImportModal(true)}
         onEditSeries={handleEditSeriesClick}
