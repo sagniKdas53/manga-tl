@@ -27,6 +27,7 @@ export interface NotificationContextType {
   unreadCount: number;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
+  dismissNotification: (id: string) => void;
   clearAll: () => void;
   subscribe: (callback: (event: SSEEvent) => void) => () => void;
 }
