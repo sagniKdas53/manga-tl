@@ -382,6 +382,37 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     );
   }
 
+  const handleDeleteChapter = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Chapter",
+      message: "Are you sure you want to delete this chapter? This cannot be undone.",
+      confirmText: "Delete Chapter",
+      isDangerous: true,
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          const res = await safeFetch(`/api/chapters/${selectedChapter.id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${user.token}` },
+          });
+          if (res.ok) {
+            showToast("Chapter deleted successfully", "success");
+            setSelectedChapter(null);
+            navigate(`/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`);
+          } else if (res.status === 403) {
+            showToast("You don't have permission to delete this chapter.", "error");
+          } else {
+            showToast("Failed to delete chapter", "error");
+          }
+        } catch (err) {
+          console.error("Error deleting chapter:", err);
+          showToast("Error deleting chapter", "error");
+        }
+      },
+    });
+  };
+
   const handleDeletePage = (pageId: string) => {
     setConfirmModal({
       isOpen: true,
@@ -498,6 +529,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         }
         onExportClick={handleExportChapterZip}
         onUploadClick={() => document.getElementById("file-upload")?.click()}
+        onDeleteClick={handleDeleteChapter}
         isImporting={isImportingProject}
         mode={mode}
       />
