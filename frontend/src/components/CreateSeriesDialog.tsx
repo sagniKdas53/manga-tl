@@ -279,19 +279,18 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               sx={{ ml: 1 }}
             />
           </AccordionSummary>
-          <AccordionDetails>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+          <AccordionDetails
+            sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}
+          >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+              <FormControl fullWidth>
                 <InputLabel>OCR Provider</InputLabel>
                 <Select
-                  value={ocrProvider}
+                  size="small"
+                  value={ocrProvider || inheritedOcrProvider || ""}
                   label="OCR Provider"
                   onChange={(e) => setOcrProvider(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {ocrProviders.map((p) => (
                     <MenuItem
                       key={p}
@@ -301,11 +300,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {ocrProvider === "" && inheritedOcrProvider && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedOcrProvider}
-                  </FormHelperText>
-                )}
               </FormControl>
               {ocrProvider !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrProvider("")}>
@@ -313,19 +307,22 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl
                 fullWidth
-                margin="dense"
                 disabled={ocrDisabled}
               >
                 <InputLabel>OCR VLM Model</InputLabel>
                 <Select
-                  value={ocrModel}
+                  size="small"
+                  value={
+                    ocrDisabled
+                      ? settings?.localOcrModel || "local"
+                      : ocrModel || inheritedOcrModel || ""
+                  }
                   label="OCR VLM Model"
                   onChange={(e) => setOcrModel(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {ocrDisabled && settings?.localOcrModel ? (
                     <MenuItem value={settings.localOcrModel}>
                       {settings.localOcrModel}
@@ -341,11 +338,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                     ))
                   )}
                 </Select>
-                {ocrModel === "" && inheritedOcrModel && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedOcrModel}
-                  </FormHelperText>
-                )}
               </FormControl>
               {ocrModel !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrModel("")}>
@@ -353,19 +345,15 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+              <FormControl fullWidth>
                 <InputLabel>TL Provider</InputLabel>
                 <Select
-                  value={tlProvider}
+                  size="small"
+                  value={tlProvider || inheritedTlProvider || ""}
                   label="TL Provider"
                   onChange={(e) => setTlProvider(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {providers.map((p) => (
                     <MenuItem
                       key={p}
@@ -375,11 +363,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {tlProvider === "" && inheritedTlProvider && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedTlProvider}
-                  </FormHelperText>
-                )}
               </FormControl>
               {tlProvider !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlProvider("")}>
@@ -387,18 +370,15 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+              <FormControl fullWidth>
                 <InputLabel>TL LLM Model</InputLabel>
                 <Select
-                  value={tlModel}
+                  size="small"
+                  value={tlModel || inheritedTlModel || ""}
                   label="TL LLM Model"
                   onChange={(e) => setTlModel(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {(settings?.tlLlmModelList || []).map((m) => (
                     <MenuItem
                       key={m}
@@ -408,11 +388,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {tlModel === "" && inheritedTlModel && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedTlModel}
-                  </FormHelperText>
-                )}
               </FormControl>
               {tlModel !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlModel("")}>
@@ -420,19 +395,15 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+              <FormControl fullWidth>
                 <InputLabel>QA Provider</InputLabel>
                 <Select
-                  value={qaProvider}
+                  size="small"
+                  value={qaProvider || inheritedQaProvider || ""}
                   label="QA Provider"
                   onChange={(e) => setQaProvider(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {providers.map((p) => (
                     <MenuItem
                       key={p}
@@ -442,11 +413,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {qaProvider === "" && inheritedQaProvider && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedQaProvider}
-                  </FormHelperText>
-                )}
               </FormControl>
               {qaProvider !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaProvider("")}>
@@ -454,18 +420,15 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
-              <FormControl
-                fullWidth
-                margin="dense"
-              >
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+              <FormControl fullWidth>
                 <InputLabel>QA Mode</InputLabel>
                 <Select
-                  value={qaMode}
+                  size="small"
+                  value={qaMode || inheritedQaMode || ""}
                   label="QA Mode"
                   onChange={(e) => setQaMode(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {QA_MODES.map((m) => (
                     <MenuItem
                       key={m}
@@ -475,11 +438,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {qaMode === "" && inheritedQaMode && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedQaMode}
-                  </FormHelperText>
-                )}
               </FormControl>
               {qaMode !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaMode("")}>
@@ -487,19 +445,18 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl
                 fullWidth
-                margin="dense"
                 disabled={qaLlmDisabled}
               >
                 <InputLabel>QA LLM Model</InputLabel>
                 <Select
-                  value={qaLlmModel}
+                  size="small"
+                  value={qaLlmModel || inheritedQaLlmModel || ""}
                   label="QA LLM Model"
                   onChange={(e) => setQaLlmModel(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {(settings?.qaLlmModelList || []).map((m) => (
                     <MenuItem
                       key={m}
@@ -509,11 +466,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {qaLlmModel === "" && inheritedQaLlmModel && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedQaLlmModel}
-                  </FormHelperText>
-                )}
               </FormControl>
               {qaLlmModel !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaLlmModel("")}>
@@ -521,19 +473,18 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl
                 fullWidth
-                margin="dense"
                 disabled={qaVlmDisabled}
               >
                 <InputLabel>QA VLM Model</InputLabel>
                 <Select
-                  value={qaVlmModel}
+                  size="small"
+                  value={qaVlmModel || inheritedQaVlmModel || ""}
                   label="QA VLM Model"
                   onChange={(e) => setQaVlmModel(e.target.value)}
                 >
-                  <MenuItem value="">-- Inherit --</MenuItem>
                   {(settings?.qaVlmModelList || []).map((m) => (
                     <MenuItem
                       key={m}
@@ -543,11 +494,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
-                {qaVlmModel === "" && inheritedQaVlmModel && (
-                  <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                    Resolved: {inheritedQaVlmModel}
-                  </FormHelperText>
-                )}
               </FormControl>
               {qaVlmModel !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaVlmModel("")}>

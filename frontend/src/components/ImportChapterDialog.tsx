@@ -237,16 +237,15 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
             <AccordionDetails
               sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}
             >
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
                   <InputLabel>OCR Provider</InputLabel>
                   <Select
                     size="small"
-                    value={ocrProvider}
+                    value={ocrProvider || inheritedOcrProvider || ""}
                     label="OCR Provider"
                     onChange={(e) => setOcrProvider(e.target.value)}
                   >
-                    <MenuItem value="">-- Inherit --</MenuItem>
                     {actualOcrProviders.map((p) => (
                       <MenuItem
                         key={p}
@@ -256,11 +255,6 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                       </MenuItem>
                     ))}
                   </Select>
-                  {ocrProvider === "" && inheritedOcrProvider && (
-                    <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                      Resolved: {inheritedOcrProvider}
-                    </FormHelperText>
-                  )}
                 </FormControl>
                 {ocrProvider !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrProvider("")}>
@@ -268,13 +262,15 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   </IconButton>
                 )}
               </Box>
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
                   <InputLabel>OCR Model</InputLabel>
                   <Select
                     size="small"
                     value={
-                      isLocalOcr ? settings?.localOcrModel || "local" : ocrModel
+                      isLocalOcr
+                        ? settings?.localOcrModel || "local"
+                        : ocrModel || inheritedOcrModel || ""
                     }
                     label="OCR Model"
                     disabled={isLocalOcr}
@@ -285,29 +281,16 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                         {settings?.localOcrModel || "Local"}
                       </MenuItem>
                     ) : (
-                      [
+                      (settings?.ocrVlmModelList || []).map((m) => (
                         <MenuItem
-                          key="inh"
-                          value=""
+                          key={m}
+                          value={m}
                         >
-                          -- Inherit --
-                        </MenuItem>,
-                        ...(settings?.ocrVlmModelList || []).map((m) => (
-                          <MenuItem
-                            key={m}
-                            value={m}
-                          >
-                            {m}
-                          </MenuItem>
-                        )),
-                      ]
+                          {m}
+                        </MenuItem>
+                      ))
                     )}
                   </Select>
-                  {ocrModel === "" && inheritedOcrModel && (
-                    <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                      Resolved: {inheritedOcrModel}
-                    </FormHelperText>
-                  )}
                 </FormControl>
                 {ocrModel !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrModel("")}>
@@ -315,16 +298,15 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   </IconButton>
                 )}
               </Box>
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
                   <InputLabel>TL Provider</InputLabel>
                   <Select
                     size="small"
-                    value={tlProvider}
+                    value={tlProvider || inheritedTlProvider || ""}
                     label="TL Provider"
                     onChange={(e) => setTlProvider(e.target.value)}
                   >
-                    <MenuItem value="">-- Inherit --</MenuItem>
                     {actualProviders.map((p) => (
                       <MenuItem
                         key={p}
@@ -334,11 +316,6 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                       </MenuItem>
                     ))}
                   </Select>
-                  {tlProvider === "" && inheritedTlProvider && (
-                    <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                      Resolved: {inheritedTlProvider}
-                    </FormHelperText>
-                  )}
                 </FormControl>
                 {tlProvider !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlProvider("")}>
@@ -346,16 +323,15 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   </IconButton>
                 )}
               </Box>
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
                   <InputLabel>TL Model</InputLabel>
                   <Select
                     size="small"
-                    value={tlModel}
+                    value={tlModel || inheritedTlModel || ""}
                     label="TL Model"
                     onChange={(e) => setTlModel(e.target.value)}
                   >
-                    <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.tlLlmModelList || []).map((m) => (
                       <MenuItem
                         key={m}
@@ -365,11 +341,6 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                       </MenuItem>
                     ))}
                   </Select>
-                  {tlModel === "" && inheritedTlModel && (
-                    <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                      Resolved: {inheritedTlModel}
-                    </FormHelperText>
-                  )}
                 </FormControl>
                 {tlModel !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlModel("")}>
@@ -377,16 +348,15 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   </IconButton>
                 )}
               </Box>
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
                   <InputLabel>QA Provider</InputLabel>
                   <Select
                     size="small"
-                    value={qaProvider}
+                    value={qaProvider || inheritedQaProvider || ""}
                     label="QA Provider"
                     onChange={(e) => setQaProvider(e.target.value)}
                   >
-                    <MenuItem value="">-- Inherit --</MenuItem>
                     {actualProviders.map((p) => (
                       <MenuItem
                         key={p}
@@ -396,11 +366,6 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                       </MenuItem>
                     ))}
                   </Select>
-                  {qaProvider === "" && inheritedQaProvider && (
-                    <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                      Resolved: {inheritedQaProvider}
-                    </FormHelperText>
-                  )}
                 </FormControl>
                 {qaProvider !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaProvider("")}>
@@ -408,16 +373,15 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   </IconButton>
                 )}
               </Box>
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
                   <InputLabel>QA Mode</InputLabel>
                   <Select
                     size="small"
-                    value={qaMode}
+                    value={qaMode || inheritedQaMode || ""}
                     label="QA Mode"
                     onChange={(e) => setQaMode(e.target.value)}
                   >
-                    <MenuItem value="">-- Inherit --</MenuItem>
                     {["auto", "llm", "vlm", "hybrid", "none"].map((m) => (
                       <MenuItem
                         key={m}
@@ -427,11 +391,6 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                       </MenuItem>
                     ))}
                   </Select>
-                  {qaMode === "" && inheritedQaMode && (
-                    <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                      Resolved: {inheritedQaMode}
-                    </FormHelperText>
-                  )}
                 </FormControl>
                 {qaMode !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaMode("")}>
@@ -439,17 +398,16 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   </IconButton>
                 )}
               </Box>
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
                   <InputLabel>QA LLM Model</InputLabel>
                   <Select
                     size="small"
-                    value={qaLlmModel}
+                    value={qaLlmModel || inheritedQaLlmModel || ""}
                     label="QA LLM Model"
                     disabled={qaMode === "vlm" || qaMode === "none"}
                     onChange={(e) => setQaLlmModel(e.target.value)}
                   >
-                    <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.qaLlmModelList || []).map((m) => (
                       <MenuItem
                         key={m}
@@ -459,11 +417,6 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                       </MenuItem>
                     ))}
                   </Select>
-                  {qaLlmModel === "" && inheritedQaLlmModel && (
-                    <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                      Resolved: {inheritedQaLlmModel}
-                    </FormHelperText>
-                  )}
                 </FormControl>
                 {qaLlmModel !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaLlmModel("")}>
@@ -471,17 +424,16 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   </IconButton>
                 )}
               </Box>
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
                   <InputLabel>QA VLM Model</InputLabel>
                   <Select
                     size="small"
-                    value={qaVlmModel}
+                    value={qaVlmModel || inheritedQaVlmModel || ""}
                     label="QA VLM Model"
                     disabled={qaMode === "llm" || qaMode === "none"}
                     onChange={(e) => setQaVlmModel(e.target.value)}
                   >
-                    <MenuItem value="">-- Inherit --</MenuItem>
                     {(settings?.qaVlmModelList || []).map((m) => (
                       <MenuItem
                         key={m}
@@ -491,11 +443,6 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                       </MenuItem>
                     ))}
                   </Select>
-                  {qaVlmModel === "" && inheritedQaVlmModel && (
-                    <FormHelperText sx={{ m: 0, fontSize: "11px", color: "text.secondary" }}>
-                      Resolved: {inheritedQaVlmModel}
-                    </FormHelperText>
-                  )}
                 </FormControl>
                 {qaVlmModel !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaVlmModel("")}>
