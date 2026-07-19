@@ -266,6 +266,7 @@ describe("ReaderRightSidebar", () => {
     const mockHandleCloneLayer = vi.fn();
     const mockHandleDeleteLayer = vi.fn();
     const mockHandleUpdateSelectedElement = vi.fn();
+    const mockHandleSaveElementChanges = vi.fn();
     const mockElement = { id: "e1", isLayerElement: true, text: "Hello", x: 10, y: 10, maxWidth: 100, maxHeight: 100, regionId: "r1", layerType: "ocr" };
 
     const { getByRole, getAllByRole } = render(
@@ -304,7 +305,7 @@ describe("ReaderRightSidebar", () => {
         handleEnterReshapeMode={vi.fn()}
         handleUpdateSelectedElement={mockHandleUpdateSelectedElement}
         dirtyElements={new Set()}
-        handleSaveElementChanges={vi.fn()}
+        handleSaveElementChanges={mockHandleSaveElementChanges}
         handleDeleteElement={vi.fn()}
         ocrRegions={[]}
         isRedoingRegionOcr={false}
@@ -353,6 +354,6 @@ describe("ReaderRightSidebar", () => {
     // Test buttons
     const saveBtn = getByRole("button", { name: /Save/i });
     fireEvent.click(saveBtn);
-    expect(mockHandleUpdateSelectedElement).toHaveBeenCalled(); // Since it renders, we just care that it doesn't crash, the exact call depends on mock
+    expect(mockHandleSaveElementChanges).toHaveBeenCalledWith(mockElement);
   });
 });
