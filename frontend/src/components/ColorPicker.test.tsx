@@ -47,7 +47,7 @@ describe("ColorPicker", () => {
         onLaunchEyeDropper={onLaunchEyeDropper}
       />,
     );
-    const button = screen.getByTitle("Color Dropper");
+    const button = screen.getByTitle("Eye dropper");
     fireEvent.click(button);
     expect(onLaunchEyeDropper).toHaveBeenCalled();
   });

@@ -21,9 +21,9 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -87,7 +87,7 @@ public class PipelineFlowIntegrationTest {
     mockRedisListStore.clear();
 
     org.springframework.data.redis.core.ValueOperations<String, String> valueOps =
-        org.mockito.Mockito.mock(org.springframework.data.redis.core.ValueOperations.class);
+        mockGeneric(org.springframework.data.redis.core.ValueOperations.class);
     org.mockito.Mockito.when(valueOps.get(org.mockito.Mockito.anyString()))
         .thenAnswer(invocation -> mockRedisValueStore.get(invocation.getArgument(0)));
     org.mockito.Mockito.doAnswer(
@@ -109,7 +109,7 @@ public class PipelineFlowIntegrationTest {
             org.mockito.Mockito.any(java.time.Duration.class));
 
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
-        org.mockito.Mockito.mock(org.springframework.data.redis.core.ListOperations.class);
+        mockGeneric(org.springframework.data.redis.core.ListOperations.class);
     org.mockito.Mockito.when(
             listOps.rightPush(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
         .thenAnswer(
@@ -697,5 +697,15 @@ public class PipelineFlowIntegrationTest {
             Map.class);
     List<?> hiddenOcrRegions = (List<?>) hiddenInfo.get("ocrRegions");
     assertEquals(1, hiddenOcrRegions.size());
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T mockGeneric(Class<?> clazz) {
+      return (T) org.mockito.Mockito.mock(clazz);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T anyGeneric(Class<?> clazz) {
+      return (T) org.mockito.ArgumentMatchers.any(clazz);
   }
 }

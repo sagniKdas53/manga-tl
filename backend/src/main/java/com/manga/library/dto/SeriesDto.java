@@ -20,4 +20,6 @@ public class SeriesDto {
   private String qaLlmModel;
   private String qaVlmModel;
   private String qaMode;
+  private java.time.OffsetDateTime createdAt;
+  private java.time.OffsetDateTime updatedAt;
 }

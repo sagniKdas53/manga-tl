@@ -15,10 +15,9 @@ import { safeFetch, toSlug, formatCost } from "../utils";
 import { fitTextInBox } from "../utils/fitText";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
-import { ColorPicker } from "./ColorPicker";
-import { useNotifications } from "./useNotifications";
-import { useToast } from "./ToastContext";
-import JSZip from "jszip";
+import ReaderTopNav from "./ReaderTopNav";
+import ReaderLeftSidebar from "./ReaderLeftSidebar";
+import ReaderRightSidebar from "./ReaderRightSidebar";
 import {
   type Point,
   type Polygon,
@@ -31,6 +30,10 @@ import {
   isVertexMoveValid,
   isRotationValid,
 } from "../utils/polygonUtils";
+import JSZip from "jszip";
+import { useNotifications } from "./useNotifications";
+import { useToast } from "./ToastContext";
+import CircularProgress from "@mui/material/CircularProgress";
 
 interface ReaderProps {
   user: User;
@@ -39,6 +42,7 @@ interface ReaderProps {
   chapters: Chapter[];
   pages: Page[];
   theme: "light" | "dark";
+  setPages?: React.Dispatch<React.SetStateAction<Page[]>>;
 }
 
 /** A single renderable item in the reader — either a conversation group or a standalone region. */
@@ -55,7 +59,7 @@ interface RenderItem {
   /** Only present for standalone regions */
   originalRegion?: OcrRegion;
   /** Only present for conversation items */
-  conversationData?: Conversation & {
+  conversationData?: Omit<Conversation, "regions"> & {
     regions: OcrRegion[];
     bboxX: number;
     bboxY: number;
@@ -68,7 +72,9 @@ interface RenderItem {
 }
 
 type SelectedItemType =
-  (RenderItem & LayerElement) | RenderItem | LayerElement | null;
+  | (RenderItem & Partial<Omit<LayerElement, keyof RenderItem>>)
+  | (LayerElement & Partial<Omit<RenderItem, keyof LayerElement>>)
+  | null;
 
 async function saveElementChanges(
   element: LayerElement,
@@ -137,6 +143,7 @@ export const Reader: React.FC<ReaderProps> = ({
   selectedChapter,
   chapters,
   pages,
+  setPages,
   theme,
 }) => {
   const navigate = useNavigate();
@@ -147,9 +154,22 @@ export const Reader: React.FC<ReaderProps> = ({
     // theme-dependent checks
   }
 
-  // Find selected page based on route param
+  const fetchPages = useCallback(async () => {
+    if (!setPages || !selectedChapter) return;
+    try {
+      const res = await safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      if (res.ok) {
+        const pagesData = await res.json();
+        setPages(pagesData);
+      }
+    } catch (e) {
+      console.error("Failed to fetch pages:", e);
+    }
+  }, [selectedChapter, user.token, setPages]);
+
   const curPageNum = parseInt(pageNumber || "1");
-  const totalPages = pages.length;
   const selectedPage = pages.find((p) => p.pageNumber === curPageNum);
 
   // Reader States
@@ -175,12 +195,17 @@ export const Reader: React.FC<ReaderProps> = ({
   });
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
-  const pageDetailsCache = useRef<Record<string, {
-    panels: Panel[];
-    ocrRegions: OcrRegion[];
-    conversations: Conversation[];
-    layers: { layer: Layer; elements: LayerElement[] }[];
-  }>>({});
+  const pageDetailsCache = useRef<
+    Record<
+      string,
+      {
+        panels: Panel[];
+        ocrRegions: OcrRegion[];
+        conversations: Conversation[];
+        layers: { layer: Layer; elements: LayerElement[] }[];
+      }
+    >
+  >({});
   const prefetchQueue = useRef<Set<string>>(new Set());
   const [zoom, setZoom] = useState(() => {
     const saved = localStorage.getItem("manga_zoom");
@@ -273,10 +298,7 @@ export const Reader: React.FC<ReaderProps> = ({
   // Detected once at component initialization — never changes after mount
   const isTouchScreen =
     "ontouchstart" in window || navigator.maxTouchPoints > 0;
-  const [containerSize, setContainerSize] = useState({
-    width: 800,
-    height: 600,
-  });
+
 
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const touchStartDist = useRef<number | null>(null);
@@ -288,7 +310,7 @@ export const Reader: React.FC<ReaderProps> = ({
   const { showToast, showError } = useToast();
 
   const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
-  const autoSaveTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const autoSaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     const timers = autoSaveTimersRef.current;
@@ -318,10 +340,10 @@ export const Reader: React.FC<ReaderProps> = ({
               console.log(
                 `SSE event: Reloading page layers due to ${data.type} job completion`,
               );
-              
+
               // Bust cache for this image so fresh data is fetched
               delete pageDetailsCache.current[data.imageId];
-              
+
               // Force refetch of page details by clearing the loaded image ID
               Promise.resolve().then(() => {
                 setLoadedImageId(null);
@@ -406,29 +428,12 @@ export const Reader: React.FC<ReaderProps> = ({
       ? sortedChapters.at(currentChapterIdx + 1) || null
       : null;
 
-  const navigateToChapter = (chapter: Chapter) => {
-    const slugPart = chapter.title
-      ? `${toSlug(chapter.title)}/`
-      : `chapter-${chapter.chapterNumber}/`;
-    navigate(`/chapters/${chapter.id}/${slugPart}reader/1`);
-  };
+
 
   // isTouchScreen is detected once at mount — no effect needed, computed directly
   // (avoids react-hooks/set-state-in-effect lint error)
 
-  useEffect(() => {
-    if (!canvasAreaRef.current) return;
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerSize({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
-      }
-    });
-    resizeObserver.observe(canvasAreaRef.current);
-    return () => resizeObserver.disconnect();
-  }, []);
+
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -436,13 +441,15 @@ export const Reader: React.FC<ReaderProps> = ({
     title: string;
     message: string;
     confirmText?: string;
+    cancelText?: string;
     isDangerous?: boolean;
     onConfirm: () => void;
+    onCancel?: () => void;
   }>({
     isOpen: false,
     title: "",
     message: "",
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const closeConfirm = () =>
@@ -473,7 +480,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Popover States
   const [activeRegion, setActiveRegion] = useState<OcrRegion | null>(null);
-  const [isRedoing, setIsRedoing] = useState(false);
+  const [isRedoingRegionOcr, setIsRedoingRegionOcr] = useState(false);
+  const [isRedoingRegionTl, setIsRedoingRegionTl] = useState(false);
 
   const visibleOcrRegionIds = React.useMemo(() => {
     const ids = new Set<string>();
@@ -603,25 +611,7 @@ export const Reader: React.FC<ReaderProps> = ({
     conversationsWithRegions,
   ]);
 
-  // Dynamic calculation of the absolute zoom percentage
-  const displayedZoom = React.useMemo(() => {
-    if (imageDims.w <= 0 || imageDims.h <= 0) return 100;
-    const aspectRatio = imageDims.w / imageDims.h;
-    const vh = window.innerHeight;
-    const containerWidth = Math.max(100, containerSize.width - 48); // 24px padding on each side
-    const refWidth = Math.min(containerWidth, vh * 0.8 * aspectRatio);
 
-    let targetWidth = refWidth;
-    if (fitMode === "page") {
-      targetWidth = refWidth * zoom;
-    } else if (fitMode === "width") {
-      targetWidth = containerWidth * zoom;
-    } else if (fitMode === "height") {
-      targetWidth = vh * 0.85 * aspectRatio * zoom;
-    }
-
-    return Math.round((targetWidth / refWidth) * 100);
-  }, [fitMode, zoom, containerSize, imageDims]);
 
   // Helper to fetch and cache a page
   const fetchPageDetails = useCallback(
@@ -655,14 +645,16 @@ export const Reader: React.FC<ReaderProps> = ({
       pageDetailsCache.current[imageId] = cachedData;
       return cachedData;
     },
-    [user.token]
+    [user.token],
   );
 
   // Fetch page details (panels, OCR regions, conversations) when page selection updates
   useEffect(() => {
     if (selectedPage && loadedImageId !== selectedPage.imageId) {
       const currentImageId = selectedPage.imageId;
-      const currentPageIndex = pages.findIndex((p) => p.imageId === currentImageId);
+      const currentPageIndex = pages.findIndex(
+        (p) => p.imageId === currentImageId,
+      );
 
       // --- SYNCHRONOUS CACHE HIT ---
       if (pageDetailsCache.current[currentImageId]) {
@@ -709,9 +701,15 @@ export const Reader: React.FC<ReaderProps> = ({
       // --- STRICT SLIDING WINDOW PREFETCH & EVICTION ---
       if (currentPageIndex !== -1) {
         // 1. Prefetch next 2 pages (N+1, N+2)
-        const pagesToPrefetch = pages.slice(currentPageIndex + 1, currentPageIndex + 3);
+        const pagesToPrefetch = pages.slice(
+          currentPageIndex + 1,
+          currentPageIndex + 3,
+        );
         pagesToPrefetch.forEach((p) => {
-          if (!pageDetailsCache.current[p.imageId] && !prefetchQueue.current.has(p.imageId)) {
+          if (
+            !pageDetailsCache.current[p.imageId] &&
+            !prefetchQueue.current.has(p.imageId)
+          ) {
             prefetchQueue.current.add(p.imageId);
 
             // Prefetch image itself (lightweight progressive loading)
@@ -719,25 +717,27 @@ export const Reader: React.FC<ReaderProps> = ({
             img.src = `${p.url}?token=${user.token}`;
 
             // Prefetch details
-            fetchPageDetails(p.imageId).catch((e) => console.error("Prefetch error", e));
+            fetchPageDetails(p.imageId).catch((e) =>
+              console.error("Prefetch error", e),
+            );
           }
         });
 
         // 2. Evict pages outside of window [N, N+1, N+2] to save memory
         const activeWindowIds = new Set([
           currentImageId,
-          ...pagesToPrefetch.map(p => p.imageId)
+          ...pagesToPrefetch.map((p) => p.imageId),
         ]);
 
         // Evict from cache
-        Object.keys(pageDetailsCache.current).forEach(cachedId => {
+        Object.keys(pageDetailsCache.current).forEach((cachedId) => {
           if (!activeWindowIds.has(cachedId)) {
             delete pageDetailsCache.current[cachedId];
           }
         });
 
         // Evict from prefetchQueue tracking
-        prefetchQueue.current.forEach(queuedId => {
+        prefetchQueue.current.forEach((queuedId) => {
           if (!activeWindowIds.has(queuedId)) {
             prefetchQueue.current.delete(queuedId);
           }
@@ -1183,13 +1183,13 @@ export const Reader: React.FC<ReaderProps> = ({
               elements: l.elements.map((el) =>
                 el.id === draggedElement.id
                   ? {
-                      ...el,
-                      x: newX,
-                      y: newY,
-                      ...(newMaskPolygon !== undefined
-                        ? { maskPolygon: newMaskPolygon }
-                        : {}),
-                    }
+                    ...el,
+                    x: newX,
+                    y: newY,
+                    ...(newMaskPolygon !== undefined
+                      ? { maskPolygon: newMaskPolygon }
+                      : {}),
+                  }
                   : el,
               ),
             };
@@ -1374,13 +1374,13 @@ export const Reader: React.FC<ReaderProps> = ({
       setSelectedItem((prev) =>
         prev && prev.id === draggedVertex.elementId
           ? {
-              ...prev,
-              maskPolygon: newMaskPolygon,
-              x: bbox.x,
-              y: bbox.y,
-              maxWidth: bbox.w,
-              maxHeight: bbox.h,
-            }
+            ...prev,
+            maskPolygon: newMaskPolygon,
+            x: bbox.x,
+            y: bbox.y,
+            maxWidth: bbox.w,
+            maxHeight: bbox.h,
+          }
           : prev,
       );
       setLayers((prev) =>
@@ -1389,13 +1389,13 @@ export const Reader: React.FC<ReaderProps> = ({
           elements: l.elements.map((el) =>
             el.id === draggedVertex.elementId
               ? {
-                  ...el,
-                  maskPolygon: newMaskPolygon,
-                  x: bbox.x,
-                  y: bbox.y,
-                  maxWidth: bbox.w,
-                  maxHeight: bbox.h,
-                }
+                ...el,
+                maskPolygon: newMaskPolygon,
+                x: bbox.x,
+                y: bbox.y,
+                maxWidth: bbox.w,
+                maxHeight: bbox.h,
+              }
               : el,
           ),
         })),
@@ -1523,13 +1523,13 @@ export const Reader: React.FC<ReaderProps> = ({
       setSelectedItem((prev) =>
         prev && prev.id === rotationDrag.elementId
           ? {
-              ...prev,
-              maskPolygon: newMaskPolygon,
-              x: bbox.x,
-              y: bbox.y,
-              maxWidth: bbox.w,
-              maxHeight: bbox.h,
-            }
+            ...prev,
+            maskPolygon: newMaskPolygon,
+            x: bbox.x,
+            y: bbox.y,
+            maxWidth: bbox.w,
+            maxHeight: bbox.h,
+          }
           : prev,
       );
       setLayers((prev) =>
@@ -1538,13 +1538,13 @@ export const Reader: React.FC<ReaderProps> = ({
           elements: l.elements.map((el) =>
             el.id === rotationDrag.elementId
               ? {
-                  ...el,
-                  maskPolygon: newMaskPolygon,
-                  x: bbox.x,
-                  y: bbox.y,
-                  maxWidth: bbox.w,
-                  maxHeight: bbox.h,
-                }
+                ...el,
+                maskPolygon: newMaskPolygon,
+                x: bbox.x,
+                y: bbox.y,
+                maxWidth: bbox.w,
+                maxHeight: bbox.h,
+              }
               : el,
           ),
         })),
@@ -1693,6 +1693,62 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   };
 
+  const handleDeletePage = React.useCallback(async (pageId: string) => {
+    try {
+      const response = await safeFetch(`/api/pages/${pageId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      if (!response.ok) throw new Error("Failed to delete page");
+      showToast("Page deleted successfully", "success");
+      
+      const remainingPages = pages.filter(p => p.id !== pageId);
+      if (remainingPages.length === 0) {
+        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}`);
+      } else if (selectedPage?.id === pageId) {
+        const deletedPageIndex = pages.findIndex(p => p.id === pageId);
+        const nextTargetIndex = deletedPageIndex < remainingPages.length ? deletedPageIndex : remainingPages.length - 1;
+        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${remainingPages[nextTargetIndex].pageNumber}`, { replace: true });
+      }
+
+      // Refresh pages
+      await fetchPages();
+    } catch (err: unknown) {
+      console.error(err);
+      showToast((err as Error).message || "Failed to delete page", "error");
+    }
+  }, [fetchPages, showToast, user.token, pages, selectedChapter, selectedPage, navigate]);
+
+  const handleChangePageNumber = React.useCallback(async (pageId: string, newNumber: number) => {
+    try {
+      const response = await safeFetch(`/api/pages/${pageId}/number`, {
+        method: "PUT",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`
+        },
+        body: JSON.stringify({ newNumber }),
+      });
+      if (!response.ok) throw new Error("Failed to update page number");
+      showToast("Page number updated successfully", "success");
+      
+      // Update state atomically by re-fetching pages
+      await fetchPages();
+
+      // Smooth Navigation to the new URL if we moved the current page
+      if (selectedPage?.id === pageId) {
+        const targetPageNumber = newNumber === 0 ? pages.length : newNumber;
+        navigate(
+          `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${targetPageNumber}`,
+          { replace: true }
+        );
+      }
+    } catch (err: unknown) {
+      console.error(err);
+      showToast((err as Error).message || "Failed to update page number", "error");
+    }
+  }, [fetchPages, showToast, navigate, selectedPage, selectedChapter, user.token, pages]);
+
   const handleDeleteElement = async (elementId: string) => {
     setConfirmModal({
       isOpen: true,
@@ -1720,7 +1776,10 @@ export const Reader: React.FC<ReaderProps> = ({
             setSelectedItem(null);
             showToast("Element deleted successfully", "success");
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this element.", "error");
+            showToast(
+              "You don't have permission to delete this element.",
+              "error",
+            );
           } else {
             showToast("Failed to delete layer element", "error");
           }
@@ -1822,7 +1881,10 @@ export const Reader: React.FC<ReaderProps> = ({
             setLayers((prev) => prev.filter((l) => l.layer.id !== layerId));
             showToast("Layer deleted successfully", "success");
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this layer.", "error");
+            showToast(
+              "You don't have permission to delete this layer.",
+              "error",
+            );
           } else {
             showToast("Failed to delete layer", "error");
           }
@@ -1869,7 +1931,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // Compute new cloned layer name
       const getLayerName = (l: Layer) => {
-        if (l.metadataJson?.layer_name) return l.metadataJson.layer_name;
+        if (typeof l.metadataJson?.layer_name === "string") return l.metadataJson.layer_name;
         if (l.type === "translation")
           return `Translation (${l.targetLanguage?.toUpperCase() || "EN"})`;
         if (l.type === "sfx") return "SFX Layer";
@@ -2322,22 +2384,12 @@ export const Reader: React.FC<ReaderProps> = ({
       // 4. project.json
       let totalCostVal = 0.0;
       layers.forEach((lData) => {
-        const meta = lData.layer.metadataJson;
+        const meta = lData.layer.metadataJson as { cost?: { estimated_cost?: number }, qa?: { cost?: { estimated_cost?: number } } } | null;
         if (meta && typeof meta === "object") {
-          if (
-            meta.cost &&
-            typeof meta.cost === "object" &&
-            typeof meta.cost.estimated_cost === "number"
-          ) {
+          if (typeof meta.cost?.estimated_cost === "number") {
             totalCostVal += meta.cost.estimated_cost;
           }
-          if (
-            meta.qa &&
-            typeof meta.qa === "object" &&
-            meta.qa.cost &&
-            typeof meta.qa.cost === "object" &&
-            typeof meta.qa.cost.estimated_cost === "number"
-          ) {
+          if (typeof meta.qa?.cost?.estimated_cost === "number") {
             totalCostVal += meta.qa.cost.estimated_cost;
           }
         }
@@ -2624,8 +2676,9 @@ export const Reader: React.FC<ReaderProps> = ({
     r: OcrRegion,
     forceType?: "ocr" | "translation",
   ) => {
-    setIsRedoing(true);
     const type = forceType || (showTranslations ? "translation" : "ocr");
+    if (type === "ocr") setIsRedoingRegionOcr(true);
+    else setIsRedoingRegionTl(true);
 
     try {
       const res = await safeFetch(
@@ -2647,7 +2700,8 @@ export const Reader: React.FC<ReaderProps> = ({
         attempts++;
         if (attempts > 20) {
           clearInterval(interval);
-          setIsRedoing(false);
+          if (type === "ocr") setIsRedoingRegionOcr(false);
+          else setIsRedoingRegionTl(false);
           showInfo(
             "Redo Timed Out",
             "The redo operation timed out. Please try again.",
@@ -2680,7 +2734,8 @@ export const Reader: React.FC<ReaderProps> = ({
                 if (activeRegion && activeRegion.id === r.id) {
                   setActiveRegion(freshRegion);
                 }
-                setIsRedoing(false);
+                if (type === "ocr") setIsRedoingRegionOcr(false);
+                else setIsRedoingRegionTl(false);
               }
             }
           }
@@ -2690,7 +2745,8 @@ export const Reader: React.FC<ReaderProps> = ({
       }, 500);
     } catch (err) {
       console.error("Error redoing region:", err);
-      setIsRedoing(false);
+      if (type === "ocr") setIsRedoingRegionOcr(false);
+      else setIsRedoingRegionTl(false);
       showInfo("Redo Failed", "Failed to start redo job.", "error");
     }
   };
@@ -2780,7 +2836,7 @@ export const Reader: React.FC<ReaderProps> = ({
         className="reader-container-nhentai"
         style={{ alignItems: "center", justifyContent: "center" }}
       >
-        <div className="spinner"></div>
+        <CircularProgress size={12} />
         <p>Loading page...</p>
       </div>
     );
@@ -2788,342 +2844,56 @@ export const Reader: React.FC<ReaderProps> = ({
 
   return (
     <div className="reader-container-nhentai">
-      {/* Top Navbar */}
-      <div
-        className="reader-navbar-nhentai"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button
-            className="reader-nav-btn back-btn"
-            onClick={() =>
-              navigate(
-                `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
-              )
-            }
-            title="Back to Chapter"
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line
-                x1="19"
-                y1="12"
-                x2="5"
-                y2="12"
-              ></line>
-              <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
-          </button>
-
-          <button
-            className={`reader-nav-btn gear-btn ${showLeftSidebar ? "active" : ""}`}
-            onClick={() => setShowLeftSidebar((prev) => !prev)}
-            title="Toggle Global Controls (Left Sidebar)"
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-            >
-              <rect
-                x="3"
-                y="3"
-                width="18"
-                height="18"
-                rx="2"
-              />
-              <line
-                x1="9"
-                y1="3"
-                x2="9"
-                y2="21"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div
-          style={{
-            fontWeight: 600,
-            fontSize: "14px",
-            fontFamily: "var(--font-display)",
-            color: "var(--text-main)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            maxWidth: "50%",
-          }}
-        >
-          {selectedSeries ? selectedSeries.title : "Series"} &mdash; Chapter{" "}
-          {selectedChapter?.chapterNumber}
-        </div>
-
-        <button
-          className={`reader-nav-btn gear-btn ${showRightSidebar ? "active" : ""}`}
-          onClick={() => setShowRightSidebar((prev) => !prev)}
-          title="Toggle Property Inspector (Right Sidebar)"
-        >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-          >
-            <rect
-              x="3"
-              y="3"
-              width="18"
-              height="18"
-              rx="2"
-            />
-            <line
-              x1="15"
-              y1="3"
-              x2="15"
-              y2="21"
-            />
-          </svg>
-        </button>
-      </div>
+      <ReaderTopNav
+        title={`${selectedSeries ? selectedSeries.title : "Series"} \u2014 Chapter ${selectedChapter?.chapterNumber} \u2014 Page ${selectedPage?.pageNumber}`}
+        onBack={() =>
+          navigate(
+            `/chapters/${selectedChapter ? selectedChapter.id : ""}/${selectedChapter ? toSlug(selectedChapter.title || `chapter-${selectedChapter.chapterNumber}`) : ""}`,
+          )
+        }
+        onToggleLeftSidebar={() => setShowLeftSidebar((prev) => !prev)}
+        onToggleRightSidebar={() => setShowRightSidebar((prev) => !prev)}
+        leftSidebarOpen={showLeftSidebar}
+        rightSidebarOpen={showRightSidebar}
+      />
 
       {/* Main Workspace split */}
       <div className="reader-workspace-frame-nhentai">
         {/* Left Sidebar (Global Controls) */}
         {showLeftSidebar && (
-          <div className="reader-left-sidebar-nhentai">
-            {/* Overlays Visibility Section */}
-            <div className="panel-section">
-              <div className="panel-section-title">Overlays</div>
-              <div className="overlay-toggle">
-                <span>Panel Boundaries</span>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={showPanels}
-                    onChange={(e) => setShowPanels(e.target.checked)}
-                  />
-                  <span className="slider"></span>
-                </label>
-              </div>
-              <div className="overlay-toggle">
-                <span>OCR Boxes</span>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={showOcr}
-                    onChange={(e) => setShowOcr(e.target.checked)}
-                  />
-                  <span className="slider"></span>
-                </label>
-              </div>
-              <div className="overlay-toggle">
-                <span>Clean Scanlation</span>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={cleanScanlationView}
-                    onChange={(e) => {
-                      setCleanScanlationView(e.target.checked);
-                      setManuallyShownOcrLayers(new Set());
-                    }}
-                  />
-                  <span className="slider"></span>
-                </label>
-              </div>
-              <div className="overlay-toggle">
-                <span>Group Conversation</span>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={groupByConversation}
-                    onChange={(e) => setGroupByConversation(e.target.checked)}
-                  />
-                  <span className="slider"></span>
-                </label>
-              </div>
-            </div>
-
-            {/* Zoom Controls Section */}
-            <div className="panel-section">
-              <div className="panel-section-title">Zoom & View</div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  marginBottom: "8px",
-                }}
-              >
-                <input
-                  type="range"
-                  min="0.5"
-                  max="3.0"
-                  step="0.1"
-                  value={zoom}
-                  onChange={(e) => setZoom(parseFloat(e.target.value))}
-                  style={{ flex: 1 }}
-                />
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                    minWidth: "40px",
-                    textAlign: "right",
-                  }}
-                >
-                  {displayedZoom}%
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "6px",
-                  width: "100%",
-                  marginBottom: "8px",
-                }}
-              >
-                <button
-                  className={`btn ${fitMode === "page" ? "btn-primary" : "btn-secondary"}`}
-                  style={{ flex: 1, fontSize: "10px", padding: "4px" }}
-                  onClick={() => setFitMode("page")}
-                >
-                  Page
-                </button>
-                <button
-                  className={`btn ${fitMode === "width" ? "btn-primary" : "btn-secondary"}`}
-                  style={{ flex: 1, fontSize: "10px", padding: "4px" }}
-                  onClick={() => setFitMode("width")}
-                >
-                  Width
-                </button>
-                <button
-                  className={`btn ${fitMode === "height" ? "btn-primary" : "btn-secondary"}`}
-                  style={{ flex: 1, fontSize: "10px", padding: "4px" }}
-                  onClick={() => setFitMode("height")}
-                >
-                  Height
-                </button>
-              </div>
-              <button
-                className="btn btn-secondary"
-                style={{ width: "100%", fontSize: "11px", padding: "6px" }}
-                onClick={() => {
-                  setZoom(1.0);
-                  setFitMode("page");
-                }}
-                disabled={zoom === 1.0 && fitMode === "page"}
-              >
-                Reset Zoom
-              </button>
-            </div>
-
-            {/* Page & Chapter Navigation */}
-            <div className="panel-section">
-              <div className="panel-section-title">Navigation</div>
-
-              <div
-                className="reader-page-controls-nhentai"
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  marginBottom: "12px",
-                  gap: "6px",
-                }}
-              >
-                <button
-                  className="reader-control-btn"
-                  onClick={() => navigateToPage(1)}
-                  disabled={curPageNum <= 1}
-                  title="First Page"
-                >
-                  &lt;&lt;
-                </button>
-                <button
-                  className="reader-control-btn"
-                  onClick={() => navigateToPage(curPageNum - 1)}
-                  disabled={curPageNum <= 1}
-                  title="Previous Page"
-                >
-                  &lt;
-                </button>
-
-                <span
-                  className="reader-page-indicator-nhentai"
-                  style={{ margin: "0 4px", fontSize: "12px" }}
-                >
-                  <strong>{curPageNum}</strong> / {totalPages}
-                </span>
-
-                <button
-                  className="reader-control-btn"
-                  onClick={() => navigateToPage(curPageNum + 1)}
-                  disabled={curPageNum >= totalPages}
-                  title="Next Page"
-                >
-                  &gt;
-                </button>
-                <button
-                  className="reader-control-btn"
-                  onClick={() => navigateToPage(totalPages)}
-                  disabled={curPageNum >= totalPages}
-                  title="Last Page"
-                >
-                  &gt;&gt;
-                </button>
-              </div>
-
-              {/* Chapter Navigation */}
-              <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, fontSize: "11px", padding: "6px" }}
-                  onClick={() => prevChapter && navigateToChapter(prevChapter)}
-                  disabled={!prevChapter}
-                  title={
-                    prevChapter
-                      ? `Go to Chapter ${prevChapter.chapterNumber}`
-                      : "No previous chapter"
-                  }
-                >
-                  &larr; Prev Ch
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, fontSize: "11px", padding: "6px" }}
-                  onClick={() => nextChapter && navigateToChapter(nextChapter)}
-                  disabled={!nextChapter}
-                  title={
-                    nextChapter
-                      ? `Go to Chapter ${nextChapter.chapterNumber}`
-                      : "No next chapter"
-                  }
-                >
-                  Next Ch &rarr;
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+            <ReaderLeftSidebar
+              showPanels={showPanels}
+              setShowPanels={setShowPanels}
+              showOcr={showOcr}
+              setShowOcr={setShowOcr}
+              cleanScanlationView={cleanScanlationView}
+              setCleanScanlationView={setCleanScanlationView}
+              setManuallyShownOcrLayers={setManuallyShownOcrLayers}
+              groupByConversation={groupByConversation}
+              setGroupByConversation={setGroupByConversation}
+              zoom={zoom}
+              setZoom={setZoom}
+              fitMode={fitMode}
+              setFitMode={setFitMode}
+              curPageNum={selectedPage?.pageNumber || 0}
+              totalPages={pages.length}
+              navigateToPage={navigateToPage}
+              prevChapter={prevChapter}
+              nextChapter={nextChapter}
+              navigateToChapter={(chapter) => {
+                navigate(`/chapters/${chapter.id}/${toSlug(chapter.title || "chapter")}`);
+              }}
+              selectedPage={selectedPage}
+              handleDeletePage={handleDeletePage}
+              handleChangePageNumber={handleChangePageNumber}
+            />
+          )}
 
         {/* Center Canvas */}
-        <div className="reader-main-nhentai" style={{ position: "relative" }}>
+        <div
+          className="reader-main-nhentai"
+          style={{ position: "relative" }}
+        >
           {isLoadingPageDetails && (
             <div
               style={{
@@ -3141,10 +2911,7 @@ export const Reader: React.FC<ReaderProps> = ({
                 color: "white",
               }}
             >
-              <div
-                className="spinner"
-                style={{ borderColor: "rgba(255,255,255,0.3)", borderTopColor: "white", marginBottom: "10px" }}
-              ></div>
+              <CircularProgress size={12} sx={{ color: "white", mb: 1 }} />
               <div>Loading page details...</div>
             </div>
           )}
@@ -3352,8 +3119,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
                     const relatedRegion = element.regionId
                       ? filteredOcrRegions.find(
-                          (r) => r.id === element.regionId,
-                        )
+                        (r) => r.id === element.regionId,
+                      )
                       : null;
                     const elQaStatus = relatedRegion
                       ? relatedRegion.qaStatus
@@ -3387,7 +3154,7 @@ export const Reader: React.FC<ReaderProps> = ({
                       const totalHeight = fit.lines.length * fontSize * 1.2;
                       overflow = totalHeight > (element.maxHeight || 100);
                     }
-                    const textToRender = fit.lines.join("\n");
+                    const textToRender = fit.lines.join("\\n");
 
                     const width = element.maxWidth || 100;
                     const height = element.maxHeight || 100;
@@ -3470,7 +3237,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? "var(--primary)"
                                 : elQaStatus === "failed" ||
-                                    elQaStatus === "manual_review"
+                                  elQaStatus === "manual_review"
                                   ? "#ef4444"
                                   : elQaStatus === "direct_fix"
                                     ? "#f59e0b"
@@ -3480,7 +3247,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? 2
                                 : elQaStatus === "failed" ||
-                                    elQaStatus === "manual_review"
+                                  elQaStatus === "manual_review"
                                   ? 2
                                   : 1
                             }
@@ -3488,7 +3255,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? "none"
                                 : elQaStatus === "failed" ||
-                                    elQaStatus === "manual_review"
+                                  elQaStatus === "manual_review"
                                   ? "none"
                                   : "4 4"
                             }
@@ -3686,7 +3453,7 @@ export const Reader: React.FC<ReaderProps> = ({
                                 {fit.lines.map((line, i) => {
                                   const lineCenterX =
                                     fit.lineCenters &&
-                                    fit.lineCenters.at(i) !== undefined
+                                      fit.lineCenters.at(i) !== undefined
                                       ? (fit.lineCenters.at(i) ??
                                         element.x + width / 2)
                                       : element.x + width / 2;
@@ -3752,1520 +3519,44 @@ export const Reader: React.FC<ReaderProps> = ({
 
         {/* Right Sidebar (Property Inspector) */}
         {showRightSidebar && (
-          <div className="reader-right-sidebar-nhentai">
-            {!selectedItem && (
-              <>
-                <div
-                  style={{
-                    color: "var(--text-muted)",
-                    fontSize: "13px",
-                    textAlign: "center",
-                    padding: "16px 0 24px",
-                    borderBottom: "1px solid var(--border-color)",
-                    marginBottom: "24px",
-                  }}
-                >
-                  Select an OCR region or a text layer to inspect and edit
-                  details.
-                </div>
-
-                {/* Translation Layers Section */}
-                <div className="panel-section">
-                  <div
-                    className="panel-section-title"
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span>Layers</span>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "4px",
-                        alignItems: "center",
-                      }}
-                    >
-                      {/* Up/Down reorder buttons — left group */}
-                      <button
-                        className="btn btn-secondary"
-                        title="Move active layer up (higher in stack)"
-                        disabled={
-                          !activeLayerId ||
-                          sortedLayers.findIndex(
-                            (l) => l.layer.id === activeLayerId,
-                          ) ===
-                            sortedLayers.length - 1
-                        }
-                        onClick={() =>
-                          activeLayerId && handleMoveLayer(activeLayerId, "up")
-                        }
-                        style={{
-                          padding: "2px 6px",
-                          fontSize: "12px",
-                          opacity:
-                            !activeLayerId ||
-                            sortedLayers.findIndex(
-                              (l) => l.layer.id === activeLayerId,
-                            ) ===
-                              sortedLayers.length - 1
-                              ? 0.4
-                              : 1,
-                        }}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        title="Move active layer down (lower in stack)"
-                        disabled={
-                          !activeLayerId ||
-                          sortedLayers.findIndex(
-                            (l) => l.layer.id === activeLayerId,
-                          ) === 0
-                        }
-                        onClick={() =>
-                          activeLayerId &&
-                          handleMoveLayer(activeLayerId, "down")
-                        }
-                        style={{
-                          padding: "2px 6px",
-                          fontSize: "12px",
-                          opacity:
-                            !activeLayerId ||
-                            sortedLayers.findIndex(
-                              (l) => l.layer.id === activeLayerId,
-                            ) === 0
-                              ? 0.4
-                              : 1,
-                        }}
-                      >
-                        ↓
-                      </button>
-                      {/* Divider */}
-                      <div
-                        style={{
-                          width: "1px",
-                          height: "14px",
-                          background: "var(--border-color)",
-                          margin: "0 2px",
-                        }}
-                      />
-                      {/* Add layer buttons — right group */}
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: "2px 6px", fontSize: "10px" }}
-                        onClick={handleCreateTranslationLayer}
-                        title="Add Translation Layer"
-                      >
-                        + TL
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: "2px 6px", fontSize: "10px" }}
-                        onClick={handleCreateSfxLayer}
-                        title="Add SFX Layer"
-                      >
-                        + SFX
-                      </button>
-                    </div>
-                  </div>
-
-                  {sortedLayers.length === 0 ? (
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: "var(--text-muted)",
-                        padding: "4px 0",
-                      }}
-                    >
-                      No active layers.
-                    </div>
-                  ) : (
-                    [...sortedLayers].reverse().map((lData, idx) => {
-                      const isActive = lData.layer.id === activeLayerId;
-                      const stackNumber = sortedLayers.length - idx;
-                      const stackLabel = `#${stackNumber}`;
-                      return (
-                        <div
-                          key={lData.layer.id}
-                          className="overlay-toggle"
-                          onClick={() => setActiveLayerId(lData.layer.id)}
-                          style={{
-                            padding: "6px 8px",
-                            border: isActive
-                              ? "1px solid var(--primary)"
-                              : "1px solid var(--border-color)",
-                            borderRadius: "6px",
-                            marginBottom: "6px",
-                            backgroundColor: isActive
-                              ? "var(--primary-glow)"
-                              : "rgba(255,255,255,0.02)",
-                            cursor: "pointer",
-                            boxShadow: isActive
-                              ? "0 0 8px var(--primary-glow)"
-                              : "none",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "2px",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: "12px",
-                                fontWeight: isActive ? 700 : 600,
-                                color: isActive
-                                  ? "var(--primary-hover)"
-                                  : "inherit",
-                              }}
-                            >
-                              {stackLabel}{" "}
-                              {lData.layer.metadataJson?.layer_name ||
-                                (lData.layer.type === "translation"
-                                  ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
-                                  : lData.layer.type === "sfx"
-                                    ? "SFX Layer"
-                                    : lData.layer.type === "ocr"
-                                      ? "OCR Layer"
-                                      : `Layer (${lData.layer.type})`)}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "9px",
-                                color: "var(--text-dim)",
-                              }}
-                            >
-                              {lData.elements.length} elements
-                            </span>
-                          </div>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              onClick={() =>
-                                handleToggleLayerVisibility(lData.layer.id)
-                              }
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: lData.layer.visible
-                                  ? "var(--primary)"
-                                  : "var(--text-muted)",
-                                cursor: "pointer",
-                                padding: "2px",
-                                display: "flex",
-                                alignItems: "center",
-                              }}
-                              title="Toggle layer visibility"
-                            >
-                              {lData.layer.visible ? (
-                                <svg
-                                  width="15"
-                                  height="15"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.5"
-                                >
-                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                  <circle
-                                    cx="12"
-                                    cy="12"
-                                    r="3"
-                                  ></circle>
-                                </svg>
-                              ) : (
-                                <svg
-                                  width="15"
-                                  height="15"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.5"
-                                >
-                                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                                  <line
-                                    x1="1"
-                                    y1="1"
-                                    x2="23"
-                                    y2="23"
-                                  ></line>
-                                </svg>
-                              )}
-                            </button>
-
-                            <button
-                              onClick={() => handleCloneLayer(lData.layer.id)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "var(--text-muted)",
-                                cursor: "pointer",
-                                padding: "2px",
-                                display: "flex",
-                                alignItems: "center",
-                              }}
-                              title="Clone layer (copies above, hides original as backup)"
-                            >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                              >
-                                <rect
-                                  x="9"
-                                  y="9"
-                                  width="13"
-                                  height="13"
-                                  rx="2"
-                                  ry="2"
-                                ></rect>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                              </svg>
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteLayer(lData.layer.id)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "var(--text-muted)",
-                                cursor: "pointer",
-                                padding: "2px",
-                                display: "flex",
-                                alignItems: "center",
-                              }}
-                              title="Delete layer"
-                            >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                              >
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Editor Tools Section */}
-                <div className="panel-section">
-                  <div className="panel-section-title">Editor Tools</div>
-                  <div
-                    style={{ display: "flex", gap: "8px", marginBottom: "8px" }}
-                  >
-                    <button
-                      className="btn btn-secondary"
-                      style={{
-                        flex: 1,
-                        padding: "8px",
-                        fontSize: "11px",
-                        fontWeight: 600,
-                      }}
-                      onClick={() => handleAddNewElement("text")}
-                      disabled={!activeLayerId}
-                      title={
-                        activeLayerId
-                          ? "Add a new text element to active layer"
-                          : "Select or create a layer first"
-                      }
-                    >
-                      💬 Add Text
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      style={{
-                        flex: 1,
-                        padding: "8px",
-                        fontSize: "11px",
-                        fontWeight: 600,
-                      }}
-                      onClick={() => handleAddNewElement("mask")}
-                      disabled={!activeLayerId}
-                      title={
-                        activeLayerId
-                          ? "Add a new background mask to active layer"
-                          : "Select or create a layer first"
-                      }
-                    >
-                      ⬜ Add Mask
-                    </button>
-                  </div>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                    onClick={handleLaunchEyeDropper}
-                    disabled={!selectedItem || !selectedItem.isLayerElement}
-                    title="Sample color from screen to apply to selected element's background"
-                  >
-                    🧪 Color Dropper
-                  </button>
-                </div>
-
-                {/* Page Actions Section */}
-                <div className="panel-section">
-                  <div className="panel-section-title">Page Actions</div>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleRedoPageOcr}
-                    disabled={isRedoingPageOcr}
-                    style={{
-                      width: "100%",
-                      marginBottom: "8px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    {isRedoingPageOcr ? (
-                      <div className="spinner-mini"></div>
-                    ) : null}
-                    Redo Page OCR
-                  </button>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleRedoPageTranslation}
-                    disabled={isRedoingPageTranslation}
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    {isRedoingPageTranslation ? (
-                      <div className="spinner-mini"></div>
-                    ) : null}
-                    Redo Page Translation
-                  </button>
-                </div>
-
-                {/* Export Section */}
-                <div
-                  className="panel-section"
-                  style={{ paddingBottom: "40px" }}
-                >
-                  <div className="panel-section-title">Export</div>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleExportPng}
-                    style={{
-                      width: "100%",
-                      marginBottom: "8px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    Export Page (PNG)
-                  </button>
-                  <button
-                    className="btn btn-secondary sidebar-action-btn"
-                    onClick={handleExportZip}
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    Export Project (ZIP)
-                  </button>
-                </div>
-              </>
-            )}
-
-            {selectedItem && selectedItem.isLayerElement && (
-              <div
-                className="ocr-detail-card"
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                <div
-                  className="panel-section-title"
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    margin: 0,
-                  }}
-                >
-                  <span>Element Inspector</span>
-                  <button
-                    onClick={() => setSelectedItem(null)}
-                    style={{
-                      background: "transparent",
-                      border: "1px solid var(--border-color)",
-                      color: "var(--text-main)",
-                      borderRadius: "6px",
-                      padding: "4px 8px",
-                      cursor: "pointer",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Deselect
-                  </button>
-                </div>
-
-                {/* Text Content */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <label
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: "bold",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    Text Content
-                  </label>
-                  <textarea
-                    style={{
-                      width: "100%",
-                      minHeight: "80px",
-                      backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "4px",
-                      color: "var(--text-main)",
-                      padding: "6px",
-                      fontSize: "13px",
-                      resize: "vertical",
-                      outline: "none",
-                      fontFamily: "inherit",
-                    }}
-                    value={selectedItem.text || ""}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({ text: e.target.value })
-                    }
-                  />
-                </div>
-
-                {/* Manual Region Redo Section */}
-                {selectedItem.regionId && (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "8px",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px",
-                        fontSize: "12px",
-                        padding: "8px 6px",
-                        height: "36px",
-                      }}
-                      disabled={isRedoing}
-                      onClick={() => {
-                        const actualRegion = ocrRegions.find(
-                          (r) => r.id === selectedItem.regionId,
-                        );
-                        if (actualRegion) handleRedoRegion(actualRegion, "ocr");
-                      }}
-                    >
-                      {isRedoing ? (
-                        <div
-                          className="spinner"
-                          style={{ width: "12px", height: "12px" }}
-                        ></div>
-                      ) : (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                        </svg>
-                      )}
-                      Redo OCR
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px",
-                        fontSize: "12px",
-                        padding: "8px 6px",
-                        height: "36px",
-                      }}
-                      disabled={isRedoing}
-                      onClick={() => {
-                        const actualRegion = ocrRegions.find(
-                          (r) => r.id === selectedItem.regionId,
-                        );
-                        if (actualRegion)
-                          handleRedoRegion(actualRegion, "translation");
-                      }}
-                    >
-                      {isRedoing ? (
-                        <div
-                          className="spinner"
-                          style={{ width: "12px", height: "12px" }}
-                        ></div>
-                      ) : (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                        </svg>
-                      )}
-                      Redo TL
-                    </button>
-                  </div>
-                )}
-
-                {/* Positioning Coordinates Row */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      X Position
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
-                      value={selectedItem.x}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          x: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Y Position
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
-                      value={selectedItem.y}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          y: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Dimensions Row */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Max Width
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
-                      value={selectedItem.maxWidth || 0}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          maxWidth: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Max Height
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
-                      value={selectedItem.maxHeight || 0}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          maxHeight: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
-                <div style={{ margin: "4px 0", display: "flex", gap: "6px" }}>
-                  {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
-                  {interactionMode === "reshape" ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "5px",
-                        fontSize: "12px",
-                        padding: "9px 6px",
-                      }}
-                      onClick={handleUndo}
-                      disabled={undoStack.length === 0}
-                      title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <polyline points="1 4 1 10 7 10" />
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                      </svg>
-                      Undo
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`btn ${interactionMode === "drag" ? "btn-primary" : "btn-secondary"}`}
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "5px",
-                        fontSize: "12px",
-                        padding: "9px 6px",
-                      }}
-                      onClick={() =>
-                        setInteractionMode((prev) =>
-                          prev === "drag" ? "none" : "drag",
-                        )
-                      }
-                      title="Drag the element to a new position on the image"
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <polyline points="5 9 2 12 5 15" />
-                        <polyline points="9 5 12 2 15 5" />
-                        <polyline points="15 19 12 22 9 19" />
-                        <polyline points="19 9 22 12 19 15" />
-                        <line
-                          x1="2"
-                          y1="12"
-                          x2="22"
-                          y2="12"
-                        />
-                        <line
-                          x1="12"
-                          y1="2"
-                          x2="12"
-                          y2="22"
-                        />
-                      </svg>
-                      {interactionMode === "drag" ? "Dragging…" : "Drag"}
-                    </button>
-                  )}
-
-                  {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
-                  {interactionMode === "drag" ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "5px",
-                        fontSize: "12px",
-                        padding: "9px 6px",
-                      }}
-                      onClick={handleUndo}
-                      disabled={undoStack.length === 0}
-                      title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <polyline points="1 4 1 10 7 10" />
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                      </svg>
-                      Undo
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`btn ${interactionMode === "reshape" ? "btn-primary" : "btn-secondary"}`}
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "5px",
-                        fontSize: "12px",
-                        padding: "9px 6px",
-                      }}
-                      onClick={() => {
-                        if (interactionMode === "reshape") {
-                          setInteractionMode("none");
-                        } else {
-                          handleEnterReshapeMode(selectedItem as LayerElement);
-                        }
-                      }}
-                      title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <circle
-                          cx="5"
-                          cy="5"
-                          r="2.5"
-                        />
-                        <circle
-                          cx="19"
-                          cy="5"
-                          r="2.5"
-                        />
-                        <circle
-                          cx="19"
-                          cy="19"
-                          r="2.5"
-                        />
-                        <circle
-                          cx="5"
-                          cy="19"
-                          r="2.5"
-                        />
-                        <line
-                          x1="7.5"
-                          y1="5"
-                          x2="16.5"
-                          y2="5"
-                        />
-                        <line
-                          x1="19"
-                          y1="7.5"
-                          x2="19"
-                          y2="16.5"
-                        />
-                        <line
-                          x1="16.5"
-                          y1="19"
-                          x2="7.5"
-                          y2="19"
-                        />
-                        <line
-                          x1="5"
-                          y1="16.5"
-                          x2="5"
-                          y2="7.5"
-                        />
-                      </svg>
-                      {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
-                    </button>
-                  )}
-                </div>
-
-                {/* Font & Style settings */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Font Family
-                    </label>
-                    <select
-                      className="form-input"
-                      style={{
-                        padding: "4px 8px",
-                        fontSize: "13px",
-                        height: "38px",
-                        backgroundColor: "var(--bg-surface)",
-                      }}
-                      value={selectedItem.font || "Comic Neue"}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({ font: e.target.value })
-                      }
-                    >
-                      <option value="Comic Neue">Comic Neue</option>
-                      <option value="Bangers">Bangers</option>
-                      <option value="Luckiest Guy">Luckiest Guy</option>
-                      <option value="Arial">Arial</option>
-                      <option value="Courier New">Courier New</option>
-                    </select>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Font Size (pt)
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "13px" }}
-                      value={selectedItem.size || 16}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          size: parseFloat(e.target.value) || 12,
-                          autoSize: false,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Font Weight & Style Row */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Font Weight
-                    </label>
-                    <select
-                      className="form-input"
-                      style={{
-                        padding: "4px 8px",
-                        fontSize: "13px",
-                        height: "38px",
-                        backgroundColor: "var(--bg-surface)",
-                      }}
-                      value={selectedItem.fontWeight || "normal"}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          fontWeight: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="normal">Normal</option>
-                      <option value="bold">Bold</option>
-                    </select>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Font Style
-                    </label>
-                    <select
-                      className="form-input"
-                      style={{
-                        padding: "4px 8px",
-                        fontSize: "13px",
-                        height: "38px",
-                        backgroundColor: "var(--bg-surface)",
-                      }}
-                      value={selectedItem.fontStyle || "normal"}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          fontStyle: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="normal">Normal</option>
-                      <option value="italic">Italic</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Box Shape selection */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <label
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: "bold",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    Box Shape
-                  </label>
-                  <select
-                    className="form-input"
-                    style={{
-                      padding: "4px 8px",
-                      fontSize: "13px",
-                      height: "38px",
-                      backgroundColor: "var(--bg-surface)",
-                    }}
-                    value={selectedItem.boxShape || "rectangular"}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({ boxShape: e.target.value })
-                    }
-                  >
-                    <option value="rectangular">Rectangular</option>
-                    <option value="elliptical">
-                      Elliptical (Contour-Based)
-                    </option>
-                  </select>
-                </div>
-
-                {/* Mask Background Color (only relevant if clean background mask is enabled) */}
-                {selectedItem.wordWrap && (
-                  <ColorPicker
-                    label="Mask Background Color"
-                    value={
-                      selectedItem.backgroundColor !== undefined &&
-                      selectedItem.backgroundColor !== null
-                        ? selectedItem.backgroundColor
-                        : "#ffffff"
-                    }
-                    onChange={(val) =>
-                      handleUpdateSelectedElement({ backgroundColor: val })
-                    }
-                    onLaunchEyeDropper={() =>
-                      handleLaunchEyeDropper("backgroundColor")
-                    }
-                    allowTransparent={true}
-                  />
-                )}
-
-                {/* Text Color (only relevant if it is a text-bearing element) */}
-                {selectedItem.text !== undefined &&
-                  selectedItem.text !== null && (
-                    <ColorPicker
-                      label="Text Color"
-                      value={
-                        selectedItem.textColor !== undefined &&
-                        selectedItem.textColor !== null
-                          ? selectedItem.textColor
-                          : "#000000"
-                      }
-                      onChange={(val) =>
-                        handleUpdateSelectedElement({ textColor: val })
-                      }
-                      onLaunchEyeDropper={() =>
-                        handleLaunchEyeDropper("textColor")
-                      }
-                      allowTransparent={false}
-                    />
-                  )}
-
-                {/* Rotation Slider */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <label
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: "bold",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    Rotation ({selectedItem.rotation || 0}°)
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="360"
-                    value={selectedItem.rotation || 0}
-                    onChange={(e) =>
-                      handleUpdateSelectedElement({
-                        rotation: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    style={{ width: "100%" }}
-                  />
-                </div>
-
-                {/* Checkboxes Row */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                    borderTop: "1px solid var(--border-color)",
-                    paddingTop: "10px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="autoSizeCheck"
-                      checked={selectedItem.autoSize}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          autoSize: e.target.checked,
-                        })
-                      }
-                    />
-                    <label
-                      htmlFor="autoSizeCheck"
-                      style={{ fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Auto-size text to fit bubble
-                    </label>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="visibleCheck"
-                      checked={selectedItem.visible}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          visible: e.target.checked,
-                        })
-                      }
-                    />
-                    <label
-                      htmlFor="visibleCheck"
-                      style={{ fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Visible
-                    </label>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="maskCheck"
-                      checked={selectedItem.wordWrap}
-                      onChange={(e) =>
-                        handleUpdateSelectedElement({
-                          wordWrap: e.target.checked,
-                        })
-                      }
-                    />
-                    <label
-                      htmlFor="maskCheck"
-                      style={{ fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Clean background mask
-                    </label>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                  <button
-                    className="btn btn-primary"
-                    style={{
-                      flex: 1,
-                      padding: "8px",
-                      position: "relative",
-                      border: dirtyElements.has(selectedItem.id)
-                        ? "1px solid var(--warning, #eab308)"
-                        : undefined,
-                    }}
-                    onClick={() => handleSaveElementChanges(selectedItem)}
-                  >
-                    Save
-                    {dirtyElements.has(selectedItem.id) && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "6px",
-                          right: "6px",
-                          width: "6px",
-                          height: "6px",
-                          borderRadius: "50%",
-                          background: "var(--error, #ef4444)",
-                        }}
-                      />
-                    )}
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    style={{
-                      flex: 1,
-                      padding: "8px",
-                      borderColor: "var(--error, #ef4444)",
-                      color: "var(--error, #ef4444)",
-                    }}
-                    onClick={() => handleDeleteElement(selectedItem.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {selectedItem && !selectedItem.isLayerElement && (
-              <div
-                className="ocr-detail-card"
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                <div
-                  className="panel-section-title"
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    margin: 0,
-                  }}
-                >
-                  <span>
-                    {selectedItem.isConversation
-                      ? "Conversation Inspector"
-                      : "Region Inspector"}
-                  </span>
-                  <button
-                    onClick={() => setSelectedItem(null)}
-                    style={{
-                      background: "transparent",
-                      border: "1px solid var(--border-color)",
-                      color: "var(--text-main)",
-                      borderRadius: "6px",
-                      padding: "4px 8px",
-                      cursor: "pointer",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Deselect
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "6px",
-                    margin: "4px 0 8px",
-                  }}
-                >
-                  <span
-                    className="meta-badge"
-                    style={{
-                      backgroundColor: "var(--primary-glow)",
-                      color: "var(--primary-hover)",
-                      borderColor: "var(--primary)",
-                    }}
-                  >
-                    {selectedItem.isConversation
-                      ? `Conv #${selectedItem.regions[0]?.bubbleReadingOrder}`
-                      : `Bubble #${selectedItem.regions[0]?.bubbleReadingOrder}`}
-                  </span>
-                  <span
-                    className="meta-badge"
-                    style={{
-                      backgroundColor: "var(--success-glow)",
-                      color: "var(--success)",
-                    }}
-                  >
-                    {selectedItem.regions[0]?.detectedLanguage || "unknown"}
-                  </span>
-                  {selectedItem.isConversation && (
-                    <span
-                      className="meta-badge"
-                      style={{ textTransform: "capitalize" }}
-                    >
-                      {selectedItem.sceneType}
-                    </span>
-                  )}
-                  {selectedItem.approved && (
-                    <span
-                      className="meta-badge"
-                      style={{
-                        backgroundColor: "rgba(16, 185, 129, 0.15)",
-                        color: "var(--success)",
-                        borderColor: "var(--success)",
-                      }}
-                    >
-                      Approved
-                    </span>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--text-muted)",
-                    marginBottom: "8px",
-                  }}
-                >
-                  Position: x={selectedItem.bboxX}, y={selectedItem.bboxY} (
-                  {selectedItem.bboxW}x{selectedItem.bboxH})
-                </div>
-
-                <div
-                  style={{
-                    overflowY: "auto",
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "12px",
-                  }}
-                >
-                  {selectedItem.regions.map((reg: OcrRegion, idx: number) => (
-                    <div
-                      key={reg.id}
-                      style={{
-                        borderBottom:
-                          idx < selectedItem.regions.length - 1
-                            ? "1px dashed var(--border-color)"
-                            : "none",
-                        paddingBottom: "12px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: "10px",
-                          fontWeight: 700,
-                          color: "var(--text-muted)",
-                          marginBottom: "4px",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Region #{idx + 1} Original
-                      </div>
-                      <div
-                        className="ocr-text-preview"
-                        style={{ marginBottom: "8px" }}
-                      >
-                        {reg.text}
-                      </div>
-
-                      {reg.translatedText && (
-                        <>
-                          <div
-                            style={{
-                              fontSize: "10px",
-                              fontWeight: 700,
-                              color: "var(--text-muted)",
-                              marginBottom: "4px",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            Region #{idx + 1} Translation
-                          </div>
-                          <div
-                            className="ocr-text-preview"
-                            style={{
-                              color: "var(--primary-hover)",
-                              borderColor: "var(--primary)",
-                            }}
-                          >
-                            {reg.translatedText}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+            <ReaderRightSidebar
+              selectedItem={selectedItem}
+              setSelectedItem={setSelectedItem}
+              activeLayerId={activeLayerId}
+              setActiveLayerId={setActiveLayerId}
+              sortedLayers={sortedLayers}
+              layers={layers}
+              manuallyShownOcrLayers={manuallyShownOcrLayers}
+              cleanScanlationView={cleanScanlationView}
+              handleMoveLayer={handleMoveLayer}
+              handleCreateTranslationLayer={handleCreateTranslationLayer}
+              handleCreateSfxLayer={handleCreateSfxLayer}
+              handleToggleLayerVisibility={handleToggleLayerVisibility}
+              handleCloneLayer={handleCloneLayer}
+              handleDeleteLayer={handleDeleteLayer}
+              handleAddNewElement={handleAddNewElement}
+              handleLaunchEyeDropper={handleLaunchEyeDropper}
+              handleRedoPageOcr={handleRedoPageOcr}
+              isRedoingPageOcr={isRedoingPageOcr}
+              handleRedoPageTranslation={handleRedoPageTranslation}
+              isRedoingPageTranslation={isRedoingPageTranslation}
+              handleExportPng={handleExportPng}
+              handleExportZip={handleExportZip}
+              interactionMode={interactionMode}
+              setInteractionMode={setInteractionMode}
+              undoStack={undoStack}
+              handleUndo={handleUndo}
+              handleEnterReshapeMode={handleEnterReshapeMode}
+              handleUpdateSelectedElement={handleUpdateSelectedElement}
+              dirtyElements={dirtyElements}
+              handleSaveElementChanges={handleSaveElementChanges}
+              handleDeleteElement={handleDeleteElement}
+              ocrRegions={ocrRegions}
+              isRedoingRegionOcr={isRedoingRegionOcr}
+              handleRedoRegion={handleRedoRegion}
+              isRedoingRegionTl={isRedoingRegionTl}
+            />
+          )}
       </div>
 
       {/* Confirm Modal */}
@@ -5289,4 +3580,4 @@ export const Reader: React.FC<ReaderProps> = ({
   );
 };
 
-export default Reader;
+export default React.memo(Reader);

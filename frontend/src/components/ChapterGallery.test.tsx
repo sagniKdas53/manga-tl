@@ -32,10 +32,19 @@ vi.mock("../utils", () => ({
   getContextPath: () => "",
 }));
 
+const mockShowToast = vi.fn();
 vi.mock("./ToastContext", () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: mockShowToast,
   }),
+}));
+
+vi.mock("./UploadContext", () => ({
+  useUploadQueue: () => ({
+    addItems: vi.fn(),
+    updateItem: vi.fn(),
+  }),
+  UploadQueueItem: {} as unknown,
 }));
 
 describe("ChapterGallery Component", () => {
@@ -88,6 +97,7 @@ describe("ChapterGallery Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSafeFetch.mockReset();
+    mockShowToast.mockReset();
   });
 
   it("renders chapter details and pages", () => {
@@ -104,7 +114,7 @@ describe("ChapterGallery Component", () => {
       />,
     );
 
-    expect(screen.getByText("Chapter 1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Chapter 1" })).toBeInTheDocument();
     expect(screen.getByText("One Piece / Romance Dawn")).toBeInTheDocument();
     expect(screen.getByText("Page 1")).toBeInTheDocument();
   });
@@ -162,7 +172,7 @@ describe("ChapterGallery Component", () => {
     const titleInput = screen.getByDisplayValue("Romance Dawn");
     fireEvent.change(titleInput, { target: { value: "Romance Dawn Updated" } });
 
-    const saveBtn = screen.getByRole("button", { name: "Save" });
+    const saveBtn = screen.getByRole("button", { name: "Update Chapter" });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -228,8 +238,6 @@ describe("ChapterGallery Component", () => {
       expect(mockSetPages).toHaveBeenCalled();
     });
   });
-
-
 
   it("handles exporting chapter zip", async () => {
     mockSafeFetch.mockResolvedValueOnce({
@@ -354,11 +362,23 @@ describe("ChapterGallery Component", () => {
       if (this.onload) this.onload();
     });
 
-    const XHRMock = vi.fn().mockImplementation(function (this: XMLHttpRequest) {
+    interface MockXHR {
+      open: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
+      setRequestHeader: ReturnType<typeof vi.fn>;
+      status: number;
+      onload: (() => void) | null;
+      upload: { onprogress: ((e: ProgressEvent) => void) | null };
+    }
+
+    const XHRMock = vi.fn().mockImplementation(function (this: MockXHR) {
       this.open = vi.fn();
       this.send = sendMock;
       this.setRequestHeader = vi.fn();
-      this.upload = { onprogress: null };
+      Object.defineProperty(this, "upload", {
+        value: { onprogress: null },
+        writable: true,
+      });
       this.status = 200;
       this.onload = null;
     });
@@ -432,11 +452,11 @@ describe("ChapterGallery Component", () => {
     const titleInput = screen.getByDisplayValue("Romance Dawn");
     fireEvent.change(titleInput, { target: { value: "Romance Dawn Failed" } });
 
-    const saveBtn = screen.getByRole("button", { name: "Save" });
+    const saveBtn = screen.getByRole("button", { name: "Update Chapter" });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
-      expect(screen.getByText("Validation error")).toBeInTheDocument();
+      expect(mockShowToast).toHaveBeenCalledWith("Validation error", "error");
     });
   });
 });

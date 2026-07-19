@@ -27,7 +27,6 @@ import org.springframework.test.web.servlet.MockMvc;
 public class JobControllerTest {
 
   @Autowired private MockMvc mockMvc;
-  @Autowired private ObjectMapper objectMapper;
 
   @MockBean private JobRepository jobRepository;
   @MockBean private JobCoordinatorService jobCoordinatorService;

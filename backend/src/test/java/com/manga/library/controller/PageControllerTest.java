@@ -490,7 +490,7 @@ public class PageControllerTest {
   }
 
   @Test
-  public void testGetImageDetails_Failure() throws Exception {
+  public void testGetImageDetails_Failure() {
     UUID imageId = UUID.randomUUID();
     when(imageRepository.findById(imageId)).thenReturn(Optional.empty());
 

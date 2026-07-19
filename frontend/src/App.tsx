@@ -1,4 +1,10 @@
-import React, { useState, useEffect, Suspense } from "react";
+import React, {
+  useState,
+  useEffect,
+  Suspense,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   BrowserRouter,
   Routes,
@@ -7,6 +13,12 @@ import {
   useLocation,
   matchPath,
 } from "react-router-dom";
+
+import { ThemeProvider } from "@mui/material/styles";
+import Box from "@mui/material/Box";
+import CssBaseline from "@mui/material/CssBaseline";
+import CircularProgress from "@mui/material/CircularProgress";
+import { themeObj } from "./theme";
 
 // Types
 import type { User, Series, Chapter, Page } from "./types";
@@ -17,13 +29,13 @@ import { safeFetch, getContextPath } from "./utils";
 // Providers
 import { NotificationProvider } from "./components/NotificationContext";
 import { ToastProvider, useToast } from "./components/ToastContext";
+import { UploadProvider } from "./components/UploadContext";
 
 // Static import for NotificationCenter (always present in nav)
-import { NotificationCenter } from "./components/NotificationCenter";
-import { QueueManager } from "./components/QueueManager";
 import { useNotifications } from "./components/useNotifications";
-import logoDark from "./assets/logo-dark.svg";
-import logoLight from "./assets/logo-light.svg";
+import { NavBar } from "./components/NavBar";
+import { useColorMode } from "./hooks/useColorMode";
+import { useDependencyLogger } from "./hooks/useDependencyLogger";
 
 // Lazy-loaded route components
 const Auth = React.lazy(() => import("./components/Auth"));
@@ -32,12 +44,18 @@ const SeriesDetails = React.lazy(() => import("./components/SeriesDetails"));
 const ChapterGallery = React.lazy(() => import("./components/ChapterGallery"));
 const Reader = React.lazy(() => import("./components/Reader"));
 const SettingsModal = React.lazy(() => import("./components/SettingsModal"));
+const UserManagementModal = React.lazy(
+  () => import("./components/UserManagementModal"),
+);
+
+// Stable identity for props that don't need per-render identities — keeps React.memo effective
+const NOOP = () => undefined;
 
 function LoadingSpinner() {
   return (
-    <div className="dashboard-content text-center">
-      <div className="spinner"></div>
-    </div>
+    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
+      <CircularProgress />
+    </Box>
   );
 }
 
@@ -144,25 +162,39 @@ function AppContent() {
   const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
-  // Theme State & Persistence
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    const saved = localStorage.getItem("manga_theme");
-    return saved === "light" ? "light" : "dark";
-  });
+  const { mode } = useColorMode();
+  const appliedTheme = useMemo(() => themeObj(mode), [mode]);
+
+  const [activeDrawer, setActiveDrawer] = useState<
+    "none" | "queue" | "notifications"
+  >("none");
 
   useEffect(() => {
-    if (theme === "light") {
-      document.documentElement.classList.add("light");
-    } else {
-      document.documentElement.classList.remove("light");
-    }
-    localStorage.setItem("manga_theme", theme);
-  }, [theme]);
+    document.documentElement.classList.toggle("light", mode === "light");
+    localStorage.setItem("manga_theme", mode);
+  }, [mode]);
+
+  useDependencyLogger(
+    {
+      user,
+      seriesId,
+      chapterId,
+      seriesList,
+      selectedSeries,
+      chapters,
+      selectedChapter,
+      pages,
+      isLoadingDetails,
+      activeDrawer,
+    },
+    "AppContent"
+  );
 
   // Load user session redirect
   useEffect(() => {
@@ -312,294 +344,188 @@ function AppContent() {
     navigate("/login");
   };
 
+  const handleSettingsClose = useCallback(() => setIsSettingsOpen(false), []);
+
   return (
-    <NotificationProvider token={user?.token || null}>
-      <ToastProvider>
-        <GlobalErrorListener />
-        <TranslationToastWatcher />
-        <div className="app-container">
-          {/* Navigation Bar */}
-          {!readerMatch && (
-            <nav className="nav-bar">
-              <div
-                className="logo"
-                onClick={() => user && navigate("/")}
-                style={{
-                  cursor: user ? "pointer" : "default",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <img
-                  src={theme === "dark" ? logoDark : logoLight}
-                  alt="tl-hub logo"
-                  style={{ height: "32px", width: "auto" }}
-                />
-                <span style={{ fontWeight: 700 }}>tl-hub</span>
-              </div>
-              <div className="nav-actions">
-                {/* Theme Toggle Button */}
-                <button
-                  className="theme-toggle-btn"
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
-                >
-                  {theme === "dark" ? (
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="5"
-                      ></circle>
-                      <line
-                        x1="12"
-                        y1="1"
-                        x2="12"
-                        y2="3"
-                      ></line>
-                      <line
-                        x1="12"
-                        y1="21"
-                        x2="12"
-                        y2="23"
-                      ></line>
-                      <line
-                        x1="4.22"
-                        y1="4.22"
-                        x2="5.64"
-                        y2="5.64"
-                      ></line>
-                      <line
-                        x1="18.36"
-                        y1="18.36"
-                        x2="19.78"
-                        y2="19.78"
-                      ></line>
-                      <line
-                        x1="1"
-                        y1="12"
-                        x2="3"
-                        y2="12"
-                      ></line>
-                      <line
-                        x1="21"
-                        y1="12"
-                        x2="23"
-                        y2="12"
-                      ></line>
-                      <line
-                        x1="4.22"
-                        y1="19.78"
-                        x2="5.64"
-                        y2="18.36"
-                      ></line>
-                      <line
-                        x1="18.36"
-                        y1="5.64"
-                        x2="19.78"
-                        y2="4.22"
-                      ></line>
-                    </svg>
-                  ) : (
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                    </svg>
-                  )}
-                </button>
-
-                {user && (
-                  <>
-                    <button
-                      className="theme-toggle-btn"
-                      onClick={() => setIsSettingsOpen(true)}
-                      title="Settings"
-                    >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <circle
-                          cx="12"
-                          cy="12"
-                          r="3"
-                        ></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                      </svg>
-                    </button>
-                    <QueueManager token={user?.token} />
-                    <NotificationCenter />
-                    <div className="user-badge">
-                      <span className="user-dot"></span>
-                      {user.displayName}
-                    </div>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={handleLogout}
-                      style={{ padding: "6px 12px" }}
-                    >
-                      Sign Out
-                    </button>
-                  </>
+    <ThemeProvider theme={appliedTheme}>
+      <CssBaseline />
+      <Box
+        sx={{
+          bgcolor: "background.default",
+          minHeight: "100dvh",
+        }}
+      >
+        <NotificationProvider token={user?.token || null}>
+          <ToastProvider>
+            <UploadProvider>
+              <GlobalErrorListener />
+              <TranslationToastWatcher />
+              <div className="app-container">
+                {/* Navigation Bar */}
+                {!readerMatch && (
+                  <NavBar
+                    user={user}
+                    activeDrawer={activeDrawer}
+                    setActiveDrawer={setActiveDrawer}
+                    setIsSettingsOpen={setIsSettingsOpen}
+                    setIsUserModalOpen={setIsUserModalOpen}
+                    handleLogout={handleLogout}
+                  />
                 )}
+
+                <Suspense fallback={<LoadingSpinner />}>
+                  <Routes>
+                    <Route
+                      path="/login"
+                      element={<Auth onLoginSuccess={setUser} />}
+                    />
+                    <Route
+                      path="/"
+                      element={
+                        user ? (
+                          <Dashboard
+                            user={user}
+                            seriesList={seriesList}
+                            setSeriesList={setSeriesList}
+                            onSelectSeries={setSelectedSeries}
+                            mode={mode}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/series/:seriesId"
+                      element={
+                        user ? (
+                          <SeriesDetails
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            setSelectedSeries={setSelectedSeries}
+                            chapters={chapters}
+                            setChapters={setChapters}
+                            onSelectChapter={setSelectedChapter}
+                            isLoadingDetails={isLoadingDetails}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/series/:seriesId/:slug"
+                      element={
+                        user ? (
+                          <SeriesDetails
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            setSelectedSeries={setSelectedSeries}
+                            chapters={chapters}
+                            setChapters={setChapters}
+                            onSelectChapter={setSelectedChapter}
+                            isLoadingDetails={isLoadingDetails}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/chapters/:chapterId"
+                      element={
+                        user ? (
+                          <ChapterGallery
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            selectedChapter={selectedChapter}
+                            setSelectedChapter={setSelectedChapter}
+                            pages={pages}
+                            setPages={setPages}
+                            onSelectPage={NOOP}
+                            isLoadingDetails={isLoadingDetails}
+                            mode={mode}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/chapters/:chapterId/:slug"
+                      element={
+                        user ? (
+                          <ChapterGallery
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            selectedChapter={selectedChapter}
+                            setSelectedChapter={setSelectedChapter}
+                            pages={pages}
+                            setPages={setPages}
+                            onSelectPage={NOOP}
+                            isLoadingDetails={isLoadingDetails}
+                            mode={mode}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/chapters/:chapterId/reader/:pageNumber"
+                      element={
+                        user ? (
+                          <Reader
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            selectedChapter={selectedChapter}
+                            chapters={chapters}
+                            pages={pages}
+                            setPages={setPages}
+                            theme={mode}
+                          />
+                        ) : null
+                      }
+                    />
+                    <Route
+                      path="/chapters/:chapterId/:slug/reader/:pageNumber"
+                      element={
+                        user ? (
+                          <Reader
+                            user={user}
+                            selectedSeries={selectedSeries}
+                            selectedChapter={selectedChapter}
+                            chapters={chapters}
+                            pages={pages}
+                            setPages={setPages}
+                            theme={mode}
+                          />
+                        ) : null
+                      }
+                    />
+                  </Routes>
+                </Suspense>
+
+                <Suspense fallback={<LoadingSpinner />}>
+                  {isSettingsOpen && (
+                    <SettingsModal
+                      isOpen={isSettingsOpen}
+                      onClose={handleSettingsClose}
+                      token={user?.token}
+                    />
+                  )}
+                  {isUserModalOpen && user && (
+                    <UserManagementModal
+                      open={isUserModalOpen}
+                      onClose={() => setIsUserModalOpen(false)}
+                      user={user}
+                      onUserUpdate={(updated) => {
+                        setUser(updated);
+                        localStorage.setItem(
+                          "manga_user",
+                          JSON.stringify(updated),
+                        );
+                      }}
+                      onLogout={handleLogout}
+                    />
+                  )}
+                </Suspense>
               </div>
-            </nav>
-          )}
-
-          <Suspense fallback={<LoadingSpinner />}>
-            <Routes>
-              <Route
-                path="/login"
-                element={<Auth onLoginSuccess={setUser} />}
-              />
-              <Route
-                path="/"
-                element={
-                  user ? (
-                    <Dashboard
-                      user={user}
-                      seriesList={seriesList}
-                      setSeriesList={setSeriesList}
-                      onSelectSeries={setSelectedSeries}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/series/:seriesId"
-                element={
-                  user ? (
-                    <SeriesDetails
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      setSelectedSeries={setSelectedSeries}
-                      chapters={chapters}
-                      setChapters={setChapters}
-                      onSelectChapter={setSelectedChapter}
-                      isLoadingDetails={isLoadingDetails}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/series/:seriesId/:slug"
-                element={
-                  user ? (
-                    <SeriesDetails
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      setSelectedSeries={setSelectedSeries}
-                      chapters={chapters}
-                      setChapters={setChapters}
-                      onSelectChapter={setSelectedChapter}
-                      isLoadingDetails={isLoadingDetails}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/chapters/:chapterId"
-                element={
-                  user ? (
-                    <ChapterGallery
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      selectedChapter={selectedChapter}
-                      setSelectedChapter={setSelectedChapter}
-                      pages={pages}
-                      setPages={setPages}
-                      onSelectPage={() => {}}
-                      isLoadingDetails={isLoadingDetails}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/chapters/:chapterId/:slug"
-                element={
-                  user ? (
-                    <ChapterGallery
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      selectedChapter={selectedChapter}
-                      setSelectedChapter={setSelectedChapter}
-                      pages={pages}
-                      setPages={setPages}
-                      onSelectPage={() => {}}
-                      isLoadingDetails={isLoadingDetails}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/chapters/:chapterId/reader/:pageNumber"
-                element={
-                  user ? (
-                    <Reader
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      selectedChapter={selectedChapter}
-                      chapters={chapters}
-                      pages={pages}
-                      theme={theme}
-                    />
-                  ) : null
-                }
-              />
-              <Route
-                path="/chapters/:chapterId/:slug/reader/:pageNumber"
-                element={
-                  user ? (
-                    <Reader
-                      user={user}
-                      selectedSeries={selectedSeries}
-                      selectedChapter={selectedChapter}
-                      chapters={chapters}
-                      pages={pages}
-                      theme={theme}
-                    />
-                  ) : null
-                }
-              />
-            </Routes>
-          </Suspense>
-
-          <Suspense fallback={null}>
-            {isSettingsOpen && (
-              <SettingsModal
-                isOpen={isSettingsOpen}
-                onClose={() => setIsSettingsOpen(false)}
-                token={user?.token}
-              />
-            )}
-          </Suspense>
-        </div>
-      </ToastProvider>
-    </NotificationProvider>
+            </UploadProvider>
+          </ToastProvider>
+        </NotificationProvider>
+      </Box>
+    </ThemeProvider>
   );
 }
 

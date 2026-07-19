@@ -69,4 +69,22 @@ public class Chapter {
   @Builder.Default
   @Column(name = "use_context_memory", nullable = false, columnDefinition = "boolean default true")
   private Boolean useContextMemory = true;
+
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private OffsetDateTime createdAt;
+
+  @Column(name = "updated_at", nullable = false)
+  private OffsetDateTime updatedAt;
+
+  @PrePersist
+  protected void onCreate() {
+    OffsetDateTime now = OffsetDateTime.now();
+    createdAt = now;
+    updatedAt = now;
+  }
+
+  @PreUpdate
+  protected void onUpdate() {
+    updatedAt = OffsetDateTime.now();
+  }
 }

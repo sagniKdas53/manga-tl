@@ -31,6 +31,7 @@ public class LayerElement {
   @com.fasterxml.jackson.annotation.JsonIgnore
   private OcrRegion region;
 
+  @Column(columnDefinition = "TEXT")
   private String text;
   private String font;
   private Double size;

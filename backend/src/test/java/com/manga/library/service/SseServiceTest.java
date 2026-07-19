@@ -27,7 +27,7 @@ public class SseServiceTest {
   @Mock private ValueOperations<String, String> valOps;
   @Mock private ImageRepository imageRepository;
 
-  private ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper = new ObjectMapper();
   private SseService sseService;
 
   @BeforeEach
@@ -166,7 +166,7 @@ public class SseServiceTest {
   }
 
   @Test
-  public void testSubscribe_SendInitialEventException() throws Exception {
+  public void testSubscribe_SendInitialEventException() {
     UUID userId = UUID.randomUUID();
     when(redisTemplate.opsForList()).thenReturn(listOps);
     when(listOps.size(anyString())).thenReturn(0L);
@@ -185,7 +185,7 @@ public class SseServiceTest {
   }
 
   @Test
-  public void testSubscribe_SendPendingNotificationException() throws Exception {
+  public void testSubscribe_SendPendingNotificationException() {
     UUID userId = UUID.randomUUID();
     when(redisTemplate.opsForList()).thenReturn(listOps);
     when(listOps.size("notifications:user:" + userId)).thenReturn(1L);
@@ -208,7 +208,7 @@ public class SseServiceTest {
   }
 
   @Test
-  public void testEmitLiveNotificationToUser_SendException() throws Exception {
+  public void testEmitLiveNotificationToUser_SendException() {
     UUID userId = UUID.randomUUID();
     when(redisTemplate.opsForList()).thenReturn(listOps);
     when(listOps.size(anyString())).thenReturn(0L);

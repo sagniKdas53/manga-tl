@@ -67,7 +67,7 @@ public class LayerController {
                 if (dto.getBoxShape() != null) element.setBoxShape(dto.getBoxShape());
                 if (dto.getMaskPolygon() != null) element.setMaskPolygon(dto.getMaskPolygon());
                 if (dto.getRegionId() != null) {
-                  OcrRegion region = ocrRegionRepository.findById(dto.getRegionId()).orElse(null);
+                  OcrRegion region = ocrRegionRepository.findById(Objects.requireNonNull(dto.getRegionId())).orElse(null);
                   element.setRegion(region);
                 }
 
@@ -88,7 +88,7 @@ public class LayerController {
                           .editedBy(user)
                           .build();
                   Objects.requireNonNull(history, "history cannot be null");
-                  layerEditHistoryRepository.save(history);
+                  layerEditHistoryRepository.save(Objects.requireNonNull(history));
                   log.info("Saved edit history for LayerElement {}", id);
 
                   // Update last_modified on the parent Layer's metadata
@@ -100,17 +100,17 @@ public class LayerController {
                               parentLayer.getMetadataJson())
                           .put("last_modified", OffsetDateTime.now().toString());
                     }
-                    layerRepository.save(parentLayer);
+                    layerRepository.save(Objects.requireNonNull(parentLayer));
 
                     Image img = parentLayer.getImage();
                     if (img != null) {
                       img.setLastEditedAt(OffsetDateTime.now());
-                      imageRepository.save(img);
+                      imageRepository.save(Objects.requireNonNull(img));
                     }
                   }
                 }
 
-                LayerElement saved = layerElementRepository.save(element);
+                LayerElement saved = layerElementRepository.save(Objects.requireNonNull(element));
                 return ResponseEntity.ok(saved);
 
               } catch (Exception e) {
@@ -140,7 +140,7 @@ public class LayerController {
     log.info("Creating new layer for image {}", imageId);
 
     return imageRepository
-        .findById(imageId)
+        .findById(Objects.requireNonNull(imageId))
         .map(
             image -> {
               String type = (String) payload.getOrDefault("type", "translation");
@@ -181,10 +181,10 @@ public class LayerController {
                       .build();
 
               Objects.requireNonNull(layer, "layer cannot be null");
-              Layer saved = layerRepository.save(layer);
+              Layer saved = layerRepository.save(Objects.requireNonNull(layer));
 
               image.setLastEditedAt(OffsetDateTime.now());
-              imageRepository.save(image);
+              imageRepository.save(Objects.requireNonNull(image));
 
               return ResponseEntity.ok(saved);
             })
@@ -203,10 +203,10 @@ public class LayerController {
             layer -> {
               Objects.requireNonNull(layer, "layer cannot be null");
               Image img = layer.getImage();
-              layerRepository.delete(layer);
+              layerRepository.delete(Objects.requireNonNull(layer));
               if (img != null) {
                 img.setLastEditedAt(OffsetDateTime.now());
-                imageRepository.save(img);
+                imageRepository.save(Objects.requireNonNull(img));
               }
               return ResponseEntity.ok().build();
             })
@@ -245,11 +245,11 @@ public class LayerController {
               if (payload.containsKey("visible")) {
                 layer.setVisible(Boolean.TRUE.equals(payload.get("visible")));
               }
-              Layer saved = layerRepository.save(layer);
+              Layer saved = layerRepository.save(Objects.requireNonNull(layer));
               Image img = saved.getImage();
               if (img != null) {
                 img.setLastEditedAt(OffsetDateTime.now());
-                imageRepository.save(img);
+                imageRepository.save(Objects.requireNonNull(img));
               }
               log.info(
                   "Layer {} updated — zOrder={}, visible={}",
@@ -269,12 +269,12 @@ public class LayerController {
     Objects.requireNonNull(layerId, "layerId cannot be null");
     log.info("Creating new LayerElement in layer {}", layerId);
     return layerRepository
-        .findById(layerId)
+        .findById(Objects.requireNonNull(layerId))
         .map(
             layer -> {
               OcrRegion region = null;
               if (dto.getRegionId() != null) {
-                region = ocrRegionRepository.findById(dto.getRegionId()).orElse(null);
+                region = ocrRegionRepository.findById(Objects.requireNonNull(dto.getRegionId())).orElse(null);
               }
               LayerElement el =
                   LayerElement.builder()
@@ -297,11 +297,11 @@ public class LayerController {
                       .boxShape(dto.getBoxShape() != null ? dto.getBoxShape() : "rectangular")
                       .maskPolygon(dto.getMaskPolygon())
                       .build();
-              LayerElement saved = layerElementRepository.save(el);
+              LayerElement saved = layerElementRepository.save(Objects.requireNonNull(el));
               Image img = layer.getImage();
               if (img != null) {
                 img.setLastEditedAt(OffsetDateTime.now());
-                imageRepository.save(img);
+                imageRepository.save(Objects.requireNonNull(img));
               }
               return ResponseEntity.ok(saved);
             })
@@ -320,10 +320,10 @@ public class LayerController {
             element -> {
               Objects.requireNonNull(element, "element cannot be null");
               Image img = element.getLayer() != null ? element.getLayer().getImage() : null;
-              layerElementRepository.delete(element);
+              layerElementRepository.delete(Objects.requireNonNull(element));
               if (img != null) {
                 img.setLastEditedAt(OffsetDateTime.now());
-                imageRepository.save(img);
+                imageRepository.save(Objects.requireNonNull(img));
               }
               return ResponseEntity.ok().build();
             })

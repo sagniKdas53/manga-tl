@@ -1,5 +1,18 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import Container from "@mui/material/Container";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import type { User } from "../types";
 import { safeFetch } from "../utils";
 
@@ -7,7 +20,7 @@ interface AuthProps {
   onLoginSuccess: (user: User) => void;
 }
 
-export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
+const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -69,138 +82,136 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       setPassword("");
       setDisplayName("");
     } catch (err: unknown) {
-      // Fixed: Specify correct type catch(err: unknown) to avoid strict 'any' lint warning
       const message = err instanceof Error ? err.message : String(err);
       setAuthError(message || "Something went wrong");
     }
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card glass">
-        <div className="auth-header">
-          <h2>{isLogin ? "Welcome Back" : "Create Account"}</h2>
-          <p>
-            {isLogin
-              ? "Access your translation workspace"
-              : "Get started by creating a local user"}
-          </p>
-        </div>
-        <form onSubmit={handleAuthSubmit}>
-          {!isLogin && (
-            <>
-              <div className="form-group">
-                <label className="form-label">Display Name</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="John Doe"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Account Role</label>
-                {isSetupRequired ? (
-                  <div
-                    className="form-info-box"
-                    style={{
-                      padding: "10px 12px",
-                      background: "rgba(235,130,20,0.1)",
-                      border: "1px solid rgba(235,130,20,0.3)",
-                      borderRadius: "6px",
-                      fontSize: "13px",
-                      color: "#ffb020",
-                    }}
-                  >
-                    <strong>Administrator</strong> (First user registration
-                    forces Admin privileges)
-                  </div>
-                ) : (
-                  <select
-                    className="form-input"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    style={{
-                      background: "rgba(255, 255, 255, 0.05)",
-                      color: "var(--text-main)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
-                    <option
-                      value="translator"
-                      style={{ background: "#222", color: "#fff" }}
-                    >
-                      Translator
-                    </option>
-                    <option
-                      value="viewer"
-                      style={{ background: "#222", color: "#fff" }}
-                    >
-                      Viewer
-                    </option>
-                  </select>
-                )}
-              </div>
-            </>
-          )}
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input
-              type="email"
-              className="form-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@manga.local"
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
-          {authError && (
-            <div
-              style={{
-                color: "var(--error)",
-                fontSize: "13px",
-                marginBottom: "16px",
-              }}
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        bgcolor: "background.default",
+      }}
+    >
+      <Container maxWidth="xs">
+        <Card elevation={0}>
+          <CardContent sx={{ p: 4, "&:last-child": { pb: 4 } }}>
+            <Typography
+              variant="h5"
+              component="h2"
+              gutterBottom
+              sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 700 }}
             >
-              {authError}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="btn btn-primary"
-            style={{ width: "100%", marginBottom: "16px" }}
-          >
-            {isLogin ? "Sign In" : "Sign Up"}
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-text"
-            onClick={() => setIsLogin(!isLogin)}
-            style={{ width: "100%" }}
-          >
-            {isLogin
-              ? "Don't have an account? Sign Up"
-              : "Already have an account? Sign In"}
-          </button>
-        </form>
-      </div>
-    </div>
+              {isLogin ? "Welcome Back" : "Create Account"}
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 3 }}
+            >
+              {isLogin
+                ? "Access your translation workspace"
+                : "Get started by creating a local user"}
+            </Typography>
+            <Box
+              component="form"
+              onSubmit={handleAuthSubmit}
+            >
+              {!isLogin && (
+                <>
+                  <TextField
+                    label="Display Name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="John Doe"
+                    required
+                    fullWidth
+                    margin="normal"
+                  />
+                  {isSetupRequired ? (
+                    <Alert
+                      severity="warning"
+                      sx={{ mt: 1, mb: 1 }}
+                    >
+                      <strong>Administrator</strong> (First user registration
+                      forces Admin privileges)
+                    </Alert>
+                  ) : (
+                    <FormControl
+                      fullWidth
+                      margin="normal"
+                    >
+                      <InputLabel>Account Role</InputLabel>
+                      <Select
+                        value={role}
+                        label="Account Role"
+                        onChange={(e) => setRole(e.target.value)}
+                      >
+                        <MenuItem value="translator">Translator</MenuItem>
+                        <MenuItem value="viewer">Viewer</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                </>
+              )}
+              <TextField
+                label="Email Address"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@manga.local"
+                required
+                fullWidth
+                margin="normal"
+              />
+              <TextField
+                label="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                fullWidth
+                margin="normal"
+              />
+              {authError && (
+                <Alert
+                  severity="error"
+                  sx={{ mt: 2 }}
+                >
+                  {authError}
+                </Alert>
+              )}
+              <Stack
+                spacing={2}
+                sx={{ mt: 3 }}
+              >
+                <Button
+                  type="submit"
+                  variant="contained"
+                  fullWidth
+                >
+                  {isLogin ? "Sign In" : "Sign Up"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setIsLogin(!isLogin)}
+                  fullWidth
+                >
+                  {isLogin
+                    ? "Don't have an account? Sign Up"
+                    : "Already have an account? Sign In"}
+                </Button>
+              </Stack>
+            </Box>
+          </CardContent>
+        </Card>
+      </Container>
+    </Box>
   );
 };
 

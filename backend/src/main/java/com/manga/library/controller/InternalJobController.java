@@ -29,7 +29,6 @@ public class InternalJobController {
   private final ConversationRegionRepository conversationRegionRepository;
   private final PageRepository pageRepository;
   private final ChapterRepository chapterRepository;
-  private final SeriesRepository seriesRepository;
   private final MinioService minioService;
   private final LayerElementRepository layerElementRepository;
   private final LayerRepository layerRepository;
@@ -40,6 +39,7 @@ public class InternalJobController {
   @PatchMapping("/jobs/{jobId}/status")
   public ResponseEntity<?> updateJobStatus(
       @PathVariable String jobId, @RequestBody Map<String, String> payload) {
+    Objects.requireNonNull(jobId, "jobId cannot be null");
     log.info("Worker updating job {} status to {}", jobId, payload.get("status"));
     return jobRepository
         .findById(jobId)
@@ -69,7 +69,7 @@ public class InternalJobController {
                   log.error("Failed to parse attempt or update payload: {}", e.getMessage());
                 }
               }
-              jobRepository.save(job);
+              jobRepository.save(Objects.requireNonNull(job));
               if ("PENDING".equals(payload.get("status"))) {
                 jobCoordinatorService.pushJobToRedis(job);
               }
@@ -88,6 +88,7 @@ public class InternalJobController {
 
   @GetMapping("/jobs/{jobId}")
   public ResponseEntity<?> getJob(@PathVariable String jobId) {
+    Objects.requireNonNull(jobId, "jobId cannot be null");
     log.info("Worker fetching status for job {}", jobId);
     return jobRepository
         .findById(jobId)
@@ -329,7 +330,9 @@ public class InternalJobController {
       }
       Map<String, Object> cost = null;
       if (payload.containsKey("cost") && payload.get("cost") instanceof Map) {
-        cost = (Map<String, Object>) payload.get("cost");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> c = (Map<String, Object>) payload.get("cost");
+        cost = c;
       }
       jobCoordinatorService.handleTranslationCallback(imageId, translations, cost);
       return ResponseEntity.ok().build();
@@ -498,7 +501,9 @@ public class InternalJobController {
       }
       Map<String, Object> cost = null;
       if (payload.containsKey("cost") && payload.get("cost") instanceof Map) {
-        cost = (Map<String, Object>) payload.get("cost");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> c = (Map<String, Object>) payload.get("cost");
+        cost = c;
       }
       String qaResultState = jobCoordinatorService.handleQaCallback(imageId, qaResults, cost);
       if ("COMPLETED".equals(qaResultState)) {

@@ -107,4 +107,49 @@ describe("Auth Component", () => {
       expect(screen.getByText("Invalid credentials")).toBeInTheDocument();
     });
   });
+
+  it("handles setup-required network error during sign up switch", async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockSafeFetch.mockRejectedValueOnce(new Error("Network err"));
+    render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
+    fireEvent.click(screen.getByText("Don't have an account? Sign Up"));
+    
+    await waitFor(() => {
+      expect(screen.getByText("Create Account")).toBeInTheDocument();
+    });
+    consoleSpy.mockRestore();
+  });
+
+  it("renders setupRequired warning if no users exist", async () => {
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ setupRequired: true }),
+    });
+    render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
+    fireEvent.click(screen.getByText("Don't have an account? Sign Up"));
+    
+    await waitFor(() => {
+      expect(screen.getByText(/First user registration forces Admin privileges/i)).toBeInTheDocument();
+    });
+    
+    fireEvent.change(screen.getByLabelText(/Display Name/i), { target: { value: "New Admin" } });
+  });
+
+  it("allows selecting a role when setup is not required", async () => {
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ setupRequired: false }),
+    });
+    render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
+    fireEvent.click(screen.getByText("Don't have an account? Sign Up"));
+    
+    const select = await screen.findByRole("combobox");
+    
+    fireEvent.change(screen.getByLabelText(/Display Name/i), { target: { value: "New User" } });
+    
+    fireEvent.mouseDown(select);
+    
+    const viewerOption = await screen.findByRole("option", { name: /Viewer/i });
+    fireEvent.click(viewerOption);
+  });
 });
