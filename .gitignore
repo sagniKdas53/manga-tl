@@ -8,21 +8,9 @@ logs/
 .venv/
 .env
 .idea
-# examples/sample[2-9]
-# examples/sample[1-9][0-9]
-examples/Sample[1-9]
-examples/Sample[1-9][0-9]
 AGENTS.md
 CLAUDE.md
 .antigravitycli/*
 secrets/
 frontend/coverage
-examples/Backend-renderer-discrepancy-p2
-examples/Backend-renderer-discrepency
-examples/iwara-bonus
-examples/nHentai
-examples/pixiv
-examples/chapter-export
-examples/chapter-export-after-fix
-examples/chapter-export-hybrid-qa
-examples/screenshots
+examples/

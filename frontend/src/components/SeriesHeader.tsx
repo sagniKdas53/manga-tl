@@ -79,7 +79,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
               </Typography>
 
               <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item>
+                <Grid>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     Language
                   </Typography>
@@ -88,13 +88,13 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                     label={`${series.sourceLanguage || series.originalLanguage || "ja"} → ${series.targetLanguage || "en"}`}
                   />
                 </Grid>
-                <Grid item>
+                <Grid>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     Direction
                   </Typography>
                   <Chip size="small" label={series.readingDirection} />
                 </Grid>
-                <Grid item>
+                <Grid>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     Chapters
                   </Typography>
@@ -109,7 +109,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   Configured Models
                 </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
                   {series.ocrModel && (
                     <Chip size="small" variant="outlined" label={`OCR: ${series.ocrModel}`} />
                   )}

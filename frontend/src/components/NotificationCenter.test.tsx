@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NotificationCenter } from "./NotificationCenter";
 import { useNotifications } from "./useNotifications";
 import { useColorMode } from "../hooks/useColorMode";
+import { safeFetch } from "../utils";
 
 vi.mock("./useNotifications", () => ({
   useNotifications: vi.fn(),
@@ -66,6 +67,57 @@ describe("NotificationCenter", () => {
     fireEvent.click(screen.getByText("Confirm"));
     await waitFor(() => {
       expect(mockClearAll).toHaveBeenCalled();
+    });
+  });
+
+  it("renders complex notifications and handles download", async () => {
+    // Mock user in localStorage
+    localStorage.setItem("manga_user", JSON.stringify({ token: "test_token" }));
+    
+    // Mock URL methods
+    global.URL.createObjectURL = vi.fn();
+    global.URL.revokeObjectURL = vi.fn();
+    
+    const mockBlob = new Blob(["test"]);
+    (safeFetch as import("vitest").Mock).mockResolvedValueOnce({
+      ok: true,
+      blob: () => Promise.resolve(mockBlob)
+    });
+
+    const notifications = [
+      { 
+        id: "2", 
+        type: "EXPORT_SUCCESS", 
+        title: "Export Done", 
+        message: "Your export is ready", 
+        read: true, 
+        timestamp: Date.now(),
+        context: {
+          seriesTitle: "Naruto",
+          chapterNumber: "123",
+          pageNumber: 5,
+          exportId: "exp-123"
+        }
+      }
+    ];
+    (useNotifications as import("vitest").Mock).mockReturnValue({
+      notifications,
+      unreadCount: 0,
+      markAsRead: vi.fn(),
+      markAllAsRead: vi.fn(),
+      clearAll: vi.fn(),
+    });
+    
+    render(<NotificationCenter forceOpen={true} onRequestOpen={vi.fn()} onClose={vi.fn()} />);
+    
+    expect(screen.getByText("Naruto › Ch.123 › Page 5")).toBeInTheDocument();
+    
+    const downloadBtn = screen.getByText("Download ZIP");
+    fireEvent.click(downloadBtn);
+    
+    await waitFor(() => {
+      expect(safeFetch).toHaveBeenCalledWith("/api/series/chapters/exports/exp-123/download", expect.any(Object));
+      expect(global.URL.createObjectURL).toHaveBeenCalled();
     });
   });
 });

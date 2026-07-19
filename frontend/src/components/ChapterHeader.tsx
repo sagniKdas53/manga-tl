@@ -105,7 +105,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                 </Typography>
 
                 <Grid container spacing={2} sx={{ mt: 1, mb: 3 }}>
-                  <Grid item>
+                  <Grid>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                       Pages
                     </Typography>
@@ -113,7 +113,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       {selectedChapter.pageCount || 0}
                     </Typography>
                   </Grid>
-                  <Grid item>
+                  <Grid>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                       Context Injection
                     </Typography>
@@ -126,7 +126,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                     Configured Models
                   </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
                     {selectedChapter.resolvedOcr?.model && (
                       <Chip size="small" variant="outlined" label={`OCR: ${selectedChapter.resolvedOcr.model}`} />
                     )}
