@@ -373,4 +373,29 @@ public class ChapterExportService {
       log.error("Failed to clear chapter exports", e);
     }
   }
+
+  @org.springframework.scheduling.annotation.Scheduled(fixedRate = 86400000) // Run daily
+  public void cleanupStaleExports() {
+    log.info("Running scheduled cleanup for stale exports in MinIO...");
+    try {
+      Iterable<io.minio.Result<io.minio.messages.Item>> results =
+          minioService.getMinioClient().listObjects(
+              io.minio.ListObjectsArgs.builder().bucket(minioService.getBucketName()).prefix("exports/").build());
+      
+      java.time.ZonedDateTime threshold = java.time.ZonedDateTime.now().minusDays(7);
+      int deletedCount = 0;
+
+      for (io.minio.Result<io.minio.messages.Item> result : results) {
+        io.minio.messages.Item item = result.get();
+        if (item.lastModified().isBefore(threshold)) {
+          minioService.getMinioClient().removeObject(
+              io.minio.RemoveObjectArgs.builder().bucket(minioService.getBucketName()).object(item.objectName()).build());
+          deletedCount++;
+        }
+      }
+      log.info("Successfully deleted {} stale exports older than 7 days.", deletedCount);
+    } catch (Exception e) {
+      log.error("Failed to cleanup stale exports", e);
+    }
+  }
 }
