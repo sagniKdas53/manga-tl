@@ -82,6 +82,9 @@ public class CostEstimationService {
     }
   }
 
+  @Autowired
+  private com.manga.library.repository.ModelRateRepository modelRateRepository;
+
   private Map<String, Double> getModelRates(String model, String provider) {
     // 1. Try Redis first
     String redisKey = "model_cost:" + model;
@@ -97,24 +100,18 @@ public class CostEstimationService {
       log.debug("Redis cache read failed for {}", model, e);
     }
 
-    // 2. Try Local File Cache
+    // 2. Try DB
     try {
-      File file = new File(costCachePath);
-      if (file.exists()) {
-        JsonNode rootNode = objectMapper.readTree(file);
-        if (rootNode.has(model)) {
-          JsonNode modelNode = rootNode.get(model);
-          Map<String, Double> rates =
-              Map.of(
-                  "prompt", modelNode.get("prompt").asDouble(),
-                  "completion", modelNode.get("completion").asDouble());
-          // Cache in Redis for fast access
-          cacheInRedis(model, rates.get("prompt"), rates.get("completion"));
-          return rates;
-        }
+      com.manga.library.model.ModelRate rate = modelRateRepository.findById(model).orElse(null);
+      if (rate != null) {
+        Map<String, Double> rates = Map.of(
+            "prompt", rate.getPromptPrice(),
+            "completion", rate.getCompletionPrice());
+        cacheInRedis(model, rate.getPromptPrice(), rate.getCompletionPrice());
+        return rates;
       }
     } catch (Exception e) {
-      log.debug("File cache read failed", e);
+      log.debug("Database read failed for model {}", model, e);
     }
 
     // 3. Fallbacks
@@ -142,6 +139,12 @@ public class CostEstimationService {
     return null;
   }
 
+  @org.springframework.scheduling.annotation.Scheduled(fixedRate = 3600000) // Sync every hour
+  public void scheduledModelCostsSync() {
+    log.info("Running scheduled model costs sync...");
+    updateModelCosts(null);
+  }
+
   public void updateModelCosts(List<String> models) {
     try {
       HttpRequest request =
@@ -156,11 +159,11 @@ public class CostEstimationService {
           Map<String, Map<String, Double>> newCosts = new HashMap<>();
           for (JsonNode mNode : dataNode) {
             String modelId = mNode.get("id").asText();
-            if (models.contains(modelId)) {
+            if (models == null || models.isEmpty() || models.contains(modelId)) {
               JsonNode pricing = mNode.get("pricing");
               if (pricing != null) {
-                double prompt = pricing.get("prompt").asDouble();
-                double completion = pricing.get("completion").asDouble();
+                double prompt = pricing.has("prompt") ? pricing.get("prompt").asDouble(0.0) : 0.0;
+                double completion = pricing.has("completion") ? pricing.get("completion").asDouble(0.0) : 0.0;
                 newCosts.put(modelId, Map.of("prompt", prompt, "completion", completion));
               }
             }
@@ -177,34 +180,27 @@ public class CostEstimationService {
   }
 
   private void updateCaches(Map<String, Map<String, Double>> newCosts) {
-    // Cache in Redis and update File
-    File file = new File(costCachePath);
-    ObjectNode rootNode = objectMapper.createObjectNode();
     try {
-      if (file.exists()) {
-        JsonNode existing = objectMapper.readTree(file);
-        if (existing.isObject()) {
-          rootNode.setAll((ObjectNode) existing);
-        }
-      }
-
       for (Map.Entry<String, Map<String, Double>> entry : newCosts.entrySet()) {
         String model = entry.getKey();
         double prompt = entry.getValue().get("prompt");
         double completion = entry.getValue().get("completion");
 
+        // Update Redis
         cacheInRedis(model, prompt, completion);
 
-        ObjectNode modelNode = objectMapper.createObjectNode();
-        modelNode.put("prompt", prompt);
-        modelNode.put("completion", completion);
-        modelNode.put("timestamp", System.currentTimeMillis() / 1000.0);
-        rootNode.set(model, modelNode);
+        // Update DB
+        com.manga.library.model.ModelRate rate = modelRateRepository.findById(model).orElse(new com.manga.library.model.ModelRate());
+        rate.setModelId(model);
+        if (rate.getProvider() == null) {
+            rate.setProvider(model.contains("/") ? model.split("/")[0] : "openrouter");
+        }
+        rate.setPromptPrice(prompt);
+        rate.setCompletionPrice(completion);
+        modelRateRepository.save(rate);
       }
-
-      objectMapper.writeValue(file, rootNode);
     } catch (Exception e) {
-      log.warn("Failed to update cache files/Redis", e);
+      log.warn("Failed to update cache DB/Redis", e);
     }
   }
 

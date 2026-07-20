@@ -163,6 +163,12 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportClick}>
                     Export Chapter (ZIP)
                   </Button>
+                  <Button variant="outlined" onClick={onReexportClick}>
+                    Re-export
+                  </Button>
+                  <Button variant="outlined" color="warning" onClick={onClearExportsClick}>
+                    Clear Exports
+                  </Button>
                   <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={onDeleteClick}>
                     Delete Chapter
                   </Button>
