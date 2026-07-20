@@ -166,6 +166,7 @@ describe("ReaderRightSidebar", () => {
     );
     expect(screen.getByText("Element Inspector")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Hello World")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
   });
 
   it("renders with different interaction modes", () => {

@@ -2574,8 +2574,24 @@ export const Reader: React.FC<ReaderProps> = ({
       target.closest(".floating-reader-toolbar") ||
       target.closest(".vertical-zoom-toolbar") ||
       target.closest(".delete-page-btn") ||
-      target.closest(".reorder-controls")
+      target.closest(".reorder-controls") ||
+      // Element drag / reshape / rotation handles: these already have their
+      // own onPointerDown handlers (handleElementDragStart, handleVertexDragStart,
+      // handleRotationDragStart). Those call stopPropagation() on the pointerdown
+      // event, but touchstart is a *separate* native event that still bubbles here
+      // regardless — without this check, canvas panning would hijack the gesture
+      // and the drag/reshape/rotate itself would never visibly happen on touch.
+      target.closest(".element-drag-handle") ||
+      target.closest(".reshape-vertex-handle") ||
+      target.closest(".reshape-rotation-handle")
     ) {
+      return;
+    }
+
+    // While actively dragging or reshaping the selected element, don't let a
+    // stray touch anywhere else on the canvas start panning either — the
+    // whole point of these modes is to manipulate the one selected element.
+    if (interactionMode !== "none") {
       return;
     }
 
@@ -3284,6 +3300,7 @@ export const Reader: React.FC<ReaderProps> = ({
                         {/* Interactive overlay rect for drag-to-position mode */}
                         {!cleanScanlationView && (
                           <rect
+                            className="element-drag-handle"
                             x={element.x}
                             y={element.y}
                             width={width}
@@ -3365,6 +3382,7 @@ export const Reader: React.FC<ReaderProps> = ({
                                 {currentPolygon.map(([px, py], vi) => (
                                   <circle
                                     key={`vtx-${vi}`}
+                                    className="reshape-vertex-handle"
                                     cx={px}
                                     cy={py}
                                     r={vertexRadius}
@@ -3401,6 +3419,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
                                 {/* Rotation handle circle */}
                                 <circle
+                                  className="reshape-rotation-handle"
                                   cx={rotHandleX}
                                   cy={rotHandleY}
                                   r={isTouchScreen ? 12 : 9}
