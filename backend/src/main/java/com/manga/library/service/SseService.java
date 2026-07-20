@@ -26,7 +26,7 @@ public class SseService {
 
   private static final String NOTIFICATION_PREFIX = "notifications:user:";
   private static final String IMAGE_USER_MAPPING_PREFIX = "job:owner:image:";
-  private static final Long EMITTER_TIMEOUT = 3600000L; // 1 hour
+  private static final long EMITTER_TIMEOUT = 3600000L; // 1 hour
 
   public SseEmitter subscribe(UUID userId) {
     SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT);
@@ -40,7 +40,7 @@ public class SseService {
         });
     emitter.onError(
         (e) -> {
-          emitter.completeWithError(e);
+          emitter.completeWithError(Objects.requireNonNull(e));
           emitters.remove(userId);
         });
 
@@ -64,7 +64,8 @@ public class SseService {
       if (pending != null) {
         for (String notifJson : pending) {
           try {
-            emitter.send(SseEmitter.event().name("notification").data(notifJson));
+            emitter.send(
+                SseEmitter.event().name("notification").data(Objects.requireNonNull(notifJson)));
           } catch (IOException e) {
             log.error("Failed to send pending notification to user {}", userId, e);
             return; // If it fails, keep remaining in Redis
@@ -79,7 +80,9 @@ public class SseService {
     redisTemplate
         .opsForValue()
         .set(
-            IMAGE_USER_MAPPING_PREFIX + imageId, userId.toString(), java.time.Duration.ofHours(24));
+            Objects.requireNonNull(IMAGE_USER_MAPPING_PREFIX + imageId),
+            Objects.requireNonNull(userId.toString()),
+            Objects.requireNonNull(java.time.Duration.ofHours(24)));
   }
 
   public void emitNotificationForImage(UUID imageId, String type, String title, String message) {
@@ -149,7 +152,8 @@ public class SseService {
     SseEmitter emitter = emitters.get(userId);
     if (emitter != null) {
       try {
-        emitter.send(SseEmitter.event().name("notification").data(jsonPayload));
+        emitter.send(
+            SseEmitter.event().name("notification").data(Objects.requireNonNull(jsonPayload)));
         return;
       } catch (IOException e) {
         log.error("Failed to send live notification to user {}, removing emitter", userId, e);
@@ -158,8 +162,11 @@ public class SseService {
     }
 
     String key = NOTIFICATION_PREFIX + userId;
-    redisTemplate.opsForList().rightPush(key, jsonPayload);
-    redisTemplate.expire(key, java.time.Duration.ofDays(7));
+    redisTemplate
+        .opsForList()
+        .rightPush(Objects.requireNonNull(key), Objects.requireNonNull(jsonPayload));
+    redisTemplate.expire(
+        Objects.requireNonNull(key), Objects.requireNonNull(java.time.Duration.ofDays(7)));
   }
 
   public void emitEventToAllUsers(String eventName, Object data) {
@@ -174,7 +181,10 @@ public class SseService {
     emitters.forEach(
         (uId, emitter) -> {
           try {
-            emitter.send(SseEmitter.event().name(eventName).data(jsonPayload));
+            emitter.send(
+                SseEmitter.event()
+                    .name(Objects.requireNonNull(eventName))
+                    .data(Objects.requireNonNull(jsonPayload)));
           } catch (IOException e) {
             log.error("Failed to send event to user {}, removing emitter", uId, e);
             emitters.remove(uId);
@@ -216,7 +226,10 @@ public class SseService {
     SseEmitter emitter = emitters.get(userId);
     if (emitter != null) {
       try {
-        emitter.send(SseEmitter.event().name(eventName).data(jsonPayload));
+        emitter.send(
+            SseEmitter.event()
+                .name(Objects.requireNonNull(eventName))
+                .data(Objects.requireNonNull(jsonPayload)));
       } catch (IOException e) {
         log.error("Failed to send live event to user {}, removing emitter", userId, e);
         emitters.remove(userId);

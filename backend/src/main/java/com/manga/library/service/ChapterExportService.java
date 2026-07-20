@@ -24,6 +24,7 @@ public class ChapterExportService {
   private final MinioService minioService;
   private final LayerRepository layerRepository;
   private final LayerElementRepository layerElementRepository;
+  private final JobCostRepository jobCostRepository;
   private final SseService sseService;
 
   @Transactional(readOnly = true)
@@ -143,6 +144,26 @@ public class ChapterExportService {
           }
 
           layersMetaList.add(layerMeta);
+        }
+
+        List<JobCost> databaseCosts = jobCostRepository.findByImageId(imageId);
+        if (!databaseCosts.isEmpty()) {
+          pageTotalCostVal =
+              databaseCosts.stream()
+                  .map(JobCost::getEstimatedCost)
+                  .filter(Objects::nonNull)
+                  .mapToDouble(Double::doubleValue)
+                  .sum();
+          pageHasCost = true;
+          Set<String> recordedModels =
+              modelsUsed.computeIfAbsent("recorded", key -> new HashSet<>());
+          databaseCosts.stream()
+              .map(JobCost::getModel)
+              .filter(Objects::nonNull)
+              .forEach(recordedModels::add);
+          pageMeta.put("costSource", "database");
+        } else {
+          pageMeta.put("costSource", "layer-metadata");
         }
 
         pageMeta.put("layers", layersMetaList);
@@ -378,7 +399,7 @@ public class ChapterExportService {
     try {
       Iterable<io.minio.Result<io.minio.messages.Item>> results =
           minioService.listObjects("exports/");
-      
+
       java.time.ZonedDateTime threshold = java.time.ZonedDateTime.now().minusDays(7);
       int deletedCount = 0;
 

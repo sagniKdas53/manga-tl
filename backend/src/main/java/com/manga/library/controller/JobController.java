@@ -161,7 +161,7 @@ public class JobController {
         .findById(id)
         .map(
             job -> {
-              jobRepository.delete(job);
+              jobRepository.delete(java.util.Objects.requireNonNull(job));
               Map<String, Object> deletedJobData = new HashMap<>();
               deletedJobData.put("jobId", job.getId());
               deletedJobData.put("status", "DELETED");

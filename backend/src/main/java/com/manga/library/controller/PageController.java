@@ -207,7 +207,8 @@ public class PageController {
         if (projectJsonBytes != null) {
           // Case A: Page-level project ZIP restore
           if (originalImageBytes == null && !imageEntries.isEmpty()) {
-            imageEntries.sort(Comparator.comparing(com.manga.library.dto.ZipImageEntry::getName));
+            imageEntries.sort(
+                Comparator.comparing(entry -> Objects.requireNonNull(entry).getName()));
             originalImageBytes = imageEntries.get(0).getBytes();
             originalImageFilename = imageEntries.get(0).getName();
           }
@@ -253,7 +254,7 @@ public class PageController {
             for (LayerElement el : elements) {
               List<LayerEditHistory> history =
                   layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
-              layerEditHistoryRepository.deleteAll(history);
+              layerEditHistoryRepository.deleteAll(Objects.requireNonNull(history));
               layerElementRepository.delete(Objects.requireNonNull(el));
             }
             layerElementRepository.flush();
@@ -463,7 +464,7 @@ public class PageController {
                 .body(new UploadResponse(null, null, "error: zip contains no images"));
           }
 
-          imageEntries.sort(Comparator.comparing(com.manga.library.dto.ZipImageEntry::getName));
+          imageEntries.sort(Comparator.comparing(entry -> Objects.requireNonNull(entry).getName()));
 
           Page firstPage = null;
           int nextNum = pageNumber;
@@ -846,7 +847,7 @@ public class PageController {
   @Transactional
   public ResponseEntity<List<Map<String, Object>>> getImageLayers(@PathVariable UUID imageId) {
     List<Layer> layers = new ArrayList<>(layerRepository.findByImageId(imageId));
-    layers.sort(Comparator.comparingInt(Layer::getZOrder));
+    layers.sort(Comparator.comparingInt(layer -> Objects.requireNonNull(layer).getZOrder()));
 
     // Auto-initialize default translation layer removed to prevent deleted layers from reappearing
 
@@ -893,7 +894,11 @@ public class PageController {
     log.info("Received request to reorder pages for chapter {}: {}", chapterId, pageIds);
     try {
       List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
-      Map<UUID, Page> pageMap = pages.stream().collect(Collectors.toMap(Page::getId, p -> p));
+      Map<UUID, Page> pageMap =
+          pages.stream()
+              .collect(
+                  Collectors.toMap(
+                      page -> Objects.requireNonNull(page).getId(), Objects::requireNonNull));
 
       if (pageIds.size() != pages.size() || !pageMap.keySet().containsAll(pageIds)) {
         return ResponseEntity.badRequest().body("Invalid list of page IDs for reordering");
@@ -993,7 +998,7 @@ public class PageController {
 
       // Look up image ID to map it to the user
       ocrRegionRepository
-          .findById(id)
+          .findById(Objects.requireNonNull(id))
           .ifPresent(
               region -> {
                 if (user != null) {
@@ -1108,7 +1113,7 @@ public class PageController {
         for (LayerElement el : elements) {
           List<LayerEditHistory> history =
               layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
-          layerEditHistoryRepository.deleteAll(history);
+          layerEditHistoryRepository.deleteAll(Objects.requireNonNull(history));
           layerElementRepository.delete(Objects.requireNonNull(el));
         }
         layerElementRepository.flush();

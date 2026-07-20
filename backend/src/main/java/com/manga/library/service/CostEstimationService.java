@@ -74,7 +74,11 @@ public class CostEstimationService {
     try {
       Map<String, Object> jobCost = new HashMap<>();
       jobCost.put("estimated_cost", cost);
-      redisTemplate.opsForList().rightPush("job_costs", objectMapper.writeValueAsString(jobCost));
+      redisTemplate
+          .opsForList()
+          .rightPush(
+              Objects.requireNonNull("job_costs"),
+              Objects.requireNonNull(objectMapper.writeValueAsString(jobCost)));
     } catch (Exception e) {
       log.debug("Failed to record job cost to Redis", e);
     }
@@ -99,11 +103,13 @@ public class CostEstimationService {
 
     // 2. Try DB
     try {
-      com.manga.library.model.ModelRate rate = modelRateRepository.findById(model).orElse(null);
+      com.manga.library.model.ModelRate rate =
+          modelRateRepository.findById(Objects.requireNonNull(model)).orElse(null);
       if (rate != null) {
-        Map<String, Double> rates = Map.of(
-            "prompt", rate.getPromptPrice(),
-            "completion", rate.getCompletionPrice());
+        Map<String, Double> rates =
+            Map.of(
+                "prompt", rate.getPromptPrice(),
+                "completion", rate.getCompletionPrice());
         cacheInRedis(model, rate.getPromptPrice(), rate.getCompletionPrice());
         return rates;
       }
@@ -160,7 +166,8 @@ public class CostEstimationService {
               JsonNode pricing = mNode.get("pricing");
               if (pricing != null) {
                 double prompt = pricing.has("prompt") ? pricing.get("prompt").asDouble(0.0) : 0.0;
-                double completion = pricing.has("completion") ? pricing.get("completion").asDouble(0.0) : 0.0;
+                double completion =
+                    pricing.has("completion") ? pricing.get("completion").asDouble(0.0) : 0.0;
                 newCosts.put(modelId, Map.of("prompt", prompt, "completion", completion));
               }
             }
@@ -187,10 +194,13 @@ public class CostEstimationService {
         cacheInRedis(model, prompt, completion);
 
         // Update DB
-        com.manga.library.model.ModelRate rate = modelRateRepository.findById(model).orElse(new com.manga.library.model.ModelRate());
+        com.manga.library.model.ModelRate rate =
+            modelRateRepository
+                .findById(Objects.requireNonNull(model))
+                .orElse(new com.manga.library.model.ModelRate());
         rate.setModelId(model);
         if (rate.getProvider() == null) {
-            rate.setProvider(model.contains("/") ? model.split("/")[0] : "openrouter");
+          rate.setProvider(model.contains("/") ? model.split("/")[0] : "openrouter");
         }
         rate.setPromptPrice(prompt);
         rate.setCompletionPrice(completion);
@@ -205,7 +215,11 @@ public class CostEstimationService {
     try {
       String redisKey = "model_cost:" + model;
       Map<String, Double> costData = Map.of("prompt", prompt, "completion", completion);
-      redisTemplate.opsForValue().set(redisKey, objectMapper.writeValueAsString(costData));
+      redisTemplate
+          .opsForValue()
+          .set(
+              Objects.requireNonNull(redisKey),
+              Objects.requireNonNull(objectMapper.writeValueAsString(costData)));
     } catch (Exception e) {
       log.debug("Redis cache write failed for {}", model, e);
     }

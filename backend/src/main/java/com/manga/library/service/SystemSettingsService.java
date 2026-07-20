@@ -176,7 +176,7 @@ public class SystemSettingsService {
   public String getSettingValue(String key, String defaultValue) {
     return systemSettingsRepository
         .findById(Objects.requireNonNull(key))
-        .map(SystemSetting::getSettingValue)
+        .map(setting -> Objects.requireNonNull(setting).getSettingValue())
         .orElse(defaultValue);
   }
 
@@ -195,7 +195,7 @@ public class SystemSettingsService {
       return List.of();
     }
     return Arrays.stream(commaSeparated.split(","))
-        .map(String::trim)
+        .map(value -> Objects.requireNonNull(value).trim())
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
   }
