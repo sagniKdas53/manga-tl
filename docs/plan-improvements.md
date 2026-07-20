@@ -726,7 +726,7 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 
 ---
 
-## Phase E — Backend Resilience
+## Phase E — Backend Resilience ✅ Completed
 
 ### E.1 Retry & Global Fallback Mechanism
 
@@ -826,6 +826,14 @@ Setting `"allow_fallbacks": false` is the critical step. It restricts the routin
 - When an API request is built, the worker checks this routing strategy and dynamically adjusts the `provider` configuration (e.g., swapping out the `order` list and `sort` parameter) accordingly.
 
 ### ✅ Checkpoint E — Resilience
+
+**Implemented reconciliation:**
+
+- Cloud provider calls use transient-error retries and `(10s connect, 45s read)` timeouts; strict fallback stays within the selected provider and global model configuration.
+- Job costs are persisted through the worker callback into `job_costs`; chapter exports now prefer database totals and retain layer metadata only as a transition fallback.
+- QA audit cache remains opt-in and removes files older than 24 hours during worker startup.
+- Export retention, manual clear, and forced re-export are implemented.
+- OpenRouter routing is applied to translation, QA, and OCR cloud requests. The routing selector now resolves `chapter → series → global` and is available in both override dialogs.
 
 **Automated tests:**
 

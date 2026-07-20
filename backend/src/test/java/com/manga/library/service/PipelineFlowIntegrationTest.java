@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@SuppressWarnings({"null", "unchecked"})
 public class PipelineFlowIntegrationTest {
 
   @Autowired private MockMvc mockMvc;

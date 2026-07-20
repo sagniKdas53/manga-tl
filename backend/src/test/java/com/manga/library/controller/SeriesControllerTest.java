@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(SeriesController.class)
 @AutoConfigureMockMvc(addFilters = false)
+@SuppressWarnings({"null", "unchecked"})
 public class SeriesControllerTest {
 
   @Autowired private MockMvc mockMvc;
@@ -109,7 +110,11 @@ public class SeriesControllerTest {
                 .content(json))
         .andExpect(status().isOk());
 
-    verify(series).setRoutingStrategy("highest-throughput");
+    org.mockito.ArgumentCaptor<Series> savedSeriesCaptor =
+        org.mockito.ArgumentCaptor.forClass(Series.class);
+    verify(seriesRepository).save(savedSeriesCaptor.capture());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        "highest-throughput", savedSeriesCaptor.getValue().getRoutingStrategy());
   }
 
   @Test

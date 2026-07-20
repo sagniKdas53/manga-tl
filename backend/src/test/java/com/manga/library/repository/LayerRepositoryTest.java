@@ -14,6 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@SuppressWarnings({"null", "unchecked"})
 public class LayerRepositoryTest {
 
   @Autowired private LayerRepository layerRepository;
