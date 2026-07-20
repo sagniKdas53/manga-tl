@@ -728,15 +728,17 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
 
 ## Phase E — Backend Resilience
 
-### E.1 Cross-Provider Failover
+### E.1 Retry & Global Fallback Mechanism
 
-**Files**: new `ProviderChain.py` (worker), `config.py`
+**Files**: all cloud LLM call sites in worker (`qa.py`, `translation.py`, `ocr.py`)
 
-- Create an abstract provider interface that wraps cloud AI calls
-- When all models within a provider fail (rate limit, timeout, 500), fall through to the next provider in a configurable priority list
-- Priority chain: configured primary → OpenRouter → DeepSeek → Gemini → local fallback
-- Add direct DeepSeek API support
-
+- Implement a robust retry mechanism for transient API failures (rate limits, 5xx errors, timeouts)
+- Logic Flow:
+  1. Attempt the **Requested Model** (e.g. Chapter-level override or Series-level override).
+  2. If it fails or is down, **Retry** with exponential backoff (e.g. up to 3 retries).
+  3. If **Retries Exhausted**, attempt a fallback to the **Global Default Model**, *only if* it is different from the requested model.
+  4. If the fallback also fails (or no fallback is applicable), **Fail the job**.
+- *Decision*: We explicitly avoid cross-provider failover chains (e.g. OpenRouter -> DeepSeek -> Gemini). Cross-provider failover makes cost tracking complex and secondary providers (like Nvidia) are often rate-limited, providing no real benefit.
 ### E.2 Strict HTTP Timeouts
 
 **Files**: all cloud LLM call sites in worker

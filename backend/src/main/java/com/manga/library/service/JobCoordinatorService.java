@@ -41,6 +41,7 @@ public class JobCoordinatorService {
   private final SseService sseService;
   private final SystemSettingsService systemSettingsService;
   private final JobRepository jobRepository;
+  private final JobCostRepository jobCostRepository;
 
   @EventListener(ApplicationReadyEvent.class)
   public void onStartup() {
@@ -233,6 +234,7 @@ public class JobCoordinatorService {
                   "qaLlmModel",
                   resolveModel(
                       chapter.getQaLlmModel(), series.getQaLlmModel(), settings.getQaLlmModel()));
+              job.put("routingStrategy", settings.getRoutingStrategy());
               job.put(
                   "qaVlmModel",
                   resolveModel(
@@ -456,6 +458,9 @@ public class JobCoordinatorService {
 
     if (dto.getCost() != null) {
       metadata.set("cost", objectMapper.valueToTree(dto.getCost()));
+      if (dto.getCost() instanceof Map) {
+        saveJobCosts(imageId, (Map<String, Object>) dto.getCost());
+      }
     }
 
     metadata.put("layer_order", nextZOrder);
@@ -1197,6 +1202,7 @@ public class JobCoordinatorService {
 
           if (cost != null) {
             qaNode.set("cost", objectMapper.valueToTree(cost));
+            saveJobCosts(imageId, cost);
           }
 
           metadata.set("qa", qaNode);
@@ -1288,4 +1294,34 @@ public class JobCoordinatorService {
       return "#000000";
     }
   }
+  private void saveJobCosts(UUID imageId, Map<String, Object> costMap) {
+    if (costMap == null || costMap.isEmpty()) return;
+    try {
+      if (costMap.containsKey("breakdown") && costMap.get("breakdown") instanceof List) {
+        List<Map<String, Object>> breakdown = (List<Map<String, Object>>) costMap.get("breakdown");
+        for (Map<String, Object> c : breakdown) {
+          JobCost jc = new JobCost();
+          jc.setImageId(imageId);
+          if (c.get("provider") != null) jc.setProvider(c.get("provider").toString());
+          if (c.get("model") != null) jc.setModel(c.get("model").toString());
+          if (c.get("prompt_tokens") != null) jc.setPromptTokens(((Number) c.get("prompt_tokens")).intValue());
+          if (c.get("completion_tokens") != null) jc.setCompletionTokens(((Number) c.get("completion_tokens")).intValue());
+          if (c.get("estimated_cost") != null) jc.setEstimatedCost(((Number) c.get("estimated_cost")).doubleValue());
+          jobCostRepository.save(jc);
+        }
+      } else if (costMap.containsKey("estimated_cost")) {
+          JobCost jc = new JobCost();
+          jc.setImageId(imageId);
+          if (costMap.get("provider") != null) jc.setProvider(costMap.get("provider").toString());
+          if (costMap.get("model") != null) jc.setModel(costMap.get("model").toString());
+          if (costMap.get("prompt_tokens") != null) jc.setPromptTokens(((Number) costMap.get("prompt_tokens")).intValue());
+          if (costMap.get("completion_tokens") != null) jc.setCompletionTokens(((Number) costMap.get("completion_tokens")).intValue());
+          if (costMap.get("estimated_cost") != null) jc.setEstimatedCost(((Number) costMap.get("estimated_cost")).doubleValue());
+          jobCostRepository.save(jc);
+      }
+    } catch (Exception e) {
+      log.error("Error saving job costs for image " + imageId, e);
+    }
+  }
+
 }

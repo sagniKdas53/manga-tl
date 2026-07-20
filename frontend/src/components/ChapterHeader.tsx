@@ -22,6 +22,8 @@ export interface ChapterHeaderProps {
   onEditClick: () => void;
   onImportClick: () => void;
   onExportClick: () => void;
+  onReexportClick: () => void;
+  onClearExportsClick: () => void;
   onUploadClick: () => void;
   onDeleteClick: () => void;
   isImporting: boolean;
@@ -35,6 +37,8 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   onEditClick,
   onImportClick,
   onExportClick,
+  onReexportClick,
+  onClearExportsClick,
   onUploadClick,
   onDeleteClick,
   isImporting,

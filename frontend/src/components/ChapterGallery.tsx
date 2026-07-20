@@ -330,6 +330,82 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     }
   };
 
+  
+  const handleReexportChapterZip = useCallback(async () => {
+    if (!selectedChapter) return;
+    try {
+      const res = await safeFetch(
+        `/api/series/chapters/${selectedChapter.id}/export?format=zip&force=true`,
+        {
+          headers: { Authorization: `Bearer ${user.token}` },
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to export chapter zip");
+      }
+
+      const contentType = res.headers.get("content-type");
+      if (
+        res.status === 202 ||
+        (contentType && contentType.includes("application/json"))
+      ) {
+        const data = await res.json();
+        showToast(
+          data.message ||
+          "Export started in the background. You will be notified when it is ready.",
+          "info",
+        );
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `chapter-${selectedChapter.chapterNumber}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      showToast("Error exporting chapter", "error");
+    }
+  }, [selectedChapter, user.token, showToast]);
+
+  
+  const handleClearExports = useCallback(async () => {
+    if (!selectedChapter) return;
+    setConfirmModal({
+      isOpen: true,
+      title: "Clear Exports",
+      message: "Are you sure you want to clear all exports for this chapter?",
+      confirmText: "Clear Exports",
+      isDangerous: true,
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          const res = await safeFetch(
+            `/api/series/chapters/${selectedChapter.id}/exports`,
+            {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${user.token}` },
+            },
+          );
+          if (res.ok) {
+            showToast("Cleared chapter exports successfully", "success");
+          } else {
+            showToast("Failed to clear exports", "error");
+          }
+        } catch (error) {
+          console.error(error);
+          showToast("Error clearing exports", "error");
+        }
+      },
+    });
+  }, [selectedChapter, user.token, showToast, setConfirmModal]);
+
   const handleExportChapterZip = useCallback(async () => {
     if (!selectedChapter) return;
     try {
@@ -528,6 +604,8 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           document.getElementById("project-import-upload")?.click()
         }
         onExportClick={handleExportChapterZip}
+        onReexportClick={handleReexportChapterZip}
+        onClearExportsClick={handleClearExports}
         onUploadClick={() => document.getElementById("file-upload")?.click()}
         onDeleteClick={handleDeleteChapter}
         isImporting={isImportingProject}
