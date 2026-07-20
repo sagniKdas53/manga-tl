@@ -66,6 +66,9 @@ public class Series {
   @Column(name = "qa_mode")
   private String qaMode;
 
+  @Column(name = "routing_strategy")
+  private String routingStrategy;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by")
   @com.fasterxml.jackson.annotation.JsonIgnore

@@ -40,6 +40,7 @@ interface SystemSettingsDto {
   tlLlmModelList?: string[];
   qaProvider?: string;
   qaMode?: string;
+  routingStrategy?: string;
   qaLlmModelList?: string[];
   qaVlmModelList?: string[];
   disableLocalOcr?: boolean;
@@ -78,6 +79,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const [qaLlmModel, setQaLlmModel] = useState(series.qaLlmModel || "");
   const [qaVlmModel, setQaVlmModel] = useState(series.qaVlmModel || "");
   const [qaMode, setQaMode] = useState(series.qaMode || "");
+  const [routingStrategy, setRoutingStrategy] = useState(series.routingStrategy || "");
   const [overridesOpen, setOverridesOpen] = useState(false);
 
   const actualProviders = settings?.activeProviders || [
@@ -106,10 +108,11 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const inheritedQaMode = settings?.qaMode;
   const inheritedQaLlmModel = settings?.qaLlmModel;
   const inheritedQaVlmModel = settings?.qaVlmModel;
+  const inheritedRoutingStrategy = settings?.routingStrategy || "lowest-cost";
 
   const overrideFields = [
     ocrProvider, ocrModel, tlProvider, tlModel,
-    qaProvider, qaMode, qaLlmModel, qaVlmModel,
+    qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
   ];
   const overriddenCount = overrideFields.filter((v) => v !== "").length;
   const inheritedCount = overrideFields.length - overriddenCount;
@@ -149,6 +152,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
           qaLlmModel: qaLlmModel || null,
           qaVlmModel: qaVlmModel || null,
           qaMode: qaMode || null,
+          routingStrategy: routingStrategy || null,
         }),
       });
       if (res.ok) {
@@ -428,6 +432,25 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                 </FormControl>
                 {qaMode !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaMode("")}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Routing Strategy</InputLabel>
+                  <Select
+                    size="small"
+                    value={routingStrategy || inheritedRoutingStrategy}
+                    label="Routing Strategy"
+                    onChange={(e) => setRoutingStrategy(e.target.value)}
+                  >
+                    <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
+                    <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
+                  </Select>
+                </FormControl>
+                {routingStrategy !== "" && (
+                  <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setRoutingStrategy("")}>
                     <CloseIcon fontSize="small" />
                   </IconButton>
                 )}

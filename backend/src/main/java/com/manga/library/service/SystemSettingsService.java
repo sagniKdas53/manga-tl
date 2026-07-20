@@ -103,7 +103,7 @@ public class SystemSettingsService {
     dto.setQaProvider(getSettingValue("qaProvider", defaultQaProvider));
     dto.setQaLlmModel(getSettingValue("qaLlmModel", actQaLlmModel));
     dto.setQaVlmModel(getSettingValue("qaVlmModel", actQaVlmModel));
-    dto.setRoutingStrategy(getSettingValue("routingStrategy", "default"));
+    dto.setRoutingStrategy(getSettingValue("routingStrategy", "lowest-cost"));
 
     dto.setDisableLocalOcr(disableLocalOcr);
     dto.setLocalOcrModel(paddleOcrRecModel);

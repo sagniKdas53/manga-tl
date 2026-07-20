@@ -70,6 +70,7 @@ public class SeriesController {
     dto.setQaLlmModel(s.getQaLlmModel());
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
+    dto.setRoutingStrategy(s.getRoutingStrategy());
     dto.setCreatedAt(s.getCreatedAt());
     dto.setUpdatedAt(s.getUpdatedAt());
     if (s.getCoverImageId() != null) {
@@ -91,6 +92,7 @@ public class SeriesController {
     dto.setQaLlmModel(c.getQaLlmModel());
     dto.setQaVlmModel(c.getQaVlmModel());
     dto.setQaMode(c.getQaMode());
+    dto.setRoutingStrategy(c.getRoutingStrategy());
     dto.setUseContextMemory(c.getUseContextMemory());
     dto.setCreatedAt(c.getCreatedAt());
     dto.setUpdatedAt(c.getUpdatedAt());
@@ -252,6 +254,7 @@ public class SeriesController {
             .qaLlmModel(dto.getQaLlmModel())
             .qaVlmModel(dto.getQaVlmModel())
             .qaMode(dto.getQaMode())
+            .routingStrategy(dto.getRoutingStrategy())
             .useContextMemory(dto.getUseContextMemory() == null || dto.getUseContextMemory())
             .build();
     Objects.requireNonNull(chapter, "chapter cannot be null");
@@ -322,6 +325,7 @@ public class SeriesController {
               s.setQaLlmModel(dto.getQaLlmModel());
               s.setQaVlmModel(dto.getQaVlmModel());
               s.setQaMode(dto.getQaMode());
+              s.setRoutingStrategy(dto.getRoutingStrategy());
               Objects.requireNonNull(s, "series cannot be null");
               s = seriesRepository.save(Objects.requireNonNull(s));
               return ResponseEntity.ok(toDto(s));
@@ -372,6 +376,7 @@ public class SeriesController {
               c.setQaLlmModel(dto.getQaLlmModel());
               c.setQaVlmModel(dto.getQaVlmModel());
               c.setQaMode(dto.getQaMode());
+              c.setRoutingStrategy(dto.getRoutingStrategy());
               if (dto.getUseContextMemory() != null) {
                 c.setUseContextMemory(dto.getUseContextMemory());
               }

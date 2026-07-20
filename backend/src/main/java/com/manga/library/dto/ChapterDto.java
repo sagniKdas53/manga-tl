@@ -19,6 +19,7 @@ public class ChapterDto {
   private String qaLlmModel;
   private String qaVlmModel;
   private String qaMode;
+  private String routingStrategy;
   private Boolean useContextMemory;
   private Integer pageCount;
   private OffsetDateTime createdAt;
