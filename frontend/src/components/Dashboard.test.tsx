@@ -167,6 +167,7 @@ describe("Dashboard Component", () => {
             qaLlmModel: null,
             qaVlmModel: null,
             qaMode: null,
+          routingStrategy: null,
           }),
         });
         expect(mockSetSeriesList).toHaveBeenCalled();
@@ -225,6 +226,7 @@ describe("Dashboard Component", () => {
           qaLlmModel: null,
           qaVlmModel: null,
           qaMode: null,
+          routingStrategy: null,
         }),
       });
     });
@@ -469,6 +471,7 @@ describe("Dashboard Component", () => {
             qaLlmModel: null,
             qaVlmModel: null,
             qaMode: null,
+          routingStrategy: null,
           }),
         });
         expect(mockSetSeriesList).toHaveBeenCalled();

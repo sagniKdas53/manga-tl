@@ -34,6 +34,7 @@ interface SystemSettingsDto {
   qaMode?: string;
   qaLlmModelList?: string[];
   qaVlmModelList?: string[];
+  routingStrategy?: string;
 }
 
 interface CreateSeriesDialogProps {
@@ -100,6 +101,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const [qaLlmModel, setQaLlmModel] = useState(editingSeries?.qaLlmModel || "");
   const [qaVlmModel, setQaVlmModel] = useState(editingSeries?.qaVlmModel || "");
   const [qaMode, setQaMode] = useState(editingSeries?.qaMode || "");
+  const [routingStrategy, setRoutingStrategy] = useState(
+    editingSeries?.routingStrategy || "",
+  );
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [saving, setSaving] = useState(false);
@@ -127,10 +131,11 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const inheritedQaMode = settings?.qaMode;
   const inheritedQaLlmModel = settings?.qaLlmModel;
   const inheritedQaVlmModel = settings?.qaVlmModel;
+  const inheritedRoutingStrategy = settings?.routingStrategy || "lowest-cost";
 
   const overrideFields = [
     ocrProvider, ocrModel, tlProvider, tlModel,
-    qaProvider, qaMode, qaLlmModel, qaVlmModel,
+    qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
   ];
   const overriddenCount = overrideFields.filter((v) => v !== "").length;
   const inheritedCount = overrideFields.length - overriddenCount;
@@ -171,6 +176,7 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           qaLlmModel: qaLlmModel || null,
           qaVlmModel: qaVlmModel || null,
           qaMode: qaMode || null,
+          routingStrategy: routingStrategy || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -322,9 +328,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                   label="OCR VLM Model"
                   onChange={(e) => setOcrModel(e.target.value)}
                 >
-                  {ocrDisabled && settings?.localOcrModel ? (
-                    <MenuItem value={settings.localOcrModel}>
-                      {settings.localOcrModel}
+                  {ocrDisabled ? (
+                    <MenuItem value={settings?.localOcrModel || "local"}>
+                      {settings?.localOcrModel || "Local Worker Model"}
                     </MenuItem>
                   ) : (
                     (settings?.ocrVlmModelList || []).map((m) => (
@@ -440,6 +446,25 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               </FormControl>
               {qaMode !== "" && (
                 <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaMode("")}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+              <FormControl fullWidth>
+                <InputLabel>Routing Strategy</InputLabel>
+                <Select
+                  size="small"
+                  value={routingStrategy || inheritedRoutingStrategy}
+                  label="Routing Strategy"
+                  onChange={(e) => setRoutingStrategy(e.target.value)}
+                >
+                  <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
+                  <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
+                </Select>
+              </FormControl>
+              {routingStrategy !== "" && (
+                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setRoutingStrategy("")}>
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
