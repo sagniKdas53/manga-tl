@@ -89,17 +89,16 @@ public class JobCoordinatorServiceTest {
               return list == null ? 0L : (long) list.size();
             });
 
-    org.mockito.Mockito.doReturn(valueOps).when(redisTemplate).opsForValue();
-    org.mockito.Mockito.doReturn(listOps).when(redisTemplate).opsForList();
-    org.mockito.Mockito.doAnswer(
+    org.mockito.Mockito.when(redisTemplate.opsForValue()).thenReturn(valueOps);
+    org.mockito.Mockito.when(redisTemplate.opsForList()).thenReturn(listOps);
+    org.mockito.Mockito.when(redisTemplate.delete(org.mockito.Mockito.anyString()))
+        .thenAnswer(
             invocation -> {
               String key = invocation.getArgument(0);
               boolean existed =
                   mockRedisValueStore.remove(key) != null || mockRedisListStore.remove(key) != null;
               return existed;
-            })
-        .when(redisTemplate)
-        .delete(org.mockito.Mockito.anyString());
+            });
   }
 
   @AfterEach
@@ -765,6 +764,7 @@ public class JobCoordinatorServiceTest {
     seriesRepository.delete(series);
   }
 
+  @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
   }

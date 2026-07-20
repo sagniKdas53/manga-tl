@@ -247,14 +247,4 @@ public class CostEstimationServiceTest {
     assertDoesNotThrow(
         () -> costEstimationService.estimateCost("google/gemini-2.5-flash", 10, 10, "ollama"));
   }
-
-  @SuppressWarnings("null")
-  private <T> T mockGeneric(Class<?> clazz) {
-    return (T) org.mockito.Mockito.mock(clazz);
-  }
-
-  @SuppressWarnings("null")
-  private <T> T anyGeneric(Class<?> clazz) {
-    return (T) org.mockito.ArgumentMatchers.any(clazz);
-  }
 }

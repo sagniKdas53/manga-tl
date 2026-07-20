@@ -307,13 +307,8 @@ public class WorkerDispatcherServiceTest {
     verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
   }
 
-  @SuppressWarnings("null")
+  @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
-  }
-
-  @SuppressWarnings("null")
-  private <T> T anyGeneric(Class<?> clazz) {
-    return (T) org.mockito.ArgumentMatchers.any(clazz);
   }
 }
