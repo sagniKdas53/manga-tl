@@ -1708,7 +1708,8 @@ export const Reader: React.FC<ReaderProps> = ({
       } else if (selectedPage?.id === pageId) {
         const deletedPageIndex = pages.findIndex(p => p.id === pageId);
         const nextTargetIndex = deletedPageIndex < remainingPages.length ? deletedPageIndex : remainingPages.length - 1;
-        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${remainingPages[nextTargetIndex].pageNumber}`, { replace: true });
+        const newPageNumber = nextTargetIndex + 1;
+        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${newPageNumber}`, { replace: true });
       }
 
       // Refresh pages

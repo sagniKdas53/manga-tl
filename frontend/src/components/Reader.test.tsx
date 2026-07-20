@@ -4,8 +4,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Reader } from "./Reader";
 
 // Mock external modules
+export const mockNavigate = vi.fn();
 vi.mock("react-router-dom", () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
   useParams: vi.fn(() => ({ pageNumber: "1" })),
 }));
 
@@ -74,6 +75,7 @@ describe("Reader Component", () => {
       ok: true,
       json: () => Promise.resolve([]),
     });
+    mockNavigate.mockClear();
   });
 
   it("renders reader component basic controls", async () => {
@@ -311,6 +313,63 @@ describe("Reader Component", () => {
       // It SHOULD prefetch img4 now since it's the new N+2
       expect(fetchUrls.some((url) => url.includes("/api/images/img4"))).toBe(
         true,
+      );
+    });
+  });
+
+  it("handles page deletion with correct navigation", async () => {
+    const { useParams } = await import("react-router-dom");
+    vi.mocked(useParams).mockReturnValue({
+      pageNumber: "1",
+      seriesId: "s1",
+      chapterId: "c1",
+    });
+
+    const p1 = { ...mockPage, id: "p1", pageNumber: 1, imageId: "img1" };
+    const p2 = { ...mockPage, id: "p2", pageNumber: 2, imageId: "img2" };
+    const p3 = { ...mockPage, id: "p3", pageNumber: 3, imageId: "img3" };
+
+    // selectedPage uses curPageNum parsed from useParams which is "1" (p1)
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[p1, p2, p3]}
+        theme="dark"
+      />
+    );
+
+    await screen.findByText(/Test Series/);
+
+    // Open left sidebar if it's hidden or just click Delete Page
+    const deleteBtn = screen.getByRole("button", { name: /Delete Page/i });
+    fireEvent.click(deleteBtn);
+
+    // The Confirm modal appears
+    await screen.findByText(/Are you sure you want to delete this page/i);
+    
+    // Click Confirm
+    const confirmBtn = screen.getByRole("button", { name: /Confirm/i });
+    
+    // Mock the delete fetch response
+    mockSafeFetch.mockResolvedValueOnce({ ok: true });
+    
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      // 1. Check if safeFetch was called with DELETE for the right page
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        `/api/pages/p1`,
+        expect.objectContaining({ method: "DELETE" })
+      );
+
+      // 2. Check if navigate was called to the new correct page number (1 in this case, since next is p2 originally at 2)
+      // Because we delete p1 (index 0). remainingPages = [p2, p3]. nextTargetIndex = 0. newPageNumber = 1.
+      expect(mockNavigate).toHaveBeenCalledWith(
+        expect.stringContaining("/reader/1"),
+        expect.objectContaining({ replace: true })
       );
     });
   });
