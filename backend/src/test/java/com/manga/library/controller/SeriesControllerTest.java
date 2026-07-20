@@ -27,7 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(SeriesController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@SuppressWarnings({"null", "unchecked"})
+@SuppressWarnings("null")
 public class SeriesControllerTest {
 
   @Autowired private MockMvc mockMvc;

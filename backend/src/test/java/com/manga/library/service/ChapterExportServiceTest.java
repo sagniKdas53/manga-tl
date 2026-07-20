@@ -27,7 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({"null", "unchecked"})
+@SuppressWarnings("null")
 public class ChapterExportServiceTest {
 
   @Mock private ChapterRepository chapterRepository;
@@ -42,13 +42,11 @@ public class ChapterExportServiceTest {
 
   private UUID chapterId;
   private UUID userId;
-  private String exportId;
 
   @BeforeEach
   void setUp() {
     chapterId = UUID.randomUUID();
     userId = UUID.randomUUID();
-    exportId = "export-123";
   }
 
   @Test

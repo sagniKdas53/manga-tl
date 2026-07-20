@@ -20,7 +20,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
-@SuppressWarnings({"null", "unchecked"})
+@SuppressWarnings("null")
 public class WorkerDispatcherServiceTest {
 
   @Mock private StringRedisTemplate redisTemplate;
@@ -307,12 +307,12 @@ public class WorkerDispatcherServiceTest {
     verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings("null")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings("null")
   private <T> T anyGeneric(Class<?> clazz) {
     return (T) org.mockito.ArgumentMatchers.any(clazz);
   }
