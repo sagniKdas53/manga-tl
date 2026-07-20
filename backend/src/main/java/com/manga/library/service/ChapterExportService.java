@@ -362,12 +362,10 @@ public class ChapterExportService {
   public void clearChapterExports(UUID chapterId) {
     try {
       Iterable<io.minio.Result<io.minio.messages.Item>> results =
-          minioService.getMinioClient().listObjects(
-              io.minio.ListObjectsArgs.builder().bucket(minioService.getBucketName()).prefix("exports/" + chapterId.toString() + "_").build());
+          minioService.listObjects("exports/" + chapterId.toString() + "_");
       for (io.minio.Result<io.minio.messages.Item> result : results) {
         io.minio.messages.Item item = result.get();
-        minioService.getMinioClient().removeObject(
-            io.minio.RemoveObjectArgs.builder().bucket(minioService.getBucketName()).object(item.objectName()).build());
+        minioService.deleteFile(item.objectName());
       }
     } catch (Exception e) {
       log.error("Failed to clear chapter exports", e);
@@ -379,8 +377,7 @@ public class ChapterExportService {
     log.info("Running scheduled cleanup for stale exports in MinIO...");
     try {
       Iterable<io.minio.Result<io.minio.messages.Item>> results =
-          minioService.getMinioClient().listObjects(
-              io.minio.ListObjectsArgs.builder().bucket(minioService.getBucketName()).prefix("exports/").build());
+          minioService.listObjects("exports/");
       
       java.time.ZonedDateTime threshold = java.time.ZonedDateTime.now().minusDays(7);
       int deletedCount = 0;
@@ -388,8 +385,7 @@ public class ChapterExportService {
       for (io.minio.Result<io.minio.messages.Item> result : results) {
         io.minio.messages.Item item = result.get();
         if (item.lastModified().isBefore(threshold)) {
-          minioService.getMinioClient().removeObject(
-              io.minio.RemoveObjectArgs.builder().bucket(minioService.getBucketName()).object(item.objectName()).build());
+          minioService.deleteFile(item.objectName());
           deletedCount++;
         }
       }

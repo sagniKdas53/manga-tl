@@ -114,11 +114,8 @@ public class MinioService {
     }
   }
 
-  public MinioClient getMinioClient() {
-    return minioClient;
-  }
-
-  public String getBucketName() {
-    return bucketName;
+  public Iterable<Result<io.minio.messages.Item>> listObjects(String prefix) {
+    return minioClient.listObjects(
+        ListObjectsArgs.builder().bucket(bucketName).prefix(prefix).build());
   }
 }
