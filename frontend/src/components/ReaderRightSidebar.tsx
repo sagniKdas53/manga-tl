@@ -553,16 +553,39 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             gap: "12px",
           }}
         >
-          <Grid
-            className="panel-section-title"
-            style={{
+          <Box
+            sx={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              margin: 0,
+              pb: 1.25,
+              mb: 0.5,
+              borderBottom: "1px solid var(--border-color)",
             }}
           >
-            <span>Element Inspector</span>
+            <Box>
+              <Typography
+                variant="overline"
+                component="div"
+                sx={{
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  color: "var(--text-dim, var(--text-muted))",
+                  lineHeight: 1.2,
+                }}
+              >
+                Element Inspector
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: "11px", color: "var(--text-muted)" }}
+              >
+                {selectedItem.text !== undefined && selectedItem.text !== null
+                  ? "Text element"
+                  : "Mask element"}
+              </Typography>
+            </Box>
             <Button
               variant="outlined"
               size="small"
@@ -578,9 +601,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               Deselect
             </Button>
-          </Grid>
+          </Box>
 
-          {/* Text Content */}
+          {/* Content */}
+          <SidebarSection title="Content">
           <Grid
             style={{
               display: "flex",
@@ -710,7 +734,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               </Grid>
             </Grid>
           )}
+          </SidebarSection>
 
+          {/* Position & Size */}
+          <SidebarSection title="Position & Size">
           {/* Positioning Coordinates Row */}
           <Grid container spacing={1}>
             <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
@@ -808,7 +835,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           </Grid>
 
           {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
-          <Grid style={{ margin: "4px 0", display: "flex", gap: "6px" }}>
+          <Grid style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <Grid style={{ display: "flex", gap: "6px" }}>
             {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
             {interactionMode === "reshape" ? (
               <Button
@@ -834,6 +862,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   )
                 }
                 title="Drag the element to a new position on the image"
+                sx={
+                  interactionMode === "drag"
+                    ? { boxShadow: "0 0 0 3px var(--primary-glow)" }
+                    : undefined
+                }
               >
                 {interactionMode === "drag" ? "Dragging…" : "Drag"}
               </Button>
@@ -866,12 +899,31 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   }
                 }}
                 title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
+                sx={
+                  interactionMode === "reshape"
+                    ? { boxShadow: "0 0 0 3px var(--primary-glow)" }
+                    : undefined
+                }
               >
                 {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
               </Button>
             )}
           </Grid>
+          {interactionMode !== "none" && (
+            <Typography
+              variant="caption"
+              sx={{ fontSize: "10.5px", color: "var(--text-dim, var(--text-muted))" }}
+            >
+              {interactionMode === "drag"
+                ? "Touch or drag the bubble on the page to move it."
+                : "Drag a vertex to reshape, or the top handle to rotate."}
+            </Typography>
+          )}
+          </Grid>
+          </SidebarSection>
 
+          {/* Typography */}
+          <SidebarSection title="Typography">
           {/* Font & Style settings */}
           <Grid container spacing={1}>
             <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
@@ -987,7 +1039,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               </Select>
             </Grid>
           </Grid>
+          </SidebarSection>
 
+          {/* Appearance */}
+          <SidebarSection title="Appearance">
           {/* Box Shape selection */}
           <Grid
             style={{
@@ -1093,15 +1148,16 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               sx={{ width: "100%", mt: 1 }}
             />
           </Grid>
+          </SidebarSection>
 
+          {/* Behavior */}
+          <SidebarSection title="Behavior">
           {/* Checkboxes Row */}
           <Grid
             style={{
               display: "flex",
               flexDirection: "column",
               gap: "8px",
-              borderTop: "1px solid var(--border-color)",
-              paddingTop: "10px",
             }}
           >
             <FormControlLabel
@@ -1149,50 +1205,62 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               label={<span style={{ fontSize: "12px" }}>Clean background mask</span>}
             />
           </Grid>
+          </SidebarSection>
 
           {/* Action Buttons */}
-          <Grid style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-            <Button
-              variant="contained"
-              color="primary"
-              size="small"
-              style={{
-                flex: 1,
-                padding: "8px",
-                position: "relative",
-                border: dirtyElements.has(selectedItem.id)
-                  ? "1px solid var(--warning, #eab308)"
-                  : undefined,
-              }}
-              onClick={() => handleSaveElementChanges(selectedItem as LayerElement)}
-            >
-              Save
-              {dirtyElements.has(selectedItem.id) && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: "6px",
-                    right: "6px",
-                    width: "6px",
-                    height: "6px",
+          <Grid style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
+            {dirtyElements.has(selectedItem.id) && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "var(--warning, #eab308)",
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 6,
+                    height: 6,
                     borderRadius: "50%",
-                    background: "var(--error, #ef4444)",
+                    backgroundColor: "var(--warning, #eab308)",
                   }}
                 />
-              )}
-            </Button>
-            <Button
-              variant="outlined"
-              color="error"
-              size="small"
-              style={{
-                flex: 1,
-                padding: "8px",
-              }}
-              onClick={() => handleDeleteElement(selectedItem.id)}
-            >
-              Delete
-            </Button>
+                Unsaved changes
+              </Box>
+            )}
+            <Grid style={{ display: "flex", gap: "8px" }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  boxShadow: "none",
+                  border: dirtyElements.has(selectedItem.id)
+                    ? "1px solid var(--warning, #eab308)"
+                    : undefined,
+                }}
+                onClick={() => handleSaveElementChanges(selectedItem as LayerElement)}
+              >
+                Save
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                }}
+                onClick={() => handleDeleteElement(selectedItem.id)}
+              >
+                Delete
+              </Button>
+            </Grid>
           </Grid>
         </Grid>
       )}
