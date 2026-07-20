@@ -49,14 +49,14 @@ export function ReaderPageNavigation({
     >
       <Tooltip title="First Page">
         <span>
-          <IconButton size="small" onClick={onFirstPage} disabled={atStart} sx={segmentBtnSx}>
+          <IconButton data-testid="first-page-btn" size="small" onClick={onFirstPage} disabled={atStart} sx={segmentBtnSx}>
             <FirstPageIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
       <Tooltip title="Previous Page">
         <span>
-          <IconButton size="small" onClick={onPrevPage} disabled={atStart} sx={segmentBtnSx}>
+          <IconButton data-testid="prev-page-btn" size="small" onClick={onPrevPage} disabled={atStart} sx={segmentBtnSx}>
             <NavigateBeforeIcon fontSize="small" />
           </IconButton>
         </span>
@@ -86,14 +86,14 @@ export function ReaderPageNavigation({
 
       <Tooltip title="Next Page">
         <span>
-          <IconButton size="small" onClick={onNextPage} disabled={atEnd} sx={segmentBtnSx}>
+          <IconButton data-testid="next-page-btn" size="small" onClick={onNextPage} disabled={atEnd} sx={segmentBtnSx}>
             <NavigateNextIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
       <Tooltip title="Last Page">
         <span>
-          <IconButton size="small" onClick={onLastPage} disabled={atEnd} sx={segmentBtnSx}>
+          <IconButton data-testid="last-page-btn" size="small" onClick={onLastPage} disabled={atEnd} sx={segmentBtnSx}>
             <LastPageIcon fontSize="small" />
           </IconButton>
         </span>

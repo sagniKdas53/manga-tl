@@ -33,10 +33,10 @@ describe("ReaderPageNavigation", () => {
         onLastPage={vi.fn()}
       />
     );
-    expect(screen.getByTitle("First Page")).toBeDisabled();
-    expect(screen.getByTitle("Previous Page")).toBeDisabled();
-    expect(screen.getByTitle("Next Page")).not.toBeDisabled();
-    expect(screen.getByTitle("Last Page")).not.toBeDisabled();
+    expect(screen.getByTestId("first-page-btn")).toBeDisabled();
+    expect(screen.getByTestId("prev-page-btn")).toBeDisabled();
+    expect(screen.getByTestId("next-page-btn")).not.toBeDisabled();
+    expect(screen.getByTestId("last-page-btn")).not.toBeDisabled();
   });
 
   it("disables next buttons on last page", () => {
@@ -50,10 +50,10 @@ describe("ReaderPageNavigation", () => {
         onLastPage={vi.fn()}
       />
     );
-    expect(screen.getByTitle("First Page")).not.toBeDisabled();
-    expect(screen.getByTitle("Previous Page")).not.toBeDisabled();
-    expect(screen.getByTitle("Next Page")).toBeDisabled();
-    expect(screen.getByTitle("Last Page")).toBeDisabled();
+    expect(screen.getByTestId("first-page-btn")).not.toBeDisabled();
+    expect(screen.getByTestId("prev-page-btn")).not.toBeDisabled();
+    expect(screen.getByTestId("next-page-btn")).toBeDisabled();
+    expect(screen.getByTestId("last-page-btn")).toBeDisabled();
   });
 
   it("calls appropriate callbacks when clicked", () => {
@@ -73,16 +73,16 @@ describe("ReaderPageNavigation", () => {
       />
     );
 
-    fireEvent.click(screen.getByTitle("First Page"));
+    fireEvent.click(screen.getByTestId("first-page-btn"));
     expect(onFirstPage).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle("Previous Page"));
+    fireEvent.click(screen.getByTestId("prev-page-btn"));
     expect(onPrevPage).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle("Next Page"));
+    fireEvent.click(screen.getByTestId("next-page-btn"));
     expect(onNextPage).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle("Last Page"));
+    fireEvent.click(screen.getByTestId("last-page-btn"));
     expect(onLastPage).toHaveBeenCalled();
   });
 });

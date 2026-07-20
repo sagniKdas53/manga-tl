@@ -144,16 +144,16 @@ describe("ReaderLeftSidebar Component", () => {
     expect(navigateChapterMock).toHaveBeenCalledWith(expect.objectContaining({ id: "next" }));
     
     // Test page navigation
-    fireEvent.click(screen.getByTitle(/First Page/i));
+    fireEvent.click(screen.getByTestId("first-page-btn"));
     expect(navigatePageMock).toHaveBeenCalledWith(1);
     
-    fireEvent.click(screen.getByTitle(/Previous Page/i));
+    fireEvent.click(screen.getByTestId("prev-page-btn"));
     expect(navigatePageMock).toHaveBeenCalledWith(1); // 2 - 1
     
-    fireEvent.click(screen.getByTitle(/Next Page/i));
+    fireEvent.click(screen.getByTestId("next-page-btn"));
     expect(navigatePageMock).toHaveBeenCalledWith(3); // 2 + 1
     
-    fireEvent.click(screen.getByTitle(/Last Page/i));
+    fireEvent.click(screen.getByTestId("last-page-btn"));
     expect(navigatePageMock).toHaveBeenCalledWith(5);
   });
 });
