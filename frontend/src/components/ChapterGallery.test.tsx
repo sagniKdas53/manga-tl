@@ -52,6 +52,7 @@ describe("ChapterGallery Component", () => {
     id: "1",
     username: "testuser",
     email: "test@test.com",
+    displayName: "testuser",
     role: "translator",
     token: "token123",
   };
@@ -61,6 +62,7 @@ describe("ChapterGallery Component", () => {
     title: "One Piece",
     coverImageUrl: "http://example.com/op.jpg",
     readingDirection: "rtl",
+    originalLanguage: "ja",
     sourceLanguage: "ja",
     targetLanguage: "en",
     chaptersCount: 1,
@@ -83,6 +85,7 @@ describe("ChapterGallery Component", () => {
       chapterId: "c1",
       pageNumber: 1,
       imageId: "img1",
+      filename: "page1.jpg",
       status: "PENDING",
       imagePath: "/path/to/img",
       processingProgress: 0,
@@ -351,7 +354,7 @@ describe("ChapterGallery Component", () => {
   });
 
   it("handles uploading multiple pages with progress", async () => {
-    const sendMock = vi.fn(function (this: XMLHttpRequest) {
+    const sendMock = vi.fn(function (this: any) {
       if (this.upload && this.upload.onprogress) {
         this.upload.onprogress({
           lengthComputable: true,

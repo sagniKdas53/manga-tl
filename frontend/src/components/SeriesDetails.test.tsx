@@ -56,6 +56,7 @@ describe("SeriesDetails Component", () => {
     id: "1",
     username: "testuser",
     email: "test@test.com",
+    displayName: "testuser",
     role: "translator",
     token: "token123",
   };
@@ -65,6 +66,7 @@ describe("SeriesDetails Component", () => {
     title: "One Piece",
     coverImageUrl: "http://example.com/op.jpg",
     readingDirection: "rtl",
+    originalLanguage: "ja",
     sourceLanguage: "ja",
     targetLanguage: "en",
     chaptersCount: 1,

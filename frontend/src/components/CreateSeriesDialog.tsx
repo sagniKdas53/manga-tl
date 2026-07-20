@@ -18,24 +18,9 @@ import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import type { User, Series } from "../types";
+import type { User, Series, SystemSettingsDto } from "../types";
 import { safeFetch } from "../utils";
 import { useToast } from "./ToastContext";
-
-interface SystemSettingsDto {
-  activeProviders?: string[];
-  activeOcrProviders?: string[];
-  localOcrModel?: string;
-  ocrProvider?: string;
-  ocrVlmModelList?: string[];
-  tlProvider?: string;
-  tlLlmModelList?: string[];
-  qaProvider?: string;
-  qaMode?: string;
-  qaLlmModelList?: string[];
-  qaVlmModelList?: string[];
-  routingStrategy?: string;
-}
 
 interface CreateSeriesDialogProps {
   open: boolean;
