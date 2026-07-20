@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ChapterGallery from "./ChapterGallery";
@@ -105,7 +104,7 @@ describe("ChapterGallery Component", () => {
 
   it("renders chapter details and pages", () => {
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -124,7 +123,7 @@ describe("ChapterGallery Component", () => {
 
   it("clicks page thumbnail to open in reader", () => {
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -153,7 +152,7 @@ describe("ChapterGallery Component", () => {
     });
 
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -213,7 +212,7 @@ describe("ChapterGallery Component", () => {
     });
 
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -257,7 +256,7 @@ describe("ChapterGallery Component", () => {
     global.URL.revokeObjectURL = vi.fn();
 
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -292,7 +291,7 @@ describe("ChapterGallery Component", () => {
     ];
 
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -328,7 +327,7 @@ describe("ChapterGallery Component", () => {
     }); // for pages refresh
 
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -354,18 +353,6 @@ describe("ChapterGallery Component", () => {
   });
 
   it("handles uploading multiple pages with progress", async () => {
-    const sendMock = vi.fn(function (this: any) {
-      if (this.upload && this.upload.onprogress) {
-        this.upload.onprogress({
-          lengthComputable: true,
-          loaded: 50,
-          total: 100,
-        });
-      }
-      this.status = 200;
-      if (this.onload) this.onload();
-    });
-
     interface MockXHR {
       open: ReturnType<typeof vi.fn>;
       send: ReturnType<typeof vi.fn>;
@@ -374,6 +361,18 @@ describe("ChapterGallery Component", () => {
       onload: (() => void) | null;
       upload: { onprogress: ((e: ProgressEvent) => void) | null };
     }
+
+    const sendMock = vi.fn(function (this: MockXHR) {
+      if (this.upload && this.upload.onprogress) {
+        this.upload.onprogress({
+          lengthComputable: true,
+          loaded: 50,
+          total: 100,
+        } as ProgressEvent);
+      }
+      this.status = 200;
+      if (this.onload) this.onload();
+    });
 
     const XHRMock = vi.fn().mockImplementation(function (this: MockXHR) {
       this.open = vi.fn();
@@ -395,7 +394,7 @@ describe("ChapterGallery Component", () => {
     }); // for pages refresh
 
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -438,7 +437,7 @@ describe("ChapterGallery Component", () => {
     });
 
     render(
-      <ChapterGallery
+      <ChapterGallery mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}

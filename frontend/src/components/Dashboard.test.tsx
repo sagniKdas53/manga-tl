@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Dashboard from "./Dashboard";
@@ -80,7 +79,7 @@ describe("Dashboard Component", () => {
 
   it("renders the dashboard with list of series", () => {
     render(
-      <Dashboard
+      <Dashboard mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -95,7 +94,7 @@ describe("Dashboard Component", () => {
 
   it("navigates to series page when card is clicked", () => {
     render(
-      <Dashboard
+      <Dashboard mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -128,7 +127,7 @@ describe("Dashboard Component", () => {
       });
 
       render(
-        <Dashboard
+        <Dashboard mode="dark"
           user={mockUser}
           seriesList={initialSeries}
           setSeriesList={mockSetSeriesList}
@@ -186,7 +185,7 @@ describe("Dashboard Component", () => {
     });
 
     render(
-      <Dashboard
+      <Dashboard mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -237,7 +236,7 @@ describe("Dashboard Component", () => {
 
   it("cancels series modal without saving", { timeout: 15000 }, async () => {
     render(
-      <Dashboard
+      <Dashboard mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -264,7 +263,7 @@ describe("Dashboard Component", () => {
     mockSafeFetch.mockRejectedValueOnce(new Error("Network Error"));
 
     render(
-      <Dashboard
+      <Dashboard mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -293,7 +292,7 @@ describe("Dashboard Component", () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: true });
 
     render(
-      <Dashboard
+      <Dashboard mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -327,7 +326,7 @@ describe("Dashboard Component", () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: false });
 
     render(
-      <Dashboard
+      <Dashboard mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -359,7 +358,7 @@ describe("Dashboard Component", () => {
       .mockImplementation(() => {});
 
     render(
-      <Dashboard
+      <Dashboard mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -403,7 +402,7 @@ describe("Dashboard Component", () => {
       });
 
       render(
-        <Dashboard
+        <Dashboard mode="dark"
           user={mockUser}
           seriesList={initialSeries}
           setSeriesList={mockSetSeriesList}
