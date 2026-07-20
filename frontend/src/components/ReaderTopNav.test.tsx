@@ -30,13 +30,13 @@ describe("ReaderTopNav", () => {
       />
     );
 
-    fireEvent.click(screen.getByTitle("Back"));
+    fireEvent.click(screen.getByLabelText("Back"));
     expect(onBack).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle("Settings"));
+    fireEvent.click(screen.getByLabelText(/Settings/i));
     expect(onToggleLeftSidebar).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle("Right Sidebar"));
+    fireEvent.click(screen.getByLabelText(/Inspector/i));
     expect(onToggleRightSidebar).toHaveBeenCalled();
   });
 });

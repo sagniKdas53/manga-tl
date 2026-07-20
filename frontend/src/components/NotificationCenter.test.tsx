@@ -16,6 +16,12 @@ vi.mock("../utils", () => ({
   safeFetch: vi.fn(),
 }));
 
+vi.mock("./ToastContext", () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+  }),
+}));
+
 describe("NotificationCenter", () => {
   const mockMarkAsRead = vi.fn();
   const mockMarkAllAsRead = vi.fn();

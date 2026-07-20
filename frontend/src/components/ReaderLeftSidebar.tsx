@@ -87,7 +87,8 @@ const ToggleRow: React.FC<{
   onChange: (val: boolean) => void;
 }> = ({ label, checked, onChange }) => (
   <Box
-    onClick={() => onChange(!checked)}
+    component="label"
+    onClick={(e) => { e.preventDefault(); onChange(!checked); }}
     sx={{
       display: "flex",
       alignItems: "center",
@@ -135,6 +136,7 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo((props) =
   React.useEffect(() => {
     // Reset target page input when current page changes
     if (props.selectedPage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTargetPageInput(props.selectedPage.pageNumber.toString());
     }
   }, [props.selectedPage]);

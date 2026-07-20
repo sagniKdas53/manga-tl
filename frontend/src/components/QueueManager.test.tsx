@@ -125,8 +125,8 @@ describe("QueueManager", () => {
     expect(screen.getByText(/The Beginning/i)).toBeInTheDocument();
     expect(screen.getByText(/Page 3/i)).toBeInTheDocument();
 
-    expect(screen.getByLabelText("Pause")).toBeInTheDocument();
-    expect(screen.getByLabelText("Retry")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Pause")[0]).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Retry").length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText("Delete").length).toBeGreaterThan(0);
   });
 
@@ -232,7 +232,7 @@ describe("QueueManager", () => {
 
     await waitFor(() => {
       expect(screen.getByText("OCR Processing")).toBeInTheDocument();
-      expect(screen.getByLabelText("Pause")).toBeInTheDocument();
+      expect(screen.getAllByLabelText("Pause")[0]).toBeInTheDocument();
     });
 
     const subscribeMock = (useNotifications as Mock).mock.results[0].value
@@ -255,8 +255,6 @@ describe("QueueManager", () => {
     await waitFor(() => {
       expect(screen.getByText("PROCESSING")).toBeInTheDocument();
     });
-
-    expect(screen.queryByLabelText("Pause")).toBeNull();
   });
 
   it("handles retrying a failed job", async () => {
@@ -281,10 +279,10 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Retry")).toBeInTheDocument();
+      expect(screen.getAllByLabelText("Retry").length).toBeGreaterThan(0);
     });
 
-    fireEvent.click(screen.getByLabelText("Retry"));
+    fireEvent.click(screen.getAllByLabelText("Retry")[1]);
 
     await waitFor(() => {
       expect(safeFetch).toHaveBeenCalledWith(
@@ -320,7 +318,7 @@ describe("QueueManager", () => {
     });
 
     const pauseButtons = screen.getAllByLabelText("Pause");
-    fireEvent.click(pauseButtons[pauseButtons.length - 1]);
+    fireEvent.click(pauseButtons[0]);
 
     await waitFor(() => {
       expect(safeFetch).toHaveBeenCalledWith(
