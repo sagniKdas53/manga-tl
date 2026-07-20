@@ -296,9 +296,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                   label="OCR VLM Model"
                   onChange={(e) => setOcrModel(e.target.value)}
                 >
-                  {ocrDisabled && settings?.localOcrModel ? (
-                    <MenuItem value={settings.localOcrModel}>
-                      {settings.localOcrModel}
+                  {ocrDisabled ? (
+                    <MenuItem value={settings?.localOcrModel || "local"}>
+                      {settings?.localOcrModel || "Local Worker Model"}
                     </MenuItem>
                   ) : (
                     (settings?.ocrVlmModelList || []).map((m) => (

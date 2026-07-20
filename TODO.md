@@ -1,202 +1,34 @@
 # TODO — Manga Library (Master Checklist)
 
-> **Last updated**: 2026-07-14  
+> **Last updated**: 2026-07-20
 > Merged from: `TODO.md` + `docs/More Observations.md`  
-> Plans: [Critical Bug Fixes](docs/plan-critical-bugfixes.md) | [Improvements](docs/plan-improvements.md)  
+> Plans: [Java 25 Upgrade](docs/java-upgrade-plan.md)
 > Status legend: `[ ]` = not started, `[/]` = in progress, `[x]` = done, `[P]` = planned (in a plan doc)
 
 ---
 
-## 🔴 Critical Bugs (plan-critical-bugfixes.md)
+## 🟢 Current Goals
 
-### Phase 1 — Data Integrity
+### Java 25 Upgrade
+- [ ] Follow [Java upgrade plan](docs/java-upgrade-plan.md) — compile Java 25 locally via SDKMAN, run Java 26 in Docker
+  - Update `pom.xml`: Spring Boot 3.4.0, `java.version=25`, `release=25`
+  - Update Dockerfile: `maven:3-eclipse-temurin-26` + `eclipse-temurin:26-jre-alpine`
+  - Update JaCoCo to 0.8.16
 
-- [x] **1.1** Shared image cascade delete — deleting a page from one chapter destroys the image in all chapters
-  - Root cause: `PageService.deletePageDb()` unconditionally deletes the `Image` entity
-  - Evidence: chapter `8bc70d04` in [run-7.log](logs/run-7.log)
-- [x] **1.2** Per-chapter model override uses wrong chapter — `findFirst()` picks arbitrary chapter for config resolution
-  - Evidence: local OCR ran instead of cloud when re-running OCR on the cloud-override chapter
-- [x] **1.3** Re-upload after cross-chapter delete fails with `pages_chapter_id_page_number_key` duplicate key constraint
-  - Evidence: chapter `8bc70d04` in [run-7.log](logs/run-7.log)
-- [x] **1.4** Allow duplicate images in same chapter (doujin cover page use case)
-  - Currently blocked by idempotency check; same hash should still create new page entries
-- [x] **1.5** Image hash reuse causing unintended layer sharing across chapters, leading to incorrect processing.
-- [x] **1.6** `project.json` `metadataJson` showing single model (e.g. PaddleOCR) instead of list of models (e.g. PaddleOCR + Gemini), and Gemini costs not captured. (Skipped, verified it already works)
-
-### Phase 2 — Backend API & Export
-
-- [x] **2.1** Chapter export returns 500 — `LazyInitializationException` after OSIV disabled
-  - Endpoint: `GET /api/series/chapters/{id}/export?format=zip`
-  - Response body is base64-encoded error: `...could not initialize proxy...no Session`
-- [x] **2.2** Clear queue API returns `{status: 999}` — missing `@Transactional`, incomplete Redis queue list, deletes PROCESSING jobs
-  - Individual job delete works (`DELETE /api/jobs/{id}`)
-- [x] **2.3** QA_MODE `auto` not recognized by worker — falls back to auto-pass instead of resolving to vlm/llm/hybrid
-  - Worker logs: `[QA] Unknown QA_MODE=auto, falling back to auto-pass`
-- [x] **2.4** OCR model identifier string has dead `MangaOCR/` prefix
-  - Shows as `MangaOCR/PaddleOCR(PP-OCRv6_medium_rec)` in exports
-- [x] **2.5** Exported ZIP should include rendered translations, not just original images
-  - Currently exports only originals; post-processing edits don't sync into rendered output either
-- [x] **2.6** Aggregated `modelsUsed` from cost breakdowns across QA and Translation in ChapterExportService.
-- [x] **2.7** Added `needsReRender` flag based on lastEditedAt vs lastRenderedAt in ChapterExportService.
-- [x] **2.8** Added padding to `LayerElement` bounds during OCR to Layout generation to improve `render.py` text fitting.
-- [x] **2.9** Checked for manual edits before enqueueing QA on Render callback, avoiding costly QA on manual re-renders.
-- [x] **2.10** Removed Image hash deduplication on Project Import to prevent layers stacking on existing pages.
-- [x] **2.11** Separated QA models from Translation models in export metadata `modelsUsed` payload and guaranteed base keys.
-
-### Phase 3 — Upload Validation & Security
-
-- [x] **3.1** Non-image files accepted on upload (`.md`, `.txt` etc.) — no file type validation
-  - Evidence: `https://ideapad.tail9ece4.ts.net/tlhub/chapters/.../reader/5` is a `.md` file
-  - Accept: PNG, JPEG, WebP, GIF, BMP, TIFF (magic bytes validation + extension check)
-- [x] **3.2** Duplicate image idempotency guard for same chapter/same slot
-- [x] **3.3** Image file endpoint (`/api/images/{id}/file`) works without auth
-  - Thumbnail endpoint should remain public
-
-### Phase 4 — Worker & Pipeline Robustness
-
-- [x] **4.1** Worker health server `BrokenPipeError` clutters logs
-  - Evidence: [run-8.log](logs/run-8.log) line 36-61
-- [x] **4.2** Translation romanization in outputs from cheap models
-  - Examples: `要出发了哦` → `Yào chūfā le o (About to depart!)`, `エルフ!` → `ERUFU (ELF!)`
-- [x] **4.3** Job retry counter never increments — frontend always shows `Attempt: 1/3`
-  - **Confirmed**: worker `rq_tasks.py` has NO job-level retry. Goes straight PROCESSING→FAILED
-  - The "retries" in logs are internal translation batch retries, not job retries
-  - Evidence: [run-13-retry-check.log](logs/run-13-retry-check.log), [screenshot](examples/the-retry-count-never-updated.png)
-- [x] **4.4** Dockerfile uses non-existent `maven:3-eclipse-temurin-26` tag (Skipped)
-  - Fix to `temurin-21` (LTS) or follow [Java upgrade plan](docs/lets-use-java21.md) for Java 25 local + 26 Docker
-- [x] **4.5** QA `auto` mode falls back to `none` (skip) instead of trying default models (Skipped)
-  - When chapter's provider (ollama) is unreachable, should fall back to global QA models
-  - Evidence: [run-13-retry-check.log](logs/run-13-retry-check.log) line 693-695
-- [x] **4.8** Linting and parallel test execution issues across components
-  - Fixed `vlm_model_used` variable scoping in worker `ocr.py`
-  - Fixed unused `e` variable in frontend `QueueManager.tsx`
-  - Enforced sequential test execution (`vitest run --pool=threads`, `mvn test -DforkCount=1`)
-
----
-
-## 🟡 Improvements (plan-improvements.md)
-
-### Phase 0 — CI Foundation (Do First)
-
-- [P] **0.1** Add static analysis to Python CI
-  - Worker CI only runs `pytest` — no linting, no type checking (unlike backend with PMD + SpotBugs)
-  - Add `ruff check` + `ruff format --check` + `pyright` to `ci-python.yml`
-  - Create `pyproject.toml` (ruff config) + `pyrightconfig.json` (basic mode)
-  - **Do this first** — protects all worker changes in Phases A–F
-
-### Phase A — SSE Job System Migration
-
-- [P] **A.1** Replace polling with SSE for job state updates
-  - Frontend polls `/api/jobs` and `/api/jobs/status` multiple per second
-  - Hybrid: SSE primary + 30s REST heartbeat fallback
-- [P] **A.1** Queue-level SSE events: `queue_paused`, `queue_resumed`, `queue_cleared`
-- [P] **A.1** Per-job SSE events: `pauseJob`, `resumeJob`, `deleteJob`, `retryJob` with targeted delivery
-  - Pausing 1 of 20 jobs must NOT block the other 19
-- [P] **A.2** Frontend SSE-driven Queue Manager (replace setInterval polling)
-- [P] **A.3** Queue Manager UI redesign per [mockup](examples/redesign-the-job-queue.jpg)
-  - Status dots: 🟢 processing, 🔵 pending, 🔴 failed, 🟡 paused
-  - Per-job controls: ⏸ Pause, ▶ Resume, 🔄 Retry, ✕ Cancel
-  - Confirm modals for destructive actions
-  - Show `Series → Ch.N → Page M` context, attempt counter
-
-### Phase B — Reader Auto-Refresh
-
-- [P] **B.1** SSE-driven layer auto-refresh in Reader
-  - When pipeline completes (OCR/TL/render/QA), auto-refresh layers for current page
-  - Replaces broken polling-based refresh
-  - Also covers manual re-OCR, re-TL, region-redo events
-
-### Phase C — Thumbnail & Image Optimization
-
-- [P] **C.1** WebP thumbnails with bicubic interpolation (replacing JPEG + bilinear)
-  - Includes migration of existing JPEG thumbnails in MinIO to WebP
-- [P] **C.2** Frontend: use `/thumbnail` URLs everywhere (Dashboard, SeriesDetails)
-  - Currently series covers and chapter cards load full `/file` URLs
-- [P] **C.3** Async thumbnail generation off the upload request path *(NEW from More Observations)*
-  - Move thumbnail gen to `@Async` bounded pool (`thumbnailExecutor`, 2-4 threads)
-  - Use `ImageReader` subsampling to avoid full-resolution decode (5000×7000 = 105-140 MB per image)
-  - `Image.thumbnailStoragePath` starts `null`; thumbnail endpoint returns placeholder until ready
-  - Batch imports benefit most — currently one request thread pinned for minutes
-
-### Phase D — Frontend UI Fixes & Redesign
-
-- [P] **D.1** Remove "Cover Image URL" field from create/edit series dialogs
-  - See [mockup](examples/remove-custom-thumbnails.jpg)
-- [P] **D.2** Fix settings modal overflow (`max-height: 90vh`, `overflow-y: auto`)
-- [P] **D.3** Chapter cards redesign per [mockup](examples/chapter-cards.jpg)
-  - Rich metadata: language pair, direction, page count, model info
-  - Add chapter description/edit field (optionally injected into model context)
-  - Delete chapter button inside chapter page
-- [P] **D.4** Dashboard sorting (Created Date ↑↓, Last Updated ↑↓)
-- [P] **D.5** Fix Reader full-reload on page switch (likely unstable keys / state reset)
-- [P] **D.6** Persist upload widget across navigation (lift to app-level context)
-- [P] **D.7** User management modal *(expanded from More Observations)*
-  - Profile with avatar, about section (inspired by [nHentai settings](examples/nHentai/user-setting-page.png))
-  - Change username and password (not email)
-  - Session management, delete profile
-  - API keys section (stub/stretch goal)
-- [P] **D.8** Theme improvements
-  - Dark mode: nHentai palette — see [extracted palette](examples/nHentai/Screenshot%202026-07-12%20at%2014-09-52%20Site%20Palette%20🎨.png)
-  - Light mode: Pixiv palette only (not design) — see [extracted palette](examples/pixiv/Screenshot%202026-07-12%20at%2014-11-16%20Site%20Palette%20🎨.png)
-- [P] **D.9** Lazy loading / infinite scroll for series, chapters, and pages *(NEW from More Observations)*
-  - Instead of pagination (like [nHentai's paged nav](examples/nHentai/add-paged-navigation-as-the-library-can-big.png)), load more as user scrolls
-- [P] **D.10** Model override display — show resolved model instead of `--Inherit--`
-  - e.g., `tencent/hy3:free (inherited from series)` instead of `--Inherit--`
-- [P] **D.11** Model override UX redesign — make overrides easier to use and display
-- [P] **D.12** Migrate frontend to Material UI (MUI) *(NEW from More Observations)*
-  - Replace vanilla CSS + glassmorphism with [MUI components](https://mui.com/material-ui/getting-started/) + [MUI icons](https://mui.com/material-ui/material-icons/)
-  - Custom `ThemeProvider` with nHentai dark + Pixiv light palettes (subsumes D.8)
-  - Incremental migration: buttons → inputs → dialogs → layout → feedback
-  - Use pre-built components to offload design decisions
-
-### Phase E — Backend Resilience
-
-- [P] **E.1** Cross-provider failover (provider factory for OpenAI API + Anthropic API formats)
-  - Direct DeepSeek API provider
-  - When provider is down, failover to next in priority list
-- [P] **E.2** Strict HTTP timeouts (connect=10s, read=45s) for all cloud LLM calls
-- [P] **E.3** Move cost tracking from `costs.json` filesystem to PostgreSQL *(NEW from More Observations)*
-  - Worker POSTs costs to backend API instead of writing files
-  - Enables queryable cost analytics, survives container restarts
-- [P] **E.4** Remove `rendered_cache` QA images *(NEW from More Observations)*
-  - Rendered images already in MinIO — local file writes are redundant overhead
-- [P] **E.5** Chapter export cleanup *(NEW from More Observations)*
-  - Scheduled cleanup of stale `exports/<hash>.zip` in MinIO (default retention: 7 days)
-  - "Clear Exports" button in admin/settings
+### Output & Rendering Quality
+- [ ] Rendered output quality gap vs mangatranslator.ai
+  - See [sample 2](examples/sample2/original.jpg): [theirs](examples/sample2/en-mangatranslator.ai.jpg) vs [ours](examples/sample2/en-local.png)
+  - See [sample 3](examples/sample3/original.jpg): [theirs](examples/sample3/en-mangatranslator.ai.jpg) vs [ours](examples/sample3/en-local.png)
 
 ---
 
 ## 🟡 Medium Priority — Not Yet in Plans
 
-### Output & Rendering Quality
-
-- [ ] Rendered output quality gap vs mangatranslator.ai
-  - See [sample 2](examples/sample2/original.jpg): [theirs](examples/sample2/en-mangatranslator.ai.jpg) vs [ours](examples/sample2/en-local.png)
-  - See [sample 3](examples/sample3/original.jpg): [theirs](examples/sample3/en-mangatranslator.ai.jpg) vs [ours](examples/sample3/en-local.png)
-
-### ML Models & Prompts *(NEW section requested from More Observations)*
-
-- [ ] **YOLO model upgrade** — current `juithealien/manga109-segmentation-bubble` (yolo11n) appears abandoned, only detects text bubbles
-  - See [Model Upgrade Plan](docs/model_upgrade_plan.md)
-- [ ] **OCR VLM prompt improvements** — classify text types and reject SFX, gibberish, author handles, already-English text at the OCR stage
-  - If doing Re-OCR or Redo-Region-TL with a VLM, inject QA feedback to help the model
-- [ ] **Translation prompt improvements** — see [current prompts](docs/models_and_prompts.md)
-  - Anti-romanization is handled in plan-critical-bugfixes Phase 4.2
-- [ ] **QA prompt improvements** — enhance QA to:
-  - Directly update text if it has a better translation
-  - Reject SFX/gibberish (hide, never delete elements)
-  - Trigger re-OCR or re-TL for specific regions (not loops — one pass only)
-  - QA output must be strictly better than input; never send back same text
-
-### Java Upgrade
-
-- [ ] Follow [Java upgrade plan](docs/lets-use-java21.md) — compile Java 25 locally via SDKMAN, run Java 26 in Docker
-  - Update `pom.xml`: Spring Boot 3.4.0, `java.version=25`, `release=25`
-  - Update Dockerfile: `maven:3-eclipse-temurin-26` + `eclipse-temurin:26-jre-alpine`
-  - Update JaCoCo to 0.8.16
+### ML Models & Prompts
+- [ ] **F.1 YOLO model upgrade** (Failed & Reverted) — current `juithealien/manga109-segmentation-bubble` (yolo11n) appears abandoned, only detects text bubbles
+  - Upgrade caused hallucinated full-page bubbles on illustrations. Needs size filter fix.
 
 ### Code Quality
-
 - [ ] Hundreds of `Null type safety` warnings in Java codebase — audit and fix
 - [ ] Layer update failure observed — check if reproducible or one-off ([run-8.log](logs/run-8.log))
 
@@ -210,6 +42,9 @@
 - [ ] Chapter & series summarization — AI generates summaries from translated dialogue
   - Currently can be added manually; later auto-generate if not provided
 - [ ] Description injection into model context — series/chapter descriptions as translation context (booru-style metadata)
+- [ ] **D.9** Lazy loading / infinite scroll for series, chapters, and pages *(Moved out of Phase D)*
+  - Instead of pagination (like [nHentai's paged nav](examples/nHentai/add-paged-navigation-as-the-library-can-big.png)), load more as user scrolls
+  - Deferred as it requires backend pagination
 
 ---
 
@@ -229,8 +64,93 @@
 <details>
 <summary>Click to expand completed items</summary>
 
-### Bugs (Fixed)
+### Critical Bugs (plan-critical-bugfixes.md)
 
+#### Phase 1 — Data Integrity
+- [x] **1.1** Shared image cascade delete — deleting a page from one chapter destroys the image in all chapters
+- [x] **1.2** Per-chapter model override uses wrong chapter — `findFirst()` picks arbitrary chapter for config resolution
+- [x] **1.3** Re-upload after cross-chapter delete fails with `pages_chapter_id_page_number_key` duplicate key constraint
+- [x] **1.4** Allow duplicate images in same chapter (doujin cover page use case)
+- [x] **1.5** Image hash reuse causing unintended layer sharing across chapters, leading to incorrect processing.
+- [x] **1.6** `project.json` `metadataJson` showing single model (e.g. PaddleOCR) instead of list of models (e.g. PaddleOCR + Gemini), and Gemini costs not captured.
+
+#### Phase 2 — Backend API & Export
+- [x] **2.1** Chapter export returns 500 — `LazyInitializationException` after OSIV disabled
+- [x] **2.2** Clear queue API returns `{status: 999}` — missing `@Transactional`, incomplete Redis queue list, deletes PROCESSING jobs
+- [x] **2.3** QA_MODE `auto` not recognized by worker — falls back to auto-pass instead of resolving to vlm/llm/hybrid
+- [x] **2.4** OCR model identifier string has dead `MangaOCR/` prefix
+- [x] **2.5** Exported ZIP should include rendered translations, not just original images
+- [x] **2.6** Aggregated `modelsUsed` from cost breakdowns across QA and Translation in ChapterExportService.
+- [x] **2.7** Added `needsReRender` flag based on lastEditedAt vs lastRenderedAt in ChapterExportService.
+- [x] **2.8** Added padding to `LayerElement` bounds during OCR to Layout generation to improve `render.py` text fitting.
+- [x] **2.9** Checked for manual edits before enqueueing QA on Render callback, avoiding costly QA on manual re-renders.
+- [x] **2.10** Removed Image hash deduplication on Project Import to prevent layers stacking on existing pages.
+- [x] **2.11** Separated QA models from Translation models in export metadata `modelsUsed` payload and guaranteed base keys.
+
+#### Phase 3 — Upload Validation & Security
+- [x] **3.1** Non-image files accepted on upload (`.md`, `.txt` etc.) — no file type validation
+- [x] **3.2** Duplicate image idempotency guard for same chapter/same slot
+- [x] **3.3** Image file endpoint (`/api/images/{id}/file`) works without auth
+
+#### Phase 4 — Worker & Pipeline Robustness
+- [x] **4.1** Worker health server `BrokenPipeError` clutters logs
+- [x] **4.2** Translation romanization in outputs from cheap models
+- [x] **4.3** Job retry counter never increments — frontend always shows `Attempt: 1/3`
+- [x] **4.4** Dockerfile uses non-existent `maven:3-eclipse-temurin-26` tag (Skipped)
+- [x] **4.5** QA `auto` mode falls back to `none` (skip) instead of trying default models (Skipped)
+- [x] **4.8** Linting and parallel test execution issues across components
+
+### Improvements (plan-improvements.md)
+
+#### Phase 0 — CI Foundation
+- [x] **0.1** Add static analysis to Python CI (ruff check, pyright)
+
+#### Phase A — SSE Job System Migration
+- [x] **A.1** Replace polling with SSE for job state updates (Queue/Per-job events)
+- [x] **A.2** Frontend SSE-driven Queue Manager
+- [x] **A.3** Queue Manager UI redesign
+
+#### Phase B — Reader Auto-Refresh
+- [x] **B.1** SSE-driven layer auto-refresh in Reader
+
+#### Phase C — Thumbnail & Image Optimization
+- [x] **C.1** WebP thumbnails with bicubic interpolation
+- [x] **C.2** Frontend: use `/thumbnail` URLs everywhere
+- [x] **C.3** Async thumbnail generation off the upload request path
+
+#### Phase D — Frontend UI Fixes & Redesign
+- [x] **D.1** Remove "Cover Image URL" field from create/edit series dialogs
+- [x] **D.2** Fix settings modal overflow
+- [x] **D.3** Chapter cards redesign
+- [x] **D.4** Dashboard sorting
+- [x] **D.5** Fix Reader full-reload on page switch
+- [x] **D.6** Persist upload widget across navigation
+- [x] **D.7** User management modal
+- [x] **D.8** Theme improvements
+- [x] **D.10** Model override display — show resolved model instead of `--Inherit--`
+- [x] **D.11** Model override UX redesign
+- [x] **D.12** Migrate frontend to Material UI (MUI)
+
+#### Phase E — Backend Resilience
+- [x] **E.1** Cross-provider failover
+- [x] **E.2** Strict HTTP timeouts
+- [x] **E.3** Move cost tracking from `costs.json` filesystem to PostgreSQL
+- [x] **E.4** Remove `rendered_cache` QA images
+- [x] **E.5** Chapter export cleanup
+- [x] **E.6** Cost-Aware Provider Routing (OpenRouter)
+- [x] **E.7** Model Routing Strategy Selector (UI + Backend)
+
+#### Phase F — ML Models & Prompts (Partial)
+- [x] **F.2** OCR VLM prompt improvements
+- [x] **F.3** Translation prompt improvements
+- [x] **F.4** QA prompt improvements
+
+#### Phase G — Concurrency & Slot Allocation
+- [x] **G.1** Dual-Slot Dispatcher (Heavy/Light queues)
+- [x] **G.2** Configurable Worker Slots (MAX_HEAVY_SLOTS / MAX_LIGHT_SLOTS)
+- [x] **G.3** Deployment & Documentation
+
+### Bugs (Fixed)
 - [x] Hybrid cloud OCR coordinate space mismatch
 - [x] Settings page causes logout
 - [x] Model picker options collapsible
@@ -258,7 +178,6 @@
 - [x] Fix `CostEstimationService.java`
 
 ### Backend & Features (Done)
-
 - [x] `/api/settings` endpoint with runtime model config
 - [x] Per-chapter/series model selection
 - [x] Worker accepts model config per-job

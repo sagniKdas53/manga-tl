@@ -194,6 +194,7 @@ describe("ChapterGallery Component", () => {
           qaLlmModel: null,
           qaVlmModel: null,
           qaMode: null,
+          routingStrategy: null,
         }),
       });
       expect(mockSetSelectedChapter).toHaveBeenCalled();

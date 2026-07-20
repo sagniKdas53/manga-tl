@@ -739,6 +739,7 @@ cd backend && mvn spotless:apply && mvn clean verify -DforkCount=1 -DreuseForks=
   3. If **Retries Exhausted**, attempt a fallback to the **Global Default Model**, *only if* it is different from the requested model.
   4. If the fallback also fails (or no fallback is applicable), **Fail the job**.
 - *Decision*: We explicitly avoid cross-provider failover chains (e.g. OpenRouter -> DeepSeek -> Gemini). Cross-provider failover makes cost tracking complex and secondary providers (like Nvidia) are often rate-limited, providing no real benefit.
+
 ### E.2 Strict HTTP Timeouts
 
 **Files**: all cloud LLM call sites in worker
