@@ -113,4 +113,12 @@ public class MinioService {
       return false;
     }
   }
+
+  public MinioClient getMinioClient() {
+    return minioClient;
+  }
+
+  public String getBucketName() {
+    return bucketName;
+  }
 }

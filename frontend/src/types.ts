@@ -180,6 +180,7 @@ export interface SystemSettingsDto {
   tlLlmModelList: string[];
   qaLlmModelList: string[];
   qaVlmModelList: string[];
+  routingStrategy?: string;
 
   ocrProvider: string;
   ocrModel: string;

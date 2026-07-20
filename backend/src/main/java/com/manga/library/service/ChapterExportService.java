@@ -27,7 +27,7 @@ public class ChapterExportService {
   private final SseService sseService;
 
   @Transactional(readOnly = true)
-  public void buildAndUploadExport(UUID chapterId, UUID userId, String exportId) {
+  public void buildAndUploadExport(UUID chapterId, UUID userId, boolean force) {
     try {
       Chapter chapter =
           chapterRepository
@@ -258,7 +258,7 @@ public class ChapterExportService {
         }
         hexString.append(hex);
       }
-      String hashExportId = hexString.toString();
+      String hashExportId = chapterId.toString() + "_" + hexString.toString();
 
       String seriesTitle =
           chapter.getSeries() != null ? chapter.getSeries().getTitle() : "Unknown Series";
@@ -270,7 +270,7 @@ public class ChapterExportService {
         ctx.put("chapterTitle", chapter.getTitle());
       }
 
-      if (minioService.fileExists("exports/" + hashExportId + ".zip")) {
+      if (!force && minioService.fileExists("exports/" + hashExportId + ".zip")) {
         log.info("Cache hit for export ZIP: " + hashExportId);
         if (userId != null) {
           sseService.emitNotificationToUser(
@@ -356,5 +356,21 @@ public class ChapterExportService {
       return "< $0.0001";
     }
     return String.format("$%.4f", cost);
+  }
+
+  @Transactional
+  public void clearChapterExports(UUID chapterId) {
+    try {
+      Iterable<io.minio.Result<io.minio.messages.Item>> results =
+          minioService.getMinioClient().listObjects(
+              io.minio.ListObjectsArgs.builder().bucket(minioService.getBucketName()).prefix("exports/" + chapterId.toString() + "_").build());
+      for (io.minio.Result<io.minio.messages.Item> result : results) {
+        io.minio.messages.Item item = result.get();
+        minioService.getMinioClient().removeObject(
+            io.minio.RemoveObjectArgs.builder().bucket(minioService.getBucketName()).object(item.objectName()).build());
+      }
+    } catch (Exception e) {
+      log.error("Failed to clear chapter exports", e);
+    }
   }
 }

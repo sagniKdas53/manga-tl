@@ -589,6 +589,7 @@ public class SeriesController {
   public ResponseEntity<?> exportChapter(
       @PathVariable UUID chapterId,
       @RequestParam(name = "format", defaultValue = "zip") String format,
+      @RequestParam(name = "force", defaultValue = "false") boolean force,
       @AuthenticationPrincipal User user) {
     Objects.requireNonNull(chapterId, "chapterId cannot be null");
 
@@ -607,7 +608,7 @@ public class SeriesController {
 
     java.util.concurrent.CompletableFuture.runAsync(
         () -> {
-          chapterExportService.buildAndUploadExport(chapterId, userId, exportId);
+          chapterExportService.buildAndUploadExport(chapterId, userId, force);
         });
 
     Map<String, String> response = new HashMap<>();
@@ -619,6 +620,12 @@ public class SeriesController {
     return ResponseEntity.status(202).body(response);
   }
 
+
+  @DeleteMapping("/chapters/{chapterId}/exports")
+  public ResponseEntity<?> clearExports(@PathVariable UUID chapterId) {
+    chapterExportService.clearChapterExports(chapterId);
+    return ResponseEntity.ok(Map.of("message", "Cleared exports for chapter"));
+  }
   @GetMapping("/chapters/exports/{exportId}/download")
   public ResponseEntity<byte[]> downloadExport(@PathVariable String exportId) {
     Objects.requireNonNull(exportId, "exportId cannot be null");

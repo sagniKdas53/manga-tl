@@ -167,6 +167,7 @@ public class SystemSettingsService {
     saveSetting("qaProvider", dto.getQaProvider());
     saveSetting("qaLlmModel", dto.getQaLlmModel());
     saveSetting("qaVlmModel", dto.getQaVlmModel());
+    saveSetting("routingStrategy", dto.getRoutingStrategy());
 
     return getSettings();
   }

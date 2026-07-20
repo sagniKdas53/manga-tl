@@ -15,6 +15,7 @@ public class SystemSettingsDto {
   private List<String> tlLlmModelList;
   private List<String> qaLlmModelList;
   private List<String> qaVlmModelList;
+  private String routingStrategy;
 
   private String ocrProvider;
   private String ocrModel;

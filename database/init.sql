@@ -277,3 +277,17 @@ CREATE INDEX IF NOT EXISTS idx_ocr_regions_image ON ocr_regions(image_id);
 CREATE INDEX IF NOT EXISTS idx_ocr_regions_bbox ON ocr_regions(bbox_x, bbox_y, bbox_w, bbox_h);
 CREATE INDEX IF NOT EXISTS idx_layers_image ON layers(image_id);
 CREATE INDEX IF NOT EXISTS idx_layer_elements_layer ON layer_elements(layer_id);
+
+-- Job Costs
+CREATE TABLE IF NOT EXISTS job_costs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_id TEXT REFERENCES jobs(id) ON DELETE CASCADE,
+    image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    provider TEXT,
+    model TEXT,
+    prompt_tokens INT,
+    completion_tokens INT,
+    estimated_cost FLOAT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_job_costs_image ON job_costs(image_id);
