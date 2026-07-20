@@ -13,7 +13,7 @@ All critical bug fixes from `plan-critical-bugfixes.md` (Phases 1–4) have been
 > [!IMPORTANT]
 > **Every phase must pass the full quality gate before manual testing begins.**
 > Run these checks from the project root after completing each phase. All must exit 0.
-
+---
 > [!WARNING]
 > **This PC is not very powerful. Do NOT run too many tasks in parallel during the quality gate, otherwise it will lock up and waste all the effort. Run checks sequentially.**
 
@@ -36,7 +36,7 @@ mvn spotless:check
 **What each tool catches:**
 
 | Tool | What it detects | Bound to |
-|------|----------------|----------|
+| ------ | --------------- | ---------- |
 | **Spotless** | Formatting (Google Java Format), unused imports, trailing whitespace | Manual / pre-commit |
 | **PMD 3.28.0** | God classes, complex methods, dead code, copy-paste, style violations | `mvn verify` |
 | **SpotBugs 4.10.2** | Null pointer bugs, resource leaks, concurrency issues, bad practices (bytecode analysis) | `mvn verify` |
@@ -131,7 +131,7 @@ pytest tests/ --cov=. --cov-report=xml --cov-report=html
 
 - **Add to `requirements.txt`** (dev section or separate `requirements-dev.txt`):
 
-  ```
+  ```sh
   ruff
   pyright
   ```
@@ -139,7 +139,7 @@ pytest tests/ --cov=. --cov-report=xml --cov-report=html
 **Parity with backend CI:**
 
 | Python tool | Equivalent to (Java) | What it catches |
-|-------------|---------------------|------------------|
+| ------------- | --------------------- | ------------------ |
 | **ruff check** | PMD | Dead code, unused imports, bug patterns, complexity |
 | **ruff format** | Spotless | Formatting consistency |
 | **pyright** | SpotBugs | Type errors, None misuse, missing attributes |
@@ -371,14 +371,14 @@ cd frontend && npm run lint && npm run test:coverage && npm run build
 
 **Current flow** (synchronous, blocking):
 
-```
+```md
 Upload → file.getBytes() → ImageIO.read (full decode) → bilinear resize → ImageIO.write(jpg)
       → MinIO.put(original) → MinIO.put(thumbnail) → HTTP response → startPipeline()
 ```
 
 **Proposed flow** (async, non-blocking):
 
-```
+```md
 Upload → file.getBytes() → MinIO.put(original) → HTTP response → startPipeline()
                                                                 ↳ @Async thumbnailPool:
                                                                   ImageReader.subsampled()
@@ -668,7 +668,7 @@ Inspired by [nHentai settings page](../examples/nHentai/user-setting-page.png):
 ### Final completion status
 
 | Item | Status | Notes |
-|------|--------|-------|
+| ------ | -------- | ------- |
 | **D.14** | ✅ | Render-hygiene foundation: memoized context values, stabilized props, React.memo on all 4 route exports, SSE remount guard. |
 | **D.12 P0** | ✅ | MUI v9.2.0 + Emotion installed. `themeObj(mode)` factory. ThemeProvider + Box wrapper. App.css deleted. |
 | **D.12 P2** | ✅ | ConfirmModal, InfoModal → MUI Dialog. CreateSeriesDialog, CreateChapterDialog extracted (key-based remounting). |
@@ -868,7 +868,7 @@ cd unified-workers && ruff check . && ruff format --check . && pyright . && pyte
 > **Implementation Failed & Reverted:** The migration to the `ShadowB/Manga109-panel-balloon-text-yolov26-segmentation` YOLO model introduced a severe regression on illustration pages (non-manga pages). The model frequently hallucinates massive speech bubbles that cover the entire page due to complex backgrounds, even with the confidence threshold raised to 0.45.
 > This caused the OCR grouping logic to lump all free-floating text into a single giant brown box spanning the entire image.
 > **Next Steps / Proposed Fix:** If we revisit this phase, we must implement a robust size filter (e.g., rejecting any detected bubble that occupies >40% of the image area) to eliminate these full-page false positives, and carefully re-evaluate the model's accuracy on colored illustrations.
-
+---
 > [!NOTE]
 > **Partial Success:** While the YOLO model upgrade (F.1) was reverted, the VLM OCR prompt improvements (F.2), QA prompt enhancements (F.3), and Translation prompt improvements (F.4) were successfully implemented and retained on top of the original YOLO model.
 
@@ -965,7 +965,7 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 ## Summary: Files Changed
 
 | Phase | File | Change |
-|-------|------|--------|
+| ------- | ------ | -------- |
 | A.1 | `SseService.java` | Add `job_update`, queue/job-level event types |
 | A.1 | `JobCoordinatorService.java` | Emit SSE on job state transitions |
 | A.1 | `JobController.java` | Emit SSE on per-job pause/resume/retry/delete |
