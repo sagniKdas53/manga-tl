@@ -23,8 +23,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(JobController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@SuppressWarnings({"null", "unchecked"})
+@SuppressWarnings("null")
 public class JobControllerTest {
+
+  private interface StringValueOperations extends ValueOperations<String, String> {}
 
   @Autowired private MockMvc mockMvc;
 
@@ -39,7 +41,7 @@ public class JobControllerTest {
     Job job = Job.builder().id("job1").type("ocr").status("PENDING").build();
     when(jobRepository.findByStatusInOrderByCreatedAtAsc(any())).thenReturn(List.of(job));
 
-    ValueOperations<String, String> valOps = mock(ValueOperations.class);
+    StringValueOperations valOps = mock(StringValueOperations.class);
     when(redisTemplate.opsForValue()).thenReturn(valOps);
     when(valOps.get("system:queue:paused")).thenReturn("false");
 
@@ -66,7 +68,7 @@ public class JobControllerTest {
 
   @Test
   public void testPauseQueue() throws Exception {
-    ValueOperations<String, String> valOps = mock(ValueOperations.class);
+    StringValueOperations valOps = mock(StringValueOperations.class);
     when(redisTemplate.opsForValue()).thenReturn(valOps);
 
     mockMvc.perform(post("/api/jobs/pause")).andExpect(status().isOk());
@@ -76,7 +78,7 @@ public class JobControllerTest {
 
   @Test
   public void testResumeQueue() throws Exception {
-    ValueOperations<String, String> valOps = mock(ValueOperations.class);
+    StringValueOperations valOps = mock(StringValueOperations.class);
     when(redisTemplate.opsForValue()).thenReturn(valOps);
 
     mockMvc.perform(post("/api/jobs/resume")).andExpect(status().isOk());
@@ -90,7 +92,7 @@ public class JobControllerTest {
     Job job = Job.builder().id("job1").type("ocr").status("FAILED").build();
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
-    ValueOperations<String, String> valOps = mock(ValueOperations.class);
+    StringValueOperations valOps = mock(StringValueOperations.class);
     when(redisTemplate.opsForValue()).thenReturn(valOps);
     when(valOps.get("system:queue:paused")).thenReturn("false");
 
@@ -115,7 +117,7 @@ public class JobControllerTest {
     Job job = Job.builder().id("job1").type("ocr").status("PAUSED").build();
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
-    ValueOperations<String, String> valOps = mock(ValueOperations.class);
+    StringValueOperations valOps = mock(StringValueOperations.class);
     when(redisTemplate.opsForValue()).thenReturn(valOps);
     when(valOps.get("system:queue:paused")).thenReturn("false");
 

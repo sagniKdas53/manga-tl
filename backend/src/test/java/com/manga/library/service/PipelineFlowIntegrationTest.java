@@ -28,7 +28,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@SuppressWarnings({"null", "unchecked"})
+@SuppressWarnings("null")
 public class PipelineFlowIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
@@ -44,7 +44,6 @@ public class PipelineFlowIntegrationTest {
   @Autowired private OcrRegionRepository ocrRegionRepository;
   @Autowired private LayerRepository layerRepository;
   @Autowired private LayerElementRepository layerElementRepository;
-  @Autowired private JobCoordinatorService jobCoordinatorService;
 
   @org.springframework.boot.test.mock.mockito.MockBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
@@ -700,12 +699,12 @@ public class PipelineFlowIntegrationTest {
     assertEquals(1, hiddenOcrRegions.size());
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings("null")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings("null")
   private <T> T anyGeneric(Class<?> clazz) {
     return (T) org.mockito.ArgumentMatchers.any(clazz);
   }

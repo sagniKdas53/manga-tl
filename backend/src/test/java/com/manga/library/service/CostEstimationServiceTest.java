@@ -21,7 +21,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings({"null", "unchecked"})
+@SuppressWarnings("null")
 public class CostEstimationServiceTest {
 
   @Mock private StringRedisTemplate redisTemplate;
@@ -248,12 +248,12 @@ public class CostEstimationServiceTest {
         () -> costEstimationService.estimateCost("google/gemini-2.5-flash", 10, 10, "ollama"));
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings("null")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings("null")
   private <T> T anyGeneric(Class<?> clazz) {
     return (T) org.mockito.ArgumentMatchers.any(clazz);
   }

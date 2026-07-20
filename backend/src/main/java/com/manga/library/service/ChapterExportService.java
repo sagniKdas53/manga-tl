@@ -150,15 +150,15 @@ public class ChapterExportService {
         if (!databaseCosts.isEmpty()) {
           pageTotalCostVal =
               databaseCosts.stream()
-                  .map(JobCost::getEstimatedCost)
+                  .map(cost -> cost.getEstimatedCost())
                   .filter(Objects::nonNull)
-                  .mapToDouble(Double::doubleValue)
+                  .mapToDouble(val -> val.doubleValue())
                   .sum();
           pageHasCost = true;
           Set<String> recordedModels =
               modelsUsed.computeIfAbsent("recorded", key -> new HashSet<>());
           databaseCosts.stream()
-              .map(JobCost::getModel)
+              .map(cost -> cost.getModel())
               .filter(Objects::nonNull)
               .forEach(recordedModels::add);
           pageMeta.put("costSource", "database");

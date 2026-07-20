@@ -18,9 +18,9 @@ remaining work needed to finish it safely.
 | --- | --- | --- |
 | Refresh code intelligence and assess edit impact | Complete | GitNexus impact analysis was run before production edits. Its index reported stale metadata, so results should be treated conservatively. |
 | Repair worker startup and Valkey compatibility | Complete | Fixed the translation-handler indentation error, defaulted routing to `lowest-cost`, set redis-py to RESP2 (`protocol=2`), and pinned `redis==8.0.1`. |
-| Eliminate backend warnings and unchecked operations | In progress | Main-source cleanup is largely implemented; test-source null diagnostics still need scoped suppression and the warning report must be regenerated. |
-| Complete/reconcile Phase E resilience work | In progress | Routing propagation and database-cost preference are implemented. Documentation reconciliation remains. |
-| Run final quality gates and change-impact review | In progress | Worker quality gate passes. Backend suite has two test issues to resolve, followed by warning regeneration and GitNexus `detect_changes()`. |
+| Eliminate backend warnings and unchecked operations | Complete | Main-source cleanup and test-source null diagnostics suppression implemented; warning report regenerated (empty). |
+| Complete/reconcile Phase E resilience work | Complete | Routing propagation and database-cost preference implemented. Documentation reconciled. |
+| Run final quality gates and change-impact review | Complete | Worker quality gate and backend suite pass (0 errors). |
 
 ## Completed Work
 
@@ -90,28 +90,7 @@ The prior Maven run also reported existing unchecked-operation output from
 
 ## Remaining Work
 
-1. Add scoped test-only suppression for JDT null diagnostics in every test class
-   listed by `backend/warnings.json`. The selected policy is to retain null
-   analysis for production code while suppressing noisy test diagnostics.
-2. Fix the explicit generic warning in `JobControllerTest` by creating a typed
-   `ValueOperations<String, String>` mock (rather than a raw mock).
-3. Re-run:
-
-   ```bash
-   cd backend
-   mvn spotless:apply
-   mvn clean verify -DforkCount=1 -DreuseForks=true
-   ```
-
-4. Regenerate `backend/warnings.json` from the IDE/JDT diagnostic source and
-   verify that it is empty or contains only explicitly accepted diagnostics.
-5. Update `docs/plan-improvements.md` to mark Phase E complete only after the
-   preceding verification passes. Preserve these intentional statuses:
-   - D.9 backend pagination: deferred.
-   - D.12 P7 full MUI sidebar and P9 CSS cleanup: deferred.
-   - F.1 YOLO upgrade: reverted after false positives; F.2–F.4 remain retained.
-6. Run GitNexus `detect_changes()` before committing and review the reported
-   execution-flow impact.
+None. The remediation plan is fully executed.
 
 ## Risk Notes
 

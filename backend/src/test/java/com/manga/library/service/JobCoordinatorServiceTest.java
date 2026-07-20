@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@SuppressWarnings({"null", "unchecked"})
+@SuppressWarnings("null")
 public class JobCoordinatorServiceTest {
 
   @Autowired private JobCoordinatorService jobCoordinatorService;
@@ -32,7 +32,6 @@ public class JobCoordinatorServiceTest {
   @Autowired private PageRepository pageRepository;
   @Autowired private ChapterRepository chapterRepository;
   @Autowired private SeriesRepository seriesRepository;
-  @Autowired private SystemSettingsService systemSettingsService;
 
   @org.springframework.boot.test.mock.mockito.MockBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
@@ -766,13 +765,7 @@ public class JobCoordinatorServiceTest {
     seriesRepository.delete(series);
   }
 
-  @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
-  }
-
-  @SuppressWarnings("unchecked")
-  private <T> T anyGeneric(Class<?> clazz) {
-    return (T) org.mockito.ArgumentMatchers.any(clazz);
   }
 }

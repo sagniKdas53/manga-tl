@@ -492,7 +492,7 @@ public class SeriesController {
       }
 
       // Sort alphabetically by filename to maintain order
-      imageEntries.sort(Comparator.comparing(ZipImageEntry::getName));
+      imageEntries.sort(Comparator.comparing(z -> z.getName()));
 
       // 3. Import each page
       int pageNum = 1;
