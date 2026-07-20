@@ -2,8 +2,6 @@ package com.manga.library.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.io.File;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -82,8 +80,7 @@ public class CostEstimationService {
     }
   }
 
-  @Autowired
-  private com.manga.library.repository.ModelRateRepository modelRateRepository;
+  private final com.manga.library.repository.ModelRateRepository modelRateRepository;
 
   private Map<String, Double> getModelRates(String model, String provider) {
     // 1. Try Redis first

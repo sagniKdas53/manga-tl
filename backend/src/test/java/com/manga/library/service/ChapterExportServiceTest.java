@@ -103,7 +103,7 @@ public class ChapterExportServiceTest {
         .thenReturn("mocked-path");
 
     assertDoesNotThrow(
-        () -> chapterExportService.buildAndUploadExport(chapterId, userId, exportId));
+        () -> chapterExportService.buildAndUploadExport(chapterId, userId, false));
 
     verify(minioService).uploadFile(anyString(), any(byte[].class), eq("application/zip"));
     verify(sseService)
@@ -151,7 +151,7 @@ public class ChapterExportServiceTest {
             });
 
     assertDoesNotThrow(
-        () -> chapterExportService.buildAndUploadExport(chapterId, userId, exportId));
+        () -> chapterExportService.buildAndUploadExport(chapterId, userId, false));
 
     verify(minioService, never()).uploadFile(anyString(), any(byte[].class), anyString());
     verify(sseService)

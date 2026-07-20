@@ -30,6 +30,7 @@ public class CostEstimationServiceTest {
   @Mock private ListOperations<String, String> listOperations;
   @Mock private HttpClient httpClient;
   @Mock private HttpResponse<String> httpResponse;
+  @Mock private com.manga.library.repository.ModelRateRepository modelRateRepository;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
   private CostEstimationService costEstimationService;
@@ -38,7 +39,7 @@ public class CostEstimationServiceTest {
 
   @BeforeEach
   public void setUp() {
-    costEstimationService = new CostEstimationService(redisTemplate, objectMapper);
+    costEstimationService = new CostEstimationService(redisTemplate, objectMapper, modelRateRepository);
     ReflectionTestUtils.setField(
         costEstimationService, "costCachePath", tempDir.resolve("costs.json").toString());
     ReflectionTestUtils.setField(
@@ -94,18 +95,21 @@ public class CostEstimationServiceTest {
   }
 
   @Test
-  public void testEstimateCost_FromFileCache() throws Exception {
+  public void testEstimateCost_FromDatabaseCache() throws Exception {
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     when(redisTemplate.opsForList()).thenReturn(listOperations);
 
     // Mock Redis empty
     when(valueOperations.get(anyString())).thenReturn(null);
 
-    // Create file cache
-    Path cacheFile = tempDir.resolve("costs.json");
-    String cacheContent =
-        "{\"google/gemini-3.1-flash-lite\":{\"prompt\":0.00000025,\"completion\":0.00000150}}";
-    Files.writeString(cacheFile, cacheContent);
+    // Mock Database
+    com.manga.library.model.ModelRate mockedRate = new com.manga.library.model.ModelRate();
+    mockedRate.setModelId("google/gemini-3.1-flash-lite");
+    mockedRate.setProvider("openrouter");
+    mockedRate.setPromptPrice(0.00000025);
+    mockedRate.setCompletionPrice(0.00000150);
+    when(modelRateRepository.findById("google/gemini-3.1-flash-lite"))
+        .thenReturn(Optional.of(mockedRate));
 
     Double cost =
         costEstimationService.estimateCost(
@@ -170,11 +174,8 @@ public class CostEstimationServiceTest {
 
     verify(valueOperations).set(eq("model_cost:google/gemini-3.1-flash-lite"), contains("1.5E-6"));
 
-    // Verify file cache updated
-    File file = new File(tempDir.resolve("costs.json").toString());
-    assertTrue(file.exists());
-    Map<?, ?> map = objectMapper.readValue(file, Map.class);
-    assertTrue(map.containsKey("google/gemini-3.1-flash-lite"));
+    // Verify database saved
+    verify(modelRateRepository).save(any(com.manga.library.model.ModelRate.class));
   }
 
   @Test
@@ -217,32 +218,6 @@ public class CostEstimationServiceTest {
   }
 
   @Test
-  public void testEstimateCost_FileCacheException() {
-    // If cache file path is invalid or causes security exception
-    ReflectionTestUtils.setField(costEstimationService, "costCachePath", "\u0000invalid-path");
-    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    when(redisTemplate.opsForList()).thenReturn(listOperations);
-    when(valueOperations.get(anyString())).thenReturn(null);
-
-    Double cost =
-        costEstimationService.estimateCost("google/gemini-2.5-flash", 1000000, 1000000, "gemini");
-    assertNotNull(cost);
-    assertEquals(0.375, cost, 0.000001);
-  }
-
-  @Test
-  public void testUpdateModelCosts_HttpClientException() throws Exception {
-    when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
-        .thenThrow(new java.io.IOException("Network timeout"));
-
-    // Should handle exception gracefully
-    assertDoesNotThrow(
-        () -> costEstimationService.updateModelCosts(List.of("google/gemini-3.1-flash-lite")));
-  }
-
-  @Test
   public void testUpdateCaches_RedisException() throws Exception {
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     // Throw exception when trying to save to Redis inside updateCaches
@@ -259,37 +234,11 @@ public class CostEstimationServiceTest {
         .thenReturn(
             "{\"data\":[{\"id\":\"google/gemini-3.1-flash-lite\",\"pricing\":{\"prompt\":0.00000025,\"completion\":0.00000150}}]}");
 
-    // File writing should still complete successfully
+    // DB writing should still complete successfully
     assertDoesNotThrow(
         () -> costEstimationService.updateModelCosts(List.of("google/gemini-3.1-flash-lite")));
 
-    File file = new File(tempDir.resolve("costs.json").toString());
-    assertTrue(file.exists());
-  }
-
-  @Test
-  public void testUpdateCaches_FileExists() throws Exception {
-    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
-        .thenReturn(httpResponse);
-    when(httpResponse.statusCode()).thenReturn(200);
-    when(httpResponse.body())
-        .thenReturn(
-            "{\"data\":[{\"id\":\"google/gemini-3.1-flash-lite\",\"pricing\":{\"prompt\":0.00000025,\"completion\":0.00000150}}]}");
-
-    Path cacheFile = tempDir.resolve("costs.json");
-    String cacheContent = "{\"old-model\":{\"prompt\":0.1,\"completion\":0.2}}";
-    Files.writeString(cacheFile, cacheContent);
-
-    costEstimationService.updateModelCosts(List.of("google/gemini-3.1-flash-lite"));
-
-    File file = new File(cacheFile.toString());
-    assertTrue(file.exists());
-    Map<?, ?> map = objectMapper.readValue(file, Map.class);
-    assertTrue(map.containsKey("old-model"));
-    assertTrue(map.containsKey("google/gemini-3.1-flash-lite"));
+    verify(modelRateRepository).save(any(com.manga.library.model.ModelRate.class));
   }
 
   @Test

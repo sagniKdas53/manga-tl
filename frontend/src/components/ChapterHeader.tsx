@@ -113,7 +113,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                       Pages
                     </Typography>
-                    <Typography variant="body1" fontWeight="medium">
+                    <Typography variant="body1" sx={{ fontWeight: "medium" }}>
                       {selectedChapter.pageCount || 0}
                     </Typography>
                   </Grid>
