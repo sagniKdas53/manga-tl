@@ -10,6 +10,12 @@ Now if I go back to the chapter and open the 4th page again and try to delete it
 
 Analyze and fix this issue.
 
+## Front-end prod logging also needs to be disabled for
+
+```log
+[Fetch Override] Rewrote API request: /api/series/67417d0e-14fe-4429-b449-d52350761e09 -> /tlhub/api/series/67417d0e-14fe-4429-b449-d52350761e09 (detected context: /tlhub) useSlotProps-Bw4q-sx8.js:37:3035
+```
+
 ---
 
 ## Code Review Request

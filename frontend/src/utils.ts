@@ -27,9 +27,11 @@ window.fetch = async (
   const context = getContextPath();
   if (typeof targetUrl === "string" && targetUrl.startsWith("/api")) {
     targetUrl = context + targetUrl;
-    console.log(
-      `[Fetch Override] Rewrote API request: ${input} -> ${targetUrl} (detected context: ${context})`,
-    );
+    if (import.meta.env.DEV) {
+      console.log(
+        `[Fetch Override] Rewrote API request: ${input} -> ${targetUrl} (detected context: ${context})`,
+      );
+    }
   }
 
   const MAX_RETRIES = 2;
