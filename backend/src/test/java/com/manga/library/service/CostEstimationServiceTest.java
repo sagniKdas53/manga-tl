@@ -4,11 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.File;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +37,8 @@ public class CostEstimationServiceTest {
 
   @BeforeEach
   public void setUp() {
-    costEstimationService = new CostEstimationService(redisTemplate, objectMapper, modelRateRepository);
+    costEstimationService =
+        new CostEstimationService(redisTemplate, objectMapper, modelRateRepository);
     ReflectionTestUtils.setField(
         costEstimationService, "costCachePath", tempDir.resolve("costs.json").toString());
     ReflectionTestUtils.setField(

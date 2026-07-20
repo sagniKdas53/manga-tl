@@ -5,7 +5,6 @@ import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
-import java.net.http.HttpClient;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -24,9 +23,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 @Slf4j
 public class JobCoordinatorService {
-
-  private final HttpClient httpClient =
-      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
@@ -109,7 +105,12 @@ public class JobCoordinatorService {
     log.info("Starting pipeline for image {} and chapter {}", imageId, chapterId);
     if (redisTemplate != null && redisTemplate.opsForValue() != null) {
       String traceId = UUID.randomUUID().toString();
-      redisTemplate.opsForValue().set("pipeline:trace:" + imageId, traceId, Duration.ofHours(2));
+      redisTemplate
+          .opsForValue()
+          .set(
+              Objects.requireNonNull("pipeline:trace:" + imageId),
+              Objects.requireNonNull(traceId),
+              Objects.requireNonNull(Duration.ofHours(2)));
     }
     enqueueJob("panel-detection", imageId, chapterId);
   }
@@ -152,7 +153,10 @@ public class JobCoordinatorService {
           traceId = UUID.randomUUID().toString();
           redisTemplate
               .opsForValue()
-              .set("pipeline:trace:" + imageId, traceId, Duration.ofHours(2));
+              .set(
+                  Objects.requireNonNull("pipeline:trace:" + imageId),
+                  Objects.requireNonNull(traceId),
+                  Objects.requireNonNull(Duration.ofHours(2)));
         }
       } else {
         traceId = UUID.randomUUID().toString();
@@ -299,7 +303,9 @@ public class JobCoordinatorService {
   public void pushJobToRedis(Job job) {
     try {
       String queueName = "queue:" + job.getType();
-      redisTemplate.opsForList().rightPush(queueName, job.getPayload());
+      redisTemplate
+          .opsForList()
+          .rightPush(Objects.requireNonNull(queueName), Objects.requireNonNull(job.getPayload()));
       log.info("Enqueued {} job {} onto {}", job.getType(), job.getId(), queueName);
     } catch (Exception e) {
       log.error("Failed to push job {} to Redis", job.getId(), e);
@@ -456,15 +462,15 @@ public class JobCoordinatorService {
     String ocrReason = redisTemplate.opsForValue().get("image:ocr:reason:" + imageId);
     if (ocrReason != null) {
       metadata.put("layer_name", "OCR (" + ocrReason + ")");
-      redisTemplate.delete("image:ocr:reason:" + imageId);
+      redisTemplate.delete(Objects.requireNonNull("image:ocr:reason:" + imageId));
     } else {
       metadata.put("layer_name", "OCR");
     }
 
     if (dto.getCost() != null) {
       metadata.set("cost", objectMapper.valueToTree(dto.getCost()));
-      if (dto.getCost() instanceof Map) {
-        saveJobCosts(imageId, (Map<String, Object>) dto.getCost());
+      if (dto.getCost() instanceof Map<?, ?> cost) {
+        saveJobCosts(imageId, stringKeyedMap(cost));
       }
     }
 
@@ -1235,7 +1241,11 @@ public class JobCoordinatorService {
       redisTemplate.delete("pipeline:trace:" + imageId);
       return "MANUAL_REVIEW";
     } else if (needsRetry && retries < 2) {
-      redisTemplate.opsForValue().set(retryKey, String.valueOf(retries + 1));
+      redisTemplate
+          .opsForValue()
+          .set(
+              Objects.requireNonNull(retryKey),
+              Objects.requireNonNull(String.valueOf(retries + 1)));
 
       if (!regionsToReOcr.isEmpty()) {
         log.info(
@@ -1299,34 +1309,49 @@ public class JobCoordinatorService {
       return "#000000";
     }
   }
+
   private void saveJobCosts(UUID imageId, Map<String, Object> costMap) {
     if (costMap == null || costMap.isEmpty()) return;
     try {
-      if (costMap.containsKey("breakdown") && costMap.get("breakdown") instanceof List) {
-        List<Map<String, Object>> breakdown = (List<Map<String, Object>>) costMap.get("breakdown");
-        for (Map<String, Object> c : breakdown) {
-          JobCost jc = new JobCost();
-          jc.setImageId(imageId);
-          if (c.get("provider") != null) jc.setProvider(c.get("provider").toString());
-          if (c.get("model") != null) jc.setModel(c.get("model").toString());
-          if (c.get("prompt_tokens") != null) jc.setPromptTokens(((Number) c.get("prompt_tokens")).intValue());
-          if (c.get("completion_tokens") != null) jc.setCompletionTokens(((Number) c.get("completion_tokens")).intValue());
-          if (c.get("estimated_cost") != null) jc.setEstimatedCost(((Number) c.get("estimated_cost")).doubleValue());
-          jobCostRepository.save(jc);
+      if (costMap.get("breakdown") instanceof List<?> breakdown) {
+        for (Object entry : breakdown) {
+          if (entry instanceof Map<?, ?> costEntry) {
+            saveJobCostEntry(imageId, stringKeyedMap(costEntry));
+          }
         }
       } else if (costMap.containsKey("estimated_cost")) {
-          JobCost jc = new JobCost();
-          jc.setImageId(imageId);
-          if (costMap.get("provider") != null) jc.setProvider(costMap.get("provider").toString());
-          if (costMap.get("model") != null) jc.setModel(costMap.get("model").toString());
-          if (costMap.get("prompt_tokens") != null) jc.setPromptTokens(((Number) costMap.get("prompt_tokens")).intValue());
-          if (costMap.get("completion_tokens") != null) jc.setCompletionTokens(((Number) costMap.get("completion_tokens")).intValue());
-          if (costMap.get("estimated_cost") != null) jc.setEstimatedCost(((Number) costMap.get("estimated_cost")).doubleValue());
-          jobCostRepository.save(jc);
+        saveJobCostEntry(imageId, costMap);
       }
     } catch (Exception e) {
       log.error("Error saving job costs for image " + imageId, e);
     }
   }
 
+  private Map<String, Object> stringKeyedMap(Map<?, ?> source) {
+    Map<String, Object> result = new HashMap<>();
+    source.forEach(
+        (key, value) -> {
+          if (key instanceof String stringKey) {
+            result.put(stringKey, value);
+          }
+        });
+    return result;
+  }
+
+  private void saveJobCostEntry(UUID imageId, Map<String, Object> cost) {
+    JobCost jobCost = new JobCost();
+    jobCost.setImageId(imageId);
+    if (cost.get("provider") != null) jobCost.setProvider(cost.get("provider").toString());
+    if (cost.get("model") != null) jobCost.setModel(cost.get("model").toString());
+    if (cost.get("prompt_tokens") instanceof Number promptTokens) {
+      jobCost.setPromptTokens(promptTokens.intValue());
+    }
+    if (cost.get("completion_tokens") instanceof Number completionTokens) {
+      jobCost.setCompletionTokens(completionTokens.intValue());
+    }
+    if (cost.get("estimated_cost") instanceof Number estimatedCost) {
+      jobCost.setEstimatedCost(estimatedCost.doubleValue());
+    }
+    jobCostRepository.save(jobCost);
+  }
 }

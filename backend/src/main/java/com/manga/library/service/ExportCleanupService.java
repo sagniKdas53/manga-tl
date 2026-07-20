@@ -27,9 +27,7 @@ public class ExportCleanupService {
   @Value("${app.export.retention.days:7}")
   private int retentionDays;
 
-  /**
-   * Run every day at 2:00 AM server time.
-   */
+  /** Run every day at 2:00 AM server time. */
   @Scheduled(cron = "0 0 2 * * ?")
   public void cleanupOldExports() {
     log.info("Starting scheduled cleanup of old chapter exports in MinIO...");

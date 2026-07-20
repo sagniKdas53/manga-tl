@@ -89,7 +89,7 @@ public class WorkerDispatcherService {
       while (processed) {
         processed = false;
 
-        String jobJson = redisTemplate.opsForList().leftPop(queue);
+        String jobJson = redisTemplate.opsForList().leftPop(Objects.requireNonNull(queue));
         if (jobJson == null) continue;
 
         boolean sent = false;
@@ -129,7 +129,9 @@ public class WorkerDispatcherService {
         }
 
         if (!sent) {
-          redisTemplate.opsForList().leftPush(queue, jobJson);
+          redisTemplate
+              .opsForList()
+              .leftPush(Objects.requireNonNull(queue), Objects.requireNonNull(jobJson));
           return;
         }
       }

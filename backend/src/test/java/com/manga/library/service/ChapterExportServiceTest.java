@@ -11,6 +11,7 @@ import com.manga.library.model.Image;
 import com.manga.library.model.Page;
 import com.manga.library.model.Series;
 import com.manga.library.repository.ChapterRepository;
+import com.manga.library.repository.JobCostRepository;
 import com.manga.library.repository.LayerElementRepository;
 import com.manga.library.repository.LayerRepository;
 import com.manga.library.repository.PageRepository;
@@ -33,6 +34,7 @@ public class ChapterExportServiceTest {
   @Mock private MinioService minioService;
   @Mock private LayerRepository layerRepository;
   @Mock private LayerElementRepository layerElementRepository;
+  @Mock private JobCostRepository jobCostRepository;
   @Mock private SseService sseService;
 
   @InjectMocks private ChapterExportService chapterExportService;
@@ -95,6 +97,7 @@ public class ChapterExportServiceTest {
     layer.setMetadataJson(meta);
 
     when(layerRepository.findByImageId(image.getId())).thenReturn(List.of(layer));
+    when(jobCostRepository.findByImageId(image.getId())).thenReturn(List.of());
 
     when(minioService.downloadFile("originals/001.png"))
         .thenReturn(new ByteArrayInputStream(new byte[] {1, 2, 3}));
@@ -102,8 +105,7 @@ public class ChapterExportServiceTest {
     when(minioService.uploadFile(anyString(), any(byte[].class), eq("application/zip")))
         .thenReturn("mocked-path");
 
-    assertDoesNotThrow(
-        () -> chapterExportService.buildAndUploadExport(chapterId, userId, false));
+    assertDoesNotThrow(() -> chapterExportService.buildAndUploadExport(chapterId, userId, false));
 
     verify(minioService).uploadFile(anyString(), any(byte[].class), eq("application/zip"));
     verify(sseService)
@@ -139,6 +141,7 @@ public class ChapterExportServiceTest {
     layer.setTargetLanguage("en");
     layer.setVisible(true);
     when(layerRepository.findByImageId(image.getId())).thenReturn(List.of(layer));
+    when(jobCostRepository.findByImageId(image.getId())).thenReturn(List.of());
 
     // Fake the hash check for cache hit by mocking minioService.fileExists to true when it matches
     // the hash
@@ -150,8 +153,7 @@ public class ChapterExportServiceTest {
               return path.startsWith("exports/");
             });
 
-    assertDoesNotThrow(
-        () -> chapterExportService.buildAndUploadExport(chapterId, userId, false));
+    assertDoesNotThrow(() -> chapterExportService.buildAndUploadExport(chapterId, userId, false));
 
     verify(minioService, never()).uploadFile(anyString(), any(byte[].class), anyString());
     verify(sseService)

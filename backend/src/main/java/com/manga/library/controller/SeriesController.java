@@ -41,7 +41,6 @@ public class SeriesController {
   private final JobCoordinatorService jobCoordinatorService;
   private final ChapterExportService chapterExportService;
   private final SystemSettingsService systemSettingsService;
-  private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
@@ -625,12 +624,12 @@ public class SeriesController {
     return ResponseEntity.status(202).body(response);
   }
 
-
   @DeleteMapping("/chapters/{chapterId}/exports")
   public ResponseEntity<?> clearExports(@PathVariable UUID chapterId) {
     chapterExportService.clearChapterExports(chapterId);
     return ResponseEntity.ok(Map.of("message", "Cleared exports for chapter"));
   }
+
   @GetMapping("/chapters/exports/{exportId}/download")
   public ResponseEntity<byte[]> downloadExport(@PathVariable String exportId) {
     Objects.requireNonNull(exportId, "exportId cannot be null");

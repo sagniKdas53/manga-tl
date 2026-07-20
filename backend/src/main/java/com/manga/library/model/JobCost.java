@@ -6,7 +6,6 @@ import java.util.UUID;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.GenericGenerator;
 
 @Data
 @NoArgsConstructor
@@ -15,8 +14,7 @@ import org.hibernate.annotations.GenericGenerator;
 public class JobCost {
 
   @Id
-  @GeneratedValue(generator = "UUID")
-  @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
+  @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
 
   @Column(name = "job_id")

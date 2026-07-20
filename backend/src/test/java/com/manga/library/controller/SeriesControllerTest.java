@@ -106,7 +106,7 @@ public class SeriesControllerTest {
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
                     "/api/series/" + seriesId)
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-        .content(json))
+                .content(json))
         .andExpect(status().isOk());
 
     verify(series).setRoutingStrategy("highest-throughput");
@@ -139,13 +139,14 @@ public class SeriesControllerTest {
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
 
-    String json = "{\"chapterNumber\":1.0,\"title\":\"Ch 1\",\"routingStrategy\":\"highest-throughput\"}";
+    String json =
+        "{\"chapterNumber\":1.0,\"title\":\"Ch 1\",\"routingStrategy\":\"highest-throughput\"}";
     mockMvc
         .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
                     "/api/series/" + seriesId + "/chapters")
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-        .content(json))
+                .content(json))
         .andExpect(status().isOk());
 
     verify(chapterRepository)

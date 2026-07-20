@@ -9,5 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface JobCostRepository extends JpaRepository<JobCost, UUID> {
   List<JobCost> findByImageId(UUID imageId);
+
   List<JobCost> findByJobId(String jobId);
 }
