@@ -193,6 +193,7 @@ describe("SeriesDetails Component", () => {
             qaLlmModel: null,
             qaVlmModel: null,
             qaMode: null,
+            routingStrategy: null,
           }),
         });
         expect(mockSetChapters).toHaveBeenCalled();
@@ -262,6 +263,7 @@ describe("SeriesDetails Component", () => {
             qaLlmModel: null,
             qaVlmModel: null,
             qaMode: null,
+            routingStrategy: null,
           }),
         });
         expect(mockSetChapters).toHaveBeenCalled();
@@ -322,6 +324,7 @@ describe("SeriesDetails Component", () => {
           qaLlmModel: null,
           qaVlmModel: null,
           qaMode: null,
+          routingStrategy: null,
         }),
       });
       expect(mockSetSelectedSeries).toHaveBeenCalled();
@@ -452,6 +455,7 @@ describe("SeriesDetails Component", () => {
           qaLlmModel: null,
           qaVlmModel: null,
           qaMode: null,
+          routingStrategy: null,
         }),
       });
       expect(mockSetChapters).toHaveBeenCalled();

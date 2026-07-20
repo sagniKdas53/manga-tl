@@ -234,7 +234,12 @@ public class JobCoordinatorService {
                   "qaLlmModel",
                   resolveModel(
                       chapter.getQaLlmModel(), series.getQaLlmModel(), settings.getQaLlmModel()));
-              job.put("routingStrategy", settings.getRoutingStrategy());
+              job.put(
+                  "routingStrategy",
+                  resolveModel(
+                      chapter.getRoutingStrategy(),
+                      series.getRoutingStrategy(),
+                      settings.getRoutingStrategy()));
               job.put(
                   "qaVlmModel",
                   resolveModel(

@@ -100,14 +100,16 @@ public class SeriesControllerTest {
     when(seriesRepository.save(any(Series.class))).thenReturn(series);
 
     String json =
-        "{\"title\":\"Updated Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
+        "{\"title\":\"Updated Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\",\"routingStrategy\":\"highest-throughput\"}";
     mockMvc
         .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
                     "/api/series/" + seriesId)
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .content(json))
+        .content(json))
         .andExpect(status().isOk());
+
+    verify(series).setRoutingStrategy("highest-throughput");
   }
 
   @Test
@@ -137,14 +139,17 @@ public class SeriesControllerTest {
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
 
-    String json = "{\"chapterNumber\":1.0,\"title\":\"Ch 1\"}";
+    String json = "{\"chapterNumber\":1.0,\"title\":\"Ch 1\",\"routingStrategy\":\"highest-throughput\"}";
     mockMvc
         .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
                     "/api/series/" + seriesId + "/chapters")
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .content(json))
+        .content(json))
         .andExpect(status().isOk());
+
+    verify(chapterRepository)
+        .save(argThat(saved -> "highest-throughput".equals(saved.getRoutingStrategy())));
   }
 
   @Test

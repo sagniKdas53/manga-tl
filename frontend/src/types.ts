@@ -22,6 +22,7 @@ export interface Series {
   qaLlmModel?: string;
   qaVlmModel?: string;
   qaMode?: string;
+  routingStrategy?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -54,6 +55,7 @@ export interface Chapter {
   qaLlmModel?: string;
   qaVlmModel?: string;
   qaMode?: string;
+  routingStrategy?: string;
   useContextMemory?: boolean;
   pageCount?: number;
   createdAt?: string;
