@@ -649,7 +649,7 @@ public class SeriesController {
 
     if (!minioService.fileExists("exports/" + exportId + ".zip")) {
       return ResponseEntity.status(org.springframework.http.HttpStatus.GONE)
-          .body(java.util.Map.of("message", "Export expired, please re-export to download."));
+          .body(Map.of("message", "Export expired, please re-export to download."));
     }
 
     try {

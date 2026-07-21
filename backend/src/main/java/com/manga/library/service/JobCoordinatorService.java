@@ -255,10 +255,14 @@ public class JobCoordinatorService {
               // useFallbackModels: chapter overrides series; if neither is explicitly set, default to true
               Boolean chapterFallback = chapter.getUseFallbackModels();
               Boolean seriesFallback = series.getUseFallbackModels();
-              boolean resolvedFallback =
-                  (chapterFallback != null) ? chapterFallback
-                  : (seriesFallback != null) ? seriesFallback
-                  : true;
+              boolean resolvedFallback;
+              if (chapterFallback != null) {
+                resolvedFallback = chapterFallback;
+              } else if (seriesFallback != null) {
+                resolvedFallback = seriesFallback;
+              } else {
+                resolvedFallback = true;
+              }
               job.put("useFallbackModels", resolvedFallback);
             }
           });
