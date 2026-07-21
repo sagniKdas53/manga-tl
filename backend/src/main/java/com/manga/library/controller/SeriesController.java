@@ -193,6 +193,15 @@ public class SeriesController {
             .sourceLanguage(sourceLang != null ? sourceLang : "ja")
             .targetLanguage(targetLang)
             .readingDirection(dto.getReadingDirection())
+            .ocrProvider(dto.getOcrProvider())
+            .ocrModel(dto.getOcrModel())
+            .tlProvider(dto.getTlProvider())
+            .tlModel(dto.getTlModel())
+            .qaProvider(dto.getQaProvider())
+            .qaLlmModel(dto.getQaLlmModel())
+            .qaVlmModel(dto.getQaVlmModel())
+            .qaMode(dto.getQaMode())
+            .routingStrategy(dto.getRoutingStrategy())
             .createdBy(user)
             .build();
     Objects.requireNonNull(series, "series cannot be null");

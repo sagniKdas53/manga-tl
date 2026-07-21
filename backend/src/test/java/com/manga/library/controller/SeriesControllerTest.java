@@ -94,6 +94,65 @@ public class SeriesControllerTest {
   }
 
   @Test
+  public void testCreateSeries_WithOverrides() throws Exception {
+    Series series =
+        Series.builder()
+            .id(UUID.randomUUID())
+            .title("Override Series")
+            .ocrProvider("openrouter")
+            .ocrModel("google/gemini-2.5-flash")
+            .tlProvider("openrouter")
+            .tlModel("deepseek/deepseek-v4-flash")
+            .qaProvider("openrouter")
+            .qaLlmModel("tencent/hy3:free")
+            .qaVlmModel("google/gemini-2.5-flash")
+            .qaMode("hybrid")
+            .routingStrategy("lowest-cost")
+            .build();
+    when(seriesRepository.save(any(Series.class))).thenReturn(series);
+
+    String json =
+        "{"
+            + "\"title\":\"Override Series\","
+            + "\"originalLanguage\":\"ja\","
+            + "\"targetLanguage\":\"en\","
+            + "\"ocrProvider\":\"openrouter\","
+            + "\"ocrModel\":\"google/gemini-2.5-flash\","
+            + "\"tlProvider\":\"openrouter\","
+            + "\"tlModel\":\"deepseek/deepseek-v4-flash\","
+            + "\"qaProvider\":\"openrouter\","
+            + "\"qaLlmModel\":\"tencent/hy3:free\","
+            + "\"qaVlmModel\":\"google/gemini-2.5-flash\","
+            + "\"qaMode\":\"hybrid\","
+            + "\"routingStrategy\":\"lowest-cost\""
+            + "}";
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/series")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(json))
+        .andExpect(status().isOk());
+
+    org.mockito.ArgumentCaptor<Series> savedCaptor =
+        org.mockito.ArgumentCaptor.forClass(Series.class);
+    verify(seriesRepository).save(savedCaptor.capture());
+    Series saved = savedCaptor.getValue();
+
+    org.junit.jupiter.api.Assertions.assertEquals("openrouter", saved.getOcrProvider());
+    org.junit.jupiter.api.Assertions.assertEquals("google/gemini-2.5-flash", saved.getOcrModel());
+    org.junit.jupiter.api.Assertions.assertEquals("openrouter", saved.getTlProvider());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        "deepseek/deepseek-v4-flash", saved.getTlModel());
+    org.junit.jupiter.api.Assertions.assertEquals("openrouter", saved.getQaProvider());
+    org.junit.jupiter.api.Assertions.assertEquals("tencent/hy3:free", saved.getQaLlmModel());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        "google/gemini-2.5-flash", saved.getQaVlmModel());
+    org.junit.jupiter.api.Assertions.assertEquals("hybrid", saved.getQaMode());
+    org.junit.jupiter.api.Assertions.assertEquals("lowest-cost", saved.getRoutingStrategy());
+  }
+
+  @Test
   public void testUpdateSeries_Success() throws Exception {
     UUID seriesId = UUID.randomUUID();
     Series series = Series.builder().id(seriesId).title("Old Series").build();
