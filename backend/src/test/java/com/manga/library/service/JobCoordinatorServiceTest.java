@@ -69,25 +69,26 @@ public class JobCoordinatorServiceTest {
 
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
         mockGeneric(org.springframework.data.redis.core.ListOperations.class);
-    org.mockito.Mockito.when(
-            listOps.rightPush(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
-        .thenAnswer(
+    org.mockito.Mockito.doAnswer(
             invocation -> {
-              String key = invocation.getArgument(0);
-              String val = invocation.getArgument(1);
+              String key = invocation.getArgument(0).toString();
+              String val = invocation.getArgument(1).toString();
               mockRedisListStore.computeIfAbsent(key, k -> new ArrayList<>()).add(val);
               if (rightPushHook != null) {
                 rightPushHook.accept(key, val);
               }
               return (long) mockRedisListStore.get(key).size();
-            });
-    org.mockito.Mockito.when(listOps.size(org.mockito.Mockito.anyString()))
-        .thenAnswer(
+            })
+        .when(listOps)
+        .rightPush(org.mockito.Mockito.any(), org.mockito.Mockito.any());
+    org.mockito.Mockito.doAnswer(
             invocation -> {
-              String key = invocation.getArgument(0);
+              String key = invocation.getArgument(0).toString();
               List<String> list = mockRedisListStore.get(key);
               return list == null ? 0L : (long) list.size();
-            });
+            })
+        .when(listOps)
+        .size(org.mockito.Mockito.any());
 
     org.springframework.data.redis.core.StringRedisTemplate dummyTemplate = new org.springframework.data.redis.core.StringRedisTemplate() {
         @Override

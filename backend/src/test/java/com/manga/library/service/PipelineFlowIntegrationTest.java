@@ -110,33 +110,34 @@ public class PipelineFlowIntegrationTest {
 
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
         mockGeneric(org.springframework.data.redis.core.ListOperations.class);
-    org.mockito.Mockito.when(
-            listOps.rightPush(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
-        .thenAnswer(
+    org.mockito.Mockito.doAnswer(
             invocation -> {
-              String key = invocation.getArgument(0);
-              String val = invocation.getArgument(1);
+              String key = invocation.getArgument(0).toString();
+              String val = invocation.getArgument(1).toString();
               mockRedisListStore.computeIfAbsent(key, k -> new ArrayList<>()).add(val);
               return (long) mockRedisListStore.get(key).size();
-            });
-    org.mockito.Mockito.when(listOps.size(org.mockito.Mockito.anyString()))
-        .thenAnswer(
+            })
+        .when(listOps)
+        .rightPush(org.mockito.Mockito.any(), org.mockito.Mockito.any());
+    org.mockito.Mockito.doAnswer(
             invocation -> {
-              String key = invocation.getArgument(0);
+              String key = invocation.getArgument(0).toString();
               List<String> list = mockRedisListStore.get(key);
               return list == null ? 0L : (long) list.size();
-            });
+            })
+        .when(listOps)
+        .size(org.mockito.Mockito.any());
 
-    org.mockito.Mockito.when(redisTemplate.opsForValue()).thenReturn(valueOps);
-    org.mockito.Mockito.when(redisTemplate.opsForList()).thenReturn(listOps);
-    org.mockito.Mockito.when(redisTemplate.delete(org.mockito.Mockito.anyString()))
-        .thenAnswer(
+    org.mockito.Mockito.doReturn(valueOps).when(redisTemplate).opsForValue();
+    org.mockito.Mockito.doReturn(listOps).when(redisTemplate).opsForList();
+    org.mockito.Mockito.doAnswer(
             invocation -> {
               String key = invocation.getArgument(0);
               boolean existed =
                   mockRedisValueStore.remove(key) != null || mockRedisListStore.remove(key) != null;
               return existed;
-            });
+            })
+        .when(redisTemplate).delete(org.mockito.Mockito.anyString());
 
     // Create user and token
     User adminUser =
