@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
@@ -13,6 +13,16 @@ import EditIcon from "@mui/icons-material/Edit";
 import UploadIcon from "@mui/icons-material/Upload";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import ButtonGroup from "@mui/material/ButtonGroup";
+import ClickAwayListener from "@mui/material/ClickAwayListener";
+import Grow from "@mui/material/Grow";
+import Paper from "@mui/material/Paper";
+import Popper from "@mui/material/Popper";
+import MenuList from "@mui/material/MenuList";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import type { Series, Chapter } from "../types";
 
 export interface ChapterHeaderProps {
@@ -43,6 +53,23 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   onDeleteClick,
   isImporting,
 }) => {
+  const [openSplit, setOpenSplit] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  
+  const [overflowAnchorEl, setOverflowAnchorEl] = useState<null | HTMLElement>(null);
+  const openOverflow = Boolean(overflowAnchorEl);
+
+  const handleToggleSplit = () => {
+    setOpenSplit((prevOpen) => !prevOpen);
+  };
+
+  const handleCloseSplit = (event: Event) => {
+    if (anchorRef.current && anchorRef.current.contains(event.target as HTMLElement)) {
+      return;
+    }
+    setOpenSplit(false);
+  };
+
   return (
     <Box sx={{ mb: 4 }}>
       <Button
@@ -123,6 +150,12 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     </Typography>
                     <Chip size="small" label={selectedChapter.useContextMemory ? "Enabled" : "Disabled"} color={selectedChapter.useContextMemory ? "success" : "default"} />
                   </Grid>
+                  <Grid>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Fallback Models
+                    </Typography>
+                    <Chip size="small" label={selectedChapter.useFallbackModels === false ? "Disabled" : "Enabled"} color={selectedChapter.useFallbackModels === false ? "warning" : "default"} />
+                  </Grid>
                 </Grid>
 
                 {/* Models Info */}
@@ -131,11 +164,20 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     Configured Models
                   </Typography>
                   <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                    {selectedChapter.resolvedOcr?.provider && (
+                      <Chip size="small" variant="outlined" label={`OCR Provider: ${selectedChapter.resolvedOcr.provider}`} />
+                    )}
                     {selectedChapter.resolvedOcr?.model && (
                       <Chip size="small" variant="outlined" label={`OCR: ${selectedChapter.resolvedOcr.model} ${selectedChapter.resolvedOcr.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
                     )}
+                    {selectedChapter.resolvedTranslation?.provider && (
+                      <Chip size="small" variant="outlined" label={`TL Provider: ${selectedChapter.resolvedTranslation.provider}`} />
+                    )}
                     {selectedChapter.resolvedTranslation?.model && (
                       <Chip size="small" variant="outlined" label={`Translation: ${selectedChapter.resolvedTranslation.model} ${selectedChapter.resolvedTranslation.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
+                    )}
+                    {selectedChapter.resolvedQa?.routingStrategy && (
+                      <Chip size="small" variant="outlined" color="primary" label={`Strategy: ${selectedChapter.resolvedQa.routingStrategy}`} />
                     )}
                     {selectedChapter.resolvedQa?.mode && (
                       <Chip size="small" variant="outlined" label={`QA Mode: ${selectedChapter.resolvedQa.mode} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
@@ -153,25 +195,90 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                 <Divider sx={{ mb: 2, mt: 1 }} />
 
                 {/* Actions Row */}
-                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1, alignItems: "center" }}>
                   <Button variant="contained" startIcon={<UploadIcon />} onClick={onUploadClick}>
                     Upload Page
                   </Button>
                   <Button variant="outlined" startIcon={<UploadIcon />} onClick={onImportClick} disabled={isImporting}>
                     {isImporting ? "Importing..." : "Import Project (ZIP)"}
                   </Button>
-                  <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportClick}>
-                    Export Chapter (ZIP)
-                  </Button>
-                  <Button variant="outlined" onClick={onReexportClick}>
-                    Re-export
-                  </Button>
-                  <Button variant="outlined" color="warning" onClick={onClearExportsClick}>
-                    Clear Exports
-                  </Button>
+
+                  <ButtonGroup variant="outlined" ref={anchorRef} aria-label="split button">
+                    <Button onClick={onExportClick} startIcon={<DownloadIcon />}>
+                      Export Chapter (ZIP)
+                    </Button>
+                    <Button
+                      size="small"
+                      aria-controls={openSplit ? 'split-button-menu' : undefined}
+                      aria-expanded={openSplit ? 'true' : undefined}
+                      aria-label="select export option"
+                      aria-haspopup="menu"
+                      onClick={handleToggleSplit}
+                    >
+                      <ArrowDropDownIcon />
+                    </Button>
+                  </ButtonGroup>
+                  <Popper
+                    sx={{ zIndex: 1 }}
+                    open={openSplit}
+                    anchorEl={anchorRef.current}
+                    role={undefined}
+                    transition
+                    disablePortal
+                  >
+                    {({ TransitionProps, placement }) => (
+                      <Grow
+                        {...TransitionProps}
+                        style={{
+                          transformOrigin:
+                            placement === 'bottom' ? 'center top' : 'center bottom',
+                        }}
+                      >
+                        <Paper>
+                          <ClickAwayListener onClickAway={handleCloseSplit}>
+                            <MenuList id="split-button-menu" autoFocusItem>
+                              <MenuItem
+                                onClick={(event) => {
+                                  onReexportClick();
+                                  setOpenSplit(false);
+                                }}
+                              >
+                                Force Re-export
+                              </MenuItem>
+                            </MenuList>
+                          </ClickAwayListener>
+                        </Paper>
+                      </Grow>
+                    )}
+                  </Popper>
+
                   <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={onDeleteClick}>
                     Delete Chapter
                   </Button>
+                  
+                  <IconButton
+                    onClick={(e) => setOverflowAnchorEl(e.currentTarget)}
+                    size="small"
+                    aria-label="more actions"
+                    aria-controls={openOverflow ? 'chapter-overflow-menu' : undefined}
+                    aria-haspopup="true"
+                    aria-expanded={openOverflow ? 'true' : undefined}
+                  >
+                    <MoreVertIcon />
+                  </IconButton>
+                  <Menu
+                    id="chapter-overflow-menu"
+                    anchorEl={overflowAnchorEl}
+                    open={openOverflow}
+                    onClose={() => setOverflowAnchorEl(null)}
+                    MenuListProps={{
+                      'aria-labelledby': 'basic-button',
+                    }}
+                  >
+                    <MenuItem onClick={() => { onClearExportsClick(); setOverflowAnchorEl(null); }}>
+                      Clear Exports
+                    </MenuItem>
+                  </Menu>
                 </Stack>
               </Box>
             </Grid>
