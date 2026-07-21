@@ -259,7 +259,7 @@ public class ChapterExportService {
         
         Boolean fallback = chapter.getUseFallbackModels();
         if (fallback == null) fallback = chapter.getSeries().getUseFallbackModels();
-        chapterMeta.put("useFallbackModels", fallback != null ? fallback : true);
+        chapterMeta.put("useFallbackModels", fallback != Boolean.FALSE);
       }
 
       if (chapterHasCost) {
