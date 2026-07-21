@@ -109,24 +109,23 @@ public class PipelineFlowIntegrationTest {
             org.mockito.Mockito.any(java.time.Duration.class));
 
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
-        mockGeneric(org.springframework.data.redis.core.ListOperations.class);
-    org.mockito.Mockito.doAnswer(
-            invocation -> {
-              String key = invocation.getArgument(0).toString();
-              String val = invocation.getArgument(1).toString();
-              mockRedisListStore.computeIfAbsent(key, k -> new ArrayList<>()).add(val);
-              return (long) mockRedisListStore.get(key).size();
-            })
-        .when(listOps)
-        .rightPush(org.mockito.Mockito.any(), org.mockito.Mockito.any());
-    org.mockito.Mockito.doAnswer(
-            invocation -> {
-              String key = invocation.getArgument(0).toString();
-              List<String> list = mockRedisListStore.get(key);
-              return list == null ? 0L : (long) list.size();
-            })
-        .when(listOps)
-        .size(org.mockito.Mockito.any());
+        (org.springframework.data.redis.core.ListOperations<String, String>) java.lang.reflect.Proxy.newProxyInstance(
+            getClass().getClassLoader(),
+            new Class<?>[] { org.springframework.data.redis.core.ListOperations.class },
+            (proxy, method, args) -> {
+                if ("rightPush".equals(method.getName())) {
+                    String key = args[0].toString();
+                    String val = args[1].toString();
+                    mockRedisListStore.computeIfAbsent(key, k -> new ArrayList<>()).add(val);
+                    return (long) mockRedisListStore.get(key).size();
+                } else if ("size".equals(method.getName())) {
+                    String key = args[0].toString();
+                    List<String> list = mockRedisListStore.get(key);
+                    return list == null ? 0L : (long) list.size();
+                }
+                return null;
+            }
+        );
 
     org.mockito.Mockito.doReturn(valueOps).when(redisTemplate).opsForValue();
     org.mockito.Mockito.doReturn(listOps).when(redisTemplate).opsForList();
