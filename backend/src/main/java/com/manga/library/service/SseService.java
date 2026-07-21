@@ -231,7 +231,7 @@ public class SseService {
                 .name(Objects.requireNonNull(eventName))
                 .data(Objects.requireNonNull(jsonPayload)));
       } catch (IOException e) {
-        log.error("Failed to send live event to user {}, removing emitter", userId, e);
+        log.warn("Failed to send live event to user {}, removing emitter: {}", userId, e.getMessage());
         emitters.remove(userId);
       }
     }
