@@ -21,6 +21,7 @@ public class ChapterDto {
   private String qaMode;
   private String routingStrategy;
   private Boolean useContextMemory;
+  private Boolean useFallbackModels;
   private Integer pageCount;
   private OffsetDateTime createdAt;
   private OffsetDateTime updatedAt;

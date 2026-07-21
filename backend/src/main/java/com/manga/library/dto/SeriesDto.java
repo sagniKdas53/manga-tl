@@ -21,6 +21,7 @@ public class SeriesDto {
   private String qaVlmModel;
   private String qaMode;
   private String routingStrategy;
+  private Boolean useFallbackModels;
   private java.time.OffsetDateTime createdAt;
   private java.time.OffsetDateTime updatedAt;
 }

@@ -58,6 +58,8 @@ CREATE TABLE public.chapters (
     tl_provider character varying(255),
     updated_at timestamp(6) with time zone NOT NULL,
     use_context_memory boolean DEFAULT true NOT NULL,
+    use_fallback_models boolean DEFAULT true NOT NULL,
+    routing_strategy character varying(255),
     series_id uuid NOT NULL
 );
 
@@ -372,6 +374,8 @@ CREATE TABLE public.series (
     tl_model character varying(255),
     tl_provider character varying(255),
     updated_at timestamp(6) with time zone NOT NULL,
+    routing_strategy character varying(255),
+    use_fallback_models boolean DEFAULT true NOT NULL,
     created_by uuid
 );
 
