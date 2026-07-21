@@ -54,7 +54,11 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
     };
   }
 
+  const resolvedTlProvider = resolveOverride(null, series.tlProvider, settings?.tlProvider);
   const resolvedTl = resolveOverride(null, series.tlModel, settings?.tlModel);
+  
+  const resolvedQaProvider = resolveOverride(null, series.qaProvider, settings?.qaProvider);
+  const resolvedQaRouting = resolveOverride(null, series.routingStrategy, settings?.routingStrategy);
   const resolvedQa = resolveOverride(null, series.qaLlmModel, settings?.qaLlmModel);
   const resolvedQaVlm = resolveOverride(null, series.qaVlmModel, settings?.qaVlmModel);
   const resolvedQaMode = resolveOverride(null, series.qaMode, settings?.qaMode);
@@ -130,6 +134,12 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                     {chapterCount}
                   </Typography>
                 </Grid>
+                <Grid>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Fallback Models
+                  </Typography>
+                  <Chip size="small" label={series.useFallbackModels === false ? "Disabled" : "Enabled"} color={series.useFallbackModels === false ? "warning" : "default"} />
+                </Grid>
               </Grid>
 
               {/* Models Info */}
@@ -138,11 +148,20 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   Configured Models
                 </Typography>
                 <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                  {resolvedOcrProvider.value && (
+                    <Chip size="small" variant="outlined" label={`OCR Provider: ${resolvedOcrProvider.value}`} />
+                  )}
                   {resolvedOcr.value && (
                     <Chip size="small" variant="outlined" label={`OCR: ${resolvedOcr.value} ${resolvedOcr.source === "series" ? "(overridden)" : "(inherited)"}`} />
                   )}
+                  {resolvedTlProvider.value && (
+                    <Chip size="small" variant="outlined" label={`TL Provider: ${resolvedTlProvider.value}`} />
+                  )}
                   {resolvedTl.value && (
                     <Chip size="small" variant="outlined" label={`Translation: ${resolvedTl.value} ${resolvedTl.source === "series" ? "(overridden)" : "(inherited)"}`} />
+                  )}
+                  {resolvedQaRouting.value && (
+                    <Chip size="small" variant="outlined" color="primary" label={`Strategy: ${resolvedQaRouting.value}`} />
                   )}
                   {resolvedQaMode.value && (
                     <Chip size="small" variant="outlined" label={`QA Mode: ${resolvedQaMode.value} ${resolvedQaMode.source === "series" ? "(overridden)" : "(inherited)"}`} />

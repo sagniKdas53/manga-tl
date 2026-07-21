@@ -257,9 +257,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     { label: "W", value: "#ffffff", color: "#ffffff", title: "White" },
     { label: "K", value: "#000000", color: "#000000", title: "Black" },
     { label: "R", value: "#ef4444", color: "#ef4444", title: "Red" },
-    { label: "B", value: "#3b82f6", color: "#3b82f6", title: "Blue" },
-    { label: "G", value: "#10b981", color: "#10b981", title: "Green" },
+    { label: "O", value: "#f97316", color: "#f97316", title: "Orange" },
     { label: "Y", value: "#f59e0b", color: "#f59e0b", title: "Yellow" },
+    { label: "G", value: "#10b981", color: "#10b981", title: "Green" },
+    { label: "B", value: "#3b82f6", color: "#3b82f6", title: "Blue" },
+    { label: "P", value: "#8b5cf6", color: "#8b5cf6", title: "Purple" },
   ];
 
   return (
