@@ -104,6 +104,7 @@ public class JobCoordinatorServiceTest {
         }
     };
     org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "redisTemplate", dummyTemplate);
+    org.springframework.test.util.ReflectionTestUtils.setField(this, "redisTemplate", dummyTemplate);
     SseService sse = (SseService) org.springframework.test.util.ReflectionTestUtils.getField(jobCoordinatorService, "sseService");
     if (sse != null) org.springframework.test.util.ReflectionTestUtils.setField(sse, "redisTemplate", dummyTemplate);
   }
