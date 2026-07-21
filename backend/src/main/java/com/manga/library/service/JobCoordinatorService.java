@@ -251,6 +251,15 @@ public class JobCoordinatorService {
               job.put(
                   "qaMode",
                   resolveModel(chapter.getQaMode(), series.getQaMode(), settings.getQaMode()));
+
+              // useFallbackModels: chapter overrides series; if neither is explicitly set, default to true
+              Boolean chapterFallback = chapter.getUseFallbackModels();
+              Boolean seriesFallback = series.getUseFallbackModels();
+              boolean resolvedFallback =
+                  (chapterFallback != null) ? chapterFallback
+                  : (seriesFallback != null) ? seriesFallback
+                  : true;
+              job.put("useFallbackModels", resolvedFallback);
             }
           });
 

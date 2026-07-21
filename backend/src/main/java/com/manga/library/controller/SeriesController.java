@@ -70,6 +70,7 @@ public class SeriesController {
     dto.setQaVlmModel(s.getQaVlmModel());
     dto.setQaMode(s.getQaMode());
     dto.setRoutingStrategy(s.getRoutingStrategy());
+    dto.setUseFallbackModels(s.getUseFallbackModels());
     dto.setCreatedAt(s.getCreatedAt());
     dto.setUpdatedAt(s.getUpdatedAt());
     if (s.getCoverImageId() != null) {
@@ -93,6 +94,7 @@ public class SeriesController {
     dto.setQaMode(c.getQaMode());
     dto.setRoutingStrategy(c.getRoutingStrategy());
     dto.setUseContextMemory(c.getUseContextMemory());
+    dto.setUseFallbackModels(c.getUseFallbackModels());
     dto.setCreatedAt(c.getCreatedAt());
     dto.setUpdatedAt(c.getUpdatedAt());
     dto.setPageCount((int) pageRepository.countByChapterId(c.getId()));
@@ -202,6 +204,7 @@ public class SeriesController {
             .qaVlmModel(dto.getQaVlmModel())
             .qaMode(dto.getQaMode())
             .routingStrategy(dto.getRoutingStrategy())
+            .useFallbackModels(dto.getUseFallbackModels() == null || dto.getUseFallbackModels())
             .createdBy(user)
             .build();
     Objects.requireNonNull(series, "series cannot be null");
@@ -264,6 +267,7 @@ public class SeriesController {
             .qaMode(dto.getQaMode())
             .routingStrategy(dto.getRoutingStrategy())
             .useContextMemory(dto.getUseContextMemory() == null || dto.getUseContextMemory())
+            .useFallbackModels(dto.getUseFallbackModels() == null || dto.getUseFallbackModels())
             .build();
     Objects.requireNonNull(chapter, "chapter cannot be null");
     chapter = chapterRepository.save(Objects.requireNonNull(chapter));

@@ -73,6 +73,11 @@ public class Chapter {
   @Column(name = "use_context_memory", nullable = false, columnDefinition = "boolean default true")
   private Boolean useContextMemory = true;
 
+  /** When false: skip application-level model fallback cascade — fail job if requested model fails. */
+  @Builder.Default
+  @Column(name = "use_fallback_models", nullable = false, columnDefinition = "boolean default true")
+  private Boolean useFallbackModels = true;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
 
