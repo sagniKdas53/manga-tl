@@ -644,8 +644,13 @@ public class SeriesController {
   }
 
   @GetMapping("/chapters/exports/{exportId}/download")
-  public ResponseEntity<byte[]> downloadExport(@PathVariable String exportId) {
+  public ResponseEntity<?> downloadExport(@PathVariable String exportId) {
     Objects.requireNonNull(exportId, "exportId cannot be null");
+
+    if (!minioService.fileExists("exports/" + exportId + ".zip")) {
+      return ResponseEntity.status(org.springframework.http.HttpStatus.GONE)
+          .body(java.util.Map.of("message", "Export expired, please re-export to download."));
+    }
 
     try {
       byte[] zipBytes;

@@ -89,16 +89,22 @@ public class JobCoordinatorServiceTest {
               return list == null ? 0L : (long) list.size();
             });
 
-    org.mockito.Mockito.when(redisTemplate.opsForValue()).thenReturn(valueOps);
-    org.mockito.Mockito.when(redisTemplate.opsForList()).thenReturn(listOps);
-    org.mockito.Mockito.when(redisTemplate.delete(org.mockito.Mockito.anyString()))
-        .thenAnswer(
-            invocation -> {
-              String key = invocation.getArgument(0);
-              boolean existed =
-                  mockRedisValueStore.remove(key) != null || mockRedisListStore.remove(key) != null;
-              return existed;
-            });
+    org.springframework.data.redis.core.StringRedisTemplate dummyTemplate = new org.springframework.data.redis.core.StringRedisTemplate() {
+        @Override
+        public org.springframework.data.redis.core.ValueOperations<String, String> opsForValue() {
+            return valueOps;
+        }
+        @Override
+        public org.springframework.data.redis.core.ListOperations<String, String> opsForList() {
+            return listOps;
+        }
+        @Override
+        public Boolean delete(String key) {
+            return mockRedisValueStore.remove(key) != null || mockRedisListStore.remove(key) != null;
+        }
+    };
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "redisTemplate", dummyTemplate);
+    org.springframework.test.util.ReflectionTestUtils.setField(this, "redisTemplate", dummyTemplate);
   }
 
   @AfterEach
