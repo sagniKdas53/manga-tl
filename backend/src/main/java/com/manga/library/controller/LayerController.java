@@ -23,7 +23,6 @@ public class LayerController {
   private final LayerRepository layerRepository;
   private final LayerElementRepository layerElementRepository;
   private final LayerEditHistoryRepository layerEditHistoryRepository;
-  private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
   private final ObjectMapper objectMapper;
   private final OcrRegionRepository ocrRegionRepository;

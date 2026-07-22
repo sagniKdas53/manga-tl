@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.manga.library.config.JwtAuthFilter;
-import com.manga.library.model.Image;
 import com.manga.library.model.Layer;
 import com.manga.library.repository.ImageRepository;
 import com.manga.library.repository.LayerEditHistoryRepository;

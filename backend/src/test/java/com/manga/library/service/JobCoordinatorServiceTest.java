@@ -71,6 +71,7 @@ public class JobCoordinatorServiceTest {
             org.mockito.Mockito.anyString(),
             org.mockito.Mockito.any(java.time.Duration.class));
 
+    @SuppressWarnings("unchecked")
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
         (org.springframework.data.redis.core.ListOperations<String, String>) java.lang.reflect.Proxy.newProxyInstance(
             getClass().getClassLoader(),
