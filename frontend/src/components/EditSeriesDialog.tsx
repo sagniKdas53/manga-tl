@@ -18,7 +18,7 @@ import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import type { User, Series } from "../types";
+import type { User, Series, SystemSettingsDto } from "../types";
 import { safeFetch } from "../utils";
 import { useToast } from "./ToastContext";
 
@@ -28,22 +28,6 @@ interface EditSeriesDialogProps {
   user: User;
   onClose: () => void;
   onSuccess: (data: Series) => void;
-}
-
-interface SystemSettingsDto {
-  activeProviders?: string[];
-  activeOcrProviders?: string[];
-  localOcrModel?: string;
-  ocrProvider?: string;
-  ocrVlmModelList?: string[];
-  tlProvider?: string;
-  tlLlmModelList?: string[];
-  qaProvider?: string;
-  qaMode?: string;
-  routingStrategy?: string;
-  qaLlmModelList?: string[];
-  qaVlmModelList?: string[];
-  disableLocalOcr?: boolean;
 }
 
 const LANG_OPTS = ["ja", "zh-TW", "zh-CN", "ko", "en"];

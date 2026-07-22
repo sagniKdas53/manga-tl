@@ -41,7 +41,7 @@ public class JobCoordinatorService {
 
   @EventListener(ApplicationReadyEvent.class)
   public void onStartup() {
-    log.info("Application started. Resetting orphaned processing jobs and requeueing...");
+    log.info("Application started. Resetting orphaned processing jobs and requeuing...");
     try {
       resetProcessingJobsToPending();
       String paused = null;
@@ -404,10 +404,9 @@ public class JobCoordinatorService {
         "Received OCR callback for image: {} with {} regions", imageId, dto.getRegions().size());
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    Image image =
-        imageRepository
-            .findById(Objects.requireNonNull(imageId))
-            .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+    imageRepository
+        .findById(Objects.requireNonNull(imageId))
+        .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
 
@@ -539,10 +538,9 @@ public class JobCoordinatorService {
         conversations != null ? conversations.size() : 0);
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    Image image =
-        imageRepository
-            .findById(Objects.requireNonNull(imageId))
-            .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+    imageRepository
+        .findById(Objects.requireNonNull(imageId))
+        .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     // 1. Update region_type on each OcrRegion
     if (regionTypes != null) {
@@ -645,10 +643,9 @@ public class JobCoordinatorService {
         translations != null ? translations.size() : 0);
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    Image image =
-        imageRepository
-            .findById(Objects.requireNonNull(imageId))
-            .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+    imageRepository
+        .findById(Objects.requireNonNull(imageId))
+        .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     Series series =
         pageRepository.findByImageId(imageId).stream()
@@ -907,7 +904,8 @@ public class JobCoordinatorService {
   @Transactional
   public void triggerPageRedo(UUID pageId, String jobType, UUID chapterId) {
     log.info("Triggering page redo for page {} with job type {} and chapter {}", pageId, jobType, chapterId);
-    Page page = pageRepository.findById(pageId)
+    Objects.requireNonNull(pageId, "pageId cannot be null");
+    Page page = pageRepository.findById(Objects.requireNonNull(pageId))
         .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
     UUID imageId = page.getImage().getId();
     if ("ocr".equals(jobType)) {

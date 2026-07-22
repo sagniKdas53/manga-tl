@@ -100,40 +100,66 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      if (editingChapter) {
-        setNumber(editingChapter.chapterNumber);
-        setTitle(editingChapter.title || "");
-        setUseContextMemory(editingChapter.useContextMemory ?? true);
-        setOcrProvider(editingChapter.ocrProvider || "");
-        setOcrModel(editingChapter.ocrModel || "");
-        setTlProvider(editingChapter.tlProvider || "");
-        setTlModel(editingChapter.tlModel || "");
-        setQaProvider(editingChapter.qaProvider || "");
-        setQaLlmModel(editingChapter.qaLlmModel || "");
-        setQaVlmModel(editingChapter.qaVlmModel || "");
-        setQaMode(editingChapter.qaMode || "");
-        setRoutingStrategy(editingChapter.routingStrategy || "");
-        setUseFallbackModels(editingChapter.useFallbackModels ?? selectedSeries?.useFallbackModels ?? true);
-      } else {
-        setUseFallbackModels(selectedSeries?.useFallbackModels ?? true);
-      }
-      if (!settings) {
-        safeFetch("/api/settings", {
-          headers: { Authorization: `Bearer ${user.token}` },
-        })
-          .then((r) => r.json())
-          .then((d) => {
-            setSettings(d);
-            if (!editingChapter && selectedSeries?.useFallbackModels === undefined && d?.useFallbackModels !== undefined) {
-              setUseFallbackModels(d.useFallbackModels);
-            }
-          })
-          .catch(() => {});
-      }
+  const [prevOpen, setPrevOpen] = useState(false);
+  const [prevEditingChapter, setPrevEditingChapter] = useState<Chapter | null>(null);
+
+  if (open && (!prevOpen || editingChapter !== prevEditingChapter)) {
+    setPrevOpen(true);
+    setPrevEditingChapter(editingChapter);
+    if (editingChapter) {
+      setNumber(editingChapter.chapterNumber);
+      setTitle(editingChapter.title || "");
+      setUseContextMemory(editingChapter.useContextMemory ?? true);
+      setOcrProvider(editingChapter.ocrProvider || "");
+      setOcrModel(editingChapter.ocrModel || "");
+      setTlProvider(editingChapter.tlProvider || "");
+      setTlModel(editingChapter.tlModel || "");
+      setQaProvider(editingChapter.qaProvider || "");
+      setQaLlmModel(editingChapter.qaLlmModel || "");
+      setQaVlmModel(editingChapter.qaVlmModel || "");
+      setQaMode(editingChapter.qaMode || "");
+      setRoutingStrategy(editingChapter.routingStrategy || "");
+      setUseFallbackModels(
+        editingChapter.useFallbackModels ?? selectedSeries?.useFallbackModels ?? true,
+      );
+    } else {
+      setNumber(defaultNum);
+      setTitle("");
+      setUseContextMemory(true);
+      setOcrProvider("");
+      setOcrModel("");
+      setTlProvider("");
+      setTlModel("");
+      setQaProvider("");
+      setQaLlmModel("");
+      setQaVlmModel("");
+      setQaMode("");
+      setRoutingStrategy("");
+      setUseFallbackModels(selectedSeries?.useFallbackModels ?? true);
     }
-  }, [open, editingChapter, selectedSeries, user.token]);
+  } else if (!open && prevOpen) {
+    setPrevOpen(false);
+  }
+
+  useEffect(() => {
+    if (open && !settings) {
+      safeFetch("/api/settings", {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          setSettings(d);
+          if (
+            !editingChapter &&
+            selectedSeries?.useFallbackModels === undefined &&
+            d?.useFallbackModels !== undefined
+          ) {
+            setUseFallbackModels(d.useFallbackModels);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [open, settings, editingChapter, selectedSeries?.useFallbackModels, user.token]);
 
   const providers = settings?.activeProviders || DEFAULT_PROVIDERS;
   const ocrProviders = settings?.activeOcrProviders || DEFAULT_OCR_PROVIDERS;

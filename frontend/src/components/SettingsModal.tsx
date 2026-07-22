@@ -108,7 +108,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleChange = (field: keyof SystemSettingsDto, value: any) => {
+  const handleChange = (
+    field: keyof SystemSettingsDto,
+    value: SystemSettingsDto[keyof SystemSettingsDto],
+  ) => {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
