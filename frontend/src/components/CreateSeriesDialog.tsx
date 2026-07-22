@@ -167,12 +167,12 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const inheritedQaVlmModel = settings?.qaVlmModel;
   const inheritedRoutingStrategy = settings?.routingStrategy || "lowest-cost";
 
-  const overrideFields = [
-    ocrProvider, ocrModel, tlProvider, tlModel,
-    qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
-  ];
-  const overriddenCount = overrideFields.filter((v) => v !== "").length;
-  const inheritedCount = overrideFields.length - overriddenCount;
+   const overrideFields = [
+     ocrProvider, ocrModel, tlProvider, tlModel,
+     qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
+   ];
+   const overriddenCount = overrideFields.filter((v) => v !== "").length + (useFallbackModels === false ? 1 : 0);
+   const inheritedCount = overrideFields.length + 1 - overriddenCount;
 
   const ocrDisabled =
     ocrProvider === "local" ||
@@ -569,8 +569,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                   label="Use Fallback Models"
                   onChange={(e) => setUseFallbackModels(e.target.value === "true")}
                 >
-                  <MenuItem value="true">True (Enabled)</MenuItem>
-                  <MenuItem value="false">False (Disabled)</MenuItem>
+                   <MenuItem value="true">Enabled</MenuItem>
+                   <MenuItem value="false">Disabled</MenuItem>
                 </Select>
               </FormControl>
             </Box>

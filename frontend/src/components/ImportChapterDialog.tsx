@@ -89,12 +89,12 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
   const inheritedQaVlmModel = series.qaVlmModel || settings?.qaVlmModel;
   const inheritedRoutingStrategy = series.routingStrategy || settings?.routingStrategy || "lowest-cost";
 
-  const overrideFields = [
-    ocrProvider, ocrModel, tlProvider, tlModel,
-    qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
-  ];
-  const overriddenCount = overrideFields.filter((v) => v !== "").length;
-  const inheritedCount = overrideFields.length - overriddenCount;
+   const overrideFields = [
+     ocrProvider, ocrModel, tlProvider, tlModel,
+     qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
+   ];
+   const overriddenCount = overrideFields.filter((v) => v !== "").length + (useFallbackModels === false ? 1 : 0);
+   const inheritedCount = overrideFields.length + 1 - overriddenCount;
 
   useEffect(() => {
     if (open) {
@@ -478,8 +478,8 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                     label="Use Fallback Models"
                     onChange={(e) => setUseFallbackModels(e.target.value === "true")}
                   >
-                    <MenuItem value="true">True (Enabled)</MenuItem>
-                    <MenuItem value="false">False (Disabled)</MenuItem>
+                   <MenuItem value="true">Enabled</MenuItem>
+                   <MenuItem value="false">Disabled</MenuItem>
                   </Select>
                 </FormControl>
               </Box>

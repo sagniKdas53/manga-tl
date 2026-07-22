@@ -86,7 +86,7 @@ ALTER TABLE public.conversation_regions OWNER TO tladmin;
 CREATE TABLE public.conversations (
     id uuid NOT NULL,
     scene_type character varying(255) NOT NULL,
-    image_id uuid NOT NULL
+    page_id uuid NOT NULL
 );
 
 
@@ -234,7 +234,7 @@ CREATE TABLE public.layers (
     type character varying(255) NOT NULL,
     visible boolean,
     z_order integer NOT NULL,
-    image_id uuid NOT NULL
+    page_id uuid NOT NULL
 );
 
 
@@ -277,7 +277,7 @@ CREATE TABLE public.ocr_regions (
     translated_text text,
     translation_failed boolean,
     translation_score double precision,
-    image_id uuid NOT NULL,
+    page_id uuid NOT NULL,
     panel_id uuid
 );
 
@@ -694,7 +694,7 @@ ALTER TABLE ONLY public.layer_elements
 --
 
 ALTER TABLE ONLY public.conversations
-    ADD CONSTRAINT fka6hou4fwxlrlvitp3rubjjf8c FOREIGN KEY (image_id) REFERENCES public.images(id) ON DELETE CASCADE;
+    ADD CONSTRAINT fka6hou4fwxlrlvitp3rubjjf8c FOREIGN KEY (page_id) REFERENCES public.pages(id) ON DELETE CASCADE;
 
 
 --
@@ -702,7 +702,7 @@ ALTER TABLE ONLY public.conversations
 --
 
 ALTER TABLE ONLY public.layers
-    ADD CONSTRAINT fkau8kwbguf2qow98iracihu77n FOREIGN KEY (image_id) REFERENCES public.images(id) ON DELETE CASCADE;
+    ADD CONSTRAINT fkau8kwbguf2qow98iracihu77n FOREIGN KEY (page_id) REFERENCES public.pages(id) ON DELETE CASCADE;
 
 
 --
@@ -742,7 +742,7 @@ ALTER TABLE ONLY public.series
 --
 
 ALTER TABLE ONLY public.ocr_regions
-    ADD CONSTRAINT fkk0ts4meid7kfysedx1cafn2vc FOREIGN KEY (image_id) REFERENCES public.images(id) ON DELETE CASCADE;
+    ADD CONSTRAINT fkk0ts4meid7kfysedx1cafn2vc FOREIGN KEY (page_id) REFERENCES public.pages(id) ON DELETE CASCADE;
 
 
 --

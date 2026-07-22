@@ -527,7 +527,7 @@ public class JobCoordinatorServiceTest {
     Map<String, Object> translation = new HashMap<>();
     translation.put("regionId", region.getId().toString());
     translation.put("translatedText", "Hello Redo");
-    translation.put("translationFailed", "false");
+    translation.put("translationFailed", false);
     translation.put("translationScore", 0.95);
     translation.put("modelIdentifier", "gpt-4o");
     translation.put("confidence", 0.99);

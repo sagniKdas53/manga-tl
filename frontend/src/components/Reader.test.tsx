@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Reader } from "./Reader";
+import Reader from "./Reader";
 
 // Mock external modules
 export const mockNavigate = vi.fn();

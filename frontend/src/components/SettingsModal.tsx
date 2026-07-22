@@ -443,8 +443,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   label="Use Fallback Models"
                   onChange={(e) => handleChange("useFallbackModels", e.target.value === "true")}
                 >
-                  <MenuItem value="true">True</MenuItem>
-                  <MenuItem value="false">False</MenuItem>
+                   <MenuItem value="true">Enabled</MenuItem>
+                   <MenuItem value="false">Disabled</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

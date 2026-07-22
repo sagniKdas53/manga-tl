@@ -34,6 +34,7 @@ describe("SettingsModal", () => {
       "google/gemini-3.1-flash-lite",
       "qwen/qwen3-vl-8b-instruct",
     ],
+    useFallbackModels: true,
   };
 
   beforeEach(() => {
