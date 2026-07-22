@@ -1,10 +1,12 @@
 package com.manga.library.repository;
 
 import com.manga.library.model.Page;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 public interface PageRepository extends JpaRepository<Page, UUID> {
   List<Page> findByChapterIdOrderByPageNumberAsc(UUID chapterId);
@@ -19,8 +21,7 @@ public interface PageRepository extends JpaRepository<Page, UUID> {
 
   @org.springframework.data.jpa.repository.Query(
       "SELECT p FROM Page p WHERE p.lastEditedAt IS NOT NULL AND p.lastEditedAt < :threshold AND (p.lastRenderedAt IS NULL OR p.lastEditedAt > p.lastRenderedAt)")
-  java.util.List<Page> findPagesNeedingRender(
-      @org.springframework.data.repository.query.Param("threshold")
-          java.time.OffsetDateTime threshold);
+  List<Page> findPagesNeedingRender(
+      @Param("threshold") OffsetDateTime threshold);
 }
 

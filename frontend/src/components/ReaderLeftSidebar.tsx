@@ -16,6 +16,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { ReaderPageNavigation, ReaderPrevNextChapters } from "./ReaderPageNavigation";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastContext";
+import SidebarSection from "./SidebarSection";
 
 import type { Chapter, Page } from "../types";
 
@@ -46,40 +47,6 @@ interface ReaderLeftSidebarProps {
   handleDeletePage: (pageId: string) => void;
   handleChangePageNumber: (pageId: string, newPage: number) => void;
 }
-
-// --- Shared presentational helpers -----------------------------------------
-
-const SidebarSection: React.FC<{ title: string; children: React.ReactNode; sx?: object }> = ({
-  title,
-  children,
-  sx,
-}) => (
-  <Box
-    sx={{
-      border: "1px solid var(--border-color)",
-      borderRadius: "10px",
-      p: 1.5,
-      mb: 2,
-      backgroundColor: "var(--bg-surface, transparent)",
-      ...sx,
-    }}
-  >
-    <Typography
-      variant="overline"
-      component="div"
-      sx={{
-        fontSize: "10.5px",
-        fontWeight: 700,
-        letterSpacing: "0.08em",
-        color: "var(--text-dim, var(--text-muted))",
-        mb: 1.25,
-      }}
-    >
-      {title}
-    </Typography>
-    {children}
-  </Box>
-);
 
 const ToggleRow: React.FC<{
   label: string;
