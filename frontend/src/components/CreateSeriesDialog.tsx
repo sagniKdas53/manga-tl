@@ -97,39 +97,62 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    if (open) {
-      if (editingSeries) {
-        setTitle(editingSeries.title || "");
-        setLang(editingSeries.originalLanguage || "ja");
-        setTargetLang(editingSeries.targetLanguage || "en");
-        setDirection(editingSeries.readingDirection || "rtl");
-        setOcrProvider(editingSeries.ocrProvider || "");
-        setOcrModel(editingSeries.ocrModel || "");
-        setTlProvider(editingSeries.tlProvider || "");
-        setTlModel(editingSeries.tlModel || "");
-        setQaProvider(editingSeries.qaProvider || "");
-        setQaLlmModel(editingSeries.qaLlmModel || "");
-        setQaVlmModel(editingSeries.qaVlmModel || "");
-        setQaMode(editingSeries.qaMode || "");
-        setRoutingStrategy(editingSeries.routingStrategy || "");
-        setUseFallbackModels(editingSeries.useFallbackModels ?? true);
-      }
-      if (!settings) {
-        safeFetch("/api/settings", {
-          headers: { Authorization: `Bearer ${user.token}` },
-        })
-          .then((res) => res.json())
-          .then((d) => {
-            setSettings(d);
-            if (!editingSeries && d?.useFallbackModels !== undefined) {
-              setUseFallbackModels(d.useFallbackModels);
-            }
-          })
-          .catch(() => {});
-      }
+  const [prevOpen, setPrevOpen] = useState(false);
+  const [prevEditingSeries, setPrevEditingSeries] = useState<Series | null>(null);
+
+  if (open && (!prevOpen || editingSeries !== prevEditingSeries)) {
+    setPrevOpen(true);
+    setPrevEditingSeries(editingSeries);
+    if (editingSeries) {
+      setTitle(editingSeries.title || "");
+      setLang(editingSeries.originalLanguage || "ja");
+      setTargetLang(editingSeries.targetLanguage || "en");
+      setDirection(editingSeries.readingDirection || "rtl");
+      setOcrProvider(editingSeries.ocrProvider || "");
+      setOcrModel(editingSeries.ocrModel || "");
+      setTlProvider(editingSeries.tlProvider || "");
+      setTlModel(editingSeries.tlModel || "");
+      setQaProvider(editingSeries.qaProvider || "");
+      setQaLlmModel(editingSeries.qaLlmModel || "");
+      setQaVlmModel(editingSeries.qaVlmModel || "");
+      setQaMode(editingSeries.qaMode || "");
+      setRoutingStrategy(editingSeries.routingStrategy || "");
+      setUseFallbackModels(editingSeries.useFallbackModels ?? true);
+    } else {
+      setTitle("");
+      setLang("ja");
+      setTargetLang("en");
+      setDirection("rtl");
+      setOcrProvider("");
+      setOcrModel("");
+      setTlProvider("");
+      setTlModel("");
+      setQaProvider("");
+      setQaLlmModel("");
+      setQaVlmModel("");
+      setQaMode("");
+      setRoutingStrategy("");
+      setUseFallbackModels(true);
     }
-  }, [open, editingSeries, user.token]);
+  } else if (!open && prevOpen) {
+    setPrevOpen(false);
+  }
+
+  useEffect(() => {
+    if (open && !settings) {
+      safeFetch("/api/settings", {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+        .then((res) => res.json())
+        .then((d) => {
+          setSettings(d);
+          if (!editingSeries && d?.useFallbackModels !== undefined) {
+            setUseFallbackModels(d.useFallbackModels);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [open, settings, editingSeries, user.token]);
 
   const providers = settings?.activeProviders || DEFAULT_PROVIDERS;
   const ocrProviders = settings?.activeOcrProviders || DEFAULT_OCR_PROVIDERS;
