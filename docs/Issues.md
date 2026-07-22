@@ -22,24 +22,17 @@ Also it's transparency option doesn't work it defaults to white when clicked on 
 
 ## The chapter card has too many buttons
 
-Export chapter as zip should internally smartly do the job of the Re-export button and Clear exports is not needed as we have a scheduler but since we have it, we can hide it inside the edit chapter modal (or maybe not)
+Move the Force export to the over flow (triple dots) menu
 
-## Errors in logs
+## Errors in export
 
-```log
-manga-backend    | 2026-07-20T18:33:10.499Z ERROR 1 --- [manga-library-backend] [nio-8080-exec-5] c.m.library.controller.SeriesController  : Failed to download export
-manga-backend    | 
-manga-backend    | io.minio.errors.ErrorResponseException: The specified key does not exist.
-manga-backend    |      at io.minio.BaseS3Client$1.onResponse(BaseS3Client.java:507) ~[minio-9.0.3.jar!/:9.0.3]
-manga-backend    |      at io.minio.BaseS3Client$1.onResponse(BaseS3Client.java:367) ~[minio-9.0.3.jar!/:9.0.3]
-manga-backend    |      at okhttp3.internal.connection.RealCall$AsyncCall.run(RealCall.kt:519) ~[okhttp-4.12.0.jar!/:na]
-manga-backend    |      at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source) ~[na:na]
-manga-backend    |      at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source) ~[na:na]
-manga-backend    |      at java.base/java.lang.Thread.run(Unknown Source) ~[na:na]
-manga-backend    | 
-```
+Export Failed
+Failed to generate chapter export: JDBC exception executing SQL [select l1_0.id,l1_0.created_at,l1_0.metadata_json,l1_0.page_id,l1_0.target_language,l1_0.type,l1_0.visible,l1_0.z_order from layers l1_0 left join pages p1_0 on p1_0.id=l1_0.page_id where p1_0.id=?] [ERROR: column l1_0.page_id does not exist Hint: Perhaps you meant to reference the column "l1_0.image_id". Position: 170] [n/a]; SQL [n/a]
+ 11:38 am
 
-Also many other look in the [logs](../logs/run-1.log)
+## The use fallback models uses --Inherited(true)-- instead of just using true or false
+
+Same
 
 ## Bubbles keep over lapping each other
 

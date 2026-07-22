@@ -93,23 +93,47 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   );
   const [qaMode, setQaMode] = useState(editingChapter?.qaMode || "");
   const [routingStrategy, setRoutingStrategy] = useState(editingChapter?.routingStrategy || "");
-  const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
-    editingChapter?.useFallbackModels ?? null,
+  const [useFallbackModels, setUseFallbackModels] = useState<boolean>(
+    editingChapter?.useFallbackModels ?? selectedSeries?.useFallbackModels ?? true,
   );
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open && !settings) {
-      safeFetch("/api/settings", {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((r) => r.json())
-        .then((d) => setSettings(d))
-        .catch(() => {});
+    if (open) {
+      if (editingChapter) {
+        setNumber(editingChapter.chapterNumber);
+        setTitle(editingChapter.title || "");
+        setUseContextMemory(editingChapter.useContextMemory ?? true);
+        setOcrProvider(editingChapter.ocrProvider || "");
+        setOcrModel(editingChapter.ocrModel || "");
+        setTlProvider(editingChapter.tlProvider || "");
+        setTlModel(editingChapter.tlModel || "");
+        setQaProvider(editingChapter.qaProvider || "");
+        setQaLlmModel(editingChapter.qaLlmModel || "");
+        setQaVlmModel(editingChapter.qaVlmModel || "");
+        setQaMode(editingChapter.qaMode || "");
+        setRoutingStrategy(editingChapter.routingStrategy || "");
+        setUseFallbackModels(editingChapter.useFallbackModels ?? selectedSeries?.useFallbackModels ?? true);
+      } else {
+        setUseFallbackModels(selectedSeries?.useFallbackModels ?? true);
+      }
+      if (!settings) {
+        safeFetch("/api/settings", {
+          headers: { Authorization: `Bearer ${user.token}` },
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            setSettings(d);
+            if (!editingChapter && selectedSeries?.useFallbackModels === undefined && d?.useFallbackModels !== undefined) {
+              setUseFallbackModels(d.useFallbackModels);
+            }
+          })
+          .catch(() => {});
+      }
     }
-  }, [open, settings, user.token]);
+  }, [open, editingChapter, selectedSeries, user.token]);
 
   const providers = settings?.activeProviders || DEFAULT_PROVIDERS;
   const ocrProviders = settings?.activeOcrProviders || DEFAULT_OCR_PROVIDERS;
@@ -127,7 +151,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const overrideFields = [
     ocrProvider, ocrModel, tlProvider, tlModel,
     qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
-    useFallbackModels !== null ? String(useFallbackModels) : "",
   ];
   const overriddenCount = overrideFields.filter((v) => v !== "").length;
   const inheritedCount = overrideFields.length - overriddenCount;
@@ -488,20 +511,14 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 <InputLabel>Use Fallback Models</InputLabel>
                 <Select
                   size="small"
-                  value={useFallbackModels === null ? "" : String(useFallbackModels)}
+                  value={useFallbackModels ? "true" : "false"}
                   label="Use Fallback Models"
-                  onChange={(e) => setUseFallbackModels(e.target.value === "" ? null : e.target.value === "true")}
+                  onChange={(e) => setUseFallbackModels(e.target.value === "true")}
                 >
-                  <MenuItem value="">{`-- Inherit (${(selectedSeries?.useFallbackModels ?? settings?.useFallbackModels) !== false ? "True" : "False"}) --`}</MenuItem>
                   <MenuItem value="true">True (Enabled)</MenuItem>
                   <MenuItem value="false">False (Disabled)</MenuItem>
                 </Select>
               </FormControl>
-              {useFallbackModels !== null && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setUseFallbackModels(null)}>
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
             </Box>
           </AccordionDetails>
         </Accordion>

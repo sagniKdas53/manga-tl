@@ -80,8 +80,8 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const [qaVlmModel, setQaVlmModel] = useState(series.qaVlmModel || "");
   const [qaMode, setQaMode] = useState(series.qaMode || "");
   const [routingStrategy, setRoutingStrategy] = useState(series.routingStrategy || "");
-  const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
-    series.useFallbackModels ?? null,
+  const [useFallbackModels, setUseFallbackModels] = useState<boolean>(
+    series.useFallbackModels ?? true,
   );
   const [overridesOpen, setOverridesOpen] = useState(false);
 
@@ -116,7 +116,6 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const overrideFields = [
     ocrProvider, ocrModel, tlProvider, tlModel,
     qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
-    useFallbackModels !== null ? String(useFallbackModels) : "",
   ];
   const overriddenCount = overrideFields.filter((v) => v !== "").length;
   const inheritedCount = overrideFields.length - overriddenCount;
@@ -517,20 +516,14 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                   <InputLabel>Use Fallback Models</InputLabel>
                   <Select
                     size="small"
-                    value={useFallbackModels === null ? "" : String(useFallbackModels)}
+                    value={useFallbackModels ? "true" : "false"}
                     label="Use Fallback Models"
-                    onChange={(e) => setUseFallbackModels(e.target.value === "" ? null : e.target.value === "true")}
+                    onChange={(e) => setUseFallbackModels(e.target.value === "true")}
                   >
-                    <MenuItem value="">{`-- Inherit (${settings?.useFallbackModels !== false ? "True" : "False"}) --`}</MenuItem>
                     <MenuItem value="true">True (Enabled)</MenuItem>
                     <MenuItem value="false">False (Disabled)</MenuItem>
                   </Select>
                 </FormControl>
-                {useFallbackModels !== null && (
-                  <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setUseFallbackModels(null)}>
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                )}
               </Box>
             </AccordionDetails>
           </Accordion>

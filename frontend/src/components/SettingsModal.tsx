@@ -426,7 +426,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   label="OpenRouter Routing Strategy"
                   onChange={(e) => handleChange("routingStrategy", e.target.value)}
                 >
-                  <MenuItem value="lowest-cost">Lowest Cost (Default)</MenuItem>
+                  <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
                   <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
                 </Select>
               </FormControl>
@@ -440,7 +440,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   label="Use Fallback Models"
                   onChange={(e) => handleChange("useFallbackModels", e.target.value === "true")}
                 >
-                  <MenuItem value="true">True (Default)</MenuItem>
+                  <MenuItem value="true">True</MenuItem>
                   <MenuItem value="false">False</MenuItem>
                 </Select>
               </FormControl>

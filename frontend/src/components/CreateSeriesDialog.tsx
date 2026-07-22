@@ -89,8 +89,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const [routingStrategy, setRoutingStrategy] = useState(
     editingSeries?.routingStrategy || "",
   );
-  const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
-    editingSeries?.useFallbackModels ?? null,
+  const [useFallbackModels, setUseFallbackModels] = useState<boolean>(
+    editingSeries?.useFallbackModels ?? true,
   );
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
@@ -98,15 +98,38 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const { showToast } = useToast();
 
   useEffect(() => {
-    if (open && !settings) {
-      safeFetch("/api/settings", {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => res.json())
-        .then((d) => setSettings(d))
-        .catch(() => {});
+    if (open) {
+      if (editingSeries) {
+        setTitle(editingSeries.title || "");
+        setLang(editingSeries.originalLanguage || "ja");
+        setTargetLang(editingSeries.targetLanguage || "en");
+        setDirection(editingSeries.readingDirection || "rtl");
+        setOcrProvider(editingSeries.ocrProvider || "");
+        setOcrModel(editingSeries.ocrModel || "");
+        setTlProvider(editingSeries.tlProvider || "");
+        setTlModel(editingSeries.tlModel || "");
+        setQaProvider(editingSeries.qaProvider || "");
+        setQaLlmModel(editingSeries.qaLlmModel || "");
+        setQaVlmModel(editingSeries.qaVlmModel || "");
+        setQaMode(editingSeries.qaMode || "");
+        setRoutingStrategy(editingSeries.routingStrategy || "");
+        setUseFallbackModels(editingSeries.useFallbackModels ?? true);
+      }
+      if (!settings) {
+        safeFetch("/api/settings", {
+          headers: { Authorization: `Bearer ${user.token}` },
+        })
+          .then((res) => res.json())
+          .then((d) => {
+            setSettings(d);
+            if (!editingSeries && d?.useFallbackModels !== undefined) {
+              setUseFallbackModels(d.useFallbackModels);
+            }
+          })
+          .catch(() => {});
+      }
     }
-  }, [open, settings, user.token]);
+  }, [open, editingSeries, user.token]);
 
   const providers = settings?.activeProviders || DEFAULT_PROVIDERS;
   const ocrProviders = settings?.activeOcrProviders || DEFAULT_OCR_PROVIDERS;
@@ -124,7 +147,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const overrideFields = [
     ocrProvider, ocrModel, tlProvider, tlModel,
     qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
-    useFallbackModels !== null ? String(useFallbackModels) : "",
   ];
   const overriddenCount = overrideFields.filter((v) => v !== "").length;
   const inheritedCount = overrideFields.length - overriddenCount;
@@ -520,20 +542,14 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 <InputLabel>Use Fallback Models</InputLabel>
                 <Select
                   size="small"
-                  value={useFallbackModels === null ? "" : String(useFallbackModels)}
+                  value={useFallbackModels ? "true" : "false"}
                   label="Use Fallback Models"
-                  onChange={(e) => setUseFallbackModels(e.target.value === "" ? null : e.target.value === "true")}
+                  onChange={(e) => setUseFallbackModels(e.target.value === "true")}
                 >
-                  <MenuItem value="">{`-- Inherit (${settings?.useFallbackModels !== false ? "True" : "False"}) --`}</MenuItem>
                   <MenuItem value="true">True (Enabled)</MenuItem>
                   <MenuItem value="false">False (Disabled)</MenuItem>
                 </Select>
               </FormControl>
-              {useFallbackModels !== null && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setUseFallbackModels(null)}>
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
             </Box>
           </AccordionDetails>
         </Accordion>
