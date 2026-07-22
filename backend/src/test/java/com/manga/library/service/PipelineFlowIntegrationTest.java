@@ -160,28 +160,31 @@ public class PipelineFlowIntegrationTest {
   public void tearDown() {
 
     // Clean up DB records created by the test
-    for (UUID imgId : createdImageIds) {
+    for (UUID pgId : createdPageIds) {
       try {
-        List<LayerElement> elements = layerElementRepository.findByLayerImageId(imgId);
+        List<LayerElement> elements = layerElementRepository.findByLayerPageId(pgId);
         layerElementRepository.deleteAll(elements);
       } catch (Exception e) {
       }
       try {
-        List<Layer> layers = layerRepository.findByImageId(imgId);
+        List<Layer> layers = layerRepository.findByPageId(pgId);
         layerRepository.deleteAll(layers);
       } catch (Exception e) {
       }
       try {
-        List<OcrRegion> ocrRegions = ocrRegionRepository.findByImageId(imgId);
+        List<OcrRegion> ocrRegions = ocrRegionRepository.findByPageId(pgId);
         ocrRegionRepository.deleteAll(ocrRegions);
       } catch (Exception e) {
       }
+    }
+    for (UUID imgId : createdImageIds) {
       try {
         List<Panel> panels = panelRepository.findByImageId(imgId);
         panelRepository.deleteAll(panels);
       } catch (Exception e) {
       }
     }
+
     for (UUID pgId : createdPageIds) {
       try {
         pageRepository.deleteById(pgId);
@@ -436,7 +439,7 @@ public class PipelineFlowIntegrationTest {
     assertEquals(1, mockRedisListStore.get("queue:layout").size());
 
     // Step C: Layout Callback -> triggers Translation
-    List<OcrRegion> savedOcrRegions = ocrRegionRepository.findByImageId(imageId);
+    List<OcrRegion> savedOcrRegions = ocrRegionRepository.findByPageId(pageId);
     assertEquals(1, savedOcrRegions.size());
     UUID regionId = savedOcrRegions.get(0).getId();
 
@@ -549,7 +552,8 @@ public class PipelineFlowIntegrationTest {
         .andExpect(status().isOk());
 
     // Verify layered structure
-    List<Layer> layers = layerRepository.findByImageId(imageId);
+    List<Layer> layers = layerRepository.findByPageId(pageId);
+
     // There should be two OCR layers
     long ocrLayerCount = layers.stream().filter(l -> "ocr".equalsIgnoreCase(l.getType())).count();
     assertEquals(2, ocrLayerCount);
@@ -591,7 +595,7 @@ public class PipelineFlowIntegrationTest {
 
   @Test
   public void testClonedOcrLayerRegionPreservationAndVisibility() throws Exception {
-    // 1. Create a mock Image
+    // 1. Create a mock Image and Page
     Image image =
         Image.builder()
             .filename("test-clone.png")
@@ -601,10 +605,23 @@ public class PipelineFlowIntegrationTest {
     image = imageRepository.save(image);
     createdImageIds.add(image.getId());
 
+    Series series = Series.builder().title("Clone Test").originalLanguage("ja").readingDirection("rtl").build();
+    series = seriesRepository.save(series);
+    createdSeriesIds.add(series.getId());
+    Chapter chapter = Chapter.builder().series(series).chapterNumber(1.0).build();
+    chapter = chapterRepository.save(chapter);
+    createdChapterIds.add(chapter.getId());
+
+    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
+    createdPageIds.add(page.getId());
+
+
+
     // 2. Create OCR Region
     OcrRegion ocrRegion =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .text("Original Text")
             .detectedLanguage("ja")
             .bboxX(10)
@@ -615,7 +632,7 @@ public class PipelineFlowIntegrationTest {
     ocrRegion = ocrRegionRepository.save(ocrRegion);
 
     // 3. Create Layer (OCR)
-    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(0).build();
+    Layer ocrLayer = Layer.builder().page(page).type("ocr").visible(true).zOrder(0).build();
     ocrLayer = layerRepository.save(ocrLayer);
 
     // 4. Create Layer Element with Region
@@ -634,8 +651,9 @@ public class PipelineFlowIntegrationTest {
     // We clone the layer. Since the frontend would call the create layer endpoint and then POST
     // each element, we simulate this.
     // Create new layer (the clone)
-    Layer clonedLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(1).build();
+    Layer clonedLayer = Layer.builder().page(page).type("ocr").visible(true).zOrder(1).build();
     clonedLayer = layerRepository.save(clonedLayer);
+
 
     // Create cloned layer element, passing regionId in the DTO
     com.manga.library.dto.LayerElementDto dto = new com.manga.library.dto.LayerElementDto();

@@ -7,7 +7,9 @@ import lombok.Data;
 @Data
 public class PanelCallbackDto {
   private UUID imageId;
+  private UUID pageId;
   private List<PanelData> panels;
+
 
   @Data
   public static class PanelData {

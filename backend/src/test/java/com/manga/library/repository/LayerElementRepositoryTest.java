@@ -19,6 +19,9 @@ public class LayerElementRepositoryTest {
   @Autowired private LayerElementRepository layerElementRepository;
   @Autowired private LayerRepository layerRepository;
   @Autowired private ImageRepository imageRepository;
+  @Autowired private PageRepository pageRepository;
+  @Autowired private ChapterRepository chapterRepository;
+  @Autowired private SeriesRepository seriesRepository;
 
   @Test
   public void testLayerElementCRUD() {
@@ -26,8 +29,16 @@ public class LayerElementRepositoryTest {
     Image image = Image.builder().filename("el_img.png").storagePath("path/el_img.png").build();
     image = imageRepository.save(image);
 
-    Layer layer = Layer.builder().image(image).type("translation").build();
+    Series series = seriesRepository.save(Series.builder().title("Test").originalLanguage("ja").readingDirection("rtl").build());
+    Chapter chapter = chapterRepository.save(Chapter.builder().series(series).chapterNumber(1.0).build());
+
+    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
+
+    Layer layer = Layer.builder().page(page).type("translation").build();
     layer = layerRepository.save(layer);
+
+
 
     // 1. Create
     LayerElement element =

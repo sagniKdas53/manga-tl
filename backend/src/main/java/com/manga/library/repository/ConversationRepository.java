@@ -6,10 +6,11 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ConversationRepository extends JpaRepository<Conversation, UUID> {
-  List<Conversation> findByImageId(UUID imageId);
+  List<Conversation> findByPageId(UUID pageId);
 
   @org.springframework.data.jpa.repository.Modifying
   @org.springframework.data.jpa.repository.Query(
-      "delete from Conversation c where c.image.id = :imageId")
-  void deleteByImageId(@org.springframework.data.repository.query.Param("imageId") UUID imageId);
+      "delete from Conversation c where c.page.id = :pageId")
+  void deleteByPageId(@org.springframework.data.repository.query.Param("pageId") UUID pageId);
 }
+

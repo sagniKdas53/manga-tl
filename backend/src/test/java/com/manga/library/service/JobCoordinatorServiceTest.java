@@ -37,9 +37,13 @@ public class JobCoordinatorServiceTest {
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
   private BiConsumer<String, String> rightPushHook;
+  private Series defaultSeries;
+  private Chapter defaultChapter;
 
   @BeforeEach
   public void setUp() {
+    defaultSeries = seriesRepository.save(Series.builder().title("Default Test Series").originalLanguage("ja").sourceLanguage("ja").targetLanguage("en").readingDirection("rtl").build());
+    defaultChapter = chapterRepository.save(Chapter.builder().series(defaultSeries).chapterNumber(1.0).build());
 
     // Set up mock for redisTemplate using in-memory structures
     final Map<String, String> mockRedisValueStore = new HashMap<>();
@@ -112,7 +116,10 @@ public class JobCoordinatorServiceTest {
   @AfterEach
   public void tearDown() {
     rightPushHook = null;
+    if (defaultChapter != null && defaultChapter.getId() != null) chapterRepository.deleteById(defaultChapter.getId());
+    if (defaultSeries != null && defaultSeries.getId() != null) seriesRepository.deleteById(defaultSeries.getId());
   }
+
 
   @Test
   public void testEnqueuedJobIsCommittedBeforeRedisPush() {
@@ -151,10 +158,12 @@ public class JobCoordinatorServiceTest {
   public void testHandleQaCallback_Passed() {
     Image image = Image.builder().filename("test.png").storagePath("test/test.png").build();
     image = imageRepository.save(image);
+    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .bboxX(10)
             .bboxY(20)
             .bboxW(100)
@@ -181,6 +190,7 @@ public class JobCoordinatorServiceTest {
 
     // Clean up
     ocrRegionRepository.delete(updatedRegion);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
 
@@ -188,10 +198,12 @@ public class JobCoordinatorServiceTest {
   public void testHandleQaCallback_DirectFix() {
     Image image = Image.builder().filename("test_df.png").storagePath("test/test_df.png").build();
     image = imageRepository.save(image);
+    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
 
     Layer layer =
         Layer.builder()
-            .image(image)
+            .page(page)
             .type("translation")
             .targetLanguage("en")
             .visible(true)
@@ -201,7 +213,7 @@ public class JobCoordinatorServiceTest {
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .bboxX(10)
             .bboxY(20)
             .bboxW(100)
@@ -251,18 +263,22 @@ public class JobCoordinatorServiceTest {
     layerElementRepository.delete(updatedElement);
     ocrRegionRepository.delete(updatedRegion);
     layerRepository.delete(layer);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
+
 
   @Test
   public void testHandleQaCallback_FailedWithRetry() {
     Image image =
         Image.builder().filename("test_retry.png").storagePath("test/test_retry.png").build();
     image = imageRepository.save(image);
+    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .bboxX(10)
             .bboxY(20)
             .bboxW(100)
@@ -306,6 +322,7 @@ public class JobCoordinatorServiceTest {
     redisTemplate.delete(retryKey);
     redisTemplate.delete(queueName);
     ocrRegionRepository.delete(updatedRegion);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
 
@@ -317,10 +334,12 @@ public class JobCoordinatorServiceTest {
             .storagePath("test/test_max_retry.png")
             .build();
     image = imageRepository.save(image);
+    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .bboxX(10)
             .bboxY(20)
             .bboxW(100)
@@ -359,6 +378,7 @@ public class JobCoordinatorServiceTest {
 
     // Clean up
     ocrRegionRepository.delete(updatedRegion);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
 
@@ -366,10 +386,12 @@ public class JobCoordinatorServiceTest {
   public void testHandleQaCallback_Escalation() {
     Image image = Image.builder().filename("test_esc.png").storagePath("test/test_esc.png").build();
     image = imageRepository.save(image);
+    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .bboxX(10)
             .bboxY(20)
             .bboxW(100)
@@ -404,18 +426,22 @@ public class JobCoordinatorServiceTest {
 
     // Clean up
     ocrRegionRepository.delete(updatedRegion);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
+
 
   @Test
   public void testHandleTranslationCallback_NewElement() {
     Image image =
         Image.builder().filename("test_trans.png").storagePath("test/test_trans.png").build();
     image = imageRepository.save(image);
+    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .bboxX(10)
             .bboxY(20)
             .bboxW(100)
@@ -453,11 +479,12 @@ public class JobCoordinatorServiceTest {
 
     // Clean up
     layerElementRepository.delete(el);
-    List<Layer> layers = layerRepository.findByImageId(image.getId());
+    List<Layer> layers = layerRepository.findByPageId(page.getId());
     for (Layer l : layers) {
       layerRepository.delete(l);
     }
     ocrRegionRepository.delete(updatedRegion);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
 
@@ -466,10 +493,12 @@ public class JobCoordinatorServiceTest {
     Image rawImage =
         Image.builder().filename("test_redo.png").storagePath("test/test_redo.png").build();
     final Image image = imageRepository.save(rawImage);
+    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    final Page page = pageRepository.save(rawPage);
 
     Layer rawLayer =
         Layer.builder()
-            .image(image)
+            .page(page)
             .type("translation")
             .targetLanguage("en")
             .visible(true)
@@ -482,7 +511,7 @@ public class JobCoordinatorServiceTest {
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .bboxX(10)
             .bboxY(20)
             .bboxW(100)
@@ -506,7 +535,7 @@ public class JobCoordinatorServiceTest {
 
     jobCoordinatorService.handleTranslationCallback(image.getId(), List.of(translation), cost);
 
-    List<Layer> layers = layerRepository.findByImageId(image.getId());
+    List<Layer> layers = layerRepository.findByPageId(page.getId());
     assertEquals(2, layers.size());
 
     Layer newLayer =
@@ -528,6 +557,7 @@ public class JobCoordinatorServiceTest {
     layerRepository.delete(newLayer);
     layerRepository.delete(updatedExisting);
     ocrRegionRepository.delete(region);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
 
@@ -536,6 +566,8 @@ public class JobCoordinatorServiceTest {
     Image rawImage =
         Image.builder().filename("test_invalid.png").storagePath("test/test_invalid.png").build();
     final Image image = imageRepository.save(rawImage);
+    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    final Page page = pageRepository.save(rawPage);
 
     Map<String, Object> translation = new HashMap<>();
     translation.put("regionId", "not-a-valid-uuid");
@@ -546,8 +578,9 @@ public class JobCoordinatorServiceTest {
             jobCoordinatorService.handleTranslationCallback(
                 image.getId(), List.of(translation), null));
 
-    List<Layer> layers = layerRepository.findByImageId(image.getId());
+    List<Layer> layers = layerRepository.findByPageId(page.getId());
     layerRepository.deleteAll(layers);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
 
@@ -556,6 +589,8 @@ public class JobCoordinatorServiceTest {
     Image rawImage =
         Image.builder().filename("test_invalid.png").storagePath("test/test_invalid.png").build();
     final Image image = imageRepository.save(rawImage);
+    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    final Page page = pageRepository.save(rawPage);
 
     List<Map<String, String>> regionTypes =
         List.of(Map.of("regionId", "not-a-uuid", "regionType", "text"));
@@ -563,6 +598,7 @@ public class JobCoordinatorServiceTest {
     assertDoesNotThrow(
         () -> jobCoordinatorService.handleLayoutCallback(image.getId(), regionTypes, null));
 
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
 
@@ -571,6 +607,8 @@ public class JobCoordinatorServiceTest {
     Image rawImage =
         Image.builder().filename("test_ocr.png").storagePath("test/test_ocr.png").build();
     final Image image = imageRepository.save(rawImage);
+    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    final Page page = pageRepository.save(rawPage);
 
     String ocrReasonKey = "image:ocr:reason:" + image.getId();
     redisTemplate.opsForValue().set(ocrReasonKey, "user-request");
@@ -583,13 +621,14 @@ public class JobCoordinatorServiceTest {
 
     jobCoordinatorService.handleOcrCallback(dto);
 
-    List<Layer> layers = layerRepository.findByImageId(image.getId());
+    List<Layer> layers = layerRepository.findByPageId(page.getId());
     assertFalse(layers.isEmpty());
     Layer ocrLayer = layers.get(0);
     assertEquals("ocr", ocrLayer.getType());
     assertTrue(ocrLayer.getMetadataJson().get("layer_name").asText().contains("user-request"));
 
     layerRepository.delete(ocrLayer);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
 
@@ -598,11 +637,13 @@ public class JobCoordinatorServiceTest {
     Image image =
         Image.builder().filename("test_hybrid.png").storagePath("test/test_hybrid.png").build();
     image = imageRepository.save(image);
+    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
 
     // Old translation layer (should be set to invisible)
     Layer oldLayer =
         Layer.builder()
-            .image(image)
+            .page(page)
             .type("translation")
             .targetLanguage("en")
             .visible(true)
@@ -613,7 +654,7 @@ public class JobCoordinatorServiceTest {
     // Latest translation layer (should remain/be set to visible)
     Layer latestLayer =
         Layer.builder()
-            .image(image)
+            .page(page)
             .type("translation")
             .targetLanguage("en")
             .visible(false)
@@ -622,12 +663,12 @@ public class JobCoordinatorServiceTest {
     latestLayer = layerRepository.save(latestLayer);
 
     // OCR layer (should be set to invisible)
-    Layer ocrLayer = Layer.builder().image(image).type("ocr").visible(true).zOrder(0).build();
+    Layer ocrLayer = Layer.builder().page(page).type("ocr").visible(true).zOrder(0).build();
     ocrLayer = layerRepository.save(ocrLayer);
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .bboxX(10)
             .bboxY(20)
             .bboxW(100)
@@ -709,8 +750,10 @@ public class JobCoordinatorServiceTest {
     layerRepository.delete(verifiedLatest);
     layerRepository.delete(verifiedOld);
     layerRepository.delete(verifiedOcr);
+    pageRepository.delete(page);
     imageRepository.delete(image);
   }
+
 
   @Test
   public void testChapterOcrProviderOverride() {

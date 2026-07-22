@@ -407,8 +407,10 @@ public class JobCoordinatorService {
             .findById(Objects.requireNonNull(imageId))
             .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
+    Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
+
     // Keep existing layers and regions for multi-pass history, but hide old OCR layers
-    List<Layer> existingLayers = layerRepository.findByImageId(imageId);
+    List<Layer> existingLayers = page != null ? layerRepository.findByPageId(page.getId()) : List.of();
     int maxZ = 0;
     for (Layer layer : existingLayers) {
       if (layer.getZOrder() > maxZ) {
@@ -434,7 +436,7 @@ public class JobCoordinatorService {
 
       OcrRegion region =
           OcrRegion.builder()
-              .image(image)
+              .page(page)
               .panel(matchingPanel)
               .text(rData.getText())
               .detectedLanguage(rData.getDetectedLanguage())
@@ -492,12 +494,13 @@ public class JobCoordinatorService {
 
     Layer ocrLayer =
         Layer.builder()
-            .image(image)
+            .page(page)
             .type("ocr")
             .visible(true)
             .zOrder(nextZOrder)
             .metadataJson(metadata)
             .build();
+
     Objects.requireNonNull(ocrLayer, "ocrLayer cannot be null");
     layerRepository.save(Objects.requireNonNull(ocrLayer));
 
@@ -576,11 +579,13 @@ public class JobCoordinatorService {
             }
           }
 
+          Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
           Conversation conv =
               Conversation.builder()
-                  .image(image)
+                  .page(page)
                   .sceneType(sceneType != null ? sceneType : "dialogue")
                   .build();
+
           Objects.requireNonNull(conv, "conv cannot be null");
           conv = conversationRepository.save(Objects.requireNonNull(conv));
 
@@ -654,10 +659,13 @@ public class JobCoordinatorService {
             ? series.getTargetLanguage().trim().toLowerCase()
             : "en";
 
+    Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
+
     // Find existing translation layers for this image and language
     final String finalTargetLang = targetLang;
     List<Layer> existingTranslationLayers = new ArrayList<>();
-    for (Layer l : layerRepository.findByImageId(imageId)) {
+    List<Layer> allLayers = page != null ? layerRepository.findByPageId(page.getId()) : List.of();
+    for (Layer l : allLayers) {
       if ("translation".equalsIgnoreCase(l.getType())
           && finalTargetLang.equalsIgnoreCase(l.getTargetLanguage())) {
         existingTranslationLayers.add(l);
@@ -674,7 +682,6 @@ public class JobCoordinatorService {
     }
 
     // Compute z-order from ALL layers (not just translation), so it's always at the top
-    List<Layer> allLayers = layerRepository.findByImageId(imageId);
     int maxZ = 0;
     for (Layer l : allLayers) {
       if (l.getZOrder() > maxZ) {
@@ -682,6 +689,7 @@ public class JobCoordinatorService {
       }
     }
     int nextZOrder = maxZ + 1;
+
 
     com.fasterxml.jackson.databind.node.ObjectNode metadata = objectMapper.createObjectNode();
     String modelIdentifier = "unknown";
@@ -737,8 +745,9 @@ public class JobCoordinatorService {
         layerRepository.save(
             Objects.requireNonNull(
                 Layer.builder()
-                    .image(image)
+                    .page(page)
                     .type("translation")
+
                     .targetLanguage(finalTargetLang)
                     .visible(true)
                     .zOrder(nextZOrder)
@@ -869,17 +878,57 @@ public class JobCoordinatorService {
             .findById(Objects.requireNonNull(regionId))
             .orElseThrow(() -> new IllegalArgumentException("Region not found: " + regionId));
 
-    Image image = region.getImage();
+    Page page = region.getPage();
+    UUID imageId = page != null ? page.getImage().getId() : null;
+    UUID pageId = page != null ? page.getId() : null;
 
     String jobType = "ocr".equalsIgnoreCase(redoType) ? "region-redo-ocr" : "region-redo-tl";
 
     enqueueJob(
         jobType,
-        image.getId(),
+        imageId,
         "high",
         job -> {
           job.put("regionId", regionId.toString());
           job.put("redoType", redoType);
+          if (pageId != null) {
+            job.put("pageId", pageId.toString());
+          }
+        });
+  }
+
+  @Transactional
+  public void triggerPageRedo(UUID pageId, String jobType) {
+    triggerPageRedo(pageId, jobType, null);
+  }
+
+  @Transactional
+  public void triggerPageRedo(UUID pageId, String jobType, UUID chapterId) {
+    log.info("Triggering page redo for page {} with job type {} and chapter {}", pageId, jobType, chapterId);
+    Page page = pageRepository.findById(pageId)
+        .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+    UUID imageId = page.getImage().getId();
+    if ("ocr".equals(jobType)) {
+      redisTemplate.opsForValue().set("page:ocr:reason:" + pageId, "manual-re-ocr");
+    } else if ("translation".equals(jobType)) {
+      redisTemplate.opsForValue().set("page:translation:reason:" + pageId, "manual-re-translate");
+    }
+
+    if (redisTemplate != null) {
+      redisTemplate.delete("pipeline:trace:" + pageId);
+    }
+
+    enqueueJob(
+        jobType,
+        imageId,
+        "normal",
+        job -> {
+          job.put("pageId", pageId.toString());
+          if (chapterId != null) {
+            job.put("chapterId", chapterId.toString());
+          } else if (page.getChapter() != null) {
+            job.put("chapterId", page.getChapter().getId().toString());
+          }
         });
   }
 
@@ -908,6 +957,7 @@ public class JobCoordinatorService {
 
     enqueueJob(jobType, imageId, chapterId);
   }
+
 
   @Transactional
   public void handleQaReOcrCallback(UUID imageId, List<Map<String, Object>> results) {
@@ -950,13 +1000,20 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleRenderCallback(UUID imageId) {
+    List<Page> pages = pageRepository.findByImageId(imageId);
+    for (Page page : pages) {
+      page.setLastRenderedAt(OffsetDateTime.now());
+      pageRepository.save(page);
+    }
     boolean manualChangesDone = false;
-    List<LayerElement> allElementsForImage = layerElementRepository.findByLayerImageId(imageId);
-    if (allElementsForImage != null) {
-      for (LayerElement el : allElementsForImage) {
-        if (Boolean.TRUE.equals(el.getIsManuallyEdited())) {
-          manualChangesDone = true;
-          break;
+    for (Page page : pages) {
+      List<LayerElement> elements = layerElementRepository.findByLayerPageId(page.getId());
+      if (elements != null) {
+        for (LayerElement el : elements) {
+          if (Boolean.TRUE.equals(el.getIsManuallyEdited())) {
+            manualChangesDone = true;
+            break;
+          }
         }
       }
     }
@@ -985,9 +1042,11 @@ public class JobCoordinatorService {
     Objects.requireNonNull(imageId, "imageId cannot be null");
 
     // Find the latest translation layer
-    List<Layer> layers = layerRepository.findByImageId(imageId);
+    List<Page> pages = pageRepository.findByImageId(imageId);
+    List<Layer> layers = pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
     Layer latestTranslationLayer = null;
     for (Layer l : layers) {
+
       if ("translation".equalsIgnoreCase(l.getType())
           && (latestTranslationLayer == null
               || l.getZOrder() > latestTranslationLayer.getZOrder())) {
@@ -1188,7 +1247,9 @@ public class JobCoordinatorService {
 
     // Save QA info into translation layer metadata_json
     try {
-      List<Layer> layers = layerRepository.findByImageId(imageId);
+      List<Page> pages = pageRepository.findByImageId(imageId);
+      List<Layer> layers = pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
+
       for (Layer layer : layers) {
         if ("translation".equalsIgnoreCase(layer.getType())) {
           com.fasterxml.jackson.databind.node.ObjectNode metadata =

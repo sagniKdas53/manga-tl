@@ -33,4 +33,11 @@ public class Page {
   @JoinColumn(name = "image_id", nullable = false)
   @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Image image;
+
+  @Column(name = "last_edited_at")
+  private java.time.OffsetDateTime lastEditedAt;
+
+  @Column(name = "last_rendered_at")
+  private java.time.OffsetDateTime lastRenderedAt;
 }
+

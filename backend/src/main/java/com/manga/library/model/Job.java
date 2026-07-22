@@ -35,8 +35,12 @@ public class Job {
   @Column(name = "image_id", columnDefinition = "uuid")
   private UUID imageId;
 
+  @Column(name = "page_id", columnDefinition = "uuid")
+  private UUID pageId;
+
   @Column(nullable = false)
   private String status; // PENDING, PROCESSING, COMPLETED, FAILED, PAUSED
+
 
   @Column(columnDefinition = "text")
   private String payload;

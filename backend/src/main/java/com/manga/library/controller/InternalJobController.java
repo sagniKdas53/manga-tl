@@ -111,12 +111,15 @@ public class InternalJobController {
               map.put("presignedUrl", minioService.generatePresignedUrl(image.getStoragePath()));
               map.put("panels", panelRepository.findByImageId(imageId));
 
+              List<Page> pages = pageRepository.findByImageId(imageId);
+              Page page = pages.isEmpty() ? null : pages.get(0);
+
               // Load OCR regions FIRST (as real entities) before any LayerElement
               // queries that would create lazy proxies in the persistence context
-              List<OcrRegion> allOcrRegions = ocrRegionRepository.findByImageId(imageId);
+              List<OcrRegion> allOcrRegions = page != null ? ocrRegionRepository.findByPageId(page.getId()) : List.of();
 
               // Only return OCR regions from the latest OCR layer
-              List<Layer> allLayers = layerRepository.findByImageId(imageId);
+              List<Layer> allLayers = page != null ? layerRepository.findByPageId(page.getId()) : List.of();
               Layer latestOcrLayer = null;
               for (Layer l : allLayers) {
                 if ("ocr".equalsIgnoreCase(l.getType())
@@ -149,65 +152,63 @@ public class InternalJobController {
                 map.put("ocrRegions", allRegionDtos);
               }
 
-              map.put("layerElements", layerElementRepository.findByLayerImageId(imageId));
+              map.put("layerElements", page != null ? layerElementRepository.findByLayerPageId(page.getId()) : List.of());
 
               // Query page history and series context for translation context assembly
-              pageRepository.findByImageId(imageId).stream()
-                  .findFirst()
-                  .ifPresent(
-                      page -> {
-                        Chapter chapter = page.getChapter();
-                        Series series = chapter.getSeries();
+              if (page != null) {
+                Chapter chapter = page.getChapter();
+                Series series = chapter.getSeries();
 
-                        // Series metadata (character rosters, editorial rules)
-                        Map<String, Object> seriesMap = new HashMap<>();
-                        seriesMap.put("title", series.getTitle());
-                        seriesMap.put("originalLanguage", series.getOriginalLanguage());
-                        seriesMap.put("readingDirection", series.getReadingDirection());
-                        seriesMap.put("metadataJson", series.getMetadataJson());
-                        map.put("seriesMetadata", seriesMap);
-                        Boolean useMemory = chapter.getUseContextMemory();
-                        if (useMemory != null && useMemory) {
-                          // Previous page context
-                          if (page.getPageNumber() > 1) {
-                            List<Page> chapterPages =
-                                pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
-                            Page prevPage =
-                                chapterPages.stream()
-                                    .filter(p -> p.getPageNumber() == page.getPageNumber() - 1)
-                                    .findFirst()
-                                    .orElse(null);
-                            if (prevPage != null) {
-                              List<OcrRegion> prevRegions =
-                                  ocrRegionRepository.findByImageId(prevPage.getImage().getId());
-                              List<String> textList = new ArrayList<>();
-                              for (OcrRegion r : prevRegions) {
-                                String txt =
-                                    r.getTranslatedText() != null
-                                        ? r.getTranslatedText()
-                                        : r.getText();
-                                if (txt != null && !txt.trim().isEmpty()) {
-                                  textList.add(txt.trim());
-                                }
-                              }
-                              map.put("previousPageText", String.join(" | ", textList));
-                            }
-                          }
-
-                          // Chapter summary context
-                          if (chapter.getChapterNumber() > 1) {
-                            chapterRepository
-                                .findBySeriesIdAndChapterNumber(
-                                    series.getId(), chapter.getChapterNumber() - 1)
-                                .ifPresent(
-                                    prevChapter ->
-                                        map.put("chapterSummary", prevChapter.getSummaryJson()));
-                          }
+                // Series metadata (character rosters, editorial rules)
+                Map<String, Object> seriesMap = new HashMap<>();
+                seriesMap.put("title", series.getTitle());
+                seriesMap.put("originalLanguage", series.getOriginalLanguage());
+                seriesMap.put("readingDirection", series.getReadingDirection());
+                seriesMap.put("metadataJson", series.getMetadataJson());
+                map.put("seriesMetadata", seriesMap);
+                Boolean useMemory = chapter.getUseContextMemory();
+                if (useMemory != null && useMemory) {
+                  // Previous page context
+                  if (page.getPageNumber() > 1) {
+                    List<Page> chapterPages =
+                        pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
+                    Page prevPage =
+                        chapterPages.stream()
+                            .filter(p -> p.getPageNumber() == page.getPageNumber() - 1)
+                            .findFirst()
+                            .orElse(null);
+                    if (prevPage != null) {
+                      List<OcrRegion> prevRegions =
+                          ocrRegionRepository.findByPageId(prevPage.getId());
+                      List<String> textList = new ArrayList<>();
+                      for (OcrRegion r : prevRegions) {
+                        String txt =
+                            r.getTranslatedText() != null
+                                ? r.getTranslatedText()
+                                : r.getText();
+                        if (txt != null && !txt.trim().isEmpty()) {
+                          textList.add(txt.trim());
                         }
-                      });
+                      }
+                      map.put("previousPageText", String.join(" | ", textList));
+                    }
+                  }
+
+                  // Chapter summary context
+                  if (chapter.getChapterNumber() > 1) {
+                    chapterRepository
+                        .findBySeriesIdAndChapterNumber(
+                            series.getId(), chapter.getChapterNumber() - 1)
+                        .ifPresent(
+                            prevChapter ->
+                                map.put("chapterSummary", prevChapter.getSummaryJson()));
+                  }
+                }
+              }
 
               // Include conversations with their region mappings
-              List<Conversation> conversations = conversationRepository.findByImageId(imageId);
+              List<Conversation> conversations = page != null ? conversationRepository.findByPageId(page.getId()) : List.of();
+
               List<Map<String, Object>> convList = new ArrayList<>();
               for (Conversation conv : conversations) {
                 Map<String, Object> convMap = new HashMap<>();
@@ -384,7 +385,8 @@ public class InternalJobController {
           .ifPresent(
               region -> {
                 Objects.requireNonNull(region, "region cannot be null");
-                UUID imageId = region.getImage().getId();
+                UUID imageId = region.getPage() != null && region.getPage().getImage() != null ? region.getPage().getImage().getId() : null;
+
                 resolveNotificationContext(imageId);
                 if (payload.containsKey("text")) {
                   region.setText((String) payload.get("text"));

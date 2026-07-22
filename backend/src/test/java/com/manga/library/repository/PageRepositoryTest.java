@@ -93,7 +93,7 @@ public class PageRepositoryTest {
 
     OcrRegion region =
         OcrRegion.builder()
-            .image(image)
+            .page(page)
             .panel(panel)
             .bboxX(10)
             .bboxY(10)
@@ -103,7 +103,7 @@ public class PageRepositoryTest {
             .build();
     region = ocrRegionRepository.save(region);
 
-    Conversation conversation = Conversation.builder().image(image).sceneType("dialogue").build();
+    Conversation conversation = Conversation.builder().page(page).sceneType("dialogue").build();
     conversation = conversationRepository.save(conversation);
 
     ConversationRegion convRegion =
@@ -114,8 +114,9 @@ public class PageRepositoryTest {
             .build();
     conversationRegionRepository.save(convRegion);
 
-    Layer layer = Layer.builder().image(image).type("translation").build();
+    Layer layer = Layer.builder().page(page).type("translation").build();
     layer = layerRepository.save(layer);
+
 
     LayerElement element =
         LayerElement.builder().layer(layer).region(region).x(10.0).y(10.0).build();

@@ -93,10 +93,9 @@ public class ChapterExportServiceTest {
     qaNode.put("status", "manual_review");
     meta.set("qa", qaNode);
 
-    layer.setMetadataJson(meta);
-
-    when(layerRepository.findByImageId(image.getId())).thenReturn(List.of(layer));
+    when(layerRepository.findByPageId(page.getId())).thenReturn(List.of(layer));
     when(jobCostRepository.findByImageId(image.getId())).thenReturn(List.of());
+
 
     when(minioService.downloadFile("originals/001.png"))
         .thenReturn(new ByteArrayInputStream(new byte[] {1, 2, 3}));
@@ -139,7 +138,8 @@ public class ChapterExportServiceTest {
     layer.setType("translation");
     layer.setTargetLanguage("en");
     layer.setVisible(true);
-    when(layerRepository.findByImageId(image.getId())).thenReturn(List.of(layer));
+    when(layerRepository.findByPageId(page.getId())).thenReturn(List.of(layer));
+
     when(jobCostRepository.findByImageId(image.getId())).thenReturn(List.of());
 
     // Fake the hash check for cache hit by mocking minioService.fileExists to true when it matches

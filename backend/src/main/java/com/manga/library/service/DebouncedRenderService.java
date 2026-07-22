@@ -1,7 +1,7 @@
 package com.manga.library.service;
 
-import com.manga.library.model.Image;
-import com.manga.library.repository.ImageRepository;
+import com.manga.library.model.Page;
+import com.manga.library.repository.PageRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class DebouncedRenderService {
 
-  private final ImageRepository imageRepository;
+  private final PageRepository pageRepository;
   private final JobCoordinatorService jobCoordinatorService;
 
   // Run every 30 seconds
@@ -24,20 +24,20 @@ public class DebouncedRenderService {
   public void processPendingRenders() {
     OffsetDateTime oneMinuteAgo = OffsetDateTime.now().minusMinutes(1);
 
-    // Find images that were edited more than a minute ago, and either never rendered or rendered
+    // Find pages that were edited more than a minute ago, and either never rendered or rendered
     // before the last edit
-    List<Image> images = imageRepository.findImagesNeedingRender(oneMinuteAgo);
+    List<Page> pages = pageRepository.findPagesNeedingRender(oneMinuteAgo);
     int triggeredCount = 0;
 
-    for (Image img : images) {
-      log.info("Debounced render triggered for image: {}", img.getId());
+    for (Page page : pages) {
+      log.info("Debounced render triggered for page: {}", page.getId());
       try {
-        jobCoordinatorService.triggerImageRedo(img.getId(), "render");
-        img.setLastRenderedAt(OffsetDateTime.now());
-        imageRepository.save(img);
+        jobCoordinatorService.triggerPageRedo(page.getId(), "render");
+        page.setLastRenderedAt(OffsetDateTime.now());
+        pageRepository.save(page);
         triggeredCount++;
       } catch (Exception e) {
-        log.error("Failed to enqueue debounced render for image: " + img.getId(), e);
+        log.error("Failed to enqueue debounced render for page: " + page.getId(), e);
       }
     }
 
@@ -46,3 +46,4 @@ public class DebouncedRenderService {
     }
   }
 }
+
