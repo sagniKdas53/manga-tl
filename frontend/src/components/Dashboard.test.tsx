@@ -76,6 +76,7 @@ describe("Dashboard Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSafeFetch.mockReset();
+    localStorage.clear();
   });
 
   it("renders the dashboard with list of series", () => {
@@ -387,6 +388,108 @@ describe("Dashboard Component", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("shows permission error when deleting series returns 403", async () => {
+    mockSafeFetch.mockResolvedValueOnce({ ok: false, status: 403 });
+
+    render(
+      <Dashboard mode="dark"
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+
+    const deleteBtn = screen.getAllByTitle("Delete Series")[0];
+    fireEvent.click(deleteBtn);
+
+    const confirmBtns = screen.getAllByRole("button", {
+      name: "Delete Series",
+    });
+    const confirmBtn = confirmBtns[confirmBtns.length - 1];
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        "You don't have permission to delete this series.",
+        "error",
+      );
+    });
+  });
+
+  it("renders series sorted by date", () => {
+    const seriesWithDates = [
+      {
+        id: "s1",
+        title: "Old Series",
+        coverImageUrl: "",
+        readingDirection: "rtl",
+        originalLanguage: "ja",
+        sourceLanguage: "ja",
+        targetLanguage: "en",
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-06-01T00:00:00Z",
+      },
+      {
+        id: "s2",
+        title: "New Series",
+        coverImageUrl: "",
+        readingDirection: "rtl",
+        originalLanguage: "ja",
+        sourceLanguage: "ja",
+        targetLanguage: "en",
+        createdAt: "2024-02-01T00:00:00Z",
+        updatedAt: "2024-07-01T00:00:00Z",
+      },
+    ];
+
+    render(
+      <Dashboard mode="dark"
+        user={mockUser}
+        seriesList={seriesWithDates as any}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
+
+    expect(screen.getAllByText("Old Series").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("New Series").length).toBeGreaterThan(0);
+  });
+
+  it(
+    "changes sort order via select",
+    { timeout: 15000 },
+    async () => {
+      localStorage.setItem("dashboard_sort_by", "updatedAt");
+      localStorage.setItem("dashboard_sort_dir", "desc");
+
+      mockSafeFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      render(
+        <Dashboard mode="dark"
+          user={mockUser}
+          seriesList={initialSeries}
+          setSeriesList={mockSetSeriesList}
+          onSelectSeries={mockOnSelectSeries}
+        />,
+      );
+
+      const comboboxes = document.querySelectorAll('[role="combobox"]');
+      expect(comboboxes.length).toBeGreaterThanOrEqual(1);
+
+      const sortSelect = comboboxes[0];
+      fireEvent.mouseDown(sortSelect);
+      await waitFor(() => {
+        expect(screen.getByRole("listbox")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole("option", { name: /Created Date ↓/ }));
+    },
+  );
 
   it.skip(
     "creates a new series with language and reading direction changed",

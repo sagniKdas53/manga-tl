@@ -16,9 +16,10 @@ vi.mock("../utils", () => ({
   safeFetch: vi.fn(),
 }));
 
+const mockShowToast = vi.fn();
 vi.mock("./ToastContext", () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: mockShowToast,
   }),
 }));
 
@@ -125,5 +126,148 @@ describe("NotificationCenter", () => {
       expect(safeFetch).toHaveBeenCalledWith("/api/series/chapters/exports/exp-123/download", expect.any(Object));
       expect(global.URL.createObjectURL).toHaveBeenCalled();
     });
+  });
+
+  it("marks notification as read when row is clicked", async () => {
+    const mockMarkAsRead = vi.fn();
+    const notifications = [
+      { id: "1", type: "INFO", title: "Read Me", message: "Msg", read: false, timestamp: Date.now() }
+    ];
+    (useNotifications as import("vitest").Mock).mockReturnValue({
+      notifications,
+      unreadCount: 1,
+      markAsRead: mockMarkAsRead,
+      markAllAsRead: vi.fn(),
+      clearAll: vi.fn(),
+      dismissNotification: vi.fn(),
+    });
+
+    render(<NotificationCenter forceOpen={true} onRequestOpen={vi.fn()} onClose={vi.fn()} />);
+
+    const row = screen.getByText("Read Me").closest("tr");
+    expect(row).not.toBeNull();
+    fireEvent.click(row!);
+    expect(mockMarkAsRead).toHaveBeenCalledWith("1");
+  });
+
+  it("dismisses notification", async () => {
+    const mockDismiss = vi.fn();
+    const notifications = [
+      { id: "1", type: "INFO", title: "Dismiss Me", message: "Msg", read: false, timestamp: Date.now() }
+    ];
+    (useNotifications as import("vitest").Mock).mockReturnValue({
+      notifications,
+      unreadCount: 1,
+      markAsRead: vi.fn(),
+      markAllAsRead: vi.fn(),
+      clearAll: vi.fn(),
+      dismissNotification: mockDismiss,
+    });
+
+    render(<NotificationCenter forceOpen={true} onRequestOpen={vi.fn()} onClose={vi.fn()} />);
+
+    const dismissBtn = screen.getByLabelText("Dismiss");
+    fireEvent.click(dismissBtn);
+    expect(mockDismiss).toHaveBeenCalledWith("1");
+  });
+
+  it("handles download when token is null and no stored user", async () => {
+    const notifications = [
+      {
+        id: "3", type: "EXPORT_SUCCESS", title: "Export", message: "Ready",
+        read: true, timestamp: Date.now(),
+        context: { seriesTitle: "S", chapterNumber: "1", exportId: "exp-1" }
+      }
+    ];
+    (useNotifications as import("vitest").Mock).mockReturnValue({
+      notifications, unreadCount: 0,
+      markAsRead: vi.fn(), markAllAsRead: vi.fn(), clearAll: vi.fn(), dismissNotification: vi.fn(),
+    });
+
+    localStorage.removeItem("manga_user");
+
+    render(<NotificationCenter forceOpen={true} onRequestOpen={vi.fn()} onClose={vi.fn()} token={null} />);
+
+    fireEvent.click(screen.getByText("Download ZIP"));
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith("You're signed out — please log in again to download.", "error");
+    });
+  });
+
+  it("handles download when stored user has invalid JSON", async () => {
+    const notifications = [
+      {
+        id: "4", type: "EXPORT_SUCCESS", title: "Export", message: "Ready",
+        read: true, timestamp: Date.now(),
+        context: { seriesTitle: "S", chapterNumber: "1", exportId: "exp-1" }
+      }
+    ];
+    (useNotifications as import("vitest").Mock).mockReturnValue({
+      notifications, unreadCount: 0,
+      markAsRead: vi.fn(), markAllAsRead: vi.fn(), clearAll: vi.fn(), dismissNotification: vi.fn(),
+    });
+
+    localStorage.setItem("manga_user", "not-json");
+
+    render(<NotificationCenter forceOpen={true} onRequestOpen={vi.fn()} onClose={vi.fn()} token={null} />);
+
+    fireEvent.click(screen.getByText("Download ZIP"));
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith("Couldn't read your session — please log in again.", "error");
+    });
+  });
+
+  it("handles 404 on download", async () => {
+    (safeFetch as import("vitest").Mock).mockResolvedValueOnce({ ok: false, status: 404 });
+    localStorage.setItem("manga_user", JSON.stringify({ token: "test" }));
+
+    const notifications = [
+      {
+        id: "5", type: "EXPORT_SUCCESS", title: "Export", message: "Ready",
+        read: true, timestamp: Date.now(),
+        context: { seriesTitle: "S", chapterNumber: "1", exportId: "exp-1" }
+      }
+    ];
+    (useNotifications as import("vitest").Mock).mockReturnValue({
+      notifications, unreadCount: 0,
+      markAsRead: vi.fn(), markAllAsRead: vi.fn(), clearAll: vi.fn(), dismissNotification: vi.fn(),
+    });
+
+    render(<NotificationCenter forceOpen={true} onRequestOpen={vi.fn()} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByText("Download ZIP"));
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        "This export has expired or was already cleaned up.",
+        "error",
+      );
+    });
+  });
+
+  it("handles download network error", async () => {
+    (safeFetch as import("vitest").Mock).mockRejectedValueOnce(new Error("Network Error"));
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    localStorage.setItem("manga_user", JSON.stringify({ token: "test" }));
+
+    const notifications = [
+      {
+        id: "6", type: "EXPORT_SUCCESS", title: "Export", message: "Ready",
+        read: true, timestamp: Date.now(),
+        context: { seriesTitle: "S", chapterNumber: "1", exportId: "exp-1" }
+      }
+    ];
+    (useNotifications as import("vitest").Mock).mockReturnValue({
+      notifications, unreadCount: 0,
+      markAsRead: vi.fn(), markAllAsRead: vi.fn(), clearAll: vi.fn(), dismissNotification: vi.fn(),
+    });
+
+    render(<NotificationCenter forceOpen={true} onRequestOpen={vi.fn()} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByText("Download ZIP"));
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalled();
+      expect(mockShowToast).toHaveBeenCalledWith("Error downloading export", "error");
+    });
+    consoleSpy.mockRestore();
   });
 });

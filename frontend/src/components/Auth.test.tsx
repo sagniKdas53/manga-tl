@@ -135,6 +135,17 @@ describe("Auth Component", () => {
     fireEvent.change(screen.getByLabelText(/Display Name/i), { target: { value: "New Admin" } });
   });
 
+  it("handles setup-required API returning non-ok response", async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockSafeFetch.mockResolvedValueOnce({ ok: false });
+    render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
+    fireEvent.click(screen.getByText("Don't have an account? Sign Up"));
+    await waitFor(() => {
+      expect(screen.getByText("Create Account")).toBeInTheDocument();
+    });
+    consoleSpy.mockRestore();
+  });
+
   it("allows selecting a role when setup is not required", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,

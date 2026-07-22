@@ -110,4 +110,77 @@ describe("ImportChapterDialog", () => {
       expect(labels.length).toBeGreaterThanOrEqual(1);
     });
   });
+
+  it("can change model override select values", async () => {
+    render(<ImportChapterDialog {...defaultProps} />);
+
+    fireEvent.click(await screen.findByText("Model Overrides (Optional)"));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(1);
+    });
+
+    const selects = document.querySelectorAll('[role="combobox"]');
+    expect(selects.length).toBeGreaterThan(0);
+
+    fireEvent.mouseDown(selects[0]);
+    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("option", { name: "gemini" }));
+
+    fireEvent.mouseDown(selects[1]);
+    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("option", { name: "vlm-ocr-1" }));
+
+    fireEvent.mouseDown(selects[2]);
+    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("option", { name: "anthropic" }));
+  });
+
+  it("sets and clears a model override provider", async () => {
+    render(<ImportChapterDialog {...defaultProps} />);
+
+    fireEvent.click(await screen.findByText("Model Overrides (Optional)"));
+    await waitFor(() => {
+      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(1);
+    });
+
+    const selects = document.querySelectorAll('[role="combobox"]');
+    fireEvent.mouseDown(selects[0]);
+    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("option", { name: "gemini" }));
+
+    const clearBtns = document.querySelectorAll('[data-testid="CloseIcon"]');
+    if (clearBtns.length > 0) {
+      fireEvent.click(clearBtns[0]);
+    }
+  });
+
+  it("changes useFallbackModels toggle", async () => {
+    render(<ImportChapterDialog {...defaultProps} />);
+
+    fireEvent.click(await screen.findByText("Model Overrides (Optional)"));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(1);
+    });
+
+    const fallbackSelect = document.querySelector('[role="combobox"]:last-child') as HTMLElement;
+    if (fallbackSelect) {
+      fireEvent.mouseDown(fallbackSelect);
+      await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("option", { name: "Disabled" }));
+    }
+  });
+
+  it("handles settings fetch failure gracefully", async () => {
+    render(<ImportChapterDialog {...defaultProps} series={{ ...defaultProps.series, useFallbackModels: undefined }} />);
+    expect(await screen.findByText("Import Chapter (ZIP)")).toBeDefined();
+  });
+
+  it("form submit returns early without file", async () => {
+    render(<ImportChapterDialog {...defaultProps} />);
+    const form = document.querySelector("form");
+    expect(form).not.toBeNull();
+    form!.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+  });
 });

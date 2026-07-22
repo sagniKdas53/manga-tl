@@ -703,7 +703,7 @@ export const Reader: React.FC<ReaderProps> = ({
       setRedoStack([]);
       setInteractionMode("none");
     });
-  }, [pageNumber]);
+  }, [pageNumber, setZoom]);
 
   // Reset interaction mode on selectedItem ID changes
   const prevSelectedItemIdRef = useRef<string | number | null>(null);

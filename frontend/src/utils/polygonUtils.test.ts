@@ -107,10 +107,22 @@ describe("polygonUtils", () => {
       ]);
     });
 
+    it("should create rotated polygon from rect", () => {
+      const rectPoly = rectToPolygon(1, 1, 3, 2, 90);
+      const area = polygonArea(rectPoly);
+      expect(area).toBeCloseTo(6, 1);
+    });
+
     it("should create polygon from ellipse", () => {
       const ellipsePoly = ellipseToPolygon(0, 0, 2, 1, 0, 4);
       expect(ellipsePoly.length).toBe(4);
       expect(ellipsePoly[0]).toEqual([2, 0]);
+    });
+
+    it("should create rotated polygon from ellipse", () => {
+      const ellipsePoly = ellipseToPolygon(0, 0, 2, 1, 90, 4);
+      expect(ellipsePoly.length).toBe(4);
+      expect(ellipsePoly[0][0]).toBeCloseTo(0);
     });
   });
 
