@@ -13,6 +13,7 @@ import type {
 } from "../types";
 import { safeFetch, toSlug, formatCost } from "../utils";
 import { fitTextInBox } from "../utils/fitText";
+import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
 import ReaderTopNav from "./ReaderTopNav";
@@ -176,23 +177,11 @@ export const Reader: React.FC<ReaderProps> = ({
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
-  const [showPanels, setShowPanels] = useState(() => {
-    const saved = localStorage.getItem("manga_show_panels");
-    return saved === null ? true : saved === "true";
-  });
-  const [showOcr, setShowOcr] = useState(() => {
-    const saved = localStorage.getItem("manga_show_ocr");
-    return saved === null ? true : saved === "true";
-  });
+  const [showPanels, setShowPanels] = usePersistedState("manga_show_panels", true);
+  const [showOcr, setShowOcr] = usePersistedState("manga_show_ocr", true);
   const [showTranslations] = useState(false);
-  const [showLeftSidebar, setShowLeftSidebar] = useState(() => {
-    const saved = localStorage.getItem("manga_show_left_sidebar");
-    return saved === null ? true : saved === "true";
-  });
-  const [showRightSidebar, setShowRightSidebar] = useState(() => {
-    const saved = localStorage.getItem("manga_show_right_sidebar");
-    return saved === null ? true : saved === "true";
-  });
+  const [showLeftSidebar, setShowLeftSidebar] = usePersistedState("manga_show_left_sidebar", true);
+  const [showRightSidebar, setShowRightSidebar] = usePersistedState("manga_show_right_sidebar", true);
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
   const pageDetailsCache = useRef<
@@ -207,21 +196,14 @@ export const Reader: React.FC<ReaderProps> = ({
     >
   >({});
   const prefetchQueue = useRef<Set<string>>(new Set());
-  const [zoom, setZoom] = useState(() => {
-    const saved = localStorage.getItem("manga_zoom");
-    const parsed = parseFloat(saved || "1.0");
-    return isNaN(parsed) ? 1.0 : parsed;
-  });
+  const [zoom, setZoom] = usePersistedState("manga_zoom", 1.0);
 
   // Phase 4 Layer System states
   const [layers, setLayers] = useState<
     { layer: Layer; elements: LayerElement[] }[]
   >([]);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
-  const [cleanScanlationView, setCleanScanlationView] = useState(() => {
-    const saved = localStorage.getItem("manga_clean_view");
-    return saved === null ? false : saved === "true";
-  });
+  const [cleanScanlationView, setCleanScanlationView] = usePersistedState("manga_clean_view", false);
   const [manuallyShownOcrLayers, setManuallyShownOcrLayers] = useState<
     Set<string>
   >(new Set());
@@ -229,17 +211,12 @@ export const Reader: React.FC<ReaderProps> = ({
   const [redoStack, setRedoStack] = useState<LayerElement[]>([]);
 
   // Conversation and Layout enhancements
-  const [groupByConversation, setGroupByConversation] = useState(() => {
-    const saved = localStorage.getItem("manga_group_by_conversation");
-    return saved === null ? true : saved === "true";
-  });
+  const [groupByConversation, setGroupByConversation] = usePersistedState("manga_group_by_conversation", true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedItem, setSelectedItem] = useState<SelectedItemType>(null);
-  const [fitMode, setFitMode] = useState<"page" | "width" | "height">(() => {
-    const saved = localStorage.getItem("manga_fit_mode");
-    return saved === "page" || saved === "width" || saved === "height"
-      ? saved
-      : "page";
+  const [fitMode, setFitMode] = usePersistedState<"page" | "width" | "height">("manga_fit_mode", "page", {
+    deserialize: (saved) =>
+      saved === "page" || saved === "width" || saved === "height" ? saved : "page",
   });
   const [isRedoingPageOcr, setIsRedoingPageOcr] = useState(false);
   const [isRedoingPageTranslation, setIsRedoingPageTranslation] =
@@ -359,45 +336,6 @@ export const Reader: React.FC<ReaderProps> = ({
       }
     });
   }, [subscribe, selectedPage, showToast]);
-
-  // Persistence effects
-  useEffect(() => {
-    localStorage.setItem("manga_show_panels", showPanels.toString());
-  }, [showPanels]);
-
-  useEffect(() => {
-    localStorage.setItem("manga_show_ocr", showOcr.toString());
-  }, [showOcr]);
-
-  useEffect(() => {
-    localStorage.setItem("manga_show_left_sidebar", showLeftSidebar.toString());
-  }, [showLeftSidebar]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "manga_show_right_sidebar",
-      showRightSidebar.toString(),
-    );
-  }, [showRightSidebar]);
-
-  useEffect(() => {
-    localStorage.setItem("manga_clean_view", cleanScanlationView.toString());
-  }, [cleanScanlationView]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "manga_group_by_conversation",
-      groupByConversation.toString(),
-    );
-  }, [groupByConversation]);
-
-  useEffect(() => {
-    localStorage.setItem("manga_fit_mode", fitMode);
-  }, [fitMode]);
-
-  useEffect(() => {
-    localStorage.setItem("manga_zoom", zoom.toString());
-  }, [zoom]);
 
   // Window title synchronization
   useEffect(() => {

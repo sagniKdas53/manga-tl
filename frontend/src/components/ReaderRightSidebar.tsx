@@ -29,53 +29,10 @@ import OpenWithIcon from "@mui/icons-material/OpenWith";
 import CropIcon from "@mui/icons-material/Crop";
 import LayersIcon from "@mui/icons-material/Layers";
 import { ColorPicker } from "./ColorPicker";
+import SidebarSection from "./SidebarSection";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 
 // --- Shared presentational helpers -----------------------------------------
-
-const SidebarSection: React.FC<{ title?: string; children: React.ReactNode; sx?: object; headerExtra?: React.ReactNode }> = ({
-  title,
-  children,
-  sx,
-  headerExtra,
-}) => (
-  <Box
-    sx={{
-      border: "1px solid var(--border-color)",
-      borderRadius: "10px",
-      p: 1.5,
-      mb: 2,
-      backgroundColor: "var(--bg-surface, transparent)",
-      ...sx,
-    }}
-  >
-    {title && (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          mb: 1.25,
-        }}
-      >
-        <Typography
-          variant="overline"
-          component="div"
-          sx={{
-            fontSize: "10.5px",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            color: "var(--text-dim, var(--text-muted))",
-          }}
-        >
-          {title}
-        </Typography>
-        {headerExtra}
-      </Box>
-    )}
-    {children}
-  </Box>
-);
 
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure

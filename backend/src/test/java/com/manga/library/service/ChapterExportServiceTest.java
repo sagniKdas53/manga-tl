@@ -16,6 +16,7 @@ import com.manga.library.repository.LayerElementRepository;
 import com.manga.library.repository.LayerRepository;
 import com.manga.library.repository.PageRepository;
 import java.io.ByteArrayInputStream;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -158,5 +159,50 @@ public class ChapterExportServiceTest {
     verify(sseService)
         .emitNotificationToUser(
             eq(userId), eq("EXPORT_SUCCESS"), anyString(), anyString(), any(), any());
+  }
+
+  @Test
+  void testBuildAndUploadExport_ChapterNotFound() {
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.empty());
+
+    chapterExportService.buildAndUploadExport(chapterId, userId, false);
+
+    verify(sseService)
+        .emitNotificationToUser(
+            eq(userId), eq("EXPORT_ERROR"), anyString(), anyString());
+  }
+
+  @Test
+  void testBuildAndUploadExport_EmptyPages() {
+    Chapter chapter = new Chapter();
+    chapter.setId(chapterId);
+    chapter.setChapterNumber(1.0);
+
+    when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
+        .thenReturn(Collections.emptyList());
+
+    chapterExportService.buildAndUploadExport(chapterId, userId, false);
+
+    verify(sseService)
+        .emitNotificationToUser(
+            eq(userId), eq("EXPORT_ERROR"), anyString(), anyString());
+  }
+
+  @Test
+  void testClearChapterExports() throws Exception {
+    when(minioService.listObjects(anyString())).thenReturn(Collections.emptyList());
+
+    assertDoesNotThrow(() -> chapterExportService.clearChapterExports(chapterId));
+
+    verify(minioService).listObjects(contains(chapterId.toString()));
+  }
+
+  @Test
+  void testClearChapterExports_HandlesException() throws Exception {
+    when(minioService.listObjects(anyString()))
+        .thenThrow(new RuntimeException("MinIO error"));
+
+    assertDoesNotThrow(() -> chapterExportService.clearChapterExports(chapterId));
   }
 }
