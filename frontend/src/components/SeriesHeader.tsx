@@ -56,8 +56,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
 
   const resolvedTlProvider = resolveOverride(null, series.tlProvider, settings?.tlProvider);
   const resolvedTl = resolveOverride(null, series.tlModel, settings?.tlModel);
-  
-  const resolvedQaProvider = resolveOverride(null, series.qaProvider, settings?.qaProvider);
+
   const resolvedQaRouting = resolveOverride(null, series.routingStrategy, settings?.routingStrategy);
   const resolvedQa = resolveOverride(null, series.qaLlmModel, settings?.qaLlmModel);
   const resolvedQaVlm = resolveOverride(null, series.qaVlmModel, settings?.qaVlmModel);

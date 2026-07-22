@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
@@ -54,7 +54,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   isImporting,
 }) => {
   const [openSplit, setOpenSplit] = useState(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
+  const [splitAnchorEl, setSplitAnchorEl] = useState<HTMLDivElement | null>(null);
   
   const [overflowAnchorEl, setOverflowAnchorEl] = useState<null | HTMLElement>(null);
   const openOverflow = Boolean(overflowAnchorEl);
@@ -63,8 +63,8 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
     setOpenSplit((prevOpen) => !prevOpen);
   };
 
-  const handleCloseSplit = (event: Event) => {
-    if (anchorRef.current && anchorRef.current.contains(event.target as HTMLElement)) {
+  const handleCloseSplit = () => {
+    if (splitAnchorEl && splitAnchorEl.contains(document.activeElement as HTMLElement)) {
       return;
     }
     setOpenSplit(false);
@@ -203,7 +203,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     {isImporting ? "Importing..." : "Import Project (ZIP)"}
                   </Button>
 
-                  <ButtonGroup variant="outlined" ref={anchorRef} aria-label="split button">
+                  <ButtonGroup variant="outlined" ref={setSplitAnchorEl} aria-label="split button">
                     <Button onClick={onExportClick} startIcon={<DownloadIcon />}>
                       Export Chapter (ZIP)
                     </Button>
@@ -221,7 +221,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   <Popper
                     sx={{ zIndex: 1 }}
                     open={openSplit}
-                    anchorEl={anchorRef.current}
+                    anchorEl={splitAnchorEl}
                     role={undefined}
                     transition
                     disablePortal
@@ -238,7 +238,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                           <ClickAwayListener onClickAway={handleCloseSplit}>
                             <MenuList id="split-button-menu" autoFocusItem>
                               <MenuItem
-                                onClick={(event) => {
+                                onClick={() => {
                                   onReexportClick();
                                   setOpenSplit(false);
                                 }}
