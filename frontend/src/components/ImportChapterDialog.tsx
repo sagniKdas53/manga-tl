@@ -70,6 +70,10 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
   const [qaLlmModel, setQaLlmModel] = useState("");
   const [qaVlmModel, setQaVlmModel] = useState("");
   const [qaMode, setQaMode] = useState("");
+  const [routingStrategy, setRoutingStrategy] = useState("");
+  const [useFallbackModels, setUseFallbackModels] = useState<boolean>(
+    series.useFallbackModels ?? true,
+  );
 
   const actualProviders = settings?.activeProviders || [
     "openrouter",
@@ -97,26 +101,33 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
   const inheritedQaMode = series.qaMode || settings?.qaMode;
   const inheritedQaLlmModel = series.qaLlmModel || settings?.qaLlmModel;
   const inheritedQaVlmModel = series.qaVlmModel || settings?.qaVlmModel;
+  const inheritedRoutingStrategy = series.routingStrategy || settings?.routingStrategy || "lowest-cost";
 
   const overrideFields = [
     ocrProvider, ocrModel, tlProvider, tlModel,
-    qaProvider, qaMode, qaLlmModel, qaVlmModel,
+    qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
   ];
   const overriddenCount = overrideFields.filter((v) => v !== "").length;
   const inheritedCount = overrideFields.length - overriddenCount;
 
   useEffect(() => {
     if (open) {
+      setUseFallbackModels(series.useFallbackModels ?? true);
       safeFetch("/api/settings", {
         headers: { Authorization: `Bearer ${user.token}` },
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
-          if (d) setSettings(d);
+          if (d) {
+            setSettings(d);
+            if (series.useFallbackModels === undefined && d.useFallbackModels !== undefined) {
+              setUseFallbackModels(d.useFallbackModels);
+            }
+          }
         })
         .catch(() => {});
     }
-  }, [open, user.token]);
+  }, [open, series, user.token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +147,8 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
     if (qaLlmModel) formData.append("qaLlmModel", qaLlmModel);
     if (qaVlmModel) formData.append("qaVlmModel", qaVlmModel);
     if (qaMode) formData.append("qaMode", qaMode);
+    if (routingStrategy) formData.append("routingStrategy", routingStrategy);
+    formData.append("useFallbackModels", String(useFallbackModels));
 
     try {
       const res = await safeFetch(`/api/series/${series.id}/chapters/import`, {
@@ -448,6 +461,39 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                     <CloseIcon fontSize="small" />
                   </IconButton>
                 )}
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Routing Strategy</InputLabel>
+                  <Select
+                    size="small"
+                    value={routingStrategy || inheritedRoutingStrategy}
+                    label="Routing Strategy"
+                    onChange={(e) => setRoutingStrategy(e.target.value)}
+                  >
+                    <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
+                    <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
+                  </Select>
+                </FormControl>
+                {routingStrategy !== "" && (
+                  <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setRoutingStrategy("")}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Use Fallback Models</InputLabel>
+                  <Select
+                    size="small"
+                    value={useFallbackModels ? "true" : "false"}
+                    label="Use Fallback Models"
+                    onChange={(e) => setUseFallbackModels(e.target.value === "true")}
+                  >
+                    <MenuItem value="true">True (Enabled)</MenuItem>
+                    <MenuItem value="false">False (Disabled)</MenuItem>
+                  </Select>
+                </FormControl>
               </Box>
             </AccordionDetails>
           </Accordion>

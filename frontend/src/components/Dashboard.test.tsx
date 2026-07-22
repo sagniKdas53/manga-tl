@@ -169,7 +169,8 @@ describe("Dashboard Component", () => {
             qaLlmModel: null,
             qaVlmModel: null,
             qaMode: null,
-          routingStrategy: null,
+            routingStrategy: null,
+            useFallbackModels: true,
           }),
         });
         expect(mockSetSeriesList).toHaveBeenCalled();
@@ -229,6 +230,7 @@ describe("Dashboard Component", () => {
           qaVlmModel: null,
           qaMode: null,
           routingStrategy: null,
+          useFallbackModels: true,
         }),
       });
     });
