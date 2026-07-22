@@ -108,7 +108,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleChange = (field: keyof SystemSettingsDto, value: string) => {
+  const handleChange = (field: keyof SystemSettingsDto, value: any) => {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
@@ -436,12 +436,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <FormControl fullWidth size="small">
                 <InputLabel>Use Fallback Models</InputLabel>
                 <Select
-                  value={settings.useFallbackModels || "false"}
+                  value={settings.useFallbackModels !== false ? "true" : "false"}
                   label="Use Fallback Models"
-                  onChange={(e) => handleChange("useFallbackModels", e.target.value)}
+                  onChange={(e) => handleChange("useFallbackModels", e.target.value === "true")}
                 >
+                  <MenuItem value="true">True (Default)</MenuItem>
                   <MenuItem value="false">False</MenuItem>
-                  <MenuItem value="true">True</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

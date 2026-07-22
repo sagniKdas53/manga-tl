@@ -104,6 +104,7 @@ public class SystemSettingsService {
     dto.setQaLlmModel(getSettingValue("qaLlmModel", actQaLlmModel));
     dto.setQaVlmModel(getSettingValue("qaVlmModel", actQaVlmModel));
     dto.setRoutingStrategy(getSettingValue("routingStrategy", "lowest-cost"));
+    dto.setUseFallbackModels(Boolean.parseBoolean(getSettingValue("useFallbackModels", "true")));
 
     dto.setDisableLocalOcr(disableLocalOcr);
     dto.setLocalOcrModel(paddleOcrRecModel);
@@ -169,6 +170,9 @@ public class SystemSettingsService {
     saveSetting("qaLlmModel", dto.getQaLlmModel());
     saveSetting("qaVlmModel", dto.getQaVlmModel());
     saveSetting("routingStrategy", dto.getRoutingStrategy());
+    if (dto.getUseFallbackModels() != null) {
+      saveSetting("useFallbackModels", String.valueOf(dto.getUseFallbackModels()));
+    }
 
     return getSettings();
   }

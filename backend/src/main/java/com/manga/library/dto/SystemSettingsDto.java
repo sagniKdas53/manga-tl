@@ -31,6 +31,8 @@ public class SystemSettingsDto {
   private boolean disableLocalLlm;
   private String qaMode;
 
+  private Boolean useFallbackModels;
+
   private List<String> activeProviders;
   private List<String> activeOcrProviders;
 }
