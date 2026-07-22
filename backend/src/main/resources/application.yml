@@ -13,10 +13,12 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
-    open-in-view: false
+    open-in-view: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        hbm2ddl:
+          halt_on_error: true
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
@@ -28,6 +30,9 @@ spring:
   web:
     resources:
       static-locations: classpath:/static/,file:../frontend/dist/,file:frontend/dist/
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
