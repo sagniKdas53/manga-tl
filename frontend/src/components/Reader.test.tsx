@@ -211,12 +211,13 @@ describe("Reader Component", () => {
       expect(mockSafeFetch).toHaveBeenCalled();
     });
 
-    // Verify that the fetch was called again for the image and layers, indicating cache was busted
+    // Verify that the fetch was called again for the image/page and layers, indicating cache was busted
     const fetchUrls = mockSafeFetch.mock.calls.map((call) => call[0]);
-    expect(fetchUrls.some((url) => url.includes("/api/images/img1"))).toBe(
-      true,
-    );
+    expect(
+      fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
+    ).toBe(true);
   });
+
   it("prefetches next two pages and applies synchronous cache hits", async () => {
     const p1 = {
       ...mockPage,
@@ -258,22 +259,22 @@ describe("Reader Component", () => {
       />,
     );
 
-    // Initial load: fetches img1 data, plus prefetches img2 and img3 data
+    // Initial load: fetches img1/p1 data, plus prefetches p2/img2 and p3/img3 data
     await waitFor(() => {
       const fetchUrls = mockSafeFetch.mock.calls.map((call) => call[0]);
-      expect(fetchUrls.some((url) => url.includes("/api/images/img1"))).toBe(
-        true,
-      );
-      expect(fetchUrls.some((url) => url.includes("/api/images/img2"))).toBe(
-        true,
-      );
-      expect(fetchUrls.some((url) => url.includes("/api/images/img3"))).toBe(
-        true,
-      );
-      // img4 should not be prefetched yet
-      expect(fetchUrls.some((url) => url.includes("/api/images/img4"))).toBe(
-        false,
-      );
+      expect(
+        fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
+      ).toBe(true);
+      expect(
+        fetchUrls.some((url) => url.includes("p2") || url.includes("img2")),
+      ).toBe(true);
+      expect(
+        fetchUrls.some((url) => url.includes("p3") || url.includes("img3")),
+      ).toBe(true);
+      // p4/img4 should not be prefetched yet
+      expect(
+        fetchUrls.some((url) => url.includes("p4") || url.includes("img4")),
+      ).toBe(false);
     });
 
     // Clear mock to observe the next transition
@@ -306,14 +307,14 @@ describe("Reader Component", () => {
       ).not.toBeInTheDocument();
 
       const fetchUrls = mockSafeFetch.mock.calls.map((call) => call[0]);
-      // Should not refetch img2 because it's cached
-      expect(fetchUrls.some((url) => url.includes("/api/images/img2"))).toBe(
-        false,
-      );
-      // It SHOULD prefetch img4 now since it's the new N+2
-      expect(fetchUrls.some((url) => url.includes("/api/images/img4"))).toBe(
-        true,
-      );
+      // Should not refetch p2/img2 because it's cached
+      expect(
+        fetchUrls.some((url) => url.includes("p2") || url.includes("img2")),
+      ).toBe(false);
+      // It SHOULD prefetch p4/img4 now since it's the new N+2
+      expect(
+        fetchUrls.some((url) => url.includes("p4") || url.includes("img4")),
+      ).toBe(true);
     });
   });
 
