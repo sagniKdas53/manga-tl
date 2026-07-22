@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Reader } from "./Reader";
@@ -24,11 +23,11 @@ vi.mock("./ToastContext", () => ({
   }),
 }));
 
-const mockSafeFetch = vi.fn(() =>
-  Promise.resolve({ ok: true, json: () => Promise.resolve([]) }),
-);
+const mockSafeFetch = vi.fn<
+  (url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>
+>(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }));
 vi.mock("../utils", () => ({
-  safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
+  safeFetch: (url: string, init?: RequestInit) => mockSafeFetch(url, init),
   toSlug: (s: string) => s.toLowerCase(),
 }));
 
@@ -36,6 +35,8 @@ describe("Reader Component", () => {
   const mockUser = {
     id: "1",
     username: "testuser",
+    email: "test@example.com",
+    displayName: "Test User",
     role: "user",
     token: "token123",
   };
@@ -47,6 +48,8 @@ describe("Reader Component", () => {
     status: "ONGOING",
     chaptersCount: 0,
     imageId: "img1",
+    originalLanguage: "ja",
+    readingDirection: "rtl",
   };
   const mockChapter = {
     id: "c1",
@@ -61,6 +64,8 @@ describe("Reader Component", () => {
     chapterId: "c1",
     pageNumber: 1,
     imageId: "img1",
+    filename: "p1.jpg",
+    url: "/path/to/img1.jpg",
     status: "PENDING",
     imagePath: "/path/to/img",
     processingProgress: 0,
@@ -148,10 +153,16 @@ describe("Reader Component", () => {
       fireEvent.click(screen.getByRole("button", { name: "Height" }));
 
       // Click Redo actions
-      mockSafeFetch.mockResolvedValueOnce({ ok: true });
+      mockSafeFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
       fireEvent.click(screen.getByText("Redo Page OCR"));
 
-      mockSafeFetch.mockResolvedValueOnce({ ok: true });
+      mockSafeFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
       fireEvent.click(screen.getByText("Redo Page Translation"));
 
       // Click layer creation buttons
@@ -185,14 +196,14 @@ describe("Reader Component", () => {
 
     await screen.findByText(/Test Series/);
 
-    const sseCallback = mockSubscribe.mock.calls[0][0];
+    const sseCallback = (mockSubscribe.mock.calls as [((event: { type: string; data: string }) => void)?][])[0]?.[0];
     expect(sseCallback).toBeDefined();
 
     // Clear mock history before triggering the SSE
     mockSafeFetch.mockClear();
 
     // Trigger SSE event
-    sseCallback({
+    sseCallback?.({
       type: "job_update",
       data: JSON.stringify({
         status: "COMPLETED",
@@ -212,7 +223,8 @@ describe("Reader Component", () => {
     });
 
     // Verify that the fetch was called again for the image/page and layers, indicating cache was busted
-    const fetchUrls = mockSafeFetch.mock.calls.map((call) => call[0]);
+    const fetchCalls = mockSafeFetch.mock.calls as unknown as [string, RequestInit?][];
+    const fetchUrls = fetchCalls.map((call) => call[0] || "");
     expect(
       fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
     ).toBe(true);
@@ -261,7 +273,8 @@ describe("Reader Component", () => {
 
     // Initial load: fetches img1/p1 data, plus prefetches p2/img2 and p3/img3 data
     await waitFor(() => {
-      const fetchUrls = mockSafeFetch.mock.calls.map((call) => call[0]);
+      const fetchCalls = mockSafeFetch.mock.calls as unknown as [string, RequestInit?][];
+      const fetchUrls = fetchCalls.map((call) => call[0] || "");
       expect(
         fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
       ).toBe(true);
@@ -306,7 +319,8 @@ describe("Reader Component", () => {
         screen.queryByText(/Loading page details/),
       ).not.toBeInTheDocument();
 
-      const fetchUrls = mockSafeFetch.mock.calls.map((call) => call[0]);
+      const fetchCalls = mockSafeFetch.mock.calls as unknown as [string, RequestInit?][];
+      const fetchUrls = fetchCalls.map((call) => call[0] || "");
       // Should not refetch p2/img2 because it's cached
       expect(
         fetchUrls.some((url) => url.includes("p2") || url.includes("img2")),
@@ -355,7 +369,10 @@ describe("Reader Component", () => {
     const confirmBtn = screen.getByRole("button", { name: /Confirm/i });
     
     // Mock the delete fetch response
-    mockSafeFetch.mockResolvedValueOnce({ ok: true });
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
     
     fireEvent.click(confirmBtn);
 

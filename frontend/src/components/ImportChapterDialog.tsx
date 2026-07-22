@@ -20,7 +20,7 @@ import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import type { User, Series, Chapter } from "../types";
+import type { User, Series, Chapter, SystemSettingsDto } from "../types";
 import { safeFetch } from "../utils";
 
 interface ImportChapterDialogProps {
@@ -30,20 +30,6 @@ interface ImportChapterDialogProps {
   user: User;
   series: Series;
   nextNum: number;
-}
-
-interface SystemSettingsDto {
-  activeProviders?: string[];
-  activeOcrProviders?: string[];
-  localOcrModel?: string;
-  ocrProvider?: string;
-  ocrVlmModelList?: string[];
-  tlProvider?: string;
-  tlLlmModelList?: string[];
-  qaProvider?: string;
-  qaMode?: string;
-  qaLlmModelList?: string[];
-  qaVlmModelList?: string[];
 }
 
 export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
@@ -112,7 +98,9 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
 
   useEffect(() => {
     if (open) {
-      setUseFallbackModels(series.useFallbackModels ?? true);
+      Promise.resolve().then(() => {
+        setUseFallbackModels(series.useFallbackModels ?? true);
+      });
       safeFetch("/api/settings", {
         headers: { Authorization: `Bearer ${user.token}` },
       })
