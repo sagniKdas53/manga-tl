@@ -464,11 +464,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ gridColumn: "1 / -1", mt: 1 }}>
-              <Typography variant="overline" color="text.disabled">
-                Advanced Routing
-              </Typography>
-            </Box>
             <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Routing Strategy</InputLabel>
