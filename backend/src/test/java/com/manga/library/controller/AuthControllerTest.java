@@ -2,19 +2,24 @@ package com.manga.library.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.config.JwtAuthFilter;
 import com.manga.library.config.JwtUtils;
+import com.manga.library.dto.ChangePasswordRequest;
 import com.manga.library.dto.LoginRequest;
 import com.manga.library.dto.RegisterRequest;
 import com.manga.library.model.User;
 import com.manga.library.repository.UserRepository;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -225,5 +230,44 @@ public class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.role").value("viewer"));
+  }
+
+  @Test
+  public void testGetProfile_Unauthenticated() throws Exception {
+    mockMvc
+        .perform(get("/api/auth/me"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").value("Not authenticated"));
+  }
+
+  @Test
+  public void testUpdateProfile_Unauthenticated() throws Exception {
+    mockMvc
+        .perform(
+            put("/api/auth/me")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("displayName", "New Name"))))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  public void testChangePassword_Unauthenticated() throws Exception {
+    ChangePasswordRequest request = new ChangePasswordRequest();
+    request.setCurrentPassword("oldpass");
+    request.setNewPassword("newpassword");
+
+    mockMvc
+        .perform(
+            post("/api/auth/change-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  public void testDeleteAccount_Unauthenticated() throws Exception {
+    mockMvc
+        .perform(delete("/api/auth/me"))
+        .andExpect(status().isUnauthorized());
   }
 }
