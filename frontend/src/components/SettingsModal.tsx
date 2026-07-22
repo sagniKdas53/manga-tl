@@ -147,47 +147,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             container
             spacing={1.5}
           >
-            <Grid size={12} sx={{my:0,py:0}}>
+            <Grid size={12} sx={{ my: 0, py: 0 }}>
               <Typography
                 variant="overline"
                 color="text.disabled"
                 sx={{
                   display: "block",
-                  m:0,
-                  p:0
+                  m: 0,
+                  p: 0
                 }}
               >
                 OCR
               </Typography>
-  
-            <Grid size={12}>
-              <Typography
-                variant="overline"
-                color="text.disabled"
-                sx={{
-                  display: "block",
-                  borderTop: 1,
-                  borderColor: "divider",
-                  pt: 1,
-                }}
-              >
-                Advanced Routing
-              </Typography>
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>OpenRouter Routing Strategy</InputLabel>
-                <Select
-                  value={settings.routingStrategy || "lowest-cost"}
-                  label="OpenRouter Routing Strategy"
-                  onChange={(e) => handleChange("routingStrategy", e.target.value)}
-                >
-                  <MenuItem value="lowest-cost">Lowest Cost (Default)</MenuItem>
-                  <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl
                 fullWidth
@@ -426,6 +398,50 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       {m}
                     </MenuItem>
                   ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid size={12}>
+              <Typography
+                variant="overline"
+                color="text.disabled"
+                sx={{
+                  display: "block",
+                  borderTop: 1,
+                  borderColor: "divider",
+                  pt: 1,
+                }}
+              >
+                Advanced Routing
+              </Typography>
+            </Grid>
+
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>OpenRouter Routing Strategy</InputLabel>
+                <Select
+                  value={settings.routingStrategy || "lowest-cost"}
+                  label="OpenRouter Routing Strategy"
+                  onChange={(e) => handleChange("routingStrategy", e.target.value)}
+                >
+                  <MenuItem value="lowest-cost">Lowest Cost (Default)</MenuItem>
+                  <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Use Fallback Models</InputLabel>
+                <Select
+                  value={settings.useFallbackModels || "false"}
+                  label="Use Fallback Models"
+                  onChange={(e) => handleChange("useFallbackModels", e.target.value)}
+                >
+                  <MenuItem value="false">False</MenuItem>
+                  <MenuItem value="true">True</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
