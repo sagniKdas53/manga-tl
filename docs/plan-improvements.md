@@ -1017,3 +1017,148 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 | G.2 | `health_server.py`, `test_health_server.py` | Configure heavy/light slots with env vars, capabilities endpoint |
 | G.3 | `.env.example`, `docker-compose.yml`, `configuration_guide.md` | Document and configure slot allocation parameters |
 | G.3 | `docs/slot-allocation.md` | Independent documentation file detailing slot behavior |
+
+---
+
+## Phase H — Bug Sweep & Schema Fixes ✅ Completed (2026-07-22)
+
+> Cleanup after a series of overlapping commits that introduced bugs across all three components.
+
+### H.1 "Use Fallback Models" Override Detection & Field Consistency
+
+**Files**: `CreateSeriesDialog.tsx`, `CreateChapterDialog.tsx`, `EditSeriesDialog.tsx`, `ImportChapterDialog.tsx`, `SettingsModal.tsx`, `SeriesHeader.tsx`, `ChapterHeader.tsx`
+
+- **Bug 1 — Not counted as override**: The `useFallbackModels` boolean was never added to the `overrideFields` array in any of the 4 dialogs. The override summary Chip always showed one fewer override than it should when the user toggled it to `false`.
+- **Fix**: Added `(useFallbackModels === false ? 1 : 0)` to the override count calculation in all 4 dialogs. Extended the `inheritedCount` denominator by 1.
+- **Bug 2 — Inconsistent labels**: Menu items used `True (Enabled)` / `False (Disabled)` (mixing both), `SettingsModal` used `True` / `False`, and Chips showed `Enabled` / `Disabled`.
+- **Fix**: Standardized all Select menu items to **`Enabled`** / **`Disabled`**. Header Chips already showed `Enabled` / `Disabled` (consistent now). Removed the redundant parenthetical suffixes.
+
+### H.2 Backend `page_id` ↔ `image_id` Schema Mismatch
+
+**Files**: `database/init.sql`, `Layer.java`, `Conversation.java`, `OcrRegion.java`
+
+- **Bug**: Commit `db9b4dd` refactored `Layer`, `Conversation`, and `OcrRegion` entities from `@JoinColumn(name = "image_id")` to `@JoinColumn(name = "page_id")` — architecturally correct (layers belong to pages, not raw images). But `database/init.sql` was never updated. Hibernate's `ddl-auto: update` tried to add NOT NULL `page_id` columns to existing tables with data, cascading into FK constraint failures (`ERROR: column "page_id" of relation "layers" contains null values`).
+- **Fix**: Updated `init.sql` — changed `image_id` → `page_id` in `layers`, `conversations`, `ocr_regions` table definitions + their FK constraints to reference `pages(id)` instead of `images(id)`. Architecture confirmed: `images` (deduplicated by hash) → `pages` (chapter-specific config context) → `layers/conversations/ocr_regions` (per-chapter processing).
+- **Pattern**: When renaming FK columns, always update the schema definition (`init.sql`) alongside the JPA entities. Hibernate will not add NOT NULL columns to tables with existing rows.
+
+### H.3 Backend Test Fixes
+
+**Files**: `JobCoordinatorServiceTest.java`
+
+- **Bug**: Test payload had `translationFailed` set to String `"false"` instead of boolean `false`. Would NPE at runtime if the service casts to `Boolean`.
+- **Fix**: Changed to `false` (boolean literal).
+
+### H.4 Frontend Test Fixes
+
+**Files**: `SettingsModal.test.tsx`, `ChapterGallery.test.tsx`, `Dashboard.test.tsx`, `SeriesDetails.test.tsx`, `Reader.test.tsx`
+
+- **Bug 1 — Missing mock field**: All 4 settings-fetching test files had mock settings responses without `useFallbackModels`. Components now read this field and could get `undefined` → falsy defaults.
+- **Fix**: Added `useFallbackModels: true` to mock settings in all 4 files.
+- **Bug 2 — Skipped test missing field**: `Dashboard.test.tsx` skipped test (line ~478) had the entire `useFallbackModels` field missing from the expected POST body, with a mis-aligned `routingStrategy: null` line.
+- **Fix**: Added `useFallbackModels: true` and fixed indentation.
+- **Bug 3 — Named vs default import**: `Reader.test.tsx` imported `{ Reader }` (named) but the component exports `default`. This made the import `undefined`.
+- **Fix**: Changed to `import Reader from "./Reader"`.
+
+### H.5 Python Worker Fixes
+
+**Files**: `unified-workers/worker/services/translation.py`, `unified-workers/worker/handlers/ocr.py`, `unified-workers/worker/services/ocr.py`
+
+- **Bug 1 — Undefined variable**: `use_fallback_models` was referenced in `translate_text()` at line 1094 but never declared as a parameter.
+- **Fix**: Added `use_fallback_models=True` parameter to `translate_text()`.
+- **Bug 2 — Possibly unbound `response`**: 4 functions (`try_cloud_ai`, `try_cloud_ai_vision`, `try_cloud_ai_vision_batch`, `try_local_ai`) logged `response.text` in `except` blocks without initializing `response` before the `try`. If the `requests.post()` call raised a connection error (before assignment), `response` was unbound.
+- **Fix**: Added `response = None` before each retry loop; added `response is not None` guard to the `if "response" in locals()` checks.
+- **Bug 3 — Possibly unbound `_redo_paddle_reader`**: `ocr.py` assigned it conditionally inside `if not api_key or provider == "paddleocr"` but read it unconditionally.
+- **Fix**: Initialized `_redo_paddle_reader = None` before the conditional.
+- **Bug 4 — Possibly unbound `transcriptions`**: `handlers/ocr.py` used `transcriptions.get(...)` in a nested block but it was only set inside one branch.
+- **Fix**: Initialized `transcriptions: dict = {}` at function top.
+
+### H.6 Lint Cleanup
+
+**Files**: `ChapterHeader.tsx`, `SeriesHeader.tsx`, `test_ocr_extra.py`
+
+- **ChapterHeader**: Changed `useRef<HTMLDivElement>` + `anchorRef.current` in render to `useState<HTMLDivElement | null>` + callback ref — eliminates ESLint `react-hooks/refs` violation.
+- **SeriesHeader**: Removed unused `resolvedQaProvider` variable.
+- **test_ocr_extra.py**: Moved `import cv2` out of `contextlib.suppress(Exception)` block — eliminated pyright `possibly unbound` + ruff `unused import` warnings.
+- **All lint**: 0 ESLint errors, 0 pyright errors, 0 ruff errors across frontend + unified-workers after fixes.
+
+### Bug Pattern Catalog (Phase H)
+
+| Pattern | Symptoms | Fix Strategy |
+|----------|----------|----------------|
+| Boolean field excluded from override counting | Override Chip shows `"0 overridden"` when field is set to non-default | Check every boolean setting against its default; add to count denominator |
+| `useFallbackModels` undefined in worker | `F821 Undefined name` at runtime | Thread every DB setting through job data → handler parameters with sensible defaults |
+| `response` unbound in `except` block | `NameError` when HTTP connection fails before assignment | `response = None` before try; guard with `is not None` |
+| JPA `@JoinColumn` name ≠ DB column name | DDL migration fails, FK cascades fail, export SQL `column does not exist` | Update `init.sql` alongside entity changes; never change column names in JPA without matching the DB |
+| `(event)` callback param unused | ESLint `no-unused-vars` — doesn't break runtime but clutter | Use `() => {}` arrow if event not needed |
+
+---
+
+## Phase I — Deep Clean & Future Improvements
+
+> Issues uncovered during the Phase H sweep that are NOT blocking but should be addressed. Some are quick wins; others are architectural.
+
+### I.1 Strip `console.log` / `console.error` from Production Frontend
+
+**Files**: 15+ frontend files (73 total calls)
+
+- **Problem**: 73 `console.log`/`console.error` calls ship to production — mostly in `Reader.tsx` (33 calls), `QueueManager.tsx` (9), `ChapterGallery.tsx` (9). This leaks debug info to the browser console and adds noise.
+- **Severity**: Medium — not user-visible but unprofessional for prod builds.
+- **Proposed fix**: Replace with a structured logger (e.g., `debug.ts` utility that wraps `console` and gates on `import.meta.env.DEV`). In the Vite build, strip all `console.*` calls via `esbuild` config (`drop: ['console', 'debugger']`). Either approach works; the Vite/esbuild drop is a one-liner and easiest.
+- **Effort**: Small (1 file — `vite.config.ts` adding `esbuild: { drop: ['console'] }` to the production build config).
+
+### I.2 Reader Component: 3.6K Lines with 419 Duplicates
+
+**Files**: `Reader.tsx`, `ReaderRightSidebar.tsx`
+
+- **Problem**: `Reader.tsx` at 3,632 lines is the largest component by far. 419 lines are duplicated (copy-paste patterns). `ReaderRightSidebar.tsx` at 1,442 lines with 216 dupes is similarly concerning.
+- **Proposed fix**: Extract repeated patterns into shared sub-components: `useZoomControls`, `useLayerEdit`, `useTranslationOverlay`, etc. Split the sidebar into independent section components. This would also improve React rendering performance (fewer re-renders on unrelated state changes).
+- **Effort**: Large (2 components × multi-day refactoring). Builds on D.14 render-hygiene foundation.
+
+### I.3 Backend Coverage Below Gate
+
+- **Problem**: Backend line coverage is ~75% against a configured ≥80% gate. 234 tests pass but the coverage gap is in untested branches within controllers and services.
+- **Proposed fix**: Identify the 15-20% of uncovered lines (use `target/site/jacoco/index.html` report) and write targeted tests for untested branches. Focus on `ChapterExportService`, `JobCoordinatorService`, and controller error paths.
+- **Effort**: Medium (focused test writing, not architecture changes).
+
+### I.4 Frontend Coverage Below Gate
+
+- **Problem**: Line coverage 78.34% against a 79% threshold. The gap is in low-coverage components: `ChapterHeader.tsx` (50%), `ImportChapterDialog.tsx` (73%), `EditSeriesDialog.tsx` (71%).
+- **Proposed fix**: Add tests for the Popper/overflow menu interaction in ChapterHeader. Test the import flow with file selection + override submission in ImportChapterDialog. Test the full EditSeriesDialog override accordion interaction.
+- **Effort**: Small-Medium (3 targeted component tests).
+
+### I.5 `useFallbackModels` Threading to Worker (Incomplete)
+
+- **Problem**: The `translate_text()` function now accepts `use_fallback_models` but callers may still omit it. The full chain — DB → backend job enqueue → worker handler → service function — needs to be verified end-to-end. Other worker functions (`process_ocr`, `process_qa`) may also need the parameter.
+- **Proposed fix**: Audit all call sites in `translation.py`, `ocr.py`, `qa.py` handlers to ensure `use_fallback_models` is read from `job_data` and passed through. Add integration tests: create a series with `useFallbackModels: false` → submit a page → verify the worker fails cleanly without falling back to global defaults.
+- **Effort**: Medium (audit + integration tests).
+
+### ✅ Checkpoint I — Summary
+
+| Item | Severity | Effort | Status |
+|------|----------|--------|--------|
+| I.1 — Strip console.log from prod builds | Medium | Small | Planned |
+| I.2 — Reader component de-duplication | Low | Large | Planned |
+| I.3 — Backend coverage ≥80% | Medium | Medium | Planned |
+| I.4 — Frontend coverage ≥80% | Medium | Small-Medium | Planned |
+| I.5 — useFallbackModels full worker threading | Medium | Medium | Planned |
+
+---
+
+## Summary: Files Changed (Phase H–I)
+
+| Phase | File | Change |
+|--------|------|--------|
+| H.1 | `CreateSeriesDialog.tsx`, `CreateChapterDialog.tsx`, `EditSeriesDialog.tsx`, `ImportChapterDialog.tsx` | Added `useFallbackModels` to override count; standardized Select labels to "Enabled"/"Disabled" |
+| H.1 | `SettingsModal.tsx` | Changed menu labels "True"/"False" → "Enabled"/"Disabled" |
+| H.2 | `database/init.sql` | `layers`, `conversations`, `ocr_regions`: `image_id` → `page_id` columns + FK references to `pages(id)` |
+| H.3 | `JobCoordinatorServiceTest.java` | `translationFailed` value: String `"false"` → boolean `false` |
+| H.4 | `SettingsModal.test.tsx`, `ChapterGallery.test.tsx`, `Dashboard.test.tsx`, `SeriesDetails.test.tsx` | Added `useFallbackModels: true` to mock settings responses |
+| H.4 | `Dashboard.test.tsx` | Added missing `useFallbackModels` field in skipped test expected body; fixed indentation |
+| H.4 | `Reader.test.tsx` | Fixed `import { Reader }` → `import Reader` (named→default) |
+| H.5 | `translation.py` | Added `use_fallback_models` param to `translate_text()`; initialized `response = None` + `is not None` guards in 4 functions |
+| H.5 | `handlers/ocr.py` | Initialized `transcriptions: dict = {}` at function top |
+| H.5 | `services/ocr.py` | Initialized `_redo_paddle_reader = None` before conditional |
+| H.6 | `ChapterHeader.tsx` | Replaced `useRef` anchor with `useState` + callback ref for Popper (ESLint fix) |
+| H.6 | `SeriesHeader.tsx` | Removed unused `resolvedQaProvider` |
+| H.6 | `test_ocr_extra.py` | Moved `import cv2` to top-level; removed unused `import contextlib` |
+| I.1 | _planned_ — `vite.config.ts` | Add `esbuild: { drop: ['console'] }` for production builds |

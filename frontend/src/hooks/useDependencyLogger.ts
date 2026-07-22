@@ -1,31 +1,19 @@
 import { useEffect, useRef } from "react";
 
-/**
- * Hook to log tracked value changes after a component render.
- * Only runs in development mode.
- * @param deps - The dependencies object to check for changes.
- * @param componentName - The name of the component for logging context.
- */
-export const useDependencyLogger = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  deps: Record<string, any>,
-  componentName: string = "component"
-) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const prevDepsRef = useRef<Record<string, any> | undefined>(undefined);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Deps = Record<string, any>;
+
+const useDevLogger = (deps: Deps, componentName: string) => {
+  const prevDepsRef = useRef<Deps | undefined>(undefined);
+  const prev = prevDepsRef.current;
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
-
-    const prev = prevDepsRef.current;
-
     if (!prev) {
       console.log(`[render] ${componentName} initial values:`, deps);
     } else {
       const changed = Object.keys(deps).filter(
         (key) => !Object.is(prev[key], deps[key])
       );
-
       if (changed.length) {
         console.group(
           `[render] ${componentName} values changed: ${changed.join(", ")}`
@@ -36,7 +24,12 @@ export const useDependencyLogger = (
         console.groupEnd();
       }
     }
-
     prevDepsRef.current = { ...deps };
   });
 };
+
+const noop = () => {};
+
+export const useDependencyLogger = import.meta.env.DEV
+  ? useDevLogger
+  : noop;
