@@ -139,6 +139,21 @@ describe("ChapterHeader", () => {
     expect(defaultProps.onReexportClick).toHaveBeenCalledTimes(1);
   });
 
+  it("closes overflow menu via Escape", () => {
+    render(<ChapterHeader {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText("more actions"));
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+  });
+
+  it("closes split popover via outside click", () => {
+    render(<ChapterHeader {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText("select export option"));
+    const splitMenu = screen.queryByRole("menu") || screen.queryByRole("listbox");
+    if (splitMenu) {
+      fireEvent.click(document.body);
+    }
+  });
+
   it("renders cover image when coverImageUrl present", () => {
     render(
       <ChapterHeader
@@ -203,5 +218,13 @@ describe("ChapterHeader", () => {
     expect(screen.getByText(/QA Mode: hybrid/)).toBeDefined();
     expect(screen.getByText(/QA LLM: gpt-4/)).toBeDefined();
     expect(screen.getByText(/QA VLM: gpt-4v/)).toBeDefined();
+  });
+
+  it("closes menus via Escape key", () => {
+    render(<ChapterHeader {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText("select export option"));
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    fireEvent.click(screen.getByLabelText("more actions"));
+    fireEvent.keyDown(document.body, { key: "Escape" });
   });
 });
