@@ -728,7 +728,6 @@ public class PageController {
   }
 
   @GetMapping("/pages/{pageId}/details")
-  @Transactional(readOnly = true)
   public ResponseEntity<Map<String, Object>> getPageDetails(@PathVariable UUID pageId) {
     Objects.requireNonNull(pageId, "pageId cannot be null");
     Page page =
@@ -759,8 +758,14 @@ public class PageController {
       convList.add(convMap);
     }
 
+    Map<String, Object> pageMap = new HashMap<>();
+    pageMap.put("id", page.getId());
+    pageMap.put("pageNumber", page.getPageNumber());
+    pageMap.put("imageId", image.getId());
+    pageMap.put("chapterId", page.getChapter().getId());
+
     Map<String, Object> response = new HashMap<>();
-    response.put("page", page);
+    response.put("page", pageMap);
     response.put("image", image);
     response.put("url", getImageUrl(image.getId()));
     response.put("panels", panels);
@@ -771,7 +776,6 @@ public class PageController {
   }
 
   @GetMapping("/images/{imageId}")
-  @Transactional(readOnly = true)
   public ResponseEntity<Map<String, Object>> getImageDetails(@PathVariable UUID imageId) {
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Optional<Page> pageOpt = pageRepository.findByImageId(imageId).stream().findFirst();

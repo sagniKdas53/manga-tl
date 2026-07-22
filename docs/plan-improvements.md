@@ -1125,6 +1125,7 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 - **Problem**: Line coverage 78.34% against a 79% threshold. The gap is in low-coverage components: `ChapterHeader.tsx` (50%), `ImportChapterDialog.tsx` (73%), `EditSeriesDialog.tsx` (71%).
 - **Proposed fix**: Add tests for the Popper/overflow menu interaction in ChapterHeader. Test the import flow with file selection + override submission in ImportChapterDialog. Test the full EditSeriesDialog override accordion interaction.
 - **Effort**: Small-Medium (3 targeted component tests).
+- **Current state**: Many tests added (~15 new test files expanded/created across ChapterHeader, ImportChapterDialog, EditSeriesDialog, Dashboard, NotificationCenter, Auth, ChapterDragOverlay, SidebarSection, usePersistedState, ChapterPageGrid). Coverage reached **78.05%** (1533/1964 lines) — ~19 lines short of the 79% gate. Work **deferred** by user as "good enough for now."
 
 ### I.5 `useFallbackModels` Threading to Worker (Incomplete)
 
@@ -1136,11 +1137,11 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 
 | Item | Severity | Effort | Status |
 |------|----------|--------|--------|
-| I.1 — Strip console.log from prod builds | Medium | Small | Planned |
-| I.2 — Reader component de-duplication | Low | Large | Planned |
-| I.3 — Backend coverage ≥80% | Medium | Medium | Planned |
-| I.4 — Frontend coverage ≥80% | Medium | Small-Medium | Planned |
-| I.5 — useFallbackModels full worker threading | Medium | Medium | Planned |
+| I.1 — Strip console.log from prod builds | Medium | Small | ✅ Done |
+| I.2 — Reader component de-duplication | Low | Large | ✅ Done |
+| I.3 — Backend coverage ≥80% | Medium | Medium | ✅ Done |
+| I.4 — Frontend coverage ≥80% | Medium | Small-Medium | ⏸️ Deferred (78.05%, ~19 lines short) |
+| I.5 — useFallbackModels full worker threading | Medium | Medium | ✅ Done |
 
 ---
 
@@ -1161,4 +1162,23 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 | H.6 | `ChapterHeader.tsx` | Replaced `useRef` anchor with `useState` + callback ref for Popper (ESLint fix) |
 | H.6 | `SeriesHeader.tsx` | Removed unused `resolvedQaProvider` |
 | H.6 | `test_ocr_extra.py` | Moved `import cv2` to top-level; removed unused `import contextlib` |
-| I.1 | _planned_ — `vite.config.ts` | Add `esbuild: { drop: ['console'] }` for production builds |
+| I.1 | `vite.config.ts` | Already had `esbuild: { drop: ['console', 'debugger'] }` — no change needed |
+| I.2 | `frontend/src/hooks/usePersistedState.ts` | New generic localStorage persistence hook; replaces 8 manual `useState`+`useEffect` blocks |
+| I.2 | `frontend/src/components/SidebarSection.tsx` | New shared presentational component for sidebars |
+| I.2 | `Reader.tsx`, `ReaderLeftSidebar.tsx`, `ReaderRightSidebar.tsx` | Refactored to use shared `SidebarSection` and `usePersistedState`; ~50 lines removed |
+| I.2 | `SidebarSection.test.tsx`, `usePersistedState.test.ts` | New tests for extracted components |
+| I.3 | `ExportCleanupServiceTest.java` | New — 6 tests |
+| I.3 | `ChapterExportServiceTest.java` | Expanded — 6 new tests |
+| I.3 | `DebouncedRenderServiceTest.java` | New — 2 tests |
+| I.3 | `AuthControllerTest.java` | Expanded — 4 new unauthenticated-path tests |
+| I.3 | `PageRepository.java` | Fixed PMD violation (unnecessary FQN) |
+| I.3 | `ChapterExportService.java:265` | Fixed SpotBugs violation (Boolean comparison) |
+| I.4 | `ChapterHeader.test.tsx` | New — 22 tests |
+| I.4 | `ImportChapterDialog.test.tsx` | New — 13 tests |
+| I.4 | `EditSeriesDialog.test.tsx` | New — 5 tests |
+| I.4 | `Dashboard.test.tsx` | Expanded — permission toast, sort rendering, sort toggle |
+| I.4 | `NotificationCenter.test.tsx` | Expanded — mark-as-read, dismiss, various download error paths |
+| I.4 | `Auth.test.tsx` | Expanded — non-ok setup-required API response |
+| I.4 | `ChapterDragOverlay.test.tsx` | New — visible/not-visible states |
+| I.4 | `ChapterPageGrid.test.tsx` | New — render + move-page test |
+| I.5 | `unified-workers/worker/handlers/translation.py:258` | Added missing `use_fallback_models=use_fallback_models` kwarg |
