@@ -22,6 +22,7 @@ vi.mock("../utils", () => ({
             qaProvider: "openrouter",
             qaLlmModelList: ["model-qa-llm-1"],
             qaVlmModelList: ["model-qa-vlm-1"],
+            useFallbackModels: true,
           }),
       });
     }

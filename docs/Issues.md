@@ -29,11 +29,3 @@ Move the Force export to the over flow (triple dots) menu
 Export Failed
 Failed to generate chapter export: JDBC exception executing SQL [select l1_0.id,l1_0.created_at,l1_0.metadata_json,l1_0.page_id,l1_0.target_language,l1_0.type,l1_0.visible,l1_0.z_order from layers l1_0 left join pages p1_0 on p1_0.id=l1_0.page_id where p1_0.id=?] [ERROR: column l1_0.page_id does not exist Hint: Perhaps you meant to reference the column "l1_0.image_id". Position: 170] [n/a]; SQL [n/a]
  11:38 am
-
-## The use fallback models uses --Inherited(true)-- instead of just using true or false
-
-Same
-
-## Bubbles keep over lapping each other
-
-This is an issue to tackle later but this needs our attention as part of the wider TODO's
