@@ -3,6 +3,7 @@ package com.manga.library.service;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -15,8 +16,12 @@ import com.manga.library.repository.JobCostRepository;
 import com.manga.library.repository.LayerElementRepository;
 import com.manga.library.repository.LayerRepository;
 import com.manga.library.repository.PageRepository;
+import io.minio.Result;
+import io.minio.messages.Item;
 import java.io.ByteArrayInputStream;
+import java.time.ZonedDateTime;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -204,5 +209,41 @@ public class ChapterExportServiceTest {
         .thenThrow(new RuntimeException("MinIO error"));
 
     assertDoesNotThrow(() -> chapterExportService.clearChapterExports(chapterId));
+  }
+
+  @Test
+  void testCleanupStaleExports() throws Exception {
+    ZonedDateTime oldDate = ZonedDateTime.now().minusDays(10);
+    Item fileItem = mock(Item.class);
+    when(fileItem.lastModified()).thenReturn(oldDate);
+    when(fileItem.objectName()).thenReturn("exports/old.zip");
+
+    Result<Item> result = mock(Result.class);
+    when(result.get()).thenReturn(fileItem);
+
+    when(minioService.listObjects(eq("exports/")))
+        .thenAnswer(inv -> singleItemIterable(result));
+
+    assertDoesNotThrow(() -> chapterExportService.cleanupStaleExports());
+
+    verify(minioService).deleteFile("exports/old.zip");
+  }
+
+  @Test
+  void testCleanupStaleExports_NoOldFiles() throws Exception {
+    when(minioService.listObjects(eq("exports/")))
+        .thenReturn(Collections.emptyList());
+
+    assertDoesNotThrow(() -> chapterExportService.cleanupStaleExports());
+
+    verify(minioService, never()).deleteFile(anyString());
+  }
+
+  private Iterable<Result<Item>> singleItemIterable(Result<Item> result) {
+    return () -> new Iterator<Result<Item>>() {
+      private boolean hasNext = true;
+      @Override public boolean hasNext() { return hasNext; }
+      @Override public Result<Item> next() { hasNext = false; return result; }
+    };
   }
 }
