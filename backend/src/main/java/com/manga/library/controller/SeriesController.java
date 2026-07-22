@@ -182,7 +182,7 @@ public class SeriesController {
   }
 
   @PostMapping
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   public ResponseEntity<SeriesDto> createSeries(
       @RequestBody SeriesDto dto, @AuthenticationPrincipal User user) {
     String sourceLang =
@@ -231,7 +231,7 @@ public class SeriesController {
   }
 
   @PostMapping("/{seriesId}/chapters")
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<?> createChapter(@PathVariable UUID seriesId, @RequestBody ChapterDto dto) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
@@ -311,7 +311,7 @@ public class SeriesController {
   }
 
   @PutMapping("/{seriesId}")
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   public ResponseEntity<SeriesDto> updateSeries(
       @PathVariable UUID seriesId, @RequestBody SeriesDto dto) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
@@ -338,6 +338,7 @@ public class SeriesController {
               s.setQaVlmModel(dto.getQaVlmModel());
               s.setQaMode(dto.getQaMode());
               s.setRoutingStrategy(dto.getRoutingStrategy());
+              s.setUseFallbackModels(dto.getUseFallbackModels());
               Objects.requireNonNull(s, "series cannot be null");
               s = seriesRepository.save(Objects.requireNonNull(s));
               return ResponseEntity.ok(toDto(s));
@@ -357,7 +358,7 @@ public class SeriesController {
   }
 
   @PutMapping("/chapters/{chapterId}")
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<?> updateChapter(
       @PathVariable UUID chapterId, @RequestBody ChapterDto dto) {
@@ -389,6 +390,7 @@ public class SeriesController {
               c.setQaVlmModel(dto.getQaVlmModel());
               c.setQaMode(dto.getQaMode());
               c.setRoutingStrategy(dto.getRoutingStrategy());
+              c.setUseFallbackModels(dto.getUseFallbackModels());
               if (dto.getUseContextMemory() != null) {
                 c.setUseContextMemory(dto.getUseContextMemory());
               }
@@ -423,7 +425,7 @@ public class SeriesController {
   }
 
   @PostMapping("/{seriesId}/chapters/import")
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   public ResponseEntity<?> importChapter(
       @PathVariable UUID seriesId,
       @RequestParam("file") MultipartFile file,
@@ -437,6 +439,8 @@ public class SeriesController {
       @RequestParam(value = "qaLlmModel", required = false) String qaLlmModel,
       @RequestParam(value = "qaVlmModel", required = false) String qaVlmModel,
       @RequestParam(value = "qaMode", required = false) String qaMode,
+      @RequestParam(value = "routingStrategy", required = false) String routingStrategy,
+      @RequestParam(value = "useFallbackModels", required = false) Boolean useFallbackModels,
       @AuthenticationPrincipal User user) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
     log.info("Importing chapter {} (num={}) for series {}", title, chapterNumber, seriesId);
@@ -467,6 +471,8 @@ public class SeriesController {
               .qaLlmModel(qaLlmModel)
               .qaVlmModel(qaVlmModel)
               .qaMode(qaMode)
+              .routingStrategy(routingStrategy)
+              .useFallbackModels(useFallbackModels)
               .build();
       chapter = chapterRepository.save(Objects.requireNonNull(chapter));
 

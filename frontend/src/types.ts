@@ -23,6 +23,7 @@ export interface Series {
   qaVlmModel?: string;
   qaMode?: string;
   routingStrategy?: string;
+  useFallbackModels?: boolean | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -56,6 +57,7 @@ export interface Chapter {
   qaVlmModel?: string;
   qaMode?: string;
   routingStrategy?: string;
+  useFallbackModels?: boolean | null;
   useContextMemory?: boolean;
   pageCount?: number;
   createdAt?: string;
@@ -196,6 +198,7 @@ export interface SystemSettingsDto {
   localOcrModel?: string;
   disableLocalLlm?: boolean;
   qaMode?: string;
+  useFallbackModels?: boolean;
 
   activeProviders?: string[];
   activeOcrProviders?: string[];

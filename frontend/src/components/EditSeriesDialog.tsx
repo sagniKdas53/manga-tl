@@ -80,6 +80,9 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const [qaVlmModel, setQaVlmModel] = useState(series.qaVlmModel || "");
   const [qaMode, setQaMode] = useState(series.qaMode || "");
   const [routingStrategy, setRoutingStrategy] = useState(series.routingStrategy || "");
+  const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
+    series.useFallbackModels ?? null,
+  );
   const [overridesOpen, setOverridesOpen] = useState(false);
 
   const actualProviders = settings?.activeProviders || [
@@ -113,6 +116,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const overrideFields = [
     ocrProvider, ocrModel, tlProvider, tlModel,
     qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
+    useFallbackModels !== null ? String(useFallbackModels) : "",
   ];
   const overriddenCount = overrideFields.filter((v) => v !== "").length;
   const inheritedCount = overrideFields.length - overriddenCount;
@@ -153,6 +157,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
           qaVlmModel: qaVlmModel || null,
           qaMode: qaMode || null,
           routingStrategy: routingStrategy || null,
+          useFallbackModels: useFallbackModels,
         }),
       });
       if (res.ok) {
@@ -438,25 +443,6 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
               </Box>
               <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
                 <FormControl fullWidth>
-                  <InputLabel>Routing Strategy</InputLabel>
-                  <Select
-                    size="small"
-                    value={routingStrategy || inheritedRoutingStrategy}
-                    label="Routing Strategy"
-                    onChange={(e) => setRoutingStrategy(e.target.value)}
-                  >
-                    <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
-                    <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
-                  </Select>
-                </FormControl>
-                {routingStrategy !== "" && (
-                  <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setRoutingStrategy("")}>
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </Box>
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
-                <FormControl fullWidth>
                   <InputLabel>QA LLM Model</InputLabel>
                   <Select
                     size="small"
@@ -503,6 +489,50 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                 </FormControl>
                 {qaVlmModel !== "" && (
                   <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaVlmModel("")}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
+              <Box sx={{ gridColumn: "1 / -1", mt: 1 }}>
+                <Typography variant="overline" color="text.disabled">
+                  Advanced Routing
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Routing Strategy</InputLabel>
+                  <Select
+                    size="small"
+                    value={routingStrategy || inheritedRoutingStrategy}
+                    label="Routing Strategy"
+                    onChange={(e) => setRoutingStrategy(e.target.value)}
+                  >
+                    <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
+                    <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
+                  </Select>
+                </FormControl>
+                {routingStrategy !== "" && (
+                  <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setRoutingStrategy("")}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Use Fallback Models</InputLabel>
+                  <Select
+                    size="small"
+                    value={useFallbackModels === null ? "" : String(useFallbackModels)}
+                    label="Use Fallback Models"
+                    onChange={(e) => setUseFallbackModels(e.target.value === "" ? null : e.target.value === "true")}
+                  >
+                    <MenuItem value="">{`-- Inherit (${settings?.useFallbackModels !== false ? "True" : "False"}) --`}</MenuItem>
+                    <MenuItem value="true">True (Enabled)</MenuItem>
+                    <MenuItem value="false">False (Disabled)</MenuItem>
+                  </Select>
+                </FormControl>
+                {useFallbackModels !== null && (
+                  <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setUseFallbackModels(null)}>
                     <CloseIcon fontSize="small" />
                   </IconButton>
                 )}
