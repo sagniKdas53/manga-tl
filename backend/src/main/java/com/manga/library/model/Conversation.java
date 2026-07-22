@@ -8,7 +8,7 @@ import lombok.*;
 @Table(name = "conversations")
 @Getter
 @Setter
-@ToString(exclude = {"image"})
+@ToString(exclude = {"page"})
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
@@ -20,9 +20,10 @@ public class Conversation {
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "image_id", nullable = false)
+  @JoinColumn(name = "page_id", nullable = false)
+  @com.fasterxml.jackson.annotation.JsonIgnore
   @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
-  private Image image;
+  private Page page;
 
   @Column(name = "scene_type", nullable = false)
   @Builder.Default

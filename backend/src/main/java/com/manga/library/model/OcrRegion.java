@@ -8,7 +8,7 @@ import lombok.*;
 @Table(name = "ocr_regions")
 @Getter
 @Setter
-@ToString(exclude = {"image", "panel"})
+@ToString(exclude = {"page", "panel"})
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
@@ -20,10 +20,11 @@ public class OcrRegion {
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "image_id", nullable = false)
+  @JoinColumn(name = "page_id", nullable = false)
   @com.fasterxml.jackson.annotation.JsonIgnore
   @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
-  private Image image;
+  private Page page;
+
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "panel_id")

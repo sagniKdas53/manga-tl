@@ -52,7 +52,8 @@ public class ChapterExportService {
           filename = "page_" + page.getPageNumber() + ".png";
         }
 
-        boolean hasRendered = minioService.fileExists("rendered/" + imageId + ".png");
+        boolean hasRendered = minioService.fileExists("rendered/" + page.getId() + ".png")
+            || minioService.fileExists("rendered/" + imageId + ".png");
 
         Map<String, Object> pageMeta = new HashMap<>();
         pageMeta.put("pageNumber", page.getPageNumber());
@@ -60,8 +61,9 @@ public class ChapterExportService {
         pageMeta.put("originalFilename", filename);
         pageMeta.put("hasRendered", hasRendered);
 
-        List<Layer> imageLayers = layerRepository.findByImageId(imageId);
+        List<Layer> imageLayers = layerRepository.findByPageId(page.getId());
         pageMeta.put("layerCount", imageLayers.size());
+
 
         List<Map<String, Object>> layersMetaList = new ArrayList<>();
         double pageTotalCostVal = 0.0;
@@ -215,7 +217,7 @@ public class ChapterExportService {
           if (page.getImage() != null) {
             boolean manualChangesDone = false;
             List<LayerElement> allElementsForImage =
-                layerElementRepository.findByLayerImageId(page.getImage().getId());
+                layerElementRepository.findByLayerPageId(page.getId());
             for (LayerElement el : allElementsForImage) {
               if (el.getIsManuallyEdited() != null && el.getIsManuallyEdited()) {
                 manualChangesDone = true;
@@ -225,8 +227,8 @@ public class ChapterExportService {
 
             boolean needsReRender = false;
             if (manualChangesDone) {
-              java.time.OffsetDateTime lastEditedAt = page.getImage().getLastEditedAt();
-              java.time.OffsetDateTime lastRenderedAt = page.getImage().getLastRenderedAt();
+              java.time.OffsetDateTime lastEditedAt = page.getLastEditedAt();
+              java.time.OffsetDateTime lastRenderedAt = page.getLastRenderedAt();
               if (lastEditedAt != null
                   && (lastRenderedAt == null || lastEditedAt.isAfter(lastRenderedAt))) {
                 needsReRender = true;
@@ -234,6 +236,7 @@ public class ChapterExportService {
             }
             pageMeta.put("manualChangesDone", manualChangesDone);
             pageMeta.put("needsReRender", needsReRender);
+
           } else {
             pageMeta.put("manualChangesDone", false);
             pageMeta.put("needsReRender", false);

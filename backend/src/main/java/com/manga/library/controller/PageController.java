@@ -250,7 +250,7 @@ public class PageController {
 
             // Clear existing elements and layers
             List<LayerElement> elements =
-                layerElementRepository.findByLayerImageId(oldImage.getId());
+                layerElementRepository.findByLayerPageId(page.getId());
             for (LayerElement el : elements) {
               List<LayerEditHistory> history =
                   layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
@@ -259,11 +259,12 @@ public class PageController {
             }
             layerElementRepository.flush();
 
-            List<Layer> existingLayers = layerRepository.findByImageId(oldImage.getId());
+            List<Layer> existingLayers = layerRepository.findByPageId(page.getId());
             for (Layer l : existingLayers) {
               layerRepository.delete(Objects.requireNonNull(l));
             }
             layerRepository.flush();
+
 
             // Check if we need to update/replace the image
             if (!fileHash.equals(oldImage.getHash())) {
@@ -359,12 +360,13 @@ public class PageController {
 
               Layer newLayer =
                   Layer.builder()
-                      .image(page.getImage())
+                      .page(page)
                       .type(type)
                       .targetLanguage(targetLanguage)
                       .visible(visible)
                       .zOrder(zOrder)
                       .build();
+
               newLayer = layerRepository.save(Objects.requireNonNull(newLayer));
               importedLayersCount++;
 
@@ -498,16 +500,17 @@ public class PageController {
                       ? chapter.getSeries().getTargetLanguage().trim().toLowerCase()
                       : "en";
               boolean targetTranslationExists =
-                  layerRepository.findByImageId(existingImage.getId()).stream()
+                  layerRepository.findByPageId(pg.getId()).stream()
                       .anyMatch(
                           l ->
                               "translation".equalsIgnoreCase(l.getType())
                                   && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
 
               if (!targetTranslationExists) {
-                jobCoordinatorService.triggerImageRedo(
-                    existingImage.getId(), "translation", chapter.getId());
+                jobCoordinatorService.triggerPageRedo(
+                    pg.getId(), "translation", chapter.getId());
               }
+
               nextNum++;
               continue;
             }
@@ -609,7 +612,7 @@ public class PageController {
                 ? chapter.getSeries().getTargetLanguage().trim().toLowerCase()
                 : "en";
         boolean targetTranslationExists =
-            layerRepository.findByImageId(existingImage.getId()).stream()
+            layerRepository.findByPageId(page.getId()).stream()
                 .anyMatch(
                     l ->
                         "translation".equalsIgnoreCase(l.getType())
@@ -617,13 +620,14 @@ public class PageController {
 
         if (!targetTranslationExists) {
           log.info(
-              "Target translation layer ({}) missing for existing image {}, queuing translation",
+              "Target translation layer ({}) missing for existing page {}, queuing translation",
               targetLang,
-              existingImage.getId());
-          jobCoordinatorService.triggerImageRedo(
-              existingImage.getId(), "translation", chapter.getId());
+              page.getId());
+          jobCoordinatorService.triggerPageRedo(
+              page.getId(), "translation", chapter.getId());
           if (user != null) sseService.mapImageToUser(existingImage.getId(), user.getId());
         }
+
 
         return ResponseEntity.ok(
             new UploadResponse(page.getId(), existingImage.getId(), "duplicate"));
@@ -723,19 +727,20 @@ public class PageController {
         .orElse(ResponseEntity.notFound().build());
   }
 
-  @GetMapping("/images/{imageId}")
-  public ResponseEntity<Map<String, Object>> getImageDetails(@PathVariable UUID imageId) {
-    Objects.requireNonNull(imageId, "imageId cannot be null");
-    Image image =
-        imageRepository
-            .findById(Objects.requireNonNull(imageId))
-            .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+  @GetMapping("/pages/{pageId}/details")
+  @Transactional(readOnly = true)
+  public ResponseEntity<Map<String, Object>> getPageDetails(@PathVariable UUID pageId) {
+    Objects.requireNonNull(pageId, "pageId cannot be null");
+    Page page =
+        pageRepository
+            .findById(Objects.requireNonNull(pageId))
+            .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+    Image image = page.getImage();
 
-    List<Panel> panels = panelRepository.findByImageId(imageId);
-    List<OcrRegion> ocrRegions = ocrRegionRepository.findByImageId(imageId);
+    List<Panel> panels = panelRepository.findByImageId(image.getId());
+    List<OcrRegion> ocrRegions = ocrRegionRepository.findByPageId(pageId);
 
-    // Include conversations with their region mappings
-    List<Conversation> conversations = conversationRepository.findByImageId(imageId);
+    List<Conversation> conversations = conversationRepository.findByPageId(pageId);
     List<Map<String, Object>> convList = new ArrayList<>();
     for (Conversation conv : conversations) {
       Map<String, Object> convMap = new HashMap<>();
@@ -755,6 +760,7 @@ public class PageController {
     }
 
     Map<String, Object> response = new HashMap<>();
+    response.put("page", page);
     response.put("image", image);
     response.put("url", getImageUrl(image.getId()));
     response.put("panels", panels);
@@ -762,6 +768,86 @@ public class PageController {
     response.put("conversations", convList);
 
     return ResponseEntity.ok(response);
+  }
+
+  @GetMapping("/images/{imageId}")
+  @Transactional(readOnly = true)
+  public ResponseEntity<Map<String, Object>> getImageDetails(@PathVariable UUID imageId) {
+    Objects.requireNonNull(imageId, "imageId cannot be null");
+    Optional<Page> pageOpt = pageRepository.findByImageId(imageId).stream().findFirst();
+    if (pageOpt.isPresent()) {
+      return getPageDetails(pageOpt.get().getId());
+    }
+
+    Image image =
+        imageRepository
+            .findById(Objects.requireNonNull(imageId))
+            .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+    List<Panel> panels = panelRepository.findByImageId(imageId);
+    Map<String, Object> response = new HashMap<>();
+    response.put("image", image);
+    response.put("url", getImageUrl(image.getId()));
+    response.put("panels", panels);
+    response.put("ocrRegions", Collections.emptyList());
+    response.put("conversations", Collections.emptyList());
+
+    return ResponseEntity.ok(response);
+  }
+
+  @GetMapping("/pages/{pageId}/rendered")
+  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
+      getPageRenderedFile(@PathVariable UUID pageId) {
+    try {
+      Objects.requireNonNull(pageId, "pageId cannot be null");
+      String storagePath = "rendered/" + pageId + ".png";
+      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
+          outputStream -> {
+            try (java.io.InputStream is = minioService.getFileStream(storagePath)) {
+              is.transferTo(outputStream);
+            } catch (Exception e) {
+              log.error("Error streaming rendered page file", e);
+            }
+          };
+
+      return ResponseEntity.ok()
+          .contentType(org.springframework.http.MediaType.parseMediaType("image/png"))
+          .body(responseBody);
+    } catch (Exception e) {
+      log.error("Failed to retrieve rendered page file for {}", pageId, e);
+      return ResponseEntity.notFound().build();
+    }
+  }
+
+  @GetMapping("/pages/{pageId}/layers")
+  @Transactional(readOnly = true)
+  public ResponseEntity<List<Map<String, Object>>> getPageLayers(@PathVariable UUID pageId) {
+    List<Layer> layers = new ArrayList<>(layerRepository.findByPageId(pageId));
+    layers.sort(Comparator.comparingInt(layer -> Objects.requireNonNull(layer).getZOrder()));
+
+    List<LayerElement> allElements = layerElementRepository.findByLayerPageId(pageId);
+    Map<UUID, List<LayerElement>> elementsByLayer =
+        allElements.stream().collect(Collectors.groupingBy(le -> le.getLayer().getId()));
+
+    List<Map<String, Object>> response = new ArrayList<>();
+    for (Layer l : layers) {
+      Map<String, Object> map = new HashMap<>();
+      map.put("layer", l);
+      map.put("elements", elementsByLayer.getOrDefault(l.getId(), Collections.emptyList()));
+      response.add(map);
+    }
+
+    return ResponseEntity.ok(response);
+  }
+
+  @GetMapping("/images/{imageId}/layers")
+  @Transactional(readOnly = true)
+  public ResponseEntity<List<Map<String, Object>>> getImageLayers(@PathVariable UUID imageId) {
+    Optional<Page> pageOpt = pageRepository.findByImageId(imageId).stream().findFirst();
+    if (pageOpt.isPresent()) {
+      return getPageLayers(pageOpt.get().getId());
+    }
+    return ResponseEntity.ok(Collections.emptyList());
   }
 
   @GetMapping("/images/{imageId}/file")
@@ -774,15 +860,6 @@ public class PageController {
               .findById(Objects.requireNonNull(imageId))
               .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
-      String contentType = "image/png";
-      String filename = image.getFilename().toLowerCase();
-      if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
-        contentType = "image/jpeg";
-      } else if (filename.endsWith(".webp")) {
-        contentType = "image/webp";
-      }
-
-      String finalContentType = contentType;
       org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
           outputStream -> {
             try (java.io.InputStream is = minioService.getFileStream(image.getStoragePath())) {
@@ -793,7 +870,7 @@ public class PageController {
           };
 
       return ResponseEntity.ok()
-          .contentType(org.springframework.http.MediaType.parseMediaType(finalContentType))
+          .contentType(org.springframework.http.MediaType.parseMediaType("image/png"))
           .body(responseBody);
     } catch (Exception e) {
       log.error("Failed to retrieve image file for {}", imageId, e);
@@ -811,23 +888,10 @@ public class PageController {
               .findById(Objects.requireNonNull(imageId))
               .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
-      String storagePath = image.getThumbnailStoragePath();
-      String contentType = "image/webp";
-
-      if (storagePath == null || storagePath.trim().isEmpty()) {
-        return ResponseEntity.notFound().build();
-      }
-
-      if (storagePath.toLowerCase().endsWith(".jpg")
-          || storagePath.toLowerCase().endsWith(".jpeg")) {
-        contentType = "image/jpeg";
-      }
-
-      String finalStoragePath = storagePath;
-      String finalContentType = contentType;
+      String path = image.getThumbnailStoragePath() != null ? image.getThumbnailStoragePath() : image.getStoragePath();
       org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
           outputStream -> {
-            try (java.io.InputStream is = minioService.getFileStream(finalStoragePath)) {
+            try (java.io.InputStream is = minioService.getFileStream(path)) {
               is.transferTo(outputStream);
             } catch (Exception e) {
               log.error("Error streaming image thumbnail", e);
@@ -835,7 +899,7 @@ public class PageController {
           };
 
       return ResponseEntity.ok()
-          .contentType(org.springframework.http.MediaType.parseMediaType(finalContentType))
+          .contentType(org.springframework.http.MediaType.parseMediaType("image/jpeg"))
           .body(responseBody);
     } catch (Exception e) {
       log.error("Failed to retrieve image thumbnail for {}", imageId, e);
@@ -843,28 +907,7 @@ public class PageController {
     }
   }
 
-  @GetMapping("/images/{imageId}/layers")
-  @Transactional
-  public ResponseEntity<List<Map<String, Object>>> getImageLayers(@PathVariable UUID imageId) {
-    List<Layer> layers = new ArrayList<>(layerRepository.findByImageId(imageId));
-    layers.sort(Comparator.comparingInt(layer -> Objects.requireNonNull(layer).getZOrder()));
 
-    // Auto-initialize default translation layer removed to prevent deleted layers from reappearing
-
-    List<LayerElement> allElements = layerElementRepository.findByLayerImageId(imageId);
-    Map<UUID, List<LayerElement>> elementsByLayer =
-        allElements.stream().collect(Collectors.groupingBy(le -> le.getLayer().getId()));
-
-    List<Map<String, Object>> response = new ArrayList<>();
-    for (Layer l : layers) {
-      Map<String, Object> map = new HashMap<>();
-      map.put("layer", l);
-      map.put("elements", elementsByLayer.getOrDefault(l.getId(), Collections.emptyList()));
-      response.add(map);
-    }
-
-    return ResponseEntity.ok(response);
-  }
 
   @DeleteMapping("/pages/{pageId}")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
@@ -1001,10 +1044,11 @@ public class PageController {
           .findById(Objects.requireNonNull(id))
           .ifPresent(
               region -> {
-                if (user != null) {
-                  sseService.mapImageToUser(region.getImage().getId(), user.getId());
+                if (user != null && region.getPage() != null && region.getPage().getImage() != null) {
+                  sseService.mapImageToUser(region.getPage().getImage().getId(), user.getId());
                 }
               });
+
 
       return ResponseEntity.ok(Map.of("status", "enqueued"));
     } catch (Exception e) {
@@ -1109,7 +1153,7 @@ public class PageController {
         Image oldImage = page.getImage();
 
         // Clear existing elements and layers
-        List<LayerElement> elements = layerElementRepository.findByLayerImageId(oldImage.getId());
+        List<LayerElement> elements = layerElementRepository.findByLayerPageId(page.getId());
         for (LayerElement el : elements) {
           List<LayerEditHistory> history =
               layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
@@ -1118,7 +1162,8 @@ public class PageController {
         }
         layerElementRepository.flush();
 
-        List<Layer> existingLayers = layerRepository.findByImageId(oldImage.getId());
+        List<Layer> existingLayers = layerRepository.findByPageId(page.getId());
+
         for (Layer l : existingLayers) {
           layerRepository.delete(Objects.requireNonNull(l));
         }
@@ -1243,13 +1288,14 @@ public class PageController {
 
           Layer newLayer =
               Layer.builder()
-                  .image(image)
+                  .page(page)
                   .type(type)
                   .targetLanguage(targetLanguage)
                   .visible(visible)
                   .zOrder(zOrder)
                   .metadataJson(metadataJson)
                   .build();
+
           newLayer = layerRepository.save(Objects.requireNonNull(newLayer));
           importedLayersCount++;
 

@@ -2,8 +2,8 @@ package com.manga.library.repository;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.manga.library.model.Image;
-import com.manga.library.model.Layer;
+import com.manga.library.model.*;
+
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,18 +19,28 @@ public class LayerRepositoryTest {
 
   @Autowired private LayerRepository layerRepository;
   @Autowired private ImageRepository imageRepository;
+  @Autowired private PageRepository pageRepository;
+  @Autowired private ChapterRepository chapterRepository;
+  @Autowired private SeriesRepository seriesRepository;
 
   @Test
   public void testLayerCRUD() {
-    // Parent Image
+    // Parent Image and Page
     Image image =
         Image.builder().filename("layer_img.png").storagePath("path/layer_img.png").build();
     image = imageRepository.save(image);
 
+    Series series = seriesRepository.save(Series.builder().title("Test").originalLanguage("ja").readingDirection("rtl").build());
+    Chapter chapter = chapterRepository.save(Chapter.builder().series(series).chapterNumber(1.0).build());
+
+    com.manga.library.model.Page page = com.manga.library.model.Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    page = pageRepository.save(page);
+
+
     // 1. Create
     Layer layer =
         Layer.builder()
-            .image(image)
+            .page(page)
             .type("translation")
             .targetLanguage("en")
             .visible(true)
@@ -43,7 +53,8 @@ public class LayerRepositoryTest {
     assertEquals("en", saved.getTargetLanguage());
     assertTrue(saved.getVisible());
     assertEquals(5, saved.getZOrder());
-    assertEquals(image.getId(), saved.getImage().getId());
+    assertEquals(page.getId(), saved.getPage().getId());
+
 
     // 2. Read
     Optional<Layer> fetchedOpt = layerRepository.findById(saved.getId());

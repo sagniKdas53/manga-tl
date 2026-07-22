@@ -380,7 +380,8 @@ public class SeriesControllerTest {
             .type("translation")
             .visible(true)
             .build();
-    when(layerRepository.findByImageId(any())).thenReturn(java.util.List.of(activeLayer));
+    when(layerRepository.findByPageId(any())).thenReturn(java.util.List.of(activeLayer));
+
     when(layerElementRepository.findByLayerId(any())).thenReturn(java.util.Collections.emptyList());
 
     mockMvc
@@ -699,7 +700,8 @@ public class SeriesControllerTest {
             .metadataJson(metadata)
             .build();
 
-    when(layerRepository.findByImageId(any())).thenReturn(java.util.List.of(activeLayer));
+    when(layerRepository.findByPageId(any())).thenReturn(java.util.List.of(activeLayer));
+
     when(layerElementRepository.findByLayerId(any())).thenReturn(java.util.Collections.emptyList());
 
     mockMvc

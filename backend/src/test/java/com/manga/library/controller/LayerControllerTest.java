@@ -36,7 +36,9 @@ public class LayerControllerTest {
   @MockBean private LayerElementRepository layerElementRepository;
   @MockBean private LayerEditHistoryRepository layerEditHistoryRepository;
   @MockBean private ImageRepository imageRepository;
+  @MockBean private com.manga.library.repository.PageRepository pageRepository;
   @MockBean private OcrRegionRepository ocrRegionRepository;
+
   @MockBean private JwtAuthFilter jwtAuthFilter;
 
   @org.springframework.boot.test.mock.mockito.SpyBean
@@ -74,20 +76,21 @@ public class LayerControllerTest {
 
   @Test
   public void testCreateLayer_Success() throws Exception {
-    UUID imageId = UUID.randomUUID();
-    Image image = Image.builder().id(imageId).filename("test.png").build();
-    Layer layer = Layer.builder().id(UUID.randomUUID()).image(image).type("translation").build();
+    UUID pageId = UUID.randomUUID();
+    com.manga.library.model.Page page = com.manga.library.model.Page.builder().id(pageId).build();
+    Layer layer = Layer.builder().id(UUID.randomUUID()).page(page).type("translation").build();
 
-    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+    when(pageRepository.findById(pageId)).thenReturn(Optional.of(page));
     when(layerRepository.save(any(Layer.class))).thenReturn(layer);
 
     mockMvc
         .perform(
-            post("/api/images/" + imageId + "/layers")
+            post("/api/pages/" + pageId + "/layers")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"type\": \"translation\"}"))
         .andExpect(status().isOk());
   }
+
 
   @Test
   public void testUpdateLayerElement_Success() throws Exception {
@@ -186,16 +189,17 @@ public class LayerControllerTest {
 
   @Test
   public void testCreateLayer_NotFound() throws Exception {
-    UUID imageId = UUID.randomUUID();
-    when(imageRepository.findById(imageId)).thenReturn(Optional.empty());
+    UUID pageId = UUID.randomUUID();
+    when(pageRepository.findById(pageId)).thenReturn(Optional.empty());
 
     mockMvc
         .perform(
-            post("/api/images/" + imageId + "/layers")
+            post("/api/pages/" + pageId + "/layers")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"type\": \"translation\"}"))
         .andExpect(status().isNotFound());
   }
+
 
   @Test
   public void testUpdateLayer_NotFound() throws Exception {
@@ -264,22 +268,23 @@ public class LayerControllerTest {
 
   @Test
   public void testCreateLayer_MetadataAndDoubleZOrder() throws Exception {
-    UUID imageId = UUID.randomUUID();
-    Image image = Image.builder().id(imageId).filename("test.png").build();
-    Layer layer = Layer.builder().id(UUID.randomUUID()).image(image).type("translation").build();
+    UUID pageId = UUID.randomUUID();
+    com.manga.library.model.Page page = com.manga.library.model.Page.builder().id(pageId).build();
+    Layer layer = Layer.builder().id(UUID.randomUUID()).page(page).type("translation").build();
 
-    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+    when(pageRepository.findById(pageId)).thenReturn(Optional.of(page));
     when(layerRepository.save(any(Layer.class))).thenReturn(layer);
 
     mockMvc
         .perform(
-            post("/api/images/" + imageId + "/layers")
+            post("/api/pages/" + pageId + "/layers")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     "{\"type\": \"translation\", \"zOrder\": 2.5, \"metadataJson\": {\"foo\":"
                         + " \"bar\"}}"))
         .andExpect(status().isOk());
   }
+
 
   @Test
   public void testUpdateLayer_DoubleZOrder() throws Exception {

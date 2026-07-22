@@ -140,8 +140,8 @@ public class PageControllerTest {
 
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
     when(panelRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
-    when(ocrRegionRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
-    when(conversationRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+    when(ocrRegionRepository.findByPageId(any())).thenReturn(Collections.emptyList());
+    when(conversationRepository.findByPageId(any())).thenReturn(Collections.emptyList());
 
     mockMvc
         .perform(get("/api/images/" + imageId))
@@ -152,10 +152,11 @@ public class PageControllerTest {
   @Test
   public void testGetImageLayers_Success() throws Exception {
     UUID imageId = UUID.randomUUID();
-    when(layerRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+    when(layerRepository.findByPageId(any())).thenReturn(Collections.emptyList());
 
     mockMvc.perform(get("/api/images/" + imageId + "/layers")).andExpect(status().isOk());
   }
+
 
   @Test
   public void testRedoOcrRegion_Success() throws Exception {
@@ -512,7 +513,8 @@ public class PageControllerTest {
     Image existingImage = Image.builder().id(existingImageId).hash("somehash").build();
     when(imageRepository.findByHash(anyString())).thenReturn(Optional.of(existingImage));
 
-    when(layerRepository.findByImageId(existingImageId)).thenReturn(Collections.emptyList());
+    when(layerRepository.findByPageId(any())).thenReturn(Collections.emptyList());
+
 
     Page page = Page.builder().id(UUID.randomUUID()).image(existingImage).build();
     when(pageService.createPageWithExistingImage(any(), any(), any(), any())).thenReturn(page);
@@ -537,7 +539,8 @@ public class PageControllerTest {
         .andExpect(jsonPath("$.status").value("duplicate"));
 
     verify(jobCoordinatorService, times(1))
-        .triggerImageRedo(existingImageId, "translation", chapterId);
+        .triggerPageRedo(page.getId(), "translation", chapterId);
+
   }
 
   @Test

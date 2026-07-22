@@ -70,16 +70,16 @@ public class InternalJobControllerTest {
     // Set up active OCR layer and elements
     UUID ocrLayerId = UUID.randomUUID();
     Layer ocrLayer = Layer.builder().id(ocrLayerId).type("ocr").zOrder(1).build();
-    when(layerRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(ocrLayer));
+    when(layerRepository.findByPageId(any())).thenReturn(Collections.singletonList(ocrLayer));
 
     UUID regionId = UUID.randomUUID();
     OcrRegion region = OcrRegion.builder().id(regionId).build();
-    when(ocrRegionRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(region));
+    when(ocrRegionRepository.findByPageId(any())).thenReturn(Collections.singletonList(region));
 
     LayerElement element = LayerElement.builder().id(UUID.randomUUID()).region(region).build();
     when(layerElementRepository.findByLayerId(ocrLayerId))
         .thenReturn(Collections.singletonList(element));
-    when(layerElementRepository.findByLayerImageId(imageId))
+    when(layerElementRepository.findByLayerPageId(any()))
         .thenReturn(Collections.singletonList(element));
 
     // Page, Chapter, Series context
@@ -106,7 +106,7 @@ public class InternalJobControllerTest {
             .text("prev text")
             .translatedText("translated prev")
             .build();
-    when(ocrRegionRepository.findByImageId(prevPage.getImage().getId()))
+    when(ocrRegionRepository.findByPageId(prevPage.getId()))
         .thenReturn(Collections.singletonList(prevRegion));
 
     // Previous chapter summary
@@ -116,10 +116,11 @@ public class InternalJobControllerTest {
 
     // Conversations
     Conversation conv = Conversation.builder().id(UUID.randomUUID()).sceneType("dialogue").build();
-    when(conversationRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(conv));
+    when(conversationRepository.findByPageId(any())).thenReturn(Collections.singletonList(conv));
     ConversationRegion cr = ConversationRegion.builder().regionId(regionId).position(1).build();
     when(conversationRegionRepository.findByConversationId(conv.getId()))
         .thenReturn(Collections.singletonList(cr));
+
 
     mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isOk());
   }
@@ -245,7 +246,8 @@ public class InternalJobControllerTest {
     OcrRegion region =
         OcrRegion.builder()
             .id(regionId)
-            .image(Image.builder().id(UUID.randomUUID()).build())
+            .page(Page.builder().id(UUID.randomUUID()).image(Image.builder().id(UUID.randomUUID()).build()).build())
+
             .build();
     when(ocrRegionRepository.findById(regionId)).thenReturn(Optional.of(region));
 

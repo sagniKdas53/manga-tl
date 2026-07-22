@@ -11,7 +11,8 @@ public interface LayerElementRepository extends JpaRepository<LayerElement, UUID
   List<LayerElement> findByRegionId(UUID regionId);
 
   @org.springframework.data.jpa.repository.Query(
-      "SELECT le FROM LayerElement le JOIN FETCH le.layer l WHERE l.image.id = :imageId")
-  List<LayerElement> findByLayerImageId(
-      @org.springframework.data.repository.query.Param("imageId") UUID imageId);
+      "SELECT le FROM LayerElement le JOIN FETCH le.layer l WHERE l.page.id = :pageId")
+  List<LayerElement> findByLayerPageId(
+      @org.springframework.data.repository.query.Param("pageId") UUID pageId);
 }
+

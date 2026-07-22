@@ -535,7 +535,8 @@ public class SeriesController {
         java.util.Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
         if (existingImageOpt.isPresent()) {
           Image existingImage = existingImageOpt.get();
-          pageService.createPageWithExistingImage(chapter, existingImage, pageNum, user);
+          Page page = pageService.createPageWithExistingImage(chapter, existingImage, pageNum, user);
+
 
           // Check if target language layer exists
           String targetLang =
@@ -543,15 +544,16 @@ public class SeriesController {
                   ? series.getTargetLanguage().trim().toLowerCase()
                   : "en";
           boolean targetTranslationExists =
-              layerRepository.findByImageId(existingImage.getId()).stream()
+              layerRepository.findByPageId(page.getId()).stream()
                   .anyMatch(
                       l ->
                           "translation".equalsIgnoreCase(l.getType())
                               && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
 
           if (!targetTranslationExists) {
-            jobCoordinatorService.triggerImageRedo(existingImage.getId(), "translation");
+            jobCoordinatorService.triggerPageRedo(page.getId(), "translation");
           }
+
           pageNum++;
           continue;
         }

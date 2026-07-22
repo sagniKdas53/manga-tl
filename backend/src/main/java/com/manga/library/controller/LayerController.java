@@ -24,6 +24,7 @@ public class LayerController {
   private final LayerElementRepository layerElementRepository;
   private final LayerEditHistoryRepository layerEditHistoryRepository;
   private final ImageRepository imageRepository;
+  private final PageRepository pageRepository;
   private final ObjectMapper objectMapper;
   private final OcrRegionRepository ocrRegionRepository;
 
@@ -105,10 +106,10 @@ public class LayerController {
                     }
                     layerRepository.save(Objects.requireNonNull(parentLayer));
 
-                    Image img = parentLayer.getImage();
-                    if (img != null) {
-                      img.setLastEditedAt(OffsetDateTime.now());
-                      imageRepository.save(Objects.requireNonNull(img));
+                    Page pg = parentLayer.getPage();
+                    if (pg != null) {
+                      pg.setLastEditedAt(OffsetDateTime.now());
+                      pageRepository.save(Objects.requireNonNull(pg));
                     }
                   }
                 }
@@ -133,19 +134,19 @@ public class LayerController {
     return ResponseEntity.ok(history);
   }
 
-  @PostMapping("/images/{imageId}/layers")
+  @PostMapping("/pages/{pageId}/layers")
   @Transactional
   @PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
-  public ResponseEntity<Layer> createLayer(
-      @PathVariable UUID imageId, @RequestBody Map<String, Object> payload) {
+  public ResponseEntity<Layer> createPageLayer(
+      @PathVariable UUID pageId, @RequestBody Map<String, Object> payload) {
 
-    Objects.requireNonNull(imageId, "imageId cannot be null");
-    log.info("Creating new layer for image {}", imageId);
+    Objects.requireNonNull(pageId, "pageId cannot be null");
+    log.info("Creating new layer for page {}", pageId);
 
-    return imageRepository
-        .findById(Objects.requireNonNull(imageId))
+    return pageRepository
+        .findById(Objects.requireNonNull(pageId))
         .map(
-            image -> {
+            page -> {
               String type = (String) payload.getOrDefault("type", "translation");
               String targetLanguage = (String) payload.get("targetLanguage");
 
@@ -175,7 +176,7 @@ public class LayerController {
 
               Layer layer =
                   Layer.builder()
-                      .image(image)
+                      .page(page)
                       .type(type)
                       .targetLanguage(targetLanguage)
                       .visible(visible)
@@ -186,12 +187,24 @@ public class LayerController {
               Objects.requireNonNull(layer, "layer cannot be null");
               Layer saved = layerRepository.save(Objects.requireNonNull(layer));
 
-              image.setLastEditedAt(OffsetDateTime.now());
-              imageRepository.save(Objects.requireNonNull(image));
+              page.setLastEditedAt(OffsetDateTime.now());
+              pageRepository.save(Objects.requireNonNull(page));
 
               return ResponseEntity.ok(saved);
             })
         .orElse(ResponseEntity.notFound().build());
+  }
+
+  @PostMapping("/images/{imageId}/layers")
+  @Transactional
+  @PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
+  public ResponseEntity<Layer> createLayer(
+      @PathVariable UUID imageId, @RequestBody Map<String, Object> payload) {
+    Page page =
+        pageRepository.findByImageId(imageId).stream()
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("No page found for image: " + imageId));
+    return createPageLayer(page.getId(), payload);
   }
 
   @DeleteMapping("/layers/{id}")
@@ -205,16 +218,17 @@ public class LayerController {
         .map(
             layer -> {
               Objects.requireNonNull(layer, "layer cannot be null");
-              Image img = layer.getImage();
+              Page pg = layer.getPage();
               layerRepository.delete(Objects.requireNonNull(layer));
-              if (img != null) {
-                img.setLastEditedAt(OffsetDateTime.now());
-                imageRepository.save(Objects.requireNonNull(img));
+              if (pg != null) {
+                pg.setLastEditedAt(OffsetDateTime.now());
+                pageRepository.save(Objects.requireNonNull(pg));
               }
               return ResponseEntity.ok().build();
             })
         .orElse(ResponseEntity.notFound().build());
   }
+
 
   /**
    * Updates mutable properties of a Layer: {@code zOrder} and/or {@code visible}.
@@ -249,10 +263,10 @@ public class LayerController {
                 layer.setVisible(Boolean.TRUE.equals(payload.get("visible")));
               }
               Layer saved = layerRepository.save(Objects.requireNonNull(layer));
-              Image img = saved.getImage();
-              if (img != null) {
-                img.setLastEditedAt(OffsetDateTime.now());
-                imageRepository.save(Objects.requireNonNull(img));
+              Page pg = saved.getPage();
+              if (pg != null) {
+                pg.setLastEditedAt(OffsetDateTime.now());
+                pageRepository.save(Objects.requireNonNull(pg));
               }
               log.info(
                   "Layer {} updated — zOrder={}, visible={}",
@@ -304,10 +318,10 @@ public class LayerController {
                       .maskPolygon(dto.getMaskPolygon())
                       .build();
               LayerElement saved = layerElementRepository.save(Objects.requireNonNull(el));
-              Image img = layer.getImage();
-              if (img != null) {
-                img.setLastEditedAt(OffsetDateTime.now());
-                imageRepository.save(Objects.requireNonNull(img));
+              Page pg = layer.getPage();
+              if (pg != null) {
+                pg.setLastEditedAt(OffsetDateTime.now());
+                pageRepository.save(Objects.requireNonNull(pg));
               }
               return ResponseEntity.ok(saved);
             })
@@ -325,16 +339,17 @@ public class LayerController {
         .map(
             element -> {
               Objects.requireNonNull(element, "element cannot be null");
-              Image img = element.getLayer() != null ? element.getLayer().getImage() : null;
+              Page pg = element.getLayer() != null ? element.getLayer().getPage() : null;
               layerElementRepository.delete(Objects.requireNonNull(element));
-              if (img != null) {
-                img.setLastEditedAt(OffsetDateTime.now());
-                imageRepository.save(Objects.requireNonNull(img));
+              if (pg != null) {
+                pg.setLastEditedAt(OffsetDateTime.now());
+                pageRepository.save(Objects.requireNonNull(pg));
               }
               return ResponseEntity.ok().build();
             })
         .orElse(ResponseEntity.notFound().build());
   }
+
 
   private Map<String, Object> captureStateMap(LayerElement el) {
     Map<String, Object> map = new HashMap<>();

@@ -16,4 +16,11 @@ public interface PageRepository extends JpaRepository<Page, UUID> {
   Optional<Page> findByChapterIdAndImageId(UUID chapterId, UUID imageId);
 
   long countByChapterId(UUID chapterId);
+
+  @org.springframework.data.jpa.repository.Query(
+      "SELECT p FROM Page p WHERE p.lastEditedAt IS NOT NULL AND p.lastEditedAt < :threshold AND (p.lastRenderedAt IS NULL OR p.lastEditedAt > p.lastRenderedAt)")
+  java.util.List<Page> findPagesNeedingRender(
+      @org.springframework.data.repository.query.Param("threshold")
+          java.time.OffsetDateTime threshold);
 }
+

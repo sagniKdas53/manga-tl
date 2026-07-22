@@ -328,7 +328,7 @@ export const Reader: React.FC<ReaderProps> = ({
           if (
             data.status === "COMPLETED" &&
             selectedPage &&
-            data.imageId === selectedPage.imageId
+            (data.pageId === selectedPage.id || data.imageId === selectedPage.imageId)
           ) {
             const relevantTypes = [
               "ocr",
@@ -341,8 +341,9 @@ export const Reader: React.FC<ReaderProps> = ({
                 `SSE event: Reloading page layers due to ${data.type} job completion`,
               );
 
-              // Bust cache for this image so fresh data is fetched
-              delete pageDetailsCache.current[data.imageId];
+              // Bust cache for this page & image so fresh data is fetched
+              delete pageDetailsCache.current[selectedPage.id];
+              delete pageDetailsCache.current[selectedPage.imageId];
 
               // Force refetch of page details by clearing the loaded image ID
               Promise.resolve().then(() => {
@@ -351,6 +352,7 @@ export const Reader: React.FC<ReaderProps> = ({
               showToast("New layers available — refreshed", "success");
             }
           }
+
         } catch (e) {
           console.error("Failed to parse job_update in Reader", e);
         }
@@ -615,16 +617,20 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Helper to fetch and cache a page
   const fetchPageDetails = useCallback(
-    async (imageId: string) => {
-      if (pageDetailsCache.current[imageId]) {
-        return pageDetailsCache.current[imageId];
+    async (pageId: string, imageId: string) => {
+      const cacheKey = pageId || imageId;
+      if (pageDetailsCache.current[cacheKey]) {
+        return pageDetailsCache.current[cacheKey];
       }
 
+      const detailsUrl = pageId ? `/api/pages/${pageId}/details` : `/api/images/${imageId}`;
+      const layersUrl = pageId ? `/api/pages/${pageId}/layers` : `/api/images/${imageId}/layers`;
+
       const [detailsRes, layersRes] = await Promise.all([
-        safeFetch(`/api/images/${imageId}`, {
+        safeFetch(detailsUrl, {
           headers: { Authorization: `Bearer ${user.token}` },
         }),
-        safeFetch(`/api/images/${imageId}/layers`, {
+        safeFetch(layersUrl, {
           headers: { Authorization: `Bearer ${user.token}` },
         }),
       ]);
@@ -642,7 +648,7 @@ export const Reader: React.FC<ReaderProps> = ({
         layers: layersData || [],
       };
 
-      pageDetailsCache.current[imageId] = cachedData;
+      pageDetailsCache.current[cacheKey] = cachedData;
       return cachedData;
     },
     [user.token],
@@ -650,32 +656,33 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Fetch page details (panels, OCR regions, conversations) when page selection updates
   useEffect(() => {
-    if (selectedPage && loadedImageId !== selectedPage.imageId) {
+    if (selectedPage && loadedImageId !== selectedPage.id) {
+      const currentPageId = selectedPage.id;
       const currentImageId = selectedPage.imageId;
       const currentPageIndex = pages.findIndex(
-        (p) => p.imageId === currentImageId,
+        (p) => p.id === currentPageId,
       );
 
       // --- SYNCHRONOUS CACHE HIT ---
-      if (pageDetailsCache.current[currentImageId]) {
-        const data = pageDetailsCache.current[currentImageId];
-        setPanels(data.panels);
-        setOcrRegions(data.ocrRegions);
-        setConversations(data.conversations);
-        setLayers(data.layers);
-        if (data.layers.length > 0) {
-          setActiveLayerId(data.layers[0].layer.id);
+      const cached = pageDetailsCache.current[currentPageId] || pageDetailsCache.current[currentImageId];
+      if (cached) {
+        setPanels(cached.panels);
+        setOcrRegions(cached.ocrRegions);
+        setConversations(cached.conversations);
+        setLayers(cached.layers);
+        if (cached.layers.length > 0) {
+          setActiveLayerId(cached.layers[0].layer.id);
         } else {
           setActiveLayerId(null);
         }
         setSelectedItem(null);
-        setLoadedImageId(currentImageId);
+        setLoadedImageId(currentPageId);
         setIsLoadingPageDetails(false);
       } else {
         setIsLoadingPageDetails(true);
-        fetchPageDetails(currentImageId)
+        fetchPageDetails(currentPageId, currentImageId)
           .then((data) => {
-            if (selectedPage.imageId === currentImageId) {
+            if (selectedPage.id === currentPageId) {
               setPanels(data.panels);
               setOcrRegions(data.ocrRegions);
               setConversations(data.conversations);
@@ -686,17 +693,18 @@ export const Reader: React.FC<ReaderProps> = ({
                 setActiveLayerId(null);
               }
               setSelectedItem(null);
-              setLoadedImageId(currentImageId);
+              setLoadedImageId(currentPageId);
               setIsLoadingPageDetails(false);
             }
           })
           .catch((err) => {
             console.error("Error loading page details:", err);
-            if (selectedPage.imageId === currentImageId) {
+            if (selectedPage.id === currentPageId) {
               setIsLoadingPageDetails(false);
             }
           });
       }
+
 
       // --- STRICT SLIDING WINDOW PREFETCH & EVICTION ---
       if (currentPageIndex !== -1) {
@@ -1605,8 +1613,9 @@ export const Reader: React.FC<ReaderProps> = ({
 
     try {
       const res = await safeFetch(
-        `/api/images/${selectedPage.imageId}/layers`,
+        `/api/pages/${selectedPage.id}/layers`,
         {
+
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1948,8 +1957,9 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // Step 3: Create the new cloned layer at newZOrder
       const createRes = await safeFetch(
-        `/api/images/${selectedPage.imageId}/layers`,
+        `/api/pages/${selectedPage.id}/layers`,
         {
+
           method: "POST",
           headers: {
             "Content-Type": "application/json",
