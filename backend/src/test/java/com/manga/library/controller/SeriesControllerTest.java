@@ -124,7 +124,8 @@ public class SeriesControllerTest {
             + "\"qaLlmModel\":\"tencent/hy3:free\","
             + "\"qaVlmModel\":\"google/gemini-2.5-flash\","
             + "\"qaMode\":\"hybrid\","
-            + "\"routingStrategy\":\"lowest-cost\""
+            + "\"routingStrategy\":\"lowest-cost\","
+            + "\"useFallbackModels\":false"
             + "}";
 
     mockMvc
@@ -150,6 +151,30 @@ public class SeriesControllerTest {
         "google/gemini-2.5-flash", saved.getQaVlmModel());
     org.junit.jupiter.api.Assertions.assertEquals("hybrid", saved.getQaMode());
     org.junit.jupiter.api.Assertions.assertEquals("lowest-cost", saved.getRoutingStrategy());
+    org.junit.jupiter.api.Assertions.assertEquals(Boolean.FALSE, saved.getUseFallbackModels());
+  }
+
+  @Test
+  public void testCreateSeries_NullUseFallbackModels_Inherits() throws Exception {
+    // When useFallbackModels is not sent, it should be stored as null (inherit from global)
+    Series series = Series.builder().id(UUID.randomUUID()).title("Inherit Series").build();
+    when(seriesRepository.save(any(Series.class))).thenReturn(series);
+
+    String json = "{\"title\":\"Inherit Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/series")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(json))
+        .andExpect(status().isOk());
+
+    org.mockito.ArgumentCaptor<Series> savedCaptor =
+        org.mockito.ArgumentCaptor.forClass(Series.class);
+    verify(seriesRepository).save(savedCaptor.capture());
+    Series saved = savedCaptor.getValue();
+
+    // null means inherit — NOT forced to true
+    org.junit.jupiter.api.Assertions.assertNull(saved.getUseFallbackModels());
   }
 
   @Test

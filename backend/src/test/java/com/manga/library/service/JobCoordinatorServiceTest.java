@@ -815,6 +815,136 @@ public class JobCoordinatorServiceTest {
     seriesRepository.delete(series);
   }
 
+  @Test
+  public void testUseFallbackModels_ChapterOverridesSeries() {
+    // Chapter says false → must win even though series says true
+    Series series =
+        Series.builder()
+            .title("FBM Series")
+            .originalLanguage("ja").sourceLanguage("ja").targetLanguage("en")
+            .readingDirection("rtl")
+            .useFallbackModels(true)
+            .build();
+    series = seriesRepository.save(series);
+
+    Chapter chapter = Chapter.builder()
+        .series(series).chapterNumber(1.0)
+        .useFallbackModels(false)
+        .build();
+    chapter = chapterRepository.save(chapter);
+
+    Image image = Image.builder().filename("fbm_c.png").storagePath("fbm/fbm_c.png").build();
+    image = imageRepository.save(image);
+    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    pageRepository.save(page);
+
+    AtomicReference<Object> pushedFallback = new AtomicReference<>();
+    rightPushHook = (queueName, payload) -> {
+      try {
+        Map<?, ?> m = new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+        pushedFallback.set(m.get("useFallbackModels"));
+      } catch (Exception e) { throw new AssertionError(e); }
+    };
+
+    jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
+
+    assertNotNull(pushedFallback.get());
+    assertEquals(false, pushedFallback.get());
+
+    // Clean up
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+    chapterRepository.delete(chapter);
+    seriesRepository.delete(series);
+  }
+
+  @Test
+  public void testUseFallbackModels_SeriesOverridesGlobal() {
+    // Chapter is null (inherit) → series says false → must win over global default (true)
+    Series series =
+        Series.builder()
+            .title("FBM Series2")
+            .originalLanguage("ja").sourceLanguage("ja").targetLanguage("en")
+            .readingDirection("rtl")
+            .useFallbackModels(false)
+            .build();
+    series = seriesRepository.save(series);
+
+    Chapter chapter = Chapter.builder()
+        .series(series).chapterNumber(1.0)
+        // useFallbackModels not set → null → should inherit series
+        .build();
+    chapter = chapterRepository.save(chapter);
+
+    Image image = Image.builder().filename("fbm_s.png").storagePath("fbm/fbm_s.png").build();
+    image = imageRepository.save(image);
+    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    pageRepository.save(page);
+
+    AtomicReference<Object> pushedFallback = new AtomicReference<>();
+    rightPushHook = (queueName, payload) -> {
+      try {
+        Map<?, ?> m = new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+        pushedFallback.set(m.get("useFallbackModels"));
+      } catch (Exception e) { throw new AssertionError(e); }
+    };
+
+    jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
+
+    assertNotNull(pushedFallback.get());
+    assertEquals(false, pushedFallback.get());
+
+    // Clean up
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+    chapterRepository.delete(chapter);
+    seriesRepository.delete(series);
+  }
+
+  @Test
+  public void testUseFallbackModels_InheritsGlobalWhenBothNull() {
+    // Both chapter and series are null → falls through to global default (true)
+    Series series =
+        Series.builder()
+            .title("FBM Series3")
+            .originalLanguage("ja").sourceLanguage("ja").targetLanguage("en")
+            .readingDirection("rtl")
+            // useFallbackModels not set → null
+            .build();
+    series = seriesRepository.save(series);
+
+    Chapter chapter = Chapter.builder()
+        .series(series).chapterNumber(1.0)
+        // useFallbackModels not set → null
+        .build();
+    chapter = chapterRepository.save(chapter);
+
+    Image image = Image.builder().filename("fbm_g.png").storagePath("fbm/fbm_g.png").build();
+    image = imageRepository.save(image);
+    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    pageRepository.save(page);
+
+    AtomicReference<Object> pushedFallback = new AtomicReference<>();
+    rightPushHook = (queueName, payload) -> {
+      try {
+        Map<?, ?> m = new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+        pushedFallback.set(m.get("useFallbackModels"));
+      } catch (Exception e) { throw new AssertionError(e); }
+    };
+
+    jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
+
+    // Global default is true (SystemSettings defaults useFallbackModels to true)
+    assertNotNull(pushedFallback.get());
+    assertEquals(true, pushedFallback.get());
+
+    // Clean up
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+    chapterRepository.delete(chapter);
+    seriesRepository.delete(series);
+  }
+
   @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);

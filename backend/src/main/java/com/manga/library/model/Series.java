@@ -69,10 +69,9 @@ public class Series {
   @Column(name = "routing_strategy")
   private String routingStrategy;
 
-  /** When false: skip application-level model fallback cascade — fail job if requested model fails. */
-  @Builder.Default
-  @Column(name = "use_fallback_models", nullable = false, columnDefinition = "boolean default true")
-  private Boolean useFallbackModels = true;
+  /** When null: inherit from global settings. When false: skip fallback cascade. */
+  @Column(name = "use_fallback_models")
+  private Boolean useFallbackModels;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by")
