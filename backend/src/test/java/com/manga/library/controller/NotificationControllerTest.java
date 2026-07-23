@@ -28,14 +28,12 @@ public class NotificationControllerTest {
   @MockBean private JwtAuthFilter jwtAuthFilter;
 
   @Test
-  public void testStream_Unauthorized() {
+  public void testStream_Unauthorized() throws Exception {
     org.springframework.security.core.context.SecurityContextHolder.clearContext();
-    Exception exception =
-        org.junit.jupiter.api.Assertions.assertThrows(
-            Exception.class, () -> mockMvc.perform(get("/api/notifications/stream")));
-    org.junit.jupiter.api.Assertions.assertTrue(exception.getCause() instanceof RuntimeException);
-    org.junit.jupiter.api.Assertions.assertEquals(
-        "Unauthorized", exception.getCause().getMessage());
+    mockMvc.perform(get("/api/notifications/stream"))
+        .andExpect(status().isInternalServerError())
+        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+            .value("Something went wrong: Unauthorized"));
   }
 
   @Test
@@ -58,7 +56,7 @@ public class NotificationControllerTest {
   }
 
   @Test
-  public void testStream_UserNotFound() {
+  public void testStream_UserNotFound() throws Exception {
     org.springframework.security.core.Authentication auth =
         mock(org.springframework.security.core.Authentication.class);
     when(auth.isAuthenticated()).thenReturn(true);
@@ -67,12 +65,10 @@ public class NotificationControllerTest {
         .setAuthentication(auth);
 
     try {
-      Exception exception =
-          org.junit.jupiter.api.Assertions.assertThrows(
-              Exception.class, () -> mockMvc.perform(get("/api/notifications/stream")));
-      org.junit.jupiter.api.Assertions.assertTrue(exception.getCause() instanceof RuntimeException);
-      org.junit.jupiter.api.Assertions.assertEquals(
-          "User not found", exception.getCause().getMessage());
+      mockMvc.perform(get("/api/notifications/stream"))
+          .andExpect(status().isInternalServerError())
+          .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+              .value("Something went wrong: User not found"));
     } finally {
       org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }

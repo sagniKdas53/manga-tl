@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.manga.library.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -147,7 +148,7 @@ public class PageController {
       Chapter chapter =
           chapterRepository
               .findWithSeriesById(chapterId)
-              .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
+              .orElseThrow(() -> new ResourceNotFoundException("Chapter not found: " + chapterId));
 
       String originalFilename = file.getOriginalFilename();
       String fileExtension = pageService.getFileExtension(originalFilename);
@@ -733,7 +734,7 @@ public class PageController {
     Page page =
         pageRepository
             .findById(Objects.requireNonNull(pageId))
-            .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+            .orElseThrow(() -> new ResourceNotFoundException("Page not found: " + pageId));
     Image image = page.getImage();
 
     List<Panel> panels = panelRepository.findByImageId(image.getId());
@@ -786,7 +787,7 @@ public class PageController {
     Image image =
         imageRepository
             .findById(Objects.requireNonNull(imageId))
-            .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+            .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
     List<Panel> panels = panelRepository.findByImageId(imageId);
     Map<String, Object> response = new HashMap<>();
@@ -862,7 +863,7 @@ public class PageController {
       Image image =
           imageRepository
               .findById(Objects.requireNonNull(imageId))
-              .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+              .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
       org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
           outputStream -> {
@@ -890,7 +891,7 @@ public class PageController {
       Image image =
           imageRepository
               .findById(Objects.requireNonNull(imageId))
-              .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+              .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
       String path = image.getThumbnailStoragePath() != null ? image.getThumbnailStoragePath() : image.getStoragePath();
       org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
@@ -1100,7 +1101,7 @@ public class PageController {
       Chapter chapter =
           chapterRepository
               .findById(Objects.requireNonNull(chapterId))
-              .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
+              .orElseThrow(() -> new ResourceNotFoundException("Chapter not found: " + chapterId));
 
       byte[] projectJsonBytes = null;
       byte[] originalImageBytes = null;

@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import com.manga.library.exception.ResourceNotFoundException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -238,7 +239,7 @@ public class SeriesController {
     Series series =
         seriesRepository
             .findById(Objects.requireNonNull(seriesId))
-            .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
+            .orElseThrow(() -> new ResourceNotFoundException("Series not found: " + seriesId));
 
     if (chapterRepository
         .findBySeriesIdAndChapterNumber(seriesId, dto.getChapterNumber())
@@ -449,7 +450,7 @@ public class SeriesController {
       Series series =
           seriesRepository
               .findById(Objects.requireNonNull(seriesId))
-              .orElseThrow(() -> new IllegalArgumentException("Series not found: " + seriesId));
+              .orElseThrow(() -> new ResourceNotFoundException("Series not found: " + seriesId));
 
       if (chapterRepository.findBySeriesIdAndChapterNumber(seriesId, chapterNumber).isPresent()) {
         return ResponseEntity.status(409)
@@ -621,7 +622,7 @@ public class SeriesController {
     // Verify chapter exists before exporting
     chapterRepository
         .findById(Objects.requireNonNull(chapterId))
-        .orElseThrow(() -> new IllegalArgumentException("Chapter not found: " + chapterId));
+        .orElseThrow(() -> new ResourceNotFoundException("Chapter not found: " + chapterId));
 
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
     if (pages == null || pages.isEmpty()) {

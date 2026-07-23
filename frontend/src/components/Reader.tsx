@@ -555,14 +555,14 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Helper to fetch and cache a page
   const fetchPageDetails = useCallback(
-    async (pageId: string, imageId: string) => {
-      const cacheKey = pageId || imageId;
+    async (pageId: string) => {
+      const cacheKey = pageId;
       if (pageDetailsCache.current[cacheKey]) {
         return pageDetailsCache.current[cacheKey];
       }
 
-      const detailsUrl = pageId ? `/api/pages/${pageId}/details` : `/api/images/${imageId}`;
-      const layersUrl = pageId ? `/api/pages/${pageId}/layers` : `/api/images/${imageId}/layers`;
+      const detailsUrl = `/api/pages/${pageId}/details`;
+      const layersUrl = `/api/pages/${pageId}/layers`;
 
       const [detailsRes, layersRes] = await Promise.all([
         safeFetch(detailsUrl, {
@@ -618,7 +618,7 @@ export const Reader: React.FC<ReaderProps> = ({
         setIsLoadingPageDetails(false);
       } else {
         setIsLoadingPageDetails(true);
-        fetchPageDetails(currentPageId, currentImageId)
+        fetchPageDetails(currentPageId)
           .then((data) => {
             if (selectedPage.id === currentPageId) {
               setPanels(data.panels);
@@ -653,26 +653,28 @@ export const Reader: React.FC<ReaderProps> = ({
         );
         pagesToPrefetch.forEach((p) => {
           if (
-            !pageDetailsCache.current[p.imageId] &&
-            !prefetchQueue.current.has(p.imageId)
+            !pageDetailsCache.current[p.id] &&
+            !prefetchQueue.current.has(p.id)
           ) {
-            prefetchQueue.current.add(p.imageId);
+            prefetchQueue.current.add(p.id);
 
             // Prefetch image itself (lightweight progressive loading)
             const img = new Image();
             img.src = `${p.url}?token=${user.token}`;
 
-            // Prefetch details
-            fetchPageDetails(p.imageId).catch((e) =>
-              console.error("Prefetch error", e),
-            );
+            // Prefetch details (must use the PAGE id, not the image id)
+            fetchPageDetails(p.id).catch((e) => {
+              // Allow retry on next navigation instead of staying queued forever
+              prefetchQueue.current.delete(p.id);
+              console.error("Prefetch error", e);
+            });
           }
         });
 
         // 2. Evict pages outside of window [N, N+1, N+2] to save memory
         const activeWindowIds = new Set([
-          currentImageId,
-          ...pagesToPrefetch.map((p) => p.imageId),
+          currentPageId,
+          ...pagesToPrefetch.map((p) => p.id),
         ]);
 
         // Evict from cache
