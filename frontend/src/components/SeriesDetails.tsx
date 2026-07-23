@@ -69,7 +69,16 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
 
   if (isLoadingDetails || !selectedSeries) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh", flexDirection: "column", gap: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "60vh",
+          flexDirection: "column",
+          gap: 2,
+        }}
+      >
         <CircularProgress />
         <Typography>Loading series details...</Typography>
       </Box>
@@ -183,7 +192,15 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   };
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto", width: "100%", px: { xs: 2, sm: 3 }, py: 3 }}>
+    <Box
+      sx={{
+        maxWidth: 1200,
+        mx: "auto",
+        width: "100%",
+        px: { xs: 2, sm: 3 },
+        py: 3,
+      }}
+    >
       <Button
         onClick={() => navigate("/")}
         variant="outlined"

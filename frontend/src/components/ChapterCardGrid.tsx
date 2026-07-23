@@ -89,14 +89,22 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                   component="img"
                   image={c.coverImageUrl}
                   alt={c.title || `Chapter ${c.chapterNumber}`}
-                  sx={{ aspectRatio: "2/3", objectFit: "cover", bgcolor: "#000" }}
+                  sx={{
+                    aspectRatio: "2/3",
+                    objectFit: "cover",
+                    bgcolor: "#000",
+                  }}
                 />
               ) : series.coverImageUrl ? (
                 <CardMedia
                   component="img"
                   image={series.coverImageUrl}
                   alt="Fallback Cover"
-                  sx={{ aspectRatio: "2/3", objectFit: "cover", bgcolor: "#000" }}
+                  sx={{
+                    aspectRatio: "2/3",
+                    objectFit: "cover",
+                    bgcolor: "#000",
+                  }}
                 />
               ) : (
                 <Box
@@ -118,10 +126,18 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                 </Box>
               )}
 
-              <CardContent sx={{ flex: 1, py: 1.5, pb: 1, "&:last-child": { pb: 1.5 } }}>
+              <CardContent
+                sx={{ flex: 1, py: 1.5, pb: 1, "&:last-child": { pb: 1.5 } }}
+              >
                 <Typography
                   variant="subtitle2"
-                  sx={{ color: "primary.main", fontWeight: 700, textTransform: "uppercase", fontSize: "0.75rem", mb: 0.5 }}
+                  sx={{
+                    color: "primary.main",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    fontSize: "0.75rem",
+                    mb: 0.5,
+                  }}
                 >
                   Chapter {c.chapterNumber}
                 </Typography>
@@ -133,68 +149,68 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                 >
                   {c.title || "Untitled"}
                 </Typography>
-                
+
                 {(c.pageCount ||
                   c.useContextMemory !== undefined ||
                   c.resolvedOcr ||
                   c.resolvedTranslation) && (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 0.5,
-                        mt: 0.5,
-                      }}
-                    >
-                      {c.pageCount !== undefined && c.pageCount > 0 && (
-                        <Chip
-                          label={`${c.pageCount} pages`}
-                          size="small"
-                          variant="outlined"
-                          title="Total pages in this chapter"
-                        />
-                      )}
-                      {c.useContextMemory !== undefined && (
-                        <Chip
-                          label={c.useContextMemory ? "Context" : "No Context"}
-                          size="small"
-                          variant="outlined"
-                          color={c.useContextMemory ? "primary" : "default"}
-                          title={
-                            c.useContextMemory
-                              ? "Context memory enabled"
-                              : "Context memory disabled"
-                          }
-                        />
-                      )}
-                      {(c.resolvedOcr || c.resolvedTranslation) && (
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: "text.secondary",
-                            fontSize: "10px",
-                            lineHeight: "20px",
-                            width: "100%",
-                            mt: 0.5
-                          }}
-                        >
-                          {c.resolvedOcr && c.resolvedOcr.source !== "global"
-                            ? `OCR: ${c.resolvedOcr.provider}${c.resolvedOcr.model ? " / " + c.resolvedOcr.model : ""} (${c.resolvedOcr.source})`
-                            : ""}
-                          {c.resolvedOcr &&
-                            c.resolvedOcr.source !== "global" &&
-                            c.resolvedTranslation &&
-                            c.resolvedTranslation.source !== "global"
-                            ? " | "
-                            : ""}
-                          {c.resolvedTranslation &&
-                            c.resolvedTranslation.source !== "global"
-                            ? `TL: ${c.resolvedTranslation.provider}${c.resolvedTranslation.model ? " / " + c.resolvedTranslation.model : ""} (${c.resolvedTranslation.source})`
-                            : ""}
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 0.5,
+                      mt: 0.5,
+                    }}
+                  >
+                    {c.pageCount !== undefined && c.pageCount > 0 && (
+                      <Chip
+                        label={`${c.pageCount} pages`}
+                        size="small"
+                        variant="outlined"
+                        title="Total pages in this chapter"
+                      />
+                    )}
+                    {c.useContextMemory !== undefined && (
+                      <Chip
+                        label={c.useContextMemory ? "Context" : "No Context"}
+                        size="small"
+                        variant="outlined"
+                        color={c.useContextMemory ? "primary" : "default"}
+                        title={
+                          c.useContextMemory
+                            ? "Context memory enabled"
+                            : "Context memory disabled"
+                        }
+                      />
+                    )}
+                    {(c.resolvedOcr || c.resolvedTranslation) && (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "text.secondary",
+                          fontSize: "10px",
+                          lineHeight: "20px",
+                          width: "100%",
+                          mt: 0.5,
+                        }}
+                      >
+                        {c.resolvedOcr && c.resolvedOcr.source !== "global"
+                          ? `OCR: ${c.resolvedOcr.provider}${c.resolvedOcr.model ? " / " + c.resolvedOcr.model : ""} (${c.resolvedOcr.source})`
+                          : ""}
+                        {c.resolvedOcr &&
+                        c.resolvedOcr.source !== "global" &&
+                        c.resolvedTranslation &&
+                        c.resolvedTranslation.source !== "global"
+                          ? " | "
+                          : ""}
+                        {c.resolvedTranslation &&
+                        c.resolvedTranslation.source !== "global"
+                          ? `TL: ${c.resolvedTranslation.provider}${c.resolvedTranslation.model ? " / " + c.resolvedTranslation.model : ""} (${c.resolvedTranslation.source})`
+                          : ""}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
               </CardContent>
 
               <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>

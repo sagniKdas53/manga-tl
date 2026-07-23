@@ -16,7 +16,7 @@ describe("ReaderPageNavigation", () => {
         onPrevPage={vi.fn()}
         onNextPage={vi.fn()}
         onLastPage={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("/ 10")).toBeInTheDocument();
@@ -31,7 +31,7 @@ describe("ReaderPageNavigation", () => {
         onPrevPage={vi.fn()}
         onNextPage={vi.fn()}
         onLastPage={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByTestId("first-page-btn")).toBeDisabled();
     expect(screen.getByTestId("prev-page-btn")).toBeDisabled();
@@ -48,7 +48,7 @@ describe("ReaderPageNavigation", () => {
         onPrevPage={vi.fn()}
         onNextPage={vi.fn()}
         onLastPage={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByTestId("first-page-btn")).not.toBeDisabled();
     expect(screen.getByTestId("prev-page-btn")).not.toBeDisabled();
@@ -70,7 +70,7 @@ describe("ReaderPageNavigation", () => {
         onPrevPage={onPrevPage}
         onNextPage={onNextPage}
         onLastPage={onLastPage}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByTestId("first-page-btn"));
@@ -95,7 +95,7 @@ describe("ReaderPrevNextChapters", () => {
         hasNextChapter={false}
         onPrevChapter={vi.fn()}
         onNextChapter={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByText("Prev Ch").closest("button")).toBeDisabled();
     expect(screen.getByText("Next Ch").closest("button")).toBeDisabled();
@@ -110,7 +110,7 @@ describe("ReaderPrevNextChapters", () => {
         hasNextChapter={true}
         onPrevChapter={onPrev}
         onNextChapter={onNext}
-      />
+      />,
     );
 
     const prevBtn = screen.getByText("Prev Ch");

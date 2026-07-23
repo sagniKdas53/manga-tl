@@ -2,11 +2,11 @@ package com.manga.library.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.dto.LayerElementDto;
+import com.manga.library.exception.ResourceNotFoundException;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import java.time.OffsetDateTime;
 import java.util.*;
-import com.manga.library.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -203,7 +203,8 @@ public class LayerController {
     Page page =
         pageRepository.findByImageId(imageId).stream()
             .findFirst()
-            .orElseThrow(() -> new ResourceNotFoundException("No page found for image: " + imageId));
+            .orElseThrow(
+                () -> new ResourceNotFoundException("No page found for image: " + imageId));
     return createPageLayer(page.getId(), payload);
   }
 
@@ -228,7 +229,6 @@ public class LayerController {
             })
         .orElse(ResponseEntity.notFound().build());
   }
-
 
   /**
    * Updates mutable properties of a Layer: {@code zOrder} and/or {@code visible}.
@@ -349,7 +349,6 @@ public class LayerController {
             })
         .orElse(ResponseEntity.notFound().build());
   }
-
 
   private Map<String, Object> captureStateMap(LayerElement el) {
     Map<String, Object> map = new HashMap<>();

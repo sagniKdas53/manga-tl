@@ -5,7 +5,9 @@ import Box from "@mui/material/Box";
 import ColorizeIcon from "@mui/icons-material/Colorize";
 
 // Convert hex to HSVA
-const hexToHsva = (hex: string): { h: number; s: number; v: number; a: number } => {
+const hexToHsva = (
+  hex: string,
+): { h: number; s: number; v: number; a: number } => {
   let clean = hex.trim().replace(/^#/, "");
   if (clean === "transparent" || clean === "") {
     return { h: 0, s: 0, v: 100, a: 0 };
@@ -58,25 +60,47 @@ const hsvaToHex = (h: number, s: number, v: number, a: number): string => {
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = v - c;
 
-  let r = 0, g = 0, b = 0;
+  let r = 0,
+    g = 0,
+    b = 0;
   if (h >= 0 && h < 60) {
-    r = c; g = x; b = 0;
+    r = c;
+    g = x;
+    b = 0;
   } else if (h >= 60 && h < 120) {
-    r = x; g = c; b = 0;
+    r = x;
+    g = c;
+    b = 0;
   } else if (h >= 120 && h < 180) {
-    r = 0; g = c; b = x;
+    r = 0;
+    g = c;
+    b = x;
   } else if (h >= 180 && h < 240) {
-    r = 0; g = x; b = c;
+    r = 0;
+    g = x;
+    b = c;
   } else if (h >= 240 && h < 300) {
-    r = x; g = 0; b = c;
+    r = x;
+    g = 0;
+    b = c;
   } else if (h >= 300 && h <= 360) {
-    r = c; g = 0; b = x;
+    r = c;
+    g = 0;
+    b = x;
   }
 
-  const rHex = Math.round((r + m) * 255).toString(16).padStart(2, "0");
-  const gHex = Math.round((g + m) * 255).toString(16).padStart(2, "0");
-  const bHex = Math.round((b + m) * 255).toString(16).padStart(2, "0");
-  const aHex = Math.round(a * 255).toString(16).padStart(2, "0");
+  const rHex = Math.round((r + m) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  const gHex = Math.round((g + m) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  const bHex = Math.round((b + m) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  const aHex = Math.round(a * 255)
+    .toString(16)
+    .padStart(2, "0");
 
   return a === 1 ? `#${rHex}${gHex}${bHex}` : `#${rHex}${gHex}${bHex}${aHex}`;
 };
@@ -86,7 +110,13 @@ const normalizeHexInput = (val: string): string => {
   const clean = val.trim();
   if (clean === "") return "";
   if (clean === "transparent") return "transparent";
-  if (!clean.startsWith("#") && (clean.length === 3 || clean.length === 4 || clean.length === 6 || clean.length === 8)) {
+  if (
+    !clean.startsWith("#") &&
+    (clean.length === 3 ||
+      clean.length === 4 ||
+      clean.length === 6 ||
+      clean.length === 8)
+  ) {
     return "#" + clean;
   }
   return clean;
@@ -253,13 +283,13 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
   const PRESETS = [
     ...(allowTransparent
       ? [
-        {
-          label: "Ø",
-          value: "#00000000",
-          color: "transparent",
-          title: "Transparent",
-        },
-      ]
+          {
+            label: "Ø",
+            value: "#00000000",
+            color: "transparent",
+            title: "Transparent",
+          },
+        ]
       : []),
     { label: "W", value: "#ffffff", color: "#ffffff", title: "White" },
     { label: "K", value: "#000000", color: "#000000", title: "Black" },
@@ -314,7 +344,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             position: "relative",
             overflow: "hidden",
             backgroundImage:
-              normalizedValue === "transparent" || normalizedValue === "" || a < 1
+              normalizedValue === "transparent" ||
+              normalizedValue === "" ||
+              a < 1
                 ? "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)"
                 : "none",
             backgroundSize: "8px 8px",
@@ -323,8 +355,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               content: '""',
               position: "absolute",
               inset: 0,
-              backgroundColor: normalizedValue === "transparent" || normalizedValue === "" ? "transparent" : normalizedValue,
-            }
+              backgroundColor:
+                normalizedValue === "transparent" || normalizedValue === ""
+                  ? "transparent"
+                  : normalizedValue,
+            },
           }}
           title="Open Color Wheel / Palette"
         >
@@ -500,7 +535,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 position: "relative",
                 width: "100%",
                 height: "12px",
-                backgroundImage: "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)",
+                backgroundImage:
+                  "linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)",
                 backgroundSize: "6px 6px",
                 backgroundPosition: "0 0, 0 3px, 3px -3px, -3px 0px",
                 borderRadius: "6px",
@@ -508,12 +544,17 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 userSelect: "none",
               }}
             >
-              <div style={{
-                position: "absolute",
-                top: 0, left: 0, right: 0, bottom: 0,
-                borderRadius: "6px",
-                background: `linear-gradient(to right, transparent, ${hsvaToHex(h, s, v, 1)})`
-              }} />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: "6px",
+                  background: `linear-gradient(to right, transparent, ${hsvaToHex(h, s, v, 1)})`,
+                }}
+              />
               {/* Alpha slider handle */}
               <div
                 style={{

@@ -25,7 +25,6 @@ public class OcrRegion {
   @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Page page;
 
-
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "panel_id")
   @com.fasterxml.jackson.annotation.JsonIgnore

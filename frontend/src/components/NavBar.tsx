@@ -11,7 +11,7 @@ import LightModeIcon from "@mui/icons-material/LightMode";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PersonIcon from "@mui/icons-material/Person";
-import PreviewIcon from '@mui/icons-material/Preview';
+import PreviewIcon from "@mui/icons-material/Preview";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 
 import { useColorMode } from "../hooks/useColorMode";
@@ -24,7 +24,9 @@ import logoLight from "../assets/logo-light.svg";
 interface NavBarProps {
   user: User | null;
   activeDrawer: "none" | "queue" | "notifications";
-  setActiveDrawer: React.Dispatch<React.SetStateAction<"none" | "queue" | "notifications">>;
+  setActiveDrawer: React.Dispatch<
+    React.SetStateAction<"none" | "queue" | "notifications">
+  >;
   setIsSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsUserModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   handleLogout: () => void;
@@ -75,7 +77,10 @@ export const NavBar: React.FC<NavBarProps> = ({
             tl-hub
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1}>
+        <Stack
+          direction="row"
+          spacing={1}
+        >
           <IconButton
             onClick={toggleMode}
             color="inherit"

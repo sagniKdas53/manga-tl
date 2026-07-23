@@ -18,4 +18,3 @@ public interface ConversationRegionRepository
       "delete from ConversationRegion cr where cr.conversationId in (select c.id from Conversation c where c.page.id = :pageId)")
   void deleteByPageId(@Param("pageId") UUID pageId);
 }
-

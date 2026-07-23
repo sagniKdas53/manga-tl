@@ -81,7 +81,8 @@ describe("Dashboard Component", () => {
 
   it("renders the dashboard with list of series", () => {
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -96,7 +97,8 @@ describe("Dashboard Component", () => {
 
   it("navigates to series page when card is clicked", () => {
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -129,7 +131,8 @@ describe("Dashboard Component", () => {
       });
 
       render(
-        <Dashboard mode="dark"
+        <Dashboard
+          mode="dark"
           user={mockUser}
           seriesList={initialSeries}
           setSeriesList={mockSetSeriesList}
@@ -188,7 +191,8 @@ describe("Dashboard Component", () => {
     });
 
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -240,7 +244,8 @@ describe("Dashboard Component", () => {
 
   it("cancels series modal without saving", { timeout: 15000 }, async () => {
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -267,7 +272,8 @@ describe("Dashboard Component", () => {
     mockSafeFetch.mockRejectedValueOnce(new Error("Network Error"));
 
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -296,7 +302,8 @@ describe("Dashboard Component", () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: true });
 
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -330,7 +337,8 @@ describe("Dashboard Component", () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: false });
 
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -362,7 +370,8 @@ describe("Dashboard Component", () => {
       .mockImplementation(() => {});
 
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -393,7 +402,8 @@ describe("Dashboard Component", () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: false, status: 403 });
 
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
@@ -445,8 +455,10 @@ describe("Dashboard Component", () => {
     ];
 
     render(
-      <Dashboard mode="dark"
+      <Dashboard
+        mode="dark"
         user={mockUser}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         seriesList={seriesWithDates as any}
         setSeriesList={mockSetSeriesList}
         onSelectSeries={mockOnSelectSeries}
@@ -457,39 +469,36 @@ describe("Dashboard Component", () => {
     expect(screen.getAllByText("New Series").length).toBeGreaterThan(0);
   });
 
-  it(
-    "changes sort order via select",
-    { timeout: 15000 },
-    async () => {
-      localStorage.setItem("dashboard_sort_by", "updatedAt");
-      localStorage.setItem("dashboard_sort_dir", "desc");
+  it("changes sort order via select", { timeout: 15000 }, async () => {
+    localStorage.setItem("dashboard_sort_by", "updatedAt");
+    localStorage.setItem("dashboard_sort_dir", "desc");
 
-      mockSafeFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+    mockSafeFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({}),
+    });
 
-      render(
-        <Dashboard mode="dark"
-          user={mockUser}
-          seriesList={initialSeries}
-          setSeriesList={mockSetSeriesList}
-          onSelectSeries={mockOnSelectSeries}
-        />,
-      );
+    render(
+      <Dashboard
+        mode="dark"
+        user={mockUser}
+        seriesList={initialSeries}
+        setSeriesList={mockSetSeriesList}
+        onSelectSeries={mockOnSelectSeries}
+      />,
+    );
 
-      const comboboxes = document.querySelectorAll('[role="combobox"]');
-      expect(comboboxes.length).toBeGreaterThanOrEqual(1);
+    const comboboxes = document.querySelectorAll('[role="combobox"]');
+    expect(comboboxes.length).toBeGreaterThanOrEqual(1);
 
-      const sortSelect = comboboxes[0];
-      fireEvent.mouseDown(sortSelect);
-      await waitFor(() => {
-        expect(screen.getByRole("listbox")).toBeInTheDocument();
-      });
+    const sortSelect = comboboxes[0];
+    fireEvent.mouseDown(sortSelect);
+    await waitFor(() => {
+      expect(screen.getByRole("listbox")).toBeInTheDocument();
+    });
 
-      fireEvent.click(screen.getByRole("option", { name: /Created Date ↓/ }));
-    },
-  );
+    fireEvent.click(screen.getByRole("option", { name: /Created Date ↓/ }));
+  });
 
   it.skip(
     "creates a new series with language and reading direction changed",
@@ -508,7 +517,8 @@ describe("Dashboard Component", () => {
       });
 
       render(
-        <Dashboard mode="dark"
+        <Dashboard
+          mode="dark"
           user={mockUser}
           seriesList={initialSeries}
           setSeriesList={mockSetSeriesList}

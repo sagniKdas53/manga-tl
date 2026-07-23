@@ -34,8 +34,7 @@ public class ExportCleanupServiceTest {
 
   @Test
   void cleanupOldExports_noFiles() throws Exception {
-    when(minioClient.listObjects(any(ListObjectsArgs.class)))
-        .thenReturn(Collections.emptyList());
+    when(minioClient.listObjects(any(ListObjectsArgs.class))).thenReturn(Collections.emptyList());
 
     service.cleanupOldExports();
 
@@ -126,10 +125,20 @@ public class ExportCleanupServiceTest {
   }
 
   private Iterable<Result<Item>> singleItemIterable(Result<Item> result) {
-    return () -> new Iterator<Result<Item>>() {
-      private boolean hasNext = true;
-      @Override public boolean hasNext() { return hasNext; }
-      @Override public Result<Item> next() { hasNext = false; return result; }
-    };
+    return () ->
+        new Iterator<Result<Item>>() {
+          private boolean hasNext = true;
+
+          @Override
+          public boolean hasNext() {
+            return hasNext;
+          }
+
+          @Override
+          public Result<Item> next() {
+            hasNext = false;
+            return result;
+          }
+        };
   }
 }

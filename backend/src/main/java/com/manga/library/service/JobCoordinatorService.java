@@ -262,8 +262,8 @@ public class JobCoordinatorService {
                 resolvedFallback = seriesFallback;
               } else {
                 // Fall through to global setting (default true if not configured)
-                resolvedFallback = settings.getUseFallbackModels() == null
-                    || settings.getUseFallbackModels();
+                resolvedFallback =
+                    settings.getUseFallbackModels() == null || settings.getUseFallbackModels();
               }
               job.put("useFallbackModels", resolvedFallback);
             }
@@ -423,7 +423,8 @@ public class JobCoordinatorService {
     Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
 
     // Keep existing layers and regions for multi-pass history, but hide old OCR layers
-    List<Layer> existingLayers = page != null ? layerRepository.findByPageId(page.getId()) : List.of();
+    List<Layer> existingLayers =
+        page != null ? layerRepository.findByPageId(page.getId()) : List.of();
     int maxZ = 0;
     for (Layer layer : existingLayers) {
       if (layer.getZOrder() > maxZ) {
@@ -672,24 +673,28 @@ public class JobCoordinatorService {
 
     Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
 
-    long successCount = translations == null ? 0 : translations.stream()
-        .filter(r -> {
-            Object text = r.get("translatedText");
-            return text != null && !text.toString().trim().isEmpty();
-        })
-        .count();
+    long successCount =
+        translations == null
+            ? 0
+            : translations.stream()
+                .filter(
+                    r -> {
+                      Object text = r.get("translatedText");
+                      return text != null && !text.toString().trim().isEmpty();
+                    })
+                .count();
 
     if (successCount == 0) {
-        log.warn("All translations failed for image {} — not creating empty layer", imageId);
-        Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "translation");
-        if (job != null) {
-            job.setStatus("FAILED");
-            job.setError("Translation failed: no regions were successfully translated");
-            job.setUpdatedAt(OffsetDateTime.now());
-            jobRepository.save(job);
-            sseService.emitEventForImage(imageId, "job_update", job);
-        }
-        return;
+      log.warn("All translations failed for image {} — not creating empty layer", imageId);
+      Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "translation");
+      if (job != null) {
+        job.setStatus("FAILED");
+        job.setError("Translation failed: no regions were successfully translated");
+        job.setUpdatedAt(OffsetDateTime.now());
+        jobRepository.save(job);
+        sseService.emitEventForImage(imageId, "job_update", job);
+      }
+      return;
     }
 
     // Find existing translation layers for this image and language
@@ -720,7 +725,6 @@ public class JobCoordinatorService {
       }
     }
     int nextZOrder = maxZ + 1;
-
 
     com.fasterxml.jackson.databind.node.ObjectNode metadata = objectMapper.createObjectNode();
     String modelIdentifier = "unknown";
@@ -778,7 +782,6 @@ public class JobCoordinatorService {
                 Layer.builder()
                     .page(page)
                     .type("translation")
-
                     .targetLanguage(finalTargetLang)
                     .visible(true)
                     .zOrder(nextZOrder)
@@ -935,10 +938,16 @@ public class JobCoordinatorService {
 
   @Transactional
   public void triggerPageRedo(UUID pageId, String jobType, UUID chapterId) {
-    log.info("Triggering page redo for page {} with job type {} and chapter {}", pageId, jobType, chapterId);
+    log.info(
+        "Triggering page redo for page {} with job type {} and chapter {}",
+        pageId,
+        jobType,
+        chapterId);
     Objects.requireNonNull(pageId, "pageId cannot be null");
-    Page page = pageRepository.findById(Objects.requireNonNull(pageId))
-        .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+    Page page =
+        pageRepository
+            .findById(Objects.requireNonNull(pageId))
+            .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
     UUID imageId = page.getImage().getId();
     if ("ocr".equals(jobType)) {
       redisTemplate.opsForValue().set("page:ocr:reason:" + pageId, "manual-re-ocr");
@@ -989,7 +998,6 @@ public class JobCoordinatorService {
 
     enqueueJob(jobType, imageId, chapterId);
   }
-
 
   @Transactional
   public void handleQaReOcrCallback(UUID imageId, List<Map<String, Object>> results) {
@@ -1075,7 +1083,8 @@ public class JobCoordinatorService {
 
     // Find the latest translation layer
     List<Page> pages = pageRepository.findByImageId(imageId);
-    List<Layer> layers = pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
+    List<Layer> layers =
+        pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
     Layer latestTranslationLayer = null;
     for (Layer l : layers) {
 
@@ -1280,7 +1289,8 @@ public class JobCoordinatorService {
     // Save QA info into translation layer metadata_json
     try {
       List<Page> pages = pageRepository.findByImageId(imageId);
-      List<Layer> layers = pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
+      List<Layer> layers =
+          pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
 
       for (Layer layer : layers) {
         if ("translation".equalsIgnoreCase(layer.getType())) {

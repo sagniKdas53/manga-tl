@@ -53,7 +53,14 @@ const NOOP = () => undefined;
 
 function LoadingSpinner() {
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "60vh",
+      }}
+    >
       <CircularProgress />
     </Box>
   );
@@ -193,7 +200,7 @@ function AppContent() {
       isLoadingDetails,
       activeDrawer,
     },
-    "AppContent"
+    "AppContent",
   );
 
   // Load user session redirect

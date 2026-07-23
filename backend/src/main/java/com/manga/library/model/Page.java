@@ -40,4 +40,3 @@ public class Page {
   @Column(name = "last_rendered_at")
   private java.time.OffsetDateTime lastRenderedAt;
 }
-

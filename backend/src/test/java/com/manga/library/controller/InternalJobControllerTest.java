@@ -121,7 +121,6 @@ public class InternalJobControllerTest {
     when(conversationRegionRepository.findByConversationId(conv.getId()))
         .thenReturn(Collections.singletonList(cr));
 
-
     mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isOk());
   }
 
@@ -246,8 +245,11 @@ public class InternalJobControllerTest {
     OcrRegion region =
         OcrRegion.builder()
             .id(regionId)
-            .page(Page.builder().id(UUID.randomUUID()).image(Image.builder().id(UUID.randomUUID()).build()).build())
-
+            .page(
+                Page.builder()
+                    .id(UUID.randomUUID())
+                    .image(Image.builder().id(UUID.randomUUID()).build())
+                    .build())
             .build();
     when(ocrRegionRepository.findById(regionId)).thenReturn(Optional.of(region));
 

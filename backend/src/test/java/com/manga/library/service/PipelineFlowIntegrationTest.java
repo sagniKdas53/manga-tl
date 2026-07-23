@@ -110,23 +110,23 @@ public class PipelineFlowIntegrationTest {
 
     @SuppressWarnings("unchecked")
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
-        (org.springframework.data.redis.core.ListOperations<String, String>) java.lang.reflect.Proxy.newProxyInstance(
-            getClass().getClassLoader(),
-            new Class<?>[] { org.springframework.data.redis.core.ListOperations.class },
-            (proxy, method, args) -> {
-                if ("rightPush".equals(method.getName())) {
+        (org.springframework.data.redis.core.ListOperations<String, String>)
+            java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[] {org.springframework.data.redis.core.ListOperations.class},
+                (proxy, method, args) -> {
+                  if ("rightPush".equals(method.getName())) {
                     String key = args[0].toString();
                     String val = args[1].toString();
                     mockRedisListStore.computeIfAbsent(key, k -> new ArrayList<>()).add(val);
                     return (long) mockRedisListStore.get(key).size();
-                } else if ("size".equals(method.getName())) {
+                  } else if ("size".equals(method.getName())) {
                     String key = args[0].toString();
                     List<String> list = mockRedisListStore.get(key);
                     return list == null ? 0L : (long) list.size();
-                }
-                return null;
-            }
-        );
+                  }
+                  return null;
+                });
 
     org.mockito.Mockito.doReturn(valueOps).when(redisTemplate).opsForValue();
     org.mockito.Mockito.doReturn(listOps).when(redisTemplate).opsForList();
@@ -137,7 +137,8 @@ public class PipelineFlowIntegrationTest {
                   mockRedisValueStore.remove(key) != null || mockRedisListStore.remove(key) != null;
               return existed;
             })
-        .when(redisTemplate).delete(org.mockito.Mockito.anyString());
+        .when(redisTemplate)
+        .delete(org.mockito.Mockito.anyString());
 
     // Create user and token
     User adminUser =
@@ -606,7 +607,8 @@ public class PipelineFlowIntegrationTest {
     image = imageRepository.save(image);
     createdImageIds.add(image.getId());
 
-    Series series = Series.builder().title("Clone Test").originalLanguage("ja").readingDirection("rtl").build();
+    Series series =
+        Series.builder().title("Clone Test").originalLanguage("ja").readingDirection("rtl").build();
     series = seriesRepository.save(series);
     createdSeriesIds.add(series.getId());
     Chapter chapter = Chapter.builder().series(series).chapterNumber(1.0).build();
@@ -616,8 +618,6 @@ public class PipelineFlowIntegrationTest {
     Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
     page = pageRepository.save(page);
     createdPageIds.add(page.getId());
-
-
 
     // 2. Create OCR Region
     OcrRegion ocrRegion =
@@ -654,7 +654,6 @@ public class PipelineFlowIntegrationTest {
     // Create new layer (the clone)
     Layer clonedLayer = Layer.builder().page(page).type("ocr").visible(true).zOrder(1).build();
     clonedLayer = layerRepository.save(clonedLayer);
-
 
     // Create cloned layer element, passing regionId in the DTO
     com.manga.library.dto.LayerElementDto dto = new com.manga.library.dto.LayerElementDto();

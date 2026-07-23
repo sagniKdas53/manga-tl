@@ -1,6 +1,8 @@
 package com.manga.library.service;
 
+import com.manga.library.model.Job;
 import com.manga.library.model.Page;
+import com.manga.library.repository.JobRepository;
 import com.manga.library.repository.PageRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -9,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.manga.library.repository.JobRepository;
-import com.manga.library.model.Job;
 
 @Service
 @RequiredArgsConstructor
@@ -34,11 +34,15 @@ public class DebouncedRenderService {
 
     for (Page page : pages) {
       // Skip if there's a recently-failed render job
-      Job lastFailed = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(page.getImage().getId(), "render");
-      if (lastFailed != null && "FAILED".equals(lastFailed.getStatus()) && lastFailed.getUpdatedAt() != null &&
-          lastFailed.getUpdatedAt().isAfter(OffsetDateTime.now().minusMinutes(5))) {
-          log.debug("Skipping render for page {} - recent failure within 5 minutes", page.getId());
-          continue;
+      Job lastFailed =
+          jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(
+              page.getImage().getId(), "render");
+      if (lastFailed != null
+          && "FAILED".equals(lastFailed.getStatus())
+          && lastFailed.getUpdatedAt() != null
+          && lastFailed.getUpdatedAt().isAfter(OffsetDateTime.now().minusMinutes(5))) {
+        log.debug("Skipping render for page {} - recent failure within 5 minutes", page.getId());
+        continue;
       }
 
       log.info("Debounced render triggered for page: {}", page.getId());
@@ -57,4 +61,3 @@ public class DebouncedRenderService {
     }
   }
 }
-

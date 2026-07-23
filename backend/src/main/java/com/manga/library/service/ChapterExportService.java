@@ -52,8 +52,9 @@ public class ChapterExportService {
           filename = "page_" + page.getPageNumber() + ".png";
         }
 
-        boolean hasRendered = minioService.fileExists("rendered/" + page.getId() + ".png")
-            || minioService.fileExists("rendered/" + imageId + ".png");
+        boolean hasRendered =
+            minioService.fileExists("rendered/" + page.getId() + ".png")
+                || minioService.fileExists("rendered/" + imageId + ".png");
 
         Map<String, Object> pageMeta = new HashMap<>();
         pageMeta.put("pageNumber", page.getPageNumber());
@@ -63,7 +64,6 @@ public class ChapterExportService {
 
         List<Layer> imageLayers = layerRepository.findByPageId(page.getId());
         pageMeta.put("layerCount", imageLayers.size());
-
 
         List<Map<String, Object>> layersMetaList = new ArrayList<>();
         double pageTotalCostVal = 0.0;
@@ -257,9 +257,10 @@ public class ChapterExportService {
       if (chapter.getSeries() != null) {
         chapterMeta.put("seriesTitle", chapter.getSeries().getTitle());
         String routing = chapter.getRoutingStrategy();
-        if (routing == null || routing.isEmpty()) routing = chapter.getSeries().getRoutingStrategy();
+        if (routing == null || routing.isEmpty())
+          routing = chapter.getSeries().getRoutingStrategy();
         if (routing != null && !routing.isEmpty()) chapterMeta.put("routingStrategy", routing);
-        
+
         Boolean fallback = chapter.getUseFallbackModels();
         if (fallback == null) fallback = chapter.getSeries().getUseFallbackModels();
         chapterMeta.put("useFallbackModels", !Boolean.FALSE.equals(fallback));

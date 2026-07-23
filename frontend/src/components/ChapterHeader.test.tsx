@@ -51,7 +51,10 @@ describe("ChapterHeader", () => {
     render(
       <ChapterHeader
         {...defaultProps}
-        selectedChapter={{ ...defaultProps.selectedChapter, pageCount: undefined }}
+        selectedChapter={{
+          ...defaultProps.selectedChapter,
+          pageCount: undefined,
+        }}
       />,
     );
     expect(screen.getByText("0")).toBeDefined();
@@ -67,7 +70,10 @@ describe("ChapterHeader", () => {
     render(
       <ChapterHeader
         {...defaultProps}
-        selectedChapter={{ ...defaultProps.selectedChapter, useContextMemory: false }}
+        selectedChapter={{
+          ...defaultProps.selectedChapter,
+          useContextMemory: false,
+        }}
       />,
     );
     expect(screen.getByText("Disabled")).toBeDefined();
@@ -77,7 +83,10 @@ describe("ChapterHeader", () => {
     render(
       <ChapterHeader
         {...defaultProps}
-        selectedChapter={{ ...defaultProps.selectedChapter, useFallbackModels: false }}
+        selectedChapter={{
+          ...defaultProps.selectedChapter,
+          useFallbackModels: false,
+        }}
       />,
     );
     const disabledChips = screen.getAllByText("Disabled");
@@ -109,7 +118,12 @@ describe("ChapterHeader", () => {
   });
 
   it("disables import and shows Importing... when isImporting", () => {
-    render(<ChapterHeader {...defaultProps} isImporting={true} />);
+    render(
+      <ChapterHeader
+        {...defaultProps}
+        isImporting={true}
+      />,
+    );
     expect(screen.getByText("Importing...")).toBeDefined();
   });
 
@@ -148,7 +162,8 @@ describe("ChapterHeader", () => {
   it("closes split popover via outside click", () => {
     render(<ChapterHeader {...defaultProps} />);
     fireEvent.click(screen.getByLabelText("select export option"));
-    const splitMenu = screen.queryByRole("menu") || screen.queryByRole("listbox");
+    const splitMenu =
+      screen.queryByRole("menu") || screen.queryByRole("listbox");
     if (splitMenu) {
       fireEvent.click(document.body);
     }
@@ -173,7 +188,11 @@ describe("ChapterHeader", () => {
         {...defaultProps}
         selectedChapter={{
           ...defaultProps.selectedChapter,
-          resolvedOcr: { provider: "openrouter", model: "ocr-model", source: "chapter" as const },
+          resolvedOcr: {
+            provider: "openrouter",
+            model: "ocr-model",
+            source: "chapter" as const,
+          },
         }}
       />,
     );

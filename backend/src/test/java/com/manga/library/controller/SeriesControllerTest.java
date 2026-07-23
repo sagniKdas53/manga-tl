@@ -143,12 +143,10 @@ public class SeriesControllerTest {
     org.junit.jupiter.api.Assertions.assertEquals("openrouter", saved.getOcrProvider());
     org.junit.jupiter.api.Assertions.assertEquals("google/gemini-2.5-flash", saved.getOcrModel());
     org.junit.jupiter.api.Assertions.assertEquals("openrouter", saved.getTlProvider());
-    org.junit.jupiter.api.Assertions.assertEquals(
-        "deepseek/deepseek-v4-flash", saved.getTlModel());
+    org.junit.jupiter.api.Assertions.assertEquals("deepseek/deepseek-v4-flash", saved.getTlModel());
     org.junit.jupiter.api.Assertions.assertEquals("openrouter", saved.getQaProvider());
     org.junit.jupiter.api.Assertions.assertEquals("tencent/hy3:free", saved.getQaLlmModel());
-    org.junit.jupiter.api.Assertions.assertEquals(
-        "google/gemini-2.5-flash", saved.getQaVlmModel());
+    org.junit.jupiter.api.Assertions.assertEquals("google/gemini-2.5-flash", saved.getQaVlmModel());
     org.junit.jupiter.api.Assertions.assertEquals("hybrid", saved.getQaMode());
     org.junit.jupiter.api.Assertions.assertEquals("lowest-cost", saved.getRoutingStrategy());
     org.junit.jupiter.api.Assertions.assertEquals(Boolean.FALSE, saved.getUseFallbackModels());
@@ -160,7 +158,8 @@ public class SeriesControllerTest {
     Series series = Series.builder().id(UUID.randomUUID()).title("Inherit Series").build();
     when(seriesRepository.save(any(Series.class))).thenReturn(series);
 
-    String json = "{\"title\":\"Inherit Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
+    String json =
+        "{\"title\":\"Inherit Series\",\"originalLanguage\":\"ja\",\"targetLanguage\":\"en\"}";
     mockMvc
         .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/series")
@@ -492,7 +491,8 @@ public class SeriesControllerTest {
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.empty());
 
     String json = "{\"chapterNumber\":1.0,\"title\":\"Ch 1\"}";
-    mockMvc.perform(
+    mockMvc
+        .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
                     "/api/series/" + seriesId + "/chapters")
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
@@ -536,8 +536,8 @@ public class SeriesControllerTest {
     UUID chapterId = UUID.randomUUID();
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.empty());
 
-    mockMvc.perform(
-            get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
+    mockMvc
+        .perform(get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
         .andExpect(status().isNotFound());
   }
 

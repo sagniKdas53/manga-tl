@@ -105,7 +105,8 @@ describe("ChapterGallery Component", () => {
 
   it("renders chapter details and pages", () => {
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -117,14 +118,17 @@ describe("ChapterGallery Component", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Chapter 1" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Chapter 1" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("One Piece / Romance Dawn")).toBeInTheDocument();
     expect(screen.getByText("Page 1")).toBeInTheDocument();
   });
 
   it("clicks page thumbnail to open in reader", () => {
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -153,7 +157,8 @@ describe("ChapterGallery Component", () => {
     });
 
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -214,7 +219,8 @@ describe("ChapterGallery Component", () => {
     });
 
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -258,7 +264,8 @@ describe("ChapterGallery Component", () => {
     global.URL.revokeObjectURL = vi.fn();
 
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -293,7 +300,8 @@ describe("ChapterGallery Component", () => {
     ];
 
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -329,7 +337,8 @@ describe("ChapterGallery Component", () => {
     }); // for pages refresh
 
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -396,7 +405,8 @@ describe("ChapterGallery Component", () => {
     }); // for pages refresh
 
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}
@@ -439,7 +449,8 @@ describe("ChapterGallery Component", () => {
     });
 
     render(
-      <ChapterGallery mode="dark"
+      <ChapterGallery
+        mode="dark"
         user={mockUser}
         selectedSeries={mockSeries}
         selectedChapter={mockChapter}

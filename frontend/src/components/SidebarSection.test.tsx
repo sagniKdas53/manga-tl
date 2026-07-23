@@ -20,7 +20,10 @@ describe("SidebarSection", () => {
 
   it("renders headerExtra when provided", () => {
     render(
-      <SidebarSection title="T" headerExtra={<button>Extra</button>}>
+      <SidebarSection
+        title="T"
+        headerExtra={<button>Extra</button>}
+      >
         content
       </SidebarSection>,
     );

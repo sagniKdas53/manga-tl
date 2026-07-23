@@ -150,14 +150,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             container
             spacing={1.5}
           >
-            <Grid size={12} sx={{ my: 0, py: 0 }}>
+            <Grid
+              size={12}
+              sx={{ my: 0, py: 0 }}
+            >
               <Typography
                 variant="overline"
                 color="text.disabled"
                 sx={{
                   display: "block",
                   m: 0,
-                  p: 0
+                  p: 0,
                 }}
               >
                 OCR
@@ -420,31 +423,44 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </Typography>
             </Grid>
 
-
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>OpenRouter Routing Strategy</InputLabel>
                 <Select
                   value={settings.routingStrategy || "lowest-cost"}
                   label="OpenRouter Routing Strategy"
-                  onChange={(e) => handleChange("routingStrategy", e.target.value)}
+                  onChange={(e) =>
+                    handleChange("routingStrategy", e.target.value)
+                  }
                 >
                   <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
-                  <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
+                  <MenuItem value="highest-throughput">
+                    Highest Throughput
+                  </MenuItem>
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>Use Fallback Models</InputLabel>
                 <Select
-                  value={settings.useFallbackModels !== false ? "true" : "false"}
+                  value={
+                    settings.useFallbackModels !== false ? "true" : "false"
+                  }
                   label="Use Fallback Models"
-                  onChange={(e) => handleChange("useFallbackModels", e.target.value === "true")}
+                  onChange={(e) =>
+                    handleChange("useFallbackModels", e.target.value === "true")
+                  }
                 >
-                   <MenuItem value="true">Enabled</MenuItem>
-                   <MenuItem value="false">Disabled</MenuItem>
+                  <MenuItem value="true">Enabled</MenuItem>
+                  <MenuItem value="false">Disabled</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

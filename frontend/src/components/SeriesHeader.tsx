@@ -45,7 +45,11 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
       .catch(() => {});
   }, [user.token]);
 
-  const resolvedOcrProvider = resolveOverride(null, series.ocrProvider, settings?.ocrProvider);
+  const resolvedOcrProvider = resolveOverride(
+    null,
+    series.ocrProvider,
+    settings?.ocrProvider,
+  );
   let resolvedOcr = resolveOverride(null, series.ocrModel, settings?.ocrModel);
   if (resolvedOcrProvider.value === "local") {
     resolvedOcr = {
@@ -54,18 +58,40 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
     };
   }
 
-  const resolvedTlProvider = resolveOverride(null, series.tlProvider, settings?.tlProvider);
+  const resolvedTlProvider = resolveOverride(
+    null,
+    series.tlProvider,
+    settings?.tlProvider,
+  );
   const resolvedTl = resolveOverride(null, series.tlModel, settings?.tlModel);
 
-  const resolvedQaRouting = resolveOverride(null, series.routingStrategy, settings?.routingStrategy);
-  const resolvedQa = resolveOverride(null, series.qaLlmModel, settings?.qaLlmModel);
-  const resolvedQaVlm = resolveOverride(null, series.qaVlmModel, settings?.qaVlmModel);
+  const resolvedQaRouting = resolveOverride(
+    null,
+    series.routingStrategy,
+    settings?.routingStrategy,
+  );
+  const resolvedQa = resolveOverride(
+    null,
+    series.qaLlmModel,
+    settings?.qaLlmModel,
+  );
+  const resolvedQaVlm = resolveOverride(
+    null,
+    series.qaVlmModel,
+    settings?.qaVlmModel,
+  );
   const resolvedQaMode = resolveOverride(null, series.qaMode, settings?.qaMode);
 
   return (
-    <Card elevation={3} sx={{ mb: 4, overflow: "visible" }}>
+    <Card
+      elevation={3}
+      sx={{ mb: 4, overflow: "visible" }}
+    >
       <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
-        <Grid container spacing={0}>
+        <Grid
+          container
+          spacing={0}
+        >
           {/* Cover Image Column */}
           <Grid size={{ xs: 12, sm: 4, md: 3, lg: 2.5 }}>
             <Box
@@ -78,8 +104,13 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                borderRight: (theme) => ({ sm: `1px solid ${theme.palette.divider}` }),
-                borderBottom: (theme) => ({ xs: `1px solid ${theme.palette.divider}`, sm: "none" }),
+                borderRight: (theme) => ({
+                  sm: `1px solid ${theme.palette.divider}`,
+                }),
+                borderBottom: (theme) => ({
+                  xs: `1px solid ${theme.palette.divider}`,
+                  sm: "none",
+                }),
                 overflow: "hidden",
               }}
             >
@@ -95,7 +126,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   }}
                 />
               ) : (
-                <Typography variant="body1" color="text.secondary">
+                <Typography
+                  variant="body1"
+                  color="text.secondary"
+                >
                   {series.title}
                 </Typography>
               )}
@@ -104,14 +138,34 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
 
           {/* Info Column */}
           <Grid size={{ xs: 12, sm: 8, md: 9, lg: 9.5 }}>
-            <Box sx={{ p: { xs: 2, sm: 3 }, display: "flex", flexDirection: "column", height: "100%" }}>
-              <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: "bold", fontFamily: '"Outfit", sans-serif' }}>
+            <Box
+              sx={{
+                p: { xs: 2, sm: 3 },
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+              }}
+            >
+              <Typography
+                variant="h4"
+                component="h1"
+                gutterBottom
+                sx={{ fontWeight: "bold", fontFamily: '"Outfit", sans-serif' }}
+              >
                 {series.title}
               </Typography>
 
-              <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid
+                container
+                spacing={2}
+                sx={{ mb: 3 }}
+              >
                 <Grid>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
                     Language
                   </Typography>
                   <Chip
@@ -120,56 +174,126 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   />
                 </Grid>
                 <Grid>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
                     Direction
                   </Typography>
-                  <Chip size="small" label={series.readingDirection} />
+                  <Chip
+                    size="small"
+                    label={series.readingDirection}
+                  />
                 </Grid>
                 <Grid>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
                     Chapters
                   </Typography>
-                  <Typography variant="body1" fontWeight="medium">
+                  <Typography
+                    variant="body1"
+                    fontWeight="medium"
+                  >
                     {chapterCount}
                   </Typography>
                 </Grid>
                 <Grid>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
                     Fallback Models
                   </Typography>
-                  <Chip size="small" label={series.useFallbackModels === false ? "Disabled" : "Enabled"} color={series.useFallbackModels === false ? "warning" : "default"} />
+                  <Chip
+                    size="small"
+                    label={
+                      series.useFallbackModels === false
+                        ? "Disabled"
+                        : "Enabled"
+                    }
+                    color={
+                      series.useFallbackModels === false ? "warning" : "default"
+                    }
+                  />
                 </Grid>
               </Grid>
 
               {/* Models Info */}
               <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                  gutterBottom
+                >
                   Configured Models
                 </Typography>
-                <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  useFlexGap
+                  sx={{ mt: 1, flexWrap: "wrap" }}
+                >
                   {resolvedOcrProvider.value && (
-                    <Chip size="small" variant="outlined" label={`OCR Provider: ${resolvedOcrProvider.value}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`OCR Provider: ${resolvedOcrProvider.value}`}
+                    />
                   )}
                   {resolvedOcr.value && (
-                    <Chip size="small" variant="outlined" label={`OCR: ${resolvedOcr.value} ${resolvedOcr.source === "series" ? "(overridden)" : "(inherited)"}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`OCR: ${resolvedOcr.value} ${resolvedOcr.source === "series" ? "(overridden)" : "(inherited)"}`}
+                    />
                   )}
                   {resolvedTlProvider.value && (
-                    <Chip size="small" variant="outlined" label={`TL Provider: ${resolvedTlProvider.value}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`TL Provider: ${resolvedTlProvider.value}`}
+                    />
                   )}
                   {resolvedTl.value && (
-                    <Chip size="small" variant="outlined" label={`Translation: ${resolvedTl.value} ${resolvedTl.source === "series" ? "(overridden)" : "(inherited)"}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Translation: ${resolvedTl.value} ${resolvedTl.source === "series" ? "(overridden)" : "(inherited)"}`}
+                    />
                   )}
                   {resolvedQaRouting.value && (
-                    <Chip size="small" variant="outlined" color="primary" label={`Strategy: ${resolvedQaRouting.value}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      label={`Strategy: ${resolvedQaRouting.value}`}
+                    />
                   )}
                   {resolvedQaMode.value && (
-                    <Chip size="small" variant="outlined" label={`QA Mode: ${resolvedQaMode.value} ${resolvedQaMode.source === "series" ? "(overridden)" : "(inherited)"}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`QA Mode: ${resolvedQaMode.value} ${resolvedQaMode.source === "series" ? "(overridden)" : "(inherited)"}`}
+                    />
                   )}
                   {resolvedQa.value && (
-                    <Chip size="small" variant="outlined" label={`QA LLM: ${resolvedQa.value} ${resolvedQa.source === "series" ? "(overridden)" : "(inherited)"}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`QA LLM: ${resolvedQa.value} ${resolvedQa.source === "series" ? "(overridden)" : "(inherited)"}`}
+                    />
                   )}
                   {resolvedQaVlm.value && (
-                    <Chip size="small" variant="outlined" label={`QA VLM: ${resolvedQaVlm.value} ${resolvedQaVlm.source === "series" ? "(overridden)" : "(inherited)"}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`QA VLM: ${resolvedQaVlm.value} ${resolvedQaVlm.source === "series" ? "(overridden)" : "(inherited)"}`}
+                    />
                   )}
                 </Stack>
               </Box>
@@ -178,17 +302,38 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
               <Divider sx={{ mb: 2, mt: 1 }} />
 
               {/* Actions Row */}
-              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={onAddChapter}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ flexWrap: "wrap", gap: 1 }}
+              >
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={onAddChapter}
+                >
                   Add Chapter
                 </Button>
-                <Button variant="outlined" startIcon={<UploadIcon />} onClick={onImportChapter}>
+                <Button
+                  variant="outlined"
+                  startIcon={<UploadIcon />}
+                  onClick={onImportChapter}
+                >
                   Import Chapter (ZIP)
                 </Button>
-                <Button variant="outlined" startIcon={<EditIcon />} onClick={onEditSeries}>
+                <Button
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={onEditSeries}
+                >
                   Edit Series
                 </Button>
-                <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={onDeleteSeries}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={onDeleteSeries}
+                >
                   Delete Series
                 </Button>
               </Stack>

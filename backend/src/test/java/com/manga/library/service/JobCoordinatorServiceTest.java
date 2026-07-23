@@ -42,8 +42,17 @@ public class JobCoordinatorServiceTest {
 
   @BeforeEach
   public void setUp() {
-    defaultSeries = seriesRepository.save(Series.builder().title("Default Test Series").originalLanguage("ja").sourceLanguage("ja").targetLanguage("en").readingDirection("rtl").build());
-    defaultChapter = chapterRepository.save(Chapter.builder().series(defaultSeries).chapterNumber(1.0).build());
+    defaultSeries =
+        seriesRepository.save(
+            Series.builder()
+                .title("Default Test Series")
+                .originalLanguage("ja")
+                .sourceLanguage("ja")
+                .targetLanguage("en")
+                .readingDirection("rtl")
+                .build());
+    defaultChapter =
+        chapterRepository.save(Chapter.builder().series(defaultSeries).chapterNumber(1.0).build());
 
     // Set up mock for redisTemplate using in-memory structures
     final Map<String, String> mockRedisValueStore = new HashMap<>();
@@ -73,54 +82,66 @@ public class JobCoordinatorServiceTest {
 
     @SuppressWarnings("unchecked")
     org.springframework.data.redis.core.ListOperations<String, String> listOps =
-        (org.springframework.data.redis.core.ListOperations<String, String>) java.lang.reflect.Proxy.newProxyInstance(
-            getClass().getClassLoader(),
-            new Class<?>[] { org.springframework.data.redis.core.ListOperations.class },
-            (proxy, method, args) -> {
-                if ("rightPush".equals(method.getName())) {
+        (org.springframework.data.redis.core.ListOperations<String, String>)
+            java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[] {org.springframework.data.redis.core.ListOperations.class},
+                (proxy, method, args) -> {
+                  if ("rightPush".equals(method.getName())) {
                     String key = args[0].toString();
                     String val = args[1].toString();
                     mockRedisListStore.computeIfAbsent(key, k -> new ArrayList<>()).add(val);
                     if (rightPushHook != null) {
-                        rightPushHook.accept(key, val);
+                      rightPushHook.accept(key, val);
                     }
                     return (long) mockRedisListStore.get(key).size();
-                } else if ("size".equals(method.getName())) {
+                  } else if ("size".equals(method.getName())) {
                     String key = args[0].toString();
                     List<String> list = mockRedisListStore.get(key);
                     return list == null ? 0L : (long) list.size();
-                }
-                return null;
-            }
-        );
+                  }
+                  return null;
+                });
 
-    org.springframework.data.redis.core.StringRedisTemplate dummyTemplate = new org.springframework.data.redis.core.StringRedisTemplate() {
-        @Override
-        public org.springframework.data.redis.core.ValueOperations<String, String> opsForValue() {
+    org.springframework.data.redis.core.StringRedisTemplate dummyTemplate =
+        new org.springframework.data.redis.core.StringRedisTemplate() {
+          @Override
+          public org.springframework.data.redis.core.ValueOperations<String, String> opsForValue() {
             return valueOps;
-        }
-        @Override
-        public org.springframework.data.redis.core.ListOperations<String, String> opsForList() {
+          }
+
+          @Override
+          public org.springframework.data.redis.core.ListOperations<String, String> opsForList() {
             return listOps;
-        }
-        @Override
-        public Boolean delete(String key) {
-            return mockRedisValueStore.remove(key) != null || mockRedisListStore.remove(key) != null;
-        }
-    };
-    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "redisTemplate", dummyTemplate);
-    org.springframework.test.util.ReflectionTestUtils.setField(this, "redisTemplate", dummyTemplate);
-    SseService sse = (SseService) org.springframework.test.util.ReflectionTestUtils.getField(jobCoordinatorService, "sseService");
-    if (sse != null) org.springframework.test.util.ReflectionTestUtils.setField(sse, "redisTemplate", dummyTemplate);
+          }
+
+          @Override
+          public Boolean delete(String key) {
+            return mockRedisValueStore.remove(key) != null
+                || mockRedisListStore.remove(key) != null;
+          }
+        };
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        jobCoordinatorService, "redisTemplate", dummyTemplate);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        this, "redisTemplate", dummyTemplate);
+    SseService sse =
+        (SseService)
+            org.springframework.test.util.ReflectionTestUtils.getField(
+                jobCoordinatorService, "sseService");
+    if (sse != null)
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          sse, "redisTemplate", dummyTemplate);
   }
 
   @AfterEach
   public void tearDown() {
     rightPushHook = null;
-    if (defaultChapter != null && defaultChapter.getId() != null) chapterRepository.deleteById(defaultChapter.getId());
-    if (defaultSeries != null && defaultSeries.getId() != null) seriesRepository.deleteById(defaultSeries.getId());
+    if (defaultChapter != null && defaultChapter.getId() != null)
+      chapterRepository.deleteById(defaultChapter.getId());
+    if (defaultSeries != null && defaultSeries.getId() != null)
+      seriesRepository.deleteById(defaultSeries.getId());
   }
-
 
   @Test
   public void testEnqueuedJobIsCommittedBeforeRedisPush() {
@@ -267,7 +288,6 @@ public class JobCoordinatorServiceTest {
     pageRepository.delete(page);
     imageRepository.delete(image);
   }
-
 
   @Test
   public void testHandleQaCallback_FailedWithRetry() {
@@ -430,7 +450,6 @@ public class JobCoordinatorServiceTest {
     pageRepository.delete(page);
     imageRepository.delete(image);
   }
-
 
   @Test
   public void testHandleTranslationCallback_NewElement() {
@@ -616,7 +635,11 @@ public class JobCoordinatorServiceTest {
 
     com.manga.library.dto.OcrCallbackDto dto = new com.manga.library.dto.OcrCallbackDto();
     dto.setImageId(image.getId());
-    dto.setRegions(Collections.emptyList());
+    com.manga.library.dto.OcrCallbackDto.OcrRegionData r = new com.manga.library.dto.OcrCallbackDto.OcrRegionData();
+    r.setText("test");
+    r.setX(0); r.setY(0); r.setWidth(100); r.setHeight(100);
+    r.setDetectedLanguage("ja");
+    dto.setRegions(List.of(r));
     dto.setModelIdentifier("paddle-ocr");
     dto.setConfidence(0.98);
 
@@ -755,7 +778,6 @@ public class JobCoordinatorServiceTest {
     imageRepository.delete(image);
   }
 
-
   @Test
   public void testChapterOcrProviderOverride() {
     // Share image between chapters with different ocrProvider settings -> start pipeline from each
@@ -822,16 +844,16 @@ public class JobCoordinatorServiceTest {
     Series series =
         Series.builder()
             .title("FBM Series")
-            .originalLanguage("ja").sourceLanguage("ja").targetLanguage("en")
+            .originalLanguage("ja")
+            .sourceLanguage("ja")
+            .targetLanguage("en")
             .readingDirection("rtl")
             .useFallbackModels(true)
             .build();
     series = seriesRepository.save(series);
 
-    Chapter chapter = Chapter.builder()
-        .series(series).chapterNumber(1.0)
-        .useFallbackModels(false)
-        .build();
+    Chapter chapter =
+        Chapter.builder().series(series).chapterNumber(1.0).useFallbackModels(false).build();
     chapter = chapterRepository.save(chapter);
 
     Image image = Image.builder().filename("fbm_c.png").storagePath("fbm/fbm_c.png").build();
@@ -840,12 +862,16 @@ public class JobCoordinatorServiceTest {
     pageRepository.save(page);
 
     AtomicReference<Object> pushedFallback = new AtomicReference<>();
-    rightPushHook = (queueName, payload) -> {
-      try {
-        Map<?, ?> m = new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
-        pushedFallback.set(m.get("useFallbackModels"));
-      } catch (Exception e) { throw new AssertionError(e); }
-    };
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> m =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            pushedFallback.set(m.get("useFallbackModels"));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
 
     jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
 
@@ -865,16 +891,20 @@ public class JobCoordinatorServiceTest {
     Series series =
         Series.builder()
             .title("FBM Series2")
-            .originalLanguage("ja").sourceLanguage("ja").targetLanguage("en")
+            .originalLanguage("ja")
+            .sourceLanguage("ja")
+            .targetLanguage("en")
             .readingDirection("rtl")
             .useFallbackModels(false)
             .build();
     series = seriesRepository.save(series);
 
-    Chapter chapter = Chapter.builder()
-        .series(series).chapterNumber(1.0)
-        // useFallbackModels not set → null → should inherit series
-        .build();
+    Chapter chapter =
+        Chapter.builder()
+            .series(series)
+            .chapterNumber(1.0)
+            // useFallbackModels not set → null → should inherit series
+            .build();
     chapter = chapterRepository.save(chapter);
 
     Image image = Image.builder().filename("fbm_s.png").storagePath("fbm/fbm_s.png").build();
@@ -883,12 +913,16 @@ public class JobCoordinatorServiceTest {
     pageRepository.save(page);
 
     AtomicReference<Object> pushedFallback = new AtomicReference<>();
-    rightPushHook = (queueName, payload) -> {
-      try {
-        Map<?, ?> m = new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
-        pushedFallback.set(m.get("useFallbackModels"));
-      } catch (Exception e) { throw new AssertionError(e); }
-    };
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> m =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            pushedFallback.set(m.get("useFallbackModels"));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
 
     jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
 
@@ -908,16 +942,20 @@ public class JobCoordinatorServiceTest {
     Series series =
         Series.builder()
             .title("FBM Series3")
-            .originalLanguage("ja").sourceLanguage("ja").targetLanguage("en")
+            .originalLanguage("ja")
+            .sourceLanguage("ja")
+            .targetLanguage("en")
             .readingDirection("rtl")
             // useFallbackModels not set → null
             .build();
     series = seriesRepository.save(series);
 
-    Chapter chapter = Chapter.builder()
-        .series(series).chapterNumber(1.0)
-        // useFallbackModels not set → null
-        .build();
+    Chapter chapter =
+        Chapter.builder()
+            .series(series)
+            .chapterNumber(1.0)
+            // useFallbackModels not set → null
+            .build();
     chapter = chapterRepository.save(chapter);
 
     Image image = Image.builder().filename("fbm_g.png").storagePath("fbm/fbm_g.png").build();
@@ -926,12 +964,16 @@ public class JobCoordinatorServiceTest {
     pageRepository.save(page);
 
     AtomicReference<Object> pushedFallback = new AtomicReference<>();
-    rightPushHook = (queueName, payload) -> {
-      try {
-        Map<?, ?> m = new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
-        pushedFallback.set(m.get("useFallbackModels"));
-      } catch (Exception e) { throw new AssertionError(e); }
-    };
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> m =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            pushedFallback.set(m.get("useFallbackModels"));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
 
     jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
 
@@ -944,6 +986,90 @@ public class JobCoordinatorServiceTest {
     imageRepository.delete(image);
     chapterRepository.delete(chapter);
     seriesRepository.delete(series);
+  }
+
+  @Test
+  public void testHandleOcrCallback_EmptyRegions_ShortCircuit() {
+    Image rawImage =
+        Image.builder()
+            .filename("test_empty_ocr.png")
+            .storagePath("test/test_empty_ocr.png")
+            .build();
+    final Image image = imageRepository.save(rawImage);
+    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    final Page page = pageRepository.save(rawPage);
+
+    // Create a running OCR job
+    Job job = Job.builder().id(UUID.randomUUID().toString()).imageId(image.getId()).type("ocr").status("PROCESSING").build();
+    job = jobRepository.save(job);
+
+    com.manga.library.dto.OcrCallbackDto dto = new com.manga.library.dto.OcrCallbackDto();
+    dto.setImageId(image.getId());
+    dto.setRegions(Collections.emptyList());
+    dto.setModelIdentifier("paddle-ocr");
+    dto.setConfidence(0.98);
+
+    jobCoordinatorService.handleOcrCallback(dto);
+
+    // Verify job is set to COMPLETED and no layout job is enqueued
+    Job updatedJob = jobRepository.findById(job.getId()).orElseThrow();
+    assertEquals("COMPLETED", updatedJob.getStatus());
+
+    // Verify no layout job enqueued
+    String queueName = "queue:layout";
+    Long size = redisTemplate.opsForList().size(queueName);
+    assertTrue(size == null || size == 0);
+
+    jobRepository.delete(updatedJob);
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
+  @Test
+  public void testHandleTranslationCallback_AllFailed_ShortCircuit() {
+    Image rawImage =
+        Image.builder().filename("test_empty_tl.png").storagePath("test/test_empty_tl.png").build();
+    final Image image = imageRepository.save(rawImage);
+    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    final Page page = pageRepository.save(rawPage);
+
+    Job job = Job.builder().id(UUID.randomUUID().toString()).imageId(image.getId()).type("translation").status("PROCESSING").build();
+    job = jobRepository.save(job);
+
+    OcrRegion region =
+        OcrRegion.builder()
+            .page(page)
+            .bboxX(10)
+            .bboxY(20)
+            .bboxW(100)
+            .bboxH(50)
+            .text("こんにちは")
+            .detectedLanguage("ja")
+            .confidence(0.9)
+            .regionType("speech")
+            .build();
+    region = ocrRegionRepository.save(region);
+
+    Map<String, Object> translation = new HashMap<>();
+    translation.put("regionId", region.getId().toString());
+    translation.put("translatedText", ""); // Empty translation
+    translation.put("translationFailed", true);
+
+    jobCoordinatorService.handleTranslationCallback(image.getId(), List.of(translation), null);
+
+    // Verify job is set to FAILED and no translation layer is created
+    Job updatedJob = jobRepository.findById(job.getId()).orElseThrow();
+    assertEquals("FAILED", updatedJob.getStatus());
+    assertTrue(
+        updatedJob.getError() != null && updatedJob.getError().contains("Translation failed"));
+
+    List<Layer> layers = layerRepository.findByPageId(page.getId());
+    assertTrue(layers.isEmpty()); // Should not have created any layers
+
+    jobRepository.delete(updatedJob);
+    ocrRegionRepository.delete(region);
+    pageRepository.delete(page);
+    imageRepository.delete(image);
   }
 
   @SuppressWarnings("unchecked")

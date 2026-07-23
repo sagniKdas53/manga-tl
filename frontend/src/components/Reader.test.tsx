@@ -24,7 +24,10 @@ vi.mock("./ToastContext", () => ({
 }));
 
 const mockSafeFetch = vi.fn<
-  (url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>
+  (
+    url: string,
+    init?: RequestInit,
+  ) => Promise<{ ok: boolean; json: () => Promise<unknown> }>
 >(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }));
 vi.mock("../utils", () => ({
   safeFetch: (url: string, init?: RequestInit) => mockSafeFetch(url, init),
@@ -196,7 +199,11 @@ describe("Reader Component", () => {
 
     await screen.findByText(/Test Series/);
 
-    const sseCallback = (mockSubscribe.mock.calls as [((event: { type: string; data: string }) => void)?][])[0]?.[0];
+    const sseCallback = (
+      mockSubscribe.mock.calls as [
+        ((event: { type: string; data: string }) => void)?,
+      ][]
+    )[0]?.[0];
     expect(sseCallback).toBeDefined();
 
     // Clear mock history before triggering the SSE
@@ -223,7 +230,10 @@ describe("Reader Component", () => {
     });
 
     // Verify that the fetch was called again for the image/page and layers, indicating cache was busted
-    const fetchCalls = mockSafeFetch.mock.calls as unknown as [string, RequestInit?][];
+    const fetchCalls = mockSafeFetch.mock.calls as unknown as [
+      string,
+      RequestInit?,
+    ][];
     const fetchUrls = fetchCalls.map((call) => call[0] || "");
     expect(
       fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
@@ -273,7 +283,10 @@ describe("Reader Component", () => {
 
     // Initial load: fetches img1/p1 data, plus prefetches p2/img2 and p3/img3 data
     await waitFor(() => {
-      const fetchCalls = mockSafeFetch.mock.calls as unknown as [string, RequestInit?][];
+      const fetchCalls = mockSafeFetch.mock.calls as unknown as [
+        string,
+        RequestInit?,
+      ][];
       const fetchUrls = fetchCalls.map((call) => call[0] || "");
       expect(
         fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
@@ -319,7 +332,10 @@ describe("Reader Component", () => {
         screen.queryByText(/Loading page details/),
       ).not.toBeInTheDocument();
 
-      const fetchCalls = mockSafeFetch.mock.calls as unknown as [string, RequestInit?][];
+      const fetchCalls = mockSafeFetch.mock.calls as unknown as [
+        string,
+        RequestInit?,
+      ][];
       const fetchUrls = fetchCalls.map((call) => call[0] || "");
       // Should not refetch p2/img2 because it's cached
       expect(
@@ -353,7 +369,7 @@ describe("Reader Component", () => {
         chapters={[mockChapter]}
         pages={[p1, p2, p3]}
         theme="dark"
-      />
+      />,
     );
 
     await screen.findByText(/Test Series/);
@@ -364,30 +380,30 @@ describe("Reader Component", () => {
 
     // The Confirm modal appears
     await screen.findByText(/Are you sure you want to delete this page/i);
-    
+
     // Click Confirm
     const confirmBtn = screen.getByRole("button", { name: /Confirm/i });
-    
+
     // Mock the delete fetch response
     mockSafeFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve([]),
     });
-    
+
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
       // 1. Check if safeFetch was called with DELETE for the right page
       expect(mockSafeFetch).toHaveBeenCalledWith(
         `/api/pages/p1`,
-        expect.objectContaining({ method: "DELETE" })
+        expect.objectContaining({ method: "DELETE" }),
       );
 
       // 2. Check if navigate was called to the new correct page number (1 in this case, since next is p2 originally at 2)
       // Because we delete p1 (index 0). remainingPages = [p2, p3]. nextTargetIndex = 0. newPageNumber = 1.
       expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringContaining("/reader/1"),
-        expect.objectContaining({ replace: true })
+        expect.objectContaining({ replace: true }),
       );
     });
   });

@@ -3,6 +3,7 @@ package com.manga.library.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.dto.PageDto;
 import com.manga.library.dto.UploadResponse;
+import com.manga.library.exception.ResourceNotFoundException;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.JobCoordinatorService;
@@ -13,7 +14,6 @@ import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
-import com.manga.library.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -250,8 +250,7 @@ public class PageController {
             Image oldImage = page.getImage();
 
             // Clear existing elements and layers
-            List<LayerElement> elements =
-                layerElementRepository.findByLayerPageId(page.getId());
+            List<LayerElement> elements = layerElementRepository.findByLayerPageId(page.getId());
             for (LayerElement el : elements) {
               List<LayerEditHistory> history =
                   layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
@@ -265,7 +264,6 @@ public class PageController {
               layerRepository.delete(Objects.requireNonNull(l));
             }
             layerRepository.flush();
-
 
             // Check if we need to update/replace the image
             if (!fileHash.equals(oldImage.getHash())) {
@@ -508,8 +506,7 @@ public class PageController {
                                   && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
 
               if (!targetTranslationExists) {
-                jobCoordinatorService.triggerPageRedo(
-                    pg.getId(), "translation", chapter.getId());
+                jobCoordinatorService.triggerPageRedo(pg.getId(), "translation", chapter.getId());
               }
 
               nextNum++;
@@ -624,11 +621,9 @@ public class PageController {
               "Target translation layer ({}) missing for existing page {}, queuing translation",
               targetLang,
               page.getId());
-          jobCoordinatorService.triggerPageRedo(
-              page.getId(), "translation", chapter.getId());
+          jobCoordinatorService.triggerPageRedo(page.getId(), "translation", chapter.getId());
           if (user != null) sseService.mapImageToUser(existingImage.getId(), user.getId());
         }
-
 
         return ResponseEntity.ok(
             new UploadResponse(page.getId(), existingImage.getId(), "duplicate"));
@@ -893,7 +888,10 @@ public class PageController {
               .findById(Objects.requireNonNull(imageId))
               .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
-      String path = image.getThumbnailStoragePath() != null ? image.getThumbnailStoragePath() : image.getStoragePath();
+      String path =
+          image.getThumbnailStoragePath() != null
+              ? image.getThumbnailStoragePath()
+              : image.getStoragePath();
       org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
           outputStream -> {
             try (java.io.InputStream is = minioService.getFileStream(path)) {
@@ -911,8 +909,6 @@ public class PageController {
       return ResponseEntity.notFound().build();
     }
   }
-
-
 
   @DeleteMapping("/pages/{pageId}")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
@@ -1049,11 +1045,12 @@ public class PageController {
           .findById(Objects.requireNonNull(id))
           .ifPresent(
               region -> {
-                if (user != null && region.getPage() != null && region.getPage().getImage() != null) {
+                if (user != null
+                    && region.getPage() != null
+                    && region.getPage().getImage() != null) {
                   sseService.mapImageToUser(region.getPage().getImage().getId(), user.getId());
                 }
               });
-
 
       return ResponseEntity.ok(Map.of("status", "enqueued"));
     } catch (Exception e) {

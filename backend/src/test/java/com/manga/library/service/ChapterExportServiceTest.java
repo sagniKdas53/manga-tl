@@ -102,7 +102,6 @@ public class ChapterExportServiceTest {
     when(layerRepository.findByPageId(page.getId())).thenReturn(List.of(layer));
     when(jobCostRepository.findByImageId(image.getId())).thenReturn(List.of());
 
-
     when(minioService.downloadFile("originals/001.png"))
         .thenReturn(new ByteArrayInputStream(new byte[] {1, 2, 3}));
 
@@ -173,8 +172,7 @@ public class ChapterExportServiceTest {
     chapterExportService.buildAndUploadExport(chapterId, userId, false);
 
     verify(sseService)
-        .emitNotificationToUser(
-            eq(userId), eq("EXPORT_ERROR"), anyString(), anyString());
+        .emitNotificationToUser(eq(userId), eq("EXPORT_ERROR"), anyString(), anyString());
   }
 
   @Test
@@ -190,8 +188,7 @@ public class ChapterExportServiceTest {
     chapterExportService.buildAndUploadExport(chapterId, userId, false);
 
     verify(sseService)
-        .emitNotificationToUser(
-            eq(userId), eq("EXPORT_ERROR"), anyString(), anyString());
+        .emitNotificationToUser(eq(userId), eq("EXPORT_ERROR"), anyString(), anyString());
   }
 
   @Test
@@ -205,8 +202,7 @@ public class ChapterExportServiceTest {
 
   @Test
   void testClearChapterExports_HandlesException() throws Exception {
-    when(minioService.listObjects(anyString()))
-        .thenThrow(new RuntimeException("MinIO error"));
+    when(minioService.listObjects(anyString())).thenThrow(new RuntimeException("MinIO error"));
 
     assertDoesNotThrow(() -> chapterExportService.clearChapterExports(chapterId));
   }
@@ -221,8 +217,7 @@ public class ChapterExportServiceTest {
     Result<Item> result = mock(Result.class);
     when(result.get()).thenReturn(fileItem);
 
-    when(minioService.listObjects(eq("exports/")))
-        .thenAnswer(inv -> singleItemIterable(result));
+    when(minioService.listObjects(eq("exports/"))).thenAnswer(inv -> singleItemIterable(result));
 
     assertDoesNotThrow(() -> chapterExportService.cleanupStaleExports());
 
@@ -231,8 +226,7 @@ public class ChapterExportServiceTest {
 
   @Test
   void testCleanupStaleExports_NoOldFiles() throws Exception {
-    when(minioService.listObjects(eq("exports/")))
-        .thenReturn(Collections.emptyList());
+    when(minioService.listObjects(eq("exports/"))).thenReturn(Collections.emptyList());
 
     assertDoesNotThrow(() -> chapterExportService.cleanupStaleExports());
 
@@ -240,10 +234,20 @@ public class ChapterExportServiceTest {
   }
 
   private Iterable<Result<Item>> singleItemIterable(Result<Item> result) {
-    return () -> new Iterator<Result<Item>>() {
-      private boolean hasNext = true;
-      @Override public boolean hasNext() { return hasNext; }
-      @Override public Result<Item> next() { hasNext = false; return result; }
-    };
+    return () ->
+        new Iterator<Result<Item>>() {
+          private boolean hasNext = true;
+
+          @Override
+          public boolean hasNext() {
+            return hasNext;
+          }
+
+          @Override
+          public Result<Item> next() {
+            hasNext = false;
+            return result;
+          }
+        };
   }
 }

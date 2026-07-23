@@ -34,7 +34,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   setPages,
   onSelectPage,
   isLoadingDetails,
-  mode
+  mode,
 }) => {
   const navigate = useNavigate();
 
@@ -115,7 +115,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     isOpen: false,
     title: "",
     message: "",
-    onConfirm: () => { },
+    onConfirm: () => {},
   });
 
   const closeConfirmModal = () =>
@@ -330,7 +330,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     }
   };
 
-  
   const handleReexportChapterZip = useCallback(async () => {
     if (!selectedChapter) return;
     try {
@@ -353,7 +352,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         const data = await res.json();
         showToast(
           data.message ||
-          "Export started in the background. You will be notified when it is ready.",
+            "Export started in the background. You will be notified when it is ready.",
           "info",
         );
         return;
@@ -374,7 +373,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     }
   }, [selectedChapter, user.token, showToast]);
 
-  
   const handleClearExports = useCallback(async () => {
     if (!selectedChapter) return;
     setConfirmModal({
@@ -428,7 +426,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         const data = await res.json();
         showToast(
           data.message ||
-          "Export started in the background. You will be notified when it is ready.",
+            "Export started in the background. You will be notified when it is ready.",
           "info",
         );
         return;
@@ -451,7 +449,16 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
   if (isLoadingDetails || !selectedSeries || !selectedChapter) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh", flexDirection: "column", gap: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "60vh",
+          flexDirection: "column",
+          gap: 2,
+        }}
+      >
         <CircularProgress />
         <Typography>Loading chapter details...</Typography>
       </Box>
@@ -462,7 +469,8 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     setConfirmModal({
       isOpen: true,
       title: "Delete Chapter",
-      message: "Are you sure you want to delete this chapter? This cannot be undone.",
+      message:
+        "Are you sure you want to delete this chapter? This cannot be undone.",
       confirmText: "Delete Chapter",
       isDangerous: true,
       onConfirm: async () => {
@@ -475,9 +483,14 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
           if (res.ok) {
             showToast("Chapter deleted successfully", "success");
             setSelectedChapter(null);
-            navigate(`/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`);
+            navigate(
+              `/series/${selectedSeries.id}/${toSlug(selectedSeries.title)}`,
+            );
           } else if (res.status === 403) {
-            showToast("You don't have permission to delete this chapter.", "error");
+            showToast(
+              "You don't have permission to delete this chapter.",
+              "error",
+            );
           } else {
             showToast("Failed to delete chapter", "error");
           }
@@ -586,7 +599,15 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   };
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: "auto", width: "100%", px: { xs: 2, sm: 3 }, py: 3 }}>
+    <Box
+      sx={{
+        maxWidth: 1200,
+        mx: "auto",
+        width: "100%",
+        px: { xs: 2, sm: 3 },
+        py: 3,
+      }}
+    >
       <ChapterHeader
         selectedSeries={selectedSeries}
         selectedChapter={selectedChapter}

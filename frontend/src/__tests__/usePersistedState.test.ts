@@ -64,7 +64,11 @@ describe("usePersistedState", () => {
   it("uses custom serialize function", () => {
     const serialize = vi.fn((v: { x: number }) => JSON.stringify(v));
     const { result } = renderHook(() =>
-      usePersistedState(testKey, { x: 0 }, { serialize, deserialize: JSON.parse }),
+      usePersistedState(
+        testKey,
+        { x: 0 },
+        { serialize, deserialize: JSON.parse },
+      ),
     );
     act(() => {
       result.current[1]({ x: 42 });
@@ -78,7 +82,9 @@ describe("usePersistedState", () => {
     };
     localStorage.setItem(testKey, "bad");
     const { result } = renderHook(() =>
-      usePersistedState(testKey, "fallback", { deserialize: problematicDeserialize }),
+      usePersistedState(testKey, "fallback", {
+        deserialize: problematicDeserialize,
+      }),
     );
     expect(result.current[0]).toBe("fallback");
   });
@@ -92,9 +98,11 @@ describe("usePersistedState", () => {
   });
 
   it("falls back to defaultValue when localStorage throws", () => {
-    const getItemSpy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("storage error");
-    });
+    const getItemSpy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("storage error");
+      });
     const { result } = renderHook(() => usePersistedState(testKey, "fallback"));
     expect(result.current[0]).toBe("fallback");
     getItemSpy.mockRestore();

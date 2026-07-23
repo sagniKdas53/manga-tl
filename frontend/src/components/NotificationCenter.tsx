@@ -64,7 +64,7 @@ export const NotificationCenter: React.FC<Props> = ({
     title: "",
     message: "",
     isDangerous: false,
-    action: () => { },
+    action: () => {},
   });
 
   const handleClearAll = () => {
@@ -92,13 +92,19 @@ export const NotificationCenter: React.FC<Props> = ({
       if (!authToken) {
         const storedUser = localStorage.getItem("manga_user");
         if (!storedUser) {
-          showToast("You're signed out — please log in again to download.", "error");
+          showToast(
+            "You're signed out — please log in again to download.",
+            "error",
+          );
           return;
         }
         try {
           authToken = JSON.parse(storedUser).token;
         } catch {
-          showToast("Couldn't read your session — please log in again.", "error");
+          showToast(
+            "Couldn't read your session — please log in again.",
+            "error",
+          );
           return;
         }
       }
@@ -119,7 +125,10 @@ export const NotificationCenter: React.FC<Props> = ({
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
       } else if (res.status === 404) {
-        showToast("This export has expired or was already cleaned up.", "error");
+        showToast(
+          "This export has expired or was already cleaned up.",
+          "error",
+        );
       } else {
         showToast("Failed to download export", "error");
       }
@@ -135,13 +144,15 @@ export const NotificationCenter: React.FC<Props> = ({
     const d = new Date(timestamp);
     const today = new Date();
     const isToday = d.toDateString() === today.toDateString();
-    const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const time = d.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     return isToday ? time : `${d.toLocaleDateString()} ${time}`;
   };
 
   return (
     <>
-
       <IconButton
         onClick={onRequestOpen}
         color="inherit"
@@ -156,7 +167,6 @@ export const NotificationCenter: React.FC<Props> = ({
           <NotificationsIcon />
         </Badge>
       </IconButton>
-
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -328,10 +338,15 @@ export const NotificationCenter: React.FC<Props> = ({
                                   <Button
                                     size="small"
                                     variant="outlined"
-                                    disabled={downloadingId === n.context.exportId}
+                                    disabled={
+                                      downloadingId === n.context.exportId
+                                    }
                                     startIcon={
                                       downloadingId === n.context.exportId ? (
-                                        <CircularProgress size={12} color="inherit" />
+                                        <CircularProgress
+                                          size={12}
+                                          color="inherit"
+                                        />
                                       ) : undefined
                                     }
                                     onClick={(e) => {

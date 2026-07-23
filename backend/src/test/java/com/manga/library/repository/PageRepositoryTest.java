@@ -117,7 +117,6 @@ public class PageRepositoryTest {
     Layer layer = Layer.builder().page(page).type("translation").build();
     layer = layerRepository.save(layer);
 
-
     LayerElement element =
         LayerElement.builder().layer(layer).region(region).x(10.0).y(10.0).build();
     element = layerElementRepository.save(element);

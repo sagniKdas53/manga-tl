@@ -166,7 +166,6 @@ body {
   box-sizing: border-box;
 }
 
-
 /* Dashboard grid — replaced by MUI Box sx */
 
 .page-header {
@@ -547,7 +546,6 @@ input:checked + .slider:before {
   border: 1px solid var(--border-color);
   min-height: 60px;
 }
-
 
 /* Loading spinner — replaced by MUI CircularProgress */
 /* .spinner, .spinner-mini, @keyframes spin removed */
@@ -1295,4 +1293,3 @@ input:checked + .slider:before {
   font-weight: 600;
   transition: all 0.2s ease;
 }
-

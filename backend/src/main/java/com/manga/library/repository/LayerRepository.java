@@ -20,4 +20,3 @@ public interface LayerRepository extends JpaRepository<Layer, UUID> {
   List<Layer> findByPageIdAndZOrderGreaterThan(
       @Param("pageId") UUID pageId, @Param("zOrder") int zOrder);
 }
-

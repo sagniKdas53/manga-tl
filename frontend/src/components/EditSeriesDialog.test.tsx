@@ -54,7 +54,14 @@ const defaultSeries = {
 const defaultProps = {
   open: true,
   series: defaultSeries,
-  user: { id: "1", username: "test", email: "t@t.com", displayName: "test", role: "translator", token: "tok" },
+  user: {
+    id: "1",
+    username: "test",
+    email: "t@t.com",
+    displayName: "test",
+    role: "translator",
+    token: "tok",
+  },
   onClose: vi.fn(),
   onSuccess: vi.fn(),
 };
@@ -62,11 +69,19 @@ const defaultProps = {
 describe("EditSeriesDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSafeFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "s1", title: "Updated" }) });
+    mockSafeFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: "s1", title: "Updated" }),
+    });
   });
 
   it("renders nothing when closed", () => {
-    render(<EditSeriesDialog {...defaultProps} open={false} />);
+    render(
+      <EditSeriesDialog
+        {...defaultProps}
+        open={false}
+      />,
+    );
     expect(screen.queryByText("Edit Series")).toBeNull();
   });
 
@@ -77,7 +92,9 @@ describe("EditSeriesDialog", () => {
 
   it("pre-fills title from series", async () => {
     render(<EditSeriesDialog {...defaultProps} />);
-    const input = await screen.findByLabelText(/Series Title/) as HTMLInputElement;
+    const input = (await screen.findByLabelText(
+      /Series Title/,
+    )) as HTMLInputElement;
     expect(input.value).toBe("One Piece");
   });
 
@@ -100,7 +117,9 @@ describe("EditSeriesDialog", () => {
     render(<EditSeriesDialog {...defaultProps} />);
     await screen.findByText("Model Overrides (Optional)");
 
-    const titleInput = await screen.findByLabelText(/Series Title/) as HTMLInputElement;
+    const titleInput = (await screen.findByLabelText(
+      /Series Title/,
+    )) as HTMLInputElement;
     fireEvent.change(titleInput, { target: { value: "Updated Title" } });
 
     fireEvent.click(screen.getByText("Save"));

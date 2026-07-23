@@ -15,4 +15,3 @@ public interface LayerElementRepository extends JpaRepository<LayerElement, UUID
   List<LayerElement> findByLayerPageId(
       @org.springframework.data.repository.query.Param("pageId") UUID pageId);
 }
-

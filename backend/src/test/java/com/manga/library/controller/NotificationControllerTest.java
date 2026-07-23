@@ -30,10 +30,12 @@ public class NotificationControllerTest {
   @Test
   public void testStream_Unauthorized() throws Exception {
     org.springframework.security.core.context.SecurityContextHolder.clearContext();
-    mockMvc.perform(get("/api/notifications/stream"))
+    mockMvc
+        .perform(get("/api/notifications/stream"))
         .andExpect(status().isInternalServerError())
-        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
-            .value("Something went wrong: Unauthorized"));
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                .value("Something went wrong: Unauthorized"));
   }
 
   @Test
@@ -65,10 +67,13 @@ public class NotificationControllerTest {
         .setAuthentication(auth);
 
     try {
-      mockMvc.perform(get("/api/notifications/stream"))
+      mockMvc
+          .perform(get("/api/notifications/stream"))
           .andExpect(status().isInternalServerError())
-          .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
-              .value("Something went wrong: User not found"));
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                      "$.message")
+                  .value("Something went wrong: User not found"));
     } finally {
       org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }

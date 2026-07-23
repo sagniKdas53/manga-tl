@@ -11,7 +11,7 @@ describe("ReaderTopNav", () => {
         onBack={vi.fn()}
         onToggleLeftSidebar={vi.fn()}
         onToggleRightSidebar={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByText("Test Title")).toBeInTheDocument();
   });
@@ -27,7 +27,7 @@ describe("ReaderTopNav", () => {
         onBack={onBack}
         onToggleLeftSidebar={onToggleLeftSidebar}
         onToggleRightSidebar={onToggleRightSidebar}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByLabelText("Back"));
