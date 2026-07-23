@@ -487,19 +487,17 @@ public class SeriesControllerTest {
   }
 
   @Test
-  public void testCreateChapter_SeriesNotFound() {
+  public void testCreateChapter_SeriesNotFound() throws Exception {
     UUID seriesId = UUID.randomUUID();
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.empty());
 
     String json = "{\"chapterNumber\":1.0,\"title\":\"Ch 1\"}";
-    org.junit.jupiter.api.Assertions.assertThrows(
-        Exception.class,
-        () ->
-            mockMvc.perform(
-                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
-                        "/api/series/" + seriesId + "/chapters")
-                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                    .content(json)));
+    mockMvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                    "/api/series/" + seriesId + "/chapters")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(json))
+        .andExpect(status().isNotFound());
   }
 
   @Test
@@ -534,15 +532,13 @@ public class SeriesControllerTest {
   }
 
   @Test
-  public void testExportChapter_NotFound() {
+  public void testExportChapter_NotFound() throws Exception {
     UUID chapterId = UUID.randomUUID();
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.empty());
 
-    org.junit.jupiter.api.Assertions.assertThrows(
-        Exception.class,
-        () ->
-            mockMvc.perform(
-                get("/api/series/chapters/" + chapterId + "/export").param("format", "zip")));
+    mockMvc.perform(
+            get("/api/series/chapters/" + chapterId + "/export").param("format", "zip"))
+        .andExpect(status().isNotFound());
   }
 
   @Test

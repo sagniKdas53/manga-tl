@@ -6,6 +6,7 @@ import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import java.time.OffsetDateTime;
 import java.util.*;
+import com.manga.library.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -202,7 +203,7 @@ public class LayerController {
     Page page =
         pageRepository.findByImageId(imageId).stream()
             .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException("No page found for image: " + imageId));
+            .orElseThrow(() -> new ResourceNotFoundException("No page found for image: " + imageId));
     return createPageLayer(page.getId(), payload);
   }
 

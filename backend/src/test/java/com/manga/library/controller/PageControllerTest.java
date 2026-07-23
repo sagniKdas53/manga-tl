@@ -82,6 +82,19 @@ public class PageControllerTest {
   }
 
   @Test
+  public void testGetPageDetails_NotFound_Returns404WithMessage() throws Exception {
+    UUID pageId = UUID.randomUUID();
+    when(pageRepository.findById(pageId)).thenReturn(Optional.empty());
+
+    mockMvc
+        .perform(get("/api/pages/" + pageId + "/details"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.status").value(404))
+        .andExpect(jsonPath("$.message").value("Page not found: " + pageId))
+        .andExpect(jsonPath("$.path").value("/api/pages/" + pageId + "/details"));
+  }
+
+  @Test
   public void testListPages_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     UUID pageId = UUID.randomUUID();
@@ -492,12 +505,11 @@ public class PageControllerTest {
   }
 
   @Test
-  public void testGetImageDetails_Failure() {
+  public void testGetImageDetails_Failure() throws Exception {
     UUID imageId = UUID.randomUUID();
     when(imageRepository.findById(imageId)).thenReturn(Optional.empty());
 
-    org.junit.jupiter.api.Assertions.assertThrows(
-        Exception.class, () -> mockMvc.perform(get("/api/images/" + imageId)));
+    mockMvc.perform(get("/api/images/" + imageId)).andExpect(status().isNotFound());
   }
 
   @Test

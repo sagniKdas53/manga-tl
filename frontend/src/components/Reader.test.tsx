@@ -391,4 +391,39 @@ describe("Reader Component", () => {
       );
     });
   });
+
+  it("prefetches next pages by page id, never by image id", async () => {
+    const mockPages = [
+      mockPage,
+      { ...mockPage, id: "p2", pageNumber: 2, imageId: "img2" },
+      { ...mockPage, id: "p3", pageNumber: 3, imageId: "img3" },
+    ];
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={mockPages}
+        theme="dark"
+      />,
+    );
+
+    await screen.findByText(/Test Series/);
+
+    await waitFor(() => {
+      const urls = mockSafeFetch.mock.calls.map((c) => c[0] as string);
+      // Prefetch of N+1 and N+2 must hit the pages endpoints with PAGE ids
+      expect(urls).toContain("/api/pages/p2/details");
+      expect(urls).toContain("/api/pages/p3/details");
+      expect(urls).toContain("/api/pages/p2/layers");
+      expect(urls).toContain("/api/pages/p3/layers");
+      // Image ids must never appear in /api/pages/* URLs
+      expect(
+        urls.some(
+          (u) => u.includes("/api/pages/img2") || u.includes("/api/pages/img3"),
+        ),
+      ).toBe(false);
+    });
+  });
 });
