@@ -25,7 +25,9 @@ const navButtonSx = (active?: boolean) => ({
   backgroundColor: active ? "var(--primary-glow)" : "transparent",
   transition: "background-color 0.15s ease, color 0.15s ease",
   "&:hover": {
-    backgroundColor: active ? "var(--primary-glow)" : "var(--bg-input, rgba(0,0,0,0.05))",
+    backgroundColor: active
+      ? "var(--primary-glow)"
+      : "var(--bg-input, rgba(0,0,0,0.05))",
     color: "var(--primary)",
   },
 });
@@ -53,9 +55,20 @@ export default function ReaderTopNav({
         borderBottom: "1px solid var(--border-color)",
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flex: "0 0 auto" }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0.5,
+          flex: "0 0 auto",
+        }}
+      >
         <Tooltip title="Back">
-          <IconButton size="small" onClick={onBack} sx={navButtonSx()}>
+          <IconButton
+            size="small"
+            onClick={onBack}
+            sx={navButtonSx()}
+          >
             <ArrowBackIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -94,11 +107,20 @@ export default function ReaderTopNav({
             return (
               <Box
                 key={i}
-                sx={{ display: "flex", alignItems: "baseline", minWidth: 0, gap: 0.5 }}
+                sx={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  minWidth: 0,
+                  gap: 0.5,
+                }}
               >
                 {i > 0 && (
                   <ChevronRightIcon
-                    sx={{ fontSize: 13, color: "var(--text-dim, var(--text-muted))", flexShrink: 0 }}
+                    sx={{
+                      fontSize: 13,
+                      color: "var(--text-dim, var(--text-muted))",
+                      flexShrink: 0,
+                    }}
                   />
                 )}
                 <Box

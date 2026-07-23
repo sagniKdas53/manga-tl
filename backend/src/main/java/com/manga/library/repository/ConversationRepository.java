@@ -13,4 +13,3 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
       "delete from Conversation c where c.page.id = :pageId")
   void deleteByPageId(@org.springframework.data.repository.query.Param("pageId") UUID pageId);
 }
-

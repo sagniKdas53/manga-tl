@@ -177,11 +177,20 @@ export const Reader: React.FC<ReaderProps> = ({
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
-  const [showPanels, setShowPanels] = usePersistedState("manga_show_panels", true);
+  const [showPanels, setShowPanels] = usePersistedState(
+    "manga_show_panels",
+    true,
+  );
   const [showOcr, setShowOcr] = usePersistedState("manga_show_ocr", true);
   const [showTranslations] = useState(false);
-  const [showLeftSidebar, setShowLeftSidebar] = usePersistedState("manga_show_left_sidebar", true);
-  const [showRightSidebar, setShowRightSidebar] = usePersistedState("manga_show_right_sidebar", true);
+  const [showLeftSidebar, setShowLeftSidebar] = usePersistedState(
+    "manga_show_left_sidebar",
+    true,
+  );
+  const [showRightSidebar, setShowRightSidebar] = usePersistedState(
+    "manga_show_right_sidebar",
+    true,
+  );
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
   const pageDetailsCache = useRef<
@@ -203,7 +212,10 @@ export const Reader: React.FC<ReaderProps> = ({
     { layer: Layer; elements: LayerElement[] }[]
   >([]);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
-  const [cleanScanlationView, setCleanScanlationView] = usePersistedState("manga_clean_view", false);
+  const [cleanScanlationView, setCleanScanlationView] = usePersistedState(
+    "manga_clean_view",
+    false,
+  );
   const [manuallyShownOcrLayers, setManuallyShownOcrLayers] = useState<
     Set<string>
   >(new Set());
@@ -211,13 +223,22 @@ export const Reader: React.FC<ReaderProps> = ({
   const [redoStack, setRedoStack] = useState<LayerElement[]>([]);
 
   // Conversation and Layout enhancements
-  const [groupByConversation, setGroupByConversation] = usePersistedState("manga_group_by_conversation", true);
+  const [groupByConversation, setGroupByConversation] = usePersistedState(
+    "manga_group_by_conversation",
+    true,
+  );
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedItem, setSelectedItem] = useState<SelectedItemType>(null);
-  const [fitMode, setFitMode] = usePersistedState<"page" | "width" | "height">("manga_fit_mode", "page", {
-    deserialize: (saved) =>
-      saved === "page" || saved === "width" || saved === "height" ? saved : "page",
-  });
+  const [fitMode, setFitMode] = usePersistedState<"page" | "width" | "height">(
+    "manga_fit_mode",
+    "page",
+    {
+      deserialize: (saved) =>
+        saved === "page" || saved === "width" || saved === "height"
+          ? saved
+          : "page",
+    },
+  );
   const [isRedoingPageOcr, setIsRedoingPageOcr] = useState(false);
   const [isRedoingPageTranslation, setIsRedoingPageTranslation] =
     useState(false);
@@ -276,7 +297,6 @@ export const Reader: React.FC<ReaderProps> = ({
   const isTouchScreen =
     "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
-
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const touchStartDist = useRef<number | null>(null);
   const touchStartZoom = useRef<number>(1.0);
@@ -287,7 +307,9 @@ export const Reader: React.FC<ReaderProps> = ({
   const { showToast, showError } = useToast();
 
   const [dirtyElements, setDirtyElements] = useState<Set<string>>(new Set());
-  const autoSaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const autoSaveTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
 
   useEffect(() => {
     const timers = autoSaveTimersRef.current;
@@ -305,7 +327,8 @@ export const Reader: React.FC<ReaderProps> = ({
           if (
             data.status === "COMPLETED" &&
             selectedPage &&
-            (data.pageId === selectedPage.id || data.imageId === selectedPage.imageId)
+            (data.pageId === selectedPage.id ||
+              data.imageId === selectedPage.imageId)
           ) {
             const relevantTypes = [
               "ocr",
@@ -329,7 +352,6 @@ export const Reader: React.FC<ReaderProps> = ({
               showToast("New layers available — refreshed", "success");
             }
           }
-
         } catch (e) {
           console.error("Failed to parse job_update in Reader", e);
         }
@@ -368,12 +390,8 @@ export const Reader: React.FC<ReaderProps> = ({
       ? sortedChapters.at(currentChapterIdx + 1) || null
       : null;
 
-
-
   // isTouchScreen is detected once at mount — no effect needed, computed directly
   // (avoids react-hooks/set-state-in-effect lint error)
-
-
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -389,7 +407,7 @@ export const Reader: React.FC<ReaderProps> = ({
     isOpen: false,
     title: "",
     message: "",
-    onConfirm: () => { },
+    onConfirm: () => {},
   });
 
   const closeConfirm = () =>
@@ -551,8 +569,6 @@ export const Reader: React.FC<ReaderProps> = ({
     conversationsWithRegions,
   ]);
 
-
-
   // Helper to fetch and cache a page
   const fetchPageDetails = useCallback(
     async (pageId: string) => {
@@ -597,12 +613,12 @@ export const Reader: React.FC<ReaderProps> = ({
     if (selectedPage && loadedImageId !== selectedPage.id) {
       const currentPageId = selectedPage.id;
       const currentImageId = selectedPage.imageId;
-      const currentPageIndex = pages.findIndex(
-        (p) => p.id === currentPageId,
-      );
+      const currentPageIndex = pages.findIndex((p) => p.id === currentPageId);
 
       // --- SYNCHRONOUS CACHE HIT ---
-      const cached = pageDetailsCache.current[currentPageId] || pageDetailsCache.current[currentImageId];
+      const cached =
+        pageDetailsCache.current[currentPageId] ||
+        pageDetailsCache.current[currentImageId];
       if (cached) {
         setPanels(cached.panels);
         setOcrRegions(cached.ocrRegions);
@@ -642,7 +658,6 @@ export const Reader: React.FC<ReaderProps> = ({
             }
           });
       }
-
 
       // --- STRICT SLIDING WINDOW PREFETCH & EVICTION ---
       if (currentPageIndex !== -1) {
@@ -1131,13 +1146,13 @@ export const Reader: React.FC<ReaderProps> = ({
               elements: l.elements.map((el) =>
                 el.id === draggedElement.id
                   ? {
-                    ...el,
-                    x: newX,
-                    y: newY,
-                    ...(newMaskPolygon !== undefined
-                      ? { maskPolygon: newMaskPolygon }
-                      : {}),
-                  }
+                      ...el,
+                      x: newX,
+                      y: newY,
+                      ...(newMaskPolygon !== undefined
+                        ? { maskPolygon: newMaskPolygon }
+                        : {}),
+                    }
                   : el,
               ),
             };
@@ -1322,13 +1337,13 @@ export const Reader: React.FC<ReaderProps> = ({
       setSelectedItem((prev) =>
         prev && prev.id === draggedVertex.elementId
           ? {
-            ...prev,
-            maskPolygon: newMaskPolygon,
-            x: bbox.x,
-            y: bbox.y,
-            maxWidth: bbox.w,
-            maxHeight: bbox.h,
-          }
+              ...prev,
+              maskPolygon: newMaskPolygon,
+              x: bbox.x,
+              y: bbox.y,
+              maxWidth: bbox.w,
+              maxHeight: bbox.h,
+            }
           : prev,
       );
       setLayers((prev) =>
@@ -1337,13 +1352,13 @@ export const Reader: React.FC<ReaderProps> = ({
           elements: l.elements.map((el) =>
             el.id === draggedVertex.elementId
               ? {
-                ...el,
-                maskPolygon: newMaskPolygon,
-                x: bbox.x,
-                y: bbox.y,
-                maxWidth: bbox.w,
-                maxHeight: bbox.h,
-              }
+                  ...el,
+                  maskPolygon: newMaskPolygon,
+                  x: bbox.x,
+                  y: bbox.y,
+                  maxWidth: bbox.w,
+                  maxHeight: bbox.h,
+                }
               : el,
           ),
         })),
@@ -1471,13 +1486,13 @@ export const Reader: React.FC<ReaderProps> = ({
       setSelectedItem((prev) =>
         prev && prev.id === rotationDrag.elementId
           ? {
-            ...prev,
-            maskPolygon: newMaskPolygon,
-            x: bbox.x,
-            y: bbox.y,
-            maxWidth: bbox.w,
-            maxHeight: bbox.h,
-          }
+              ...prev,
+              maskPolygon: newMaskPolygon,
+              x: bbox.x,
+              y: bbox.y,
+              maxWidth: bbox.w,
+              maxHeight: bbox.h,
+            }
           : prev,
       );
       setLayers((prev) =>
@@ -1486,13 +1501,13 @@ export const Reader: React.FC<ReaderProps> = ({
           elements: l.elements.map((el) =>
             el.id === rotationDrag.elementId
               ? {
-                ...el,
-                maskPolygon: newMaskPolygon,
-                x: bbox.x,
-                y: bbox.y,
-                maxWidth: bbox.w,
-                maxHeight: bbox.h,
-              }
+                  ...el,
+                  maskPolygon: newMaskPolygon,
+                  x: bbox.x,
+                  y: bbox.y,
+                  maxWidth: bbox.w,
+                  maxHeight: bbox.h,
+                }
               : el,
           ),
         })),
@@ -1552,25 +1567,19 @@ export const Reader: React.FC<ReaderProps> = ({
     }
 
     try {
-      const res = await safeFetch(
-        `/api/pages/${selectedPage.id}/layers`,
-        {
-
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
-          },
-          body: JSON.stringify({
-            type,
-            targetLanguage: targetLanguage
-              ? targetLanguage.toLowerCase()
-              : null,
-            visible: true,
-            zOrder: layers.length,
-          }),
+      const res = await safeFetch(`/api/pages/${selectedPage.id}/layers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
         },
-      );
+        body: JSON.stringify({
+          type,
+          targetLanguage: targetLanguage ? targetLanguage.toLowerCase() : null,
+          visible: true,
+          zOrder: layers.length,
+        }),
+      });
 
       if (!res.ok) throw new Error("Failed to create layer");
 
@@ -1642,62 +1651,95 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   };
 
-  const handleDeletePage = React.useCallback(async (pageId: string) => {
-    try {
-      const response = await safeFetch(`/api/pages/${pageId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      if (!response.ok) throw new Error("Failed to delete page");
-      showToast("Page deleted successfully", "success");
-      
-      const remainingPages = pages.filter(p => p.id !== pageId);
-      if (remainingPages.length === 0) {
-        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}`);
-      } else if (selectedPage?.id === pageId) {
-        const deletedPageIndex = pages.findIndex(p => p.id === pageId);
-        const nextTargetIndex = deletedPageIndex < remainingPages.length ? deletedPageIndex : remainingPages.length - 1;
-        const newPageNumber = nextTargetIndex + 1;
-        navigate(`/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${newPageNumber}`, { replace: true });
+  const handleDeletePage = React.useCallback(
+    async (pageId: string) => {
+      try {
+        const response = await safeFetch(`/api/pages/${pageId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        if (!response.ok) throw new Error("Failed to delete page");
+        showToast("Page deleted successfully", "success");
+
+        const remainingPages = pages.filter((p) => p.id !== pageId);
+        if (remainingPages.length === 0) {
+          navigate(
+            `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}`,
+          );
+        } else if (selectedPage?.id === pageId) {
+          const deletedPageIndex = pages.findIndex((p) => p.id === pageId);
+          const nextTargetIndex =
+            deletedPageIndex < remainingPages.length
+              ? deletedPageIndex
+              : remainingPages.length - 1;
+          const newPageNumber = nextTargetIndex + 1;
+          navigate(
+            `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${newPageNumber}`,
+            { replace: true },
+          );
+        }
+
+        // Refresh pages
+        await fetchPages();
+      } catch (err: unknown) {
+        console.error(err);
+        showToast((err as Error).message || "Failed to delete page", "error");
       }
+    },
+    [
+      fetchPages,
+      showToast,
+      user.token,
+      pages,
+      selectedChapter,
+      selectedPage,
+      navigate,
+    ],
+  );
 
-      // Refresh pages
-      await fetchPages();
-    } catch (err: unknown) {
-      console.error(err);
-      showToast((err as Error).message || "Failed to delete page", "error");
-    }
-  }, [fetchPages, showToast, user.token, pages, selectedChapter, selectedPage, navigate]);
+  const handleChangePageNumber = React.useCallback(
+    async (pageId: string, newNumber: number) => {
+      try {
+        const response = await safeFetch(`/api/pages/${pageId}/number`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify({ newNumber }),
+        });
+        if (!response.ok) throw new Error("Failed to update page number");
+        showToast("Page number updated successfully", "success");
 
-  const handleChangePageNumber = React.useCallback(async (pageId: string, newNumber: number) => {
-    try {
-      const response = await safeFetch(`/api/pages/${pageId}/number`, {
-        method: "PUT",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`
-        },
-        body: JSON.stringify({ newNumber }),
-      });
-      if (!response.ok) throw new Error("Failed to update page number");
-      showToast("Page number updated successfully", "success");
-      
-      // Update state atomically by re-fetching pages
-      await fetchPages();
+        // Update state atomically by re-fetching pages
+        await fetchPages();
 
-      // Smooth Navigation to the new URL if we moved the current page
-      if (selectedPage?.id === pageId) {
-        const targetPageNumber = newNumber === 0 ? pages.length : newNumber;
-        navigate(
-          `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${targetPageNumber}`,
-          { replace: true }
+        // Smooth Navigation to the new URL if we moved the current page
+        if (selectedPage?.id === pageId) {
+          const targetPageNumber = newNumber === 0 ? pages.length : newNumber;
+          navigate(
+            `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${targetPageNumber}`,
+            { replace: true },
+          );
+        }
+      } catch (err: unknown) {
+        console.error(err);
+        showToast(
+          (err as Error).message || "Failed to update page number",
+          "error",
         );
       }
-    } catch (err: unknown) {
-      console.error(err);
-      showToast((err as Error).message || "Failed to update page number", "error");
-    }
-  }, [fetchPages, showToast, navigate, selectedPage, selectedChapter, user.token, pages]);
+    },
+    [
+      fetchPages,
+      showToast,
+      navigate,
+      selectedPage,
+      selectedChapter,
+      user.token,
+      pages,
+    ],
+  );
 
   const handleDeleteElement = async (elementId: string) => {
     setConfirmModal({
@@ -1881,7 +1923,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // Compute new cloned layer name
       const getLayerName = (l: Layer) => {
-        if (typeof l.metadataJson?.layer_name === "string") return l.metadataJson.layer_name;
+        if (typeof l.metadataJson?.layer_name === "string")
+          return l.metadataJson.layer_name;
         if (l.type === "translation")
           return `Translation (${l.targetLanguage?.toUpperCase() || "EN"})`;
         if (l.type === "sfx") return "SFX Layer";
@@ -1899,7 +1942,6 @@ export const Reader: React.FC<ReaderProps> = ({
       const createRes = await safeFetch(
         `/api/pages/${selectedPage.id}/layers`,
         {
-
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -2335,7 +2377,10 @@ export const Reader: React.FC<ReaderProps> = ({
       // 4. project.json
       let totalCostVal = 0.0;
       layers.forEach((lData) => {
-        const meta = lData.layer.metadataJson as { cost?: { estimated_cost?: number }, qa?: { cost?: { estimated_cost?: number } } } | null;
+        const meta = lData.layer.metadataJson as {
+          cost?: { estimated_cost?: number };
+          qa?: { cost?: { estimated_cost?: number } };
+        } | null;
         if (meta && typeof meta === "object") {
           if (typeof meta.cost?.estimated_cost === "number") {
             totalCostVal += meta.cost.estimated_cost;
@@ -2798,12 +2843,17 @@ export const Reader: React.FC<ReaderProps> = ({
       const slugPart = selectedChapter.title
         ? `${toSlug(selectedChapter.title)}/`
         : `chapter-${selectedChapter.chapterNumber}/`;
-      navigate(`/chapters/${selectedChapter.id}/${slugPart}reader/1`, { replace: true });
+      navigate(`/chapters/${selectedChapter.id}/${slugPart}reader/1`, {
+        replace: true,
+      });
     } else if (pageNum > pages.length) {
       const slugPart = selectedChapter.title
         ? `${toSlug(selectedChapter.title)}/`
         : `chapter-${selectedChapter.chapterNumber}/`;
-      navigate(`/chapters/${selectedChapter.id}/${slugPart}reader/${pages.length}`, { replace: true });
+      navigate(
+        `/chapters/${selectedChapter.id}/${slugPart}reader/${pages.length}`,
+        { replace: true },
+      );
     }
   }, [pages, pageNumber, selectedChapter, navigate]);
 
@@ -2818,10 +2868,19 @@ export const Reader: React.FC<ReaderProps> = ({
     return (
       <div
         className="reader-container-nhentai"
-        style={{ alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "16px", color: "white" }}
+        style={{
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: "16px",
+          color: "white",
+        }}
       >
         <h2>Page {pageNumber} does not exist in this chapter.</h2>
-        <p>This chapter has {pages.length} page{pages.length !== 1 ? "s" : ""}. Redirecting...</p>
+        <p>
+          This chapter has {pages.length} page{pages.length !== 1 ? "s" : ""}.
+          Redirecting...
+        </p>
       </div>
     );
   }
@@ -2862,33 +2921,35 @@ export const Reader: React.FC<ReaderProps> = ({
       <div className="reader-workspace-frame-nhentai">
         {/* Left Sidebar (Global Controls) */}
         {showLeftSidebar && (
-            <ReaderLeftSidebar
-              showPanels={showPanels}
-              setShowPanels={setShowPanels}
-              showOcr={showOcr}
-              setShowOcr={setShowOcr}
-              cleanScanlationView={cleanScanlationView}
-              setCleanScanlationView={setCleanScanlationView}
-              setManuallyShownOcrLayers={setManuallyShownOcrLayers}
-              groupByConversation={groupByConversation}
-              setGroupByConversation={setGroupByConversation}
-              zoom={zoom}
-              setZoom={setZoom}
-              fitMode={fitMode}
-              setFitMode={setFitMode}
-              curPageNum={selectedPage?.pageNumber || 0}
-              totalPages={pages.length}
-              navigateToPage={navigateToPage}
-              prevChapter={prevChapter}
-              nextChapter={nextChapter}
-              navigateToChapter={(chapter) => {
-                navigate(`/chapters/${chapter.id}/${toSlug(chapter.title || "chapter")}`);
-              }}
-              selectedPage={selectedPage}
-              handleDeletePage={handleDeletePage}
-              handleChangePageNumber={handleChangePageNumber}
-            />
-          )}
+          <ReaderLeftSidebar
+            showPanels={showPanels}
+            setShowPanels={setShowPanels}
+            showOcr={showOcr}
+            setShowOcr={setShowOcr}
+            cleanScanlationView={cleanScanlationView}
+            setCleanScanlationView={setCleanScanlationView}
+            setManuallyShownOcrLayers={setManuallyShownOcrLayers}
+            groupByConversation={groupByConversation}
+            setGroupByConversation={setGroupByConversation}
+            zoom={zoom}
+            setZoom={setZoom}
+            fitMode={fitMode}
+            setFitMode={setFitMode}
+            curPageNum={selectedPage?.pageNumber || 0}
+            totalPages={pages.length}
+            navigateToPage={navigateToPage}
+            prevChapter={prevChapter}
+            nextChapter={nextChapter}
+            navigateToChapter={(chapter) => {
+              navigate(
+                `/chapters/${chapter.id}/${toSlug(chapter.title || "chapter")}`,
+              );
+            }}
+            selectedPage={selectedPage}
+            handleDeletePage={handleDeletePage}
+            handleChangePageNumber={handleChangePageNumber}
+          />
+        )}
 
         {/* Center Canvas */}
         <div
@@ -2919,7 +2980,10 @@ export const Reader: React.FC<ReaderProps> = ({
                 gap: "8px",
               }}
             >
-              <CircularProgress size={22} sx={{ color: "white" }} />
+              <CircularProgress
+                size={22}
+                sx={{ color: "white" }}
+              />
               <div style={{ fontSize: "13px", fontWeight: 500 }}>
                 Loading page details...
               </div>
@@ -3134,8 +3198,8 @@ export const Reader: React.FC<ReaderProps> = ({
 
                     const relatedRegion = element.regionId
                       ? filteredOcrRegions.find(
-                        (r) => r.id === element.regionId,
-                      )
+                          (r) => r.id === element.regionId,
+                        )
                       : null;
                     const elQaStatus = relatedRegion
                       ? relatedRegion.qaStatus
@@ -3252,7 +3316,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? "var(--primary)"
                                 : elQaStatus === "failed" ||
-                                  elQaStatus === "manual_review"
+                                    elQaStatus === "manual_review"
                                   ? "#ef4444"
                                   : elQaStatus === "direct_fix"
                                     ? "#f59e0b"
@@ -3262,7 +3326,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? 2
                                 : elQaStatus === "failed" ||
-                                  elQaStatus === "manual_review"
+                                    elQaStatus === "manual_review"
                                   ? 2
                                   : 1
                             }
@@ -3270,7 +3334,7 @@ export const Reader: React.FC<ReaderProps> = ({
                               isSelected
                                 ? "none"
                                 : elQaStatus === "failed" ||
-                                  elQaStatus === "manual_review"
+                                    elQaStatus === "manual_review"
                                   ? "none"
                                   : "4 4"
                             }
@@ -3471,7 +3535,7 @@ export const Reader: React.FC<ReaderProps> = ({
                                 {fit.lines.map((line, i) => {
                                   const lineCenterX =
                                     fit.lineCenters &&
-                                      fit.lineCenters.at(i) !== undefined
+                                    fit.lineCenters.at(i) !== undefined
                                       ? (fit.lineCenters.at(i) ??
                                         element.x + width / 2)
                                       : element.x + width / 2;
@@ -3537,44 +3601,44 @@ export const Reader: React.FC<ReaderProps> = ({
 
         {/* Right Sidebar (Property Inspector) */}
         {showRightSidebar && (
-            <ReaderRightSidebar
-              selectedItem={selectedItem}
-              setSelectedItem={setSelectedItem}
-              activeLayerId={activeLayerId}
-              setActiveLayerId={setActiveLayerId}
-              sortedLayers={sortedLayers}
-              layers={layers}
-              manuallyShownOcrLayers={manuallyShownOcrLayers}
-              cleanScanlationView={cleanScanlationView}
-              handleMoveLayer={handleMoveLayer}
-              handleCreateTranslationLayer={handleCreateTranslationLayer}
-              handleCreateSfxLayer={handleCreateSfxLayer}
-              handleToggleLayerVisibility={handleToggleLayerVisibility}
-              handleCloneLayer={handleCloneLayer}
-              handleDeleteLayer={handleDeleteLayer}
-              handleAddNewElement={handleAddNewElement}
-              handleLaunchEyeDropper={handleLaunchEyeDropper}
-              handleRedoPageOcr={handleRedoPageOcr}
-              isRedoingPageOcr={isRedoingPageOcr}
-              handleRedoPageTranslation={handleRedoPageTranslation}
-              isRedoingPageTranslation={isRedoingPageTranslation}
-              handleExportPng={handleExportPng}
-              handleExportZip={handleExportZip}
-              interactionMode={interactionMode}
-              setInteractionMode={setInteractionMode}
-              undoStack={undoStack}
-              handleUndo={handleUndo}
-              handleEnterReshapeMode={handleEnterReshapeMode}
-              handleUpdateSelectedElement={handleUpdateSelectedElement}
-              dirtyElements={dirtyElements}
-              handleSaveElementChanges={handleSaveElementChanges}
-              handleDeleteElement={handleDeleteElement}
-              ocrRegions={ocrRegions}
-              isRedoingRegionOcr={isRedoingRegionOcr}
-              handleRedoRegion={handleRedoRegion}
-              isRedoingRegionTl={isRedoingRegionTl}
-            />
-          )}
+          <ReaderRightSidebar
+            selectedItem={selectedItem}
+            setSelectedItem={setSelectedItem}
+            activeLayerId={activeLayerId}
+            setActiveLayerId={setActiveLayerId}
+            sortedLayers={sortedLayers}
+            layers={layers}
+            manuallyShownOcrLayers={manuallyShownOcrLayers}
+            cleanScanlationView={cleanScanlationView}
+            handleMoveLayer={handleMoveLayer}
+            handleCreateTranslationLayer={handleCreateTranslationLayer}
+            handleCreateSfxLayer={handleCreateSfxLayer}
+            handleToggleLayerVisibility={handleToggleLayerVisibility}
+            handleCloneLayer={handleCloneLayer}
+            handleDeleteLayer={handleDeleteLayer}
+            handleAddNewElement={handleAddNewElement}
+            handleLaunchEyeDropper={handleLaunchEyeDropper}
+            handleRedoPageOcr={handleRedoPageOcr}
+            isRedoingPageOcr={isRedoingPageOcr}
+            handleRedoPageTranslation={handleRedoPageTranslation}
+            isRedoingPageTranslation={isRedoingPageTranslation}
+            handleExportPng={handleExportPng}
+            handleExportZip={handleExportZip}
+            interactionMode={interactionMode}
+            setInteractionMode={setInteractionMode}
+            undoStack={undoStack}
+            handleUndo={handleUndo}
+            handleEnterReshapeMode={handleEnterReshapeMode}
+            handleUpdateSelectedElement={handleUpdateSelectedElement}
+            dirtyElements={dirtyElements}
+            handleSaveElementChanges={handleSaveElementChanges}
+            handleDeleteElement={handleDeleteElement}
+            ocrRegions={ocrRegions}
+            isRedoingRegionOcr={isRedoingRegionOcr}
+            handleRedoRegion={handleRedoRegion}
+            isRedoingRegionTl={isRedoingRegionTl}
+          />
+        )}
       </div>
 
       {/* Confirm Modal */}

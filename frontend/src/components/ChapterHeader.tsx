@@ -54,9 +54,13 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   isImporting,
 }) => {
   const [openSplit, setOpenSplit] = useState(false);
-  const [splitAnchorEl, setSplitAnchorEl] = useState<HTMLDivElement | null>(null);
-  
-  const [overflowAnchorEl, setOverflowAnchorEl] = useState<null | HTMLElement>(null);
+  const [splitAnchorEl, setSplitAnchorEl] = useState<HTMLDivElement | null>(
+    null,
+  );
+
+  const [overflowAnchorEl, setOverflowAnchorEl] = useState<null | HTMLElement>(
+    null,
+  );
   const openOverflow = Boolean(overflowAnchorEl);
 
   const handleToggleSplit = () => {
@@ -64,7 +68,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   };
 
   const handleCloseSplit = () => {
-    if (splitAnchorEl && splitAnchorEl.contains(document.activeElement as HTMLElement)) {
+    if (
+      splitAnchorEl &&
+      splitAnchorEl.contains(document.activeElement as HTMLElement)
+    ) {
       return;
     }
     setOpenSplit(false);
@@ -83,7 +90,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
 
       <Card elevation={3}>
         <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
-          <Grid container spacing={0}>
+          <Grid
+            container
+            spacing={0}
+          >
             {/* Cover/Thumbnail column matching Series header for uniformity */}
             <Grid size={{ xs: 12, sm: 4, md: 3, lg: 2.5 }}>
               <Box
@@ -96,8 +106,13 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  borderRight: (theme) => ({ sm: `1px solid ${theme.palette.divider}` }),
-                  borderBottom: (theme) => ({ xs: `1px solid ${theme.palette.divider}`, sm: "none" }),
+                  borderRight: (theme) => ({
+                    sm: `1px solid ${theme.palette.divider}`,
+                  }),
+                  borderBottom: (theme) => ({
+                    xs: `1px solid ${theme.palette.divider}`,
+                    sm: "none",
+                  }),
                   overflow: "hidden",
                 }}
               >
@@ -105,7 +120,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   <Box
                     component="img"
                     src={selectedChapter.coverImageUrl}
-                    alt={selectedChapter.title || `Chapter ${selectedChapter.chapterNumber}`}
+                    alt={
+                      selectedChapter.title ||
+                      `Chapter ${selectedChapter.chapterNumber}`
+                    }
                     sx={{
                       width: "100%",
                       height: "100%",
@@ -113,7 +131,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     }}
                   />
                 ) : (
-                  <Typography variant="body1" color="text.secondary">
+                  <Typography
+                    variant="body1"
+                    color="text.secondary"
+                  >
                     Chapter {selectedChapter.chapterNumber}
                   </Typography>
                 )}
@@ -122,71 +143,184 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
 
             {/* Info Column */}
             <Grid size={{ xs: 12, sm: 8, md: 9, lg: 9.5 }}>
-              <Box sx={{ p: { xs: 2, sm: 3 }, display: "flex", flexDirection: "column", height: "100%" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-                  <Typography variant="h4" component="h1" sx={{ fontWeight: "bold", fontFamily: '"Outfit", sans-serif' }}>
+              <Box
+                sx={{
+                  p: { xs: 2, sm: 3 },
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "100%",
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    mb: 0.5,
+                  }}
+                >
+                  <Typography
+                    variant="h4"
+                    component="h1"
+                    sx={{
+                      fontWeight: "bold",
+                      fontFamily: '"Outfit", sans-serif',
+                    }}
+                  >
                     Chapter {selectedChapter.chapterNumber}
                   </Typography>
-                  <IconButton onClick={onEditClick} title="Edit Chapter Name & Number" size="small">
+                  <IconButton
+                    onClick={onEditClick}
+                    title="Edit Chapter Name & Number"
+                    size="small"
+                  >
                     <EditIcon fontSize="small" />
                   </IconButton>
                 </Box>
-                <Typography variant="body1" color="text.secondary" gutterBottom>
-                  {selectedSeries.title} {selectedChapter.title ? `/ ${selectedChapter.title}` : ""}
+                <Typography
+                  variant="body1"
+                  color="text.secondary"
+                  gutterBottom
+                >
+                  {selectedSeries.title}{" "}
+                  {selectedChapter.title ? `/ ${selectedChapter.title}` : ""}
                 </Typography>
 
-                <Grid container spacing={2} sx={{ mt: 1, mb: 3 }}>
+                <Grid
+                  container
+                  spacing={2}
+                  sx={{ mt: 1, mb: 3 }}
+                >
                   <Grid>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
                       Pages
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: "medium" }}>
+                    <Typography
+                      variant="body1"
+                      sx={{ fontWeight: "medium" }}
+                    >
                       {selectedChapter.pageCount || 0}
                     </Typography>
                   </Grid>
                   <Grid>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
                       Context Injection
                     </Typography>
-                    <Chip size="small" label={selectedChapter.useContextMemory ? "Enabled" : "Disabled"} color={selectedChapter.useContextMemory ? "success" : "default"} />
+                    <Chip
+                      size="small"
+                      label={
+                        selectedChapter.useContextMemory
+                          ? "Enabled"
+                          : "Disabled"
+                      }
+                      color={
+                        selectedChapter.useContextMemory ? "success" : "default"
+                      }
+                    />
                   </Grid>
                   <Grid>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
                       Fallback Models
                     </Typography>
-                    <Chip size="small" label={selectedChapter.useFallbackModels === false ? "Disabled" : "Enabled"} color={selectedChapter.useFallbackModels === false ? "warning" : "default"} />
+                    <Chip
+                      size="small"
+                      label={
+                        selectedChapter.useFallbackModels === false
+                          ? "Disabled"
+                          : "Enabled"
+                      }
+                      color={
+                        selectedChapter.useFallbackModels === false
+                          ? "warning"
+                          : "default"
+                      }
+                    />
                   </Grid>
                 </Grid>
 
                 {/* Models Info */}
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  <Typography
+                    variant="subtitle2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
                     Configured Models
                   </Typography>
-                  <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: "wrap" }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    useFlexGap
+                    sx={{ mt: 1, flexWrap: "wrap" }}
+                  >
                     {selectedChapter.resolvedOcr?.provider && (
-                      <Chip size="small" variant="outlined" label={`OCR Provider: ${selectedChapter.resolvedOcr.provider}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`OCR Provider: ${selectedChapter.resolvedOcr.provider}`}
+                      />
                     )}
                     {selectedChapter.resolvedOcr?.model && (
-                      <Chip size="small" variant="outlined" label={`OCR: ${selectedChapter.resolvedOcr.model} ${selectedChapter.resolvedOcr.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`OCR: ${selectedChapter.resolvedOcr.model} ${selectedChapter.resolvedOcr.source === "chapter" ? "(overridden)" : "(inherited)"}`}
+                      />
                     )}
                     {selectedChapter.resolvedTranslation?.provider && (
-                      <Chip size="small" variant="outlined" label={`TL Provider: ${selectedChapter.resolvedTranslation.provider}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`TL Provider: ${selectedChapter.resolvedTranslation.provider}`}
+                      />
                     )}
                     {selectedChapter.resolvedTranslation?.model && (
-                      <Chip size="small" variant="outlined" label={`Translation: ${selectedChapter.resolvedTranslation.model} ${selectedChapter.resolvedTranslation.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`Translation: ${selectedChapter.resolvedTranslation.model} ${selectedChapter.resolvedTranslation.source === "chapter" ? "(overridden)" : "(inherited)"}`}
+                      />
                     )}
                     {selectedChapter.resolvedQa?.routingStrategy && (
-                      <Chip size="small" variant="outlined" color="primary" label={`Strategy: ${selectedChapter.resolvedQa.routingStrategy}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        label={`Strategy: ${selectedChapter.resolvedQa.routingStrategy}`}
+                      />
                     )}
                     {selectedChapter.resolvedQa?.mode && (
-                      <Chip size="small" variant="outlined" label={`QA Mode: ${selectedChapter.resolvedQa.mode} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`QA Mode: ${selectedChapter.resolvedQa.mode} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
+                      />
                     )}
                     {selectedChapter.resolvedQa?.llmModel && (
-                      <Chip size="small" variant="outlined" label={`QA LLM: ${selectedChapter.resolvedQa.llmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`QA LLM: ${selectedChapter.resolvedQa.llmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
+                      />
                     )}
                     {selectedChapter.resolvedQa?.vlmModel && (
-                      <Chip size="small" variant="outlined" label={`QA VLM: ${selectedChapter.resolvedQa.vlmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`QA VLM: ${selectedChapter.resolvedQa.vlmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
+                      />
                     )}
                   </Stack>
                 </Box>
@@ -195,22 +329,44 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                 <Divider sx={{ mb: 2, mt: 1 }} />
 
                 {/* Actions Row */}
-                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-                  <Button variant="contained" startIcon={<UploadIcon />} onClick={onUploadClick}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ flexWrap: "wrap", gap: 1, alignItems: "center" }}
+                >
+                  <Button
+                    variant="contained"
+                    startIcon={<UploadIcon />}
+                    onClick={onUploadClick}
+                  >
                     Upload Page
                   </Button>
-                  <Button variant="outlined" startIcon={<UploadIcon />} onClick={onImportClick} disabled={isImporting}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<UploadIcon />}
+                    onClick={onImportClick}
+                    disabled={isImporting}
+                  >
                     {isImporting ? "Importing..." : "Import Project (ZIP)"}
                   </Button>
 
-                  <ButtonGroup variant="outlined" ref={setSplitAnchorEl} aria-label="split button">
-                    <Button onClick={onExportClick} startIcon={<DownloadIcon />}>
+                  <ButtonGroup
+                    variant="outlined"
+                    ref={setSplitAnchorEl}
+                    aria-label="split button"
+                  >
+                    <Button
+                      onClick={onExportClick}
+                      startIcon={<DownloadIcon />}
+                    >
                       Export Chapter (ZIP)
                     </Button>
                     <Button
                       size="small"
-                      aria-controls={openSplit ? 'split-button-menu' : undefined}
-                      aria-expanded={openSplit ? 'true' : undefined}
+                      aria-controls={
+                        openSplit ? "split-button-menu" : undefined
+                      }
+                      aria-expanded={openSplit ? "true" : undefined}
                       aria-label="select export option"
                       aria-haspopup="menu"
                       onClick={handleToggleSplit}
@@ -231,12 +387,17 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                         {...TransitionProps}
                         style={{
                           transformOrigin:
-                            placement === 'bottom' ? 'center top' : 'center bottom',
+                            placement === "bottom"
+                              ? "center top"
+                              : "center bottom",
                         }}
                       >
                         <Paper>
                           <ClickAwayListener onClickAway={handleCloseSplit}>
-                            <MenuList id="split-button-menu" autoFocusItem>
+                            <MenuList
+                              id="split-button-menu"
+                              autoFocusItem
+                            >
                               <MenuItem
                                 onClick={() => {
                                   onReexportClick();
@@ -252,17 +413,24 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     )}
                   </Popper>
 
-                  <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={onDeleteClick}>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={onDeleteClick}
+                  >
                     Delete Chapter
                   </Button>
-                  
+
                   <IconButton
                     onClick={(e) => setOverflowAnchorEl(e.currentTarget)}
                     size="small"
                     aria-label="more actions"
-                    aria-controls={openOverflow ? 'chapter-overflow-menu' : undefined}
+                    aria-controls={
+                      openOverflow ? "chapter-overflow-menu" : undefined
+                    }
                     aria-haspopup="true"
-                    aria-expanded={openOverflow ? 'true' : undefined}
+                    aria-expanded={openOverflow ? "true" : undefined}
                   >
                     <MoreVertIcon />
                   </IconButton>
@@ -272,10 +440,15 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     open={openOverflow}
                     onClose={() => setOverflowAnchorEl(null)}
                     MenuListProps={{
-                      'aria-labelledby': 'basic-button',
+                      "aria-labelledby": "basic-button",
                     }}
                   >
-                    <MenuItem onClick={() => { onClearExportsClick(); setOverflowAnchorEl(null); }}>
+                    <MenuItem
+                      onClick={() => {
+                        onClearExportsClick();
+                        setOverflowAnchorEl(null);
+                      }}
+                    >
                       Clear Exports
                     </MenuItem>
                   </Menu>

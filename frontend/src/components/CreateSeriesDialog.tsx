@@ -98,7 +98,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const { showToast } = useToast();
 
   const [prevOpen, setPrevOpen] = useState(false);
-  const [prevEditingSeries, setPrevEditingSeries] = useState<Series | null>(null);
+  const [prevEditingSeries, setPrevEditingSeries] = useState<Series | null>(
+    null,
+  );
 
   if (open && (!prevOpen || editingSeries !== prevEditingSeries)) {
     setPrevOpen(true);
@@ -167,12 +169,21 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   const inheritedQaVlmModel = settings?.qaVlmModel;
   const inheritedRoutingStrategy = settings?.routingStrategy || "lowest-cost";
 
-   const overrideFields = [
-     ocrProvider, ocrModel, tlProvider, tlModel,
-     qaProvider, qaMode, qaLlmModel, qaVlmModel, routingStrategy,
-   ];
-   const overriddenCount = overrideFields.filter((v) => v !== "").length + (useFallbackModels === false ? 1 : 0);
-   const inheritedCount = overrideFields.length + 1 - overriddenCount;
+  const overrideFields = [
+    ocrProvider,
+    ocrModel,
+    tlProvider,
+    tlModel,
+    qaProvider,
+    qaMode,
+    qaLlmModel,
+    qaVlmModel,
+    routingStrategy,
+  ];
+  const overriddenCount =
+    overrideFields.filter((v) => v !== "").length +
+    (useFallbackModels === false ? 1 : 0);
+  const inheritedCount = overrideFields.length + 1 - overriddenCount;
 
   const ocrDisabled =
     ocrProvider === "local" ||
@@ -322,7 +333,14 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           <AccordionDetails
             sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}
           >
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
               <FormControl fullWidth>
                 <InputLabel>OCR Provider</InputLabel>
                 <Select
@@ -342,12 +360,23 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </Select>
               </FormControl>
               {ocrProvider !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrProvider("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setOcrProvider("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
               <FormControl
                 fullWidth
                 disabled={ocrDisabled}
@@ -380,12 +409,23 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </Select>
               </FormControl>
               {ocrModel !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setOcrModel("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setOcrModel("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
               <FormControl fullWidth>
                 <InputLabel>TL Provider</InputLabel>
                 <Select
@@ -405,12 +445,23 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </Select>
               </FormControl>
               {tlProvider !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlProvider("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setTlProvider("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
               <FormControl fullWidth>
                 <InputLabel>TL LLM Model</InputLabel>
                 <Select
@@ -430,12 +481,23 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </Select>
               </FormControl>
               {tlModel !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setTlModel("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setTlModel("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
               <FormControl fullWidth>
                 <InputLabel>QA Provider</InputLabel>
                 <Select
@@ -455,12 +517,23 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </Select>
               </FormControl>
               {qaProvider !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaProvider("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setQaProvider("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
               <FormControl fullWidth>
                 <InputLabel>QA Mode</InputLabel>
                 <Select
@@ -480,12 +553,23 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </Select>
               </FormControl>
               {qaMode !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaMode("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setQaMode("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
               <FormControl
                 fullWidth
                 disabled={qaLlmDisabled}
@@ -508,12 +592,23 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </Select>
               </FormControl>
               {qaLlmModel !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaLlmModel("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setQaLlmModel("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
               <FormControl
                 fullWidth
                 disabled={qaVlmDisabled}
@@ -536,13 +631,27 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 </Select>
               </FormControl>
               {qaVlmModel !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setQaVlmModel("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setQaVlmModel("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
-              <FormControl fullWidth size="small">
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>Routing Strategy</InputLabel>
                 <Select
                   size="small"
@@ -551,26 +660,44 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                   onChange={(e) => setRoutingStrategy(e.target.value)}
                 >
                   <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
-                  <MenuItem value="highest-throughput">Highest Throughput</MenuItem>
+                  <MenuItem value="highest-throughput">
+                    Highest Throughput
+                  </MenuItem>
                 </Select>
               </FormControl>
               {routingStrategy !== "" && (
-                <IconButton size="small" sx={{ mt: 0.5 }} onClick={() => setRoutingStrategy("")}>
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setRoutingStrategy("")}
+                >
                   <CloseIcon fontSize="small" />
                 </IconButton>
               )}
             </Box>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
-              <FormControl fullWidth size="small">
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
+              <FormControl
+                fullWidth
+                size="small"
+              >
                 <InputLabel>Use Fallback Models</InputLabel>
                 <Select
                   size="small"
                   value={useFallbackModels ? "true" : "false"}
                   label="Use Fallback Models"
-                  onChange={(e) => setUseFallbackModels(e.target.value === "true")}
+                  onChange={(e) =>
+                    setUseFallbackModels(e.target.value === "true")
+                  }
                 >
-                   <MenuItem value="true">Enabled</MenuItem>
-                   <MenuItem value="false">Disabled</MenuItem>
+                  <MenuItem value="true">Enabled</MenuItem>
+                  <MenuItem value="false">Disabled</MenuItem>
                 </Select>
               </FormControl>
             </Box>

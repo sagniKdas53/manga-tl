@@ -21,7 +21,5 @@ public interface PageRepository extends JpaRepository<Page, UUID> {
 
   @org.springframework.data.jpa.repository.Query(
       "SELECT p FROM Page p WHERE p.lastEditedAt IS NOT NULL AND p.lastEditedAt < :threshold AND (p.lastRenderedAt IS NULL OR p.lastEditedAt > p.lastRenderedAt)")
-  List<Page> findPagesNeedingRender(
-      @Param("threshold") OffsetDateTime threshold);
+  List<Page> findPagesNeedingRender(@Param("threshold") OffsetDateTime threshold);
 }
-

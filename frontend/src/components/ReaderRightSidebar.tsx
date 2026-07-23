@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
 import Tooltip from "@mui/material/Tooltip";
@@ -67,7 +67,9 @@ export interface ReaderRightSidebarProps {
   handleExportPng: () => void;
   handleExportZip: () => void;
   interactionMode: string;
-  setInteractionMode: React.Dispatch<React.SetStateAction<"none" | "drag" | "reshape">>;
+  setInteractionMode: React.Dispatch<
+    React.SetStateAction<"none" | "drag" | "reshape">
+  >;
   undoStack: LayerElement[];
   handleUndo: () => void;
   handleEnterReshapeMode: (element: LayerElement) => void;
@@ -83,18 +85,38 @@ export interface ReaderRightSidebarProps {
 
 const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
   const {
-    selectedItem, setSelectedItem,
-    activeLayerId, setActiveLayerId,
+    selectedItem,
+    setSelectedItem,
+    activeLayerId,
+    setActiveLayerId,
     sortedLayers,
-    handleMoveLayer, handleCreateTranslationLayer, handleCreateSfxLayer,
-    handleToggleLayerVisibility, handleCloneLayer, handleDeleteLayer,
-    handleAddNewElement, handleLaunchEyeDropper,
-    handleRedoPageOcr, isRedoingPageOcr,
-    handleRedoPageTranslation, isRedoingPageTranslation,
-    handleExportPng, handleExportZip,
-    interactionMode, setInteractionMode, undoStack, handleUndo, handleEnterReshapeMode,
-    handleUpdateSelectedElement, dirtyElements, handleSaveElementChanges, handleDeleteElement,
-    ocrRegions, isRedoingRegionOcr, handleRedoRegion, isRedoingRegionTl
+    handleMoveLayer,
+    handleCreateTranslationLayer,
+    handleCreateSfxLayer,
+    handleToggleLayerVisibility,
+    handleCloneLayer,
+    handleDeleteLayer,
+    handleAddNewElement,
+    handleLaunchEyeDropper,
+    handleRedoPageOcr,
+    isRedoingPageOcr,
+    handleRedoPageTranslation,
+    isRedoingPageTranslation,
+    handleExportPng,
+    handleExportZip,
+    interactionMode,
+    setInteractionMode,
+    undoStack,
+    handleUndo,
+    handleEnterReshapeMode,
+    handleUpdateSelectedElement,
+    dirtyElements,
+    handleSaveElementChanges,
+    handleDeleteElement,
+    ocrRegions,
+    isRedoingRegionOcr,
+    handleRedoRegion,
+    isRedoingRegionTl,
   } = props;
 
   return (
@@ -117,7 +139,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             <LayersIcon sx={{ fontSize: 22, opacity: 0.5 }} />
             <Typography
               variant="body2"
-              sx={{ fontSize: "12.5px", color: "var(--text-muted)", maxWidth: 210 }}
+              sx={{
+                fontSize: "12.5px",
+                color: "var(--text-muted)",
+                maxWidth: 210,
+              }}
             >
               Select an OCR region or a text layer to inspect and edit details.
             </Typography>
@@ -136,7 +162,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     sortedLayers.findIndex(
                       (l) => l.layer.id === activeLayerId,
                     ) ===
-                    sortedLayers.length - 1
+                      sortedLayers.length - 1
                   }
                   onClick={() =>
                     activeLayerId && handleMoveLayer(activeLayerId, "up")
@@ -155,8 +181,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     ) === 0
                   }
                   onClick={() =>
-                    activeLayerId &&
-                    handleMoveLayer(activeLayerId, "down")
+                    activeLayerId && handleMoveLayer(activeLayerId, "down")
                   }
                   sx={{ p: 0.25, color: "var(--text-muted)" }}
                 >
@@ -210,7 +235,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             {sortedLayers.length === 0 ? (
               <Typography
                 variant="body2"
-                sx={{ fontSize: "11px", color: "var(--text-dim, var(--text-muted))", py: 0.5 }}
+                sx={{
+                  fontSize: "11px",
+                  color: "var(--text-dim, var(--text-muted))",
+                  py: 0.5,
+                }}
               >
                 No active layers.
               </Typography>
@@ -234,12 +263,18 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       border: isActive
                         ? "1px solid var(--primary)"
                         : "1px solid var(--border-color)",
-                      backgroundColor: isActive ? "var(--primary-glow)" : "transparent",
-                      boxShadow: isActive ? "0 0 8px var(--primary-glow)" : "none",
+                      backgroundColor: isActive
+                        ? "var(--primary-glow)"
+                        : "transparent",
+                      boxShadow: isActive
+                        ? "0 0 8px var(--primary-glow)"
+                        : "none",
                       opacity: isVisible ? 1 : 0.5,
                       transition: "opacity 0.15s ease, border-color 0.15s ease",
                       "&:hover": {
-                        borderColor: isActive ? "var(--primary)" : "var(--text-dim, var(--text-muted))",
+                        borderColor: isActive
+                          ? "var(--primary)"
+                          : "var(--text-dim, var(--text-muted))",
                       },
                     }}
                   >
@@ -254,7 +289,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         fontSize: "10px",
                         fontWeight: 700,
                         flexShrink: 0,
-                        backgroundColor: isActive ? "var(--primary)" : "var(--bg-input, rgba(0,0,0,0.06))",
+                        backgroundColor: isActive
+                          ? "var(--primary)"
+                          : "var(--bg-input, rgba(0,0,0,0.06))",
                         color: isActive ? "#fff" : "var(--text-muted)",
                       }}
                     >
@@ -276,34 +313,53 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                           fontWeight: isActive ? 700 : 600,
                           lineHeight: 1.2,
                           wordBreak: "break-word",
-                          color: isActive ? "var(--primary-hover)" : "var(--text-main)",
+                          color: isActive
+                            ? "var(--primary-hover)"
+                            : "var(--text-main)",
                         }}
                       >
-                        {typeof lData.layer.metadataJson?.layer_name === "string" ? lData.layer.metadataJson.layer_name :
-                          (lData.layer.type === "translation"
+                        {typeof lData.layer.metadataJson?.layer_name ===
+                        "string"
+                          ? lData.layer.metadataJson.layer_name
+                          : lData.layer.type === "translation"
                             ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
                             : lData.layer.type === "sfx"
                               ? "SFX Layer"
                               : lData.layer.type === "ocr"
                                 ? "OCR Layer"
-                                : `Layer (${lData.layer.type})`)}
+                                : `Layer (${lData.layer.type})`}
                       </Typography>
                       <Typography
                         component="span"
-                        sx={{ fontSize: "9px", color: "var(--text-dim, var(--text-muted))" }}
+                        sx={{
+                          fontSize: "9px",
+                          color: "var(--text-dim, var(--text-muted))",
+                        }}
                       >
-                        {lData.elements.length} elements{!isVisible ? " · hidden" : ""}
+                        {lData.elements.length} elements
+                        {!isVisible ? " · hidden" : ""}
                       </Typography>
                     </Box>
                     <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.25,
+                        flexShrink: 0,
+                      }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Tooltip title={isVisible ? "Hide layer" : "Show layer"}>
                         <IconButton
                           size="small"
-                          onClick={() => handleToggleLayerVisibility(lData.layer.id)}
-                          sx={{ color: isVisible ? "var(--primary)" : "var(--text-dim, var(--text-muted))" }}
+                          onClick={() =>
+                            handleToggleLayerVisibility(lData.layer.id)
+                          }
+                          sx={{
+                            color: isVisible
+                              ? "var(--primary)"
+                              : "var(--text-dim, var(--text-muted))",
+                          }}
                         >
                           {isVisible ? (
                             <VisibilityIcon fontSize="small" />
@@ -406,7 +462,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               sx={{
                 color: "var(--text-main)",
                 borderColor: "var(--border-color)",
-                "&:hover": { borderColor: "var(--primary)", color: "var(--primary)" },
+                "&:hover": {
+                  borderColor: "var(--primary)",
+                  color: "var(--primary)",
+                },
               }}
               onClick={() => handleLaunchEyeDropper("backgroundColor")}
               disabled={!selectedItem || !selectedItem.isLayerElement}
@@ -423,7 +482,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               size="small"
               startIcon={
                 isRedoingPageOcr ? (
-                  <CircularProgress size={12} sx={{ color: "inherit" }} />
+                  <CircularProgress
+                    size={12}
+                    sx={{ color: "inherit" }}
+                  />
                 ) : (
                   <RefreshIcon />
                 )
@@ -446,7 +508,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               size="small"
               startIcon={
                 isRedoingPageTranslation ? (
-                  <CircularProgress size={12} sx={{ color: "inherit" }} />
+                  <CircularProgress
+                    size={12}
+                    sx={{ color: "inherit" }}
+                  />
                 ) : (
                   <RefreshIcon />
                 )
@@ -466,7 +531,10 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           </SidebarSection>
 
           {/* Export Section */}
-          <SidebarSection title="Export" sx={{ mb: 5 }}>
+          <SidebarSection
+            title="Export"
+            sx={{ mb: 5 }}
+          >
             <Button
               variant="outlined"
               size="small"
@@ -562,610 +630,714 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
 
           {/* Content */}
           <SidebarSection title="Content">
-          <Grid
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-            }}
-          >
-            <label
+            <Grid
               style={{
-                fontSize: "11px",
-                fontWeight: "bold",
-                color: "var(--text-muted)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
               }}
             >
-              Text Content
-            </label>
-            <TextField
-              multiline
-              minRows={3}
-              fullWidth
-              variant="outlined"
-              size="small"
-              value={selectedItem.text || ""}
-              onChange={(e) =>
-                handleUpdateSelectedElement({ text: e.target.value })
-              }
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))",
-                  fontSize: "13px",
-                  fontFamily: "inherit",
-                },
-              }}
-            />
-          </Grid>
+              <label
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  color: "var(--text-muted)",
+                }}
+              >
+                Text Content
+              </label>
+              <TextField
+                multiline
+                minRows={3}
+                fullWidth
+                variant="outlined"
+                size="small"
+                value={selectedItem.text || ""}
+                onChange={(e) =>
+                  handleUpdateSelectedElement({ text: e.target.value })
+                }
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))",
+                    fontSize: "13px",
+                    fontFamily: "inherit",
+                  },
+                }}
+              />
+            </Grid>
 
-          {/* Manual Region Redo Section */}
-          {selectedItem.regionId && (
-            <Grid container spacing={1} sx={{ mb: 0.5 }}>
-              <Grid size={6} sx={{ display: "flex" }}>
-                <Button fullWidth
-                  variant="outlined"
-                  size="small"
-                  style={{
-                    justifyContent: "center",
-                    gap: "6px",
-                    fontSize: "12px",
-                    padding: "8px 6px",
-                    height: "36px",
-                  }}
-                  disabled={
-                    isRedoingRegionOcr ||
-                    (selectedItem &&
-                      "layerType" in selectedItem &&
-                      (selectedItem.layerType === "translation" ||
-                        selectedItem.layerType === "tl"))
-                  }
-                  title={
-                    selectedItem &&
+            {/* Manual Region Redo Section */}
+            {selectedItem.regionId && (
+              <Grid
+                container
+                spacing={1}
+                sx={{ mb: 0.5 }}
+              >
+                <Grid
+                  size={6}
+                  sx={{ display: "flex" }}
+                >
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    style={{
+                      justifyContent: "center",
+                      gap: "6px",
+                      fontSize: "12px",
+                      padding: "8px 6px",
+                      height: "36px",
+                    }}
+                    disabled={
+                      isRedoingRegionOcr ||
+                      (selectedItem &&
+                        "layerType" in selectedItem &&
+                        (selectedItem.layerType === "translation" ||
+                          selectedItem.layerType === "tl"))
+                    }
+                    title={
+                      selectedItem &&
                       "layerType" in selectedItem &&
                       (selectedItem.layerType === "translation" ||
                         selectedItem.layerType === "tl")
-                      ? "Select an OCR layer element to redo OCR"
-                      : undefined
-                  }
-                  onClick={() => {
-                    const actualRegion = ocrRegions.find(
-                      (r) => r.id === selectedItem.regionId,
-                    );
-                    if (actualRegion) handleRedoRegion(actualRegion, "ocr");
-                  }}
-                >
-                  {isRedoingRegionOcr ? (
-                    <CircularProgress size={12} sx={{ mr: 0.5 }} />
-                  ) : (
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                    >
-                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                    </svg>
-                  )}
-                  Redo OCR
-                </Button>
-              </Grid>
+                        ? "Select an OCR layer element to redo OCR"
+                        : undefined
+                    }
+                    onClick={() => {
+                      const actualRegion = ocrRegions.find(
+                        (r) => r.id === selectedItem.regionId,
+                      );
+                      if (actualRegion) handleRedoRegion(actualRegion, "ocr");
+                    }}
+                  >
+                    {isRedoingRegionOcr ? (
+                      <CircularProgress
+                        size={12}
+                        sx={{ mr: 0.5 }}
+                      />
+                    ) : (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                      </svg>
+                    )}
+                    Redo OCR
+                  </Button>
+                </Grid>
 
-              <Grid size={6} sx={{ display: "flex" }}>
-                <Button fullWidth
-                  variant="outlined"
-                  size="small"
-                  style={{
-                    justifyContent: "center",
-                    gap: "6px",
-                    fontSize: "12px",
-                    padding: "8px 6px",
-                    height: "36px",
-                  }}
-                  disabled={isRedoingRegionTl}
-                  onClick={() => {
-                    const actualRegion = ocrRegions.find(
-                      (r) => r.id === selectedItem.regionId,
-                    );
-                    if (actualRegion)
-                      handleRedoRegion(actualRegion, "translation");
-                  }}
+                <Grid
+                  size={6}
+                  sx={{ display: "flex" }}
                 >
-                  {isRedoingRegionTl ? (
-                    <CircularProgress size={12} sx={{ mr: 0.5 }} />
-                  ) : (
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                    >
-                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                    </svg>
-                  )}
-                  Redo TL
-                </Button>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    style={{
+                      justifyContent: "center",
+                      gap: "6px",
+                      fontSize: "12px",
+                      padding: "8px 6px",
+                      height: "36px",
+                    }}
+                    disabled={isRedoingRegionTl}
+                    onClick={() => {
+                      const actualRegion = ocrRegions.find(
+                        (r) => r.id === selectedItem.regionId,
+                      );
+                      if (actualRegion)
+                        handleRedoRegion(actualRegion, "translation");
+                    }}
+                  >
+                    {isRedoingRegionTl ? (
+                      <CircularProgress
+                        size={12}
+                        sx={{ mr: 0.5 }}
+                      />
+                    ) : (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                      </svg>
+                    )}
+                    Redo TL
+                  </Button>
+                </Grid>
               </Grid>
-            </Grid>
-          )}
+            )}
           </SidebarSection>
 
           {/* Position & Size */}
           <SidebarSection title="Position & Size">
-          {/* Positioning Coordinates Row */}
-          <Grid container spacing={1}>
-            <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
-                X Position
-              </label>
-              <TextField
-                type="number"
-                size="small"
-                value={selectedItem.x}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    x: parseFloat(e.target.value) || 0,
-                  })
-                }
-                sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
-              />
-            </Grid>
-            <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Y Position
-              </label>
-              <TextField
-                type="number"
-                size="small"
-                value={selectedItem.y}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    y: parseFloat(e.target.value) || 0,
-                  })
-                }
-                sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
-              />
-            </Grid>
-          </Grid>
-
-          {/* Dimensions Row */}
-          <Grid container spacing={1}>
-            <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Max Width
-              </label>
-              <TextField
-                type="number"
-                size="small"
-                value={selectedItem.maxWidth || 0}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    maxWidth: parseInt(e.target.value) || 0,
-                  })
-                }
-                sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
-              />
-            </Grid>
-            <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Max Height
-              </label>
-              <TextField
-                type="number"
-                size="small"
-                value={selectedItem.maxHeight || 0}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    maxHeight: parseInt(e.target.value) || 0,
-                  })
-                }
-                sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
-              />
-            </Grid>
-          </Grid>
-
-          {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
-          <Grid style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Grid style={{ display: "flex", gap: "6px" }}>
-            {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
-            {interactionMode === "reshape" ? (
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<UndoIcon />}
-                style={{ flex: 1, fontSize: "12px" }}
-                onClick={handleUndo}
-                disabled={undoStack.length === 0}
-                title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
-              >
-                Undo
-              </Button>
-            ) : (
-              <Button
-                variant={interactionMode === "drag" ? "contained" : "outlined"}
-                size="small"
-                startIcon={<OpenWithIcon />}
-                style={{ flex: 1, fontSize: "12px" }}
-                onClick={() =>
-                  setInteractionMode((prev) =>
-                    prev === "drag" ? "none" : "drag",
-                  )
-                }
-                title="Drag the element to a new position on the image"
-                sx={
-                  interactionMode === "drag"
-                    ? { boxShadow: "0 0 0 3px var(--primary-glow)" }
-                    : undefined
-                }
-              >
-                {interactionMode === "drag" ? "Dragging…" : "Drag"}
-              </Button>
-            )}
-
-            {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
-            {interactionMode === "drag" ? (
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<UndoIcon />}
-                style={{ flex: 1, fontSize: "12px" }}
-                onClick={handleUndo}
-                disabled={undoStack.length === 0}
-                title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
-              >
-                Undo
-              </Button>
-            ) : (
-              <Button
-                variant={interactionMode === "reshape" ? "contained" : "outlined"}
-                size="small"
-                startIcon={<CropIcon />}
-                style={{ flex: 1, fontSize: "12px" }}
-                onClick={() => {
-                  if (interactionMode === "reshape") {
-                    setInteractionMode("none");
-                  } else {
-                    handleEnterReshapeMode(selectedItem as LayerElement);
-                  }
-                }}
-                title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
-                sx={
-                  interactionMode === "reshape"
-                    ? { boxShadow: "0 0 0 3px var(--primary-glow)" }
-                    : undefined
-                }
-              >
-                {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
-              </Button>
-            )}
-          </Grid>
-          {interactionMode !== "none" && (
-            <Typography
-              variant="caption"
-              sx={{ fontSize: "10.5px", color: "var(--text-dim, var(--text-muted))" }}
+            {/* Positioning Coordinates Row */}
+            <Grid
+              container
+              spacing={1}
             >
-              {interactionMode === "drag"
-                ? "Touch or drag the bubble on the page to move it."
-                : "Drag a vertex to reshape, or the top handle to rotate."}
-            </Typography>
-          )}
-          </Grid>
+              <Grid
+                size={6}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+              >
+                <label
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  X Position
+                </label>
+                <TextField
+                  type="number"
+                  size="small"
+                  value={selectedItem.x}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({
+                      x: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      fontSize: "13px",
+                      padding: "6px 10px",
+                    },
+                  }}
+                />
+              </Grid>
+              <Grid
+                size={6}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+              >
+                <label
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Y Position
+                </label>
+                <TextField
+                  type="number"
+                  size="small"
+                  value={selectedItem.y}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({
+                      y: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      fontSize: "13px",
+                      padding: "6px 10px",
+                    },
+                  }}
+                />
+              </Grid>
+            </Grid>
+
+            {/* Dimensions Row */}
+            <Grid
+              container
+              spacing={1}
+            >
+              <Grid
+                size={6}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+              >
+                <label
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Max Width
+                </label>
+                <TextField
+                  type="number"
+                  size="small"
+                  value={selectedItem.maxWidth || 0}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({
+                      maxWidth: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      fontSize: "13px",
+                      padding: "6px 10px",
+                    },
+                  }}
+                />
+              </Grid>
+              <Grid
+                size={6}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+              >
+                <label
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Max Height
+                </label>
+                <TextField
+                  type="number"
+                  size="small"
+                  value={selectedItem.maxHeight || 0}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({
+                      maxHeight: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      fontSize: "13px",
+                      padding: "6px 10px",
+                    },
+                  }}
+                />
+              </Grid>
+            </Grid>
+
+            {/* Drag & Reshape Mode Buttons — contextually swap to Undo during active modes */}
+            <Grid
+              style={{ display: "flex", flexDirection: "column", gap: "6px" }}
+            >
+              <Grid style={{ display: "flex", gap: "6px" }}>
+                {/* LEFT BUTTON: Drag (idle) or Undo (while reshaping) */}
+                {interactionMode === "reshape" ? (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<UndoIcon />}
+                    style={{ flex: 1, fontSize: "12px" }}
+                    onClick={handleUndo}
+                    disabled={undoStack.length === 0}
+                    title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
+                  >
+                    Undo
+                  </Button>
+                ) : (
+                  <Button
+                    variant={
+                      interactionMode === "drag" ? "contained" : "outlined"
+                    }
+                    size="small"
+                    startIcon={<OpenWithIcon />}
+                    style={{ flex: 1, fontSize: "12px" }}
+                    onClick={() =>
+                      setInteractionMode((prev) =>
+                        prev === "drag" ? "none" : "drag",
+                      )
+                    }
+                    title="Drag the element to a new position on the image"
+                    sx={
+                      interactionMode === "drag"
+                        ? { boxShadow: "0 0 0 3px var(--primary-glow)" }
+                        : undefined
+                    }
+                  >
+                    {interactionMode === "drag" ? "Dragging…" : "Drag"}
+                  </Button>
+                )}
+
+                {/* RIGHT BUTTON: Reshape (idle) or Undo (while dragging) */}
+                {interactionMode === "drag" ? (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<UndoIcon />}
+                    style={{ flex: 1, fontSize: "12px" }}
+                    onClick={handleUndo}
+                    disabled={undoStack.length === 0}
+                    title={`Undo last action${undoStack.length > 0 ? ` (${undoStack.length} available)` : " — nothing to undo"}`}
+                  >
+                    Undo
+                  </Button>
+                ) : (
+                  <Button
+                    variant={
+                      interactionMode === "reshape" ? "contained" : "outlined"
+                    }
+                    size="small"
+                    startIcon={<CropIcon />}
+                    style={{ flex: 1, fontSize: "12px" }}
+                    onClick={() => {
+                      if (interactionMode === "reshape") {
+                        setInteractionMode("none");
+                      } else {
+                        handleEnterReshapeMode(selectedItem as LayerElement);
+                      }
+                    }}
+                    title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
+                    sx={
+                      interactionMode === "reshape"
+                        ? { boxShadow: "0 0 0 3px var(--primary-glow)" }
+                        : undefined
+                    }
+                  >
+                    {interactionMode === "reshape" ? "Reshaping…" : "Reshape"}
+                  </Button>
+                )}
+              </Grid>
+              {interactionMode !== "none" && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: "10.5px",
+                    color: "var(--text-dim, var(--text-muted))",
+                  }}
+                >
+                  {interactionMode === "drag"
+                    ? "Touch or drag the bubble on the page to move it."
+                    : "Drag a vertex to reshape, or the top handle to rotate."}
+                </Typography>
+              )}
+            </Grid>
           </SidebarSection>
 
           {/* Typography */}
           <SidebarSection title="Typography">
-          {/* Font & Style settings */}
-          <Grid container spacing={1}>
-            <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
+            {/* Font & Style settings */}
+            <Grid
+              container
+              spacing={1}
+            >
+              <Grid
+                size={6}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                Font Family
-              </label>
-              <Select
-                size="small"
-                value={selectedItem.font || "Comic Neue"}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({ font: e.target.value })
-                }
-                sx={{
-                  fontSize: "13px",
-                  height: "38px",
-                  backgroundColor: "var(--bg-surface)",
-                }}
+                <label
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Font Family
+                </label>
+                <Select
+                  size="small"
+                  value={selectedItem.font || "Comic Neue"}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({ font: e.target.value })
+                  }
+                  sx={{
+                    fontSize: "13px",
+                    height: "38px",
+                    backgroundColor: "var(--bg-surface)",
+                  }}
+                >
+                  <MenuItem value="Comic Neue">Comic Neue</MenuItem>
+                  <MenuItem value="Bangers">Bangers</MenuItem>
+                  <MenuItem value="Luckiest Guy">Luckiest Guy</MenuItem>
+                  <MenuItem value="Arial">Arial</MenuItem>
+                  <MenuItem value="Courier New">Courier New</MenuItem>
+                </Select>
+              </Grid>
+              <Grid
+                size={6}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <MenuItem value="Comic Neue">Comic Neue</MenuItem>
-                <MenuItem value="Bangers">Bangers</MenuItem>
-                <MenuItem value="Luckiest Guy">Luckiest Guy</MenuItem>
-                <MenuItem value="Arial">Arial</MenuItem>
-                <MenuItem value="Courier New">Courier New</MenuItem>
-              </Select>
+                <label
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Font Size (pt)
+                </label>
+                <TextField
+                  type="number"
+                  size="small"
+                  value={selectedItem.size || 16}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({
+                      size: parseFloat(e.target.value) || 12,
+                      autoSize: false,
+                    })
+                  }
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      fontSize: "13px",
+                      padding: "6px 10px",
+                    },
+                  }}
+                />
+              </Grid>
             </Grid>
-            <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Font Size (pt)
-              </label>
-              <TextField
-                type="number"
-                size="small"
-                value={selectedItem.size || 16}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    size: parseFloat(e.target.value) || 12,
-                    autoSize: false,
-                  })
-                }
-                sx={{ "& .MuiInputBase-input": { fontSize: "13px", padding: "6px 10px" } }}
-              />
-            </Grid>
-          </Grid>
 
-          {/* Font Weight & Style Row */}
-          <Grid container spacing={1}>
-            <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
+            {/* Font Weight & Style Row */}
+            <Grid
+              container
+              spacing={1}
+            >
+              <Grid
+                size={6}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                Font Weight
-              </label>
-              <Select
-                size="small"
-                value={selectedItem.fontWeight || "normal"}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    fontWeight: e.target.value as string,
-                  })
-                }
-                sx={{
-                  fontSize: "13px",
-                  height: "38px",
-                  backgroundColor: "var(--bg-surface)",
-                }}
+                <label
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Font Weight
+                </label>
+                <Select
+                  size="small"
+                  value={selectedItem.fontWeight || "normal"}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({
+                      fontWeight: e.target.value as string,
+                    })
+                  }
+                  sx={{
+                    fontSize: "13px",
+                    height: "38px",
+                    backgroundColor: "var(--bg-surface)",
+                  }}
+                >
+                  <MenuItem value="normal">Normal</MenuItem>
+                  <MenuItem value="bold">Bold</MenuItem>
+                </Select>
+              </Grid>
+              <Grid
+                size={6}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <MenuItem value="normal">Normal</MenuItem>
-                <MenuItem value="bold">Bold</MenuItem>
-              </Select>
+                <label
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Font Style
+                </label>
+                <Select
+                  size="small"
+                  value={selectedItem.fontStyle || "normal"}
+                  onChange={(e) =>
+                    handleUpdateSelectedElement({
+                      fontStyle: e.target.value as string,
+                    })
+                  }
+                  sx={{
+                    fontSize: "13px",
+                    height: "38px",
+                    backgroundColor: "var(--bg-surface)",
+                  }}
+                >
+                  <MenuItem value="normal">Normal</MenuItem>
+                  <MenuItem value="italic">Italic</MenuItem>
+                </Select>
+              </Grid>
             </Grid>
-            <Grid size={6} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Font Style
-              </label>
-              <Select
-                size="small"
-                value={selectedItem.fontStyle || "normal"}
-                onChange={(e) =>
-                  handleUpdateSelectedElement({
-                    fontStyle: e.target.value as string,
-                  })
-                }
-                sx={{
-                  fontSize: "13px",
-                  height: "38px",
-                  backgroundColor: "var(--bg-surface)",
-                }}
-              >
-                <MenuItem value="normal">Normal</MenuItem>
-                <MenuItem value="italic">Italic</MenuItem>
-              </Select>
-            </Grid>
-          </Grid>
           </SidebarSection>
 
           {/* Appearance */}
           <SidebarSection title="Appearance">
-          {/* Box Shape selection */}
-          <Grid
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-            }}
-          >
-            <label
+            {/* Box Shape selection */}
+            <Grid
               style={{
-                fontSize: "11px",
-                fontWeight: "bold",
-                color: "var(--text-muted)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
               }}
             >
-              Box Shape
-            </label>
-            <Select
-              size="small"
-              value={selectedItem.boxShape || "rectangular"}
-              onChange={(e) =>
-                handleUpdateSelectedElement({ boxShape: e.target.value as string })
-              }
-              sx={{
-                fontSize: "13px",
-                height: "38px",
-                backgroundColor: "var(--bg-surface)",
-              }}
-            >
-              <MenuItem value="rectangular">Rectangular</MenuItem>
-              <MenuItem value="elliptical">Elliptical (Contour-Based)</MenuItem>
-            </Select>
-          </Grid>
+              <label
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  color: "var(--text-muted)",
+                }}
+              >
+                Box Shape
+              </label>
+              <Select
+                size="small"
+                value={selectedItem.boxShape || "rectangular"}
+                onChange={(e) =>
+                  handleUpdateSelectedElement({
+                    boxShape: e.target.value as string,
+                  })
+                }
+                sx={{
+                  fontSize: "13px",
+                  height: "38px",
+                  backgroundColor: "var(--bg-surface)",
+                }}
+              >
+                <MenuItem value="rectangular">Rectangular</MenuItem>
+                <MenuItem value="elliptical">
+                  Elliptical (Contour-Based)
+                </MenuItem>
+              </Select>
+            </Grid>
 
-          {/* Mask Background Color (only relevant if clean background mask is enabled) */}
-          {selectedItem.wordWrap && (
-            <ColorPicker
-              label="Mask Background Color"
-              value={
-                selectedItem.backgroundColor !== undefined &&
+            {/* Mask Background Color (only relevant if clean background mask is enabled) */}
+            {selectedItem.wordWrap && (
+              <ColorPicker
+                label="Mask Background Color"
+                value={
+                  selectedItem.backgroundColor !== undefined &&
                   selectedItem.backgroundColor !== null
-                  ? selectedItem.backgroundColor
-                  : "#ffffff"
-              }
-              onChange={(val) =>
-                handleUpdateSelectedElement({ backgroundColor: val })
-              }
-              onLaunchEyeDropper={() =>
-                handleLaunchEyeDropper("backgroundColor")
-              }
-              allowTransparent={true}
-            />
-          )}
+                    ? selectedItem.backgroundColor
+                    : "#ffffff"
+                }
+                onChange={(val) =>
+                  handleUpdateSelectedElement({ backgroundColor: val })
+                }
+                onLaunchEyeDropper={() =>
+                  handleLaunchEyeDropper("backgroundColor")
+                }
+                allowTransparent={true}
+              />
+            )}
 
-          {/* Text Color (only relevant if it is a text-bearing element) */}
-          {selectedItem.text !== undefined &&
-            selectedItem.text !== null && (
+            {/* Text Color (only relevant if it is a text-bearing element) */}
+            {selectedItem.text !== undefined && selectedItem.text !== null && (
               <ColorPicker
                 label="Text Color"
                 value={
                   selectedItem.textColor !== undefined &&
-                    selectedItem.textColor !== null
+                  selectedItem.textColor !== null
                     ? selectedItem.textColor
                     : "#000000"
                 }
                 onChange={(val) =>
                   handleUpdateSelectedElement({ textColor: val })
                 }
-                onLaunchEyeDropper={() =>
-                  handleLaunchEyeDropper("textColor")
-                }
+                onLaunchEyeDropper={() => handleLaunchEyeDropper("textColor")}
                 allowTransparent={false}
               />
             )}
 
-          {/* Rotation Slider */}
-          <Grid
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-            }}
-          >
-            <label
+            {/* Rotation Slider */}
+            <Grid
               style={{
-                fontSize: "11px",
-                fontWeight: "bold",
-                color: "var(--text-muted)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
               }}
             >
-              Rotation ({selectedItem.rotation || 0}°)
-            </label>
-            <Slider
-              size="small"
-              min={0}
-              max={360}
-              value={selectedItem.rotation || 0}
-              onChange={(_, val) =>
-                handleUpdateSelectedElement({
-                  rotation: val as number,
-                })
-              }
-              sx={{ width: "100%", mt: 1 }}
-            />
-          </Grid>
+              <label
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  color: "var(--text-muted)",
+                }}
+              >
+                Rotation ({selectedItem.rotation || 0}°)
+              </label>
+              <Slider
+                size="small"
+                min={0}
+                max={360}
+                value={selectedItem.rotation || 0}
+                onChange={(_, val) =>
+                  handleUpdateSelectedElement({
+                    rotation: val as number,
+                  })
+                }
+                sx={{ width: "100%", mt: 1 }}
+              />
+            </Grid>
           </SidebarSection>
 
           {/* Behavior */}
           <SidebarSection title="Behavior">
-          {/* Checkboxes Row */}
+            {/* Checkboxes Row */}
+            <Grid
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={selectedItem.autoSize}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        autoSize: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label={
+                  <span style={{ fontSize: "12px" }}>
+                    Auto-size text to fit bubble
+                  </span>
+                }
+              />
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={selectedItem.visible}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        visible: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label={<span style={{ fontSize: "12px" }}>Visible</span>}
+              />
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={selectedItem.wordWrap}
+                    onChange={(e) =>
+                      handleUpdateSelectedElement({
+                        wordWrap: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label={
+                  <span style={{ fontSize: "12px" }}>
+                    Clean background mask
+                  </span>
+                }
+              />
+            </Grid>
+          </SidebarSection>
+
+          {/* Action Buttons */}
           <Grid
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "8px",
+              gap: "6px",
+              marginTop: "4px",
             }}
           >
-            <FormControlLabel
-              control={
-                <Checkbox
-                  size="small"
-                  checked={selectedItem.autoSize}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      autoSize: e.target.checked,
-                    })
-                  }
-                />
-              }
-              label={<span style={{ fontSize: "12px" }}>Auto-size text to fit bubble</span>}
-            />
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  size="small"
-                  checked={selectedItem.visible}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      visible: e.target.checked,
-                    })
-                  }
-                />
-              }
-              label={<span style={{ fontSize: "12px" }}>Visible</span>}
-            />
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  size="small"
-                  checked={selectedItem.wordWrap}
-                  onChange={(e) =>
-                    handleUpdateSelectedElement({
-                      wordWrap: e.target.checked,
-                    })
-                  }
-                />
-              }
-              label={<span style={{ fontSize: "12px" }}>Clean background mask</span>}
-            />
-          </Grid>
-          </SidebarSection>
-
-          {/* Action Buttons */}
-          <Grid style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
             {dirtyElements.has(selectedItem.id) && (
               <Box
                 sx={{
@@ -1201,7 +1373,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     ? "1px solid var(--warning, #eab308)"
                     : undefined,
                 }}
-                onClick={() => handleSaveElementChanges(selectedItem as LayerElement)}
+                onClick={() =>
+                  handleSaveElementChanges(selectedItem as LayerElement)
+                }
               >
                 Save
               </Button>

@@ -30,8 +30,14 @@ export function ReaderPageNavigation({
   const segmentBtnSx = {
     borderRadius: 0,
     color: "var(--text-muted)",
-    "&:hover": { backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))", color: "var(--text-main)" },
-    "&.Mui-disabled": { color: "var(--text-dim, var(--text-muted))", opacity: 0.4 },
+    "&:hover": {
+      backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))",
+      color: "var(--text-main)",
+    },
+    "&.Mui-disabled": {
+      color: "var(--text-dim, var(--text-muted))",
+      opacity: 0.4,
+    },
   };
 
   return (
@@ -49,14 +55,26 @@ export function ReaderPageNavigation({
     >
       <Tooltip title="First Page">
         <span>
-          <IconButton data-testid="first-page-btn" size="small" onClick={onFirstPage} disabled={atStart} sx={segmentBtnSx}>
+          <IconButton
+            data-testid="first-page-btn"
+            size="small"
+            onClick={onFirstPage}
+            disabled={atStart}
+            sx={segmentBtnSx}
+          >
             <FirstPageIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
       <Tooltip title="Previous Page">
         <span>
-          <IconButton data-testid="prev-page-btn" size="small" onClick={onPrevPage} disabled={atStart} sx={segmentBtnSx}>
+          <IconButton
+            data-testid="prev-page-btn"
+            size="small"
+            onClick={onPrevPage}
+            disabled={atStart}
+            sx={segmentBtnSx}
+          >
             <NavigateBeforeIcon fontSize="small" />
           </IconButton>
         </span>
@@ -76,24 +94,42 @@ export function ReaderPageNavigation({
           px: 1,
         }}
       >
-        <Box component="span" sx={{ fontWeight: 700, color: "var(--text-main)" }}>
+        <Box
+          component="span"
+          sx={{ fontWeight: 700, color: "var(--text-main)" }}
+        >
           {currentPage}
         </Box>
-        <Box component="span" sx={{ color: "var(--text-dim, var(--text-muted))" }}>
+        <Box
+          component="span"
+          sx={{ color: "var(--text-dim, var(--text-muted))" }}
+        >
           / {totalPages}
         </Box>
       </Box>
 
       <Tooltip title="Next Page">
         <span>
-          <IconButton data-testid="next-page-btn" size="small" onClick={onNextPage} disabled={atEnd} sx={segmentBtnSx}>
+          <IconButton
+            data-testid="next-page-btn"
+            size="small"
+            onClick={onNextPage}
+            disabled={atEnd}
+            sx={segmentBtnSx}
+          >
             <NavigateNextIcon fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
       <Tooltip title="Last Page">
         <span>
-          <IconButton data-testid="last-page-btn" size="small" onClick={onLastPage} disabled={atEnd} sx={segmentBtnSx}>
+          <IconButton
+            data-testid="last-page-btn"
+            size="small"
+            onClick={onLastPage}
+            disabled={atEnd}
+            sx={segmentBtnSx}
+          >
             <LastPageIcon fontSize="small" />
           </IconButton>
         </span>

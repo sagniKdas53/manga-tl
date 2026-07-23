@@ -26,7 +26,6 @@ public class Layer {
   @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private Page page;
 
-
   @Column(nullable = false)
   private String type; // translation | ocr | notes | mask | sfx
 

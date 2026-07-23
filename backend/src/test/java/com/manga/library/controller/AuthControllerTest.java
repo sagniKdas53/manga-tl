@@ -265,8 +265,6 @@ public class AuthControllerTest {
 
   @Test
   public void testDeleteAccount_Unauthenticated() throws Exception {
-    mockMvc
-        .perform(delete("/api/auth/me"))
-        .andExpect(status().isUnauthorized());
+    mockMvc.perform(delete("/api/auth/me")).andExpect(status().isUnauthorized());
   }
 }

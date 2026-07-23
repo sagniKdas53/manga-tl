@@ -116,10 +116,12 @@ public class InternalJobController {
 
               // Load OCR regions FIRST (as real entities) before any LayerElement
               // queries that would create lazy proxies in the persistence context
-              List<OcrRegion> allOcrRegions = page != null ? ocrRegionRepository.findByPageId(page.getId()) : List.of();
+              List<OcrRegion> allOcrRegions =
+                  page != null ? ocrRegionRepository.findByPageId(page.getId()) : List.of();
 
               // Only return OCR regions from the latest OCR layer
-              List<Layer> allLayers = page != null ? layerRepository.findByPageId(page.getId()) : List.of();
+              List<Layer> allLayers =
+                  page != null ? layerRepository.findByPageId(page.getId()) : List.of();
               Layer latestOcrLayer = null;
               for (Layer l : allLayers) {
                 if ("ocr".equalsIgnoreCase(l.getType())
@@ -152,7 +154,11 @@ public class InternalJobController {
                 map.put("ocrRegions", allRegionDtos);
               }
 
-              map.put("layerElements", page != null ? layerElementRepository.findByLayerPageId(page.getId()) : List.of());
+              map.put(
+                  "layerElements",
+                  page != null
+                      ? layerElementRepository.findByLayerPageId(page.getId())
+                      : List.of());
 
               // Query page history and series context for translation context assembly
               if (page != null) {
@@ -183,9 +189,7 @@ public class InternalJobController {
                       List<String> textList = new ArrayList<>();
                       for (OcrRegion r : prevRegions) {
                         String txt =
-                            r.getTranslatedText() != null
-                                ? r.getTranslatedText()
-                                : r.getText();
+                            r.getTranslatedText() != null ? r.getTranslatedText() : r.getText();
                         if (txt != null && !txt.trim().isEmpty()) {
                           textList.add(txt.trim());
                         }
@@ -200,14 +204,14 @@ public class InternalJobController {
                         .findBySeriesIdAndChapterNumber(
                             series.getId(), chapter.getChapterNumber() - 1)
                         .ifPresent(
-                            prevChapter ->
-                                map.put("chapterSummary", prevChapter.getSummaryJson()));
+                            prevChapter -> map.put("chapterSummary", prevChapter.getSummaryJson()));
                   }
                 }
               }
 
               // Include conversations with their region mappings
-              List<Conversation> conversations = page != null ? conversationRepository.findByPageId(page.getId()) : List.of();
+              List<Conversation> conversations =
+                  page != null ? conversationRepository.findByPageId(page.getId()) : List.of();
 
               List<Map<String, Object>> convList = new ArrayList<>();
               for (Conversation conv : conversations) {
@@ -385,7 +389,10 @@ public class InternalJobController {
           .ifPresent(
               region -> {
                 Objects.requireNonNull(region, "region cannot be null");
-                UUID imageId = region.getPage() != null && region.getPage().getImage() != null ? region.getPage().getImage().getId() : null;
+                UUID imageId =
+                    region.getPage() != null && region.getPage().getImage() != null
+                        ? region.getPage().getImage().getId()
+                        : null;
 
                 resolveNotificationContext(imageId);
                 if (payload.containsKey("text")) {

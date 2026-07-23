@@ -41,12 +41,12 @@ describe("ReaderRightSidebar", () => {
         ocrRegions={[]}
         isRedoingRegionTl={false}
         handleRedoRegion={vi.fn()}
-      />
+      />,
     );
     expect(
       screen.getByText(
-        "Select an OCR region or a text layer to inspect and edit details."
-      )
+        "Select an OCR region or a text layer to inspect and edit details.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -64,13 +64,25 @@ describe("ReaderRightSidebar", () => {
         setActiveLayerId={vi.fn()}
         sortedLayers={[
           {
-            layer: { id: "l1", type: "translation", visible: true, metadataJson: { layer_name: "Test TL Layer" } } as unknown as import("../types").Layer,
-            elements: []
+            layer: {
+              id: "l1",
+              type: "translation",
+              visible: true,
+              metadataJson: { layer_name: "Test TL Layer" },
+            } as unknown as import("../types").Layer,
+            elements: [],
           },
           {
-            layer: { id: "l2", type: "sfx", visible: false, targetLanguage: "en" } as unknown as import("../types").Layer,
-            elements: [{ id: "e1" } as unknown as import("../types").LayerElement]
-          }
+            layer: {
+              id: "l2",
+              type: "sfx",
+              visible: false,
+              targetLanguage: "en",
+            } as unknown as import("../types").Layer,
+            elements: [
+              { id: "e1" } as unknown as import("../types").LayerElement,
+            ],
+          },
         ]}
         layers={[]}
         manuallyShownOcrLayers={new Set()}
@@ -106,7 +118,7 @@ describe("ReaderRightSidebar", () => {
         handleDeleteRegion={vi.fn()}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-      />
+      />,
     );
     expect(screen.getByText(/Test TL Layer/)).toBeInTheDocument();
     expect(screen.getByText(/SFX Layer/)).toBeInTheDocument();
@@ -120,10 +132,20 @@ describe("ReaderRightSidebar", () => {
     const handleUndo = vi.fn();
     const handleEnterReshapeMode = vi.fn();
     const setInteractionMode = vi.fn();
-    
+
     render(
       <ReaderRightSidebar
-        selectedItem={{ id: "e1", isLayerElement: true, text: "Hello World", x: 10, y: 20, maxWidth: 100, maxHeight: 200, regionId: "r1", layerType: "ocr" }}
+        selectedItem={{
+          id: "e1",
+          isLayerElement: true,
+          text: "Hello World",
+          x: 10,
+          y: 20,
+          maxWidth: 100,
+          maxHeight: 200,
+          regionId: "r1",
+          layerType: "ocr",
+        }}
         setSelectedItem={vi.fn()}
         activeLayerId="l1"
         setActiveLayerId={vi.fn()}
@@ -154,7 +176,15 @@ describe("ReaderRightSidebar", () => {
         dirtyElements={new Set(["e1"])}
         handleSaveElementChanges={handleSaveElementChanges}
         handleDeleteElement={vi.fn()}
-        ocrRegions={[{ id: "r1", x: 0, y: 0, w: 10, h: 10 } as unknown as import("../types").OcrRegion]}
+        ocrRegions={[
+          {
+            id: "r1",
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 10,
+          } as unknown as import("../types").OcrRegion,
+        ]}
         isRedoingRegionOcr={false}
         handleRedoRegionOcr={vi.fn()}
         isRedoingRegionTranslation={false}
@@ -162,7 +192,7 @@ describe("ReaderRightSidebar", () => {
         handleDeleteRegion={vi.fn()}
         handleRedoRegion={handleRedoRegion}
         isRedoingRegionTl={false}
-      />
+      />,
     );
     expect(screen.getByText("Element Inspector")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Hello World")).toBeInTheDocument();
@@ -170,7 +200,17 @@ describe("ReaderRightSidebar", () => {
   });
 
   it("renders with different interaction modes", () => {
-    const mockElement = { id: "e1", isLayerElement: true, text: "Hello", x: 10, y: 10, maxWidth: 100, maxHeight: 100, regionId: "r1", layerType: "ocr" };
+    const mockElement = {
+      id: "e1",
+      isLayerElement: true,
+      text: "Hello",
+      x: 10,
+      y: 10,
+      maxWidth: 100,
+      maxHeight: 100,
+      regionId: "r1",
+      layerType: "ocr",
+    };
     const { rerender } = render(
       <ReaderRightSidebar
         selectedItem={mockElement}
@@ -212,7 +252,7 @@ describe("ReaderRightSidebar", () => {
         handleDeleteRegion={vi.fn()}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-      />
+      />,
     );
     expect(screen.getByText(/Dragging…/i)).toBeInTheDocument();
 
@@ -257,7 +297,7 @@ describe("ReaderRightSidebar", () => {
         handleDeleteRegion={vi.fn()}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-      />
+      />,
     );
     expect(screen.getByText(/Reshaping…/i)).toBeInTheDocument();
   });
@@ -268,7 +308,17 @@ describe("ReaderRightSidebar", () => {
     const mockHandleDeleteLayer = vi.fn();
     const mockHandleUpdateSelectedElement = vi.fn();
     const mockHandleSaveElementChanges = vi.fn();
-    const mockElement = { id: "e1", isLayerElement: true, text: "Hello", x: 10, y: 10, maxWidth: 100, maxHeight: 100, regionId: "r1", layerType: "ocr" };
+    const mockElement = {
+      id: "e1",
+      isLayerElement: true,
+      text: "Hello",
+      x: 10,
+      y: 10,
+      maxWidth: 100,
+      maxHeight: 100,
+      regionId: "r1",
+      layerType: "ocr",
+    };
 
     const { getByRole, getAllByRole } = render(
       <ReaderRightSidebar
@@ -278,7 +328,12 @@ describe("ReaderRightSidebar", () => {
         setActiveLayerId={vi.fn()}
         sortedLayers={[
           {
-            layer: { id: "l1", type: "translation", visible: true, metadataJson: { layer_name: "Test Layer" } } as unknown as import("../types").Layer,
+            layer: {
+              id: "l1",
+              type: "translation",
+              visible: true,
+              metadataJson: { layer_name: "Test Layer" },
+            } as unknown as import("../types").Layer,
             elements: [],
           },
         ]}
@@ -316,7 +371,7 @@ describe("ReaderRightSidebar", () => {
         handleDeleteRegion={vi.fn()}
         handleRedoRegion={vi.fn()}
         isRedoingRegionTl={false}
-      />
+      />,
     );
 
     // Test input changes
@@ -324,33 +379,48 @@ describe("ReaderRightSidebar", () => {
     // [0] = X, [1] = Y, [2] = Max Width, [3] = Max Height, [4] = Font Size
     fireEvent.change(inputs[0], { target: { value: "20" } });
     expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({ x: 20 });
-    
+
     fireEvent.change(inputs[1], { target: { value: "30" } });
     expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({ y: 30 });
 
     fireEvent.change(inputs[2], { target: { value: "150" } });
-    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({ maxWidth: 150 });
+    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({
+      maxWidth: 150,
+    });
 
     fireEvent.change(inputs[3], { target: { value: "250" } });
-    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({ maxHeight: 250 });
+    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({
+      maxHeight: 250,
+    });
 
     if (inputs[4]) {
       fireEvent.change(inputs[4], { target: { value: "24" } });
-      expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({ size: 24, autoSize: false });
+      expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({
+        size: 24,
+        autoSize: false,
+      });
     }
 
     // Test checkboxes
-    const autoSizeCheck = getByRole("checkbox", { name: /Auto-size text to fit bubble/i });
+    const autoSizeCheck = getByRole("checkbox", {
+      name: /Auto-size text to fit bubble/i,
+    });
     fireEvent.click(autoSizeCheck);
-    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({ autoSize: true });
+    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({
+      autoSize: true,
+    });
 
     const visibleCheck = getByRole("checkbox", { name: /Visible/i });
     fireEvent.click(visibleCheck);
-    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({ visible: true });
+    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({
+      visible: true,
+    });
 
     const wrapCheck = getByRole("checkbox", { name: /Clean background mask/i });
     fireEvent.click(wrapCheck);
-    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({ wordWrap: true });
+    expect(mockHandleUpdateSelectedElement).toHaveBeenCalledWith({
+      wordWrap: true,
+    });
 
     // Test buttons
     const saveBtn = getByRole("button", { name: /Save/i });

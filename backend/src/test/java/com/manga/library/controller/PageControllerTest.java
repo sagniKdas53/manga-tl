@@ -170,7 +170,6 @@ public class PageControllerTest {
     mockMvc.perform(get("/api/images/" + imageId + "/layers")).andExpect(status().isOk());
   }
 
-
   @Test
   public void testRedoOcrRegion_Success() throws Exception {
     UUID id = UUID.randomUUID();
@@ -527,7 +526,6 @@ public class PageControllerTest {
 
     when(layerRepository.findByPageId(any())).thenReturn(Collections.emptyList());
 
-
     Page page = Page.builder().id(UUID.randomUUID()).image(existingImage).build();
     when(pageService.createPageWithExistingImage(any(), any(), any(), any())).thenReturn(page);
 
@@ -550,9 +548,7 @@ public class PageControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("duplicate"));
 
-    verify(jobCoordinatorService, times(1))
-        .triggerPageRedo(page.getId(), "translation", chapterId);
-
+    verify(jobCoordinatorService, times(1)).triggerPageRedo(page.getId(), "translation", chapterId);
   }
 
   @Test

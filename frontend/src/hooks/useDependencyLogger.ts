@@ -12,11 +12,11 @@ const useDevLogger = (deps: Deps, componentName: string) => {
       console.log(`[render] ${componentName} initial values:`, deps);
     } else {
       const changed = Object.keys(deps).filter(
-        (key) => !Object.is(prev[key], deps[key])
+        (key) => !Object.is(prev[key], deps[key]),
       );
       if (changed.length) {
         console.group(
-          `[render] ${componentName} values changed: ${changed.join(", ")}`
+          `[render] ${componentName} values changed: ${changed.join(", ")}`,
         );
         changed.forEach((key) => {
           console.log(key, "prev:", prev[key], "curr:", deps[key]);
@@ -30,6 +30,4 @@ const useDevLogger = (deps: Deps, componentName: string) => {
 
 const noop = () => {};
 
-export const useDependencyLogger = import.meta.env.DEV
-  ? useDevLogger
-  : noop;
+export const useDependencyLogger = import.meta.env.DEV ? useDevLogger : noop;

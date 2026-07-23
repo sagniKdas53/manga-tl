@@ -10,7 +10,6 @@ public class PanelCallbackDto {
   private UUID pageId;
   private List<PanelData> panels;
 
-
   @Data
   public static class PanelData {
     private Integer x;

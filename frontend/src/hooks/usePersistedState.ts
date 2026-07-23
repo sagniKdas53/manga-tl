@@ -34,12 +34,9 @@ export function usePersistedState<T>(
     }
   }, [key, value, serialize]);
 
-  const setPersistedValue = useCallback(
-    (val: T | ((prev: T) => T)) => {
-      setValue(val);
-    },
-    [],
-  );
+  const setPersistedValue = useCallback((val: T | ((prev: T) => T)) => {
+    setValue(val);
+  }, []);
 
   return [value, setPersistedValue];
 }

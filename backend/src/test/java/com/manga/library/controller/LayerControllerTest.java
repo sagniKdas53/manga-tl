@@ -90,7 +90,6 @@ public class LayerControllerTest {
         .andExpect(status().isOk());
   }
 
-
   @Test
   public void testUpdateLayerElement_Success() throws Exception {
     UUID elementId = UUID.randomUUID();
@@ -199,7 +198,6 @@ public class LayerControllerTest {
         .andExpect(status().isNotFound());
   }
 
-
   @Test
   public void testUpdateLayer_NotFound() throws Exception {
     UUID layerId = UUID.randomUUID();
@@ -283,7 +281,6 @@ public class LayerControllerTest {
                         + " \"bar\"}}"))
         .andExpect(status().isOk());
   }
-
 
   @Test
   public void testUpdateLayer_DoubleZOrder() throws Exception {

@@ -33,7 +33,7 @@ interface Job {
   type: string;
   imageId: string;
   status:
-  "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
+    "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
   payload: string | null;
   error: string | null;
   attempt: number;
@@ -96,7 +96,10 @@ const PipelineStepper: React.FC<{
   }
 
   return (
-    <Tooltip title={stageName} placement="top">
+    <Tooltip
+      title={stageName}
+      placement="top"
+    >
       <Box sx={{ display: "flex", gap: 0.5, mt: 0.75, maxWidth: 140 }}>
         {pipelineStages.map((stage, i) => {
           const isDone = isComplete || (currentIndex >= 0 && i < currentIndex);
@@ -108,13 +111,16 @@ const PipelineStepper: React.FC<{
                 flex: 1,
                 height: 3,
                 borderRadius: 2,
-                backgroundColor: isDone || isCurrent ? color : "action.disabledBackground",
+                backgroundColor:
+                  isDone || isCurrent ? color : "action.disabledBackground",
                 backgroundImage:
                   isCurrent && isRetry
                     ? `repeating-linear-gradient(45deg, ${color} 0px, ${color} 2px, transparent 2px, transparent 4px)`
                     : "none",
                 opacity: isDone ? 0.4 : 1,
-                animation: isCurrent ? "queuePulse 1.3s ease-in-out infinite" : "none",
+                animation: isCurrent
+                  ? "queuePulse 1.3s ease-in-out infinite"
+                  : "none",
                 "@keyframes queuePulse": {
                   "0%, 100%": { opacity: 1 },
                   "50%": { opacity: 0.3 },
@@ -181,7 +187,8 @@ const renderProviderModel = (job: Job) => {
         providerModel = `${payload.tlProvider} / ${payload.tlModel || "default"}`;
       }
     } else if (job.type === "qa") {
-      const model = payload.qaMode === "vlm" ? payload.qaVlmModel : payload.qaLlmModel;
+      const model =
+        payload.qaMode === "vlm" ? payload.qaVlmModel : payload.qaLlmModel;
       if (payload.qaProvider) {
         providerModel = `${payload.qaProvider} / ${model || "default"}`;
       }
@@ -252,7 +259,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     title: "",
     message: "",
     isDangerous: false,
-    action: () => { },
+    action: () => {},
   });
 
   useDependencyLogger(
@@ -262,7 +269,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       jobsLength: jobs.length,
       confirmModalOpen: confirmModal.isOpen,
     },
-    "QueueManager"
+    "QueueManager",
   );
 
   const sortJobs = (jobsList: Job[]) => {
@@ -591,19 +598,26 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     return statusColor[job.status] || "#9e9e9e";
   };
 
-  const statusSummary = jobs.reduce((acc, job) => {
-    const label = getDisplayStatus(job.status).replace("...", "");
-    const color = getJobStatusColor(job);
-    const existing = acc.find((s) => s.label === label);
-    if (existing) existing.count += 1;
-    else acc.push({ label, color, count: 1 });
-    return acc;
-  }, [] as { label: string; color: string; count: number }[]);
+  const statusSummary = jobs.reduce(
+    (acc, job) => {
+      const label = getDisplayStatus(job.status).replace("...", "");
+      const color = getJobStatusColor(job);
+      const existing = acc.find((s) => s.label === label);
+      if (existing) existing.count += 1;
+      else acc.push({ label, color, count: 1 });
+      return acc;
+    },
+    [] as { label: string; color: string; count: number }[],
+  );
 
   // jobs is already sorted so that a chapter's jobs are always contiguous;
   // this just folds consecutive same-chapter jobs into groups for rendering.
   const jobGroups = useMemo(() => {
-    const result: { key: string; chapterPath: string | null; groupJobs: Job[] }[] = [];
+    const result: {
+      key: string;
+      chapterPath: string | null;
+      groupJobs: Job[];
+    }[] = [];
     jobs.forEach((job) => {
       const { chapterPath } = renderJobLocation(job);
       const key = chapterPath || `__solo__${job.id}`;
@@ -628,7 +642,6 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
 
   return (
     <>
-
       <IconButton
         onClick={onRequestOpen}
         color="inherit"
@@ -803,13 +816,21 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                               borderBottom: 0,
                             }}
                           >
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                              }}
+                            >
                               <ExpandMoreIcon
                                 sx={{
                                   fontSize: 16,
                                   color: "text.secondary",
                                   transition: "transform 0.15s ease",
-                                  transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                                  transform: isCollapsed
+                                    ? "rotate(-90deg)"
+                                    : "rotate(0deg)",
                                 }}
                               />
                               <Typography
@@ -826,7 +847,10 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                               {isCollapsed && (
                                 <Typography
                                   variant="caption"
-                                  sx={{ color: "text.disabled", fontSize: "10px" }}
+                                  sx={{
+                                    color: "text.disabled",
+                                    fontSize: "10px",
+                                  }}
                                 >
                                   · {group.groupJobs.length} job
                                   {group.groupJobs.length !== 1 ? "s" : ""}
@@ -847,11 +871,21 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                             <TableRow
                               key={job.id}
                               sx={{
-                                "&:last-child td, &:last-child th": { borderBottom: 0 },
+                                "&:last-child td, &:last-child th": {
+                                  borderBottom: 0,
+                                },
                               }}
                             >
-                              <TableCell sx={{ px: 2, py: 1.25, verticalAlign: "top" }}>
-                                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                              <TableCell
+                                sx={{ px: 2, py: 1.25, verticalAlign: "top" }}
+                              >
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: 1,
+                                  }}
+                                >
                                   <Box
                                     sx={{
                                       width: 8,
@@ -864,16 +898,28 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     }}
                                   />
                                   <Box sx={{ minWidth: 0 }}>
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 0.5,
+                                      }}
+                                    >
                                       <Typography
                                         variant="body2"
-                                        sx={{ fontWeight: 600, fontSize: "13px" }}
+                                        sx={{
+                                          fontWeight: 600,
+                                          fontSize: "13px",
+                                        }}
                                       >
                                         {formatJobType(job.type)}
                                         {pageLabel && (
                                           <Box
                                             component="span"
-                                            sx={{ color: "text.secondary", fontWeight: 400 }}
+                                            sx={{
+                                              color: "text.secondary",
+                                              fontWeight: 400,
+                                            }}
                                           >
                                             {" "}
                                             · {pageLabel}
@@ -882,7 +928,12 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                       </Typography>
                                       {isRetry && (
                                         <Tooltip title="Part of the QA retry loop, re-running after a failed QA pass">
-                                          <LoopIcon sx={{ fontSize: 13, color: "text.disabled" }} />
+                                          <LoopIcon
+                                            sx={{
+                                              fontSize: 13,
+                                              color: "text.disabled",
+                                            }}
+                                          />
                                         </Tooltip>
                                       )}
                                     </Box>
@@ -894,7 +945,14 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   </Box>
                                 </Box>
                               </TableCell>
-                              <TableCell sx={{ px: 2, py: 1.25, maxWidth: 230, verticalAlign: "top" }}>
+                              <TableCell
+                                sx={{
+                                  px: 2,
+                                  py: 1.25,
+                                  maxWidth: 230,
+                                  verticalAlign: "top",
+                                }}
+                              >
                                 <Box sx={{ minHeight: 16 }}>
                                   {providerModel ? (
                                     <Tooltip title={providerModel}>
@@ -916,13 +974,25 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   ) : (
                                     <Typography
                                       variant="caption"
-                                      sx={{ display: "block", color: "text.disabled", fontSize: "11px" }}
+                                      sx={{
+                                        display: "block",
+                                        color: "text.disabled",
+                                        fontSize: "11px",
+                                      }}
                                     >
                                       —
                                     </Typography>
                                   )}
                                 </Box>
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5, flexWrap: "wrap" }}>
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 1,
+                                    mt: 0.5,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
                                   <Chip
                                     label={getDisplayStatus(job.status)}
                                     size="small"
@@ -940,7 +1010,10 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   {job.attempt > 1 && (
                                     <Typography
                                       variant="caption"
-                                      sx={{ color: "text.disabled", fontSize: "10px" }}
+                                      sx={{
+                                        color: "text.disabled",
+                                        fontSize: "10px",
+                                      }}
                                     >
                                       Attempt {job.attempt}/{job.maxAttempts}
                                     </Typography>
@@ -948,9 +1021,14 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   {job.updatedAt && (
                                     <Typography
                                       variant="caption"
-                                      sx={{ color: "text.disabled", fontSize: "10px" }}
+                                      sx={{
+                                        color: "text.disabled",
+                                        fontSize: "10px",
+                                      }}
                                     >
-                                      {new Date(job.updatedAt).toLocaleTimeString([], {
+                                      {new Date(
+                                        job.updatedAt,
+                                      ).toLocaleTimeString([], {
                                         hour: "2-digit",
                                         minute: "2-digit",
                                       })}
@@ -974,17 +1052,32 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   )}
                                 </Box>
                               </TableCell>
-                              <TableCell sx={{ px: 2, py: 1.25, verticalAlign: "top" }} align="right">
-                                <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+                              <TableCell
+                                sx={{ px: 2, py: 1.25, verticalAlign: "top" }}
+                                align="right"
+                              >
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    gap: 0.5,
+                                    justifyContent: "flex-end",
+                                  }}
+                                >
                                   <Box
                                     sx={{
-                                      visibility: job.status === "FAILED" ? "visible" : "hidden",
+                                      visibility:
+                                        job.status === "FAILED"
+                                          ? "visible"
+                                          : "hidden",
                                       width: 28,
                                       height: 28,
                                     }}
                                   >
                                     <Tooltip title="Retry">
-                                      <IconButton size="small" onClick={() => handleRetryJob(job.id)}>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleRetryJob(job.id)}
+                                      >
                                         <RestartAltIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
@@ -992,7 +1085,8 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   <Box
                                     sx={{
                                       visibility:
-                                        job.status === "PENDING" || job.status === "PAUSED"
+                                        job.status === "PENDING" ||
+                                        job.status === "PAUSED"
                                           ? "visible"
                                           : "hidden",
                                       width: 28,
@@ -1010,7 +1104,9 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     >
                                       <IconButton
                                         size="small"
-                                        onClick={() => handleToggleJobPause(job)}
+                                        onClick={() =>
+                                          handleToggleJobPause(job)
+                                        }
                                         disabled={isPaused}
                                       >
                                         {job.status === "PAUSED" || isPaused ? (
@@ -1023,7 +1119,10 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   </Box>
                                   <Box
                                     sx={{
-                                      visibility: job.status !== "PROCESSING" ? "visible" : "hidden",
+                                      visibility:
+                                        job.status !== "PROCESSING"
+                                          ? "visible"
+                                          : "hidden",
                                       width: 28,
                                       height: 28,
                                     }}

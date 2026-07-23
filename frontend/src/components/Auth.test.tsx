@@ -109,11 +109,11 @@ describe("Auth Component", () => {
   });
 
   it("handles setup-required network error during sign up switch", async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockSafeFetch.mockRejectedValueOnce(new Error("Network err"));
     render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
     fireEvent.click(screen.getByText("Don't have an account? Sign Up"));
-    
+
     await waitFor(() => {
       expect(screen.getByText("Create Account")).toBeInTheDocument();
     });
@@ -127,16 +127,20 @@ describe("Auth Component", () => {
     });
     render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
     fireEvent.click(screen.getByText("Don't have an account? Sign Up"));
-    
+
     await waitFor(() => {
-      expect(screen.getByText(/First user registration forces Admin privileges/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/First user registration forces Admin privileges/i),
+      ).toBeInTheDocument();
     });
-    
-    fireEvent.change(screen.getByLabelText(/Display Name/i), { target: { value: "New Admin" } });
+
+    fireEvent.change(screen.getByLabelText(/Display Name/i), {
+      target: { value: "New Admin" },
+    });
   });
 
   it("handles setup-required API returning non-ok response", async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockSafeFetch.mockResolvedValueOnce({ ok: false });
     render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
     fireEvent.click(screen.getByText("Don't have an account? Sign Up"));
@@ -153,13 +157,15 @@ describe("Auth Component", () => {
     });
     render(<Auth onLoginSuccess={mockOnLoginSuccess} />);
     fireEvent.click(screen.getByText("Don't have an account? Sign Up"));
-    
+
     const select = await screen.findByRole("combobox");
-    
-    fireEvent.change(screen.getByLabelText(/Display Name/i), { target: { value: "New User" } });
-    
+
+    fireEvent.change(screen.getByLabelText(/Display Name/i), {
+      target: { value: "New User" },
+    });
+
     fireEvent.mouseDown(select);
-    
+
     const viewerOption = await screen.findByRole("option", { name: /Viewer/i });
     fireEvent.click(viewerOption);
   });

@@ -13,4 +13,3 @@ public interface OcrRegionRepository extends JpaRepository<OcrRegion, UUID> {
       "delete from OcrRegion o where o.page.id = :pageId")
   void deleteByPageId(@org.springframework.data.repository.query.Param("pageId") UUID pageId);
 }
-

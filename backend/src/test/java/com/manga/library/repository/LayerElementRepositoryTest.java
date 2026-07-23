@@ -29,16 +29,17 @@ public class LayerElementRepositoryTest {
     Image image = Image.builder().filename("el_img.png").storagePath("path/el_img.png").build();
     image = imageRepository.save(image);
 
-    Series series = seriesRepository.save(Series.builder().title("Test").originalLanguage("ja").readingDirection("rtl").build());
-    Chapter chapter = chapterRepository.save(Chapter.builder().series(series).chapterNumber(1.0).build());
+    Series series =
+        seriesRepository.save(
+            Series.builder().title("Test").originalLanguage("ja").readingDirection("rtl").build());
+    Chapter chapter =
+        chapterRepository.save(Chapter.builder().series(series).chapterNumber(1.0).build());
 
     Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
     page = pageRepository.save(page);
 
     Layer layer = Layer.builder().page(page).type("translation").build();
     layer = layerRepository.save(layer);
-
-
 
     // 1. Create
     LayerElement element =

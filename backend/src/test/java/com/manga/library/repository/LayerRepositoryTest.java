@@ -3,7 +3,6 @@ package com.manga.library.repository;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.manga.library.model.*;
-
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,12 +29,15 @@ public class LayerRepositoryTest {
         Image.builder().filename("layer_img.png").storagePath("path/layer_img.png").build();
     image = imageRepository.save(image);
 
-    Series series = seriesRepository.save(Series.builder().title("Test").originalLanguage("ja").readingDirection("rtl").build());
-    Chapter chapter = chapterRepository.save(Chapter.builder().series(series).chapterNumber(1.0).build());
+    Series series =
+        seriesRepository.save(
+            Series.builder().title("Test").originalLanguage("ja").readingDirection("rtl").build());
+    Chapter chapter =
+        chapterRepository.save(Chapter.builder().series(series).chapterNumber(1.0).build());
 
-    com.manga.library.model.Page page = com.manga.library.model.Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    com.manga.library.model.Page page =
+        com.manga.library.model.Page.builder().chapter(chapter).image(image).pageNumber(1).build();
     page = pageRepository.save(page);
-
 
     // 1. Create
     Layer layer =
@@ -54,7 +56,6 @@ public class LayerRepositoryTest {
     assertTrue(saved.getVisible());
     assertEquals(5, saved.getZOrder());
     assertEquals(page.getId(), saved.getPage().getId());
-
 
     // 2. Read
     Optional<Layer> fetchedOpt = layerRepository.findById(saved.getId());

@@ -14,8 +14,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
- * Maps exceptions to proper HTTP status codes with human-readable messages.
- * Response shape: {timestamp, status, error, message, path}.
+ * Maps exceptions to proper HTTP status codes with human-readable messages. Response shape:
+ * {timestamp, status, error, message, path}.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {

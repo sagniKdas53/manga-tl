@@ -42,9 +42,19 @@ vi.mock("../utils", () => ({
   },
 }));
 
-const defaultSeries = { id: "s1", title: "One Piece", originalLanguage: "ja", readingDirection: "rtl" };
+const defaultSeries = {
+  id: "s1",
+  title: "One Piece",
+  originalLanguage: "ja",
+  readingDirection: "rtl",
+};
 const defaultUser = {
-  id: "1", username: "test", email: "t@t.com", displayName: "test", role: "translator", token: "tok",
+  id: "1",
+  username: "test",
+  email: "t@t.com",
+  displayName: "test",
+  role: "translator",
+  token: "tok",
 };
 
 const defaultProps = {
@@ -59,11 +69,19 @@ const defaultProps = {
 describe("ImportChapterDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSafeFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "new-c" }) });
+    mockSafeFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: "new-c" }),
+    });
   });
 
   it("renders nothing when closed", () => {
-    render(<ImportChapterDialog {...defaultProps} open={false} />);
+    render(
+      <ImportChapterDialog
+        {...defaultProps}
+        open={false}
+      />,
+    );
     expect(screen.queryByText("Import Chapter (ZIP)")).toBeNull();
   });
 
@@ -74,13 +92,17 @@ describe("ImportChapterDialog", () => {
 
   it("pre-fills chapter number from nextNum", async () => {
     render(<ImportChapterDialog {...defaultProps} />);
-    const input = await screen.findByLabelText(/Chapter Number/) as HTMLInputElement;
+    const input = (await screen.findByLabelText(
+      /Chapter Number/,
+    )) as HTMLInputElement;
     expect(input.value).toBe("5");
   });
 
   it("has a file input accepting zip and epub", async () => {
     render(<ImportChapterDialog {...defaultProps} />);
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     expect(fileInput).toBeDefined();
     expect(fileInput.accept).toContain(".zip");
   });
@@ -117,22 +139,30 @@ describe("ImportChapterDialog", () => {
     fireEvent.click(await screen.findByText("Model Overrides (Optional)"));
 
     await waitFor(() => {
-      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(
+        1,
+      );
     });
 
     const selects = document.querySelectorAll('[role="combobox"]');
     expect(selects.length).toBeGreaterThan(0);
 
     fireEvent.mouseDown(selects[0]);
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole("option", { name: "gemini" }));
 
     fireEvent.mouseDown(selects[1]);
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole("option", { name: "vlm-ocr-1" }));
 
     fireEvent.mouseDown(selects[2]);
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole("option", { name: "anthropic" }));
   });
 
@@ -141,12 +171,16 @@ describe("ImportChapterDialog", () => {
 
     fireEvent.click(await screen.findByText("Model Overrides (Optional)"));
     await waitFor(() => {
-      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(
+        1,
+      );
     });
 
     const selects = document.querySelectorAll('[role="combobox"]');
     fireEvent.mouseDown(selects[0]);
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole("option", { name: "gemini" }));
 
     const clearBtns = document.querySelectorAll('[data-testid="CloseIcon"]');
@@ -161,19 +195,30 @@ describe("ImportChapterDialog", () => {
     fireEvent.click(await screen.findByText("Model Overrides (Optional)"));
 
     await waitFor(() => {
-      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(
+        1,
+      );
     });
 
-    const fallbackSelect = document.querySelector('[role="combobox"]:last-child') as HTMLElement;
+    const fallbackSelect = document.querySelector(
+      '[role="combobox"]:last-child',
+    ) as HTMLElement;
     if (fallbackSelect) {
       fireEvent.mouseDown(fallbackSelect);
-      await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByRole("listbox")).toBeInTheDocument(),
+      );
       fireEvent.click(screen.getByRole("option", { name: "Disabled" }));
     }
   });
 
   it("handles settings fetch failure gracefully", async () => {
-    render(<ImportChapterDialog {...defaultProps} series={{ ...defaultProps.series, useFallbackModels: undefined }} />);
+    render(
+      <ImportChapterDialog
+        {...defaultProps}
+        series={{ ...defaultProps.series, useFallbackModels: undefined }}
+      />,
+    );
     expect(await screen.findByText("Import Chapter (ZIP)")).toBeDefined();
   });
 
@@ -181,6 +226,8 @@ describe("ImportChapterDialog", () => {
     render(<ImportChapterDialog {...defaultProps} />);
     const form = document.querySelector("form");
     expect(form).not.toBeNull();
-    form!.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    form!.dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
   });
 });

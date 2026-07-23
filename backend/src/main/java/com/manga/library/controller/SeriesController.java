@@ -4,6 +4,7 @@ import com.manga.library.dto.ChapterDto;
 import com.manga.library.dto.SeriesDto;
 import com.manga.library.dto.SystemSettingsDto;
 import com.manga.library.dto.ZipImageEntry;
+import com.manga.library.exception.ResourceNotFoundException;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import com.manga.library.service.*;
@@ -21,7 +22,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import com.manga.library.exception.ResourceNotFoundException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -190,14 +190,16 @@ public class SeriesController {
   }
 
   @PostMapping
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
+  @org.springframework.security.access.prepost.PreAuthorize(
+      "hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   public ResponseEntity<SeriesDto> createSeries(
       @RequestBody SeriesDto dto, @AuthenticationPrincipal User user) {
     String sourceLang =
-        resolveSetting(dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage());
+        resolveSetting(
+            dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage());
     String targetLang = resolveSetting(dto.getTargetLanguage());
     if (targetLang == null) targetLang = "en";
-    
+
     String origLang = resolveSetting(sourceLang);
     if (origLang == null) origLang = "ja";
 
@@ -244,7 +246,8 @@ public class SeriesController {
   }
 
   @PostMapping("/{seriesId}/chapters")
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
+  @org.springframework.security.access.prepost.PreAuthorize(
+      "hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<?> createChapter(@PathVariable UUID seriesId, @RequestBody ChapterDto dto) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
@@ -324,7 +327,8 @@ public class SeriesController {
   }
 
   @PutMapping("/{seriesId}")
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
+  @org.springframework.security.access.prepost.PreAuthorize(
+      "hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   public ResponseEntity<SeriesDto> updateSeries(
       @PathVariable UUID seriesId, @RequestBody SeriesDto dto) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
@@ -334,12 +338,13 @@ public class SeriesController {
             s -> {
               s.setTitle(dto.getTitle());
               String sourceLang =
-                  resolveSetting(dto.getSourceLanguage() != null
-                      ? dto.getSourceLanguage()
-                      : dto.getOriginalLanguage());
+                  resolveSetting(
+                      dto.getSourceLanguage() != null
+                          ? dto.getSourceLanguage()
+                          : dto.getOriginalLanguage());
               String targetLang = resolveSetting(dto.getTargetLanguage());
               if (targetLang == null) targetLang = "en";
-              
+
               String origLang = resolveSetting(sourceLang);
               if (origLang == null) origLang = "ja";
 
@@ -376,7 +381,8 @@ public class SeriesController {
   }
 
   @PutMapping("/chapters/{chapterId}")
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
+  @org.springframework.security.access.prepost.PreAuthorize(
+      "hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<?> updateChapter(
       @PathVariable UUID chapterId, @RequestBody ChapterDto dto) {
@@ -443,7 +449,8 @@ public class SeriesController {
   }
 
   @PostMapping("/{seriesId}/chapters/import")
-  @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
+  @org.springframework.security.access.prepost.PreAuthorize(
+      "hasAnyRole('ADMIN', 'TRANSLATOR', 'VIEWER')")
   public ResponseEntity<?> importChapter(
       @PathVariable UUID seriesId,
       @RequestParam("file") MultipartFile file,
@@ -559,8 +566,8 @@ public class SeriesController {
         java.util.Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
         if (existingImageOpt.isPresent()) {
           Image existingImage = existingImageOpt.get();
-          Page page = pageService.createPageWithExistingImage(chapter, existingImage, pageNum, user);
-
+          Page page =
+              pageService.createPageWithExistingImage(chapter, existingImage, pageNum, user);
 
           // Check if target language layer exists
           String targetLang =

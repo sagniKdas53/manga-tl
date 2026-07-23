@@ -9,7 +9,12 @@ interface SidebarSectionProps {
   headerExtra?: React.ReactNode;
 }
 
-const SidebarSection: React.FC<SidebarSectionProps> = ({ title, children, sx, headerExtra }) => (
+const SidebarSection: React.FC<SidebarSectionProps> = ({
+  title,
+  children,
+  sx,
+  headerExtra,
+}) => (
   <Box
     sx={{
       border: "1px solid var(--border-color)",

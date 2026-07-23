@@ -41,7 +41,6 @@ public class Job {
   @Column(nullable = false)
   private String status; // PENDING, PROCESSING, COMPLETED, FAILED, PAUSED
 
-
   @Column(columnDefinition = "text")
   private String payload;
 

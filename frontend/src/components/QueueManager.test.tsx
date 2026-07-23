@@ -91,9 +91,7 @@ describe("QueueManager", () => {
   });
 
   it("renders closed state by default", () => {
-    render(
-      <QueueManagerWrapper />
-    );
+    render(<QueueManagerWrapper />);
     const button = screen.getByTitle("Queue Manager");
     expect(button).toBeInTheDocument();
     expect(screen.queryByText("Queue Manager")).toBeNull();
@@ -110,9 +108,7 @@ describe("QueueManager", () => {
       return Promise.reject(new Error("Unknown URL"));
     });
 
-    render(
-      <QueueManagerWrapper />
-    );
+    render(<QueueManagerWrapper />);
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -146,9 +142,7 @@ describe("QueueManager", () => {
       },
     );
 
-    render(
-      <QueueManagerWrapper />
-    );
+    render(<QueueManagerWrapper />);
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -193,9 +187,7 @@ describe("QueueManager", () => {
       },
     );
 
-    render(
-      <QueueManagerWrapper />
-    );
+    render(<QueueManagerWrapper />);
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -225,9 +217,7 @@ describe("QueueManager", () => {
       return Promise.reject(new Error("Unknown URL"));
     });
 
-    const { rerender } = render(
-      <QueueManagerWrapper />
-    );
+    const { rerender } = render(<QueueManagerWrapper />);
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -248,9 +238,7 @@ describe("QueueManager", () => {
       }),
     });
 
-    rerender(
-      <QueueManagerWrapper />
-    );
+    rerender(<QueueManagerWrapper />);
 
     await waitFor(() => {
       expect(screen.getByText("PROCESSING")).toBeInTheDocument();
@@ -273,9 +261,7 @@ describe("QueueManager", () => {
       },
     );
 
-    render(
-      <QueueManagerWrapper />
-    );
+    render(<QueueManagerWrapper />);
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -308,9 +294,7 @@ describe("QueueManager", () => {
       },
     );
 
-    render(
-      <QueueManagerWrapper />
-    );
+    render(<QueueManagerWrapper />);
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
@@ -367,9 +351,7 @@ describe("QueueManager", () => {
       return Promise.reject(new Error("Unknown URL"));
     });
 
-    render(
-      <QueueManagerWrapper />
-    );
+    render(<QueueManagerWrapper />);
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {

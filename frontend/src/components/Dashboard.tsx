@@ -34,7 +34,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   user,
   seriesList,
   setSeriesList,
-  onSelectSeries
+  onSelectSeries,
 }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -75,7 +75,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     isOpen: false,
     title: "",
     message: "",
-    onConfirm: () => { },
+    onConfirm: () => {},
   });
 
   const closeConfirmModal = () =>
@@ -156,7 +156,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Box>
           <Typography
             variant="h4"
-            sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600, color: "text.primary" }}
+            sx={{
+              fontFamily: '"Outfit", sans-serif',
+              fontWeight: 600,
+              color: "text.primary",
+            }}
           >
             My Manga Library
           </Typography>
