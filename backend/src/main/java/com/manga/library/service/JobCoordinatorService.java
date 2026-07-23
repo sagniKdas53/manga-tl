@@ -408,6 +408,18 @@ public class JobCoordinatorService {
         .findById(Objects.requireNonNull(imageId))
         .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
+    if (dto.getRegions() == null || dto.getRegions().isEmpty()) {
+      log.info("OCR found 0 regions for image {} — skipping downstream pipeline", imageId);
+      Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "ocr");
+      if (job != null) {
+        job.setStatus("COMPLETED");
+        job.setUpdatedAt(OffsetDateTime.now());
+        jobRepository.save(job);
+        sseService.emitEventForImage(imageId, "job_update", job);
+      }
+      return;
+    }
+
     Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
 
     // Keep existing layers and regions for multi-pass history, but hide old OCR layers
@@ -659,6 +671,26 @@ public class JobCoordinatorService {
             : "en";
 
     Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
+
+    long successCount = translations == null ? 0 : translations.stream()
+        .filter(r -> {
+            Object text = r.get("translatedText");
+            return text != null && !text.toString().trim().isEmpty();
+        })
+        .count();
+
+    if (successCount == 0) {
+        log.warn("All translations failed for image {} — not creating empty layer", imageId);
+        Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "translation");
+        if (job != null) {
+            job.setStatus("FAILED");
+            job.setError("Translation failed: no regions were successfully translated");
+            job.setUpdatedAt(OffsetDateTime.now());
+            jobRepository.save(job);
+            sseService.emitEventForImage(imageId, "job_update", job);
+        }
+        return;
+    }
 
     // Find existing translation layers for this image and language
     final String finalTargetLang = targetLang;

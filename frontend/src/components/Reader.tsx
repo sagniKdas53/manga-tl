@@ -2790,12 +2790,41 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   };
 
+  // Page out-of-bounds protection: redirect to last valid page
+  useEffect(() => {
+    if (!pages || pages.length === 0 || !selectedChapter) return;
+    const pageNum = pageNumber ? parseInt(pageNumber, 10) : 1;
+    if (pageNum < 1) {
+      const slugPart = selectedChapter.title
+        ? `${toSlug(selectedChapter.title)}/`
+        : `chapter-${selectedChapter.chapterNumber}/`;
+      navigate(`/chapters/${selectedChapter.id}/${slugPart}reader/1`, { replace: true });
+    } else if (pageNum > pages.length) {
+      const slugPart = selectedChapter.title
+        ? `${toSlug(selectedChapter.title)}/`
+        : `chapter-${selectedChapter.chapterNumber}/`;
+      navigate(`/chapters/${selectedChapter.id}/${slugPart}reader/${pages.length}`, { replace: true });
+    }
+  }, [pages, pageNumber, selectedChapter, navigate]);
+
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     setImageDims({
       w: e.currentTarget.naturalWidth,
       h: e.currentTarget.naturalHeight,
     });
   };
+
+  if (pages.length > 0 && !selectedPage) {
+    return (
+      <div
+        className="reader-container-nhentai"
+        style={{ alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "16px", color: "white" }}
+      >
+        <h2>Page {pageNumber} does not exist in this chapter.</h2>
+        <p>This chapter has {pages.length} page{pages.length !== 1 ? "s" : ""}. Redirecting...</p>
+      </div>
+    );
+  }
 
   if (!selectedPage) {
     return (
