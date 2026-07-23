@@ -1,4 +1,4 @@
-# Plan: Fix Constant 500s on `/api/pages/{pageId}/details`
+# Plan: Fix Constant 500s on `/api/pages/{pageId}/details` (✅ COMPLETED)
 
 > **Audience:** execution agents. Every task below is self-contained with exact file paths,
 > line numbers, and before/after code. Line numbers are accurate as of commit `97b4951`.

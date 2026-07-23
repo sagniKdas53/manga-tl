@@ -8,7 +8,7 @@ import ColorizeIcon from "@mui/icons-material/Colorize";
 const hexToHsva = (hex: string): { h: number; s: number; v: number; a: number } => {
   let clean = hex.trim().replace(/^#/, "");
   if (clean === "transparent" || clean === "") {
-    return { h: 0, s: 0, v: 100, a: 0 }; 
+    return { h: 0, s: 0, v: 100, a: 0 };
   }
   if (clean.length === 3 || clean.length === 4) {
     clean = clean
@@ -22,7 +22,7 @@ const hexToHsva = (hex: string): { h: number; s: number; v: number; a: number } 
   } else if (clean.length !== 6) {
     return { h: 0, s: 0, v: 100, a: 1 };
   }
-  
+
   const r = parseInt(clean.substring(0, 2), 16) / 255;
   const g = parseInt(clean.substring(2, 4), 16) / 255;
   const b = parseInt(clean.substring(4, 6), 16) / 255;
@@ -252,7 +252,14 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
   const PRESETS = [
     ...(allowTransparent
-      ? [{ label: "Ø", value: "", color: "transparent", title: "Transparent" }]
+      ? [
+        {
+          label: "Ø",
+          value: "#00000000",
+          color: "transparent",
+          title: "Transparent",
+        },
+      ]
       : []),
     { label: "W", value: "#ffffff", color: "#ffffff", title: "White" },
     { label: "K", value: "#000000", color: "#000000", title: "Black" },
@@ -313,10 +320,10 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             backgroundSize: "8px 8px",
             backgroundPosition: "0 0, 0 4px, 4px -4px, -4px 0px",
             "&::after": {
-               content: '""',
-               position: "absolute",
-               inset: 0,
-               backgroundColor: normalizedValue === "transparent" || normalizedValue === "" ? "transparent" : normalizedValue,
+              content: '""',
+              position: "absolute",
+              inset: 0,
+              backgroundColor: normalizedValue === "transparent" || normalizedValue === "" ? "transparent" : normalizedValue,
             }
           }}
           title="Open Color Wheel / Palette"
@@ -482,7 +489,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 }}
               />
             </div>
-            
+
             {/* Alpha Slider Bar */}
             <div
               ref={alphaRef}

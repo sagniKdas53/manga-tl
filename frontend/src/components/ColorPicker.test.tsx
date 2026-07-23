@@ -1,4 +1,4 @@
-import React from "react";
+
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { ColorPicker } from "./ColorPicker";
@@ -191,7 +191,79 @@ describe("ColorPicker", () => {
     fireEvent.touchEnd(window);
   });
 
-  it("normalizes short hex and missing hash", () => {
+  it("allows dragging on the alpha slider", () => {
+    const onChange = vi.fn();
+    const onLaunchEyeDropper = vi.fn();
+    render(
+      <ColorPicker
+        label="Text Color"
+        value="#ff0000"
+        onChange={onChange}
+        onLaunchEyeDropper={onLaunchEyeDropper}
+      />,
+    );
+
+    // Open popover
+    const toggle = screen.getByTitle("Open Color Wheel / Palette");
+    fireEvent.click(toggle);
+
+    const alphaSlider = screen.getByTestId("alpha-slider");
+    alphaSlider.getBoundingClientRect = () =>
+      ({
+        width: 100,
+        height: 12,
+        left: 0,
+        top: 0,
+        right: 100,
+        bottom: 12,
+      }) as DOMRect;
+
+    fireEvent.mouseDown(alphaSlider, { clientX: 50 });
+    expect(onChange).toHaveBeenCalled();
+
+    fireEvent.mouseMove(window, { clientX: 75 });
+    expect(onChange).toHaveBeenCalled();
+
+    fireEvent.mouseUp(window);
+  });
+
+  it("allows touch dragging on the alpha slider", () => {
+    const onChange = vi.fn();
+    const onLaunchEyeDropper = vi.fn();
+    render(
+      <ColorPicker
+        label="Text Color"
+        value="#ff0000"
+        onChange={onChange}
+        onLaunchEyeDropper={onLaunchEyeDropper}
+      />,
+    );
+
+    // Open popover
+    const toggle = screen.getByTitle("Open Color Wheel / Palette");
+    fireEvent.click(toggle);
+
+    const alphaSlider = screen.getByTestId("alpha-slider");
+    alphaSlider.getBoundingClientRect = () =>
+      ({
+        width: 100,
+        height: 12,
+        left: 0,
+        top: 0,
+        right: 100,
+        bottom: 12,
+      }) as DOMRect;
+
+    fireEvent.touchStart(alphaSlider, { touches: [{ clientX: 50 }] });
+    expect(onChange).toHaveBeenCalled();
+
+    fireEvent.touchMove(window, { touches: [{ clientX: 75 }] });
+    expect(onChange).toHaveBeenCalled();
+
+    fireEvent.touchEnd(window);
+  });
+
+  it("normalizes short hex, 4/8 char hex, and missing hash", () => {
     const onChange = vi.fn();
     render(
       <ColorPicker
@@ -204,6 +276,12 @@ describe("ColorPicker", () => {
     const input = screen.getByDisplayValue("#f00");
     fireEvent.change(input, { target: { value: "111" } });
     expect(onChange).toHaveBeenCalledWith("#111");
+
+    fireEvent.change(input, { target: { value: "1111" } });
+    expect(onChange).toHaveBeenCalledWith("#1111");
+
+    fireEvent.change(input, { target: { value: "11112222" } });
+    expect(onChange).toHaveBeenCalledWith("#11112222");
 
     fireEvent.change(input, { target: { value: "transparent" } });
     expect(onChange).toHaveBeenCalledWith("transparent");
@@ -230,6 +308,6 @@ describe("ColorPicker", () => {
     // Click transparent preset
     const transPreset = screen.getByTitle("Transparent");
     fireEvent.click(transPreset);
-    expect(onChange).toHaveBeenCalledWith(null);
+    expect(onChange).toHaveBeenCalledWith("#00000000");
   });
 });
