@@ -42,6 +42,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/images/*/thumbnail")
                     .permitAll()
+                    .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/layers/**")
+                    .hasAnyRole("ADMIN", "TRANSLATOR")
                     .requestMatchers("/api/**")
                     .authenticated()
                     .anyRequest()

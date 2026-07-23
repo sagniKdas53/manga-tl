@@ -54,6 +54,13 @@ public class SeriesController {
     return cleanContext + "/api/images/" + imageId + "/thumbnail";
   }
 
+  private String resolveSetting(String value) {
+    if (value != null && (value.equals("inherit") || value.equals("default") || value.isBlank())) {
+      return null;
+    }
+    return value;
+  }
+
   private SeriesDto toDto(Series s) {
     SeriesDto dto = new SeriesDto();
     dto.setId(s.getId());
@@ -187,24 +194,29 @@ public class SeriesController {
   public ResponseEntity<SeriesDto> createSeries(
       @RequestBody SeriesDto dto, @AuthenticationPrincipal User user) {
     String sourceLang =
-        dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage();
-    String targetLang = dto.getTargetLanguage() != null ? dto.getTargetLanguage() : "en";
+        resolveSetting(dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage());
+    String targetLang = resolveSetting(dto.getTargetLanguage());
+    if (targetLang == null) targetLang = "en";
+    
+    String origLang = resolveSetting(sourceLang);
+    if (origLang == null) origLang = "ja";
+
     Series series =
         Series.builder()
             .title(dto.getTitle())
-            .originalLanguage(sourceLang != null ? sourceLang : "ja")
-            .sourceLanguage(sourceLang != null ? sourceLang : "ja")
+            .originalLanguage(origLang)
+            .sourceLanguage(origLang)
             .targetLanguage(targetLang)
-            .readingDirection(dto.getReadingDirection())
-            .ocrProvider(dto.getOcrProvider())
-            .ocrModel(dto.getOcrModel())
-            .tlProvider(dto.getTlProvider())
-            .tlModel(dto.getTlModel())
-            .qaProvider(dto.getQaProvider())
-            .qaLlmModel(dto.getQaLlmModel())
-            .qaVlmModel(dto.getQaVlmModel())
-            .qaMode(dto.getQaMode())
-            .routingStrategy(dto.getRoutingStrategy())
+            .readingDirection(resolveSetting(dto.getReadingDirection()))
+            .ocrProvider(resolveSetting(dto.getOcrProvider()))
+            .ocrModel(resolveSetting(dto.getOcrModel()))
+            .tlProvider(resolveSetting(dto.getTlProvider()))
+            .tlModel(resolveSetting(dto.getTlModel()))
+            .qaProvider(resolveSetting(dto.getQaProvider()))
+            .qaLlmModel(resolveSetting(dto.getQaLlmModel()))
+            .qaVlmModel(resolveSetting(dto.getQaVlmModel()))
+            .qaMode(resolveSetting(dto.getQaMode()))
+            .routingStrategy(resolveSetting(dto.getRoutingStrategy()))
             .useFallbackModels(dto.getUseFallbackModels())
             .createdBy(user)
             .build();
@@ -258,15 +270,15 @@ public class SeriesController {
             .series(series)
             .chapterNumber(dto.getChapterNumber())
             .title(dto.getTitle())
-            .ocrProvider(dto.getOcrProvider())
-            .ocrModel(dto.getOcrModel())
-            .tlProvider(dto.getTlProvider())
-            .tlModel(dto.getTlModel())
-            .qaProvider(dto.getQaProvider())
-            .qaLlmModel(dto.getQaLlmModel())
-            .qaVlmModel(dto.getQaVlmModel())
-            .qaMode(dto.getQaMode())
-            .routingStrategy(dto.getRoutingStrategy())
+            .ocrProvider(resolveSetting(dto.getOcrProvider()))
+            .ocrModel(resolveSetting(dto.getOcrModel()))
+            .tlProvider(resolveSetting(dto.getTlProvider()))
+            .tlModel(resolveSetting(dto.getTlModel()))
+            .qaProvider(resolveSetting(dto.getQaProvider()))
+            .qaLlmModel(resolveSetting(dto.getQaLlmModel()))
+            .qaVlmModel(resolveSetting(dto.getQaVlmModel()))
+            .qaMode(resolveSetting(dto.getQaMode()))
+            .routingStrategy(resolveSetting(dto.getRoutingStrategy()))
             .useContextMemory(dto.getUseContextMemory() == null || dto.getUseContextMemory())
             .useFallbackModels(dto.getUseFallbackModels())
             .build();
@@ -322,23 +334,28 @@ public class SeriesController {
             s -> {
               s.setTitle(dto.getTitle());
               String sourceLang =
-                  dto.getSourceLanguage() != null
+                  resolveSetting(dto.getSourceLanguage() != null
                       ? dto.getSourceLanguage()
-                      : dto.getOriginalLanguage();
-              String targetLang = dto.getTargetLanguage() != null ? dto.getTargetLanguage() : "en";
-              s.setOriginalLanguage(sourceLang != null ? sourceLang : "ja");
-              s.setSourceLanguage(sourceLang != null ? sourceLang : "ja");
+                      : dto.getOriginalLanguage());
+              String targetLang = resolveSetting(dto.getTargetLanguage());
+              if (targetLang == null) targetLang = "en";
+              
+              String origLang = resolveSetting(sourceLang);
+              if (origLang == null) origLang = "ja";
+
+              s.setOriginalLanguage(origLang);
+              s.setSourceLanguage(origLang);
               s.setTargetLanguage(targetLang);
-              s.setReadingDirection(dto.getReadingDirection());
-              s.setOcrProvider(dto.getOcrProvider());
-              s.setOcrModel(dto.getOcrModel());
-              s.setTlProvider(dto.getTlProvider());
-              s.setTlModel(dto.getTlModel());
-              s.setQaProvider(dto.getQaProvider());
-              s.setQaLlmModel(dto.getQaLlmModel());
-              s.setQaVlmModel(dto.getQaVlmModel());
-              s.setQaMode(dto.getQaMode());
-              s.setRoutingStrategy(dto.getRoutingStrategy());
+              s.setReadingDirection(resolveSetting(dto.getReadingDirection()));
+              s.setOcrProvider(resolveSetting(dto.getOcrProvider()));
+              s.setOcrModel(resolveSetting(dto.getOcrModel()));
+              s.setTlProvider(resolveSetting(dto.getTlProvider()));
+              s.setTlModel(resolveSetting(dto.getTlModel()));
+              s.setQaProvider(resolveSetting(dto.getQaProvider()));
+              s.setQaLlmModel(resolveSetting(dto.getQaLlmModel()));
+              s.setQaVlmModel(resolveSetting(dto.getQaVlmModel()));
+              s.setQaMode(resolveSetting(dto.getQaMode()));
+              s.setRoutingStrategy(resolveSetting(dto.getRoutingStrategy()));
               s.setUseFallbackModels(dto.getUseFallbackModels());
               Objects.requireNonNull(s, "series cannot be null");
               s = seriesRepository.save(Objects.requireNonNull(s));
@@ -382,15 +399,15 @@ public class SeriesController {
               }
               c.setTitle(dto.getTitle());
               c.setChapterNumber(dto.getChapterNumber());
-              c.setOcrProvider(dto.getOcrProvider());
-              c.setOcrModel(dto.getOcrModel());
-              c.setTlProvider(dto.getTlProvider());
-              c.setTlModel(dto.getTlModel());
-              c.setQaProvider(dto.getQaProvider());
-              c.setQaLlmModel(dto.getQaLlmModel());
-              c.setQaVlmModel(dto.getQaVlmModel());
-              c.setQaMode(dto.getQaMode());
-              c.setRoutingStrategy(dto.getRoutingStrategy());
+              c.setOcrProvider(resolveSetting(dto.getOcrProvider()));
+              c.setOcrModel(resolveSetting(dto.getOcrModel()));
+              c.setTlProvider(resolveSetting(dto.getTlProvider()));
+              c.setTlModel(resolveSetting(dto.getTlModel()));
+              c.setQaProvider(resolveSetting(dto.getQaProvider()));
+              c.setQaLlmModel(resolveSetting(dto.getQaLlmModel()));
+              c.setQaVlmModel(resolveSetting(dto.getQaVlmModel()));
+              c.setQaMode(resolveSetting(dto.getQaMode()));
+              c.setRoutingStrategy(resolveSetting(dto.getRoutingStrategy()));
               c.setUseFallbackModels(dto.getUseFallbackModels());
               if (dto.getUseContextMemory() != null) {
                 c.setUseContextMemory(dto.getUseContextMemory());
@@ -464,15 +481,15 @@ public class SeriesController {
               .series(series)
               .chapterNumber(chapterNumber)
               .title(title)
-              .ocrProvider(ocrProvider)
-              .ocrModel(ocrModel)
-              .tlProvider(tlProvider)
-              .tlModel(tlModel)
-              .qaProvider(qaProvider)
-              .qaLlmModel(qaLlmModel)
-              .qaVlmModel(qaVlmModel)
-              .qaMode(qaMode)
-              .routingStrategy(routingStrategy)
+              .ocrProvider(resolveSetting(ocrProvider))
+              .ocrModel(resolveSetting(ocrModel))
+              .tlProvider(resolveSetting(tlProvider))
+              .tlModel(resolveSetting(tlModel))
+              .qaProvider(resolveSetting(qaProvider))
+              .qaLlmModel(resolveSetting(qaLlmModel))
+              .qaVlmModel(resolveSetting(qaVlmModel))
+              .qaMode(resolveSetting(qaMode))
+              .routingStrategy(resolveSetting(routingStrategy))
               .useFallbackModels(useFallbackModels)
               .build();
       chapter = chapterRepository.save(Objects.requireNonNull(chapter));
