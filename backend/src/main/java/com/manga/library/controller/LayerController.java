@@ -209,7 +209,7 @@ public class LayerController {
 
   @DeleteMapping("/layers/{id}")
   @Transactional
-  @PreAuthorize("hasRole('ADMIN')")
+  @PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<?> deleteLayer(@PathVariable UUID id) {
     Objects.requireNonNull(id, "id cannot be null");
     log.info("Deleting layer {}", id);
