@@ -29,7 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 public class PageController {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PageController.class);
 
-
   private final ChapterRepository chapterRepository;
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
@@ -45,7 +44,13 @@ public class PageController {
   private final SseService sseService;
   private final LayerEditHistoryRepository layerEditHistoryRepository;
   private final ObjectMapper objectMapper;
-  public PageController(ChapterRepository chapterRepository, ImageRepository imageRepository, PageRepository pageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository, LayerRepository layerRepository, LayerElementRepository layerElementRepository, MinioService minioService, JobCoordinatorService jobCoordinatorService, com.manga.library.service.PageService pageService, ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository, SseService sseService, LayerEditHistoryRepository layerEditHistoryRepository, ObjectMapper objectMapper) {
+
+  public PageController(ChapterRepository chapterRepository, ImageRepository imageRepository,
+      PageRepository pageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository,
+      LayerRepository layerRepository, LayerElementRepository layerElementRepository, MinioService minioService,
+      JobCoordinatorService jobCoordinatorService, com.manga.library.service.PageService pageService,
+      ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository,
+      SseService sseService, LayerEditHistoryRepository layerEditHistoryRepository, ObjectMapper objectMapper) {
     this.chapterRepository = chapterRepository;
     this.imageRepository = imageRepository;
     this.pageRepository = pageRepository;
@@ -63,7 +68,6 @@ public class PageController {
     this.objectMapper = objectMapper;
   }
 
-
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
 
@@ -75,7 +79,8 @@ public class PageController {
     return cleanContext + "/api/images/" + imageId + "/file";
   }
 
-  private record ProcessedImage(byte[] bytes, String extension, String filename) {}
+  private record ProcessedImage(byte[] bytes, String extension, String filename) {
+  }
 
   private ProcessedImage validateAndProcessImageBytes(String originalFilename, byte[] fileBytes) {
     if (fileBytes == null || fileBytes.length < 16) {
@@ -84,12 +89,11 @@ public class PageController {
     }
 
     String lowerName = originalFilename == null ? "" : originalFilename.toLowerCase();
-    boolean hasValidExt =
-        lowerName.endsWith(".png")
-            || lowerName.endsWith(".jpg")
-            || lowerName.endsWith(".jpeg")
-            || lowerName.endsWith(".webp")
-            || lowerName.endsWith(".bmp");
+    boolean hasValidExt = lowerName.endsWith(".png")
+        || lowerName.endsWith(".jpg")
+        || lowerName.endsWith(".jpeg")
+        || lowerName.endsWith(".webp")
+        || lowerName.endsWith(".bmp");
 
     if (!hasValidExt && !lowerName.isEmpty()) {
       throw new IllegalArgumentException(
@@ -97,22 +101,19 @@ public class PageController {
     }
 
     // Magic Bytes Check
-    boolean isPng =
-        fileBytes[0] == (byte) 0x89
-            && fileBytes[1] == (byte) 0x50
-            && fileBytes[2] == (byte) 0x4E
-            && fileBytes[3] == (byte) 0x47;
-    boolean isJpeg =
-        fileBytes[0] == (byte) 0xFF && fileBytes[1] == (byte) 0xD8 && fileBytes[2] == (byte) 0xFF;
-    boolean isWebp =
-        fileBytes[0] == (byte) 0x52
-            && fileBytes[1] == (byte) 0x49
-            && fileBytes[2] == (byte) 0x46
-            && fileBytes[3] == (byte) 0x46
-            && fileBytes[8] == (byte) 0x57
-            && fileBytes[9] == (byte) 0x45
-            && fileBytes[10] == (byte) 0x42
-            && fileBytes[11] == (byte) 0x50;
+    boolean isPng = fileBytes[0] == (byte) 0x89
+        && fileBytes[1] == (byte) 0x50
+        && fileBytes[2] == (byte) 0x4E
+        && fileBytes[3] == (byte) 0x47;
+    boolean isJpeg = fileBytes[0] == (byte) 0xFF && fileBytes[1] == (byte) 0xD8 && fileBytes[2] == (byte) 0xFF;
+    boolean isWebp = fileBytes[0] == (byte) 0x52
+        && fileBytes[1] == (byte) 0x49
+        && fileBytes[2] == (byte) 0x46
+        && fileBytes[3] == (byte) 0x46
+        && fileBytes[8] == (byte) 0x57
+        && fileBytes[9] == (byte) 0x45
+        && fileBytes[10] == (byte) 0x42
+        && fileBytes[11] == (byte) 0x50;
     boolean isBmp = fileBytes[0] == (byte) 0x42 && fileBytes[1] == (byte) 0x4D;
 
     if (!isPng && !isJpeg && !isWebp && !isBmp) {
@@ -122,8 +123,8 @@ public class PageController {
 
     if (isBmp) {
       try {
-        java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(fileBytes);
-        java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(bais);
+        java.io.ByteArrayInputStream byteAIS = new java.io.ByteArrayInputStream(fileBytes);
+        java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(byteAIS);
         if (img == null) {
           throw new IllegalArgumentException(
               "Invalid file type. Accepted formats: PNG, JPEG, WebP, BMP");
@@ -165,10 +166,9 @@ public class PageController {
 
     try {
       Objects.requireNonNull(chapterId, "chapterId cannot be null");
-      Chapter chapter =
-          chapterRepository
-              .findWithSeriesById(chapterId)
-              .orElseThrow(() -> new ResourceNotFoundException("Chapter not found: " + chapterId));
+      Chapter chapter = chapterRepository
+          .findWithSeriesById(chapterId)
+          .orElseThrow(() -> new ResourceNotFoundException("Chapter not found: " + chapterId));
 
       String originalFilename = file.getOriginalFilename();
       String fileExtension = pageService.getFileExtension(originalFilename);
@@ -180,11 +180,11 @@ public class PageController {
         String originalImageFilename = null;
         List<com.manga.library.dto.ZipImageEntry> imageEntries = new ArrayList<>();
 
-        try (java.util.zip.ZipInputStream zis =
-            new java.util.zip.ZipInputStream(file.getInputStream())) {
+        try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(file.getInputStream())) {
           java.util.zip.ZipEntry entry;
           while ((entry = zis.getNextEntry()) != null) {
-            if (entry.isDirectory()) continue;
+            if (entry.isDirectory())
+              continue;
             String name = entry.getName();
             String lowerName = name.toLowerCase();
             if (lowerName.contains("__macosx")
@@ -245,8 +245,7 @@ public class PageController {
             originalImageFilename = "original.png";
           }
 
-          ProcessedImage processed =
-              validateAndProcessImageBytes(originalImageFilename, originalImageBytes);
+          ProcessedImage processed = validateAndProcessImageBytes(originalImageFilename, originalImageBytes);
           originalImageBytes = processed.bytes();
           originalImageFilename = processed.filename();
 
@@ -255,15 +254,15 @@ public class PageController {
           StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
           for (byte b : encodedhash) {
             String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
+            if (hex.length() == 1)
+              hexString.append('0');
             hexString.append(hex);
           }
           String fileHash = hexString.toString();
 
           // Check duplicate image
           Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
-          Optional<Page> existingPageOpt =
-              pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
+          Optional<Page> existingPageOpt = pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
           Page page;
           if (existingPageOpt.isPresent()) {
             page = existingPageOpt.get();
@@ -272,8 +271,8 @@ public class PageController {
             // Clear existing elements and layers
             List<LayerElement> elements = layerElementRepository.findByLayerPageId(page.getId());
             for (LayerElement el : elements) {
-              List<LayerEditHistory> history =
-                  layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
+              List<LayerEditHistory> history = layerEditHistoryRepository
+                  .findByLayerElementIdOrderByEditedAtDesc(el.getId());
               layerEditHistoryRepository.deleteAll(Objects.requireNonNull(history));
               layerElementRepository.delete(Objects.requireNonNull(el));
             }
@@ -326,8 +325,7 @@ public class PageController {
           } else {
             if (existingImageOpt.isPresent()) {
               Image existingImage = existingImageOpt.get();
-              page =
-                  pageService.createPageWithExistingImage(chapter, existingImage, pageNumber, user);
+              page = pageService.createPageWithExistingImage(chapter, existingImage, pageNumber, user);
             } else {
               String uuid = UUID.randomUUID().toString();
               String imgExt = pageService.getFileExtension(originalImageFilename);
@@ -345,15 +343,14 @@ public class PageController {
 
               String thumbnailStoragePath = null;
 
-              page =
-                  pageService.createPageAndImage(
-                      chapter,
-                      originalImageFilename,
-                      storagePath,
-                      thumbnailStoragePath,
-                      pageNumber,
-                      fileHash,
-                      user);
+              page = pageService.createPageAndImage(
+                  chapter,
+                  originalImageFilename,
+                  storagePath,
+                  thumbnailStoragePath,
+                  pageNumber,
+                  fileHash,
+                  user);
               pageService.generateAndSaveThumbnailAsync(
                   page.getImage().getId(), uuid, originalImageBytes);
             }
@@ -368,10 +365,9 @@ public class PageController {
           if (layersNode != null && layersNode.isArray()) {
             for (com.fasterxml.jackson.databind.JsonNode layerNode : layersNode) {
               String type = layerNode.has("type") ? layerNode.get("type").asText() : "translation";
-              String targetLanguage =
-                  layerNode.has("targetLanguage") && !layerNode.get("targetLanguage").isNull()
-                      ? layerNode.get("targetLanguage").asText()
-                      : null;
+              String targetLanguage = layerNode.has("targetLanguage") && !layerNode.get("targetLanguage").isNull()
+                  ? layerNode.get("targetLanguage").asText()
+                  : null;
               boolean visible = !layerNode.has("visible") || layerNode.get("visible").asBoolean();
               int zOrder = layerNode.has("zOrder") ? layerNode.get("zOrder").asInt() : 0;
 
@@ -395,25 +391,19 @@ public class PageController {
                   int maxWidth = elNode.has("maxWidth") ? elNode.get("maxWidth").asInt() : 150;
                   int maxHeight = elNode.has("maxHeight") ? elNode.get("maxHeight").asInt() : 80;
                   boolean wordWrap = !elNode.has("wordWrap") || elNode.get("wordWrap").asBoolean();
-                  double rotation =
-                      elNode.has("rotation") ? elNode.get("rotation").asDouble() : 0.0;
+                  double rotation = elNode.has("rotation") ? elNode.get("rotation").asDouble() : 0.0;
                   double x = elNode.has("x") ? elNode.get("x").asDouble() : 100.0;
                   double y = elNode.has("y") ? elNode.get("y").asDouble() : 100.0;
                   boolean elVisible = !elNode.has("visible") || elNode.get("visible").asBoolean();
-                  String backgroundColor =
-                      elNode.has("backgroundColor") && !elNode.get("backgroundColor").isNull()
-                          ? elNode.get("backgroundColor").asText()
-                          : null;
-                  String textColor =
-                      elNode.has("textColor") && !elNode.get("textColor").isNull()
-                          ? elNode.get("textColor").asText()
-                          : null;
-                  String fontWeight =
-                      elNode.has("fontWeight") ? elNode.get("fontWeight").asText() : "normal";
-                  String fontStyle =
-                      elNode.has("fontStyle") ? elNode.get("fontStyle").asText() : "normal";
-                  String boxShape =
-                      elNode.has("boxShape") ? elNode.get("boxShape").asText() : "rectangular";
+                  String backgroundColor = elNode.has("backgroundColor") && !elNode.get("backgroundColor").isNull()
+                      ? elNode.get("backgroundColor").asText()
+                      : null;
+                  String textColor = elNode.has("textColor") && !elNode.get("textColor").isNull()
+                      ? elNode.get("textColor").asText()
+                      : null;
+                  String fontWeight = elNode.has("fontWeight") ? elNode.get("fontWeight").asText() : "normal";
+                  String fontStyle = elNode.has("fontStyle") ? elNode.get("fontStyle").asText() : "normal";
+                  String boxShape = elNode.has("boxShape") ? elNode.get("boxShape").asText() : "rectangular";
 
                   String maskPolygon = null;
                   if (elNode.has("maskPolygon") && !elNode.get("maskPolygon").isNull()) {
@@ -425,10 +415,9 @@ public class PageController {
                   if (elNode.has("regionId") && !elNode.get("regionId").isNull()) {
                     try {
                       UUID regionId = UUID.fromString(elNode.get("regionId").asText());
-                      region =
-                          ocrRegionRepository
-                              .findById(Objects.requireNonNull(regionId))
-                              .orElse(null);
+                      region = ocrRegionRepository
+                          .findById(Objects.requireNonNull(regionId))
+                          .orElse(null);
                     } catch (Exception e) {
                       log.warn(
                           "Invalid regionId format or missing region: {}",
@@ -485,8 +474,7 @@ public class PageController {
           int nextNum = pageNumber;
 
           for (com.manga.library.dto.ZipImageEntry imgEntry : imageEntries) {
-            ProcessedImage processed =
-                validateAndProcessImageBytes(imgEntry.name(), imgEntry.bytes());
+            ProcessedImage processed = validateAndProcessImageBytes(imgEntry.name(), imgEntry.bytes());
             byte[] originalBytes = processed.bytes();
             String processedFilename = processed.filename();
 
@@ -495,7 +483,8 @@ public class PageController {
             StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
             for (byte b : encodedhash) {
               String hex = Integer.toHexString(0xff & b);
-              if (hex.length() == 1) hexString.append('0');
+              if (hex.length() == 1)
+                hexString.append('0');
               hexString.append(hex);
             }
             String fileHash = hexString.toString();
@@ -504,20 +493,17 @@ public class PageController {
             Optional<Image> existingImageOpt = imageRepository.findByHash(fileHash);
             if (existingImageOpt.isPresent()) {
               Image existingImage = existingImageOpt.get();
-              Page pg =
-                  pageService.createPageWithExistingImage(chapter, existingImage, nextNum, user);
-              if (firstPage == null) firstPage = pg;
+              Page pg = pageService.createPageWithExistingImage(chapter, existingImage, nextNum, user);
+              if (firstPage == null)
+                firstPage = pg;
 
-              String targetLang =
-                  chapter.getSeries().getTargetLanguage() != null
-                      ? chapter.getSeries().getTargetLanguage().trim().toLowerCase()
-                      : "en";
-              boolean targetTranslationExists =
-                  layerRepository.findByPageId(pg.getId()).stream()
-                      .anyMatch(
-                          l ->
-                              "translation".equalsIgnoreCase(l.getType())
-                                  && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
+              String targetLang = chapter.getSeries().getTargetLanguage() != null
+                  ? chapter.getSeries().getTargetLanguage().trim().toLowerCase()
+                  : "en";
+              boolean targetTranslationExists = layerRepository.findByPageId(pg.getId()).stream()
+                  .anyMatch(
+                      l -> "translation".equalsIgnoreCase(l.getType())
+                          && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
 
               if (!targetTranslationExists) {
                 jobCoordinatorService.triggerPageRedo(pg.getId(), "translation", chapter.getId());
@@ -543,18 +529,18 @@ public class PageController {
 
             String thumbnailStoragePath = null;
 
-            Page pg =
-                pageService.createPageAndImage(
-                    chapter,
-                    processedFilename,
-                    storagePath,
-                    thumbnailStoragePath,
-                    nextNum,
-                    fileHash,
-                    user);
+            Page pg = pageService.createPageAndImage(
+                chapter,
+                processedFilename,
+                storagePath,
+                thumbnailStoragePath,
+                nextNum,
+                fileHash,
+                user);
             pageService.generateAndSaveThumbnailAsync(pg.getImage().getId(), uuid, originalBytes);
 
-            if (firstPage == null) firstPage = pg;
+            if (firstPage == null)
+              firstPage = pg;
 
             jobCoordinatorService.startPipeline(pg.getImage().getId(), chapter.getId());
             nextNum++;
@@ -598,8 +584,7 @@ public class PageController {
             existingImage.getId());
 
         // Check if page already exists at this exact slot (idempotency guard)
-        Optional<Page> exactSlotPage =
-            pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
+        Optional<Page> exactSlotPage = pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
         if (exactSlotPage.isPresent()
             && exactSlotPage.get().getImage().getId().equals(existingImage.getId())) {
           return ResponseEntity.ok(
@@ -608,27 +593,21 @@ public class PageController {
         }
 
         // Calculate max page number + 1 for duplicate upload
-        List<Page> allChapterPages =
-            pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
-        int safePageNumber =
-            allChapterPages.isEmpty()
-                ? 1
-                : allChapterPages.get(allChapterPages.size() - 1).getPageNumber() + 1;
+        List<Page> allChapterPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
+        int safePageNumber = allChapterPages.isEmpty()
+            ? 1
+            : allChapterPages.get(allChapterPages.size() - 1).getPageNumber() + 1;
 
-        Page page =
-            pageService.createPageWithExistingImage(chapter, existingImage, safePageNumber, user);
+        Page page = pageService.createPageWithExistingImage(chapter, existingImage, safePageNumber, user);
 
         // Check if target language layer exists
-        String targetLang =
-            chapter.getSeries().getTargetLanguage() != null
-                ? chapter.getSeries().getTargetLanguage().trim().toLowerCase()
-                : "en";
-        boolean targetTranslationExists =
-            layerRepository.findByPageId(page.getId()).stream()
-                .anyMatch(
-                    l ->
-                        "translation".equalsIgnoreCase(l.getType())
-                            && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
+        String targetLang = chapter.getSeries().getTargetLanguage() != null
+            ? chapter.getSeries().getTargetLanguage().trim().toLowerCase()
+            : "en";
+        boolean targetTranslationExists = layerRepository.findByPageId(page.getId()).stream()
+            .anyMatch(
+                l -> "translation".equalsIgnoreCase(l.getType())
+                    && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
 
         if (!targetTranslationExists) {
           log.info(
@@ -636,7 +615,8 @@ public class PageController {
               targetLang,
               page.getId());
           jobCoordinatorService.triggerPageRedo(page.getId(), "translation", chapter.getId());
-          if (user != null) sseService.mapImageToUser(existingImage.getId(), user.getId());
+          if (user != null)
+            sseService.mapImageToUser(existingImage.getId(), user.getId());
         }
 
         return ResponseEntity.ok(
@@ -654,20 +634,20 @@ public class PageController {
       String thumbnailStoragePath = null;
 
       // Call transactional service to save image and page records
-      Page page =
-          pageService.createPageAndImage(
-              chapter,
-              originalFilename,
-              storagePath,
-              thumbnailStoragePath,
-              pageNumber,
-              fileHash,
-              user);
+      Page page = pageService.createPageAndImage(
+          chapter,
+          originalFilename,
+          storagePath,
+          thumbnailStoragePath,
+          pageNumber,
+          fileHash,
+          user);
       pageService.generateAndSaveThumbnailAsync(page.getImage().getId(), uuid, originalBytes);
 
       // Trigger pipeline
       jobCoordinatorService.startPipeline(page.getImage().getId(), chapter.getId());
-      if (user != null) sseService.mapImageToUser(page.getImage().getId(), user.getId());
+      if (user != null)
+        sseService.mapImageToUser(page.getImage().getId(), user.getId());
 
       return ResponseEntity.ok(
           new UploadResponse(page.getId(), page.getImage().getId(), "processing"));
@@ -694,60 +674,51 @@ public class PageController {
   @GetMapping("/chapters/{chapterId}/pages")
   @Transactional(readOnly = true)
   public ResponseEntity<List<PageDto>> listPages(@PathVariable UUID chapterId) {
-    List<PageDto> list =
-        pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId).stream()
-            .map(
-                p -> new PageDto(
-                  p.getId(),
-                  p.getPageNumber(),
-                  p.getImage().getId(),
-                  p.getChapter().getId(),
-                  p.getImage().getFilename(),
-                  getImageUrl(p.getImage().getId()),
-                  p.getImage().getThumbnailStoragePath() != null ? getThumbnailUrl(p.getImage().getId()) : null
-                ))
-            .collect(Collectors.toList());
+    List<PageDto> list = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId).stream()
+        .map(
+            p -> new PageDto(
+                p.getId(),
+                p.getPageNumber(),
+                p.getImage().getId(),
+                p.getChapter().getId(),
+                p.getImage().getFilename(),
+                getImageUrl(p.getImage().getId()),
+                p.getImage().getThumbnailStoragePath() != null ? getThumbnailUrl(p.getImage().getId()) : null))
+        .collect(Collectors.toList());
     return ResponseEntity.ok(list);
   }
 
-  @Operation(
-      summary = "Get a page by ID",
-      description = "Returns page details including layers, panels, and OCR regions")
+  @Operation(summary = "Get a page by ID", description = "Returns page details including layers, panels, and OCR regions")
   @ApiResponse(responseCode = "200", description = "Page found")
   @ApiResponse(responseCode = "404", description = "Page not found")
   @GetMapping("/pages/{pageId}")
   @Transactional(readOnly = true)
   public ResponseEntity<Map<String, Object>> getPage(@PathVariable UUID pageId) {
     Objects.requireNonNull(pageId, "pageId cannot be null");
-    Page page =
-        pageRepository
-            .findById(pageId)
-            .orElseThrow(() -> new ResourceNotFoundException("Page not found: " + pageId));
+    Page page = pageRepository
+        .findById(pageId)
+        .orElseThrow(() -> new ResourceNotFoundException("Page not found: " + pageId));
     Image image = page.getImage();
 
     List<Panel> panels = panelRepository.findByImageId(image.getId());
     List<OcrRegion> ocrRegions = ocrRegionRepository.findByPageId(pageId);
 
     List<Conversation> conversations = conversationRepository.findByPageId(pageId);
-    List<UUID> conversationIds =
-        conversations.stream().map(Conversation::getId).collect(Collectors.toList());
+    List<UUID> conversationIds = conversations.stream().map(c -> c.getId()).collect(Collectors.toList());
 
-    List<ConversationRegion> allConversationRegions =
-        conversationIds.isEmpty()
-            ? Collections.emptyList()
-            : conversationRegionRepository.findByConversationIdIn(conversationIds);
+    List<ConversationRegion> allConversationRegions = conversationIds.isEmpty()
+        ? Collections.emptyList()
+        : conversationRegionRepository.findByConversationIdIn(conversationIds);
 
-    Map<UUID, List<ConversationRegion>> regionsByConversation =
-        allConversationRegions.stream()
-            .collect(Collectors.groupingBy(ConversationRegion::getConversationId));
+    Map<UUID, List<ConversationRegion>> regionsByConversation = allConversationRegions.stream()
+        .collect(Collectors.groupingBy(cr -> cr.getConversationId()));
 
     List<Map<String, Object>> convList = new ArrayList<>();
     for (Conversation conv : conversations) {
       Map<String, Object> convMap = new HashMap<>();
       convMap.put("id", conv.getId().toString());
       convMap.put("sceneType", conv.getSceneType());
-      List<ConversationRegion> crs =
-          regionsByConversation.getOrDefault(conv.getId(), Collections.emptyList());
+      List<ConversationRegion> crs = regionsByConversation.getOrDefault(conv.getId(), Collections.emptyList());
       List<Map<String, Object>> crList = new ArrayList<>();
       for (ConversationRegion cr : crs) {
         Map<String, Object> crMap = new HashMap<>();
@@ -763,8 +734,8 @@ public class PageController {
     List<Layer> layers = new ArrayList<>(layerRepository.findByPageId(pageId));
     layers.sort(Comparator.comparingInt(layer -> Objects.requireNonNull(layer).getZOrder()));
     List<LayerElement> allElements = layerElementRepository.findByLayerPageId(pageId);
-    Map<UUID, List<LayerElement>> elementsByLayer =
-        allElements.stream().collect(Collectors.groupingBy(le -> le.getLayer().getId()));
+    Map<UUID, List<LayerElement>> elementsByLayer = allElements.stream()
+        .collect(Collectors.groupingBy(le -> le.getLayer().getId()));
     List<Map<String, Object>> layersResponse = new ArrayList<>();
     for (Layer l : layers) {
       Map<String, Object> map = new HashMap<>();
@@ -803,10 +774,9 @@ public class PageController {
       return getPage(pageOpt.get().getId());
     }
 
-    Image image =
-        imageRepository
-            .findById(imageId)
-            .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
+    Image image = imageRepository
+        .findById(imageId)
+        .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
     List<Panel> panels = panelRepository.findByImageId(imageId);
     Map<String, Object> response = new HashMap<>();
@@ -821,19 +791,18 @@ public class PageController {
   }
 
   @GetMapping("/pages/{pageId}/rendered")
-  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
-      getPageRenderedFile(@PathVariable UUID pageId) {
+  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> getPageRenderedFile(
+      @PathVariable UUID pageId) {
     try {
       Objects.requireNonNull(pageId, "pageId cannot be null");
       String storagePath = "rendered/" + pageId + ".png";
-      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
-          outputStream -> {
-            try (java.io.InputStream is = minioService.getFileStream(storagePath)) {
-              is.transferTo(outputStream);
-            } catch (Exception e) {
-              log.error("Error streaming rendered page file", e);
-            }
-          };
+      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody = outputStream -> {
+        try (java.io.InputStream is = minioService.getFileStream(storagePath)) {
+          is.transferTo(outputStream);
+        } catch (Exception e) {
+          log.error("Error streaming rendered page file", e);
+        }
+      };
 
       return ResponseEntity.ok()
           .contentType(org.springframework.http.MediaType.parseMediaType("image/png"))
@@ -845,23 +814,21 @@ public class PageController {
   }
 
   @GetMapping("/images/{imageId}/file")
-  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
-      getImageFile(@PathVariable UUID imageId) {
+  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> getImageFile(
+      @PathVariable UUID imageId) {
     try {
       Objects.requireNonNull(imageId, "imageId cannot be null");
-      Image image =
-          imageRepository
-              .findById(Objects.requireNonNull(imageId))
-              .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
+      Image image = imageRepository
+          .findById(Objects.requireNonNull(imageId))
+          .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
-      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
-          outputStream -> {
-            try (java.io.InputStream is = minioService.getFileStream(image.getStoragePath())) {
-              is.transferTo(outputStream);
-            } catch (Exception e) {
-              log.error("Error streaming image file", e);
-            }
-          };
+      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody = outputStream -> {
+        try (java.io.InputStream is = minioService.getFileStream(image.getStoragePath())) {
+          is.transferTo(outputStream);
+        } catch (Exception e) {
+          log.error("Error streaming image file", e);
+        }
+      };
 
       return ResponseEntity.ok()
           .contentType(org.springframework.http.MediaType.parseMediaType("image/png"))
@@ -873,27 +840,24 @@ public class PageController {
   }
 
   @GetMapping("/images/{imageId}/thumbnail")
-  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
-      getImageThumbnail(@PathVariable UUID imageId) {
+  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> getImageThumbnail(
+      @PathVariable UUID imageId) {
     try {
       Objects.requireNonNull(imageId, "imageId cannot be null");
-      Image image =
-          imageRepository
-              .findById(Objects.requireNonNull(imageId))
-              .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
+      Image image = imageRepository
+          .findById(Objects.requireNonNull(imageId))
+          .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
-      String path =
-          image.getThumbnailStoragePath() != null
-              ? image.getThumbnailStoragePath()
-              : image.getStoragePath();
-      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
-          outputStream -> {
-            try (java.io.InputStream is = minioService.getFileStream(path)) {
-              is.transferTo(outputStream);
-            } catch (Exception e) {
-              log.error("Error streaming image thumbnail", e);
-            }
-          };
+      String path = image.getThumbnailStoragePath() != null
+          ? image.getThumbnailStoragePath()
+          : image.getStoragePath();
+      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody = outputStream -> {
+        try (java.io.InputStream is = minioService.getFileStream(path)) {
+          is.transferTo(outputStream);
+        } catch (Exception e) {
+          log.error("Error streaming image thumbnail", e);
+        }
+      };
 
       return ResponseEntity.ok()
           .contentType(org.springframework.http.MediaType.parseMediaType("image/jpeg"))
@@ -935,17 +899,17 @@ public class PageController {
     log.info("Received request to reorder pages for chapter {}: {}", chapterId, pageIds);
     try {
       List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId);
-      Map<UUID, Page> pageMap =
-          pages.stream()
-              .collect(
-                  Collectors.toMap(
-                      page -> Objects.requireNonNull(page).getId(), Objects::requireNonNull));
+      Map<UUID, Page> pageMap = pages.stream()
+          .collect(
+              Collectors.toMap(
+                  page -> Objects.requireNonNull(page).getId(), Objects::requireNonNull));
 
       if (pageIds.size() != pages.size() || !pageMap.keySet().containsAll(pageIds)) {
         return ResponseEntity.badRequest().body("Invalid list of page IDs for reordering");
       }
 
-      // Phase 1: Set temporary high page numbers to avoid unique constraint violations
+      // Phase 1: Set temporary high page numbers to avoid unique constraint
+      // violations
       for (int i = 0; i < pageIds.size(); i++) {
         Page p = pageMap.get(pageIds.get(i));
         p.setPageNumber(i + 1 + 10000);
@@ -1096,20 +1060,19 @@ public class PageController {
       @AuthenticationPrincipal User user) {
     log.info("Importing project ZIP to chapter {}", chapterId);
     try {
-      Chapter chapter =
-          chapterRepository
-              .findById(Objects.requireNonNull(chapterId))
-              .orElseThrow(() -> new ResourceNotFoundException("Chapter not found: " + chapterId));
+      Chapter chapter = chapterRepository
+          .findById(Objects.requireNonNull(chapterId))
+          .orElseThrow(() -> new ResourceNotFoundException("Chapter not found: " + chapterId));
 
       byte[] projectJsonBytes = null;
       byte[] originalImageBytes = null;
       String originalImageFilename = null;
 
-      try (java.util.zip.ZipInputStream zis =
-          new java.util.zip.ZipInputStream(file.getInputStream())) {
+      try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(file.getInputStream())) {
         java.util.zip.ZipEntry entry;
         while ((entry = zis.getNextEntry()) != null) {
-          if (entry.isDirectory()) continue;
+          if (entry.isDirectory())
+            continue;
           String name = entry.getName();
           String lowerName = name.toLowerCase();
           if ("project.json".equals(name) || lowerName.endsWith("project.json")) {
@@ -1121,10 +1084,10 @@ public class PageController {
             }
             projectJsonBytes = baos.toByteArray();
           } else if ((lowerName.endsWith(".png")
-                  || lowerName.endsWith(".jpg")
-                  || lowerName.endsWith(".jpeg")
-                  || lowerName.endsWith(".webp")
-                  || lowerName.endsWith(".gif"))
+              || lowerName.endsWith(".jpg")
+              || lowerName.endsWith(".jpeg")
+              || lowerName.endsWith(".webp")
+              || lowerName.endsWith(".gif"))
               && ("original.png".equals(name)
                   || lowerName.contains("original")
                   || originalImageBytes == null)) {
@@ -1148,8 +1111,7 @@ public class PageController {
       com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(projectJsonBytes);
       int pageNumber = pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId).size() + 1;
 
-      Optional<Page> existingPageOpt =
-          pageRepository.findByChapterIdAndPageNumber(chapterId, pageNumber);
+      Optional<Page> existingPageOpt = pageRepository.findByChapterIdAndPageNumber(chapterId, pageNumber);
       Page page;
       if (existingPageOpt.isPresent()) {
         page = existingPageOpt.get();
@@ -1158,8 +1120,8 @@ public class PageController {
         // Clear existing elements and layers
         List<LayerElement> elements = layerElementRepository.findByLayerPageId(page.getId());
         for (LayerElement el : elements) {
-          List<LayerEditHistory> history =
-              layerEditHistoryRepository.findByLayerElementIdOrderByEditedAtDesc(el.getId());
+          List<LayerEditHistory> history = layerEditHistoryRepository
+              .findByLayerElementIdOrderByEditedAtDesc(el.getId());
           layerEditHistoryRepository.deleteAll(Objects.requireNonNull(history));
           layerElementRepository.delete(Objects.requireNonNull(el));
         }
@@ -1179,7 +1141,8 @@ public class PageController {
           StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
           for (byte b : encodedhash) {
             String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
+            if (hex.length() == 1)
+              hexString.append('0');
             hexString.append(hex);
           }
           String fileHash = hexString.toString();
@@ -1233,7 +1196,8 @@ public class PageController {
         StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
         for (byte b : encodedhash) {
           String hex = Integer.toHexString(0xff & b);
-          if (hex.length() == 1) hexString.append('0');
+          if (hex.length() == 1)
+            hexString.append('0');
           hexString.append(hex);
         }
         String fileHash = hexString.toString();
@@ -1255,15 +1219,14 @@ public class PageController {
 
         String thumbnailStoragePath = null;
 
-        page =
-            pageService.createPageAndImage(
-                chapter,
-                originalImageFilename,
-                storagePath,
-                thumbnailStoragePath,
-                pageNumber,
-                fileHash,
-                user);
+        page = pageService.createPageAndImage(
+            chapter,
+            originalImageFilename,
+            storagePath,
+            thumbnailStoragePath,
+            pageNumber,
+            fileHash,
+            user);
         pageService.generateAndSaveThumbnailAsync(
             page.getImage().getId(), uuid, originalImageBytes);
       }
@@ -1278,10 +1241,9 @@ public class PageController {
       if (layersNode != null && layersNode.isArray()) {
         for (com.fasterxml.jackson.databind.JsonNode layerNode : layersNode) {
           String type = layerNode.has("type") ? layerNode.get("type").asText() : "translation";
-          String targetLanguage =
-              layerNode.has("targetLanguage") && !layerNode.get("targetLanguage").isNull()
-                  ? layerNode.get("targetLanguage").asText()
-                  : null;
+          String targetLanguage = layerNode.has("targetLanguage") && !layerNode.get("targetLanguage").isNull()
+              ? layerNode.get("targetLanguage").asText()
+              : null;
           boolean visible = !layerNode.has("visible") || layerNode.get("visible").asBoolean();
           int zOrder = layerNode.has("zOrder") ? layerNode.get("zOrder").asInt() : 0;
 
@@ -1312,22 +1274,16 @@ public class PageController {
               double x = elNode.has("x") ? elNode.get("x").asDouble() : 100.0;
               double y = elNode.has("y") ? elNode.get("y").asDouble() : 100.0;
               boolean elVisible = !elNode.has("visible") || elNode.get("visible").asBoolean();
-              String backgroundColor =
-                  elNode.has("backgroundColor") && !elNode.get("backgroundColor").isNull()
-                      ? elNode.get("backgroundColor").asText()
-                      : null;
-              String textColor =
-                  elNode.has("textColor") && !elNode.get("textColor").isNull()
-                      ? elNode.get("textColor").asText()
-                      : null;
-              String fontWeight =
-                  elNode.has("fontWeight") ? elNode.get("fontWeight").asText() : "normal";
-              String fontStyle =
-                  elNode.has("fontStyle") ? elNode.get("fontStyle").asText() : "normal";
-              String boxShape =
-                  elNode.has("boxShape") ? elNode.get("boxShape").asText() : "rectangular";
-              boolean isManuallyEdited =
-                  elNode.has("isManuallyEdited") && elNode.get("isManuallyEdited").asBoolean();
+              String backgroundColor = elNode.has("backgroundColor") && !elNode.get("backgroundColor").isNull()
+                  ? elNode.get("backgroundColor").asText()
+                  : null;
+              String textColor = elNode.has("textColor") && !elNode.get("textColor").isNull()
+                  ? elNode.get("textColor").asText()
+                  : null;
+              String fontWeight = elNode.has("fontWeight") ? elNode.get("fontWeight").asText() : "normal";
+              String fontStyle = elNode.has("fontStyle") ? elNode.get("fontStyle").asText() : "normal";
+              String boxShape = elNode.has("boxShape") ? elNode.get("boxShape").asText() : "rectangular";
+              boolean isManuallyEdited = elNode.has("isManuallyEdited") && elNode.get("isManuallyEdited").asBoolean();
               if (isManuallyEdited) {
                 hasManualEdits = true;
               }
@@ -1342,8 +1298,7 @@ public class PageController {
               if (elNode.has("regionId") && !elNode.get("regionId").isNull()) {
                 try {
                   UUID regionId = UUID.fromString(elNode.get("regionId").asText());
-                  region =
-                      ocrRegionRepository.findById(Objects.requireNonNull(regionId)).orElse(null);
+                  region = ocrRegionRepository.findById(Objects.requireNonNull(regionId)).orElse(null);
                 } catch (Exception e) {
                   log.warn(
                       "Invalid regionId format or missing region: {}",

@@ -4,6 +4,7 @@ import com.manga.library.exception.ResourceNotFoundException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.lang.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -48,10 +49,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   /** Upload too large → 413. */
   @Override
   protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
-      MaxUploadSizeExceededException ex,
-      HttpHeaders headers,
-      HttpStatusCode status,
-      WebRequest request) {
+      @NonNull MaxUploadSizeExceededException ex,
+      @NonNull HttpHeaders headers,
+      @NonNull HttpStatusCode status,
+      @NonNull WebRequest request) {
     ProblemDetail pd =
         ProblemDetail.forStatusAndDetail(
             HttpStatus.PAYLOAD_TOO_LARGE, "File exceeds maximum upload size");
@@ -63,10 +64,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   /** Validation failures on @RequestBody (MethodArgumentNotValidException) → 400. */
   @Override
   protected ResponseEntity<Object> handleMethodArgumentNotValid(
-      MethodArgumentNotValidException ex,
-      HttpHeaders headers,
-      HttpStatusCode status,
-      WebRequest request) {
+      @NonNull MethodArgumentNotValidException ex,
+      @NonNull HttpHeaders headers,
+      @NonNull HttpStatusCode status,
+      @NonNull WebRequest request) {
 
     ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, "Validation failed for request");
     pd.setTitle("Validation Failed");

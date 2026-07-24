@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class CostEstimationService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CostEstimationService.class);
+  
+  @org.springframework.beans.factory.annotation.Value("${cost.openrouter-models-url:https://openrouter.ai/api/v1/models}")
+  private String openrouterModelsUrl;
 
 
   private final StringRedisTemplate redisTemplate;
@@ -26,9 +29,6 @@ public class CostEstimationService {
   }
 
 
-  private String costCachePath;
-
-  private String openrouterModelsUrl;
 
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
