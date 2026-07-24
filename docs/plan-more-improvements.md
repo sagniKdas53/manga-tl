@@ -34,20 +34,6 @@ mockMvc.perform(get("/api/pages/" + pageId)).andExpect(status().isOk());
 2. **Contract tests** — verify the JSON response shape matches what the frontend expects
 3. **At minimum**: one test that boots the full Spring context against an H2/Postgres container and calls `/health` and a few real endpoints
 
-
-
-## 9. Custom Fonts Missing in Dev
-
-### Problem
-
-The custom fonts (like Comic Neue) have stopped working in the frontend dev environment, only default system ones work.
-
-### Fix
-
-Ensure font assets are properly served or imported in the Vite dev server configuration or global CSS.
-
----
-
 ## 10. Costs Database Validation
 
 ### Problem
@@ -102,7 +88,7 @@ Furthermore, there is no formal contract or schema for the API.
 | 6 | Translation layer empty text — OpenRouter 404 | ✅ Fixed (Short-circuited at backend) |
 | 7 | Unit tests are useless (mock everything, catch nothing) | 🔲 TODO |
 | 8 | Move "Force export" button to overflow menu | ✅ Fixed |
-| 9 | Fix custom fonts not loading in dev frontend | 🔲 TODO |
+| 9 | Fix custom fonts not loading in dev frontend | ✅ Fixed |
 | 10 | Validate cost DB tracking is accurate | 🔲 TODO |
 | 11 | Fallback Models Validation logic | 🔲 TODO |
 | 12 | Create OpenAPI spec & fix API redundancy | ✅ Fixed |
@@ -288,3 +274,15 @@ The chapter card has too many buttons. "Force export" should be moved out of the
 #### Fix
 
 Moved the "Force export" button to an overflow (triple dots) menu, streamlining the actions row.
+
+---
+
+### 9. Custom Fonts Missing in Dev (✅ COMPLETED)
+
+#### Problem
+
+The custom fonts (like Comic Neue) stopped working in the frontend dev environment.
+
+#### Fix
+
+Moved the Google Fonts `@import` rule from `index.css` to standard `<link>` tags in `index.html`. This ensures Vite consistently injects and resolves external fonts across both development and production environments.
