@@ -14,13 +14,6 @@ import UploadIcon from "@mui/icons-material/Upload";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
-import ButtonGroup from "@mui/material/ButtonGroup";
-import ClickAwayListener from "@mui/material/ClickAwayListener";
-import Grow from "@mui/material/Grow";
-import Paper from "@mui/material/Paper";
-import Popper from "@mui/material/Popper";
-import MenuList from "@mui/material/MenuList";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import type { Series, Chapter } from "../types";
@@ -53,29 +46,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   onDeleteClick,
   isImporting,
 }) => {
-  const [openSplit, setOpenSplit] = useState(false);
-  const [splitAnchorEl, setSplitAnchorEl] = useState<HTMLDivElement | null>(
-    null,
-  );
-
   const [overflowAnchorEl, setOverflowAnchorEl] = useState<null | HTMLElement>(
     null,
   );
   const openOverflow = Boolean(overflowAnchorEl);
-
-  const handleToggleSplit = () => {
-    setOpenSplit((prevOpen) => !prevOpen);
-  };
-
-  const handleCloseSplit = () => {
-    if (
-      splitAnchorEl &&
-      splitAnchorEl.contains(document.activeElement as HTMLElement)
-    ) {
-      return;
-    }
-    setOpenSplit(false);
-  };
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -350,68 +324,13 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     {isImporting ? "Importing..." : "Import Project (ZIP)"}
                   </Button>
 
-                  <ButtonGroup
+                  <Button
                     variant="outlined"
-                    ref={setSplitAnchorEl}
-                    aria-label="split button"
+                    startIcon={<DownloadIcon />}
+                    onClick={onExportClick}
                   >
-                    <Button
-                      onClick={onExportClick}
-                      startIcon={<DownloadIcon />}
-                    >
-                      Export Chapter (ZIP)
-                    </Button>
-                    <Button
-                      size="small"
-                      aria-controls={
-                        openSplit ? "split-button-menu" : undefined
-                      }
-                      aria-expanded={openSplit ? "true" : undefined}
-                      aria-label="select export option"
-                      aria-haspopup="menu"
-                      onClick={handleToggleSplit}
-                    >
-                      <ArrowDropDownIcon />
-                    </Button>
-                  </ButtonGroup>
-                  <Popper
-                    sx={{ zIndex: 1 }}
-                    open={openSplit}
-                    anchorEl={splitAnchorEl}
-                    role={undefined}
-                    transition
-                    disablePortal
-                  >
-                    {({ TransitionProps, placement }) => (
-                      <Grow
-                        {...TransitionProps}
-                        style={{
-                          transformOrigin:
-                            placement === "bottom"
-                              ? "center top"
-                              : "center bottom",
-                        }}
-                      >
-                        <Paper>
-                          <ClickAwayListener onClickAway={handleCloseSplit}>
-                            <MenuList
-                              id="split-button-menu"
-                              autoFocusItem
-                            >
-                              <MenuItem
-                                onClick={() => {
-                                  onReexportClick();
-                                  setOpenSplit(false);
-                                }}
-                              >
-                                Force Re-export
-                              </MenuItem>
-                            </MenuList>
-                          </ClickAwayListener>
-                        </Paper>
-                      </Grow>
-                    )}
-                  </Popper>
+                    Export Chapter (ZIP)
+                  </Button>
 
                   <Button
                     variant="outlined"
@@ -443,6 +362,14 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       "aria-labelledby": "basic-button",
                     }}
                   >
+                    <MenuItem
+                      onClick={() => {
+                        onReexportClick();
+                        setOverflowAnchorEl(null);
+                      }}
+                    >
+                      Force Re-export
+                    </MenuItem>
                     <MenuItem
                       onClick={() => {
                         onClearExportsClick();

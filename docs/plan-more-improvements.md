@@ -34,17 +34,7 @@ mockMvc.perform(get("/api/pages/" + pageId)).andExpect(status().isOk());
 2. **Contract tests** — verify the JSON response shape matches what the frontend expects
 3. **At minimum**: one test that boots the full Spring context against an H2/Postgres container and calls `/health` and a few real endpoints
 
-## 8. Frontend UX & Button Clutter
 
-### Problem
-
-The chapter card has too many buttons. "Force export" should be moved out of the primary view.
-
-### Fix
-
-Move the "Force export" button to an overflow (triple dots) menu.
-
----
 
 ## 9. Custom Fonts Missing in Dev
 
@@ -111,7 +101,7 @@ Furthermore, there is no formal contract or schema for the API.
 | 5 | Auto-extend active sessions via `/auth/refresh` | ✅ Fixed |
 | 6 | Translation layer empty text — OpenRouter 404 | ✅ Fixed (Short-circuited at backend) |
 | 7 | Unit tests are useless (mock everything, catch nothing) | 🔲 TODO |
-| 8 | Move "Force export" button to overflow menu | 🔲 TODO |
+| 8 | Move "Force export" button to overflow menu | ✅ Fixed |
 | 9 | Fix custom fonts not loading in dev frontend | 🔲 TODO |
 | 10 | Validate cost DB tracking is accurate | 🔲 TODO |
 | 11 | Fallback Models Validation logic | 🔲 TODO |
@@ -212,43 +202,43 @@ Display these error messages in toast/alert. Currently errors are swallowed — 
 
 ### 3. If reader navigates to page 2 when chapter has 1 page → infinite spinner
 
-#### Problem
+#### Problem 3.1
 
 URL `/chapters/{id}/default/reader/2` when chapter has only 1 page. No error, just spins forever.
 
-### Fix
+#### Fix 3.1
 
 In `Reader.tsx`: validate `currentPageNumber ≤ pages.length`, redirect to last valid page, show toast.
 
 ---
 
-## 4. No JWT expiry handling → user gets stuck silently
+### 4. No JWT expiry handling → user gets stuck silently
 
-### Problem
+#### Problem 4.1
 
 Token expires after 24h. All API calls return 401. Frontend shows blank/spinner. No logout redirect, no message.
 
-### Fix
+#### Fix 4.1
 
 In `safeFetch()`: on 401 → clear token, toast "Session expired", redirect to `/login`. Add `POST /api/auth/refresh` for auto-extend.
 
 ---
 
-## 5. No auto-extension of active sessions
+### 5. No auto-extension of active sessions
 
-### Problem
+#### Problem 5.1
 
 Active user for >24h gets booted. No refresh mechanism.
 
-### Fix
+#### Fix 5.1
 
 Add `/api/auth/refresh` endpoint. Frontend calls it every 60 mins while user is active. Issues new JWT if user was active ≤15 mins ago.
 
 ---
 
-## 6. [CRITICAL] Translation layer has empty text — OpenRouter API returns 404
+### 6. [CRITICAL] Translation layer has empty text — OpenRouter API returns 404
 
-### Symptom
+#### Symptom
 
 Translation layer created with empty `translatedText`:
 
@@ -265,7 +255,7 @@ Translation layer created with empty `translatedText`:
 
 But **no `translatedText` field on the elements** — only the OCR layer has text.
 
-### Root Cause
+#### Root Cause
 
 Worker log from `run-12.log`:
 
@@ -275,14 +265,26 @@ Worker log from `run-12.log`:
 
 OpenRouter returned **404** when the worker tried to call the translation API. The worker handled the error and sent back `translationFailed: true` with empty text, but the backend still created the translation layer with no content.
 
-### Possible Causes
+#### Possible Causes
 
 1. **API key is invalid or expired** — OpenRouter returns 404 (not 401) for unknown/invalid API keys
 2. **Model name is wrong** — `deepseek/deepseek-v4-pro` might not exist or might be renamed
 3. **Worker silently swallows translation failures** — the layer is created even when all translations failed
 
-### Fix
+#### Fix 6
 
 1. **Verify OpenRouter API key** — check `OPENROUTER_API_KEY` env var in docker-compose
 2. **Verify model name** — check OpenRouter docs for the correct model path
 3. **Worker should NOT create translation layer if ALL translations failed** — it should either retry or mark the job as failed so the user knows something is wrong, not silently create an empty layer
+
+---
+
+### 8. Frontend UX & Button Clutter (✅ COMPLETED)
+
+#### Problem
+
+The chapter card has too many buttons. "Force export" should be moved out of the primary view.
+
+#### Fix
+
+Moved the "Force export" button to an overflow (triple dots) menu, streamlining the actions row.
