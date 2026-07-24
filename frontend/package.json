@@ -10,7 +10,8 @@
     "fmt": "prettier --write .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "preview": "vite preview"
+    "host": "vite --host",
+    "generate-api": "openapi-typescript http://localhost:8080/tlhub/v3/api-docs -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
