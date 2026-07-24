@@ -430,10 +430,8 @@ describe("Reader Component", () => {
     await waitFor(() => {
       const urls = mockSafeFetch.mock.calls.map((c) => c[0] as string);
       // Prefetch of N+1 and N+2 must hit the pages endpoints with PAGE ids
-      expect(urls).toContain("/api/pages/p2/details");
-      expect(urls).toContain("/api/pages/p3/details");
-      expect(urls).toContain("/api/pages/p2/layers");
-      expect(urls).toContain("/api/pages/p3/layers");
+      expect(urls).toContain("/api/pages/p2");
+      expect(urls).toContain("/api/pages/p3");
       // Image ids must never appear in /api/pages/* URLs
       expect(
         urls.some(

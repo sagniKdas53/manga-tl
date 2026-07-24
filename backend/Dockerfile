@@ -8,7 +8,7 @@ ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 COPY frontend/package*.json ./
 # npm ci: reproducible, faster, uses lockfile exactly — preferred over npm install for CI/production
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+    npm install --legacy-peer-deps
 
 COPY frontend/ ./
 RUN npm run build

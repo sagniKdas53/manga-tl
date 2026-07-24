@@ -17,6 +17,14 @@ export const getContextPath = (): string => {
   return cp;
 };
 
+const parseJwt = (token: string) => {
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (e) {
+    return null;
+  }
+};
+
 // Override global fetch to prepend the dynamic context path / subfolder base URL to API requests
 const originalFetch = window.fetch;
 window.fetch = async (
@@ -31,6 +39,44 @@ window.fetch = async (
       console.log(
         `[Fetch Override] Rewrote API request: ${input} -> ${targetUrl} (detected context: ${context})`,
       );
+    }
+  }
+
+  // Auto-refresh token if it's about to expire
+  if (typeof targetUrl === "string" && !targetUrl.includes("/auth/refresh")) {
+    const userStr = localStorage.getItem("manga_user");
+    if (userStr) {
+      try {
+        const mangaUser = JSON.parse(userStr);
+        if (mangaUser?.token) {
+          const claims = parseJwt(mangaUser.token);
+          if (claims && claims.exp) {
+            const timeToExpiry = claims.exp * 1000 - Date.now();
+            // Refresh if expiring in less than 5 minutes
+            if (timeToExpiry > 0 && timeToExpiry < 5 * 60 * 1000) {
+              const refreshRes = await originalFetch(context + "/api/auth/refresh", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${mangaUser.token}` }
+              });
+              if (refreshRes.ok) {
+                const data = await refreshRes.json();
+                mangaUser.token = data.token;
+                localStorage.setItem("manga_user", JSON.stringify(mangaUser));
+                
+                if (init?.headers) {
+                  const headers = new Headers(init.headers);
+                  if (headers.has("Authorization")) {
+                    headers.set("Authorization", `Bearer ${data.token}`);
+                    init.headers = headers;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[Fetch Auto-Refresh] Failed to refresh token", err);
+      }
     }
   }
 
