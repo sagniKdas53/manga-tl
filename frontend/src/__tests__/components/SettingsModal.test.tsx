@@ -1,16 +1,16 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import SettingsModal from "./SettingsModal";
-import { safeFetch } from "../utils";
+import SettingsModal from "../../components/SettingsModal";
+import { safeFetch } from "../../utils";
 
 const mockShowToast = vi.fn();
-vi.mock("./ToastContext", () => ({
+vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
     showToast: mockShowToast,
   }),
 }));
 
-vi.mock("../utils", () => ({
+vi.mock("../../utils", () => ({
   safeFetch: vi.fn(),
 }));
 

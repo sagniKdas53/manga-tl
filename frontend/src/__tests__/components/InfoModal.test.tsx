@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import InfoModal from "./InfoModal";
+import InfoModal from "../../components/InfoModal";
 
 describe("InfoModal", () => {
   const defaultProps = {

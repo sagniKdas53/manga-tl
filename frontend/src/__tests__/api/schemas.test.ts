@@ -4,7 +4,7 @@ import {
   ProblemDetailSchema,
   SseProgressEventSchema,
   SseCompletionEventSchema,
-} from "./schemas";
+} from "../../api/schemas";
 
 describe("API Contract Schemas", () => {
   it("PageDtoSchema parses valid page dto", () => {

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import ChapterHeader, { type ChapterHeaderProps } from "./ChapterHeader";
+import ChapterHeader, { type ChapterHeaderProps } from "../../components/ChapterHeader";
 
 const defaultProps: ChapterHeaderProps = {
   selectedSeries: {

@@ -1,10 +1,10 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
-import ReaderLeftSidebar from "./ReaderLeftSidebar";
-import { Page } from "../types";
+import ReaderLeftSidebar from "../../components/ReaderLeftSidebar";
+import { Page } from "../../types";
 
-vi.mock("./ToastContext", () => ({
+vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({ showToast: vi.fn() }),
 }));
 
@@ -138,8 +138,8 @@ describe("ReaderLeftSidebar Component", () => {
         navigateToPage={navigatePageMock}
         curPageNum={2}
         totalPages={5}
-        prevChapter={{ id: "prev" } as unknown as import("../types").Chapter}
-        nextChapter={{ id: "next" } as unknown as import("../types").Chapter}
+        prevChapter={{ id: "prev" } as unknown as import("../../types").Chapter}
+        nextChapter={{ id: "next" } as unknown as import("../../types").Chapter}
       />,
     );
 

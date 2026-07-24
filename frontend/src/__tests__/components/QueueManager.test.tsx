@@ -3,24 +3,24 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import type { Mock } from "vitest";
-import { QueueManager } from "./QueueManager";
-import { safeFetch } from "../utils";
-import { useNotifications } from "./useNotifications";
-import { useColorMode } from "../hooks/useColorMode";
+import { QueueManager } from "../../components/QueueManager";
+import { safeFetch } from "../../utils";
+import { useNotifications } from "../../components/useNotifications";
+import { useColorMode } from "../../hooks/useColorMode";
 
-vi.mock("../utils", () => ({
+vi.mock("../../utils", () => ({
   safeFetch: vi.fn(),
 }));
 
-vi.mock("./useNotifications", () => ({
+vi.mock("../../components/useNotifications", () => ({
   useNotifications: vi.fn(),
 }));
 
-vi.mock("../hooks/useColorMode", () => ({
+vi.mock("../../hooks/useColorMode", () => ({
   useColorMode: vi.fn(),
 }));
 
-vi.mock("./ToastContext", () => ({
+vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
     showToast: vi.fn(),
   }),

@@ -25,7 +25,7 @@ describe("safeFetch", () => {
 
     // Dynamically import utils to ensure it picks up the mocked global.fetch
     vi.resetModules();
-    const utils = await import("./utils");
+    const utils = await import("../../utils");
     safeFetch = utils.safeFetch;
   });
 
@@ -103,13 +103,13 @@ describe("safeFetch", () => {
 
 describe("utils helpers", () => {
   it("toSlug converts strings correctly", async () => {
-    const { toSlug } = await import("./utils");
+    const { toSlug } = await import("../../utils");
     expect(toSlug("")).toBe("manga");
     expect(toSlug("Hello World! 123")).toBe("hello-world-123");
   });
 
   it("formatCost formats numbers properly", async () => {
-    const { formatCost } = await import("./utils");
+    const { formatCost } = await import("../../utils");
     expect(formatCost(null)).toBe("N/A");
     expect(formatCost(0)).toBe("$0.00");
     expect(formatCost(0.05)).toBe("$0.0500");
@@ -118,7 +118,7 @@ describe("utils helpers", () => {
   });
 
   it("resolveOverride respects fallback precedence", async () => {
-    const { resolveOverride } = await import("./utils");
+    const { resolveOverride } = await import("../../utils");
     expect(resolveOverride("chap", "ser", "glob")).toEqual({ value: "chap", source: "chapter" });
     expect(resolveOverride(null, "ser", "glob")).toEqual({ value: "ser", source: "series" });
     expect(resolveOverride(null, null, "glob")).toEqual({ value: "glob", source: "global" });
@@ -126,7 +126,7 @@ describe("utils helpers", () => {
   });
 
   it("formatResolverHint formats hint string", async () => {
-    const { formatResolverHint } = await import("./utils");
+    const { formatResolverHint } = await import("../../utils");
     expect(formatResolverHint("series")).toBe("(inherited from series)");
     expect(formatResolverHint("global")).toBe("(global)");
     expect(formatResolverHint("chapter")).toBe("");

@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import ReaderRightSidebar from "./ReaderRightSidebar";
+import ReaderRightSidebar from "../../components/ReaderRightSidebar";
 
 describe("ReaderRightSidebar", () => {
   it("renders correctly with no selection", () => {
@@ -69,7 +69,7 @@ describe("ReaderRightSidebar", () => {
               type: "translation",
               visible: true,
               metadataJson: { layer_name: "Test TL Layer" },
-            } as unknown as import("../types").Layer,
+            } as unknown as import("../../types").Layer,
             elements: [],
           },
           {
@@ -78,9 +78,9 @@ describe("ReaderRightSidebar", () => {
               type: "sfx",
               visible: false,
               targetLanguage: "en",
-            } as unknown as import("../types").Layer,
+            } as unknown as import("../../types").Layer,
             elements: [
-              { id: "e1" } as unknown as import("../types").LayerElement,
+              { id: "e1" } as unknown as import("../../types").LayerElement,
             ],
           },
         ]}
@@ -183,7 +183,7 @@ describe("ReaderRightSidebar", () => {
             y: 0,
             w: 10,
             h: 10,
-          } as unknown as import("../types").OcrRegion,
+          } as unknown as import("../../types").OcrRegion,
         ]}
         isRedoingRegionOcr={false}
         handleRedoRegionOcr={vi.fn()}
@@ -333,7 +333,7 @@ describe("ReaderRightSidebar", () => {
               type: "translation",
               visible: true,
               metadataJson: { layer_name: "Test Layer" },
-            } as unknown as import("../types").Layer,
+            } as unknown as import("../../types").Layer,
             elements: [],
           },
         ]}
@@ -440,7 +440,7 @@ describe("ReaderRightSidebar", () => {
       width: 100,
       height: 50,
       readingOrder: 1,
-    } as unknown as import("../types").OcrRegion;
+    } as unknown as import("../../types").OcrRegion;
 
     const mockHandleRedoRegion = vi.fn();
 

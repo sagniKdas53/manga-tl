@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import ChapterDragOverlay from "./ChapterDragOverlay";
+import ChapterDragOverlay from "../../components/ChapterDragOverlay";
 
 describe("ChapterDragOverlay", () => {
   it("renders nothing when visible is false", () => {

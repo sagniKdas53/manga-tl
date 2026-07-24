@@ -1,23 +1,23 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { NotificationCenter } from "./NotificationCenter";
-import { useNotifications } from "./useNotifications";
-import { useColorMode } from "../hooks/useColorMode";
-import { safeFetch } from "../utils";
+import { NotificationCenter } from "../../components/NotificationCenter";
+import { useNotifications } from "../../components/useNotifications";
+import { useColorMode } from "../../hooks/useColorMode";
+import { safeFetch } from "../../utils";
 
-vi.mock("./useNotifications", () => ({
+vi.mock("../../components/useNotifications", () => ({
   useNotifications: vi.fn(),
 }));
-vi.mock("../hooks/useColorMode", () => ({
+vi.mock("../../hooks/useColorMode", () => ({
   useColorMode: vi.fn(),
 }));
-vi.mock("../utils", () => ({
+vi.mock("../../utils", () => ({
   safeFetch: vi.fn(),
 }));
 
 const mockShowToast = vi.fn();
-vi.mock("./ToastContext", () => ({
+vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
     showToast: mockShowToast,
   }),

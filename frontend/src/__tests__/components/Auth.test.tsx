@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import Auth from "./Auth";
+import Auth from "../../components/Auth";
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", () => ({
@@ -9,7 +9,7 @@ vi.mock("react-router-dom", () => ({
 }));
 
 const mockSafeFetch = vi.fn();
-vi.mock("../utils", () => ({
+vi.mock("../../utils", () => ({
   safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
 }));
 
