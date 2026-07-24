@@ -59,10 +59,7 @@ public class JwtTest {
     // Generate dynamically signed JWT token
     String token = "Bearer " + jwtUtils.generateToken("admin@manga.local");
 
-    ChapterDto dto = new ChapterDto();
-    dto.setChapterNumber(1.0);
-    dto.setTitle("One");
-
+    ChapterDto dto = new ChapterDto(null, null, 1.0, "One", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     mockMvc
         .perform(
             post("/api/series/" + series.getId() + "/chapters")
@@ -128,10 +125,7 @@ public class JwtTest {
 
     String rawToken = jwtUtils.generateToken("admin@manga.local");
 
-    ChapterDto dto = new ChapterDto();
-    dto.setChapterNumber(2.0);
-    dto.setTitle("Two");
-
+    ChapterDto dto = new ChapterDto(null, null, 2.0, "Two", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     mockMvc
         .perform(
             post("/api/series/" + series.getId() + "/chapters")

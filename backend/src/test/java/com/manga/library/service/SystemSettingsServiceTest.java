@@ -49,24 +49,26 @@ public class SystemSettingsServiceTest {
     SystemSettingsDto settings = systemSettingsService.getSettings();
 
     assertNotNull(settings);
-    assertEquals("openrouter", settings.getOcrProvider());
-    assertEquals("default-ocr-model", settings.getOcrModel());
-    assertEquals(2, settings.getOcrVlmModelList().size());
-    assertTrue(settings.getOcrVlmModelList().contains("ocr1"));
-    assertTrue(settings.getOcrVlmModelList().contains("ocr2"));
+    assertEquals("openrouter", settings.ocrProvider());
+    assertEquals("default-ocr-model", settings.ocrModel());
+    assertEquals(2, settings.ocrVlmModelList().size());
+    assertTrue(settings.ocrVlmModelList().contains("ocr1"));
+    assertTrue(settings.ocrVlmModelList().contains("ocr2"));
 
-    assertEquals("openrouter", settings.getTlProvider());
-    assertEquals("default-tl-model", settings.getTlModel());
-    assertEquals(2, settings.getTlLlmModelList().size());
+    assertEquals("openrouter", settings.tlProvider());
+    assertEquals("default-tl-model", settings.tlModel());
+    assertEquals(2, settings.tlLlmModelList().size());
 
-    assertEquals("openrouter", settings.getQaProvider());
-    assertEquals("default-qa-llm", settings.getQaLlmModel());
-    assertEquals("default-qa-vlm", settings.getQaVlmModel());
+    assertEquals("openrouter", settings.qaProvider());
+    assertEquals("default-qa-llm", settings.qaLlmModel());
+    assertEquals("default-qa-vlm", settings.qaVlmModel());
   }
 
   @Test
   public void testGetSettings_FromRepository() {
-    SystemSetting mockOcrProvider = new SystemSetting("ocrProvider", "local", null);
+    SystemSetting mockOcrProvider = new SystemSetting();
+    mockOcrProvider.setSettingKey("ocrProvider");
+    mockOcrProvider.setSettingValue("local");
     when(systemSettingsRepository.findById("ocrProvider")).thenReturn(Optional.of(mockOcrProvider));
     when(systemSettingsRepository.findById(argThat(key -> !key.equals("ocrProvider"))))
         .thenReturn(Optional.empty());
@@ -74,22 +76,16 @@ public class SystemSettingsServiceTest {
     SystemSettingsDto settings = systemSettingsService.getSettings();
 
     assertNotNull(settings);
-    assertEquals("local", settings.getOcrProvider());
-    assertEquals("default-ocr-model", settings.getOcrModel());
+    assertEquals("local", settings.ocrProvider());
+    assertEquals("default-ocr-model", settings.ocrModel());
   }
 
   @Test
   public void testUpdateSettings() {
-    SystemSettingsDto updateDto = new SystemSettingsDto();
-    updateDto.setOcrProvider("local");
-    updateDto.setOcrModel("new-ocr-model");
-    updateDto.setTlProvider("gemini");
-    updateDto.setTlModel("new-tl-model");
-    updateDto.setQaProvider("openai");
-    updateDto.setQaLlmModel("new-qa-llm");
-    updateDto.setQaVlmModel("new-qa-vlm");
-
-    SystemSetting existingOcrProvider = new SystemSetting("ocrProvider", "openrouter", null);
+    SystemSettingsDto updateDto = new SystemSettingsDto(null, null, null, null, null, "local", "new-ocr-model", "gemini", "new-tl-model", "openai", "new-qa-llm", "new-qa-vlm", false, null, false, null, null, null, null);
+    SystemSetting existingOcrProvider = new SystemSetting();
+    existingOcrProvider.setSettingKey("ocrProvider");
+    existingOcrProvider.setSettingValue("openrouter");
     when(systemSettingsRepository.findById("ocrProvider"))
         .thenReturn(Optional.of(existingOcrProvider));
     when(systemSettingsRepository.findById(argThat(key -> !key.equals("ocrProvider"))))

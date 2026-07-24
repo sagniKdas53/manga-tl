@@ -118,9 +118,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testPanelCallback_Success() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto();
-    dto.setImageId(UUID.randomUUID());
-
+    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
     mockMvc
         .perform(
             post("/api/internal/jobs/callback/panel")
@@ -133,8 +131,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testPanelCallback_Failure() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto();
-    dto.setImageId(UUID.randomUUID());
+    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
         .handlePanelCallback(any(PanelCallbackDto.class));
@@ -149,8 +146,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testOcrCallback_Success() throws Exception {
-    OcrCallbackDto dto = new OcrCallbackDto();
-    dto.setImageId(UUID.randomUUID());
+    OcrCallbackDto dto = new OcrCallbackDto(UUID.randomUUID(), null, null, null, null, null);
     doNothing().when(jobCoordinatorService).handleOcrCallback(any());
 
     mockMvc
@@ -163,8 +159,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testOcrCallback_Failure() throws Exception {
-    OcrCallbackDto dto = new OcrCallbackDto();
-    dto.setImageId(UUID.randomUUID());
+    OcrCallbackDto dto = new OcrCallbackDto(UUID.randomUUID(), null, null, null, null, null);
     doThrow(new RuntimeException("error")).when(jobCoordinatorService).handleOcrCallback(any());
 
     mockMvc
@@ -177,8 +172,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testTranslateCallback_Success() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto();
-    dto.setImageId(UUID.randomUUID());
+    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
     doNothing().when(jobCoordinatorService).handleTranslationCallback(any(), any(), any());
 
     mockMvc
@@ -191,8 +185,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testLayoutCallback_Success() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto();
-    dto.setImageId(UUID.randomUUID());
+    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
     doNothing().when(jobCoordinatorService).handleLayoutCallback(any(), any(), any());
 
     mockMvc
@@ -205,8 +198,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testQaCallback_Success() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto();
-    dto.setImageId(UUID.randomUUID());
+    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
     doReturn("PASSED").when(jobCoordinatorService).handleQaCallback(any(), any(), any());
 
     mockMvc

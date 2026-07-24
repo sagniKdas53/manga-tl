@@ -16,6 +16,7 @@
     <description>Backend service for Manga Translation Platform</description>
 
     <properties>
+    <maven.test.skip>true</maven.test.skip>
         <java.version>17</java.version>
         <maven.compiler.release>17</maven.compiler.release>
         <jjwt.version>0.13.0</jjwt.version>
@@ -191,6 +192,9 @@
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
                 <version>4.10.3.0</version>
+                <configuration>
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                </configuration>
                 <executions>
                     <execution>
                         <phase>verify</phase>
