@@ -204,6 +204,67 @@ mockMvc.perform(get("/api/pages/" + pageId)).andExpect(status().isOk());
 2. **Contract tests** — verify the JSON response shape matches what the frontend expects
 3. **At minimum**: one test that boots the full Spring context against an H2/Postgres container and calls `/health` and a few real endpoints
 
+## 8. Frontend UX & Button Clutter
+
+### Problem
+
+The chapter card has too many buttons. "Force export" should be moved out of the primary view.
+
+### Fix
+
+Move the "Force export" button to an overflow (triple dots) menu.
+
+---
+
+## 9. Custom Fonts Missing in Dev
+
+### Problem
+
+The custom fonts (like Comic Neue) have stopped working in the frontend dev environment, only default system ones work.
+
+### Fix
+
+Ensure font assets are properly served or imported in the Vite dev server configuration or global CSS.
+
+---
+
+## 10. Costs Database Validation
+
+### Problem
+
+We need to ensure that the costs DB is being updated properly and costs are actually being tracked after processing jobs.
+
+### Fix
+
+Validate and add tests to ensure the cost records are correctly inserted when jobs finish.
+
+---
+
+## 11. Fallback Models Still Failing
+
+### Problem
+
+Even when "Fallback Models" is enabled, jobs can fail (e.g., `openrouter/tencent/hy3:free` returns 500). The fallback mechanism might not be working correctly or the fallback models themselves are failing without gracefully retrying another one.
+
+### Fix
+
+Improve the fallback logic in the worker to ensure it tries the next available model in the fallback list if the primary one returns a 500.
+
+---
+
+## 12. API Endpoint Redundancy & OpenAPI Spec
+
+### Problem
+
+We currently have two different API endpoints for loading a single page in the reader: `/api/pages/{pageId}/details` and `/api/pages/{pageId}/layers`. They return largely similar or overlapping data, which is inefficient.
+Furthermore, there is no formal contract or schema for the API.
+
+### Fix
+
+1. Create a proper **OpenAPI Spec** for the REST API to address the design and serve as a contract.
+2. Unify the page loading endpoints or clearly separate their concerns based on the spec.
+3. Enforce REST validation.
+
 ---
 
 ## Action Items Summary
@@ -213,8 +274,13 @@ mockMvc.perform(get("/api/pages/" + pageId)).andExpect(status().isOk());
 | 1 | `/api/pages/{id}/details` — proxy/lazy init issues | ✅ Fixed |
 | 1b | `/api/pages/{id}/details` — `IllegalArgumentException` → 404, not 500 | ✅ Fixed |
 | 2 | Proper 4XX/5XX error responses with messages | ✅ Fixed |
-| 3 | Reader page-out-of-bounds infinite spinner | 🔲 TODO |
+| 3 | Reader page-out-of-bounds infinite spinner | ✅ Fixed |
 | 4 | JWT expiry detection & redirect to login | 🔲 TODO |
 | 5 | Auto-extend active sessions via `/auth/refresh` | 🔲 TODO |
-| 6 | Translation layer empty text — OpenRouter 404 | 🔲 IN PROGRESS (check API key/model) |
+| 6 | Translation layer empty text — OpenRouter 404 | ✅ Fixed (Short-circuited at backend) |
 | 7 | Unit tests are useless (mock everything, catch nothing) | 🔲 TODO |
+| 8 | Move "Force export" button to overflow menu | 🔲 TODO |
+| 9 | Fix custom fonts not loading in dev frontend | 🔲 TODO |
+| 10 | Validate cost DB tracking is accurate | 🔲 TODO |
+| 11 | Fallback models failing / improve fallback logic | 🔲 TODO |
+| 12 | Create OpenAPI spec & fix API redundancy | 🔲 TODO (High Priority) |
