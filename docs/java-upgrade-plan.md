@@ -4,11 +4,11 @@
 
 Here is the complete, step-by-step guide to achieving this hybrid deployment. By following this sequence, you will safely compile and test your application using Java 25 locally, and then deploy the resulting artifact into a high-performance Java 26 container.
 
-### Phase 1: Upgrade the Host Machine
+### Phase 1: Upgrade the Host Machine (done)
 
 Since your system's package manager provides outdated versions, you need to configure your local Ubuntu environment to compile Java 25 code using a compatible version of Maven.
 
-1. **Install SDKMAN:**
+1. **Install SDKMAN:** (done)
 Download and initialize the environment manager:
 
 ```bash
@@ -17,23 +17,23 @@ source "$HOME/.sdkman/bin/sdkman-init.sh"
 
 ```
 
-1. **Install Java 25:**
+1. **Install Java 26:** (done)
 
 ```bash
-sdk install java 25-open
+sdk install java java 26.0.2-amzn
 
 ```
 
-1. **Install the latest Maven:**
-This will install a version of Maven newer than the 3.14.1 requirement for Java 25.
+1. **Install the latest Maven:** (done)
+This will install a version of Maven newer than the 3.9.16 requirement for Java 26.
 
 ```bash
 sdk install maven
 
 ```
 
-1. **Verify the installation:**
-Run `java -version` and `mvn -v` to ensure your host is now pointing to the newly installed Java 25 SDK and the updated Maven release.
+1. **Verify the installation:** (done)
+Run `java -version` and `mvn -v` to ensure your host is now pointing to the newly installed Java 26 SDK and the updated Maven release.
 
 ---
 
