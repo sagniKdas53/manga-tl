@@ -684,11 +684,17 @@ export const Reader: React.FC<ReaderProps> = ({
           }
         });
 
-        // 2. Evict pages outside of window [N, N+1, N+2] to save memory
+        // 2. Evict pages outside of window [N-1, N, N+1, N+2] to save memory
+        const prevPageId =
+          currentPageIndex > 0 ? pages[currentPageIndex - 1].id : null;
+
         const activeWindowIds = new Set([
           currentPageId,
           ...pagesToPrefetch.map((p) => p.id),
         ]);
+        if (prevPageId) {
+          activeWindowIds.add(prevPageId);
+        }
 
         // Evict from cache
         Object.keys(pageDetailsCache.current).forEach((cachedId) => {
