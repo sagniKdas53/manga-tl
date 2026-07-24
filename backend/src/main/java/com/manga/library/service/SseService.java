@@ -8,20 +8,24 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class SseService {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SseService.class);
+
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
   private final ImageRepository imageRepository;
+  public SseService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, ImageRepository imageRepository) {
+    this.redisTemplate = redisTemplate;
+    this.objectMapper = objectMapper;
+    this.imageRepository = imageRepository;
+  }
+
   private final ConcurrentHashMap<UUID, SseEmitter> emitters = new ConcurrentHashMap<>();
 
   private static final String NOTIFICATION_PREFIX = "notifications:user:";

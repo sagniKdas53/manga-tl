@@ -9,15 +9,13 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class ChapterExportService {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ChapterExportService.class);
+
 
   private final ChapterRepository chapterRepository;
   private final PageRepository pageRepository;
@@ -26,6 +24,16 @@ public class ChapterExportService {
   private final LayerElementRepository layerElementRepository;
   private final JobCostRepository jobCostRepository;
   private final SseService sseService;
+  public ChapterExportService(ChapterRepository chapterRepository, PageRepository pageRepository, MinioService minioService, LayerRepository layerRepository, LayerElementRepository layerElementRepository, JobCostRepository jobCostRepository, SseService sseService) {
+    this.chapterRepository = chapterRepository;
+    this.pageRepository = pageRepository;
+    this.minioService = minioService;
+    this.layerRepository = layerRepository;
+    this.layerElementRepository = layerElementRepository;
+    this.jobCostRepository = jobCostRepository;
+    this.sseService = sseService;
+  }
+
 
   @Transactional(readOnly = true)
   public void buildAndUploadExport(UUID chapterId, UUID userId, boolean force) {

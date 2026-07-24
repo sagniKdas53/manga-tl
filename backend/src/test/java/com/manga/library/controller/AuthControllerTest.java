@@ -91,7 +91,7 @@ public class AuthControllerTest {
 
   @Test
   public void testRegister_EmailAlreadyExists() throws Exception {
-    User existingUser = User.builder().email("test@test.com").build();
+    User existingUser = new User() {{ setEmail("test@test.com"); }};
     when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(existingUser));
 
     RegisterRequest request = new RegisterRequest();
@@ -110,12 +110,7 @@ public class AuthControllerTest {
   @Test
   public void testLogin_Success() throws Exception {
     User user =
-        User.builder()
-            .email("test@test.com")
-            .passwordHash("hashed_password")
-            .displayName("Test User")
-            .role("viewer")
-            .build();
+        new User() {{ setEmail("test@test.com"); setPasswordHash("hashed_password"); setDisplayName("Test User"); setRole("viewer"); }};
 
     when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("password", "hashed_password")).thenReturn(true);
@@ -154,7 +149,7 @@ public class AuthControllerTest {
 
   @Test
   public void testLogin_PasswordMismatch() throws Exception {
-    User user = User.builder().email("test@test.com").passwordHash("hashed").build();
+    User user = new User() {{ setEmail("test@test.com"); setPasswordHash("hashed"); }};
     when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("password", "hashed")).thenReturn(false);
 

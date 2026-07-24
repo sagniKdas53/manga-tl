@@ -3,21 +3,13 @@ package com.manga.library.model;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import lombok.*;
 
 @Entity
 @Table(name = "layers")
-@Getter
-@Setter
-@ToString(exclude = {"page"})
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class Layer {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  @EqualsAndHashCode.Include
+  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -32,10 +24,10 @@ public class Layer {
   @Column(name = "target_language")
   private String targetLanguage;
 
-  @Builder.Default private Boolean visible = true;
+   private Boolean visible = true;
 
   @Column(name = "z_order", nullable = false)
-  @Builder.Default
+  
   private Integer zOrder = 0;
 
   @Column(name = "created_at", nullable = false, updatable = false)
@@ -48,5 +40,84 @@ public class Layer {
   @PrePersist
   protected void onCreate() {
     createdAt = OffsetDateTime.now();
+  }
+
+  public Layer() {}
+
+  public UUID getId() {
+    return this.id;
+  }
+
+  public void setId(UUID id) {
+    this.id = id;
+  }
+
+  public Page getPage() {
+    return this.page;
+  }
+
+  public void setPage(Page page) {
+    this.page = page;
+  }
+
+  public String getType() {
+    return this.type;
+  }
+
+  public void setType(String type) {
+    this.type = type;
+  }
+
+  public String getTargetLanguage() {
+    return this.targetLanguage;
+  }
+
+  public void setTargetLanguage(String targetLanguage) {
+    this.targetLanguage = targetLanguage;
+  }
+
+  public Boolean getVisible() {
+    return this.visible;
+  }
+
+  public void setVisible(Boolean visible) {
+    this.visible = visible;
+  }
+
+  public Integer getZOrder() {
+    return this.zOrder;
+  }
+
+  public void setZOrder(Integer zOrder) {
+    this.zOrder = zOrder;
+  }
+
+  public OffsetDateTime getCreatedAt() {
+    return this.createdAt;
+  }
+
+  public void setCreatedAt(OffsetDateTime createdAt) {
+    this.createdAt = createdAt;
+  }
+
+  public com.fasterxml.jackson.databind.JsonNode getMetadataJson() {
+    return this.metadataJson;
+  }
+
+  public void setMetadataJson(com.fasterxml.jackson.databind.JsonNode metadataJson) {
+    this.metadataJson = metadataJson;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Layer)) return false;
+    Layer that = (Layer) o;
+    return id != null && id.equals(that.getId());
+  }
+
+  @Override
+  public int hashCode() {
+    return getClass().hashCode();
   }
 }

@@ -29,32 +29,24 @@ public class LayerElementRepositoryTest {
   @Test
   public void testLayerElementCRUD() {
     // Parent Image and Layer
-    Image image = Image.builder().filename("el_img.png").storagePath("path/el_img.png").build();
+    Image image = new Image() {{ setFilename("el_img.png"); setStoragePath("path/el_img.png"); }};
     image = imageRepository.save(image);
 
     Series series =
         seriesRepository.save(
-            Series.builder().title("Test").originalLanguage("ja").readingDirection("rtl").build());
+            new Series() {{ setTitle("Test"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }});
     Chapter chapter =
-        chapterRepository.save(Chapter.builder().series(series).chapterNumber(1.0).build());
+        chapterRepository.save(new Chapter() {{ setSeries(series); setChapterNumber(1.0); }});
 
-    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
-    Layer layer = Layer.builder().page(page).type("translation").build();
+    Layer layer = new Layer() {{ setPage(page); setType("translation"); }};
     layer = layerRepository.save(layer);
 
     // 1. Create
     LayerElement element =
-        LayerElement.builder()
-            .layer(layer)
-            .text("Hello World")
-            .font("Arial")
-            .size(14.0)
-            .x(100.0)
-            .y(200.0)
-            .visible(true)
-            .build();
+        new LayerElement() {{ setLayer(layer); setText("Hello World"); setFont("Arial"); setSize(14.0); setX(100.0); setY(200.0); setVisible(true); }};
 
     LayerElement saved = layerElementRepository.save(element);
     assertNotNull(saved.getId());

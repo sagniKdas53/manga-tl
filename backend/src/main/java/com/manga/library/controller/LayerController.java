@@ -7,8 +7,6 @@ import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import java.time.OffsetDateTime;
 import java.util.*;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,9 +15,9 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api")
-@RequiredArgsConstructor
-@Slf4j
 public class LayerController {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LayerController.class);
+
 
   private final LayerRepository layerRepository;
   private final LayerElementRepository layerElementRepository;
@@ -27,6 +25,15 @@ public class LayerController {
   private final PageRepository pageRepository;
   private final ObjectMapper objectMapper;
   private final OcrRegionRepository ocrRegionRepository;
+  public LayerController(LayerRepository layerRepository, LayerElementRepository layerElementRepository, LayerEditHistoryRepository layerEditHistoryRepository, PageRepository pageRepository, ObjectMapper objectMapper, OcrRegionRepository ocrRegionRepository) {
+    this.layerRepository = layerRepository;
+    this.layerElementRepository = layerElementRepository;
+    this.layerEditHistoryRepository = layerEditHistoryRepository;
+    this.pageRepository = pageRepository;
+    this.objectMapper = objectMapper;
+    this.ocrRegionRepository = ocrRegionRepository;
+  }
+
 
   @PutMapping("/layer-elements/{id}")
   @Transactional
@@ -48,29 +55,29 @@ public class LayerController {
                 String prevJson = objectMapper.writeValueAsString(prevMap);
 
                 // Apply changes from DTO
-                if (dto.getText() != null) element.setText(dto.getText());
-                if (dto.getFont() != null) element.setFont(dto.getFont());
-                if (dto.getSize() != null) element.setSize(dto.getSize());
-                if (dto.getAutoSize() != null) element.setAutoSize(dto.getAutoSize());
-                if (dto.getMaxWidth() != null) element.setMaxWidth(dto.getMaxWidth());
-                if (dto.getMaxHeight() != null) element.setMaxHeight(dto.getMaxHeight());
-                if (dto.getWordWrap() != null) element.setWordWrap(dto.getWordWrap());
-                if (dto.getRotation() != null) element.setRotation(dto.getRotation());
-                if (dto.getX() != null) element.setX(dto.getX());
-                if (dto.getY() != null) element.setY(dto.getY());
-                if (dto.getVisible() != null) element.setVisible(dto.getVisible());
-                if (dto.getOverflow() != null) element.setOverflow(dto.getOverflow());
-                if (dto.getBackgroundColor() != null)
-                  element.setBackgroundColor(dto.getBackgroundColor());
-                if (dto.getTextColor() != null) element.setTextColor(dto.getTextColor());
-                if (dto.getFontWeight() != null) element.setFontWeight(dto.getFontWeight());
-                if (dto.getFontStyle() != null) element.setFontStyle(dto.getFontStyle());
-                if (dto.getBoxShape() != null) element.setBoxShape(dto.getBoxShape());
-                if (dto.getMaskPolygon() != null) element.setMaskPolygon(dto.getMaskPolygon());
-                if (dto.getRegionId() != null) {
+                if (dto.text() != null) element.setText(dto.text());
+                if (dto.font() != null) element.setFont(dto.font());
+                if (dto.size() != null) element.setSize(dto.size());
+                if (dto.autoSize() != null) element.setAutoSize(dto.autoSize());
+                if (dto.maxWidth() != null) element.setMaxWidth(dto.maxWidth());
+                if (dto.maxHeight() != null) element.setMaxHeight(dto.maxHeight());
+                if (dto.wordWrap() != null) element.setWordWrap(dto.wordWrap());
+                if (dto.rotation() != null) element.setRotation(dto.rotation());
+                if (dto.x() != null) element.setX(dto.x());
+                if (dto.y() != null) element.setY(dto.y());
+                if (dto.visible() != null) element.setVisible(dto.visible());
+                if (dto.overflow() != null) element.setOverflow(dto.overflow());
+                if (dto.backgroundColor() != null)
+                  element.setBackgroundColor(dto.backgroundColor());
+                if (dto.textColor() != null) element.setTextColor(dto.textColor());
+                if (dto.fontWeight() != null) element.setFontWeight(dto.fontWeight());
+                if (dto.fontStyle() != null) element.setFontStyle(dto.fontStyle());
+                if (dto.boxShape() != null) element.setBoxShape(dto.boxShape());
+                if (dto.maskPolygon() != null) element.setMaskPolygon(dto.maskPolygon());
+                if (dto.regionId() != null) {
                   OcrRegion region =
                       ocrRegionRepository
-                          .findById(Objects.requireNonNull(dto.getRegionId()))
+                          .findById(Objects.requireNonNull(dto.regionId()))
                           .orElse(null);
                   element.setRegion(region);
                 }
@@ -84,13 +91,11 @@ public class LayerController {
 
                 // If state changed, save history
                 if (!prevJson.equals(newJson)) {
-                  LayerEditHistory history =
-                      LayerEditHistory.builder()
-                          .layerElement(element)
-                          .previousValueJson(prevJson)
-                          .newValueJson(newJson)
-                          .editedBy(user)
-                          .build();
+                  LayerEditHistory history = new LayerEditHistory();
+                  history.setLayerElement(element);
+                  history.setPreviousValueJson(prevJson);
+                  history.setNewValueJson(newJson);
+                  history.setEditedBy(user);
                   Objects.requireNonNull(history, "history cannot be null");
                   layerEditHistoryRepository.save(Objects.requireNonNull(history));
                   log.info("Saved edit history for LayerElement {}", id);
@@ -174,15 +179,13 @@ public class LayerController {
                 }
               }
 
-              Layer layer =
-                  Layer.builder()
-                      .page(page)
-                      .type(type)
-                      .targetLanguage(targetLanguage)
-                      .visible(visible)
-                      .zOrder(zOrder)
-                      .metadataJson(metadataJson)
-                      .build();
+              Layer layer = new Layer();
+              layer.setPage(page);
+              layer.setType(type);
+              layer.setTargetLanguage(targetLanguage);
+              layer.setVisible(visible);
+              layer.setZOrder(zOrder);
+              layer.setMetadataJson(metadataJson);
 
               Objects.requireNonNull(layer, "layer cannot be null");
               Layer saved = layerRepository.save(Objects.requireNonNull(layer));
@@ -290,33 +293,31 @@ public class LayerController {
         .map(
             layer -> {
               OcrRegion region = null;
-              if (dto.getRegionId() != null) {
+              if (dto.regionId() != null) {
                 region =
                     ocrRegionRepository
-                        .findById(Objects.requireNonNull(dto.getRegionId()))
+                        .findById(Objects.requireNonNull(dto.regionId()))
                         .orElse(null);
               }
-              LayerElement el =
-                  LayerElement.builder()
-                      .layer(layer)
-                      .region(region)
-                      .text(dto.getText() != null ? dto.getText() : "")
-                      .font(dto.getFont() != null ? dto.getFont() : "Comic Neue")
-                      .size(dto.getSize() != null ? dto.getSize() : 16.0)
-                      .autoSize(Boolean.TRUE.equals(dto.getAutoSize()))
-                      .maxWidth(dto.getMaxWidth() != null ? dto.getMaxWidth() : 150)
-                      .maxHeight(dto.getMaxHeight() != null ? dto.getMaxHeight() : 80)
-                      .wordWrap(Boolean.TRUE.equals(dto.getWordWrap()))
-                      .rotation(dto.getRotation() != null ? dto.getRotation() : 0.0)
-                      .x(dto.getX() != null ? dto.getX() : 100.0)
-                      .y(dto.getY() != null ? dto.getY() : 100.0)
-                      .visible(dto.getVisible() == null || dto.getVisible())
-                      .backgroundColor(dto.getBackgroundColor())
-                      .fontWeight(dto.getFontWeight() != null ? dto.getFontWeight() : "normal")
-                      .fontStyle(dto.getFontStyle() != null ? dto.getFontStyle() : "normal")
-                      .boxShape(dto.getBoxShape() != null ? dto.getBoxShape() : "rectangular")
-                      .maskPolygon(dto.getMaskPolygon())
-                      .build();
+              LayerElement el = new LayerElement();
+              el.setLayer(layer);
+              el.setRegion(region);
+              el.setText(dto.text() != null ? dto.text() : "");
+              el.setFont(dto.font() != null ? dto.font() : "Comic Neue");
+              el.setSize(dto.size() != null ? dto.size() : 16.0);
+              el.setAutoSize(Boolean.TRUE.equals(dto.autoSize()));
+              el.setMaxWidth(dto.maxWidth() != null ? dto.maxWidth() : 150);
+              el.setMaxHeight(dto.maxHeight() != null ? dto.maxHeight() : 80);
+              el.setWordWrap(Boolean.TRUE.equals(dto.wordWrap()));
+              el.setRotation(dto.rotation() != null ? dto.rotation() : 0.0);
+              el.setX(dto.x() != null ? dto.x() : 100.0);
+              el.setY(dto.y() != null ? dto.y() : 100.0);
+              el.setVisible(dto.visible() == null || dto.visible());
+              el.setBackgroundColor(dto.backgroundColor());
+              el.setFontWeight(dto.fontWeight() != null ? dto.fontWeight() : "normal");
+              el.setFontStyle(dto.fontStyle() != null ? dto.fontStyle() : "normal");
+              el.setBoxShape(dto.boxShape() != null ? dto.boxShape() : "rectangular");
+              el.setMaskPolygon(dto.maskPolygon());
               LayerElement saved = layerElementRepository.save(Objects.requireNonNull(el));
               Page pg = layer.getPage();
               if (pg != null) {

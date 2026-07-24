@@ -2,8 +2,6 @@ package com.manga.library.controller;
 
 import com.manga.library.model.User;
 import com.manga.library.service.SseService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,11 +11,15 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/notifications")
-@RequiredArgsConstructor
-@Slf4j
 public class NotificationController {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(NotificationController.class);
+
 
   private final SseService sseService;
+  public NotificationController(SseService sseService) {
+    this.sseService = sseService;
+  }
+
 
   @GetMapping("/stream")
   public SseEmitter stream() {

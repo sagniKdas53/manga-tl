@@ -3,23 +3,15 @@ package com.manga.library.model;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import lombok.*;
 
 @Entity
 @Table(
     name = "chapters",
     uniqueConstraints = {@UniqueConstraint(columnNames = {"series_id", "chapter_number"})})
-@Getter
-@Setter
-@ToString(exclude = {"series"})
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class Chapter {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  @EqualsAndHashCode.Include
+  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -69,7 +61,7 @@ public class Chapter {
   @Column(name = "routing_strategy")
   private String routingStrategy;
 
-  @Builder.Default
+  
   @Column(name = "use_context_memory", nullable = false, columnDefinition = "boolean default true")
   private Boolean useContextMemory = true;
 
@@ -93,5 +85,180 @@ public class Chapter {
   @PreUpdate
   protected void onUpdate() {
     updatedAt = OffsetDateTime.now();
+  }
+
+  public Chapter() {}
+
+  public UUID getId() {
+    return this.id;
+  }
+
+  public void setId(UUID id) {
+    this.id = id;
+  }
+
+  public Series getSeries() {
+    return this.series;
+  }
+
+  public void setSeries(Series series) {
+    this.series = series;
+  }
+
+  public Double getChapterNumber() {
+    return this.chapterNumber;
+  }
+
+  public void setChapterNumber(Double chapterNumber) {
+    this.chapterNumber = chapterNumber;
+  }
+
+  public String getTitle() {
+    return this.title;
+  }
+
+  public void setTitle(String title) {
+    this.title = title;
+  }
+
+  public UUID getCoverImageId() {
+    return this.coverImageId;
+  }
+
+  public void setCoverImageId(UUID coverImageId) {
+    this.coverImageId = coverImageId;
+  }
+
+  public String getSummaryJson() {
+    return this.summaryJson;
+  }
+
+  public void setSummaryJson(String summaryJson) {
+    this.summaryJson = summaryJson;
+  }
+
+  public OffsetDateTime getSummaryGeneratedAt() {
+    return this.summaryGeneratedAt;
+  }
+
+  public void setSummaryGeneratedAt(OffsetDateTime summaryGeneratedAt) {
+    this.summaryGeneratedAt = summaryGeneratedAt;
+  }
+
+  public String getOcrProvider() {
+    return this.ocrProvider;
+  }
+
+  public void setOcrProvider(String ocrProvider) {
+    this.ocrProvider = ocrProvider;
+  }
+
+  public String getOcrModel() {
+    return this.ocrModel;
+  }
+
+  public void setOcrModel(String ocrModel) {
+    this.ocrModel = ocrModel;
+  }
+
+  public String getTlProvider() {
+    return this.tlProvider;
+  }
+
+  public void setTlProvider(String tlProvider) {
+    this.tlProvider = tlProvider;
+  }
+
+  public String getTlModel() {
+    return this.tlModel;
+  }
+
+  public void setTlModel(String tlModel) {
+    this.tlModel = tlModel;
+  }
+
+  public String getQaProvider() {
+    return this.qaProvider;
+  }
+
+  public void setQaProvider(String qaProvider) {
+    this.qaProvider = qaProvider;
+  }
+
+  public String getQaLlmModel() {
+    return this.qaLlmModel;
+  }
+
+  public void setQaLlmModel(String qaLlmModel) {
+    this.qaLlmModel = qaLlmModel;
+  }
+
+  public String getQaVlmModel() {
+    return this.qaVlmModel;
+  }
+
+  public void setQaVlmModel(String qaVlmModel) {
+    this.qaVlmModel = qaVlmModel;
+  }
+
+  public String getQaMode() {
+    return this.qaMode;
+  }
+
+  public void setQaMode(String qaMode) {
+    this.qaMode = qaMode;
+  }
+
+  public String getRoutingStrategy() {
+    return this.routingStrategy;
+  }
+
+  public void setRoutingStrategy(String routingStrategy) {
+    this.routingStrategy = routingStrategy;
+  }
+
+  public Boolean getUseContextMemory() {
+    return this.useContextMemory;
+  }
+
+  public void setUseContextMemory(Boolean useContextMemory) {
+    this.useContextMemory = useContextMemory;
+  }
+
+  public Boolean getUseFallbackModels() {
+    return this.useFallbackModels;
+  }
+
+  public void setUseFallbackModels(Boolean useFallbackModels) {
+    this.useFallbackModels = useFallbackModels;
+  }
+
+  public OffsetDateTime getCreatedAt() {
+    return this.createdAt;
+  }
+
+  public void setCreatedAt(OffsetDateTime createdAt) {
+    this.createdAt = createdAt;
+  }
+
+  public OffsetDateTime getUpdatedAt() {
+    return this.updatedAt;
+  }
+
+  public void setUpdatedAt(OffsetDateTime updatedAt) {
+    this.updatedAt = updatedAt;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Chapter)) return false;
+    Chapter that = (Chapter) o;
+    return id != null && id.equals(that.getId());
+  }
+
+  @Override
+  public int hashCode() {
+    return getClass().hashCode();
   }
 }

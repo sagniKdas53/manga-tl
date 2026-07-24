@@ -3,21 +3,13 @@ package com.manga.library.model;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import lombok.*;
 
 @Entity
 @Table(name = "layer_elements")
-@Getter
-@Setter
-@ToString(exclude = {"layer", "region"})
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class LayerElement {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  @EqualsAndHashCode.Include
+  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -38,7 +30,7 @@ public class LayerElement {
   private Double size;
 
   @Column(name = "auto_size")
-  @Builder.Default
+  
   private Boolean autoSize = true;
 
   @Column(name = "max_width")
@@ -48,10 +40,10 @@ public class LayerElement {
   private Integer maxHeight;
 
   @Column(name = "word_wrap")
-  @Builder.Default
+  
   private Boolean wordWrap = true;
 
-  @Builder.Default private Double rotation = 0.0;
+   private Double rotation = 0.0;
 
   @Column(nullable = false)
   private Double x;
@@ -59,9 +51,9 @@ public class LayerElement {
   @Column(nullable = false)
   private Double y;
 
-  @Builder.Default private Boolean visible = true;
+   private Boolean visible = true;
 
-  @Builder.Default private Boolean overflow = false;
+   private Boolean overflow = false;
 
   @Column(name = "background_color")
   private String backgroundColor;
@@ -70,22 +62,22 @@ public class LayerElement {
   private String textColor;
 
   @Column(name = "font_weight")
-  @Builder.Default
+  
   private String fontWeight = "normal";
 
   @Column(name = "font_style")
-  @Builder.Default
+  
   private String fontStyle = "normal";
 
   @Column(name = "is_manually_edited")
-  @Builder.Default
+  
   private Boolean isManuallyEdited = false;
 
   @Column(name = "edited_at")
   private OffsetDateTime editedAt;
 
   @Column(name = "box_shape")
-  @Builder.Default
+  
   private String boxShape = "rectangular";
 
   @Column(name = "mask_polygon")
@@ -130,5 +122,204 @@ public class LayerElement {
     } catch (org.hibernate.LazyInitializationException e) {
       return null;
     }
+  }
+
+  public LayerElement() {}
+
+  public UUID getId() {
+    return this.id;
+  }
+
+  public void setId(UUID id) {
+    this.id = id;
+  }
+
+  public Layer getLayer() {
+    return this.layer;
+  }
+
+  public void setLayer(Layer layer) {
+    this.layer = layer;
+  }
+
+  public OcrRegion getRegion() {
+    return this.region;
+  }
+
+  public void setRegion(OcrRegion region) {
+    this.region = region;
+  }
+
+  public String getText() {
+    return this.text;
+  }
+
+  public void setText(String text) {
+    this.text = text;
+  }
+
+  public String getFont() {
+    return this.font;
+  }
+
+  public void setFont(String font) {
+    this.font = font;
+  }
+
+  public Double getSize() {
+    return this.size;
+  }
+
+  public void setSize(Double size) {
+    this.size = size;
+  }
+
+  public Boolean getAutoSize() {
+    return this.autoSize;
+  }
+
+  public void setAutoSize(Boolean autoSize) {
+    this.autoSize = autoSize;
+  }
+
+  public Integer getMaxWidth() {
+    return this.maxWidth;
+  }
+
+  public void setMaxWidth(Integer maxWidth) {
+    this.maxWidth = maxWidth;
+  }
+
+  public Integer getMaxHeight() {
+    return this.maxHeight;
+  }
+
+  public void setMaxHeight(Integer maxHeight) {
+    this.maxHeight = maxHeight;
+  }
+
+  public Boolean getWordWrap() {
+    return this.wordWrap;
+  }
+
+  public void setWordWrap(Boolean wordWrap) {
+    this.wordWrap = wordWrap;
+  }
+
+  public Double getRotation() {
+    return this.rotation;
+  }
+
+  public void setRotation(Double rotation) {
+    this.rotation = rotation;
+  }
+
+  public Double getX() {
+    return this.x;
+  }
+
+  public void setX(Double x) {
+    this.x = x;
+  }
+
+  public Double getY() {
+    return this.y;
+  }
+
+  public void setY(Double y) {
+    this.y = y;
+  }
+
+  public Boolean getVisible() {
+    return this.visible;
+  }
+
+  public void setVisible(Boolean visible) {
+    this.visible = visible;
+  }
+
+  public Boolean getOverflow() {
+    return this.overflow;
+  }
+
+  public void setOverflow(Boolean overflow) {
+    this.overflow = overflow;
+  }
+
+  public String getBackgroundColor() {
+    return this.backgroundColor;
+  }
+
+  public void setBackgroundColor(String backgroundColor) {
+    this.backgroundColor = backgroundColor;
+  }
+
+  public String getTextColor() {
+    return this.textColor;
+  }
+
+  public void setTextColor(String textColor) {
+    this.textColor = textColor;
+  }
+
+  public String getFontWeight() {
+    return this.fontWeight;
+  }
+
+  public void setFontWeight(String fontWeight) {
+    this.fontWeight = fontWeight;
+  }
+
+  public String getFontStyle() {
+    return this.fontStyle;
+  }
+
+  public void setFontStyle(String fontStyle) {
+    this.fontStyle = fontStyle;
+  }
+
+  public Boolean getIsManuallyEdited() {
+    return this.isManuallyEdited;
+  }
+
+  public void setIsManuallyEdited(Boolean isManuallyEdited) {
+    this.isManuallyEdited = isManuallyEdited;
+  }
+
+  public OffsetDateTime getEditedAt() {
+    return this.editedAt;
+  }
+
+  public void setEditedAt(OffsetDateTime editedAt) {
+    this.editedAt = editedAt;
+  }
+
+  public String getBoxShape() {
+    return this.boxShape;
+  }
+
+  public void setBoxShape(String boxShape) {
+    this.boxShape = boxShape;
+  }
+
+  public String getMaskPolygon() {
+    return this.maskPolygon;
+  }
+
+  public void setMaskPolygon(String maskPolygon) {
+    this.maskPolygon = maskPolygon;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof LayerElement)) return false;
+    LayerElement that = (LayerElement) o;
+    return id != null && id.equals(that.getId());
+  }
+
+  @Override
+  public int hashCode() {
+    return getClass().hashCode();
   }
 }

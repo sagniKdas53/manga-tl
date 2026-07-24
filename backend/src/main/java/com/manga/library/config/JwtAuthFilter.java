@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Objects;
-import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,11 +19,15 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
-@RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
   private final JwtUtils jwtUtils;
   private final UserRepository userRepository;
+  public JwtAuthFilter(JwtUtils jwtUtils, UserRepository userRepository) {
+    this.jwtUtils = jwtUtils;
+    this.userRepository = userRepository;
+  }
+
 
   @Override
   protected void doFilterInternal(

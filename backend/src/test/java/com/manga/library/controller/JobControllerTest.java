@@ -38,7 +38,7 @@ public class JobControllerTest {
 
   @Test
   public void testGetJobs() throws Exception {
-    Job job = Job.builder().id("job1").type("ocr").status("PENDING").build();
+    Job job = new Job() {{ setId("job1"); setType("ocr"); setStatus("PENDING"); }};
     when(jobRepository.findByStatusInOrderByCreatedAtAsc(any())).thenReturn(List.of(job));
 
     StringValueOperations valOps = mock(StringValueOperations.class);
@@ -56,8 +56,8 @@ public class JobControllerTest {
 
   @Test
   public void testClearQueue() throws Exception {
-    Job job1 = Job.builder().id("job1").type("ocr").status("FAILED").build();
-    Job job2 = Job.builder().id("job2").type("ocr").status("PENDING").build();
+    Job job1 = new Job() {{ setId("job1"); setType("ocr"); setStatus("FAILED"); }};
+    Job job2 = new Job() {{ setId("job2"); setType("ocr"); setStatus("PENDING"); }};
     when(jobRepository.findByStatusInOrderByCreatedAtAsc(any())).thenReturn(List.of(job1, job2));
 
     mockMvc.perform(delete("/api/jobs/clear")).andExpect(status().isOk());
@@ -89,7 +89,7 @@ public class JobControllerTest {
 
   @Test
   public void testRetryJob() throws Exception {
-    Job job = Job.builder().id("job1").type("ocr").status("FAILED").build();
+    Job job = new Job() {{ setId("job1"); setType("ocr"); setStatus("FAILED"); }};
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     StringValueOperations valOps = mock(StringValueOperations.class);
@@ -104,7 +104,7 @@ public class JobControllerTest {
 
   @Test
   public void testPauseJob() throws Exception {
-    Job job = Job.builder().id("job1").type("ocr").status("PENDING").build();
+    Job job = new Job() {{ setId("job1"); setType("ocr"); setStatus("PENDING"); }};
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     mockMvc.perform(post("/api/jobs/job1/pause")).andExpect(status().isOk());
@@ -114,7 +114,7 @@ public class JobControllerTest {
 
   @Test
   public void testResumeJob() throws Exception {
-    Job job = Job.builder().id("job1").type("ocr").status("PAUSED").build();
+    Job job = new Job() {{ setId("job1"); setType("ocr"); setStatus("PAUSED"); }};
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     StringValueOperations valOps = mock(StringValueOperations.class);
@@ -129,7 +129,7 @@ public class JobControllerTest {
 
   @Test
   public void testDeleteJob() throws Exception {
-    Job job = Job.builder().id("job1").type("ocr").status("PENDING").build();
+    Job job = new Job() {{ setId("job1"); setType("ocr"); setStatus("PENDING"); }};
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     mockMvc.perform(delete("/api/jobs/job1")).andExpect(status().isOk());

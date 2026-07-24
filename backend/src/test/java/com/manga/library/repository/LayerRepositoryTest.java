@@ -29,28 +29,22 @@ public class LayerRepositoryTest {
   public void testLayerCRUD() {
     // Parent Image and Page
     Image image =
-        Image.builder().filename("layer_img.png").storagePath("path/layer_img.png").build();
+        new Image() {{ setFilename("layer_img.png"); setStoragePath("path/layer_img.png"); }};
     image = imageRepository.save(image);
 
     Series series =
         seriesRepository.save(
-            Series.builder().title("Test").originalLanguage("ja").readingDirection("rtl").build());
+            new Series() {{ setTitle("Test"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }});
     Chapter chapter =
-        chapterRepository.save(Chapter.builder().series(series).chapterNumber(1.0).build());
+        chapterRepository.save(new Chapter() {{ setSeries(series); setChapterNumber(1.0); }});
 
     com.manga.library.model.Page page =
-        com.manga.library.model.Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+        new com.manga.library.model.Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
     // 1. Create
     Layer layer =
-        Layer.builder()
-            .page(page)
-            .type("translation")
-            .targetLanguage("en")
-            .visible(true)
-            .zOrder(5)
-            .build();
+        new Layer() {{ setPage(page); setType("translation"); setTargetLanguage("en"); setVisible(true); setZOrder(5); }};
 
     Layer saved = layerRepository.save(layer);
     assertNotNull(saved.getId());

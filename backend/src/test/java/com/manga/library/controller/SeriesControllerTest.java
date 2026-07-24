@@ -58,7 +58,7 @@ public class SeriesControllerTest {
     UUID seriesId = UUID.randomUUID();
     UUID coverId = UUID.randomUUID();
     Series series =
-        Series.builder().id(seriesId).title("Test Series").coverImageId(coverId).build();
+        new Series() {{ setId(seriesId); setTitle("Test Series"); setCoverImageId(coverId); }};
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
 
     mockMvc
@@ -73,14 +73,14 @@ public class SeriesControllerTest {
 
   @Test
   public void testListSeries_Success() throws Exception {
-    Series series = Series.builder().id(UUID.randomUUID()).title("Test Series").build();
+    Series series = new Series() {{ setId(UUID.randomUUID()); setTitle("Test Series"); }};
     when(seriesRepository.findAll()).thenReturn(java.util.List.of(series));
     mockMvc.perform(get("/api/series")).andExpect(status().isOk());
   }
 
   @Test
   public void testCreateSeries_Success() throws Exception {
-    Series series = Series.builder().id(UUID.randomUUID()).title("New Series").build();
+    Series series = new Series() {{ setId(UUID.randomUUID()); setTitle("New Series"); }};
     when(seriesRepository.save(any(Series.class))).thenReturn(series);
 
     String json =
@@ -96,19 +96,7 @@ public class SeriesControllerTest {
   @Test
   public void testCreateSeries_WithOverrides() throws Exception {
     Series series =
-        Series.builder()
-            .id(UUID.randomUUID())
-            .title("Override Series")
-            .ocrProvider("openrouter")
-            .ocrModel("google/gemini-2.5-flash")
-            .tlProvider("openrouter")
-            .tlModel("deepseek/deepseek-v4-flash")
-            .qaProvider("openrouter")
-            .qaLlmModel("tencent/hy3:free")
-            .qaVlmModel("google/gemini-2.5-flash")
-            .qaMode("hybrid")
-            .routingStrategy("lowest-cost")
-            .build();
+        new Series() {{ setId(UUID.randomUUID()); setTitle("Override Series"); setOcrProvider("openrouter"); setOcrModel("google/gemini-2.5-flash"); setTlProvider("openrouter"); setTlModel("deepseek/deepseek-v4-flash"); setQaProvider("openrouter"); setQaLlmModel("tencent/hy3:free"); setQaVlmModel("google/gemini-2.5-flash"); setQaMode("hybrid"); setRoutingStrategy("lowest-cost"); }};
     when(seriesRepository.save(any(Series.class))).thenReturn(series);
 
     String json =
@@ -155,7 +143,7 @@ public class SeriesControllerTest {
   @Test
   public void testCreateSeries_NullUseFallbackModels_Inherits() throws Exception {
     // When useFallbackModels is not sent, it should be stored as null (inherit from global)
-    Series series = Series.builder().id(UUID.randomUUID()).title("Inherit Series").build();
+    Series series = new Series() {{ setId(UUID.randomUUID()); setTitle("Inherit Series"); }};
     when(seriesRepository.save(any(Series.class))).thenReturn(series);
 
     String json =
@@ -179,7 +167,7 @@ public class SeriesControllerTest {
   @Test
   public void testUpdateSeries_Success() throws Exception {
     UUID seriesId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).title("Old Series").build();
+    Series series = new Series() {{ setId(seriesId); setTitle("Old Series"); }};
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(seriesRepository.save(any(Series.class))).thenReturn(series);
 
@@ -215,14 +203,9 @@ public class SeriesControllerTest {
   @Test
   public void testCreateChapter_Success() throws Exception {
     UUID seriesId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).title("Test Series").build();
+    Series series = new Series() {{ setId(seriesId); setTitle("Test Series"); }};
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(UUID.randomUUID())
-            .chapterNumber(1.0)
-            .title("Ch 1")
-            .series(series)
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(UUID.randomUUID()); setChapterNumber(1.0); setTitle("Ch 1"); setSeries(series); }};
 
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
@@ -245,14 +228,9 @@ public class SeriesControllerTest {
   public void testUpdateChapter_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     UUID seriesId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).build();
+    Series series = new Series() {{ setId(seriesId); }};
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(chapterId)
-            .series(series)
-            .chapterNumber(1.0)
-            .title("Old Title")
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(chapterId); setSeries(series); setChapterNumber(1.0); setTitle("Old Title"); }};
 
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
     when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
@@ -280,13 +258,9 @@ public class SeriesControllerTest {
   public void testGetChapter_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     UUID coverId = UUID.randomUUID();
-    Series series = Series.builder().id(UUID.randomUUID()).build();
+    Series series = new Series() {{ setId(UUID.randomUUID()); }};
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(chapterId)
-            .series(series)
-            .coverImageId(coverId)
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(chapterId); setSeries(series); setCoverImageId(coverId); }};
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
 
     mockMvc
@@ -303,10 +277,7 @@ public class SeriesControllerTest {
   public void testDeleteChapter_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().id(UUID.randomUUID()).build())
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series() {{ setId(UUID.randomUUID()); }}); }};
 
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId)).thenReturn(null);
@@ -323,14 +294,9 @@ public class SeriesControllerTest {
   @Test
   public void testImportChapter_Success() throws Exception {
     UUID seriesId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).title("Test Series").build();
+    Series series = new Series() {{ setId(seriesId); setTitle("Test Series"); }};
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(UUID.randomUUID())
-            .chapterNumber(1.0)
-            .title("Ch 1")
-            .series(series)
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(UUID.randomUUID()); setChapterNumber(1.0); setTitle("Ch 1"); setSeries(series); }};
 
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
@@ -349,9 +315,9 @@ public class SeriesControllerTest {
     when(pageService.getFileExtension(anyString())).thenReturn(".png");
 
     com.manga.library.model.Image image =
-        com.manga.library.model.Image.builder().id(UUID.randomUUID()).build();
+        new com.manga.library.model.Image() {{ setId(UUID.randomUUID()); }};
     com.manga.library.model.Page page =
-        com.manga.library.model.Page.builder().id(UUID.randomUUID()).image(image).build();
+        new com.manga.library.model.Page() {{ setId(UUID.randomUUID()); setImage(image); }};
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
     doNothing().when(pageService).generateAndSaveThumbnailAsync(any(), any(), any());
@@ -373,25 +339,13 @@ public class SeriesControllerTest {
   public void testExportChapter_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(chapterId)
-            .chapterNumber(1.0)
-            .title("Ch 1")
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(chapterId); setChapterNumber(1.0); setTitle("Ch 1"); }};
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
 
     com.manga.library.model.Image img =
-        com.manga.library.model.Image.builder()
-            .id(UUID.randomUUID())
-            .filename("page1.png")
-            .storagePath("orig/page1.png")
-            .build();
+        new com.manga.library.model.Image() {{ setId(UUID.randomUUID()); setFilename("page1.png"); setStoragePath("orig/page1.png"); }};
     com.manga.library.model.Page page =
-        com.manga.library.model.Page.builder()
-            .id(UUID.randomUUID())
-            .pageNumber(1)
-            .image(img)
-            .build();
+        new com.manga.library.model.Page() {{ setId(UUID.randomUUID()); setPageNumber(1); setImage(img); }};
 
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
         .thenReturn(java.util.List.of(page));
@@ -399,11 +353,7 @@ public class SeriesControllerTest {
         .thenReturn(new java.io.ByteArrayInputStream("dummy".getBytes()));
 
     com.manga.library.model.Layer activeLayer =
-        com.manga.library.model.Layer.builder()
-            .id(UUID.randomUUID())
-            .type("translation")
-            .visible(true)
-            .build();
+        new com.manga.library.model.Layer() {{ setId(UUID.randomUUID()); setType("translation"); setVisible(true); }};
     when(layerRepository.findByPageId(any())).thenReturn(java.util.List.of(activeLayer));
 
     when(layerElementRepository.findByLayerId(any())).thenReturn(java.util.Collections.emptyList());
@@ -417,7 +367,7 @@ public class SeriesControllerTest {
   public void testExportChapter_NoPages() throws Exception {
     UUID chapterId = UUID.randomUUID();
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder().id(chapterId).build();
+        new com.manga.library.model.Chapter() {{ setId(chapterId); }};
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
         .thenReturn(java.util.Collections.emptyList());
@@ -544,14 +494,9 @@ public class SeriesControllerTest {
   @Test
   public void testCreateChapter_Conflict() throws Exception {
     UUID seriesId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).title("Test Series").build();
+    Series series = new Series() {{ setId(seriesId); setTitle("Test Series"); }};
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(UUID.randomUUID())
-            .chapterNumber(1.0)
-            .title("Ch 1")
-            .series(series)
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(UUID.randomUUID()); setChapterNumber(1.0); setTitle("Ch 1"); setSeries(series); }};
 
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(chapterRepository.findBySeriesIdAndChapterNumber(seriesId, 1.0))
@@ -571,22 +516,12 @@ public class SeriesControllerTest {
   public void testUpdateChapter_Conflict() throws Exception {
     UUID chapterId = UUID.randomUUID();
     UUID seriesId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).build();
+    Series series = new Series() {{ setId(seriesId); }};
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(chapterId)
-            .series(series)
-            .chapterNumber(1.0)
-            .title("Old Title")
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(chapterId); setSeries(series); setChapterNumber(1.0); setTitle("Old Title"); }};
 
     com.manga.library.model.Chapter existingChapter =
-        com.manga.library.model.Chapter.builder()
-            .id(UUID.randomUUID())
-            .series(series)
-            .chapterNumber(2.0)
-            .title("Existing Title")
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(UUID.randomUUID()); setSeries(series); setChapterNumber(2.0); setTitle("Existing Title"); }};
 
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
     when(chapterRepository.findBySeriesIdAndChapterNumber(seriesId, 2.0))
@@ -605,14 +540,9 @@ public class SeriesControllerTest {
   @Test
   public void testImportChapter_Conflict() throws Exception {
     UUID seriesId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).title("Test Series").build();
+    Series series = new Series() {{ setId(seriesId); setTitle("Test Series"); }};
     com.manga.library.model.Chapter existingChapter =
-        com.manga.library.model.Chapter.builder()
-            .id(UUID.randomUUID())
-            .series(series)
-            .chapterNumber(1.0)
-            .title("Existing")
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(UUID.randomUUID()); setSeries(series); setChapterNumber(1.0); setTitle("Existing"); }};
 
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(chapterRepository.findBySeriesIdAndChapterNumber(seriesId, 1.0))
@@ -635,7 +565,7 @@ public class SeriesControllerTest {
   @Test
   public void testImportChapter_EmptyZip() throws Exception {
     UUID seriesId = UUID.randomUUID();
-    Series series = Series.builder().id(seriesId).title("Test Series").build();
+    Series series = new Series() {{ setId(seriesId); setTitle("Test Series"); }};
 
     when(seriesRepository.findById(seriesId)).thenReturn(Optional.of(series));
     when(chapterRepository.findBySeriesIdAndChapterNumber(seriesId, 1.0))
@@ -650,12 +580,7 @@ public class SeriesControllerTest {
             "file", "test.zip", "application/zip", baos.toByteArray());
 
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(UUID.randomUUID())
-            .chapterNumber(1.0)
-            .title("Ch 1")
-            .series(series)
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(UUID.randomUUID()); setChapterNumber(1.0); setTitle("Ch 1"); setSeries(series); }};
     when(chapterRepository.save(any(com.manga.library.model.Chapter.class))).thenReturn(chapter);
 
     mockMvc
@@ -672,25 +597,13 @@ public class SeriesControllerTest {
   public void testExportChapter_WithMetadataAndCosts() throws Exception {
     UUID chapterId = UUID.randomUUID();
     com.manga.library.model.Chapter chapter =
-        com.manga.library.model.Chapter.builder()
-            .id(chapterId)
-            .chapterNumber(1.0)
-            .title("Ch 1")
-            .build();
+        new com.manga.library.model.Chapter() {{ setId(chapterId); setChapterNumber(1.0); setTitle("Ch 1"); }};
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
 
     com.manga.library.model.Image img =
-        com.manga.library.model.Image.builder()
-            .id(UUID.randomUUID())
-            .filename("page1.png")
-            .storagePath("orig/page1.png")
-            .build();
+        new com.manga.library.model.Image() {{ setId(UUID.randomUUID()); setFilename("page1.png"); setStoragePath("orig/page1.png"); }};
     com.manga.library.model.Page page =
-        com.manga.library.model.Page.builder()
-            .id(UUID.randomUUID())
-            .pageNumber(1)
-            .image(img)
-            .build();
+        new com.manga.library.model.Page() {{ setId(UUID.randomUUID()); setPageNumber(1); setImage(img); }};
 
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
         .thenReturn(java.util.List.of(page));
@@ -714,12 +627,7 @@ public class SeriesControllerTest {
     metadata.set("qa", qaNode);
 
     com.manga.library.model.Layer activeLayer =
-        com.manga.library.model.Layer.builder()
-            .id(UUID.randomUUID())
-            .type("translation")
-            .visible(true)
-            .metadataJson(metadata)
-            .build();
+        new com.manga.library.model.Layer() {{ setId(UUID.randomUUID()); setType("translation"); setVisible(true); setMetadataJson(metadata); }};
 
     when(layerRepository.findByPageId(any())).thenReturn(java.util.List.of(activeLayer));
 

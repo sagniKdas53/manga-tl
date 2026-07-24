@@ -17,8 +17,6 @@ import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,9 +26,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api")
 @Tag(name = "Page Controller", description = "Endpoints for managing manga pages and images")
-@RequiredArgsConstructor
-@Slf4j
 public class PageController {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PageController.class);
+
 
   private final ChapterRepository chapterRepository;
   private final ImageRepository imageRepository;
@@ -47,6 +45,24 @@ public class PageController {
   private final SseService sseService;
   private final LayerEditHistoryRepository layerEditHistoryRepository;
   private final ObjectMapper objectMapper;
+  public PageController(ChapterRepository chapterRepository, ImageRepository imageRepository, PageRepository pageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository, LayerRepository layerRepository, LayerElementRepository layerElementRepository, MinioService minioService, JobCoordinatorService jobCoordinatorService, com.manga.library.service.PageService pageService, ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository, SseService sseService, LayerEditHistoryRepository layerEditHistoryRepository, ObjectMapper objectMapper) {
+    this.chapterRepository = chapterRepository;
+    this.imageRepository = imageRepository;
+    this.pageRepository = pageRepository;
+    this.panelRepository = panelRepository;
+    this.ocrRegionRepository = ocrRegionRepository;
+    this.layerRepository = layerRepository;
+    this.layerElementRepository = layerElementRepository;
+    this.minioService = minioService;
+    this.jobCoordinatorService = jobCoordinatorService;
+    this.pageService = pageService;
+    this.conversationRepository = conversationRepository;
+    this.conversationRegionRepository = conversationRegionRepository;
+    this.sseService = sseService;
+    this.layerEditHistoryRepository = layerEditHistoryRepository;
+    this.objectMapper = objectMapper;
+  }
+
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
@@ -213,9 +229,9 @@ public class PageController {
           // Case A: Page-level project ZIP restore
           if (originalImageBytes == null && !imageEntries.isEmpty()) {
             imageEntries.sort(
-                Comparator.comparing(entry -> Objects.requireNonNull(entry).getName()));
-            originalImageBytes = imageEntries.get(0).getBytes();
-            originalImageFilename = imageEntries.get(0).getName();
+                Comparator.comparing(entry -> Objects.requireNonNull(entry).name()));
+            originalImageBytes = imageEntries.get(0).bytes();
+            originalImageFilename = imageEntries.get(0).name();
           }
 
           if (originalImageBytes == null) {
@@ -291,14 +307,12 @@ public class PageController {
 
                 String thumbnailStoragePath = null;
 
-                image =
-                    Image.builder()
-                        .filename(originalImageFilename)
-                        .storagePath(storagePath)
-                        .thumbnailStoragePath(thumbnailStoragePath)
-                        .hash(fileHash)
-                        .createdBy(user)
-                        .build();
+                image = new Image();
+                image.setFilename(originalImageFilename);
+                image.setStoragePath(storagePath);
+                image.setThumbnailStoragePath(thumbnailStoragePath);
+                image.setHash(fileHash);
+                image.setCreatedBy(user);
                 image = imageRepository.save(Objects.requireNonNull(image));
                 pageService.generateAndSaveThumbnailAsync(image.getId(), uuid, originalImageBytes);
               }
@@ -361,14 +375,12 @@ public class PageController {
               boolean visible = !layerNode.has("visible") || layerNode.get("visible").asBoolean();
               int zOrder = layerNode.has("zOrder") ? layerNode.get("zOrder").asInt() : 0;
 
-              Layer newLayer =
-                  Layer.builder()
-                      .page(page)
-                      .type(type)
-                      .targetLanguage(targetLanguage)
-                      .visible(visible)
-                      .zOrder(zOrder)
-                      .build();
+              Layer newLayer = new Layer();
+              newLayer.setPage(page);
+              newLayer.setType(type);
+              newLayer.setTargetLanguage(targetLanguage);
+              newLayer.setVisible(visible);
+              newLayer.setZOrder(zOrder);
 
               newLayer = layerRepository.save(Objects.requireNonNull(newLayer));
               importedLayersCount++;
@@ -425,28 +437,26 @@ public class PageController {
                     }
                   }
 
-                  LayerElement newEl =
-                      LayerElement.builder()
-                          .layer(newLayer)
-                          .region(region)
-                          .text(text)
-                          .font(font)
-                          .size(size)
-                          .autoSize(autoSize)
-                          .maxWidth(maxWidth)
-                          .maxHeight(maxHeight)
-                          .wordWrap(wordWrap)
-                          .rotation(rotation)
-                          .x(x)
-                          .y(y)
-                          .visible(elVisible)
-                          .backgroundColor(backgroundColor)
-                          .textColor(textColor)
-                          .fontWeight(fontWeight)
-                          .fontStyle(fontStyle)
-                          .boxShape(boxShape)
-                          .maskPolygon(maskPolygon)
-                          .build();
+                  LayerElement newEl = new LayerElement();
+                  newEl.setLayer(newLayer);
+                  newEl.setRegion(region);
+                  newEl.setText(text);
+                  newEl.setFont(font);
+                  newEl.setSize(size);
+                  newEl.setAutoSize(autoSize);
+                  newEl.setMaxWidth(maxWidth);
+                  newEl.setMaxHeight(maxHeight);
+                  newEl.setWordWrap(wordWrap);
+                  newEl.setRotation(rotation);
+                  newEl.setX(x);
+                  newEl.setY(y);
+                  newEl.setVisible(elVisible);
+                  newEl.setBackgroundColor(backgroundColor);
+                  newEl.setTextColor(textColor);
+                  newEl.setFontWeight(fontWeight);
+                  newEl.setFontStyle(fontStyle);
+                  newEl.setBoxShape(boxShape);
+                  newEl.setMaskPolygon(maskPolygon);
                   layerElementRepository.save(Objects.requireNonNull(newEl));
                   importedElementsCount++;
                 }
@@ -469,14 +479,14 @@ public class PageController {
                 .body(new UploadResponse(null, null, "error: zip contains no images"));
           }
 
-          imageEntries.sort(Comparator.comparing(entry -> Objects.requireNonNull(entry).getName()));
+          imageEntries.sort(Comparator.comparing(entry -> Objects.requireNonNull(entry).name()));
 
           Page firstPage = null;
           int nextNum = pageNumber;
 
           for (com.manga.library.dto.ZipImageEntry imgEntry : imageEntries) {
             ProcessedImage processed =
-                validateAndProcessImageBytes(imgEntry.getName(), imgEntry.getBytes());
+                validateAndProcessImageBytes(imgEntry.name(), imgEntry.bytes());
             byte[] originalBytes = processed.bytes();
             String processedFilename = processed.filename();
 
@@ -687,19 +697,15 @@ public class PageController {
     List<PageDto> list =
         pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId).stream()
             .map(
-                p -> {
-                  PageDto dto = new PageDto();
-                  dto.setId(p.getId());
-                  dto.setPageNumber(p.getPageNumber());
-                  dto.setImageId(p.getImage().getId());
-                  dto.setChapterId(p.getChapter().getId());
-                  dto.setFilename(p.getImage().getFilename());
-                  dto.setUrl(getImageUrl(p.getImage().getId()));
-                  if (p.getImage().getThumbnailStoragePath() != null) {
-                    dto.setThumbnailUrl(getThumbnailUrl(p.getImage().getId()));
-                  }
-                  return dto;
-                })
+                p -> new PageDto(
+                  p.getId(),
+                  p.getPageNumber(),
+                  p.getImage().getId(),
+                  p.getChapter().getId(),
+                  p.getImage().getFilename(),
+                  getImageUrl(p.getImage().getId()),
+                  p.getImage().getThumbnailStoragePath() != null ? getThumbnailUrl(p.getImage().getId()) : null
+                ))
             .collect(Collectors.toList());
     return ResponseEntity.ok(list);
   }
@@ -1200,14 +1206,12 @@ public class PageController {
 
               String thumbnailStoragePath = null;
 
-              image =
-                  Image.builder()
-                      .filename(originalImageFilename)
-                      .storagePath(storagePath)
-                      .thumbnailStoragePath(thumbnailStoragePath)
-                      .hash(fileHash)
-                      .createdBy(user)
-                      .build();
+              image = new Image();
+              image.setFilename(originalImageFilename);
+              image.setStoragePath(storagePath);
+              image.setThumbnailStoragePath(thumbnailStoragePath);
+              image.setHash(fileHash);
+              image.setCreatedBy(user);
               image = imageRepository.save(Objects.requireNonNull(image));
               pageService.generateAndSaveThumbnailAsync(image.getId(), uuid, originalImageBytes);
             }
@@ -1283,15 +1287,13 @@ public class PageController {
 
           com.fasterxml.jackson.databind.JsonNode metadataJson = layerNode.get("metadataJson");
 
-          Layer newLayer =
-              Layer.builder()
-                  .page(page)
-                  .type(type)
-                  .targetLanguage(targetLanguage)
-                  .visible(visible)
-                  .zOrder(zOrder)
-                  .metadataJson(metadataJson)
-                  .build();
+          Layer newLayer = new Layer();
+          newLayer.setPage(page);
+          newLayer.setType(type);
+          newLayer.setTargetLanguage(targetLanguage);
+          newLayer.setVisible(visible);
+          newLayer.setZOrder(zOrder);
+          newLayer.setMetadataJson(metadataJson);
 
           newLayer = layerRepository.save(Objects.requireNonNull(newLayer));
           importedLayersCount++;
@@ -1350,29 +1352,27 @@ public class PageController {
                 }
               }
 
-              LayerElement newEl =
-                  LayerElement.builder()
-                      .layer(newLayer)
-                      .region(region)
-                      .text(text)
-                      .font(font)
-                      .size(size)
-                      .autoSize(autoSize)
-                      .maxWidth(maxWidth)
-                      .maxHeight(maxHeight)
-                      .wordWrap(wordWrap)
-                      .rotation(rotation)
-                      .x(x)
-                      .y(y)
-                      .visible(elVisible)
-                      .backgroundColor(backgroundColor)
-                      .textColor(textColor)
-                      .fontWeight(fontWeight)
-                      .fontStyle(fontStyle)
-                      .boxShape(boxShape)
-                      .maskPolygon(maskPolygon)
-                      .isManuallyEdited(isManuallyEdited)
-                      .build();
+              LayerElement newEl = new LayerElement();
+              newEl.setLayer(newLayer);
+              newEl.setRegion(region);
+              newEl.setText(text);
+              newEl.setFont(font);
+              newEl.setSize(size);
+              newEl.setAutoSize(autoSize);
+              newEl.setMaxWidth(maxWidth);
+              newEl.setMaxHeight(maxHeight);
+              newEl.setWordWrap(wordWrap);
+              newEl.setRotation(rotation);
+              newEl.setX(x);
+              newEl.setY(y);
+              newEl.setVisible(elVisible);
+              newEl.setBackgroundColor(backgroundColor);
+              newEl.setTextColor(textColor);
+              newEl.setFontWeight(fontWeight);
+              newEl.setFontStyle(fontStyle);
+              newEl.setBoxShape(boxShape);
+              newEl.setMaskPolygon(maskPolygon);
+              newEl.setIsManuallyEdited(isManuallyEdited);
               layerElementRepository.save(Objects.requireNonNull(newEl));
               importedElementsCount++;
             }

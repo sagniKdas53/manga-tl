@@ -9,20 +9,28 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Service
-@RequiredArgsConstructor
-@lombok.extern.slf4j.Slf4j
-public class PageService {
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+@Service
+public class PageService {
+  private static final Logger log = LoggerFactory.getLogger(PageService.class);
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
   private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
   private final MinioService minioService;
+  public PageService(ImageRepository imageRepository, PageRepository pageRepository, SeriesRepository seriesRepository, ChapterRepository chapterRepository, MinioService minioService) {
+    this.imageRepository = imageRepository;
+    this.pageRepository = pageRepository;
+    this.seriesRepository = seriesRepository;
+    this.chapterRepository = chapterRepository;
+    this.minioService = minioService;
+  }
+
 
   @Transactional
   public Page createPageAndImage(
@@ -39,18 +47,19 @@ public class PageService {
       shiftPagesUp(chapter.getId(), pageNumber);
     }
 
-    Image image =
-        Image.builder()
-            .filename(filename)
-            .storagePath(storagePath)
-            .thumbnailStoragePath(thumbnailStoragePath)
-            .hash(hash)
-            .createdBy(user)
-            .build();
+    Image image = new Image();
+    image.setFilename(filename);
+    image.setStoragePath(storagePath);
+    image.setThumbnailStoragePath(thumbnailStoragePath);
+    image.setHash(hash);
+    image.setCreatedBy(user);
     Objects.requireNonNull(image, "image cannot be null");
     image = imageRepository.save(Objects.requireNonNull(image));
 
-    Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(image).build();
+    Page page = new Page();
+    page.setChapter(chapter);
+    page.setPageNumber(pageNumber);
+    page.setImage(image);
     Objects.requireNonNull(page, "page cannot be null");
     page = pageRepository.save(Objects.requireNonNull(page));
 
@@ -76,7 +85,10 @@ public class PageService {
       }
     }
 
-    Page page = Page.builder().chapter(chapter).pageNumber(pageNumber).image(existingImage).build();
+    Page page = new Page();
+    page.setChapter(chapter);
+    page.setPageNumber(pageNumber);
+    page.setImage(existingImage);
     Objects.requireNonNull(page, "page cannot be null");
     page = pageRepository.save(Objects.requireNonNull(page));
 

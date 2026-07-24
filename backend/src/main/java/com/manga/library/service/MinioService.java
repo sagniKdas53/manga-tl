@@ -4,26 +4,25 @@ import io.minio.*;
 import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class MinioService {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MinioService.class);
+
 
   private final MinioClient minioClient;
+  public MinioService(MinioClient minioClient) {
+    this.minioClient = minioClient;
+  }
 
-  @Value("${minio.bucketName}")
+
   private String bucketName;
 
-  @Value("${minio.externalUrl:}")
   private String externalUrl;
 
-  @Value("${minio.endpoint}")
   private String endpoint;
 
   @PostConstruct

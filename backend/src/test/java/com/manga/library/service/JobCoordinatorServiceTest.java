@@ -45,15 +45,9 @@ public class JobCoordinatorServiceTest {
   public void setUp() {
     defaultSeries =
         seriesRepository.save(
-            Series.builder()
-                .title("Default Test Series")
-                .originalLanguage("ja")
-                .sourceLanguage("ja")
-                .targetLanguage("en")
-                .readingDirection("rtl")
-                .build());
+            new Series() {{ setTitle("Default Test Series"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); }});
     defaultChapter =
-        chapterRepository.save(Chapter.builder().series(defaultSeries).chapterNumber(1.0).build());
+        chapterRepository.save(new Chapter() {{ setSeries(defaultSeries); setChapterNumber(1.0); }});
 
     // Set up mock for redisTemplate using in-memory structures
     final Map<String, String> mockRedisValueStore = new HashMap<>();
@@ -179,23 +173,13 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testHandleQaCallback_Passed() {
-    Image image = Image.builder().filename("test.png").storagePath("test/test.png").build();
+    Image image = new Image() {{ setFilename("test.png"); setStoragePath("test/test.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .qaStatus("pending")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setQaStatus("pending"); }};
     region = ocrRegionRepository.save(region);
 
     Map<String, Object> qaResult = new HashMap<>();
@@ -219,45 +203,21 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testHandleQaCallback_DirectFix() {
-    Image image = Image.builder().filename("test_df.png").storagePath("test/test_df.png").build();
+    Image image = new Image() {{ setFilename("test_df.png"); setStoragePath("test/test_df.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
     Layer layer =
-        Layer.builder()
-            .page(page)
-            .type("translation")
-            .targetLanguage("en")
-            .visible(true)
-            .zOrder(2)
-            .build();
+        new Layer() {{ setPage(page); setType("translation"); setTargetLanguage("en"); setVisible(true); setZOrder(2); }};
     layer = layerRepository.save(layer);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .qaStatus("pending")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setQaStatus("pending"); }};
     region = ocrRegionRepository.save(region);
 
     LayerElement element =
-        LayerElement.builder()
-            .layer(layer)
-            .region(region)
-            .text("Hello")
-            .size(12.0)
-            .x(10.0)
-            .y(20.0)
-            .visible(true)
-            .build();
+        new LayerElement() {{ setLayer(layer); setRegion(region); setText("Hello"); setSize(12.0); setX(10.0); setY(20.0); setVisible(true); }};
     element = layerElementRepository.save(element);
 
     Map<String, Object> qaResult = new HashMap<>();
@@ -293,23 +253,13 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleQaCallback_FailedWithRetry() {
     Image image =
-        Image.builder().filename("test_retry.png").storagePath("test/test_retry.png").build();
+        new Image() {{ setFilename("test_retry.png"); setStoragePath("test/test_retry.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .qaStatus("pending")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setQaStatus("pending"); }};
     region = ocrRegionRepository.save(region);
 
     String retryKey = "image:qa:retries:" + image.getId();
@@ -351,26 +301,13 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleQaCallback_FailedMaxRetries() {
     Image image =
-        Image.builder()
-            .filename("test_max_retry.png")
-            .storagePath("test/test_max_retry.png")
-            .build();
+        new Image() {{ setFilename("test_max_retry.png"); setStoragePath("test/test_max_retry.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .qaStatus("pending")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setQaStatus("pending"); }};
     region = ocrRegionRepository.save(region);
 
     String retryKey = "image:qa:retries:" + image.getId();
@@ -406,24 +343,13 @@ public class JobCoordinatorServiceTest {
 
   @Test
   public void testHandleQaCallback_Escalation() {
-    Image image = Image.builder().filename("test_esc.png").storagePath("test/test_esc.png").build();
+    Image image = new Image() {{ setFilename("test_esc.png"); setStoragePath("test/test_esc.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .bubbleReadingOrder(1)
-            .qaStatus("pending")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setBubbleReadingOrder(1); setQaStatus("pending"); }};
     region = ocrRegionRepository.save(region);
 
     Map<String, Object> qaResult = new HashMap<>();
@@ -455,23 +381,13 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleTranslationCallback_NewElement() {
     Image image =
-        Image.builder().filename("test_trans.png").storagePath("test/test_trans.png").build();
+        new Image() {{ setFilename("test_trans.png"); setStoragePath("test/test_trans.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .regionType("speech")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setRegionType("speech"); }};
     region = ocrRegionRepository.save(region);
 
     Map<String, Object> translation = new HashMap<>();
@@ -512,36 +428,20 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleTranslationCallback_RedoAndCostAndRedisReason() {
     Image rawImage =
-        Image.builder().filename("test_redo.png").storagePath("test/test_redo.png").build();
+        new Image() {{ setFilename("test_redo.png"); setStoragePath("test/test_redo.png"); }};
     final Image image = imageRepository.save(rawImage);
-    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page rawPage = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     final Page page = pageRepository.save(rawPage);
 
     Layer rawLayer =
-        Layer.builder()
-            .page(page)
-            .type("translation")
-            .targetLanguage("en")
-            .visible(true)
-            .zOrder(1)
-            .build();
+        new Layer() {{ setPage(page); setType("translation"); setTargetLanguage("en"); setVisible(true); setZOrder(1); }};
     final Layer existingLayer = layerRepository.save(rawLayer);
 
     String reasonKey = "image:translation:reason:" + image.getId();
     redisTemplate.opsForValue().set(reasonKey, "user-triggered");
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .regionType("speech")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setRegionType("speech"); }};
     region = ocrRegionRepository.save(region);
 
     Map<String, Object> translation = new HashMap<>();
@@ -585,9 +485,9 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleTranslationCallback_InvalidRegionId() {
     Image rawImage =
-        Image.builder().filename("test_invalid.png").storagePath("test/test_invalid.png").build();
+        new Image() {{ setFilename("test_invalid.png"); setStoragePath("test/test_invalid.png"); }};
     final Image image = imageRepository.save(rawImage);
-    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page rawPage = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     final Page page = pageRepository.save(rawPage);
 
     Map<String, Object> translation = new HashMap<>();
@@ -608,9 +508,9 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleLayoutCallback_InvalidRegionId() {
     Image rawImage =
-        Image.builder().filename("test_invalid.png").storagePath("test/test_invalid.png").build();
+        new Image() {{ setFilename("test_invalid.png"); setStoragePath("test/test_invalid.png"); }};
     final Image image = imageRepository.save(rawImage);
-    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page rawPage = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     final Page page = pageRepository.save(rawPage);
 
     List<Map<String, String>> regionTypes =
@@ -626,9 +526,9 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleOcrCallback_WithRedisReason() {
     Image rawImage =
-        Image.builder().filename("test_ocr.png").storagePath("test/test_ocr.png").build();
+        new Image() {{ setFilename("test_ocr.png"); setStoragePath("test/test_ocr.png"); }};
     final Image image = imageRepository.save(rawImage);
-    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page rawPage = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     final Page page = pageRepository.save(rawPage);
 
     String ocrReasonKey = "image:ocr:reason:" + image.getId();
@@ -664,76 +564,36 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testPrepareHybridQa() {
     Image image =
-        Image.builder().filename("test_hybrid.png").storagePath("test/test_hybrid.png").build();
+        new Image() {{ setFilename("test_hybrid.png"); setStoragePath("test/test_hybrid.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
 
     // Old translation layer (should be set to invisible)
     Layer oldLayer =
-        Layer.builder()
-            .page(page)
-            .type("translation")
-            .targetLanguage("en")
-            .visible(true)
-            .zOrder(1)
-            .build();
+        new Layer() {{ setPage(page); setType("translation"); setTargetLanguage("en"); setVisible(true); setZOrder(1); }};
     oldLayer = layerRepository.save(oldLayer);
 
     // Latest translation layer (should remain/be set to visible)
     Layer latestLayer =
-        Layer.builder()
-            .page(page)
-            .type("translation")
-            .targetLanguage("en")
-            .visible(false)
-            .zOrder(2)
-            .build();
+        new Layer() {{ setPage(page); setType("translation"); setTargetLanguage("en"); setVisible(false); setZOrder(2); }};
     latestLayer = layerRepository.save(latestLayer);
 
     // OCR layer (should be set to invisible)
-    Layer ocrLayer = Layer.builder().page(page).type("ocr").visible(true).zOrder(0).build();
+    Layer ocrLayer = new Layer() {{ setPage(page); setType("ocr"); setVisible(true); setZOrder(0); }};
     ocrLayer = layerRepository.save(ocrLayer);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .qaStatus("pending")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setQaStatus("pending"); }};
     region = ocrRegionRepository.save(region);
 
     // Layer elements on both layers
     LayerElement oldEl =
-        LayerElement.builder()
-            .layer(oldLayer)
-            .region(region)
-            .text("Hello old")
-            .x(10.0)
-            .y(20.0)
-            .maxWidth(100)
-            .maxHeight(50)
-            .visible(true)
-            .build();
+        new LayerElement() {{ setLayer(oldLayer); setRegion(region); setText("Hello old"); setX(10.0); setY(20.0); setMaxWidth(100); setMaxHeight(50); setVisible(true); }};
     layerElementRepository.save(oldEl);
 
     LayerElement latestEl =
-        LayerElement.builder()
-            .layer(latestLayer)
-            .region(region)
-            .text("Hello latest")
-            .x(10.0)
-            .y(20.0)
-            .maxWidth(100)
-            .maxHeight(50)
-            .visible(true)
-            .build();
+        new LayerElement() {{ setLayer(latestLayer); setRegion(region); setText("Hello latest"); setX(10.0); setY(20.0); setMaxWidth(100); setMaxHeight(50); setVisible(true); }};
     latestEl = layerElementRepository.save(latestEl);
 
     // QA Results with a direct fix
@@ -788,30 +648,24 @@ public class JobCoordinatorServiceTest {
     // Share image between chapters with different ocrProvider settings -> start pipeline from each
     // -> verify correct provider
     Series series =
-        Series.builder()
-            .title("Test Series")
-            .originalLanguage("ja")
-            .sourceLanguage("ja")
-            .targetLanguage("en")
-            .readingDirection("rtl")
-            .build();
+        new Series() {{ setTitle("Test Series"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); }};
     series = seriesRepository.save(series);
 
     Chapter chapterA =
-        Chapter.builder().series(series).chapterNumber(1.0).ocrProvider("openrouter").build();
+        new Chapter() {{ setSeries(series); setChapterNumber(1.0); setOcrProvider("openrouter"); }};
     chapterA = chapterRepository.save(chapterA);
 
     Chapter chapterB =
-        Chapter.builder().series(series).chapterNumber(2.0).ocrProvider("local").build();
+        new Chapter() {{ setSeries(series); setChapterNumber(2.0); setOcrProvider("local"); }};
     chapterB = chapterRepository.save(chapterB);
 
-    Image image = Image.builder().filename("shared.png").storagePath("shared/shared.png").build();
+    Image image = new Image() {{ setFilename("shared.png"); setStoragePath("shared/shared.png"); }};
     image = imageRepository.save(image);
 
-    Page pageA = Page.builder().chapter(chapterA).image(image).pageNumber(1).build();
+    Page pageA = new Page() {{ setChapter(chapterA); setImage(image); setPageNumber(1); }};
     pageRepository.save(pageA);
 
-    Page pageB = Page.builder().chapter(chapterB).image(image).pageNumber(1).build();
+    Page pageB = new Page() {{ setChapter(chapterB); setImage(image); setPageNumber(1); }};
     pageRepository.save(pageB);
 
     AtomicReference<String> pushedProvider = new AtomicReference<>();
@@ -847,23 +701,16 @@ public class JobCoordinatorServiceTest {
   public void testUseFallbackModels_ChapterOverridesSeries() {
     // Chapter says false → must win even though series says true
     Series series =
-        Series.builder()
-            .title("FBM Series")
-            .originalLanguage("ja")
-            .sourceLanguage("ja")
-            .targetLanguage("en")
-            .readingDirection("rtl")
-            .useFallbackModels(true)
-            .build();
+        new Series() {{ setTitle("FBM Series"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); setUseFallbackModels(true); }};
     series = seriesRepository.save(series);
 
     Chapter chapter =
-        Chapter.builder().series(series).chapterNumber(1.0).useFallbackModels(false).build();
+        new Chapter() {{ setSeries(series); setChapterNumber(1.0); setUseFallbackModels(false); }};
     chapter = chapterRepository.save(chapter);
 
-    Image image = Image.builder().filename("fbm_c.png").storagePath("fbm/fbm_c.png").build();
+    Image image = new Image() {{ setFilename("fbm_c.png"); setStoragePath("fbm/fbm_c.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
     pageRepository.save(page);
 
     AtomicReference<Object> pushedFallback = new AtomicReference<>();
@@ -894,27 +741,16 @@ public class JobCoordinatorServiceTest {
   public void testUseFallbackModels_SeriesOverridesGlobal() {
     // Chapter is null (inherit) → series says false → must win over global default (true)
     Series series =
-        Series.builder()
-            .title("FBM Series2")
-            .originalLanguage("ja")
-            .sourceLanguage("ja")
-            .targetLanguage("en")
-            .readingDirection("rtl")
-            .useFallbackModels(false)
-            .build();
+        new Series() {{ setTitle("FBM Series2"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); setUseFallbackModels(false); }};
     series = seriesRepository.save(series);
 
     Chapter chapter =
-        Chapter.builder()
-            .series(series)
-            .chapterNumber(1.0)
-            // useFallbackModels not set → null → should inherit series
-            .build();
+        new Chapter() {{ setSeries(series); setChapterNumber(1.0); }};
     chapter = chapterRepository.save(chapter);
 
-    Image image = Image.builder().filename("fbm_s.png").storagePath("fbm/fbm_s.png").build();
+    Image image = new Image() {{ setFilename("fbm_s.png"); setStoragePath("fbm/fbm_s.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
     pageRepository.save(page);
 
     AtomicReference<Object> pushedFallback = new AtomicReference<>();
@@ -945,27 +781,16 @@ public class JobCoordinatorServiceTest {
   public void testUseFallbackModels_InheritsGlobalWhenBothNull() {
     // Both chapter and series are null → falls through to global default (true)
     Series series =
-        Series.builder()
-            .title("FBM Series3")
-            .originalLanguage("ja")
-            .sourceLanguage("ja")
-            .targetLanguage("en")
-            .readingDirection("rtl")
-            // useFallbackModels not set → null
-            .build();
+        new Series() {{ setTitle("FBM Series3"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); }};
     series = seriesRepository.save(series);
 
     Chapter chapter =
-        Chapter.builder()
-            .series(series)
-            .chapterNumber(1.0)
-            // useFallbackModels not set → null
-            .build();
+        new Chapter() {{ setSeries(series); setChapterNumber(1.0); }};
     chapter = chapterRepository.save(chapter);
 
-    Image image = Image.builder().filename("fbm_g.png").storagePath("fbm/fbm_g.png").build();
+    Image image = new Image() {{ setFilename("fbm_g.png"); setStoragePath("fbm/fbm_g.png"); }};
     image = imageRepository.save(image);
-    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
     pageRepository.save(page);
 
     AtomicReference<Object> pushedFallback = new AtomicReference<>();
@@ -996,22 +821,14 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleOcrCallback_EmptyRegions_ShortCircuit() {
     Image rawImage =
-        Image.builder()
-            .filename("test_empty_ocr.png")
-            .storagePath("test/test_empty_ocr.png")
-            .build();
+        new Image() {{ setFilename("test_empty_ocr.png"); setStoragePath("test/test_empty_ocr.png"); }};
     final Image image = imageRepository.save(rawImage);
-    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page rawPage = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     final Page page = pageRepository.save(rawPage);
 
     // Create a running OCR job
     Job job =
-        Job.builder()
-            .id(UUID.randomUUID().toString())
-            .imageId(image.getId())
-            .type("ocr")
-            .status("PROCESSING")
-            .build();
+        new Job() {{ setId(UUID.randomUUID().toString()); setImageId(image.getId()); setType("ocr"); setStatus("PROCESSING"); }};
     job = jobRepository.save(job);
 
     com.manga.library.dto.OcrCallbackDto dto = new com.manga.library.dto.OcrCallbackDto();
@@ -1039,32 +856,17 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleTranslationCallback_AllFailed_ShortCircuit() {
     Image rawImage =
-        Image.builder().filename("test_empty_tl.png").storagePath("test/test_empty_tl.png").build();
+        new Image() {{ setFilename("test_empty_tl.png"); setStoragePath("test/test_empty_tl.png"); }};
     final Image image = imageRepository.save(rawImage);
-    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page rawPage = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     final Page page = pageRepository.save(rawPage);
 
     Job job =
-        Job.builder()
-            .id(UUID.randomUUID().toString())
-            .imageId(image.getId())
-            .type("translation")
-            .status("PROCESSING")
-            .build();
+        new Job() {{ setId(UUID.randomUUID().toString()); setImageId(image.getId()); setType("translation"); setStatus("PROCESSING"); }};
     job = jobRepository.save(job);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .regionType("speech")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setRegionType("speech"); }};
     region = ocrRegionRepository.save(region);
 
     Map<String, Object> translation = new HashMap<>();
@@ -1092,23 +894,13 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testHandleTranslationCallback_SavesJobCost() {
     Image rawImage =
-        Image.builder().filename("test_cost.png").storagePath("test/test_cost.png").build();
+        new Image() {{ setFilename("test_cost.png"); setStoragePath("test/test_cost.png"); }};
     final Image image = imageRepository.save(rawImage);
-    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    Page rawPage = new Page() {{ setChapter(defaultChapter); setImage(image); setPageNumber(1); }};
     final Page page = pageRepository.save(rawPage);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .bboxX(10)
-            .bboxY(20)
-            .bboxW(100)
-            .bboxH(50)
-            .text("こんにちは")
-            .detectedLanguage("ja")
-            .confidence(0.9)
-            .regionType("speech")
-            .build();
+        new OcrRegion() {{ setPage(page); setBboxX(10); setBboxY(20); setBboxW(100); setBboxH(50); setText("こんにちは"); setDetectedLanguage("ja"); setConfidence(0.9); setRegionType("speech"); }};
     region = ocrRegionRepository.save(region);
 
     Map<String, Object> translation = new HashMap<>();
@@ -1151,59 +943,40 @@ public class JobCoordinatorServiceTest {
   @Test
   public void testFallbackModelInheritance() throws Exception {
     Series series =
-        Series.builder()
-            .title("Fallback Test Series")
-            .originalLanguage("ja")
-            .sourceLanguage("ja")
-            .targetLanguage("en")
-            .readingDirection("rtl")
-            .build();
+        new Series() {{ setTitle("Fallback Test Series"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); }};
     series = seriesRepository.save(series);
 
     // 1. Chapter overrides (false)
     Chapter chapter1 =
-        Chapter.builder().series(series).chapterNumber(1.0).useFallbackModels(false).build();
+        new Chapter() {{ setSeries(series); setChapterNumber(1.0); setUseFallbackModels(false); }};
     chapter1 = chapterRepository.save(chapter1);
 
     Image image1 =
-        imageRepository.save(Image.builder().filename("f1.png").storagePath("f1.png").build());
-    pageRepository.save(Page.builder().chapter(chapter1).image(image1).pageNumber(1).build());
+        imageRepository.save(new Image() {{ setFilename("f1.png"); setStoragePath("f1.png"); }});
+    pageRepository.save(new Page() {{ setChapter(chapter1); setImage(image1); setPageNumber(1); }});
 
     // 2. Chapter inherits, Series overrides (false)
     Series series2 =
-        Series.builder()
-            .title("Fallback Test Series 2")
-            .originalLanguage("ja")
-            .sourceLanguage("ja")
-            .targetLanguage("en")
-            .readingDirection("rtl")
-            .useFallbackModels(false)
-            .build();
+        new Series() {{ setTitle("Fallback Test Series 2"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); setUseFallbackModels(false); }};
     series2 = seriesRepository.save(series2);
-    Chapter chapter2 = Chapter.builder().series(series2).chapterNumber(2.0).build();
+    Chapter chapter2 = new Chapter() {{ setSeries(series2); setChapterNumber(2.0); }};
     chapter2 = chapterRepository.save(chapter2);
 
     Image image2 =
-        imageRepository.save(Image.builder().filename("f2.png").storagePath("f2.png").build());
-    pageRepository.save(Page.builder().chapter(chapter2).image(image2).pageNumber(1).build());
+        imageRepository.save(new Image() {{ setFilename("f2.png"); setStoragePath("f2.png"); }});
+    pageRepository.save(new Page() {{ setChapter(chapter2); setImage(image2); setPageNumber(1); }});
 
     // 3. Both inherit, should be true by default (system setting not mocked here, but defaults to
     // true in logic)
     Series series3 =
-        Series.builder()
-            .title("Fallback Test Series 3")
-            .originalLanguage("ja")
-            .sourceLanguage("ja")
-            .targetLanguage("en")
-            .readingDirection("rtl")
-            .build();
+        new Series() {{ setTitle("Fallback Test Series 3"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); }};
     series3 = seriesRepository.save(series3);
-    Chapter chapter3 = Chapter.builder().series(series3).chapterNumber(3.0).build();
+    Chapter chapter3 = new Chapter() {{ setSeries(series3); setChapterNumber(3.0); }};
     chapter3 = chapterRepository.save(chapter3);
 
     Image image3 =
-        imageRepository.save(Image.builder().filename("f3.png").storagePath("f3.png").build());
-    pageRepository.save(Page.builder().chapter(chapter3).image(image3).pageNumber(1).build());
+        imageRepository.save(new Image() {{ setFilename("f3.png"); setStoragePath("f3.png"); }});
+    pageRepository.save(new Page() {{ setChapter(chapter3); setImage(image3); setPageNumber(1); }});
 
     // Execute
     AtomicReference<String> payload1 = new AtomicReference<>();

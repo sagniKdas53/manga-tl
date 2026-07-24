@@ -8,23 +8,23 @@ import io.minio.messages.Item;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class ExportCleanupService {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ExportCleanupService.class);
+
 
   private final MinioClient minioClient;
+  public ExportCleanupService(MinioClient minioClient) {
+    this.minioClient = minioClient;
+  }
 
-  @Value("${minio.bucket-name}")
+
   private String bucketName;
 
-  @Value("${app.export.retention.days:7}")
   private int retentionDays;
 
   /** Run every day at 2:00 AM server time. */

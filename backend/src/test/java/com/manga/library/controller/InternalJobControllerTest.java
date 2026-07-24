@@ -61,7 +61,7 @@ public class InternalJobControllerTest {
   public void testGetImageInfo_Success() throws Exception {
     UUID imageId = UUID.randomUUID();
     Image image =
-        Image.builder().id(imageId).filename("test.png").storagePath("orig/test.png").build();
+        new Image() {{ setId(imageId); setFilename("test.png"); setStoragePath("orig/test.png"); }};
 
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
     when(minioService.generatePresignedUrl(anyString())).thenReturn("http://presigned-url");
@@ -69,14 +69,14 @@ public class InternalJobControllerTest {
 
     // Set up active OCR layer and elements
     UUID ocrLayerId = UUID.randomUUID();
-    Layer ocrLayer = Layer.builder().id(ocrLayerId).type("ocr").zOrder(1).build();
+    Layer ocrLayer = new Layer() {{ setId(ocrLayerId); setType("ocr"); setZOrder(1); }};
     when(layerRepository.findByPageId(any())).thenReturn(Collections.singletonList(ocrLayer));
 
     UUID regionId = UUID.randomUUID();
-    OcrRegion region = OcrRegion.builder().id(regionId).build();
+    OcrRegion region = new OcrRegion() {{ setId(regionId); }};
     when(ocrRegionRepository.findByPageId(any())).thenReturn(Collections.singletonList(region));
 
-    LayerElement element = LayerElement.builder().id(UUID.randomUUID()).region(region).build();
+    LayerElement element = new LayerElement() {{ setId(UUID.randomUUID()); setRegion(region); }};
     when(layerElementRepository.findByLayerId(ocrLayerId))
         .thenReturn(Collections.singletonList(element));
     when(layerElementRepository.findByLayerPageId(any()))
@@ -84,40 +84,32 @@ public class InternalJobControllerTest {
 
     // Page, Chapter, Series context
     Series series =
-        Series.builder().id(UUID.randomUUID()).title("Series Title").originalLanguage("ja").build();
+        new Series() {{ setId(UUID.randomUUID()); setTitle("Series Title"); setOriginalLanguage("ja"); }};
     Chapter chapter =
-        Chapter.builder().id(UUID.randomUUID()).series(series).chapterNumber(2.0).build();
+        new Chapter() {{ setId(UUID.randomUUID()); setSeries(series); setChapterNumber(2.0); }};
     Page page =
-        Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(2).image(image).build();
+        new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(2); setImage(image); }};
     when(pageRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(page));
 
     // Previous page text
     Page prevPage =
-        Page.builder()
-            .id(UUID.randomUUID())
-            .pageNumber(1)
-            .image(Image.builder().id(UUID.randomUUID()).build())
-            .build();
+        new Page() {{ setId(UUID.randomUUID()); setPageNumber(1); setImage(new Image() {{ setId(UUID.randomUUID()); }}); }};
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(any()))
         .thenReturn(Arrays.asList(prevPage, page));
     OcrRegion prevRegion =
-        OcrRegion.builder()
-            .id(UUID.randomUUID())
-            .text("prev text")
-            .translatedText("translated prev")
-            .build();
+        new OcrRegion() {{ setId(UUID.randomUUID()); setText("prev text"); setTranslatedText("translated prev"); }};
     when(ocrRegionRepository.findByPageId(prevPage.getId()))
         .thenReturn(Collections.singletonList(prevRegion));
 
     // Previous chapter summary
-    Chapter prevChapter = Chapter.builder().id(UUID.randomUUID()).summaryJson("summary").build();
+    Chapter prevChapter = new Chapter() {{ setId(UUID.randomUUID()); setSummaryJson("summary"); }};
     when(chapterRepository.findBySeriesIdAndChapterNumber(any(), eq(1.0)))
         .thenReturn(Optional.of(prevChapter));
 
     // Conversations
-    Conversation conv = Conversation.builder().id(UUID.randomUUID()).sceneType("dialogue").build();
+    Conversation conv = new Conversation() {{ setId(UUID.randomUUID()); setSceneType("dialogue"); }};
     when(conversationRepository.findByPageId(any())).thenReturn(Collections.singletonList(conv));
-    ConversationRegion cr = ConversationRegion.builder().regionId(regionId).position(1).build();
+    ConversationRegion cr = new ConversationRegion() {{ setRegionId(regionId); setPosition(1); }};
     when(conversationRegionRepository.findByConversationId(conv.getId()))
         .thenReturn(Collections.singletonList(cr));
 
@@ -243,14 +235,8 @@ public class InternalJobControllerTest {
   public void testRegionCallback_Success() throws Exception {
     UUID regionId = UUID.randomUUID();
     OcrRegion region =
-        OcrRegion.builder()
-            .id(regionId)
-            .page(
-                Page.builder()
-                    .id(UUID.randomUUID())
-                    .image(Image.builder().id(UUID.randomUUID()).build())
-                    .build())
-            .build();
+        new OcrRegion() {{ setId(regionId); setPage(
+                new Page() {{ setId(UUID.randomUUID()); setImage(new Image() {{ setId(UUID.randomUUID()); }}); }}); }};
     when(ocrRegionRepository.findById(regionId)).thenReturn(Optional.of(region));
 
     Map<String, Object> payload = new HashMap<>();
@@ -373,8 +359,7 @@ public class InternalJobControllerTest {
   public void testResolveNotificationContext_Exception() throws Exception {
     UUID imageId = UUID.randomUUID();
     when(pageRepository.findByImageId(imageId)).thenThrow(new RuntimeException("db error"));
-    PanelCallbackDto dto = new PanelCallbackDto();
-    dto.setImageId(imageId);
+    PanelCallbackDto dto = new PanelCallbackDto(imageId, null, null);
 
     mockMvc
         .perform(
@@ -387,14 +372,14 @@ public class InternalJobControllerTest {
   @Test
   public void testGetImageInfo_PageOneNoChapter() throws Exception {
     UUID imageId = UUID.randomUUID();
-    Image image = Image.builder().id(imageId).filename("test.png").build();
+    Image image = new Image() {{ setId(imageId); setFilename("test.png"); }};
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
 
-    Series series = Series.builder().id(UUID.randomUUID()).title("Series Title").build();
+    Series series = new Series() {{ setId(UUID.randomUUID()); setTitle("Series Title"); }};
     Chapter chapter =
-        Chapter.builder().id(UUID.randomUUID()).series(series).chapterNumber(1.0).build();
+        new Chapter() {{ setId(UUID.randomUUID()); setSeries(series); setChapterNumber(1.0); }};
     Page page =
-        Page.builder().id(UUID.randomUUID()).pageNumber(1).image(image).chapter(chapter).build();
+        new Page() {{ setId(UUID.randomUUID()); setPageNumber(1); setImage(image); setChapter(chapter); }};
     when(pageRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(page));
 
     mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isOk());
@@ -402,7 +387,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testGetJob_Success() throws Exception {
-    Job job = Job.builder().id("job1").type("ocr").status("PENDING").build();
+    Job job = new Job() {{ setId("job1"); setType("ocr"); setStatus("PENDING"); }};
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     mockMvc
@@ -460,13 +445,7 @@ public class InternalJobControllerTest {
   @Test
   public void testUpdateJobStatus_WithAttemptUpdate() throws Exception {
     Job job =
-        Job.builder()
-            .id("job1")
-            .type("ocr")
-            .status("PROCESSING")
-            .payload("{\"attempt\": 1, \"jobId\": \"job1\"}")
-            .attempt(1)
-            .build();
+        new Job() {{ setId("job1"); setType("ocr"); setStatus("PROCESSING"); setPayload("{\"attempt\": 1, \"jobId\": \"job1\"}"); setAttempt(1); }};
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     Map<String, String> payload = new HashMap<>();

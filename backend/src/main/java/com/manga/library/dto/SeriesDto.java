@@ -1,27 +1,26 @@
 package com.manga.library.dto;
 
 import java.util.UUID;
-import lombok.Data;
 
-@Data
-public class SeriesDto {
-  private UUID id;
-  private String title;
-  private String originalLanguage;
-  private String sourceLanguage;
-  private String targetLanguage;
-  private String readingDirection;
-  private String coverImageUrl;
-  private String ocrProvider;
-  private String ocrModel;
-  private String tlProvider;
-  private String tlModel;
-  private String qaProvider;
-  private String qaLlmModel;
-  private String qaVlmModel;
-  private String qaMode;
-  private String routingStrategy;
-  private Boolean useFallbackModels;
-  private java.time.OffsetDateTime createdAt;
-  private java.time.OffsetDateTime updatedAt;
+public record SeriesDto(
+  UUID id,
+  String title,
+  String originalLanguage,
+  String sourceLanguage,
+  String targetLanguage,
+  String readingDirection,
+  String coverImageUrl,
+  String ocrProvider,
+  String ocrModel,
+  String tlProvider,
+  String tlModel,
+  String qaProvider,
+  String qaLlmModel,
+  String qaVlmModel,
+  String qaMode,
+  String routingStrategy,
+  Boolean useFallbackModels,
+  java.time.OffsetDateTime createdAt,
+  java.time.OffsetDateTime updatedAt
+) {
 }

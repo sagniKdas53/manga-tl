@@ -150,12 +150,7 @@ public class PipelineFlowIntegrationTest {
             .orElseGet(
                 () -> {
                   User buildUser =
-                      User.builder()
-                          .email("admin@manga.local")
-                          .passwordHash("mock_password_hash")
-                          .displayName("Admin User")
-                          .role("admin")
-                          .build();
+                      new User() {{ setEmail("admin@manga.local"); setPasswordHash("mock_password_hash"); setDisplayName("Admin User"); setRole("admin"); }};
                   return userRepository.save(buildUser);
                 });
     adminToken = "Bearer " + jwtUtils.generateToken(adminUser.getEmail());
@@ -602,52 +597,34 @@ public class PipelineFlowIntegrationTest {
   public void testClonedOcrLayerRegionPreservationAndVisibility() throws Exception {
     // 1. Create a mock Image and Page
     Image image =
-        Image.builder()
-            .filename("test-clone.png")
-            .storagePath("originals/test-clone.png")
-            .hash("test-clone-hash")
-            .build();
+        new Image() {{ setFilename("test-clone.png"); setStoragePath("originals/test-clone.png"); setHash("test-clone-hash"); }};
     image = imageRepository.save(image);
     createdImageIds.add(image.getId());
 
     Series series =
-        Series.builder().title("Clone Test").originalLanguage("ja").readingDirection("rtl").build();
+        new Series() {{ setTitle("Clone Test"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
     series = seriesRepository.save(series);
     createdSeriesIds.add(series.getId());
-    Chapter chapter = Chapter.builder().series(series).chapterNumber(1.0).build();
+    Chapter chapter = new Chapter() {{ setSeries(series); setChapterNumber(1.0); }};
     chapter = chapterRepository.save(chapter);
     createdChapterIds.add(chapter.getId());
 
-    Page page = Page.builder().chapter(chapter).image(image).pageNumber(1).build();
+    Page page = new Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
     page = pageRepository.save(page);
     createdPageIds.add(page.getId());
 
     // 2. Create OCR Region
     OcrRegion ocrRegion =
-        OcrRegion.builder()
-            .page(page)
-            .text("Original Text")
-            .detectedLanguage("ja")
-            .bboxX(10)
-            .bboxY(10)
-            .bboxW(100)
-            .bboxH(50)
-            .build();
+        new OcrRegion() {{ setPage(page); setText("Original Text"); setDetectedLanguage("ja"); setBboxX(10); setBboxY(10); setBboxW(100); setBboxH(50); }};
     ocrRegion = ocrRegionRepository.save(ocrRegion);
 
     // 3. Create Layer (OCR)
-    Layer ocrLayer = Layer.builder().page(page).type("ocr").visible(true).zOrder(0).build();
+    Layer ocrLayer = new Layer() {{ setPage(page); setType("ocr"); setVisible(true); setZOrder(0); }};
     ocrLayer = layerRepository.save(ocrLayer);
 
     // 4. Create Layer Element with Region
     LayerElement element =
-        LayerElement.builder()
-            .layer(ocrLayer)
-            .region(ocrRegion)
-            .text("Original Text")
-            .x(10.0)
-            .y(10.0)
-            .build();
+        new LayerElement() {{ setLayer(ocrLayer); setRegion(ocrRegion); setText("Original Text"); setX(10.0); setY(10.0); }};
     element = layerElementRepository.save(element);
 
     // 5. Test frontend cloning behaviour via API /api/images/{imageId}/layers and
@@ -655,7 +632,7 @@ public class PipelineFlowIntegrationTest {
     // We clone the layer. Since the frontend would call the create layer endpoint and then POST
     // each element, we simulate this.
     // Create new layer (the clone)
-    Layer clonedLayer = Layer.builder().page(page).type("ocr").visible(true).zOrder(1).build();
+    Layer clonedLayer = new Layer() {{ setPage(page); setType("ocr"); setVisible(true); setZOrder(1); }};
     clonedLayer = layerRepository.save(clonedLayer);
 
     // Create cloned layer element, passing regionId in the DTO
