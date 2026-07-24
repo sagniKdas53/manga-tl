@@ -7,110 +7,76 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class SystemSettingsService {
 
   private final SystemSettingsRepository systemSettingsRepository;
+  public SystemSettingsService(SystemSettingsRepository systemSettingsRepository) {
+    this.systemSettingsRepository = systemSettingsRepository;
+  }
 
-  @Value("${OCR_MODEL_PROVIDER:openrouter}")
+
   private String defaultOcrProvider;
 
-  @Value("${OCR_VLM_MODEL:}")
   private String defaultOcrModel;
 
-  @Value("${OCR_VLM_MODEL_LIST:}")
   private String ocrVlmModelList;
 
-  @Value("${TL_MODEL_PROVIDER:openrouter}")
   private String defaultTlProvider;
 
-  @Value("${TL_LLM_MODEL:}")
   private String defaultTlModel;
 
-  @Value("${TL_LLM_MODEL_LIST:}")
   private String tlLlmModelList;
 
-  @Value("${QA_MODEL_PROVIDER:openrouter}")
   private String defaultQaProvider;
 
-  @Value("${QA_LLM_MODEL:}")
   private String defaultQaLlmModel;
 
-  @Value("${QA_VLM_MODEL:}")
   private String defaultQaVlmModel;
 
-  @Value("${QA_LLM_MODEL_LIST:}")
   private String qaLlmModelList;
 
-  @Value("${QA_VLM_MODEL_LIST:}")
   private String qaVlmModelList;
 
-  @Value("${DISABLE_LOCAL_OCR:false}")
   private boolean disableLocalOcr;
 
-  @Value("${PADDLEOCR_REC_MODEL:PP-OCRv6_medium_rec}")
   private String paddleOcrRecModel;
 
-  @Value("${DISABLE_LOCAL_LLM:false}")
   private boolean disableLocalLlm;
 
-  @Value("${QA_MODE:auto}")
   private String qaMode;
 
-  @Value("${OPENAI_API_KEY:}")
   private String openaiApiKey;
 
-  @Value("${ANTHROPIC_API_KEY:}")
   private String anthropicApiKey;
 
-  @Value("${LOCAL_LLM_PROVIDER:ollama}")
   private String localLlmProvider;
 
   public SystemSettingsDto getSettings() {
-    SystemSettingsDto dto = new SystemSettingsDto();
-
-    dto.setOcrVlmModelList(parseList(ocrVlmModelList));
-    dto.setTlLlmModelList(parseList(tlLlmModelList));
-    dto.setQaLlmModelList(parseList(qaLlmModelList));
-    dto.setQaVlmModelList(parseList(qaVlmModelList));
+    List<String> parsedOcrVlmModelList = parseList(ocrVlmModelList);
+    List<String> parsedTlLlmModelList = parseList(tlLlmModelList);
+    List<String> parsedQaLlmModelList = parseList(qaLlmModelList);
+    List<String> parsedQaVlmModelList = parseList(qaVlmModelList);
 
     String actOcrModel = defaultOcrModel;
-    if ((actOcrModel == null || actOcrModel.isEmpty()) && !dto.getOcrVlmModelList().isEmpty())
-      actOcrModel = dto.getOcrVlmModelList().get(0);
+    if ((actOcrModel == null || actOcrModel.isEmpty()) && !parsedOcrVlmModelList.isEmpty())
+      actOcrModel = parsedOcrVlmModelList.get(0);
 
     String actTlModel = defaultTlModel;
-    if ((actTlModel == null || actTlModel.isEmpty()) && !dto.getTlLlmModelList().isEmpty())
-      actTlModel = dto.getTlLlmModelList().get(0);
+    if ((actTlModel == null || actTlModel.isEmpty()) && !parsedTlLlmModelList.isEmpty())
+      actTlModel = parsedTlLlmModelList.get(0);
 
     String actQaLlmModel = defaultQaLlmModel;
-    if ((actQaLlmModel == null || actQaLlmModel.isEmpty()) && !dto.getQaLlmModelList().isEmpty())
-      actQaLlmModel = dto.getQaLlmModelList().get(0);
+    if ((actQaLlmModel == null || actQaLlmModel.isEmpty()) && !parsedQaLlmModelList.isEmpty())
+      actQaLlmModel = parsedQaLlmModelList.get(0);
 
     String actQaVlmModel = defaultQaVlmModel;
-    if ((actQaVlmModel == null || actQaVlmModel.isEmpty()) && !dto.getQaVlmModelList().isEmpty())
-      actQaVlmModel = dto.getQaVlmModelList().get(0);
-
-    dto.setOcrProvider(getSettingValue("ocrProvider", defaultOcrProvider));
-    dto.setOcrModel(getSettingValue("ocrModel", actOcrModel));
-    dto.setTlProvider(getSettingValue("tlProvider", defaultTlProvider));
-    dto.setTlModel(getSettingValue("tlModel", actTlModel));
-    dto.setQaProvider(getSettingValue("qaProvider", defaultQaProvider));
-    dto.setQaLlmModel(getSettingValue("qaLlmModel", actQaLlmModel));
-    dto.setQaVlmModel(getSettingValue("qaVlmModel", actQaVlmModel));
-    dto.setRoutingStrategy(getSettingValue("routingStrategy", "lowest-cost"));
-    dto.setUseFallbackModels(Boolean.parseBoolean(getSettingValue("useFallbackModels", "true")));
-
-    dto.setDisableLocalOcr(disableLocalOcr);
-    dto.setLocalOcrModel(paddleOcrRecModel);
-
-    dto.setDisableLocalLlm(disableLocalLlm);
-    dto.setQaMode(getSettingValue("qaMode", qaMode));
+    if ((actQaVlmModel == null || actQaVlmModel.isEmpty()) && !parsedQaVlmModelList.isEmpty())
+      actQaVlmModel = parsedQaVlmModelList.get(0);
 
     List<String> activeProviders = new java.util.ArrayList<>();
     activeProviders.add("openrouter");
@@ -134,7 +100,6 @@ public class SystemSettingsService {
         activeProviders.add("lmstudio");
       }
     }
-    dto.setActiveProviders(activeProviders);
 
     List<String> activeOcrProviders = new java.util.ArrayList<>();
     if (!disableLocalOcr) {
@@ -155,23 +120,42 @@ public class SystemSettingsService {
         activeOcrProviders.add("lmstudio");
       }
     }
-    dto.setActiveOcrProviders(activeOcrProviders);
 
-    return dto;
+    return new SystemSettingsDto(
+      parsedOcrVlmModelList,
+      parsedTlLlmModelList,
+      parsedQaLlmModelList,
+      parsedQaVlmModelList,
+      getSettingValue("routingStrategy", "lowest-cost"),
+      getSettingValue("ocrProvider", defaultOcrProvider),
+      getSettingValue("ocrModel", actOcrModel),
+      getSettingValue("tlProvider", defaultTlProvider),
+      getSettingValue("tlModel", actTlModel),
+      getSettingValue("qaProvider", defaultQaProvider),
+      getSettingValue("qaLlmModel", actQaLlmModel),
+      getSettingValue("qaVlmModel", actQaVlmModel),
+      disableLocalOcr,
+      paddleOcrRecModel,
+      disableLocalLlm,
+      getSettingValue("qaMode", qaMode),
+      Boolean.parseBoolean(getSettingValue("useFallbackModels", "true")),
+      activeProviders,
+      activeOcrProviders
+    );
   }
 
   @Transactional
   public SystemSettingsDto updateSettings(SystemSettingsDto dto) {
-    saveSetting("ocrProvider", dto.getOcrProvider());
-    saveSetting("ocrModel", dto.getOcrModel());
-    saveSetting("tlProvider", dto.getTlProvider());
-    saveSetting("tlModel", dto.getTlModel());
-    saveSetting("qaProvider", dto.getQaProvider());
-    saveSetting("qaLlmModel", dto.getQaLlmModel());
-    saveSetting("qaVlmModel", dto.getQaVlmModel());
-    saveSetting("routingStrategy", dto.getRoutingStrategy());
-    if (dto.getUseFallbackModels() != null) {
-      saveSetting("useFallbackModels", String.valueOf(dto.getUseFallbackModels()));
+    saveSetting("ocrProvider", dto.ocrProvider());
+    saveSetting("ocrModel", dto.ocrModel());
+    saveSetting("tlProvider", dto.tlProvider());
+    saveSetting("tlModel", dto.tlModel());
+    saveSetting("qaProvider", dto.qaProvider());
+    saveSetting("qaLlmModel", dto.qaLlmModel());
+    saveSetting("qaVlmModel", dto.qaVlmModel());
+    saveSetting("routingStrategy", dto.routingStrategy());
+    if (dto.useFallbackModels() != null) {
+      saveSetting("useFallbackModels", String.valueOf(dto.useFallbackModels()));
     }
 
     return getSettings();
@@ -189,7 +173,11 @@ public class SystemSettingsService {
     SystemSetting setting =
         systemSettingsRepository
             .findById(Objects.requireNonNull(key))
-            .orElse(new SystemSetting(key, value, null));
+            .orElseGet(() -> {
+              SystemSetting s = new SystemSetting();
+              s.setSettingKey(key);
+              return s;
+            });
     setting.setSettingValue(value);
     systemSettingsRepository.save(Objects.requireNonNull(setting));
   }

@@ -9,7 +9,6 @@ import com.manga.library.model.User;
 import com.manga.library.repository.UserRepository;
 import java.util.Map;
 import java.util.Objects;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,12 +16,17 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
-@RequiredArgsConstructor
 public class AuthController {
 
   private final UserRepository userRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtUtils jwtUtils;
+  public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtils jwtUtils) {
+    this.userRepository = userRepository;
+    this.passwordEncoder = passwordEncoder;
+    this.jwtUtils = jwtUtils;
+  }
+
 
   @GetMapping("/setup-required")
   public ResponseEntity<?> isSetupRequired() {
@@ -33,7 +37,7 @@ public class AuthController {
   @PostMapping("/register")
   public ResponseEntity<?> register(
       @jakarta.validation.Valid @RequestBody RegisterRequest request) {
-    if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+    if (userRepository.findByEmail(request.email()).isPresent()) {
       return ResponseEntity.badRequest().body("Email already exists");
     }
 
@@ -42,23 +46,21 @@ public class AuthController {
     if (userCount == 0) {
       assignedRole = "admin";
     } else {
-      if (request.getRole() == null || "admin".equalsIgnoreCase(request.getRole())) {
+      if (request.role() == null || "admin".equalsIgnoreCase(request.role())) {
         return ResponseEntity.badRequest()
             .body("Cannot register as Admin. Admin is created on first registration.");
       }
-      assignedRole = request.getRole().toLowerCase();
+      assignedRole = request.role().toLowerCase();
       if (!assignedRole.equals("translator") && !assignedRole.equals("viewer")) {
         assignedRole = "viewer";
       }
     }
 
-    User user =
-        User.builder()
-            .email(request.getEmail())
-            .passwordHash(passwordEncoder.encode(request.getPassword()))
-            .displayName(request.getDisplayName())
-            .role(assignedRole)
-            .build();
+    User user = new User();
+    user.setEmail(request.email());
+    user.setPasswordHash(passwordEncoder.encode(request.password()));
+    user.setDisplayName(request.displayName());
+    user.setRole(assignedRole);
 
     Objects.requireNonNull(user, "user cannot be null");
     userRepository.save(user);
@@ -70,9 +72,9 @@ public class AuthController {
 
   @PostMapping("/login")
   public ResponseEntity<?> login(@jakarta.validation.Valid @RequestBody LoginRequest request) {
-    User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+    User user = userRepository.findByEmail(request.email()).orElse(null);
 
-    if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+    if (user == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
       return ResponseEntity.status(401).body("Invalid credentials");
     }
 
@@ -129,11 +131,11 @@ public class AuthController {
     User dbUser = userRepository.findById(Objects.requireNonNull(user.getId())).orElse(null);
     if (dbUser == null) return ResponseEntity.notFound().build();
 
-    if (!passwordEncoder.matches(request.getCurrentPassword(), dbUser.getPasswordHash())) {
+    if (!passwordEncoder.matches(request.currentPassword(), dbUser.getPasswordHash())) {
       return ResponseEntity.status(403).body(Map.of("message", "Current password is incorrect"));
     }
 
-    dbUser.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+    dbUser.setPasswordHash(passwordEncoder.encode(request.newPassword()));
     userRepository.save(dbUser);
     return ResponseEntity.ok(Map.of("message", "Password changed successfully"));
   }

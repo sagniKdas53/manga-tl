@@ -8,24 +8,27 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.*;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class CostEstimationService {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CostEstimationService.class);
+
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
+  private final com.manga.library.repository.ModelRateRepository modelRateRepository;
+  public CostEstimationService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, com.manga.library.repository.ModelRateRepository modelRateRepository) {
+    this.redisTemplate = redisTemplate;
+    this.objectMapper = objectMapper;
+    this.modelRateRepository = modelRateRepository;
+  }
 
-  @Value("${cost.cache-path:costs.json}")
+
   private String costCachePath;
 
-  @Value("${cost.openrouter-models-url:https://openrouter.ai/api/v1/models}")
   private String openrouterModelsUrl;
 
   private final HttpClient httpClient =
@@ -84,7 +87,6 @@ public class CostEstimationService {
     }
   }
 
-  private final com.manga.library.repository.ModelRateRepository modelRateRepository;
 
   private Map<String, Double> getModelRates(String model, String provider) {
     // 1. Try Redis first

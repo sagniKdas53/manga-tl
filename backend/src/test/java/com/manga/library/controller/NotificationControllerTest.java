@@ -40,7 +40,7 @@ public class NotificationControllerTest {
 
   @Test
   public void testStream_Authorized() throws Exception {
-    User user = User.builder().id(UUID.randomUUID()).email("test@test.com").build();
+    User user = new User() {{ setId(UUID.randomUUID()); setEmail("test@test.com"); }};
     when(sseService.subscribe(user.getId())).thenReturn(new SseEmitter());
 
     org.springframework.security.core.Authentication auth =

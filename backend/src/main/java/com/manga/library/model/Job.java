@@ -8,19 +8,9 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "jobs")
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class Job {
   @Id
   @Column(name = "id")
@@ -67,5 +57,116 @@ public class Job {
   @PreUpdate
   protected void onUpdate() {
     updatedAt = OffsetDateTime.now();
+  }
+
+  public Job() {}
+
+  public String getId() {
+    return this.id;
+  }
+
+  public void setId(String id) {
+    this.id = id;
+  }
+
+  public String getTraceId() {
+    return this.traceId;
+  }
+
+  public void setTraceId(String traceId) {
+    this.traceId = traceId;
+  }
+
+  public String getType() {
+    return this.type;
+  }
+
+  public void setType(String type) {
+    this.type = type;
+  }
+
+  public UUID getImageId() {
+    return this.imageId;
+  }
+
+  public void setImageId(UUID imageId) {
+    this.imageId = imageId;
+  }
+
+  public UUID getPageId() {
+    return this.pageId;
+  }
+
+  public void setPageId(UUID pageId) {
+    this.pageId = pageId;
+  }
+
+  public String getStatus() {
+    return this.status;
+  }
+
+  public void setStatus(String status) {
+    this.status = status;
+  }
+
+  public String getPayload() {
+    return this.payload;
+  }
+
+  public void setPayload(String payload) {
+    this.payload = payload;
+  }
+
+  public String getError() {
+    return this.error;
+  }
+
+  public void setError(String error) {
+    this.error = error;
+  }
+
+  public Integer getAttempt() {
+    return this.attempt;
+  }
+
+  public void setAttempt(Integer attempt) {
+    this.attempt = attempt;
+  }
+
+  public Integer getMaxAttempts() {
+    return this.maxAttempts;
+  }
+
+  public void setMaxAttempts(Integer maxAttempts) {
+    this.maxAttempts = maxAttempts;
+  }
+
+  public OffsetDateTime getCreatedAt() {
+    return this.createdAt;
+  }
+
+  public void setCreatedAt(OffsetDateTime createdAt) {
+    this.createdAt = createdAt;
+  }
+
+  public OffsetDateTime getUpdatedAt() {
+    return this.updatedAt;
+  }
+
+  public void setUpdatedAt(OffsetDateTime updatedAt) {
+    this.updatedAt = updatedAt;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Job)) return false;
+    Job that = (Job) o;
+    return id != null && id.equals(that.getId());
+  }
+
+  @Override
+  public int hashCode() {
+    return getClass().hashCode();
   }
 }

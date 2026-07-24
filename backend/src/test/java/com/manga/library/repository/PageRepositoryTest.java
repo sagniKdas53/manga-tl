@@ -27,26 +27,20 @@ public class PageRepositoryTest {
   @Test
   public void testFindByChapterIdOrderByPageNumberAsc() {
     Series series =
-        Series.builder()
-            .title("Test Series Rep")
-            .originalLanguage("ja")
-            .sourceLanguage("ja")
-            .targetLanguage("en")
-            .readingDirection("rtl")
-            .build();
+        new Series() {{ setTitle("Test Series Rep"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); }};
     series = seriesRepository.save(series);
 
-    Chapter chapter = Chapter.builder().chapterNumber(1.0).title("Ch 1").series(series).build();
+    Chapter chapter = new Chapter() {{ setChapterNumber(1.0); setTitle("Ch 1"); setSeries(series); }};
     chapter = chapterRepository.save(chapter);
 
-    Image img1 = Image.builder().filename("img1.png").storagePath("p1").hash("h1").build();
+    Image img1 = new Image() {{ setFilename("img1.png"); setStoragePath("p1"); setHash("h1"); }};
     img1 = imageRepository.save(img1);
-    Image img2 = Image.builder().filename("img2.png").storagePath("p2").hash("h2").build();
+    Image img2 = new Image() {{ setFilename("img2.png"); setStoragePath("p2"); setHash("h2"); }};
     img2 = imageRepository.save(img2);
 
-    Page p2 = Page.builder().chapter(chapter).pageNumber(2).image(img2).build();
+    Page p2 = new Page() {{ setChapter(chapter); setPageNumber(2); setImage(img2); }};
     pageRepository.save(p2);
-    Page p1 = Page.builder().chapter(chapter).pageNumber(1).image(img1).build();
+    Page p1 = new Page() {{ setChapter(chapter); setPageNumber(1); setImage(img1); }};
     pageRepository.save(p1);
 
     List<Page> pages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
@@ -67,64 +61,41 @@ public class PageRepositoryTest {
   @Test
   public void testDeletePageCascade() {
     Series series =
-        Series.builder()
-            .title("Delete Test Series")
-            .originalLanguage("ja")
-            .readingDirection("rtl")
-            .build();
+        new Series() {{ setTitle("Delete Test Series"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
     series = seriesRepository.save(series);
 
-    Chapter chapter = Chapter.builder().chapterNumber(1.0).title("Ch 1").series(series).build();
+    Chapter chapter = new Chapter() {{ setChapterNumber(1.0); setTitle("Ch 1"); setSeries(series); }};
     chapter = chapterRepository.save(chapter);
 
-    Image image = Image.builder().filename("test.png").storagePath("path/test.png").build();
+    Image image = new Image() {{ setFilename("test.png"); setStoragePath("path/test.png"); }};
     image = imageRepository.save(image);
 
-    Page page = Page.builder().chapter(chapter).pageNumber(1).image(image).build();
+    Page page = new Page() {{ setChapter(chapter); setPageNumber(1); setImage(image); }};
     page = pageRepository.save(page);
 
     Panel panel =
-        Panel.builder()
-            .image(image)
-            .bboxX(0)
-            .bboxY(0)
-            .bboxW(100)
-            .bboxH(100)
-            .readingOrder(1)
-            .build();
+        new Panel() {{ setImage(image); setBboxX(0); setBboxY(0); setBboxW(100); setBboxH(100); setReadingOrder(1); }};
     panel = panelRepository.save(panel);
 
     OcrRegion region =
-        OcrRegion.builder()
-            .page(page)
-            .panel(panel)
-            .bboxX(10)
-            .bboxY(10)
-            .bboxW(50)
-            .bboxH(50)
-            .detectedLanguage("ja")
-            .build();
+        new OcrRegion() {{ setPage(page); setPanel(panel); setBboxX(10); setBboxY(10); setBboxW(50); setBboxH(50); setDetectedLanguage("ja"); }};
     region = ocrRegionRepository.save(region);
 
-    Conversation conversation = Conversation.builder().page(page).sceneType("dialogue").build();
+    Conversation conversation = new Conversation() {{ setPage(page); setSceneType("dialogue"); }};
     conversation = conversationRepository.save(conversation);
 
     ConversationRegion convRegion =
-        ConversationRegion.builder()
-            .conversationId(conversation.getId())
-            .regionId(region.getId())
-            .position(1)
-            .build();
+        new ConversationRegion() {{ setConversationId(conversation.getId()); setRegionId(region.getId()); setPosition(1); }};
     conversationRegionRepository.save(convRegion);
 
-    Layer layer = Layer.builder().page(page).type("translation").build();
+    Layer layer = new Layer() {{ setPage(page); setType("translation"); }};
     layer = layerRepository.save(layer);
 
     LayerElement element =
-        LayerElement.builder().layer(layer).region(region).x(10.0).y(10.0).build();
+        new LayerElement() {{ setLayer(layer); setRegion(region); setX(10.0); setY(10.0); }};
     element = layerElementRepository.save(element);
 
-    LayerEditHistory history = LayerEditHistory.builder().layerElement(element).build();
+    LayerEditHistory history = new LayerEditHistory() {{ setLayerElement(element); }};
     layerEditHistoryRepository.save(history);
 
     // Assert everything exists
@@ -152,23 +123,23 @@ public class PageRepositoryTest {
   @Test
   public void testDeletePageAndResequence() {
     Series series =
-        Series.builder().title("Resequence").originalLanguage("ja").readingDirection("rtl").build();
+        new Series() {{ setTitle("Resequence"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
     series = seriesRepository.save(series);
-    Chapter chapter = Chapter.builder().chapterNumber(1.0).title("Ch 1").series(series).build();
+    Chapter chapter = new Chapter() {{ setChapterNumber(1.0); setTitle("Ch 1"); setSeries(series); }};
     chapter = chapterRepository.save(chapter);
 
-    Image img1 = Image.builder().filename("1.png").storagePath("p1").build();
+    Image img1 = new Image() {{ setFilename("1.png"); setStoragePath("p1"); }};
     img1 = imageRepository.save(img1);
-    Image img2 = Image.builder().filename("2.png").storagePath("p2").build();
+    Image img2 = new Image() {{ setFilename("2.png"); setStoragePath("p2"); }};
     img2 = imageRepository.save(img2);
-    Image img3 = Image.builder().filename("3.png").storagePath("p3").build();
+    Image img3 = new Image() {{ setFilename("3.png"); setStoragePath("p3"); }};
     img3 = imageRepository.save(img3);
 
-    Page p1 = Page.builder().chapter(chapter).pageNumber(1).image(img1).build();
+    Page p1 = new Page() {{ setChapter(chapter); setPageNumber(1); setImage(img1); }};
     pageRepository.save(p1);
-    Page p2 = Page.builder().chapter(chapter).pageNumber(2).image(img2).build();
+    Page p2 = new Page() {{ setChapter(chapter); setPageNumber(2); setImage(img2); }};
     pageRepository.save(p2);
-    Page p3 = Page.builder().chapter(chapter).pageNumber(3).image(img3).build();
+    Page p3 = new Page() {{ setChapter(chapter); setPageNumber(3); setImage(img3); }};
     pageRepository.save(p3);
     pageRepository.flush();
 

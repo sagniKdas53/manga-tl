@@ -27,16 +27,12 @@ public class ChapterRepositoryTest {
   public void testChapterCRUD() {
     // Parent Series
     Series series =
-        Series.builder()
-            .title("Chapter Test Series")
-            .originalLanguage("ja")
-            .readingDirection("rtl")
-            .build();
+        new Series() {{ setTitle("Chapter Test Series"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
     series = seriesRepository.save(series);
 
     // 1. Create
     Chapter chapter =
-        Chapter.builder().chapterNumber(2.5).title("Chapter Two Point Five").series(series).build();
+        new Chapter() {{ setChapterNumber(2.5); setTitle("Chapter Two Point Five"); setSeries(series); }};
 
     Chapter saved = chapterRepository.save(chapter);
     assertNotNull(saved.getId());

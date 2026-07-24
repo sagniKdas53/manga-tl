@@ -3,21 +3,13 @@ package com.manga.library.model;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import lombok.*;
 
 @Entity
 @Table(name = "users")
-@Getter
-@Setter
-@ToString
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class User {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  @EqualsAndHashCode.Include
+  
   private UUID id;
 
   @Column(unique = true, nullable = false)
@@ -39,5 +31,68 @@ public class User {
   @PrePersist
   protected void onCreate() {
     createdAt = OffsetDateTime.now();
+  }
+
+  public User() {}
+
+  public UUID getId() {
+    return this.id;
+  }
+
+  public void setId(UUID id) {
+    this.id = id;
+  }
+
+  public String getEmail() {
+    return this.email;
+  }
+
+  public void setEmail(String email) {
+    this.email = email;
+  }
+
+  public String getPasswordHash() {
+    return this.passwordHash;
+  }
+
+  public void setPasswordHash(String passwordHash) {
+    this.passwordHash = passwordHash;
+  }
+
+  public String getDisplayName() {
+    return this.displayName;
+  }
+
+  public void setDisplayName(String displayName) {
+    this.displayName = displayName;
+  }
+
+  public String getRole() {
+    return this.role;
+  }
+
+  public void setRole(String role) {
+    this.role = role;
+  }
+
+  public OffsetDateTime getCreatedAt() {
+    return this.createdAt;
+  }
+
+  public void setCreatedAt(OffsetDateTime createdAt) {
+    this.createdAt = createdAt;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof User)) return false;
+    User that = (User) o;
+    return id != null && id.equals(that.getId());
+  }
+
+  @Override
+  public int hashCode() {
+    return getClass().hashCode();
   }
 }

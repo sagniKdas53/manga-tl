@@ -9,8 +9,6 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Consumer;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,9 +18,9 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class JobCoordinatorService {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JobCoordinatorService.class);
+
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
@@ -38,6 +36,23 @@ public class JobCoordinatorService {
   private final SystemSettingsService systemSettingsService;
   private final JobRepository jobRepository;
   private final JobCostRepository jobCostRepository;
+  public JobCoordinatorService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, ImageRepository imageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository, ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository, LayerRepository layerRepository, LayerElementRepository layerElementRepository, PageRepository pageRepository, SseService sseService, SystemSettingsService systemSettingsService, JobRepository jobRepository, JobCostRepository jobCostRepository) {
+    this.redisTemplate = redisTemplate;
+    this.objectMapper = objectMapper;
+    this.imageRepository = imageRepository;
+    this.panelRepository = panelRepository;
+    this.ocrRegionRepository = ocrRegionRepository;
+    this.conversationRepository = conversationRepository;
+    this.conversationRegionRepository = conversationRegionRepository;
+    this.layerRepository = layerRepository;
+    this.layerElementRepository = layerElementRepository;
+    this.pageRepository = pageRepository;
+    this.sseService = sseService;
+    this.systemSettingsService = systemSettingsService;
+    this.jobRepository = jobRepository;
+    this.jobCostRepository = jobCostRepository;
+  }
+
 
   @EventListener(ApplicationReadyEvent.class)
   public void onStartup() {
@@ -163,16 +178,14 @@ public class JobCoordinatorService {
       }
 
       String jobId = UUID.randomUUID().toString();
-      Job dbJob =
-          Job.builder()
-              .id(jobId)
-              .traceId(traceId)
-              .type(jobType)
-              .imageId(imageId)
-              .status("PENDING")
-              .attempt(1)
-              .maxAttempts(3)
-              .build();
+      Job dbJob = new Job();
+      dbJob.setId(jobId);
+      dbJob.setTraceId(traceId);
+      dbJob.setType(jobType);
+      dbJob.setImageId(imageId);
+      dbJob.setStatus("PENDING");
+      dbJob.setAttempt(1);
+      dbJob.setMaxAttempts(3);
       Map<String, Object> job = new HashMap<>();
       job.put("jobId", jobId);
       job.put("traceId", traceId);
@@ -212,45 +225,45 @@ public class JobCoordinatorService {
 
               String resolvedOcrProvider =
                   resolveModel(
-                      chapter.getOcrProvider(), series.getOcrProvider(), settings.getOcrProvider());
+                      chapter.getOcrProvider(), series.getOcrProvider(), settings.ocrProvider());
               job.put("ocrProvider", resolvedOcrProvider);
 
               if ("local".equals(resolvedOcrProvider)) {
-                job.put("ocrModel", settings.getLocalOcrModel());
+                job.put("ocrModel", settings.localOcrModel());
               } else {
                 job.put(
                     "ocrModel",
                     resolveModel(
-                        chapter.getOcrModel(), series.getOcrModel(), settings.getOcrModel()));
+                        chapter.getOcrModel(), series.getOcrModel(), settings.ocrModel()));
               }
               job.put(
                   "tlProvider",
                   resolveModel(
-                      chapter.getTlProvider(), series.getTlProvider(), settings.getTlProvider()));
+                      chapter.getTlProvider(), series.getTlProvider(), settings.tlProvider()));
               job.put(
                   "tlModel",
-                  resolveModel(chapter.getTlModel(), series.getTlModel(), settings.getTlModel()));
+                  resolveModel(chapter.getTlModel(), series.getTlModel(), settings.tlModel()));
               job.put(
                   "qaProvider",
                   resolveModel(
-                      chapter.getQaProvider(), series.getQaProvider(), settings.getQaProvider()));
+                      chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider()));
               job.put(
                   "qaLlmModel",
                   resolveModel(
-                      chapter.getQaLlmModel(), series.getQaLlmModel(), settings.getQaLlmModel()));
+                      chapter.getQaLlmModel(), series.getQaLlmModel(), settings.qaLlmModel()));
               job.put(
                   "routingStrategy",
                   resolveModel(
                       chapter.getRoutingStrategy(),
                       series.getRoutingStrategy(),
-                      settings.getRoutingStrategy()));
+                      settings.routingStrategy()));
               job.put(
                   "qaVlmModel",
                   resolveModel(
-                      chapter.getQaVlmModel(), series.getQaVlmModel(), settings.getQaVlmModel()));
+                      chapter.getQaVlmModel(), series.getQaVlmModel(), settings.qaVlmModel()));
               job.put(
                   "qaMode",
-                  resolveModel(chapter.getQaMode(), series.getQaMode(), settings.getQaMode()));
+                  resolveModel(chapter.getQaMode(), series.getQaMode(), settings.qaMode()));
 
               // useFallbackModels: chapter overrides series overrides global; null = inherit
               Boolean chapterFallback = chapter.getUseFallbackModels();
@@ -263,7 +276,7 @@ public class JobCoordinatorService {
               } else {
                 // Fall through to global setting (default true if not configured)
                 resolvedFallback =
-                    settings.getUseFallbackModels() == null || settings.getUseFallbackModels();
+                    settings.useFallbackModels() == null || settings.useFallbackModels();
               }
               job.put("useFallbackModels", resolvedFallback);
             }
@@ -362,9 +375,9 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handlePanelCallback(PanelCallbackDto dto) {
-    UUID imageId = dto.getImageId();
+    UUID imageId = dto.imageId();
     log.info(
-        "Received panel callback for image: {} with {} panels", imageId, dto.getPanels().size());
+        "Received panel callback for image: {} with {} panels", imageId, dto.panels().size());
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
@@ -377,18 +390,16 @@ public class JobCoordinatorService {
 
     // Save new panels
     List<Panel> panelsToSave = new ArrayList<>();
-    for (PanelCallbackDto.PanelData pData : dto.getPanels()) {
-      Panel panel =
-          Panel.builder()
-              .image(image)
-              .bboxX(pData.getX())
-              .bboxY(pData.getY())
-              .bboxW(pData.getWidth())
-              .bboxH(pData.getHeight())
-              .gridRow(pData.getGridRow())
-              .gridCol(pData.getGridCol())
-              .readingOrder(pData.getReadingOrder())
-              .build();
+    for (PanelCallbackDto.PanelData pData : dto.panels()) {
+      Panel panel = new Panel();
+      panel.setImage(image);
+      panel.setBboxX(pData.x());
+      panel.setBboxY(pData.y());
+      panel.setBboxW(pData.width());
+      panel.setBboxH(pData.height());
+      panel.setGridRow(pData.gridRow());
+      panel.setGridCol(pData.gridCol());
+      panel.setReadingOrder(pData.readingOrder());
       panelsToSave.add(panel);
     }
     panelRepository.saveAll(Objects.requireNonNull(panelsToSave));
@@ -399,16 +410,16 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleOcrCallback(OcrCallbackDto dto) {
-    UUID imageId = dto.getImageId();
+    UUID imageId = dto.imageId();
     log.info(
-        "Received OCR callback for image: {} with {} regions", imageId, dto.getRegions().size());
+        "Received OCR callback for image: {} with {} regions", imageId, dto.regions().size());
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
     imageRepository
         .findById(Objects.requireNonNull(imageId))
         .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
-    if (dto.getRegions() == null || dto.getRegions().isEmpty()) {
+    if (dto.regions() == null || dto.regions().isEmpty()) {
       log.info("OCR found 0 regions for image {} — skipping downstream pipeline", imageId);
       Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "ocr");
       if (job != null) {
@@ -442,40 +453,38 @@ public class JobCoordinatorService {
 
     // Save OCR Regions
     List<OcrRegion> regionsToSave = new ArrayList<>();
-    for (OcrCallbackDto.OcrRegionData rData : dto.getRegions()) {
+    for (OcrCallbackDto.OcrRegionData rData : dto.regions()) {
       // Find which panel this OCR region resides in based on overlap
       Panel matchingPanel =
           findMatchingPanel(
-              rData.getX(), rData.getY(), rData.getWidth(), rData.getHeight(), panels);
+              rData.x(), rData.y(), rData.width(), rData.height(), panels);
 
-      OcrRegion region =
-          OcrRegion.builder()
-              .page(page)
-              .panel(matchingPanel)
-              .text(rData.getText())
-              .detectedLanguage(rData.getDetectedLanguage())
-              .confidence(rData.getConfidence())
-              .ocrScore(rData.getConfidence())
-              .rotation(rData.getRotation() != null ? rData.getRotation() : 0.0)
-              .bboxX(rData.getX())
-              .bboxY(rData.getY())
-              .bboxW(rData.getWidth())
-              .bboxH(rData.getHeight())
-              .panelReadingOrder(matchingPanel != null ? matchingPanel.getReadingOrder() : 0)
-              .bubbleReadingOrder(rData.getBubbleReadingOrder())
-              .backgroundColor(rData.getBackgroundColor())
-              .bubbleX(rData.getBubbleX())
-              .bubbleY(rData.getBubbleY())
-              .bubbleW(rData.getBubbleWidth())
-              .bubbleH(rData.getBubbleHeight())
-              .bubbleId(rData.getBubbleId())
-              .detectionConfidence(rData.getDetectionConfidence())
-              .maskPolygon(rData.getMaskPolygon())
-              .safeTextX(rData.getSafeTextX())
-              .safeTextY(rData.getSafeTextY())
-              .safeTextW(rData.getSafeTextW())
-              .safeTextH(rData.getSafeTextH())
-              .build();
+      OcrRegion region = new OcrRegion();
+      region.setPage(page);
+      region.setPanel(matchingPanel);
+      region.setText(rData.text());
+      region.setDetectedLanguage(rData.detectedLanguage());
+      region.setConfidence(rData.confidence());
+      region.setOcrScore(rData.confidence());
+      region.setRotation(rData.rotation() != null ? rData.rotation() : 0.0);
+      region.setBboxX(rData.x());
+      region.setBboxY(rData.y());
+      region.setBboxW(rData.width());
+      region.setBboxH(rData.height());
+      region.setPanelReadingOrder(matchingPanel != null ? matchingPanel.getReadingOrder() : 0);
+      region.setBubbleReadingOrder(rData.bubbleReadingOrder());
+      region.setBackgroundColor(rData.backgroundColor());
+      region.setBubbleX(rData.bubbleX());
+      region.setBubbleY(rData.bubbleY());
+      region.setBubbleW(rData.bubbleWidth());
+      region.setBubbleH(rData.bubbleHeight());
+      region.setBubbleId(rData.bubbleId());
+      region.setDetectionConfidence(rData.detectionConfidence());
+      region.setMaskPolygon(rData.maskPolygon());
+      region.setSafeTextX(rData.safeTextX());
+      region.setSafeTextY(rData.safeTextY());
+      region.setSafeTextW(rData.safeTextW());
+      region.setSafeTextH(rData.safeTextH());
       regionsToSave.add(region);
     }
     List<OcrRegion> savedRegions =
@@ -484,9 +493,9 @@ public class JobCoordinatorService {
     // Create default OCR overlay layer
     com.fasterxml.jackson.databind.node.ObjectNode metadata = objectMapper.createObjectNode();
     metadata.put("provider", "OCR Worker");
-    metadata.put("model", dto.getModelIdentifier() != null ? dto.getModelIdentifier() : "unknown");
+    metadata.put("model", dto.modelIdentifier() != null ? dto.modelIdentifier() : "unknown");
     metadata.put("time", OffsetDateTime.now().toString());
-    metadata.put("confidence", dto.getConfidence() != null ? dto.getConfidence() : 1.0);
+    metadata.put("confidence", dto.confidence() != null ? dto.confidence() : 1.0);
 
     String ocrReason = redisTemplate.opsForValue().get("image:ocr:reason:" + imageId);
     if (ocrReason != null) {
@@ -496,9 +505,9 @@ public class JobCoordinatorService {
       metadata.put("layer_name", "OCR");
     }
 
-    if (dto.getCost() != null) {
-      metadata.set("cost", objectMapper.valueToTree(dto.getCost()));
-      if (dto.getCost() instanceof Map<?, ?> cost) {
+    if (dto.cost() != null) {
+      metadata.set("cost", objectMapper.valueToTree(dto.cost()));
+      if (dto.cost() instanceof Map<?, ?> cost) {
         saveJobCosts(imageId, stringKeyedMap(cost));
       }
     }
@@ -506,31 +515,27 @@ public class JobCoordinatorService {
     metadata.put("layer_order", nextZOrder);
     metadata.put("last_modified", OffsetDateTime.now().toString());
 
-    Layer ocrLayer =
-        Layer.builder()
-            .page(page)
-            .type("ocr")
-            .visible(true)
-            .zOrder(nextZOrder)
-            .metadataJson(metadata)
-            .build();
+    Layer ocrLayer = new Layer();
+    ocrLayer.setPage(page);
+    ocrLayer.setType("ocr");
+    ocrLayer.setVisible(true);
+    ocrLayer.setZOrder(nextZOrder);
+    ocrLayer.setMetadataJson(metadata);
 
     Objects.requireNonNull(ocrLayer, "ocrLayer cannot be null");
     layerRepository.save(Objects.requireNonNull(ocrLayer));
 
     List<LayerElement> elementsToSave = new ArrayList<>();
     for (OcrRegion region : savedRegions) {
-      LayerElement element =
-          LayerElement.builder()
-              .layer(ocrLayer)
-              .region(region)
-              .text(region.getText())
-              .x(region.getBboxX().doubleValue())
-              .y(region.getBboxY().doubleValue())
-              .maxWidth(region.getBboxW())
-              .maxHeight(region.getBboxH())
-              .visible(true)
-              .build();
+      LayerElement element = new LayerElement();
+      element.setLayer(ocrLayer);
+      element.setRegion(region);
+      element.setText(region.getText());
+      element.setX(region.getBboxX().doubleValue());
+      element.setY(region.getBboxY().doubleValue());
+      element.setMaxWidth(region.getBboxW());
+      element.setMaxHeight(region.getBboxH());
+      element.setVisible(true);
       elementsToSave.add(element);
     }
     layerElementRepository.saveAll(Objects.requireNonNull(elementsToSave));
@@ -593,11 +598,9 @@ public class JobCoordinatorService {
           }
 
           Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
-          Conversation conv =
-              Conversation.builder()
-                  .page(page)
-                  .sceneType(sceneType != null ? sceneType : "dialogue")
-                  .build();
+          Conversation conv = new Conversation();
+          conv.setPage(page);
+          conv.setSceneType(sceneType != null ? sceneType : "dialogue");
 
           Objects.requireNonNull(conv, "conv cannot be null");
           conv = conversationRepository.save(Objects.requireNonNull(conv));
@@ -605,12 +608,10 @@ public class JobCoordinatorService {
           if (regionIds != null) {
             int position = 1;
             for (String ridStr : regionIds) {
-              ConversationRegion cr =
-                  ConversationRegion.builder()
-                      .conversationId(conv.getId())
-                      .regionId(UUID.fromString(ridStr))
-                      .position(position++)
-                      .build();
+              ConversationRegion cr = new ConversationRegion();
+              cr.setConversationId(conv.getId());
+              cr.setRegionId(UUID.fromString(ridStr));
+              cr.setPosition(position++);
               Objects.requireNonNull(cr, "cr cannot be null");
               conversationRegionRepository.save(Objects.requireNonNull(cr));
             }
@@ -777,17 +778,15 @@ public class JobCoordinatorService {
       saveJobCosts(imageId, cost);
     }
 
-    final Layer translationLayer =
-        layerRepository.save(
-            Objects.requireNonNull(
-                Layer.builder()
-                    .page(page)
-                    .type("translation")
-                    .targetLanguage(finalTargetLang)
-                    .visible(true)
-                    .zOrder(nextZOrder)
-                    .metadataJson(metadata)
-                    .build()));
+    Layer translationLayer = new Layer();
+    translationLayer.setPage(page);
+    translationLayer.setType("translation");
+    translationLayer.setTargetLanguage(finalTargetLang);
+    translationLayer.setVisible(true);
+    translationLayer.setZOrder(nextZOrder);
+    translationLayer.setMetadataJson(metadata);
+    translationLayer = layerRepository.save(Objects.requireNonNull(translationLayer));
+    final Layer finalLayer = translationLayer;
 
     if (translations != null) {
       // Find all existing elements for this layer
@@ -858,27 +857,22 @@ public class JobCoordinatorService {
                       int ew = rawEw + (int) (padding * 2);
                       int eh = rawEh + (int) (padding * 2);
 
-                      element =
-                          LayerElement.builder()
-                              .layer(translationLayer)
-                              .region(region)
-                              .text(translatedText)
-                              .x(ex)
-                              .y(ey)
-                              .maxWidth(ew)
-                              .maxHeight(eh)
-                              .visible(true)
-                              .autoSize(true)
-                              .font("Comic Neue")
-                              .fontWeight("bold")
-                              .backgroundColor(region.getBackgroundColor())
-                              .textColor(getContrastingTextColor(region.getBackgroundColor()))
-                              .boxShape(
-                                  "speech".equalsIgnoreCase(region.getRegionType())
-                                      ? "elliptical"
-                                      : "rectangular")
-                              .maskPolygon(region.getMaskPolygon())
-                              .build();
+                      element = new LayerElement();
+                      element.setLayer(finalLayer);
+                      element.setRegion(region);
+                      element.setText(translatedText);
+                      element.setX(ex);
+                      element.setY(ey);
+                      element.setMaxWidth(ew);
+                      element.setMaxHeight(eh);
+                      element.setVisible(true);
+                      element.setAutoSize(true);
+                      element.setFont("Comic Neue");
+                      element.setFontWeight("bold");
+                      element.setBackgroundColor(region.getBackgroundColor());
+                      element.setTextColor(getContrastingTextColor(region.getBackgroundColor()));
+                      element.setBoxShape("speech".equalsIgnoreCase(region.getRegionType()) ? "elliptical" : "rectangular");
+                      element.setMaskPolygon(region.getMaskPolygon());
                     } else {
                       element.setText(translatedText);
                       if (!Boolean.TRUE.equals(element.getIsManuallyEdited())) {

@@ -7,20 +7,25 @@ import com.manga.library.service.SseService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/jobs")
-@RequiredArgsConstructor
 public class JobController {
 
   private final JobRepository jobRepository;
   private final JobCoordinatorService jobCoordinatorService;
   private final StringRedisTemplate redisTemplate;
   private final SseService sseService;
+  public JobController(JobRepository jobRepository, JobCoordinatorService jobCoordinatorService, StringRedisTemplate redisTemplate, SseService sseService) {
+    this.jobRepository = jobRepository;
+    this.jobCoordinatorService = jobCoordinatorService;
+    this.redisTemplate = redisTemplate;
+    this.sseService = sseService;
+  }
+
 
   private static final String QUEUE_PAUSED_KEY = "system:queue:paused";
 

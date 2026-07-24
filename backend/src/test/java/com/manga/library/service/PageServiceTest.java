@@ -43,8 +43,8 @@ public class PageServiceTest {
     series.setId(UUID.randomUUID());
     chapter.setSeries(series);
     User user = new User();
-    Image image = Image.builder().id(UUID.randomUUID()).build();
-    Page page = Page.builder().id(UUID.randomUUID()).image(image).build();
+    Image image = new Image() {{ setId(UUID.randomUUID()); }};
+    Page page = new Page() {{ setId(UUID.randomUUID()); setImage(image); }};
 
     when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
         .thenReturn(java.util.Optional.of(page));
@@ -75,7 +75,7 @@ public class PageServiceTest {
     Image image = new Image();
     image.setId(UUID.randomUUID());
     User user = new User();
-    Page page = Page.builder().id(UUID.randomUUID()).build();
+    Page page = new Page() {{ setId(UUID.randomUUID()); }};
 
     when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
         .thenReturn(java.util.Optional.empty());
@@ -102,11 +102,11 @@ public class PageServiceTest {
   public void testDeletePageDb_Success() {
     UUID pageId = UUID.randomUUID();
     UUID chapterId = UUID.randomUUID();
-    Series series = Series.builder().id(UUID.randomUUID()).build();
-    Chapter chapter = Chapter.builder().id(chapterId).series(series).build();
+    Series series = new Series() {{ setId(UUID.randomUUID()); }};
+    Chapter chapter = new Chapter() {{ setId(chapterId); setSeries(series); }};
     Image image =
-        Image.builder().id(pageId).storagePath("path").thumbnailStoragePath("thumb").build();
-    Page page = Page.builder().id(pageId).chapter(chapter).image(image).build();
+        new Image() {{ setId(pageId); setStoragePath("path"); setThumbnailStoragePath("thumb"); }};
+    Page page = new Page() {{ setId(pageId); setChapter(chapter); setImage(image); }};
 
     when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.of(page));
     when(pageRepository.findByImageId(pageId)).thenReturn(java.util.List.of(page));
@@ -125,10 +125,10 @@ public class PageServiceTest {
   public void testDeletePageDb_SharedImage() {
     UUID pageId = UUID.randomUUID();
     UUID chapterId = UUID.randomUUID();
-    Chapter chapter = Chapter.builder().id(chapterId).build();
-    Image image = Image.builder().id(pageId).storagePath("path").build();
-    Page page1 = Page.builder().id(pageId).chapter(chapter).image(image).build();
-    Page page2 = Page.builder().id(UUID.randomUUID()).chapter(chapter).image(image).build();
+    Chapter chapter = new Chapter() {{ setId(chapterId); }};
+    Image image = new Image() {{ setId(pageId); setStoragePath("path"); }};
+    Page page1 = new Page() {{ setId(pageId); setChapter(chapter); setImage(image); }};
+    Page page2 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setImage(image); }};
 
     when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.of(page1));
     when(pageRepository.findByImageId(pageId)).thenReturn(java.util.List.of(page1, page2));
@@ -145,21 +145,16 @@ public class PageServiceTest {
 
   @Test
   public void testCreatePageWithExistingImage_Conflict() {
-    Chapter chapter = Chapter.builder().id(UUID.randomUUID()).chapterNumber(1.0).build();
-    Series series = Series.builder().id(UUID.randomUUID()).build();
+    Chapter chapter = new Chapter() {{ setId(UUID.randomUUID()); setChapterNumber(1.0); }};
+    Series series = new Series() {{ setId(UUID.randomUUID()); }};
     chapter.setSeries(series);
-    Image newImage = Image.builder().id(UUID.randomUUID()).build();
-    Image existingImage = Image.builder().id(UUID.randomUUID()).build();
+    Image newImage = new Image() {{ setId(UUID.randomUUID()); }};
+    Image existingImage = new Image() {{ setId(UUID.randomUUID()); }};
     User user = new User();
 
     Page conflictingPage =
-        Page.builder()
-            .id(UUID.randomUUID())
-            .chapter(chapter)
-            .pageNumber(1)
-            .image(existingImage)
-            .build();
-    Page newPage = Page.builder().id(UUID.randomUUID()).build();
+        new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(1); setImage(existingImage); }};
+    Page newPage = new Page() {{ setId(UUID.randomUUID()); }};
 
     when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
         .thenReturn(java.util.Optional.of(conflictingPage));
@@ -244,10 +239,10 @@ public class PageServiceTest {
     Chapter chapter = new Chapter();
     chapter.setId(chapterId);
 
-    Page p1 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(1).build();
-    Page p2 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(2).build();
-    Page p3 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(3).build();
-    Page p4 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(4).build();
+    Page p1 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(1); }};
+    Page p2 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(2); }};
+    Page p3 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(3); }};
+    Page p4 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(4); }};
 
     when(pageRepository.findById(p2.getId())).thenReturn(java.util.Optional.of(p2));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
@@ -268,10 +263,10 @@ public class PageServiceTest {
     Chapter chapter = new Chapter();
     chapter.setId(chapterId);
 
-    Page p1 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(1).build();
-    Page p2 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(2).build();
-    Page p3 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(3).build();
-    Page p4 = Page.builder().id(UUID.randomUUID()).chapter(chapter).pageNumber(4).build();
+    Page p1 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(1); }};
+    Page p2 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(2); }};
+    Page p3 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(3); }};
+    Page p4 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(4); }};
 
     when(pageRepository.findById(p4.getId())).thenReturn(java.util.Optional.of(p4));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))

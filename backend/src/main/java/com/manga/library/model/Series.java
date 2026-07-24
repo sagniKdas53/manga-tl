@@ -3,21 +3,13 @@ package com.manga.library.model;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import lombok.*;
 
 @Entity
 @Table(name = "series")
-@Getter
-@Setter
-@ToString
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class Series {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  @EqualsAndHashCode.Include
+  
   private UUID id;
 
   @Column(nullable = false)
@@ -110,5 +102,188 @@ public class Series {
     if (targetLanguage == null) {
       targetLanguage = "en";
     }
+  }
+
+  public Series() {}
+
+  public UUID getId() {
+    return this.id;
+  }
+
+  public void setId(UUID id) {
+    this.id = id;
+  }
+
+  public String getTitle() {
+    return this.title;
+  }
+
+  public void setTitle(String title) {
+    this.title = title;
+  }
+
+  public UUID getCoverImageId() {
+    return this.coverImageId;
+  }
+
+  public void setCoverImageId(UUID coverImageId) {
+    this.coverImageId = coverImageId;
+  }
+
+  public String getOriginalLanguage() {
+    return this.originalLanguage;
+  }
+
+  public void setOriginalLanguage(String originalLanguage) {
+    this.originalLanguage = originalLanguage;
+  }
+
+  public String getSourceLanguage() {
+    return this.sourceLanguage;
+  }
+
+  public void setSourceLanguage(String sourceLanguage) {
+    this.sourceLanguage = sourceLanguage;
+  }
+
+  public String getTargetLanguage() {
+    return this.targetLanguage;
+  }
+
+  public void setTargetLanguage(String targetLanguage) {
+    this.targetLanguage = targetLanguage;
+  }
+
+  public String getReadingDirection() {
+    return this.readingDirection;
+  }
+
+  public void setReadingDirection(String readingDirection) {
+    this.readingDirection = readingDirection;
+  }
+
+  public String getMetadataJson() {
+    return this.metadataJson;
+  }
+
+  public void setMetadataJson(String metadataJson) {
+    this.metadataJson = metadataJson;
+  }
+
+  public String getOcrProvider() {
+    return this.ocrProvider;
+  }
+
+  public void setOcrProvider(String ocrProvider) {
+    this.ocrProvider = ocrProvider;
+  }
+
+  public String getOcrModel() {
+    return this.ocrModel;
+  }
+
+  public void setOcrModel(String ocrModel) {
+    this.ocrModel = ocrModel;
+  }
+
+  public String getTlProvider() {
+    return this.tlProvider;
+  }
+
+  public void setTlProvider(String tlProvider) {
+    this.tlProvider = tlProvider;
+  }
+
+  public String getTlModel() {
+    return this.tlModel;
+  }
+
+  public void setTlModel(String tlModel) {
+    this.tlModel = tlModel;
+  }
+
+  public String getQaProvider() {
+    return this.qaProvider;
+  }
+
+  public void setQaProvider(String qaProvider) {
+    this.qaProvider = qaProvider;
+  }
+
+  public String getQaLlmModel() {
+    return this.qaLlmModel;
+  }
+
+  public void setQaLlmModel(String qaLlmModel) {
+    this.qaLlmModel = qaLlmModel;
+  }
+
+  public String getQaVlmModel() {
+    return this.qaVlmModel;
+  }
+
+  public void setQaVlmModel(String qaVlmModel) {
+    this.qaVlmModel = qaVlmModel;
+  }
+
+  public String getQaMode() {
+    return this.qaMode;
+  }
+
+  public void setQaMode(String qaMode) {
+    this.qaMode = qaMode;
+  }
+
+  public String getRoutingStrategy() {
+    return this.routingStrategy;
+  }
+
+  public void setRoutingStrategy(String routingStrategy) {
+    this.routingStrategy = routingStrategy;
+  }
+
+  public Boolean getUseFallbackModels() {
+    return this.useFallbackModels;
+  }
+
+  public void setUseFallbackModels(Boolean useFallbackModels) {
+    this.useFallbackModels = useFallbackModels;
+  }
+
+  public User getCreatedBy() {
+    return this.createdBy;
+  }
+
+  public void setCreatedBy(User createdBy) {
+    this.createdBy = createdBy;
+  }
+
+  public OffsetDateTime getCreatedAt() {
+    return this.createdAt;
+  }
+
+  public void setCreatedAt(OffsetDateTime createdAt) {
+    this.createdAt = createdAt;
+  }
+
+  public OffsetDateTime getUpdatedAt() {
+    return this.updatedAt;
+  }
+
+  public void setUpdatedAt(OffsetDateTime updatedAt) {
+    this.updatedAt = updatedAt;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Series)) return false;
+    Series that = (Series) o;
+    return id != null && id.equals(that.getId());
+  }
+
+  @Override
+  public int hashCode() {
+    return getClass().hashCode();
   }
 }

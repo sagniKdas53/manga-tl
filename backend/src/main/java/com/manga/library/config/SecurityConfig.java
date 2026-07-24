@@ -2,7 +2,6 @@ package com.manga.library.config;
 
 import java.util.Arrays;
 import java.util.Collections;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,10 +20,13 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 @EnableWebSecurity
 @org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
   private final JwtAuthFilter jwtAuthFilter;
+  public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+    this.jwtAuthFilter = jwtAuthFilter;
+  }
+
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {

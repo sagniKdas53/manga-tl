@@ -19,8 +19,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -28,9 +26,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/series")
-@RequiredArgsConstructor
-@Slf4j
 public class SeriesController {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SeriesController.class);
+
 
   private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
@@ -42,6 +40,19 @@ public class SeriesController {
   private final JobCoordinatorService jobCoordinatorService;
   private final ChapterExportService chapterExportService;
   private final SystemSettingsService systemSettingsService;
+  public SeriesController(SeriesRepository seriesRepository, ChapterRepository chapterRepository, PageRepository pageRepository, ImageRepository imageRepository, LayerRepository layerRepository, PageService pageService, MinioService minioService, JobCoordinatorService jobCoordinatorService, ChapterExportService chapterExportService, SystemSettingsService systemSettingsService) {
+    this.seriesRepository = seriesRepository;
+    this.chapterRepository = chapterRepository;
+    this.pageRepository = pageRepository;
+    this.imageRepository = imageRepository;
+    this.layerRepository = layerRepository;
+    this.pageService = pageService;
+    this.minioService = minioService;
+    this.jobCoordinatorService = jobCoordinatorService;
+    this.chapterExportService = chapterExportService;
+    this.systemSettingsService = systemSettingsService;
+  }
+
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
@@ -62,63 +73,39 @@ public class SeriesController {
   }
 
   private SeriesDto toDto(Series s) {
-    SeriesDto dto = new SeriesDto();
-    dto.setId(s.getId());
-    dto.setTitle(s.getTitle());
-    dto.setOriginalLanguage(s.getOriginalLanguage());
-    dto.setSourceLanguage(s.getSourceLanguage());
-    dto.setTargetLanguage(s.getTargetLanguage());
-    dto.setReadingDirection(s.getReadingDirection());
-    dto.setOcrProvider(s.getOcrProvider());
-    dto.setOcrModel(s.getOcrModel());
-    dto.setTlProvider(s.getTlProvider());
-    dto.setTlModel(s.getTlModel());
-    dto.setQaProvider(s.getQaProvider());
-    dto.setQaLlmModel(s.getQaLlmModel());
-    dto.setQaVlmModel(s.getQaVlmModel());
-    dto.setQaMode(s.getQaMode());
-    dto.setRoutingStrategy(s.getRoutingStrategy());
-    dto.setUseFallbackModels(s.getUseFallbackModels());
-    dto.setCreatedAt(s.getCreatedAt());
-    dto.setUpdatedAt(s.getUpdatedAt());
-    if (s.getCoverImageId() != null) {
-      dto.setCoverImageUrl(getImageUrl(s.getCoverImageId()));
-    }
-    return dto;
+    return new SeriesDto(
+      s.getId(),
+      s.getTitle(),
+      s.getOriginalLanguage(),
+      s.getSourceLanguage(),
+      s.getTargetLanguage(),
+      s.getReadingDirection(),
+      s.getCoverImageId() != null ? getImageUrl(s.getCoverImageId()) : null,
+      s.getOcrProvider(),
+      s.getOcrModel(),
+      s.getTlProvider(),
+      s.getTlModel(),
+      s.getQaProvider(),
+      s.getQaLlmModel(),
+      s.getQaVlmModel(),
+      s.getQaMode(),
+      s.getRoutingStrategy(),
+      s.getUseFallbackModels(),
+      s.getCreatedAt(),
+      s.getUpdatedAt()
+    );
   }
 
-  private void populateChapterDto(ChapterDto dto, Chapter c, SystemSettingsDto globalSettings) {
-    dto.setId(c.getId());
-    dto.setSeriesId(c.getSeries() != null ? c.getSeries().getId() : null);
-    dto.setChapterNumber(c.getChapterNumber());
-    dto.setTitle(c.getTitle());
-    dto.setOcrProvider(c.getOcrProvider());
-    dto.setOcrModel(c.getOcrModel());
-    dto.setTlProvider(c.getTlProvider());
-    dto.setTlModel(c.getTlModel());
-    dto.setQaProvider(c.getQaProvider());
-    dto.setQaLlmModel(c.getQaLlmModel());
-    dto.setQaVlmModel(c.getQaVlmModel());
-    dto.setQaMode(c.getQaMode());
-    dto.setRoutingStrategy(c.getRoutingStrategy());
-    dto.setUseContextMemory(c.getUseContextMemory());
-    dto.setUseFallbackModels(c.getUseFallbackModels());
-    dto.setCreatedAt(c.getCreatedAt());
-    dto.setUpdatedAt(c.getUpdatedAt());
-    dto.setPageCount((int) pageRepository.countByChapterId(c.getId()));
-    if (c.getCoverImageId() != null) {
-      dto.setCoverImageUrl(getImageUrl(c.getCoverImageId()));
-    }
-
+  private ChapterDto toChapterDto(Chapter c, SystemSettingsDto globalSettings) {
     Series series = c.getSeries();
-    String gOcrProvider = globalSettings != null ? globalSettings.getOcrProvider() : null;
-    String gOcrModel = globalSettings != null ? globalSettings.getOcrModel() : null;
-    String gTlProvider = globalSettings != null ? globalSettings.getTlProvider() : null;
-    String gTlModel = globalSettings != null ? globalSettings.getTlModel() : null;
-    String gQaProvider = globalSettings != null ? globalSettings.getQaProvider() : null;
-    String gQaLlmModel = globalSettings != null ? globalSettings.getQaLlmModel() : null;
-    String gQaVlmModel = globalSettings != null ? globalSettings.getQaVlmModel() : null;
-    String gQaMode = globalSettings != null ? globalSettings.getQaMode() : null;
+    String gOcrProvider = globalSettings != null ? globalSettings.ocrProvider() : null;
+    String gOcrModel = globalSettings != null ? globalSettings.ocrModel() : null;
+    String gTlProvider = globalSettings != null ? globalSettings.tlProvider() : null;
+    String gTlModel = globalSettings != null ? globalSettings.tlModel() : null;
+    String gQaProvider = globalSettings != null ? globalSettings.qaProvider() : null;
+    String gQaLlmModel = globalSettings != null ? globalSettings.qaLlmModel() : null;
+    String gQaVlmModel = globalSettings != null ? globalSettings.qaVlmModel() : null;
+    String gQaMode = globalSettings != null ? globalSettings.qaMode() : null;
 
     String ocrProv = c.getOcrProvider();
     String ocrMod = c.getOcrModel();
@@ -137,13 +124,9 @@ public class SeriesController {
     }
 
     if ("local".equals(ocrProv)) {
-      ocrMod =
-          globalSettings != null && globalSettings.getLocalOcrModel() != null
-              ? globalSettings.getLocalOcrModel()
-              : "local";
+      ocrMod = globalSettings != null && globalSettings.localOcrModel() != null ? globalSettings.localOcrModel() : "local";
     }
-
-    dto.setResolvedOcr(new ChapterDto.ResolvedModelSlot(ocrProv, ocrMod, ocrSrc));
+    var resolvedOcr = new ChapterDto.ResolvedModelSlot(ocrProv, ocrMod, ocrSrc);
 
     String tlProv = c.getTlProvider();
     String tlMod = c.getTlModel();
@@ -160,7 +143,7 @@ public class SeriesController {
     } else if (c.getTlProvider() != null) {
       tlSrc = "chapter";
     }
-    dto.setResolvedTranslation(new ChapterDto.ResolvedModelSlot(tlProv, tlMod, tlSrc));
+    var resolvedTranslation = new ChapterDto.ResolvedModelSlot(tlProv, tlMod, tlSrc);
 
     String qaProv = c.getQaProvider();
     String qaLlm = c.getQaLlmModel();
@@ -180,13 +163,35 @@ public class SeriesController {
       qaVlm = gQaVlmModel;
       qaMod = gQaMode;
       qaSrc = "global";
-    } else if (c.getQaProvider() != null
-        || c.getQaLlmModel() != null
-        || c.getQaVlmModel() != null
-        || c.getQaMode() != null) {
+    } else if (c.getQaProvider() != null || c.getQaLlmModel() != null || c.getQaVlmModel() != null || c.getQaMode() != null) {
       qaSrc = "chapter";
     }
-    dto.setResolvedQa(new ChapterDto.ResolvedQaSlot(qaProv, qaLlm, qaVlm, qaMod, qaSrc));
+    var resolvedQa = new ChapterDto.ResolvedQaSlot(qaProv, qaLlm, qaVlm, qaMod, qaSrc);
+
+    return new ChapterDto(
+      c.getId(),
+      c.getSeries() != null ? c.getSeries().getId() : null,
+      c.getChapterNumber(),
+      c.getTitle(),
+      c.getCoverImageId() != null ? getImageUrl(c.getCoverImageId()) : null,
+      c.getOcrProvider(),
+      c.getOcrModel(),
+      c.getTlProvider(),
+      c.getTlModel(),
+      c.getQaProvider(),
+      c.getQaLlmModel(),
+      c.getQaVlmModel(),
+      c.getQaMode(),
+      c.getRoutingStrategy(),
+      c.getUseContextMemory(),
+      c.getUseFallbackModels(),
+      (int) pageRepository.countByChapterId(c.getId()),
+      c.getCreatedAt(),
+      c.getUpdatedAt(),
+      resolvedOcr,
+      resolvedTranslation,
+      resolvedQa
+    );
   }
 
   @PostMapping
@@ -196,32 +201,30 @@ public class SeriesController {
       @RequestBody SeriesDto dto, @AuthenticationPrincipal User user) {
     String sourceLang =
         resolveSetting(
-            dto.getSourceLanguage() != null ? dto.getSourceLanguage() : dto.getOriginalLanguage());
-    String targetLang = resolveSetting(dto.getTargetLanguage());
+            dto.sourceLanguage() != null ? dto.sourceLanguage() : dto.originalLanguage());
+    String targetLang = resolveSetting(dto.targetLanguage());
     if (targetLang == null) targetLang = "en";
 
     String origLang = resolveSetting(sourceLang);
     if (origLang == null) origLang = "ja";
 
-    Series series =
-        Series.builder()
-            .title(dto.getTitle())
-            .originalLanguage(origLang)
-            .sourceLanguage(origLang)
-            .targetLanguage(targetLang)
-            .readingDirection(resolveSetting(dto.getReadingDirection()))
-            .ocrProvider(resolveSetting(dto.getOcrProvider()))
-            .ocrModel(resolveSetting(dto.getOcrModel()))
-            .tlProvider(resolveSetting(dto.getTlProvider()))
-            .tlModel(resolveSetting(dto.getTlModel()))
-            .qaProvider(resolveSetting(dto.getQaProvider()))
-            .qaLlmModel(resolveSetting(dto.getQaLlmModel()))
-            .qaVlmModel(resolveSetting(dto.getQaVlmModel()))
-            .qaMode(resolveSetting(dto.getQaMode()))
-            .routingStrategy(resolveSetting(dto.getRoutingStrategy()))
-            .useFallbackModels(dto.getUseFallbackModels())
-            .createdBy(user)
-            .build();
+    Series series = new Series();
+    series.setTitle(dto.title());
+    series.setOriginalLanguage(origLang);
+    series.setSourceLanguage(origLang);
+    series.setTargetLanguage(targetLang);
+    series.setReadingDirection(resolveSetting(dto.readingDirection()));
+    series.setOcrProvider(resolveSetting(dto.ocrProvider()));
+    series.setOcrModel(resolveSetting(dto.ocrModel()));
+    series.setTlProvider(resolveSetting(dto.tlProvider()));
+    series.setTlModel(resolveSetting(dto.tlModel()));
+    series.setQaProvider(resolveSetting(dto.qaProvider()));
+    series.setQaLlmModel(resolveSetting(dto.qaLlmModel()));
+    series.setQaVlmModel(resolveSetting(dto.qaVlmModel()));
+    series.setQaMode(resolveSetting(dto.qaMode()));
+    series.setRoutingStrategy(resolveSetting(dto.routingStrategy()));
+    series.setUseFallbackModels(dto.useFallbackModels());
+    series.setCreatedBy(user);
     Objects.requireNonNull(series, "series cannot be null");
     series = seriesRepository.save(Objects.requireNonNull(series));
 
@@ -257,39 +260,36 @@ public class SeriesController {
             .orElseThrow(() -> new ResourceNotFoundException("Series not found: " + seriesId));
 
     if (chapterRepository
-        .findBySeriesIdAndChapterNumber(seriesId, dto.getChapterNumber())
+        .findBySeriesIdAndChapterNumber(seriesId, dto.chapterNumber())
         .isPresent()) {
       return ResponseEntity.status(409)
           .body(
               Map.of(
                   "message",
                   "Chapter "
-                      + dto.getChapterNumber()
+                      + dto.chapterNumber()
                       + " already exists in this series. Please select a different chapter number."));
     }
 
-    Chapter chapter =
-        Chapter.builder()
-            .series(series)
-            .chapterNumber(dto.getChapterNumber())
-            .title(dto.getTitle())
-            .ocrProvider(resolveSetting(dto.getOcrProvider()))
-            .ocrModel(resolveSetting(dto.getOcrModel()))
-            .tlProvider(resolveSetting(dto.getTlProvider()))
-            .tlModel(resolveSetting(dto.getTlModel()))
-            .qaProvider(resolveSetting(dto.getQaProvider()))
-            .qaLlmModel(resolveSetting(dto.getQaLlmModel()))
-            .qaVlmModel(resolveSetting(dto.getQaVlmModel()))
-            .qaMode(resolveSetting(dto.getQaMode()))
-            .routingStrategy(resolveSetting(dto.getRoutingStrategy()))
-            .useContextMemory(dto.getUseContextMemory() == null || dto.getUseContextMemory())
-            .useFallbackModels(dto.getUseFallbackModels())
-            .build();
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setChapterNumber(dto.chapterNumber());
+    chapter.setTitle(dto.title());
+    chapter.setOcrProvider(resolveSetting(dto.ocrProvider()));
+    chapter.setOcrModel(resolveSetting(dto.ocrModel()));
+    chapter.setTlProvider(resolveSetting(dto.tlProvider()));
+    chapter.setTlModel(resolveSetting(dto.tlModel()));
+    chapter.setQaProvider(resolveSetting(dto.qaProvider()));
+    chapter.setQaLlmModel(resolveSetting(dto.qaLlmModel()));
+    chapter.setQaVlmModel(resolveSetting(dto.qaVlmModel()));
+    chapter.setQaMode(resolveSetting(dto.qaMode()));
+    chapter.setRoutingStrategy(resolveSetting(dto.routingStrategy()));
+    chapter.setUseContextMemory(dto.useContextMemory() == null || dto.useContextMemory());
+    chapter.setUseFallbackModels(dto.useFallbackModels());
     Objects.requireNonNull(chapter, "chapter cannot be null");
     chapter = chapterRepository.save(Objects.requireNonNull(chapter));
 
-    ChapterDto responseDto = new ChapterDto();
-    populateChapterDto(responseDto, chapter, systemSettingsService.getSettings());
+    ChapterDto responseDto = toChapterDto(chapter, systemSettingsService.getSettings());
     return ResponseEntity.ok(responseDto);
   }
 
@@ -303,8 +303,7 @@ public class SeriesController {
         chapters.stream()
             .map(
                 c -> {
-                  ChapterDto dto = new ChapterDto();
-                  populateChapterDto(dto, c, globalSettings);
+                  ChapterDto dto = toChapterDto(c, globalSettings);
                   return dto;
                 })
             .collect(Collectors.toList());
@@ -319,8 +318,7 @@ public class SeriesController {
         .findById(Objects.requireNonNull(chapterId))
         .map(
             c -> {
-              ChapterDto dto = new ChapterDto();
-              populateChapterDto(dto, c, systemSettingsService.getSettings());
+              ChapterDto dto = toChapterDto(c, systemSettingsService.getSettings());
               return ResponseEntity.ok(dto);
             })
         .orElse(ResponseEntity.notFound().build());
@@ -336,13 +334,13 @@ public class SeriesController {
         .findById(Objects.requireNonNull(seriesId))
         .map(
             s -> {
-              s.setTitle(dto.getTitle());
+              s.setTitle(dto.title());
               String sourceLang =
                   resolveSetting(
-                      dto.getSourceLanguage() != null
-                          ? dto.getSourceLanguage()
-                          : dto.getOriginalLanguage());
-              String targetLang = resolveSetting(dto.getTargetLanguage());
+                      dto.sourceLanguage() != null
+                          ? dto.sourceLanguage()
+                          : dto.originalLanguage());
+              String targetLang = resolveSetting(dto.targetLanguage());
               if (targetLang == null) targetLang = "en";
 
               String origLang = resolveSetting(sourceLang);
@@ -351,17 +349,17 @@ public class SeriesController {
               s.setOriginalLanguage(origLang);
               s.setSourceLanguage(origLang);
               s.setTargetLanguage(targetLang);
-              s.setReadingDirection(resolveSetting(dto.getReadingDirection()));
-              s.setOcrProvider(resolveSetting(dto.getOcrProvider()));
-              s.setOcrModel(resolveSetting(dto.getOcrModel()));
-              s.setTlProvider(resolveSetting(dto.getTlProvider()));
-              s.setTlModel(resolveSetting(dto.getTlModel()));
-              s.setQaProvider(resolveSetting(dto.getQaProvider()));
-              s.setQaLlmModel(resolveSetting(dto.getQaLlmModel()));
-              s.setQaVlmModel(resolveSetting(dto.getQaVlmModel()));
-              s.setQaMode(resolveSetting(dto.getQaMode()));
-              s.setRoutingStrategy(resolveSetting(dto.getRoutingStrategy()));
-              s.setUseFallbackModels(dto.getUseFallbackModels());
+              s.setReadingDirection(resolveSetting(dto.readingDirection()));
+              s.setOcrProvider(resolveSetting(dto.ocrProvider()));
+              s.setOcrModel(resolveSetting(dto.ocrModel()));
+              s.setTlProvider(resolveSetting(dto.tlProvider()));
+              s.setTlModel(resolveSetting(dto.tlModel()));
+              s.setQaProvider(resolveSetting(dto.qaProvider()));
+              s.setQaLlmModel(resolveSetting(dto.qaLlmModel()));
+              s.setQaVlmModel(resolveSetting(dto.qaVlmModel()));
+              s.setQaMode(resolveSetting(dto.qaMode()));
+              s.setRoutingStrategy(resolveSetting(dto.routingStrategy()));
+              s.setUseFallbackModels(dto.useFallbackModels());
               Objects.requireNonNull(s, "series cannot be null");
               s = seriesRepository.save(Objects.requireNonNull(s));
               return ResponseEntity.ok(toDto(s));
@@ -393,38 +391,37 @@ public class SeriesController {
             c -> {
               java.util.Optional<Chapter> existing =
                   chapterRepository.findBySeriesIdAndChapterNumber(
-                      c.getSeries().getId(), dto.getChapterNumber());
+                      c.getSeries().getId(), dto.chapterNumber());
               if (existing.isPresent() && !existing.get().getId().equals(c.getId())) {
                 return ResponseEntity.status(409)
                     .body(
                         Map.of(
                             "message",
                             "Chapter "
-                                + dto.getChapterNumber()
+                                + dto.chapterNumber()
                                 + " already exists in this series. Please select a different chapter number."));
               }
-              c.setTitle(dto.getTitle());
-              c.setChapterNumber(dto.getChapterNumber());
-              c.setOcrProvider(resolveSetting(dto.getOcrProvider()));
-              c.setOcrModel(resolveSetting(dto.getOcrModel()));
-              c.setTlProvider(resolveSetting(dto.getTlProvider()));
-              c.setTlModel(resolveSetting(dto.getTlModel()));
-              c.setQaProvider(resolveSetting(dto.getQaProvider()));
-              c.setQaLlmModel(resolveSetting(dto.getQaLlmModel()));
-              c.setQaVlmModel(resolveSetting(dto.getQaVlmModel()));
-              c.setQaMode(resolveSetting(dto.getQaMode()));
-              c.setRoutingStrategy(resolveSetting(dto.getRoutingStrategy()));
-              c.setUseFallbackModels(dto.getUseFallbackModels());
-              if (dto.getUseContextMemory() != null) {
-                c.setUseContextMemory(dto.getUseContextMemory());
+              c.setTitle(dto.title());
+              c.setChapterNumber(dto.chapterNumber());
+              c.setOcrProvider(resolveSetting(dto.ocrProvider()));
+              c.setOcrModel(resolveSetting(dto.ocrModel()));
+              c.setTlProvider(resolveSetting(dto.tlProvider()));
+              c.setTlModel(resolveSetting(dto.tlModel()));
+              c.setQaProvider(resolveSetting(dto.qaProvider()));
+              c.setQaLlmModel(resolveSetting(dto.qaLlmModel()));
+              c.setQaVlmModel(resolveSetting(dto.qaVlmModel()));
+              c.setQaMode(resolveSetting(dto.qaMode()));
+              c.setRoutingStrategy(resolveSetting(dto.routingStrategy()));
+              c.setUseFallbackModels(dto.useFallbackModels());
+              if (dto.useContextMemory() != null) {
+                c.setUseContextMemory(dto.useContextMemory());
               }
               Objects.requireNonNull(c, "chapter cannot be null");
               c = chapterRepository.save(Objects.requireNonNull(c));
 
               pageService.recalculateSeriesCover(c.getSeries().getId());
 
-              ChapterDto responseDto = new ChapterDto();
-              populateChapterDto(responseDto, c, systemSettingsService.getSettings());
+              ChapterDto responseDto = toChapterDto(c, systemSettingsService.getSettings());
               return ResponseEntity.ok(responseDto);
             })
         .orElse(ResponseEntity.notFound().build());
@@ -483,22 +480,20 @@ public class SeriesController {
       }
 
       // 1. Create the Chapter
-      Chapter chapter =
-          Chapter.builder()
-              .series(series)
-              .chapterNumber(chapterNumber)
-              .title(title)
-              .ocrProvider(resolveSetting(ocrProvider))
-              .ocrModel(resolveSetting(ocrModel))
-              .tlProvider(resolveSetting(tlProvider))
-              .tlModel(resolveSetting(tlModel))
-              .qaProvider(resolveSetting(qaProvider))
-              .qaLlmModel(resolveSetting(qaLlmModel))
-              .qaVlmModel(resolveSetting(qaVlmModel))
-              .qaMode(resolveSetting(qaMode))
-              .routingStrategy(resolveSetting(routingStrategy))
-              .useFallbackModels(useFallbackModels)
-              .build();
+      Chapter chapter = new Chapter();
+      chapter.setSeries(series);
+      chapter.setChapterNumber(chapterNumber);
+      chapter.setTitle(title);
+      chapter.setOcrProvider(resolveSetting(ocrProvider));
+      chapter.setOcrModel(resolveSetting(ocrModel));
+      chapter.setTlProvider(resolveSetting(tlProvider));
+      chapter.setTlModel(resolveSetting(tlModel));
+      chapter.setQaProvider(resolveSetting(qaProvider));
+      chapter.setQaLlmModel(resolveSetting(qaLlmModel));
+      chapter.setQaVlmModel(resolveSetting(qaVlmModel));
+      chapter.setQaMode(resolveSetting(qaMode));
+      chapter.setRoutingStrategy(resolveSetting(routingStrategy));
+      chapter.setUseFallbackModels(useFallbackModels);
       chapter = chapterRepository.save(Objects.requireNonNull(chapter));
 
       // 2. Read ZIP/ePub entries
@@ -536,7 +531,7 @@ public class SeriesController {
       }
 
       // Sort alphabetically by filename to maintain order
-      imageEntries.sort(Comparator.comparing(z -> z.getName()));
+      imageEntries.sort(Comparator.comparing(z -> z.name()));
 
       // 3. Import each page
       int pageNum = 1;
@@ -545,11 +540,11 @@ public class SeriesController {
             "Importing page {}/{} (filename: '{}') for chapter {} (Number {}) of seriesId {}",
             pageNum,
             imageEntries.size(),
-            imgEntry.getName(),
+            imgEntry.name(),
             chapter.getId(),
             chapter.getChapterNumber(),
             seriesId);
-        byte[] originalBytes = imgEntry.getBytes();
+        byte[] originalBytes = imgEntry.bytes();
 
         // SHA-256 hash
         java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
@@ -589,7 +584,7 @@ public class SeriesController {
           continue;
         }
 
-        String fileExtension = pageService.getFileExtension(imgEntry.getName());
+        String fileExtension = pageService.getFileExtension(imgEntry.name());
         String uuid = UUID.randomUUID().toString();
         String storagePath = "originals/" + uuid + fileExtension;
         String contentType = "image/png";
@@ -611,7 +606,7 @@ public class SeriesController {
         Page page =
             pageService.createPageAndImage(
                 chapter,
-                imgEntry.getName(),
+                imgEntry.name(),
                 storagePath,
                 thumbnailStoragePath,
                 pageNum,
@@ -624,8 +619,7 @@ public class SeriesController {
         pageNum++;
       }
 
-      ChapterDto responseDto = new ChapterDto();
-      populateChapterDto(responseDto, chapter, systemSettingsService.getSettings());
+      ChapterDto responseDto = toChapterDto(chapter, systemSettingsService.getSettings());
       return ResponseEntity.ok(responseDto);
 
     } catch (IOException | NoSuchAlgorithmException | MinioException | RuntimeException e) {

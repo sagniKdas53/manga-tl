@@ -3,17 +3,9 @@ package com.manga.library.model;
 import jakarta.persistence.*;
 import java.io.Serializable;
 import java.util.UUID;
-import lombok.*;
 
 @Entity
 @Table(name = "conversation_regions")
-@Getter
-@Setter
-@ToString
-@EqualsAndHashCode
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 @IdClass(ConversationRegion.ConversationRegionId.class)
 public class ConversationRegion {
 
@@ -28,14 +20,47 @@ public class ConversationRegion {
   @Column(nullable = false)
   private Integer position;
 
-  @Getter
-  @Setter
-  @ToString
-  @EqualsAndHashCode
-  @NoArgsConstructor
-  @AllArgsConstructor
-  public static class ConversationRegionId implements Serializable {
+              public static class ConversationRegionId implements Serializable {
     private UUID conversationId;
     private UUID regionId;
+  }
+
+  public ConversationRegion() {}
+
+  public UUID getConversationId() {
+    return this.conversationId;
+  }
+
+  public void setConversationId(UUID conversationId) {
+    this.conversationId = conversationId;
+  }
+
+  public UUID getRegionId() {
+    return this.regionId;
+  }
+
+  public void setRegionId(UUID regionId) {
+    this.regionId = regionId;
+  }
+
+  public Integer getPosition() {
+    return this.position;
+  }
+
+  public void setPosition(Integer position) {
+    this.position = position;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof ConversationRegion)) return false;
+    ConversationRegion that = (ConversationRegion) o;
+    return regionId != null && regionId.equals(that.getRegionId());
+  }
+
+  @Override
+  public int hashCode() {
+    return getClass().hashCode();
   }
 }

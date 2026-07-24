@@ -58,9 +58,9 @@ public class PageControllerTest {
     UUID imageId = UUID.randomUUID();
     UUID chapterId = UUID.randomUUID();
 
-    Image image = Image.builder().id(imageId).filename("test.png").build();
-    Chapter chapter = Chapter.builder().id(chapterId).build();
-    Page page = Page.builder().id(pageId).pageNumber(1).image(image).chapter(chapter).build();
+    Image image = new Image() {{ setId(imageId); setFilename("test.png"); }};
+    Chapter chapter = new Chapter() {{ setId(chapterId); }};
+    Page page = new Page() {{ setId(pageId); setPageNumber(1); setImage(image); setChapter(chapter); }};
 
     when(pageRepository.findById(pageId)).thenReturn(Optional.of(page));
 
@@ -91,9 +91,9 @@ public class PageControllerTest {
     UUID pageId = UUID.randomUUID();
     UUID imageId = UUID.randomUUID();
 
-    Image image = Image.builder().id(imageId).filename("test.png").build();
-    Chapter chapter = Chapter.builder().id(chapterId).build();
-    Page page = Page.builder().id(pageId).pageNumber(1).image(image).chapter(chapter).build();
+    Image image = new Image() {{ setId(imageId); setFilename("test.png"); }};
+    Chapter chapter = new Chapter() {{ setId(chapterId); }};
+    Page page = new Page() {{ setId(pageId); setPageNumber(1); setImage(image); setChapter(chapter); }};
 
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
         .thenReturn(Collections.singletonList(page));
@@ -121,8 +121,8 @@ public class PageControllerTest {
     UUID p1 = UUID.randomUUID();
     UUID p2 = UUID.randomUUID();
 
-    Page page1 = Page.builder().id(p1).pageNumber(1).build();
-    Page page2 = Page.builder().id(p2).pageNumber(2).build();
+    Page page1 = new Page() {{ setId(p1); setPageNumber(1); }};
+    Page page2 = new Page() {{ setId(p2); setPageNumber(2); }};
 
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
         .thenReturn(java.util.Arrays.asList(page1, page2));
@@ -140,7 +140,7 @@ public class PageControllerTest {
   @Test
   public void testGetImageDetails_Success() throws Exception {
     UUID imageId = UUID.randomUUID();
-    Image image = Image.builder().id(imageId).filename("test.png").build();
+    Image image = new Image() {{ setId(imageId); setFilename("test.png"); }};
 
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
     when(panelRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
@@ -170,7 +170,7 @@ public class PageControllerTest {
   public void testGetImageFile_Success() throws Exception {
     UUID imageId = UUID.randomUUID();
     Image image =
-        Image.builder().id(imageId).filename("test.png").storagePath("path/test.png").build();
+        new Image() {{ setId(imageId); setFilename("test.png"); setStoragePath("path/test.png"); }};
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
     when(minioService.getFileStream(anyString()))
         .thenReturn(new java.io.ByteArrayInputStream("dummy".getBytes()));
@@ -182,11 +182,7 @@ public class PageControllerTest {
   public void testGetImageThumbnail_Success() throws Exception {
     UUID imageId = UUID.randomUUID();
     Image image =
-        Image.builder()
-            .id(imageId)
-            .filename("test.png")
-            .thumbnailStoragePath("path/thumb.jpg")
-            .build();
+        new Image() {{ setId(imageId); setFilename("test.png"); setThumbnailStoragePath("path/thumb.jpg"); }};
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
     when(minioService.getFileStream(anyString()))
         .thenReturn(new java.io.ByteArrayInputStream("dummy".getBytes()));
@@ -198,15 +194,12 @@ public class PageControllerTest {
   public void testUploadPage_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".png");
 
-    Image image = Image.builder().id(UUID.randomUUID()).build();
-    Page page = Page.builder().id(UUID.randomUUID()).image(image).build();
+    Image image = new Image() {{ setId(UUID.randomUUID()); }};
+    Page page = new Page() {{ setId(UUID.randomUUID()); setImage(image); }};
 
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
@@ -234,10 +227,7 @@ public class PageControllerTest {
   public void testUploadPage_ZipImport() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".zip");
 
@@ -249,8 +239,8 @@ public class PageControllerTest {
     zos.closeEntry();
     zos.finish();
 
-    Image image = Image.builder().id(UUID.randomUUID()).build();
-    Page page = Page.builder().id(UUID.randomUUID()).image(image).build();
+    Image image = new Image() {{ setId(UUID.randomUUID()); }};
+    Page page = new Page() {{ setId(UUID.randomUUID()); setImage(image); }};
 
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
@@ -273,10 +263,7 @@ public class PageControllerTest {
   public void testUploadPage_ZipProjectImport() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".zip");
 
@@ -293,8 +280,8 @@ public class PageControllerTest {
     zos.closeEntry();
     zos.finish();
 
-    Image image = Image.builder().id(UUID.randomUUID()).build();
-    Page page = Page.builder().id(UUID.randomUUID()).image(image).pageNumber(1).build();
+    Image image = new Image() {{ setId(UUID.randomUUID()); }};
+    Page page = new Page() {{ setId(UUID.randomUUID()); setImage(image); setPageNumber(1); }};
 
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
@@ -302,9 +289,9 @@ public class PageControllerTest {
     when(imageRepository.save(any(Image.class))).thenReturn(image);
     when(pageRepository.save(any(Page.class))).thenReturn(page);
     when(layerRepository.save(any(com.manga.library.model.Layer.class)))
-        .thenReturn(com.manga.library.model.Layer.builder().build());
+        .thenReturn(new com.manga.library.model.Layer());
     when(layerElementRepository.save(any(com.manga.library.model.LayerElement.class)))
-        .thenReturn(com.manga.library.model.LayerElement.builder().build());
+        .thenReturn(new com.manga.library.model.LayerElement());
 
     org.springframework.mock.web.MockMultipartFile file =
         new org.springframework.mock.web.MockMultipartFile(
@@ -324,10 +311,7 @@ public class PageControllerTest {
   public void testImportProject_Success() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".png");
 
@@ -344,8 +328,8 @@ public class PageControllerTest {
     zos.closeEntry();
     zos.finish();
 
-    Image image = Image.builder().id(UUID.randomUUID()).build();
-    Page page = Page.builder().id(UUID.randomUUID()).image(image).pageNumber(1).build();
+    Image image = new Image() {{ setId(UUID.randomUUID()); }};
+    Page page = new Page() {{ setId(UUID.randomUUID()); setImage(image); setPageNumber(1); }};
 
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
@@ -353,9 +337,9 @@ public class PageControllerTest {
     when(imageRepository.save(any(Image.class))).thenReturn(image);
     when(pageRepository.save(any(Page.class))).thenReturn(page);
     when(layerRepository.save(any(com.manga.library.model.Layer.class)))
-        .thenReturn(com.manga.library.model.Layer.builder().build());
+        .thenReturn(new com.manga.library.model.Layer());
     when(layerElementRepository.save(any(com.manga.library.model.LayerElement.class)))
-        .thenReturn(com.manga.library.model.LayerElement.builder().build());
+        .thenReturn(new com.manga.library.model.LayerElement());
 
     org.springframework.mock.web.MockMultipartFile file =
         new org.springframework.mock.web.MockMultipartFile(
@@ -373,7 +357,7 @@ public class PageControllerTest {
   public void testUpdateOcrRegion_Success() throws Exception {
     UUID regionId = UUID.randomUUID();
     com.manga.library.model.OcrRegion region =
-        com.manga.library.model.OcrRegion.builder().id(regionId).build();
+        new com.manga.library.model.OcrRegion() {{ setId(regionId); }};
     when(ocrRegionRepository.findById(regionId)).thenReturn(Optional.of(region));
     when(ocrRegionRepository.save(any(com.manga.library.model.OcrRegion.class))).thenReturn(region);
 
@@ -403,18 +387,15 @@ public class PageControllerTest {
   public void testUploadPage_DuplicateImage() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".png");
 
     UUID existingImageId = UUID.randomUUID();
-    Image existingImage = Image.builder().id(existingImageId).hash("somehash").build();
+    Image existingImage = new Image() {{ setId(existingImageId); setHash("somehash"); }};
     when(imageRepository.findByHash(anyString())).thenReturn(Optional.of(existingImage));
 
-    Page page = Page.builder().id(UUID.randomUUID()).image(existingImage).build();
+    Page page = new Page() {{ setId(UUID.randomUUID()); setImage(existingImage); }};
     when(pageService.createPageWithExistingImage(any(), any(), any(), any())).thenReturn(page);
 
     org.springframework.mock.web.MockMultipartFile file =
@@ -498,18 +479,18 @@ public class PageControllerTest {
   public void testUploadPage_DuplicateImage_MissingTranslation() throws Exception {
     UUID chapterId = UUID.randomUUID();
     com.manga.library.model.Series series =
-        com.manga.library.model.Series.builder().id(UUID.randomUUID()).targetLanguage("en").build();
-    Chapter chapter = Chapter.builder().id(chapterId).series(series).build();
+        new com.manga.library.model.Series() {{ setId(UUID.randomUUID()); setTargetLanguage("en"); }};
+    Chapter chapter = new Chapter() {{ setId(chapterId); setSeries(series); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".png");
 
     UUID existingImageId = UUID.randomUUID();
-    Image existingImage = Image.builder().id(existingImageId).hash("somehash").build();
+    Image existingImage = new Image() {{ setId(existingImageId); setHash("somehash"); }};
     when(imageRepository.findByHash(anyString())).thenReturn(Optional.of(existingImage));
 
     when(layerRepository.findByPageId(any())).thenReturn(Collections.emptyList());
 
-    Page page = Page.builder().id(UUID.randomUUID()).image(existingImage).build();
+    Page page = new Page() {{ setId(UUID.randomUUID()); setImage(existingImage); }};
     when(pageService.createPageWithExistingImage(any(), any(), any(), any())).thenReturn(page);
 
     org.springframework.mock.web.MockMultipartFile file =
@@ -538,10 +519,7 @@ public class PageControllerTest {
   public void testUploadPage_ZipNoImages() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".zip");
 
@@ -567,10 +545,7 @@ public class PageControllerTest {
   public void testUploadPage_ZipProjectNoImages() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".zip");
 
@@ -600,7 +575,7 @@ public class PageControllerTest {
     UUID chapterId = UUID.randomUUID();
     UUID p1 = UUID.randomUUID();
 
-    Page page1 = Page.builder().id(p1).pageNumber(1).build();
+    Page page1 = new Page() {{ setId(p1); setPageNumber(1); }};
 
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
         .thenReturn(java.util.Collections.singletonList(page1));
@@ -639,11 +614,7 @@ public class PageControllerTest {
   public void testUpdateOcrRegion_Success_FullPayload() throws Exception {
     UUID id = UUID.randomUUID();
     com.manga.library.model.OcrRegion region =
-        com.manga.library.model.OcrRegion.builder()
-            .id(id)
-            .text("original text")
-            .confidence(0.8)
-            .build();
+        new com.manga.library.model.OcrRegion() {{ setId(id); setText("original text"); setConfidence(0.8); }};
 
     when(ocrRegionRepository.findById(id)).thenReturn(Optional.of(region));
     when(ocrRegionRepository.save(any(com.manga.library.model.OcrRegion.class))).thenReturn(region);
@@ -676,10 +647,7 @@ public class PageControllerTest {
   public void testUploadPage_WithMarkdownFile_ReturnsBadRequest() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".md");
 
@@ -704,10 +672,7 @@ public class PageControllerTest {
   public void testUploadPage_WithBmpFile_ReturnsOkAndConverts() throws Exception {
     UUID chapterId = UUID.randomUUID();
     Chapter chapter =
-        Chapter.builder()
-            .id(chapterId)
-            .series(com.manga.library.model.Series.builder().build())
-            .build();
+        new Chapter() {{ setId(chapterId); setSeries(new com.manga.library.model.Series()); }};
     when(chapterRepository.findWithSeriesById(chapterId)).thenReturn(Optional.of(chapter));
     when(pageService.getFileExtension(anyString())).thenReturn(".bmp");
 
@@ -719,10 +684,7 @@ public class PageControllerTest {
     byte[] bmpBytes = baos.toByteArray();
 
     Page page =
-        Page.builder()
-            .id(UUID.randomUUID())
-            .image(Image.builder().id(UUID.randomUUID()).build())
-            .build();
+        new Page() {{ setId(UUID.randomUUID()); setImage(new Image() {{ setId(UUID.randomUUID()); }}); }};
     when(pageService.createPageAndImage(any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(page);
 

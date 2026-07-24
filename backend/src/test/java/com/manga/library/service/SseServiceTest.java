@@ -111,8 +111,8 @@ public class SseServiceTest {
     when(redisTemplate.opsForValue()).thenReturn(valOps);
     when(valOps.get("job:owner:image:" + imageId)).thenReturn(null);
 
-    User creator = User.builder().id(userId).build();
-    Image image = Image.builder().id(imageId).createdBy(creator).build();
+    User creator = new User() {{ setId(userId); }};
+    Image image = new Image() {{ setId(imageId); setCreatedBy(creator); }};
     when(imageRepository.findById(imageId)).thenReturn(java.util.Optional.of(image));
     when(redisTemplate.opsForList()).thenReturn(listOps);
 
@@ -128,7 +128,7 @@ public class SseServiceTest {
     when(redisTemplate.opsForValue()).thenReturn(valOps);
     when(valOps.get("job:owner:image:" + imageId)).thenReturn(null);
 
-    Image image = Image.builder().id(imageId).createdBy(null).build();
+    Image image = new Image() {{ setId(imageId); setCreatedBy(null); }};
     when(imageRepository.findById(imageId)).thenReturn(java.util.Optional.of(image));
 
     sseService.emitNotificationForImage(imageId, "type", "title", "msg");

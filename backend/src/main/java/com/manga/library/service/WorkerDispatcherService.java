@@ -10,25 +10,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class WorkerDispatcherService {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WorkerDispatcherService.class);
 
-  @Value("${WORKER_URLS:http://worker:9091}")
+
   private String workerUrlsConfig;
 
-  @Value("${WORKER_API_SECRET:}")
   private String workerApiSecret;
 
-  @Value("${WORKER_API_SECRET_FILE:}")
   private String workerApiSecretFile;
 
   @PostConstruct
@@ -45,6 +40,11 @@ public class WorkerDispatcherService {
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
+  public WorkerDispatcherService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
+    this.redisTemplate = redisTemplate;
+    this.objectMapper = objectMapper;
+  }
+
 
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();

@@ -9,17 +9,15 @@ import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.SseService;
 import java.util.*;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/internal")
-@RequiredArgsConstructor
-@Slf4j
 @org.springframework.transaction.annotation.Transactional
 public class InternalJobController {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(InternalJobController.class);
+
 
   private final JobCoordinatorService jobCoordinatorService;
   private final ImageRepository imageRepository;
@@ -35,6 +33,23 @@ public class InternalJobController {
   private final SseService sseService;
   private final JobRepository jobRepository;
   private final ObjectMapper objectMapper;
+  public InternalJobController(JobCoordinatorService jobCoordinatorService, ImageRepository imageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository, ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository, PageRepository pageRepository, ChapterRepository chapterRepository, MinioService minioService, LayerElementRepository layerElementRepository, LayerRepository layerRepository, SseService sseService, JobRepository jobRepository, ObjectMapper objectMapper) {
+    this.jobCoordinatorService = jobCoordinatorService;
+    this.imageRepository = imageRepository;
+    this.panelRepository = panelRepository;
+    this.ocrRegionRepository = ocrRegionRepository;
+    this.conversationRepository = conversationRepository;
+    this.conversationRegionRepository = conversationRegionRepository;
+    this.pageRepository = pageRepository;
+    this.chapterRepository = chapterRepository;
+    this.minioService = minioService;
+    this.layerElementRepository = layerElementRepository;
+    this.layerRepository = layerRepository;
+    this.sseService = sseService;
+    this.jobRepository = jobRepository;
+    this.objectMapper = objectMapper;
+  }
+
 
   @PatchMapping("/jobs/{jobId}/status")
   public ResponseEntity<?> updateJobStatus(
@@ -239,8 +254,8 @@ public class InternalJobController {
 
   @PostMapping("/jobs/callback/panel")
   public ResponseEntity<?> panelCallback(@RequestBody PanelCallbackDto dto) {
-    log.info("Received panel callback for image: {}", dto.getImageId());
-    resolveNotificationContext(dto.getImageId());
+    log.info("Received panel callback for image: {}", dto.imageId());
+    resolveNotificationContext(dto.imageId());
     try {
       jobCoordinatorService.handlePanelCallback(dto);
       return ResponseEntity.ok().build();
@@ -252,8 +267,8 @@ public class InternalJobController {
 
   @PostMapping("/jobs/callback/ocr")
   public ResponseEntity<?> ocrCallback(@RequestBody OcrCallbackDto dto) {
-    log.info("Received OCR callback for image: {}", dto.getImageId());
-    resolveNotificationContext(dto.getImageId());
+    log.info("Received OCR callback for image: {}", dto.imageId());
+    resolveNotificationContext(dto.imageId());
     try {
       jobCoordinatorService.handleOcrCallback(dto);
       return ResponseEntity.ok().build();

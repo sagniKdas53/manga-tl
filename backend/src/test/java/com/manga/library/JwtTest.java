@@ -45,23 +45,14 @@ public class JwtTest {
         .orElseGet(
             () -> {
               User buildUser =
-                  User.builder()
-                      .email("admin@manga.local")
-                      .passwordHash("mock_password_hash")
-                      .displayName("Admin User")
-                      .role("admin")
-                      .build();
+                  new User() {{ setEmail("admin@manga.local"); setPasswordHash("mock_password_hash"); setDisplayName("Admin User"); setRole("admin"); }};
               Objects.requireNonNull(buildUser, "user cannot be null");
               return userRepository.save(buildUser);
             });
 
     // Save test series programmatically
     Series series =
-        Series.builder()
-            .title("Test Series")
-            .originalLanguage("ja")
-            .readingDirection("rtl")
-            .build();
+        new Series() {{ setTitle("Test Series"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
     Objects.requireNonNull(series, "series cannot be null");
     series = seriesRepository.save(series);
 
@@ -125,22 +116,13 @@ public class JwtTest {
         .orElseGet(
             () -> {
               User buildUser =
-                  User.builder()
-                      .email("admin@manga.local")
-                      .passwordHash("mock_password_hash")
-                      .displayName("Admin User")
-                      .role("admin")
-                      .build();
+                  new User() {{ setEmail("admin@manga.local"); setPasswordHash("mock_password_hash"); setDisplayName("Admin User"); setRole("admin"); }};
               Objects.requireNonNull(buildUser, "user cannot be null");
               return userRepository.save(buildUser);
             });
 
     Series series =
-        Series.builder()
-            .title("Test Series QueryParam")
-            .originalLanguage("ja")
-            .readingDirection("rtl")
-            .build();
+        new Series() {{ setTitle("Test Series QueryParam"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
     Objects.requireNonNull(series, "series cannot be null");
     series = seriesRepository.save(series);
 

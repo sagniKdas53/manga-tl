@@ -2,7 +2,6 @@ package com.manga.library.controller;
 
 import com.manga.library.dto.SystemSettingsDto;
 import com.manga.library.service.SystemSettingsService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -12,10 +11,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/settings")
-@RequiredArgsConstructor
 public class SettingsController {
 
   private final SystemSettingsService systemSettingsService;
+  public SettingsController(SystemSettingsService systemSettingsService) {
+    this.systemSettingsService = systemSettingsService;
+  }
+
 
   @GetMapping
   public ResponseEntity<SystemSettingsDto> getSettings() {

@@ -14,7 +14,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Backend JAR
-FROM maven:3-eclipse-temurin-26 AS backend-build
+FROM maven:3-eclipse-temurin-25 AS backend-build
 WORKDIR /app
 
 # Cache Maven dependencies separately so source changes don't re-download deps
@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn clean package -DskipTests -P!frontend
 
 # Stage 3: Runtime JRE Image
-FROM eclipse-temurin:26-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 # Non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
