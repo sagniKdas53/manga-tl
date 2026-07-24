@@ -1,20 +1,20 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ImportChapterDialog } from "./ImportChapterDialog";
+import { ImportChapterDialog } from "../../components/ImportChapterDialog";
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mockNavigate,
 }));
 
-vi.mock("./ToastContext", () => ({
+vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
     showToast: vi.fn(),
   }),
 }));
 
 const mockSafeFetch = vi.fn();
-vi.mock("../utils", () => ({
+vi.mock("../../utils", () => ({
   safeFetch: (url: string, options?: RequestInit) => {
     if (typeof url === "string" && url.includes("/api/settings")) {
       return Promise.resolve({

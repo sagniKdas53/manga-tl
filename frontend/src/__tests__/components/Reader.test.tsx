@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import Reader from "./Reader";
+import Reader from "../../components/Reader";
 
 // Mock external modules
 export const mockNavigate = vi.fn();
@@ -10,12 +10,12 @@ vi.mock("react-router-dom", () => ({
 }));
 
 export const mockSubscribe = vi.fn(() => vi.fn());
-vi.mock("./useNotifications", () => ({
+vi.mock("../../components/useNotifications", () => ({
   useNotifications: () => ({ notifications: [], subscribe: mockSubscribe }),
 }));
 
 export const mockShowToast = vi.fn();
-vi.mock("./ToastContext", () => ({
+vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
     showToast: mockShowToast,
     showSuccess: vi.fn(),
@@ -29,7 +29,7 @@ const mockSafeFetch = vi.fn<
     init?: RequestInit,
   ) => Promise<{ ok: boolean; json: () => Promise<unknown> }>
 >(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }));
-vi.mock("../utils", () => ({
+vi.mock("../../utils", () => ({
   safeFetch: (url: string, init?: RequestInit) => mockSafeFetch(url, init),
   toSlug: (s: string) => s.toLowerCase(),
 }));

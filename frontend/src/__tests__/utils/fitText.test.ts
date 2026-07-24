@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fitTextInBox } from "./fitText";
+import { fitTextInBox } from "../../utils/fitText";
 
 describe("fitTextInBox", () => {
   let originalCreateElement: typeof document.createElement;

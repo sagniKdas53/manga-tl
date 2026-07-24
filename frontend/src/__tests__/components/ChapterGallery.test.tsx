@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import ChapterGallery from "./ChapterGallery";
+import ChapterGallery from "../../components/ChapterGallery";
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", () => ({
@@ -8,7 +8,7 @@ vi.mock("react-router-dom", () => ({
 }));
 
 const mockSafeFetch = vi.fn();
-vi.mock("../utils", () => ({
+vi.mock("../../utils", () => ({
   safeFetch: (url: string, ...args: unknown[]) => {
     if (typeof url === "string" && url.includes("/api/settings")) {
       return Promise.resolve({
@@ -33,13 +33,13 @@ vi.mock("../utils", () => ({
 }));
 
 const mockShowToast = vi.fn();
-vi.mock("./ToastContext", () => ({
+vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
     showToast: mockShowToast,
   }),
 }));
 
-vi.mock("./UploadContext", () => ({
+vi.mock("../../components/UploadContext", () => ({
   useUploadQueue: () => ({
     addItems: vi.fn(),
     updateItem: vi.fn(),

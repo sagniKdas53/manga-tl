@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   ReaderPageNavigation,
   ReaderPrevNextChapters,
-} from "./ReaderPageNavigation";
+} from "../../components/ReaderPageNavigation";
 
 describe("ReaderPageNavigation", () => {
   it("renders page indicator correctly", () => {

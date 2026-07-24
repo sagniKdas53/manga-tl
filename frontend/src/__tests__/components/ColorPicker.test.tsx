@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { ColorPicker } from "./ColorPicker";
+import { ColorPicker } from "../../components/ColorPicker";
 
 describe("ColorPicker", () => {
   it("renders with given label and value", () => {

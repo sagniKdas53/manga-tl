@@ -7,12 +7,14 @@ on:
       - "backend/pom.xml"
       - "backend/src/**"
       - "backend/Dockerfile"
+      - "database/**"
       - ".github/workflows/ci-maven.yml"
   pull_request:
     paths:
       - "backend/pom.xml"
       - "backend/src/**"
       - "backend/Dockerfile"
+      - "database/**"
       - ".github/workflows/ci-maven.yml"
 
 permissions:

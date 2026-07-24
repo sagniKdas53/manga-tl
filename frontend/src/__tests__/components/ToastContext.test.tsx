@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { ToastProvider, useToast } from "./ToastContext";
+import { ToastProvider, useToast } from "../../components/ToastContext";
 
 const TestComponent = () => {
   const { showToast } = useToast();

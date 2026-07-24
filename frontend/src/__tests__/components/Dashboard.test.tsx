@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import Dashboard from "./Dashboard";
+import Dashboard from "../../components/Dashboard";
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", () => ({
@@ -8,7 +8,7 @@ vi.mock("react-router-dom", () => ({
 }));
 
 const mockShowToast = vi.fn();
-vi.mock("./ToastContext", () => ({
+vi.mock("../../components/ToastContext", () => ({
   useToast: () => ({
     showToast: mockShowToast,
     showError: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock("./ToastContext", () => ({
 }));
 
 const mockSafeFetch = vi.fn();
-vi.mock("../utils", () => ({
+vi.mock("../../utils", () => ({
   safeFetch: (url: string, ...args: unknown[]) => {
     if (typeof url === "string" && url.includes("/api/settings")) {
       return Promise.resolve({

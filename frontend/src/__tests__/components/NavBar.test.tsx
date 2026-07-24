@@ -2,11 +2,11 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { BrowserRouter } from "react-router-dom";
-import { NavBar } from "./NavBar";
-import { useColorMode } from "../hooks/useColorMode";
+import { NavBar } from "../../components/NavBar";
+import { useColorMode } from "../../hooks/useColorMode";
 
 // Mock the components inside NavBar
-vi.mock("./QueueManager", () => ({
+vi.mock("../../components/QueueManager", () => ({
   QueueManager: ({
     onRequestOpen,
     onClose,
@@ -26,7 +26,7 @@ vi.mock("./QueueManager", () => ({
     </div>
   ),
 }));
-vi.mock("./NotificationCenter", () => ({
+vi.mock("../../components/NotificationCenter", () => ({
   NotificationCenter: ({
     onRequestOpen,
     onClose,
@@ -47,7 +47,7 @@ vi.mock("./NotificationCenter", () => ({
   ),
 }));
 
-vi.mock("../hooks/useColorMode", () => ({
+vi.mock("../../hooks/useColorMode", () => ({
   useColorMode: vi.fn(),
 }));
 
@@ -93,7 +93,7 @@ describe("NavBar", () => {
     renderWithRouter(
       <NavBar
         {...defaultProps}
-        user={{ id: "1", token: "tok" } as import("../types").User}
+        user={{ id: "1", token: "tok" } as import("../../types").User}
       />,
     );
 
@@ -112,7 +112,7 @@ describe("NavBar", () => {
     renderWithRouter(
       <NavBar
         {...defaultProps}
-        user={{ id: "1", token: "tok" } as import("../types").User}
+        user={{ id: "1", token: "tok" } as import("../../types").User}
       />,
     );
 
@@ -133,7 +133,7 @@ describe("NavBar", () => {
     renderWithRouter(
       <NavBar
         {...defaultProps}
-        user={{ id: "1", token: "tok" } as import("../types").User}
+        user={{ id: "1", token: "tok" } as import("../../types").User}
       />,
     );
 

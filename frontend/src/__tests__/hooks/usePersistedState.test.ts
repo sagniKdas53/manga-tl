@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { usePersistedState } from "../hooks/usePersistedState";
+import { usePersistedState } from "../../hooks/usePersistedState";
 
 const testKey = "test-usePersistedState";
 
