@@ -1,14 +1,133 @@
 # Plan: More Improvements
 
-## 1. [CRITICAL] `/api/pages/{pageId}/details` returns 500 (✅ COMPLETED)
+## 7. Unit tests are useless — never catch real issues
 
-### Root Cause (3 compounding issues)
+### Problem
+
+The tests in `PageControllerTest.java` and `PageServiceTest.java` mock **everything**. Every repository, every service is a `@MockBean`. That means:
+
+- They never touch a real database
+- They never catch SQL schema issues (like missing PKs on `images`/`chapters`)
+- They never catch lazy proxy serialization failures
+- They never catch Hibernate DDL problems
+- They never catch real HTTP serialization behavior
+
+A test like this:
+
+```java
+when(pageRepository.findById(pageId)).thenReturn(Optional.of(page));
+mockMvc.perform(get("/api/pages/" + pageId)).andExpect(status().isOk());
+```
+
+...passes even when:
+
+- The actual table has no PK
+- Jackson can't serialize the entity
+- The entity has lazy proxies that would fail
+- The DB schema is completely wrong
+
+**The tests are tautologies** — they test that the mock returns what you told it to return.
+
+### What should exist instead
+
+1. **Integration tests with Testcontainers** — spin up a real Postgres, run Alembic/Flyway migrations, hit real endpoints
+2. **Contract tests** — verify the JSON response shape matches what the frontend expects
+3. **At minimum**: one test that boots the full Spring context against an H2/Postgres container and calls `/health` and a few real endpoints
+
+## 8. Frontend UX & Button Clutter
+
+### Problem
+
+The chapter card has too many buttons. "Force export" should be moved out of the primary view.
+
+### Fix
+
+Move the "Force export" button to an overflow (triple dots) menu.
+
+---
+
+## 9. Custom Fonts Missing in Dev
+
+### Problem
+
+The custom fonts (like Comic Neue) have stopped working in the frontend dev environment, only default system ones work.
+
+### Fix
+
+Ensure font assets are properly served or imported in the Vite dev server configuration or global CSS.
+
+---
+
+## 10. Costs Database Validation
+
+### Problem
+
+We need to ensure that the costs DB is being updated properly and costs are actually being tracked after processing jobs.
+
+### Fix
+
+Validate and add tests to ensure the cost records are correctly inserted when jobs finish.
+
+---
+
+## 11. Fallback Models Validation
+
+### Problem
+
+We need to ensure that the fallback models is being updated properly and costs are actually being tracked after processing jobs.
+
+Also make sure if the over-rides set disable fall back's they aren't being used and fail the jobs properly on the main model being unavailable.
+
+### Fix
+
+Validate and add tests to ensure the cost records are correctly inserted when jobs finish. And also validate the fact that the fallback models are used when they are supposed and not when they are not supposed to be, ensuring no rouge spending happens.
+
+---
+
+## 12. API Endpoint Redundancy & OpenAPI Spec
+
+### Problem
+
+We currently have two different API endpoints for loading a single page in the reader: `/api/pages/{pageId}/details` and `/api/pages/{pageId}/layers`. They return largely similar or overlapping data, which is inefficient.
+Furthermore, there is no formal contract or schema for the API.
+
+### Fix
+
+1. Create a proper **OpenAPI Spec** for the REST API to address the design and serve as a contract.
+2. Unify the page loading endpoints or clearly separate their concerns based on the spec.
+3. Enforce REST validation.
+
+---
+
+## Action Items Summary
+
+| # | Issue | Status |
+|---|-------|--------|
+| 1 | `/api/pages/{id}/details` — proxy/lazy init issues | ✅ Fixed |
+| 1b | `/api/pages/{id}/details` — `IllegalArgumentException` → 404, not 500 | ✅ Fixed |
+| 2 | Proper 4XX/5XX error responses with messages | ✅ Fixed |
+| 3 | Reader page-out-of-bounds infinite spinner | ✅ Fixed |
+| 4 | JWT expiry detection & redirect to login | ✅ Fixed |
+| 5 | Auto-extend active sessions via `/auth/refresh` | ✅ Fixed |
+| 6 | Translation layer empty text — OpenRouter 404 | ✅ Fixed (Short-circuited at backend) |
+| 7 | Unit tests are useless (mock everything, catch nothing) | 🔲 TODO |
+| 8 | Move "Force export" button to overflow menu | 🔲 TODO |
+| 9 | Fix custom fonts not loading in dev frontend | 🔲 TODO |
+| 10 | Validate cost DB tracking is accurate | 🔲 TODO |
+| 11 | Fallback Models Validation logic | 🔲 TODO |
+| 12 | Create OpenAPI spec & fix API redundancy | ✅ Fixed |
+
+## Archived Issues
+
+### 1. [CRITICAL] `/api/pages/{pageId}/details` returns 500 (✅ COMPLETED)
+
+#### Root Cause (3 compounding issues)
 
 1. **`open-in-view: false`** → Hibernate session closes before Jackson serializes
 2. **Jackson `FAIL_ON_EMPTY_BEANS`** → `ByteBuddyInterceptor` on Hibernate proxies has no serializer
 3. **Missing PKs on `images`/`chapters`** → `ddl-auto: update` silently skipped PK creation
 
-### Fixes Applied
+#### Fixes Applied
 
 | # | Fix | File |
 |---|-----|------|
@@ -19,7 +138,7 @@
 | 5 | Manual PKs on `images` and `chapters` | SQL |
 | 6 | `halt_on_error: true` for DDL | `application.yml:19-20` |
 
-### Remaining Issue: `IllegalArgumentException: Page not found` → 500 instead of 404
+#### Remaining Issue: `IllegalArgumentException: Page not found` → 500 instead of 404
 
 When a page doesn't exist (e.g., after DB wipe or deleted page), the controller throws:
 
@@ -35,7 +154,7 @@ When a page doesn't exist (e.g., after DB wipe or deleted page), the controller 
 
 **No message, no hint it's actually a 404.** The frontend has no idea what went wrong.
 
-### Also: `IllegalArgumentException` becoming 500 instead of 400/404
+#### Also: `IllegalArgumentException` becoming 500 instead of 400/404
 
 Same pattern used throughout the controller:
 
@@ -167,120 +286,3 @@ OpenRouter returned **404** when the worker tried to call the translation API. T
 1. **Verify OpenRouter API key** — check `OPENROUTER_API_KEY` env var in docker-compose
 2. **Verify model name** — check OpenRouter docs for the correct model path
 3. **Worker should NOT create translation layer if ALL translations failed** — it should either retry or mark the job as failed so the user knows something is wrong, not silently create an empty layer
-
----
-
-## 7. Unit tests are useless — never catch real issues
-
-### Problem
-
-The tests in `PageControllerTest.java` and `PageServiceTest.java` mock **everything**. Every repository, every service is a `@MockBean`. That means:
-
-- They never touch a real database
-- They never catch SQL schema issues (like missing PKs on `images`/`chapters`)
-- They never catch lazy proxy serialization failures
-- They never catch Hibernate DDL problems
-- They never catch real HTTP serialization behavior
-
-A test like this:
-
-```java
-when(pageRepository.findById(pageId)).thenReturn(Optional.of(page));
-mockMvc.perform(get("/api/pages/" + pageId)).andExpect(status().isOk());
-```
-
-...passes even when:
-
-- The actual table has no PK
-- Jackson can't serialize the entity
-- The entity has lazy proxies that would fail
-- The DB schema is completely wrong
-
-**The tests are tautologies** — they test that the mock returns what you told it to return.
-
-### What should exist instead
-
-1. **Integration tests with Testcontainers** — spin up a real Postgres, run Alembic/Flyway migrations, hit real endpoints
-2. **Contract tests** — verify the JSON response shape matches what the frontend expects
-3. **At minimum**: one test that boots the full Spring context against an H2/Postgres container and calls `/health` and a few real endpoints
-
-## 8. Frontend UX & Button Clutter
-
-### Problem
-
-The chapter card has too many buttons. "Force export" should be moved out of the primary view.
-
-### Fix
-
-Move the "Force export" button to an overflow (triple dots) menu.
-
----
-
-## 9. Custom Fonts Missing in Dev
-
-### Problem
-
-The custom fonts (like Comic Neue) have stopped working in the frontend dev environment, only default system ones work.
-
-### Fix
-
-Ensure font assets are properly served or imported in the Vite dev server configuration or global CSS.
-
----
-
-## 10. Costs Database Validation
-
-### Problem
-
-We need to ensure that the costs DB is being updated properly and costs are actually being tracked after processing jobs.
-
-### Fix
-
-Validate and add tests to ensure the cost records are correctly inserted when jobs finish.
-
----
-
-## 11. Fallback Models Still Failing
-
-### Problem
-
-Even when "Fallback Models" is enabled, jobs can fail (e.g., `openrouter/tencent/hy3:free` returns 500). The fallback mechanism might not be working correctly or the fallback models themselves are failing without gracefully retrying another one.
-
-### Fix
-
-Improve the fallback logic in the worker to ensure it tries the next available model in the fallback list if the primary one returns a 500.
-
----
-
-## 12. API Endpoint Redundancy & OpenAPI Spec
-
-### Problem
-
-We currently have two different API endpoints for loading a single page in the reader: `/api/pages/{pageId}/details` and `/api/pages/{pageId}/layers`. They return largely similar or overlapping data, which is inefficient.
-Furthermore, there is no formal contract or schema for the API.
-
-### Fix
-
-1. Create a proper **OpenAPI Spec** for the REST API to address the design and serve as a contract.
-2. Unify the page loading endpoints or clearly separate their concerns based on the spec.
-3. Enforce REST validation.
-
----
-
-## Action Items Summary
-
-| # | Issue | Status |
-|---|-------|--------|
-| 1 | `/api/pages/{id}/details` — proxy/lazy init issues | ✅ Fixed |
-| 1b | `/api/pages/{id}/details` — `IllegalArgumentException` → 404, not 500 | ✅ Fixed |
-| 2 | Proper 4XX/5XX error responses with messages | ✅ Fixed |
-| 3 | Reader page-out-of-bounds infinite spinner | ✅ Fixed |
-| 4 | JWT expiry detection & redirect to login | 🔲 TODO |
-| 5 | Auto-extend active sessions via `/auth/refresh` | 🔲 TODO |
-| 6 | Translation layer empty text — OpenRouter 404 | ✅ Fixed (Short-circuited at backend) |
-| 7 | Unit tests are useless (mock everything, catch nothing) | 🔲 TODO |
-| 8 | Move "Force export" button to overflow menu | 🔲 TODO |
-| 9 | Fix custom fonts not loading in dev frontend | 🔲 TODO |
-| 10 | Validate cost DB tracking is accurate | 🔲 TODO |
-| 11 | Fallback models failing / improve fallback logic | 🔲 TODO |
-| 12 | Create OpenAPI spec & fix API redundancy | 🔲 TODO (High Priority) |

@@ -345,12 +345,18 @@ export const Reader: React.FC<ReaderProps> = ({
               delete pageDetailsCache.current[selectedPage.id];
               delete pageDetailsCache.current[selectedPage.imageId];
 
-              // Force refetch of page details by clearing the loaded image ID
               Promise.resolve().then(() => {
                 setLoadedImageId(null);
               });
               showToast("New layers available — refreshed", "success");
             }
+          } else if (
+            data.status === "FAILED" &&
+            selectedPage &&
+            (data.pageId === selectedPage.id ||
+              data.imageId === selectedPage.imageId)
+          ) {
+            showToast(`Job failed: ${data.error || "Unknown error"}`, "error");
           }
         } catch (e) {
           console.error("Failed to parse job_update in Reader", e);
@@ -577,29 +583,21 @@ export const Reader: React.FC<ReaderProps> = ({
         return pageDetailsCache.current[cacheKey];
       }
 
-      const detailsUrl = `/api/pages/${pageId}/details`;
-      const layersUrl = `/api/pages/${pageId}/layers`;
+      const detailsUrl = `/api/pages/${pageId}`;
 
-      const [detailsRes, layersRes] = await Promise.all([
-        safeFetch(detailsUrl, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        }),
-        safeFetch(layersUrl, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        }),
-      ]);
+      const detailsRes = await safeFetch(detailsUrl, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
 
       if (!detailsRes.ok) throw new Error("Image details fetch failed");
-      if (!layersRes.ok) throw new Error("Layers fetch failed");
 
       const detailsData = await detailsRes.json();
-      const layersData = await layersRes.json();
 
       const cachedData = {
         panels: detailsData.panels || [],
         ocrRegions: detailsData.ocrRegions || [],
         conversations: detailsData.conversations || [],
-        layers: layersData || [],
+        layers: detailsData.layers || [],
       };
 
       pageDetailsCache.current[cacheKey] = cachedData;
@@ -1701,7 +1699,7 @@ export const Reader: React.FC<ReaderProps> = ({
     async (pageId: string, newNumber: number) => {
       try {
         const response = await safeFetch(`/api/pages/${pageId}/number`, {
-          method: "PUT",
+          method: "PATCH",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${user.token}`,

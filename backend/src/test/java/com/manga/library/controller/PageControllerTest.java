@@ -67,31 +67,22 @@ public class PageControllerTest {
     mockMvc
         .perform(get("/api/pages/" + pageId))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id").value(pageId.toString()))
-        .andExpect(jsonPath("$.pageNumber").value(1))
-        .andExpect(jsonPath("$.imageId").value(imageId.toString()))
-        .andExpect(jsonPath("$.chapterId").value(chapterId.toString()));
+        .andExpect(jsonPath("$.page.id").value(pageId.toString()))
+        .andExpect(jsonPath("$.page.pageNumber").value(1))
+        .andExpect(jsonPath("$.page.imageId").value(imageId.toString()))
+        .andExpect(jsonPath("$.page.chapterId").value(chapterId.toString()));
   }
 
   @Test
-  public void testGetPage_NotFound() throws Exception {
-    UUID pageId = UUID.randomUUID();
-    when(pageRepository.findById(pageId)).thenReturn(Optional.empty());
-
-    mockMvc.perform(get("/api/pages/" + pageId)).andExpect(status().isNotFound());
-  }
-
-  @Test
-  public void testGetPageDetails_NotFound_Returns404WithMessage() throws Exception {
+  public void testGetPage_NotFound_Returns404WithMessage() throws Exception {
     UUID pageId = UUID.randomUUID();
     when(pageRepository.findById(pageId)).thenReturn(Optional.empty());
 
     mockMvc
-        .perform(get("/api/pages/" + pageId + "/details"))
+        .perform(get("/api/pages/" + pageId))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.status").value(404))
-        .andExpect(jsonPath("$.message").value("Page not found: " + pageId))
-        .andExpect(jsonPath("$.path").value("/api/pages/" + pageId + "/details"));
+        .andExpect(jsonPath("$.detail").value("Page not found: " + pageId));
   }
 
   @Test
@@ -162,13 +153,7 @@ public class PageControllerTest {
         .andExpect(jsonPath("$.image.id").value(imageId.toString()));
   }
 
-  @Test
-  public void testGetImageLayers_Success() throws Exception {
-    UUID imageId = UUID.randomUUID();
-    when(layerRepository.findByPageId(any())).thenReturn(Collections.emptyList());
 
-    mockMvc.perform(get("/api/images/" + imageId + "/layers")).andExpect(status().isOk());
-  }
 
   @Test
   public void testRedoOcrRegion_Success() throws Exception {
@@ -396,7 +381,7 @@ public class PageControllerTest {
 
     mockMvc
         .perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
                     "/api/ocr-regions/" + regionId)
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"new text\"}"))
@@ -667,7 +652,7 @@ public class PageControllerTest {
 
     mockMvc
         .perform(
-            put("/api/ocr-regions/" + id)
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/ocr-regions/" + id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     "{\"text\":\"updated text\",\"translatedText\":\"Hello\",\"approved\":true,\"confidence\":0.95}"))
@@ -681,7 +666,7 @@ public class PageControllerTest {
 
     mockMvc
         .perform(
-            put("/api/ocr-regions/" + id)
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/ocr-regions/" + id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"updated text\"}"))
         .andExpect(status().isNotFound());

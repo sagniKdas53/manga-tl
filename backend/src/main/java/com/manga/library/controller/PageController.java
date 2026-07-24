@@ -10,6 +10,9 @@ import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.SseService;
 import io.minio.errors.MinioException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -24,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Page Controller", description = "Endpoints for managing manga pages and images")
 @RequiredArgsConstructor
 @Slf4j
 public class PageController {
@@ -700,35 +704,18 @@ public class PageController {
     return ResponseEntity.ok(list);
   }
 
+  @Operation(
+      summary = "Get a page by ID",
+      description = "Returns page details including layers, panels, and OCR regions")
+  @ApiResponse(responseCode = "200", description = "Page found")
+  @ApiResponse(responseCode = "404", description = "Page not found")
   @GetMapping("/pages/{pageId}")
   @Transactional(readOnly = true)
-  public ResponseEntity<PageDto> getPage(@PathVariable UUID pageId) {
-    Objects.requireNonNull(pageId, "pageId cannot be null");
-    return pageRepository
-        .findById(Objects.requireNonNull(pageId))
-        .map(
-            p -> {
-              PageDto dto = new PageDto();
-              dto.setId(p.getId());
-              dto.setPageNumber(p.getPageNumber());
-              dto.setImageId(p.getImage().getId());
-              dto.setChapterId(p.getChapter().getId());
-              dto.setFilename(p.getImage().getFilename());
-              dto.setUrl(getImageUrl(p.getImage().getId()));
-              if (p.getImage().getThumbnailStoragePath() != null) {
-                dto.setThumbnailUrl(getThumbnailUrl(p.getImage().getId()));
-              }
-              return ResponseEntity.ok(dto);
-            })
-        .orElse(ResponseEntity.notFound().build());
-  }
-
-  @GetMapping("/pages/{pageId}/details")
-  public ResponseEntity<Map<String, Object>> getPageDetails(@PathVariable UUID pageId) {
+  public ResponseEntity<Map<String, Object>> getPage(@PathVariable UUID pageId) {
     Objects.requireNonNull(pageId, "pageId cannot be null");
     Page page =
         pageRepository
-            .findById(Objects.requireNonNull(pageId))
+            .findById(pageId)
             .orElseThrow(() -> new ResourceNotFoundException("Page not found: " + pageId));
     Image image = page.getImage();
 
@@ -754,6 +741,20 @@ public class PageController {
       convList.add(convMap);
     }
 
+    // Layers
+    List<Layer> layers = new ArrayList<>(layerRepository.findByPageId(pageId));
+    layers.sort(Comparator.comparingInt(layer -> Objects.requireNonNull(layer).getZOrder()));
+    List<LayerElement> allElements = layerElementRepository.findByLayerPageId(pageId);
+    Map<UUID, List<LayerElement>> elementsByLayer =
+        allElements.stream().collect(Collectors.groupingBy(le -> le.getLayer().getId()));
+    List<Map<String, Object>> layersResponse = new ArrayList<>();
+    for (Layer l : layers) {
+      Map<String, Object> map = new HashMap<>();
+      map.put("layer", l);
+      map.put("elements", elementsByLayer.getOrDefault(l.getId(), Collections.emptyList()));
+      layersResponse.add(map);
+    }
+
     Map<String, Object> pageMap = new HashMap<>();
     pageMap.put("id", page.getId());
     pageMap.put("pageNumber", page.getPageNumber());
@@ -767,21 +768,28 @@ public class PageController {
     response.put("panels", panels);
     response.put("ocrRegions", ocrRegions);
     response.put("conversations", convList);
+    response.put("layers", layersResponse);
 
     return ResponseEntity.ok(response);
   }
 
+  @Operation(
+      summary = "Get image details",
+      description = "Returns image details including panels")
+  @ApiResponse(responseCode = "200", description = "Image found")
+  @ApiResponse(responseCode = "404", description = "Image not found")
   @GetMapping("/images/{imageId}")
-  public ResponseEntity<Map<String, Object>> getImageDetails(@PathVariable UUID imageId) {
+  @Transactional(readOnly = true)
+  public ResponseEntity<Map<String, Object>> getImage(@PathVariable UUID imageId) {
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Optional<Page> pageOpt = pageRepository.findByImageId(imageId).stream().findFirst();
     if (pageOpt.isPresent()) {
-      return getPageDetails(pageOpt.get().getId());
+      return getPage(pageOpt.get().getId());
     }
 
     Image image =
         imageRepository
-            .findById(Objects.requireNonNull(imageId))
+            .findById(imageId)
             .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
     List<Panel> panels = panelRepository.findByImageId(imageId);
@@ -791,6 +799,7 @@ public class PageController {
     response.put("panels", panels);
     response.put("ocrRegions", Collections.emptyList());
     response.put("conversations", Collections.emptyList());
+    response.put("layers", Collections.emptyList());
 
     return ResponseEntity.ok(response);
   }
@@ -819,36 +828,7 @@ public class PageController {
     }
   }
 
-  @GetMapping("/pages/{pageId}/layers")
-  @Transactional(readOnly = true)
-  public ResponseEntity<List<Map<String, Object>>> getPageLayers(@PathVariable UUID pageId) {
-    List<Layer> layers = new ArrayList<>(layerRepository.findByPageId(pageId));
-    layers.sort(Comparator.comparingInt(layer -> Objects.requireNonNull(layer).getZOrder()));
 
-    List<LayerElement> allElements = layerElementRepository.findByLayerPageId(pageId);
-    Map<UUID, List<LayerElement>> elementsByLayer =
-        allElements.stream().collect(Collectors.groupingBy(le -> le.getLayer().getId()));
-
-    List<Map<String, Object>> response = new ArrayList<>();
-    for (Layer l : layers) {
-      Map<String, Object> map = new HashMap<>();
-      map.put("layer", l);
-      map.put("elements", elementsByLayer.getOrDefault(l.getId(), Collections.emptyList()));
-      response.add(map);
-    }
-
-    return ResponseEntity.ok(response);
-  }
-
-  @GetMapping("/images/{imageId}/layers")
-  @Transactional(readOnly = true)
-  public ResponseEntity<List<Map<String, Object>>> getImageLayers(@PathVariable UUID imageId) {
-    Optional<Page> pageOpt = pageRepository.findByImageId(imageId).stream().findFirst();
-    if (pageOpt.isPresent()) {
-      return getPageLayers(pageOpt.get().getId());
-    }
-    return ResponseEntity.ok(Collections.emptyList());
-  }
 
   @GetMapping("/images/{imageId}/file")
   public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
@@ -910,6 +890,9 @@ public class PageController {
     }
   }
 
+  @Operation(summary = "Delete a page", description = "Deletes a page and its associated layers")
+  @ApiResponse(responseCode = "200", description = "Page deleted")
+  @ApiResponse(responseCode = "403", description = "Forbidden")
   @DeleteMapping("/pages/{pageId}")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<?> deletePage(@PathVariable UUID pageId) {
@@ -973,7 +956,9 @@ public class PageController {
     }
   }
 
-  @PutMapping("/pages/{pageId}/number")
+  @Operation(summary = "Update page number", description = "Update the number of a specific page")
+  @ApiResponse(responseCode = "200", description = "Page number updated")
+  @PatchMapping("/pages/{pageId}/number")
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<?> updatePageNumber(
       @PathVariable UUID pageId, @RequestBody Map<String, Object> payload) {
@@ -999,7 +984,9 @@ public class PageController {
     }
   }
 
-  @PutMapping("/ocr-regions/{id}")
+  @Operation(summary = "Update OCR region", description = "Update OCR region text and confidence")
+  @ApiResponse(responseCode = "200", description = "OCR region updated")
+  @PatchMapping("/ocr-regions/{id}")
   @Transactional
   @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")
   public ResponseEntity<?> updateOcrRegion(

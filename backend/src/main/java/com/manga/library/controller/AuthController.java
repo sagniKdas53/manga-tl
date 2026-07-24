@@ -91,6 +91,17 @@ public class AuthController {
             null, user.getId(), user.getEmail(), user.getDisplayName(), user.getRole()));
   }
 
+  @PostMapping("/refresh")
+  public ResponseEntity<?> refreshToken(@AuthenticationPrincipal User user) {
+    if (user == null)
+      return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+
+    String newToken = jwtUtils.generateToken(user.getEmail());
+    return ResponseEntity.ok(
+        new AuthResponse(
+            newToken, user.getId(), user.getEmail(), user.getDisplayName(), user.getRole()));
+  }
+
   @PutMapping("/me")
   public ResponseEntity<?> updateProfile(
       @AuthenticationPrincipal User user, @RequestBody Map<String, String> body) {
