@@ -169,9 +169,9 @@ All of these should return proper HTTP status codes with messages.
 
 ---
 
-## 2. API error responses are useless (no message, wrong status codes)
+### 2. API error responses are useless (no message, wrong status codes)
 
-### Problem
+#### Problem 2.1
 
 Every error returns the same useless blob:
 
@@ -192,7 +192,7 @@ Actual failures observed that should be different:
 | Token expired | 401 (handled) | 401 | `"Session expired. Please log in."` |
 | Internal server error | 500 | 500 | `"Something went wrong: {actual message}"` |
 
-### Fix
+#### Fix 2.1
 
 Add `@ControllerAdvice` / `@ExceptionHandler` that maps specific exceptions to proper HTTP status codes **with human-readable messages**:
 
@@ -204,15 +204,15 @@ Add `@ControllerAdvice` / `@ExceptionHandler` that maps specific exceptions to p
 @ExceptionHandler(Exception.class) → 500 (include message in dev, generic in prod)
 ```
 
-### Frontend required change
+#### Frontend required change
 
 Display these error messages in toast/alert. Currently errors are swallowed — user sees infinite spinner.
 
 ---
 
-## 3. If reader navigates to page 2 when chapter has 1 page → infinite spinner
+### 3. If reader navigates to page 2 when chapter has 1 page → infinite spinner
 
-### Problem
+#### Problem
 
 URL `/chapters/{id}/default/reader/2` when chapter has only 1 page. No error, just spins forever.
 
