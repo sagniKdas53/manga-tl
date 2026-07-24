@@ -157,7 +157,7 @@ services:
   worker:
     image: ghcr.io/${REGISTRY_OWNER:-sagnikdas53}/manga-tl-worker:latest
     build:
-      context: ./unified-workers
+      context: ./worker
       dockerfile: Dockerfile
     container_name: manga-worker
     environment:
