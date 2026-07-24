@@ -245,7 +245,7 @@ In `Reader.tsx`: validate `currentPageNumber ≤ pages.length`, redirect to last
 
 ---
 
-### 4. No JWT expiry handling → user gets stuck silently
+### 4. No JWT expiry handling → user gets stuck silently (✅ COMPLETED)
 
 #### Problem 4.1
 
@@ -257,7 +257,7 @@ In `safeFetch()`: on 401 → clear token, toast "Session expired", redirect to `
 
 ---
 
-### 5. No auto-extension of active sessions
+### 5. No auto-extension of active sessions (✅ COMPLETED)
 
 #### Problem 5.1
 
