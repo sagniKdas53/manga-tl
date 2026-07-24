@@ -28,8 +28,7 @@ public class SettingsControllerTest {
 
   @Test
   public void testGetSettings() throws Exception {
-    SystemSettingsDto settings = new SystemSettingsDto();
-    settings.setOcrProvider("local");
+    SystemSettingsDto settings = new SystemSettingsDto(null, null, null, null, null, "local", null, null, null, null, null, null, null, null, null, null, null, null, null);
     when(systemSettingsService.getSettings()).thenReturn(settings);
 
     mockMvc.perform(get("/api/settings")).andExpect(status().isOk());
@@ -38,8 +37,7 @@ public class SettingsControllerTest {
 
   @Test
   public void testUpdateSettings() throws Exception {
-    SystemSettingsDto settings = new SystemSettingsDto();
-    settings.setOcrProvider("local");
+    SystemSettingsDto settings = new SystemSettingsDto(null, null, null, null, null, "local", null, null, null, null, null, null, null, null, null, null, null, null, null);
     when(systemSettingsService.updateSettings(any(SystemSettingsDto.class))).thenReturn(settings);
 
     String json = "{\"ocrProvider\":\"local\"}";

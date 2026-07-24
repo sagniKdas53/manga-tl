@@ -11,17 +11,21 @@ public class ConversationRegion {
 
   @Id
   @Column(name = "conversation_id")
-  private UUID conversationId;
+  @SuppressWarnings("PMD.UnusedPrivateField")
+    private UUID conversationId;
 
   @Id
   @Column(name = "region_id")
-  private UUID regionId;
+  @SuppressWarnings("PMD.UnusedPrivateField")
+    private UUID regionId;
 
   @Column(nullable = false)
   private Integer position;
 
               public static class ConversationRegionId implements Serializable {
+    @SuppressWarnings("PMD.UnusedPrivateField")
     private UUID conversationId;
+    @SuppressWarnings("PMD.UnusedPrivateField")
     private UUID regionId;
   }
 

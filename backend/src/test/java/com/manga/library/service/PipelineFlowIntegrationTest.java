@@ -229,13 +229,7 @@ public class PipelineFlowIntegrationTest {
   @Test
   public void testPipelineFlowAndLayers() throws Exception {
     // 1. Create Series
-    SeriesDto seriesDto = new SeriesDto();
-    seriesDto.setTitle("Flow Test Series");
-    seriesDto.setOriginalLanguage("ja");
-    seriesDto.setSourceLanguage("ja");
-    seriesDto.setTargetLanguage("en");
-    seriesDto.setReadingDirection("rtl");
-
+    SeriesDto seriesDto = new SeriesDto(null, "Flow Test Series", "ja", "ja", "en", "rtl", null, null, null, null, null, null, null, null, null, null, null, null, null);
     MvcResult seriesResult =
         mockMvc
             .perform(
@@ -248,18 +242,15 @@ public class PipelineFlowIntegrationTest {
 
     SeriesDto savedSeries =
         objectMapper.readValue(seriesResult.getResponse().getContentAsString(), SeriesDto.class);
-    assertNotNull(savedSeries.getId());
-    createdSeriesIds.add(savedSeries.getId());
+    assertNotNull(savedSeries.id());
+    createdSeriesIds.add(savedSeries.id());
 
     // 2. Create Chapter 1
-    ChapterDto ch1Dto = new ChapterDto();
-    ch1Dto.setChapterNumber(1.0);
-    ch1Dto.setTitle("Chapter One");
-
+    ChapterDto ch1Dto = new ChapterDto(null, null, 1.0, "Chapter One", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     MvcResult ch1Result =
         mockMvc
             .perform(
-                post("/api/series/" + savedSeries.getId() + "/chapters")
+                post("/api/series/" + savedSeries.id() + "/chapters")
                     .header("Authorization", adminToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(ch1Dto)))
@@ -268,18 +259,15 @@ public class PipelineFlowIntegrationTest {
 
     ChapterDto savedCh1 =
         objectMapper.readValue(ch1Result.getResponse().getContentAsString(), ChapterDto.class);
-    assertNotNull(savedCh1.getId());
-    createdChapterIds.add(savedCh1.getId());
+    assertNotNull(savedCh1.id());
+    createdChapterIds.add(savedCh1.id());
 
     // 3. Create Chapter 2 (for reordering check)
-    ChapterDto ch2Dto = new ChapterDto();
-    ch2Dto.setChapterNumber(2.0);
-    ch2Dto.setTitle("Chapter Two");
-
+    ChapterDto ch2Dto = new ChapterDto(null, null, 2.0, "Chapter Two", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     MvcResult ch2Result =
         mockMvc
             .perform(
-                post("/api/series/" + savedSeries.getId() + "/chapters")
+                post("/api/series/" + savedSeries.id() + "/chapters")
                     .header("Authorization", adminToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(ch2Dto)))
@@ -288,19 +276,19 @@ public class PipelineFlowIntegrationTest {
 
     ChapterDto savedCh2 =
         objectMapper.readValue(ch2Result.getResponse().getContentAsString(), ChapterDto.class);
-    createdChapterIds.add(savedCh2.getId());
+    createdChapterIds.add(savedCh2.id());
 
     // Reorder chapters (make Chapter Two -> Chapter 1.5)
-    savedCh2.setChapterNumber(1.5);
+    ChapterDto updatedCh2 = new ChapterDto(savedCh2.id(), savedCh2.seriesId(), 1.5, savedCh2.title(), savedCh2.volume(), savedCh2.language(), savedCh2.scanlator(), savedCh2.status(), savedCh2.sourceUrl(), savedCh2.sourceName(), savedCh2.externalId(), savedCh2.ocrStatus(), savedCh2.translationStatus(), savedCh2.qaStatus(), savedCh2.ocrRequested(), savedCh2.translationRequested(), savedCh2.pageCount(), savedCh2.createdAt(), savedCh2.updatedAt(), savedCh2.resolvedOcrModel(), savedCh2.resolvedTlModel());
     mockMvc
         .perform(
-            put("/api/series/chapters/" + savedCh2.getId())
+            put("/api/series/chapters/" + savedCh2.id())
                 .header("Authorization", adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(savedCh2)))
+                .content(objectMapper.writeValueAsString(updatedCh2)))
         .andExpect(status().isOk());
 
-    Chapter chapterInDb = chapterRepository.findById(savedCh2.getId()).orElseThrow();
+    Chapter chapterInDb = chapterRepository.findById(savedCh2.id()).orElseThrow();
     assertEquals(1.5, chapterInDb.getChapterNumber());
 
     // Helper to generate valid PNG bytes with unique suffix
@@ -326,7 +314,7 @@ public class PipelineFlowIntegrationTest {
             .perform(
                 multipart("/api/images")
                     .file(mockFile)
-                    .param("chapterId", savedCh1.getId().toString())
+                    .param("chapterId", savedCh1.id().toString())
                     .param("pageNumber", "1")
                     .header("Authorization", adminToken))
             .andExpect(status().isOk())
@@ -352,7 +340,7 @@ public class PipelineFlowIntegrationTest {
             .perform(
                 multipart("/api/images")
                     .file(mockFile2)
-                    .param("chapterId", savedCh1.getId().toString())
+                    .param("chapterId", savedCh1.id().toString())
                     .param("pageNumber", "2")
                     .header("Authorization", adminToken))
             .andExpect(status().isOk())
@@ -367,7 +355,7 @@ public class PipelineFlowIntegrationTest {
     // Reorder pages: [pageId2, pageId]
     mockMvc
         .perform(
-            put("/api/chapters/" + savedCh1.getId() + "/pages/reorder")
+            put("/api/chapters/" + savedCh1.id() + "/pages/reorder")
                 .header("Authorization", adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
@@ -382,16 +370,8 @@ public class PipelineFlowIntegrationTest {
 
     // 6. Sequential OCR Callback Pipeline Mocking
     // Step A: Panel Detection Callback -> triggers OCR
-    PanelCallbackDto panelCallback = new PanelCallbackDto();
-    panelCallback.setImageId(imageId);
-    PanelCallbackDto.PanelData panelData = new PanelCallbackDto.PanelData();
-    panelData.setX(10);
-    panelData.setY(20);
-    panelData.setWidth(500);
-    panelData.setHeight(400);
-    panelData.setGridRow(0);
-    panelData.setGridCol(0);
-    panelData.setReadingOrder(1);
+    PanelCallbackDto panelCallback = new PanelCallbackDto(imageId, null, null);
+    PanelCallbackDto.PanelData panelData = new PanelCallbackDto.PanelData(10, 20, 500, 400, 1, null, null);
     panelCallback.setPanels(List.of(panelData));
 
     mockMvc
@@ -405,27 +385,8 @@ public class PipelineFlowIntegrationTest {
     assertEquals(1, mockRedisListStore.get("queue:ocr").size());
 
     // Step B: OCR Callback -> triggers Layout
-    OcrCallbackDto ocrCallback = new OcrCallbackDto();
-    ocrCallback.setImageId(imageId);
-    ocrCallback.setModelIdentifier("Tesseract/Mock");
-    ocrCallback.setConfidence(0.95);
-    OcrCallbackDto.OcrRegionData ocrRegion = new OcrCallbackDto.OcrRegionData();
-    ocrRegion.setText("こんにちは");
-    ocrRegion.setDetectedLanguage("ja");
-    ocrRegion.setConfidence(0.9);
-    ocrRegion.setRotation(0.0);
-    ocrRegion.setX(15);
-    ocrRegion.setY(25);
-    ocrRegion.setWidth(100);
-    ocrRegion.setHeight(40);
-    ocrRegion.setBubbleReadingOrder(1);
-    ocrRegion.setBackgroundColor("#ffffff");
-    ocrRegion.setBubbleX(12);
-    ocrRegion.setBubbleY(22);
-    ocrRegion.setBubbleWidth(110);
-    ocrRegion.setBubbleHeight(50);
-    ocrRegion.setBubbleId("bubble_1");
-    ocrRegion.setDetectionConfidence(0.99);
+    OcrCallbackDto ocrCallback = new OcrCallbackDto(imageId, null, "Tesseract/Mock", 0.95, null, null);
+    OcrCallbackDto.OcrRegionData ocrRegion = new OcrCallbackDto.OcrRegionData("こんにちは", "ja", 0.9, 0.0, 15, 25, 100, 40, null, 1, null, "#ffffff", 12, 22, 110, 50, "bubble_1", 0.99, null, null, null, null, null);
     ocrCallback.setRegions(List.of(ocrRegion));
 
     mockMvc
@@ -521,27 +482,8 @@ public class PipelineFlowIntegrationTest {
         .andExpect(status().isOk());
 
     // A second OCR callback triggers for the redo
-    OcrCallbackDto ocrCallback2 = new OcrCallbackDto();
-    ocrCallback2.setImageId(imageId);
-    ocrCallback2.setModelIdentifier("Tesseract/Mock-v2");
-    ocrCallback2.setConfidence(0.99);
-    OcrCallbackDto.OcrRegionData ocrRegion2 = new OcrCallbackDto.OcrRegionData();
-    ocrRegion2.setText("こんにちは、世界");
-    ocrRegion2.setDetectedLanguage("ja");
-    ocrRegion2.setConfidence(0.98);
-    ocrRegion2.setRotation(0.0);
-    ocrRegion2.setX(15);
-    ocrRegion2.setY(25);
-    ocrRegion2.setWidth(100);
-    ocrRegion2.setHeight(40);
-    ocrRegion2.setBubbleReadingOrder(1);
-    ocrRegion2.setBackgroundColor("#ffffff");
-    ocrRegion2.setBubbleX(12);
-    ocrRegion2.setBubbleY(22);
-    ocrRegion2.setBubbleWidth(110);
-    ocrRegion2.setBubbleHeight(50);
-    ocrRegion2.setBubbleId("bubble_1");
-    ocrRegion2.setDetectionConfidence(0.99);
+    OcrCallbackDto ocrCallback2 = new OcrCallbackDto(imageId, null, "Tesseract/Mock-v2", 0.99, null, null);
+    OcrCallbackDto.OcrRegionData ocrRegion2 = new OcrCallbackDto.OcrRegionData("こんにちは、世界", "ja", 0.98, 0.0, 15, 25, 100, 40, null, 1, null, "#ffffff", 12, 22, 110, 50, "bubble_1", 0.99, null, null, null, null, null);
     ocrCallback2.setRegions(List.of(ocrRegion2));
 
     mockMvc
@@ -636,11 +578,7 @@ public class PipelineFlowIntegrationTest {
     clonedLayer = layerRepository.save(clonedLayer);
 
     // Create cloned layer element, passing regionId in the DTO
-    com.manga.library.dto.LayerElementDto dto = new com.manga.library.dto.LayerElementDto();
-    dto.setText(element.getText());
-    dto.setX(element.getX());
-    dto.setY(element.getY());
-    dto.setRegionId(ocrRegion.getId()); // regionId passed in the DTO
+    com.manga.library.dto.LayerElementDto dto = new com.manga.library.dto.LayerElementDto(element.getText(), null, null, null, null, null, null, null, element.getX(), element.getY(), null, null, null, null, null, null, null, null, ocrRegion.getId());
 
     MvcResult cloneResult =
         mockMvc
