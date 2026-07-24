@@ -30,6 +30,8 @@ export default defineConfig({
         "src/App.tsx",
         "src/types.ts",
         "src/components/Reader.tsx",
+        "src/assets/**",
+        "**/*.svg",
         "vitest.setup.ts",
         "**/*.test.{ts,tsx}",
         "dist/**",

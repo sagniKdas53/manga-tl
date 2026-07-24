@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { components } from './generated/schema';
 
 // We can derive Zod schemas from our TypeScript definitions if we want runtime checks,
 // but for now we manually define the most critical boundaries as requested.

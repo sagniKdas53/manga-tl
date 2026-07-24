@@ -723,21 +723,25 @@ public class PageController {
     List<OcrRegion> ocrRegions = ocrRegionRepository.findByPageId(pageId);
 
     List<Conversation> conversations = conversationRepository.findByPageId(pageId);
-    List<UUID> conversationIds = conversations.stream().map(Conversation::getId).collect(Collectors.toList());
-    
-    List<ConversationRegion> allConversationRegions = conversationIds.isEmpty() 
-        ? Collections.emptyList() 
-        : conversationRegionRepository.findByConversationIdIn(conversationIds);
-        
-    Map<UUID, List<ConversationRegion>> regionsByConversation = allConversationRegions.stream()
-        .collect(Collectors.groupingBy(ConversationRegion::getConversationId));
+    List<UUID> conversationIds =
+        conversations.stream().map(Conversation::getId).collect(Collectors.toList());
+
+    List<ConversationRegion> allConversationRegions =
+        conversationIds.isEmpty()
+            ? Collections.emptyList()
+            : conversationRegionRepository.findByConversationIdIn(conversationIds);
+
+    Map<UUID, List<ConversationRegion>> regionsByConversation =
+        allConversationRegions.stream()
+            .collect(Collectors.groupingBy(ConversationRegion::getConversationId));
 
     List<Map<String, Object>> convList = new ArrayList<>();
     for (Conversation conv : conversations) {
       Map<String, Object> convMap = new HashMap<>();
       convMap.put("id", conv.getId().toString());
       convMap.put("sceneType", conv.getSceneType());
-      List<ConversationRegion> crs = regionsByConversation.getOrDefault(conv.getId(), Collections.emptyList());
+      List<ConversationRegion> crs =
+          regionsByConversation.getOrDefault(conv.getId(), Collections.emptyList());
       List<Map<String, Object>> crList = new ArrayList<>();
       for (ConversationRegion cr : crs) {
         Map<String, Object> crMap = new HashMap<>();
@@ -781,9 +785,7 @@ public class PageController {
     return ResponseEntity.ok(response);
   }
 
-  @Operation(
-      summary = "Get image details",
-      description = "Returns image details including panels")
+  @Operation(summary = "Get image details", description = "Returns image details including panels")
   @ApiResponse(responseCode = "200", description = "Image found")
   @ApiResponse(responseCode = "404", description = "Image not found")
   @GetMapping("/images/{imageId}")
@@ -835,8 +837,6 @@ public class PageController {
       return ResponseEntity.notFound().build();
     }
   }
-
-
 
   @GetMapping("/images/{imageId}/file")
   public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>

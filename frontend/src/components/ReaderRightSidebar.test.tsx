@@ -427,4 +427,62 @@ describe("ReaderRightSidebar", () => {
     fireEvent.click(saveBtn);
     expect(mockHandleSaveElementChanges).toHaveBeenCalledWith(mockElement);
   });
+
+  it("renders correctly when selectedItem is an OCR region", () => {
+    const mockRegion = {
+      id: "r1",
+      text: "Original OCR Text",
+      translation: "Translated OCR Text",
+      confidence: 0.95,
+      detectedLanguage: "ja",
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 50,
+      readingOrder: 1,
+    } as unknown as import("../types").OcrRegion;
+
+    const mockHandleRedoRegion = vi.fn();
+
+    render(
+      <ReaderRightSidebar
+        selectedItem={{ type: "ocrRegion", data: mockRegion, regions: [mockRegion] }}
+        setSelectedItem={vi.fn()}
+        activeLayerId={null}
+        setActiveLayerId={vi.fn()}
+        sortedLayers={[]}
+        layers={[]}
+        manuallyShownOcrLayers={new Set()}
+        cleanScanlationView={false}
+        handleMoveLayer={vi.fn()}
+        handleCreateTranslationLayer={vi.fn()}
+        handleCreateSfxLayer={vi.fn()}
+        handleToggleLayerVisibility={vi.fn()}
+        handleCloneLayer={vi.fn()}
+        handleDeleteLayer={vi.fn()}
+        handleAddNewElement={vi.fn()}
+        handleLaunchEyeDropper={vi.fn()}
+        handleRedoPageOcr={vi.fn()}
+        isRedoingPageOcr={false}
+        handleRedoPageTranslation={vi.fn()}
+        isRedoingPageTranslation={false}
+        handleExportPng={vi.fn()}
+        handleExportZip={vi.fn()}
+        interactionMode="none"
+        setInteractionMode={vi.fn()}
+        undoStack={[]}
+        handleUndo={vi.fn()}
+        handleEnterReshapeMode={vi.fn()}
+        handleUpdateSelectedElement={vi.fn()}
+        dirtyElements={new Set()}
+        handleSaveElementChanges={vi.fn()}
+        handleDeleteElement={vi.fn()}
+        ocrRegions={[mockRegion]}
+        isRedoingRegionTl={false}
+        handleRedoRegion={mockHandleRedoRegion}
+      />,
+    );
+
+    expect(screen.getByText("Original OCR Text")).toBeInTheDocument();
+  });
 });

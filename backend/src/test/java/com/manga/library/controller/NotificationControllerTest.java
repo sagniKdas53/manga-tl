@@ -71,8 +71,7 @@ public class NotificationControllerTest {
           .perform(get("/api/notifications/stream"))
           .andExpect(status().isInternalServerError())
           .andExpect(
-              org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
-                      "$.detail")
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.detail")
                   .value("Something went wrong: User not found"));
     } finally {
       org.springframework.security.core.context.SecurityContextHolder.clearContext();
