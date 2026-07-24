@@ -46,7 +46,7 @@ services:
   redis:
     image: valkey/valkey:8-alpine
     container_name: manga-valkey
-    command: ["valkey-server", "--appendonly", "yes"]
+    command: [ "valkey-server", "--appendonly", "yes" ]
     ports:
       - "6379:6379"
     volumes:
@@ -83,7 +83,7 @@ services:
       retries: 5
 
   backend:
-    image: ghcr.io/${REGISTRY_OWNER:-sagnikdas53}/manga-tl:latest
+    image: ghcr.io/sagnikdas53/manga-tl:latest
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -155,7 +155,7 @@ services:
       start_period: 40s
 
   worker:
-    image: ghcr.io/${REGISTRY_OWNER:-sagnikdas53}/manga-tl-worker:latest
+    image: ghcr.io/sagnikdas53/manga-tl-worker:latest
     build:
       context: ./worker
       dockerfile: Dockerfile
