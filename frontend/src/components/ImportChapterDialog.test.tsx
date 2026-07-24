@@ -230,4 +230,18 @@ describe("ImportChapterDialog", () => {
       new Event("submit", { cancelable: true, bubbles: true }),
     );
   });
+
+  it("submits file when uploaded", async () => {
+    render(<ImportChapterDialog {...defaultProps} />);
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["dummy content"], "manga.zip", { type: "application/zip" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    const form = document.querySelector("form")!;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(defaultProps.onSuccess).toHaveBeenCalled();
+    });
+  });
 });

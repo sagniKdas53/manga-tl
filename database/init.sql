@@ -58,7 +58,7 @@ CREATE TABLE public.chapters (
     tl_provider character varying(255),
     updated_at timestamp(6) with time zone NOT NULL,
     use_context_memory boolean DEFAULT true NOT NULL,
-    use_fallback_models boolean DEFAULT true NOT NULL,
+    use_fallback_models boolean DEFAULT true,
     routing_strategy character varying(255),
     series_id uuid NOT NULL
 );
@@ -162,6 +162,7 @@ CREATE TABLE public.jobs (
     created_at timestamp(6) with time zone,
     error text,
     image_id uuid,
+    page_id uuid,
     max_attempts integer,
     payload text,
     status character varying(255) NOT NULL,
@@ -292,7 +293,9 @@ CREATE TABLE public.pages (
     id uuid NOT NULL,
     page_number integer NOT NULL,
     chapter_id uuid NOT NULL,
-    image_id uuid NOT NULL
+    image_id uuid NOT NULL,
+    last_edited_at timestamp(6) with time zone,
+    last_rendered_at timestamp(6) with time zone
 );
 
 
@@ -375,7 +378,7 @@ CREATE TABLE public.series (
     tl_provider character varying(255),
     updated_at timestamp(6) with time zone NOT NULL,
     routing_strategy character varying(255),
-    use_fallback_models boolean DEFAULT true NOT NULL,
+    use_fallback_models boolean DEFAULT true,
     created_by uuid
 );
 
@@ -394,6 +397,18 @@ CREATE TABLE public.system_settings (
 
 
 ALTER TABLE public.system_settings OWNER TO tladmin;
+
+CREATE TABLE public.model_rates (
+    model_id character varying(255) NOT NULL,
+    provider character varying(255),
+    prompt_price double precision,
+    completion_price double precision,
+    updated_at timestamp with time zone,
+    CONSTRAINT model_rates_pkey PRIMARY KEY (model_id)
+);
+
+
+ALTER TABLE public.model_rates OWNER TO tladmin;
 
 --
 -- Name: translation_regions; Type: TABLE; Schema: public; Owner: tladmin

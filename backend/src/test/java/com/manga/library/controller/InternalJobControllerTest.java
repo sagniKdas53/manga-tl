@@ -485,4 +485,47 @@ public class InternalJobControllerTest {
     org.junit.jupiter.api.Assertions.assertTrue(job.getPayload().contains("\"attempt\":2"));
     verify(jobCoordinatorService, times(1)).pushJobToRedis(job);
   }
+
+  @Test
+  public void testTranslationCallback_WithBooleanType_Success() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Map<String, Object> payload =
+        Map.of(
+            "imageId", imageId.toString(),
+            "translationFailed", false,
+            "translations",
+                List.of(
+                    Map.of(
+                        "regionId",
+                        UUID.randomUUID().toString(),
+                        "translatedText",
+                        "Hello world",
+                        "translationFailed",
+                        false)));
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/translation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isOk());
+
+    verify(jobCoordinatorService, times(1)).handleTranslationCallback(eq(imageId), any(), any());
+  }
+
+  @Test
+  public void testRenderCallback_WithStringMap_Success() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Map<String, String> payload =
+        Map.of("imageId", imageId.toString(), "storagePath", "renders/output.png");
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/render")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isOk());
+
+    verify(jobCoordinatorService, times(1)).handleRenderCallback(any());
+  }
 }

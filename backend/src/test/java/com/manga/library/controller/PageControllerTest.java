@@ -153,8 +153,6 @@ public class PageControllerTest {
         .andExpect(jsonPath("$.image.id").value(imageId.toString()));
   }
 
-
-
   @Test
   public void testRedoOcrRegion_Success() throws Exception {
     UUID id = UUID.randomUUID();
@@ -652,7 +650,8 @@ public class PageControllerTest {
 
     mockMvc
         .perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/ocr-regions/" + id)
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                    "/api/ocr-regions/" + id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     "{\"text\":\"updated text\",\"translatedText\":\"Hello\",\"approved\":true,\"confidence\":0.95}"))
@@ -666,7 +665,8 @@ public class PageControllerTest {
 
     mockMvc
         .perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/ocr-regions/" + id)
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                    "/api/ocr-regions/" + id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"updated text\"}"))
         .andExpect(status().isNotFound());

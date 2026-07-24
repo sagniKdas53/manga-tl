@@ -129,7 +129,7 @@ Add strict quality-gate checks between pipeline stages (e.g. after OCR and after
 | 4 | JWT expiry detection & redirect to login | ✅ Fixed |
 | 5 | Auto-extend active sessions via `/auth/refresh` | ✅ Fixed |
 | 6 | Translation layer empty text — OpenRouter 404 | ✅ Fixed (Short-circuited at backend) |
-| 7 | Unit tests are useless (mock everything, catch nothing) | 🔲 TODO |
+| 7 | Unit tests are useless (mock everything, catch nothing) | ✅ Fixed (Testcontainers + Real Postgres + API & Worker Contracts) |
 | 8 | Move "Force export" button to overflow menu | ✅ Fixed |
 | 9 | Fix custom fonts not loading in dev frontend | ✅ Fixed |
 | 10 | Validate cost DB tracking is accurate | ✅ DONE |
@@ -138,7 +138,7 @@ Add strict quality-gate checks between pipeline stages (e.g. after OCR and after
 | 13 | Manual edits cause renders to fail and continuously retry | ✅ Fixed |
 | 14 | High Reader Latency | ✅ Fixed |
 | 15 | Aggressive Reader Page Dropping | ✅ Fixed |
-| 16 | Enforce Quality Gates | 🔲 TODO |
+| 16 | Code Quality Assurance Gates & Pipeline Verification | ✅ Fixed |
 
 ## Archived Issues
 

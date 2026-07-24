@@ -19,9 +19,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-/**
- * Maps exceptions to proper HTTP status codes using RFC 7807 Problem Details.
- */
+/** Maps exceptions to proper HTTP status codes using RFC 7807 Problem Details. */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
@@ -39,7 +37,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   /** Validation failures (incl. Objects.requireNonNull NPEs) → 400. */
   @ExceptionHandler({IllegalArgumentException.class, NullPointerException.class})
   public ProblemDetail handleBadRequest(RuntimeException ex, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage() != null ? ex.getMessage() : "Bad Request");
+    ProblemDetail pd =
+        ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST, ex.getMessage() != null ? ex.getMessage() : "Bad Request");
     pd.setTitle("Bad Request");
     pd.setProperty("timestamp", Instant.now().toString());
     return pd;
@@ -48,8 +48,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   /** Upload too large → 413. */
   @Override
   protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
-      MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE, "File exceeds maximum upload size");
+      MaxUploadSizeExceededException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    ProblemDetail pd =
+        ProblemDetail.forStatusAndDetail(
+            HttpStatus.PAYLOAD_TOO_LARGE, "File exceeds maximum upload size");
     pd.setTitle("Payload Too Large");
     pd.setProperty("timestamp", Instant.now().toString());
     return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(pd);
@@ -58,18 +63,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   /** Validation failures on @RequestBody (MethodArgumentNotValidException) → 400. */
   @Override
   protected ResponseEntity<Object> handleMethodArgumentNotValid(
-      MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-    
+      MethodArgumentNotValidException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+
     ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, "Validation failed for request");
     pd.setTitle("Validation Failed");
     pd.setProperty("timestamp", Instant.now().toString());
-    
+
     Map<String, String> errors = new HashMap<>();
     for (FieldError error : ex.getBindingResult().getFieldErrors()) {
       errors.put(error.getField(), error.getDefaultMessage());
     }
     pd.setProperty("errors", errors);
-    
+
     return ResponseEntity.status(status).body(pd);
   }
 
@@ -77,7 +85,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(Exception.class)
   public ProblemDetail handleInternalError(Exception ex, WebRequest request) {
     log.error("Unhandled exception", ex);
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Something went wrong: " + ex.getMessage());
+    ProblemDetail pd =
+        ProblemDetail.forStatusAndDetail(
+            HttpStatus.INTERNAL_SERVER_ERROR, "Something went wrong: " + ex.getMessage());
     pd.setTitle("Internal Server Error");
     pd.setProperty("timestamp", Instant.now().toString());
     return pd;
