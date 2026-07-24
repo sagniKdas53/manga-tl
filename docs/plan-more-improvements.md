@@ -132,8 +132,8 @@ Add strict quality-gate checks between pipeline stages (e.g. after OCR and after
 | 7 | Unit tests are useless (mock everything, catch nothing) | 🔲 TODO |
 | 8 | Move "Force export" button to overflow menu | ✅ Fixed |
 | 9 | Fix custom fonts not loading in dev frontend | ✅ Fixed |
-| 10 | Validate cost DB tracking is accurate | 🔲 TODO |
-| 11 | Fallback Models Validation logic | 🔲 TODO |
+| 10 | Validate cost DB tracking is accurate | ✅ DONE |
+| 11 | Fallback Models Validation logic | ✅ DONE |
 | 12 | Create OpenAPI spec & fix API redundancy | ✅ Fixed |
 | 13 | Manual edits cause renders to fail and continuously retry | ✅ Fixed |
 | 14 | High Reader Latency | ✅ Fixed |
