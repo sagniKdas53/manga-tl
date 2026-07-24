@@ -11,24 +11,25 @@ import org.springframework.web.multipart.MultipartFile;
 public class MinioService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MinioService.class);
 
+  @org.springframework.beans.factory.annotation.Value("${minio.bucketName}")
+  private String bucketName;
+
+  @org.springframework.beans.factory.annotation.Value("${minio.externalUrl:}")
+  private String externalUrl;
+
+  @org.springframework.beans.factory.annotation.Value("${minio.endpoint}")
+  private String endpoint;
 
   private final MinioClient minioClient;
+
   public MinioService(MinioClient minioClient) {
     this.minioClient = minioClient;
   }
 
-
-  private String bucketName;
-
-  private String externalUrl;
-
-  private String endpoint;
-
   @PostConstruct
   public void init() {
     try {
-      boolean found =
-          minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
+      boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
       if (!found) {
         minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
         log.info("Successfully created MinIO bucket: {}", bucketName);
@@ -43,7 +44,7 @@ public class MinioService {
     try (InputStream is = file.getInputStream()) {
       minioClient.putObject(
           PutObjectArgs.builder().bucket(bucketName).object(objectPath).stream(
-                  is, file.getSize(), -1L)
+              is, file.getSize(), -1L)
               .contentType(file.getContentType())
               .build());
       return objectPath;
@@ -52,10 +53,10 @@ public class MinioService {
 
   public String uploadFile(String objectPath, byte[] bytes, String contentType)
       throws io.minio.errors.MinioException, java.io.IOException {
-    try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(bytes)) {
+    try (java.io.ByteArrayInputStream byteAIS = new java.io.ByteArrayInputStream(bytes)) {
       minioClient.putObject(
           PutObjectArgs.builder().bucket(bucketName).object(objectPath).stream(
-                  bais, (long) bytes.length, -1L)
+              byteAIS, (long) bytes.length, -1L)
               .contentType(contentType)
               .build());
       return objectPath;
@@ -69,14 +70,13 @@ public class MinioService {
 
   public String generatePresignedUrl(String objectPath) {
     try {
-      String url =
-          minioClient.getPresignedObjectUrl(
-              GetPresignedObjectUrlArgs.builder()
-                  .method(Http.Method.GET)
-                  .bucket(bucketName)
-                  .object(objectPath)
-                  .expiry(10, TimeUnit.MINUTES)
-                  .build());
+      String url = minioClient.getPresignedObjectUrl(
+          GetPresignedObjectUrlArgs.builder()
+              .method(Http.Method.GET)
+              .bucket(bucketName)
+              .object(objectPath)
+              .expiry(10, TimeUnit.MINUTES)
+              .build());
       if (externalUrl != null && !externalUrl.trim().isEmpty() && url != null) {
         url = url.replace(endpoint, externalUrl);
       }

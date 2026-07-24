@@ -22,11 +22,43 @@ public class ConversationRegion {
   @Column(nullable = false)
   private Integer position;
 
-              public static class ConversationRegionId implements Serializable {
-    @SuppressWarnings("PMD.UnusedPrivateField")
+  public static class ConversationRegionId implements Serializable {
     private UUID conversationId;
-    @SuppressWarnings("PMD.UnusedPrivateField")
     private UUID regionId;
+
+    public ConversationRegionId() {}
+
+    public UUID getConversationId() {
+      return conversationId;
+    }
+
+    public void setConversationId(UUID conversationId) {
+      this.conversationId = conversationId;
+    }
+
+    public UUID getRegionId() {
+      return regionId;
+    }
+
+    public void setRegionId(UUID regionId) {
+      this.regionId = regionId;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (!(o instanceof ConversationRegionId)) return false;
+      ConversationRegionId that = (ConversationRegionId) o;
+      if (conversationId != null ? !conversationId.equals(that.conversationId) : that.conversationId != null) return false;
+      return regionId != null ? regionId.equals(that.regionId) : that.regionId == null;
+    }
+
+    @Override
+    public int hashCode() {
+      int result = conversationId != null ? conversationId.hashCode() : 0;
+      result = 31 * result + (regionId != null ? regionId.hashCode() : 0);
+      return result;
+    }
   }
 
   public ConversationRegion() {}

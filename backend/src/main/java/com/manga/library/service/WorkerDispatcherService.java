@@ -19,10 +19,13 @@ public class WorkerDispatcherService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WorkerDispatcherService.class);
 
 
+  @org.springframework.beans.factory.annotation.Value("${WORKER_URLS:http://worker:9091}")
   private String workerUrlsConfig;
 
+  @org.springframework.beans.factory.annotation.Value("${WORKER_API_SECRET:}")
   private String workerApiSecret;
 
+  @org.springframework.beans.factory.annotation.Value("${WORKER_API_SECRET_FILE:}")
   private String workerApiSecretFile;
 
   @PostConstruct

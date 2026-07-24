@@ -19,40 +19,58 @@ public class SystemSettingsService {
   }
 
 
+  @org.springframework.beans.factory.annotation.Value("${OCR_MODEL_PROVIDER:openrouter}")
   private String defaultOcrProvider;
 
+  @org.springframework.beans.factory.annotation.Value("${OCR_VLM_MODEL:}")
   private String defaultOcrModel;
 
+  @org.springframework.beans.factory.annotation.Value("${OCR_VLM_MODEL_LIST:}")
   private String ocrVlmModelList;
 
+  @org.springframework.beans.factory.annotation.Value("${TL_MODEL_PROVIDER:openrouter}")
   private String defaultTlProvider;
 
+  @org.springframework.beans.factory.annotation.Value("${TL_LLM_MODEL:}")
   private String defaultTlModel;
 
+  @org.springframework.beans.factory.annotation.Value("${TL_LLM_MODEL_LIST:}")
   private String tlLlmModelList;
 
+  @org.springframework.beans.factory.annotation.Value("${QA_MODEL_PROVIDER:openrouter}")
   private String defaultQaProvider;
 
+  @org.springframework.beans.factory.annotation.Value("${QA_LLM_MODEL:}")
   private String defaultQaLlmModel;
 
+  @org.springframework.beans.factory.annotation.Value("${QA_VLM_MODEL:}")
   private String defaultQaVlmModel;
 
+  @org.springframework.beans.factory.annotation.Value("${QA_LLM_MODEL_LIST:}")
   private String qaLlmModelList;
 
+  @org.springframework.beans.factory.annotation.Value("${QA_VLM_MODEL_LIST:}")
   private String qaVlmModelList;
 
+  @org.springframework.beans.factory.annotation.Value("${DISABLE_LOCAL_OCR:false}")
   private boolean disableLocalOcr;
 
+  @org.springframework.beans.factory.annotation.Value("${PADDLEOCR_REC_MODEL:PP-OCRv6_medium_rec}")
   private String paddleOcrRecModel;
 
+  @org.springframework.beans.factory.annotation.Value("${DISABLE_LOCAL_LLM:false}")
   private boolean disableLocalLlm;
 
+  @org.springframework.beans.factory.annotation.Value("${QA_MODE:auto}")
   private String qaMode;
 
+  @org.springframework.beans.factory.annotation.Value("${OPENAI_API_KEY:}")
   private String openaiApiKey;
 
+  @org.springframework.beans.factory.annotation.Value("${ANTHROPIC_API_KEY:}")
   private String anthropicApiKey;
 
+  @org.springframework.beans.factory.annotation.Value("${LOCAL_LLM_PROVIDER:ollama}")
   private String localLlmProvider;
 
   public SystemSettingsDto getSettings() {

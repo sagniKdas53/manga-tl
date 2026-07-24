@@ -14,6 +14,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class ExportCleanupService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ExportCleanupService.class);
+  
+  @org.springframework.beans.factory.annotation.Value("${minio.bucket-name}")
+  private String bucketName;
+
+  @org.springframework.beans.factory.annotation.Value("${app.export.retention.days:7}")
+  private int retentionDays;
 
 
   private final MinioClient minioClient;
@@ -22,9 +28,6 @@ public class ExportCleanupService {
   }
 
 
-  private String bucketName;
-
-  private int retentionDays;
 
   /** Run every day at 2:00 AM server time. */
   @Scheduled(cron = "0 0 2 * * ?")
