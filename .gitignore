@@ -8,8 +8,8 @@ logs/
 .venv/
 .env
 .idea
-AGENTS.md
-CLAUDE.md
+# AGENTS.md
+# CLAUDE.md
 .antigravitycli/*
 secrets/
 frontend/coverage
