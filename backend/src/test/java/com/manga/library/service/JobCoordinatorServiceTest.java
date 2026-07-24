@@ -32,6 +32,7 @@ public class JobCoordinatorServiceTest {
   @Autowired private PageRepository pageRepository;
   @Autowired private ChapterRepository chapterRepository;
   @Autowired private SeriesRepository seriesRepository;
+  @Autowired private JobCostRepository jobCostRepository;
 
   @org.springframework.boot.test.mock.mockito.MockBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
@@ -1070,6 +1071,141 @@ public class JobCoordinatorServiceTest {
     ocrRegionRepository.delete(region);
     pageRepository.delete(page);
     imageRepository.delete(image);
+  }
+
+  @Test
+  public void testHandleTranslationCallback_SavesJobCost() {
+    Image rawImage = Image.builder().filename("test_cost.png").storagePath("test/test_cost.png").build();
+    final Image image = imageRepository.save(rawImage);
+    Page rawPage = Page.builder().chapter(defaultChapter).image(image).pageNumber(1).build();
+    final Page page = pageRepository.save(rawPage);
+
+    OcrRegion region = OcrRegion.builder()
+        .page(page)
+        .bboxX(10).bboxY(20).bboxW(100).bboxH(50)
+        .text("こんにちは")
+        .detectedLanguage("ja")
+        .confidence(0.9)
+        .regionType("speech")
+        .build();
+    region = ocrRegionRepository.save(region);
+
+    Map<String, Object> translation = new HashMap<>();
+    translation.put("regionId", region.getId().toString());
+    translation.put("translatedText", "Hello");
+
+    Map<String, Object> cost = new HashMap<>();
+    cost.put("estimated_cost", 0.005);
+    cost.put("provider", "openrouter");
+    cost.put("model", "gpt-4");
+    cost.put("prompt_tokens", 100);
+    cost.put("completion_tokens", 50);
+
+    jobCoordinatorService.handleTranslationCallback(image.getId(), List.of(translation), cost);
+
+    List<JobCost> jobCosts = jobCostRepository.findAll();
+    assertFalse(jobCosts.isEmpty());
+    JobCost savedCost = jobCosts.stream().filter(c -> c.getImageId().equals(image.getId())).findFirst().orElseThrow();
+    assertEquals(0.005, savedCost.getEstimatedCost());
+    assertEquals("openrouter", savedCost.getProvider());
+    assertEquals("gpt-4", savedCost.getModel());
+    assertEquals(100, savedCost.getPromptTokens());
+    assertEquals(50, savedCost.getCompletionTokens());
+
+    // Clean up
+    jobCostRepository.deleteAll(jobCosts);
+    List<Layer> layers = layerRepository.findByPageId(page.getId());
+    layers.forEach(l -> layerElementRepository.deleteAll(layerElementRepository.findByLayerId(l.getId())));
+    layerRepository.deleteAll(layers);
+    ocrRegionRepository.delete(region);
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
+  @Test
+  public void testFallbackModelInheritance() throws Exception {
+    Series series = Series.builder()
+        .title("Fallback Test Series")
+        .originalLanguage("ja")
+        .sourceLanguage("ja")
+        .targetLanguage("en")
+        .readingDirection("rtl")
+        .build();
+    series = seriesRepository.save(series);
+
+    // 1. Chapter overrides (false)
+    Chapter chapter1 = Chapter.builder().series(series).chapterNumber(1.0).useFallbackModels(false).build();
+    chapter1 = chapterRepository.save(chapter1);
+    
+    Image image1 = imageRepository.save(Image.builder().filename("f1.png").storagePath("f1.png").build());
+    pageRepository.save(Page.builder().chapter(chapter1).image(image1).pageNumber(1).build());
+
+    // 2. Chapter inherits, Series overrides (false)
+    Series series2 = Series.builder()
+        .title("Fallback Test Series 2")
+        .originalLanguage("ja")
+        .sourceLanguage("ja")
+        .targetLanguage("en")
+        .readingDirection("rtl")
+        .useFallbackModels(false)
+        .build();
+    series2 = seriesRepository.save(series2);
+    Chapter chapter2 = Chapter.builder().series(series2).chapterNumber(2.0).build();
+    chapter2 = chapterRepository.save(chapter2);
+    
+    Image image2 = imageRepository.save(Image.builder().filename("f2.png").storagePath("f2.png").build());
+    pageRepository.save(Page.builder().chapter(chapter2).image(image2).pageNumber(1).build());
+
+    // 3. Both inherit, should be true by default (system setting not mocked here, but defaults to true in logic)
+    Series series3 = Series.builder()
+        .title("Fallback Test Series 3")
+        .originalLanguage("ja")
+        .sourceLanguage("ja")
+        .targetLanguage("en")
+        .readingDirection("rtl")
+        .build();
+    series3 = seriesRepository.save(series3);
+    Chapter chapter3 = Chapter.builder().series(series3).chapterNumber(3.0).build();
+    chapter3 = chapterRepository.save(chapter3);
+    
+    Image image3 = imageRepository.save(Image.builder().filename("f3.png").storagePath("f3.png").build());
+    pageRepository.save(Page.builder().chapter(chapter3).image(image3).pageNumber(1).build());
+
+    // Execute
+    AtomicReference<String> payload1 = new AtomicReference<>();
+    AtomicReference<String> payload2 = new AtomicReference<>();
+    AtomicReference<String> payload3 = new AtomicReference<>();
+    
+    rightPushHook = (queueName, payload) -> {
+      if (payload.contains(image1.getId().toString())) payload1.set(payload);
+      if (payload.contains(image2.getId().toString())) payload2.set(payload);
+      if (payload.contains(image3.getId().toString())) payload3.set(payload);
+    };
+
+    transactionTemplate.executeWithoutResult(status -> {
+      jobCoordinatorService.startPipeline(image1.getId());
+      jobCoordinatorService.startPipeline(image2.getId());
+      jobCoordinatorService.startPipeline(image3.getId());
+    });
+
+    // Check assertions using ObjectMapper
+    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    
+    assertNotNull(payload1.get());
+    assertFalse(mapper.readTree(payload1.get()).get("useFallbackModels").asBoolean());
+
+    assertNotNull(payload2.get());
+    assertFalse(mapper.readTree(payload2.get()).get("useFallbackModels").asBoolean());
+
+    assertNotNull(payload3.get());
+    assertTrue(mapper.readTree(payload3.get()).get("useFallbackModels").asBoolean());
+    
+    // Clean up
+    jobRepository.deleteAll();
+    pageRepository.deleteAll();
+    imageRepository.deleteAll();
+    chapterRepository.deleteAll();
+    seriesRepository.deleteAll();
   }
 
   @SuppressWarnings("unchecked")

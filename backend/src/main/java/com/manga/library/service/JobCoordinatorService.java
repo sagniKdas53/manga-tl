@@ -774,6 +774,7 @@ public class JobCoordinatorService {
       // But user said move tl cost and summary under 'tl'.
       // If summary is in cost, it'll naturally move under 'tl'.
       metadata.set("tl", tlNode);
+      saveJobCosts(imageId, cost);
     }
 
     final Layer translationLayer =
