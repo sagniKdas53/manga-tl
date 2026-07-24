@@ -723,13 +723,21 @@ public class PageController {
     List<OcrRegion> ocrRegions = ocrRegionRepository.findByPageId(pageId);
 
     List<Conversation> conversations = conversationRepository.findByPageId(pageId);
+    List<UUID> conversationIds = conversations.stream().map(Conversation::getId).collect(Collectors.toList());
+    
+    List<ConversationRegion> allConversationRegions = conversationIds.isEmpty() 
+        ? Collections.emptyList() 
+        : conversationRegionRepository.findByConversationIdIn(conversationIds);
+        
+    Map<UUID, List<ConversationRegion>> regionsByConversation = allConversationRegions.stream()
+        .collect(Collectors.groupingBy(ConversationRegion::getConversationId));
+
     List<Map<String, Object>> convList = new ArrayList<>();
     for (Conversation conv : conversations) {
       Map<String, Object> convMap = new HashMap<>();
       convMap.put("id", conv.getId().toString());
       convMap.put("sceneType", conv.getSceneType());
-      List<ConversationRegion> crs =
-          conversationRegionRepository.findByConversationId(conv.getId());
+      List<ConversationRegion> crs = regionsByConversation.getOrDefault(conv.getId(), Collections.emptyList());
       List<Map<String, Object>> crList = new ArrayList<>();
       for (ConversationRegion cr : crs) {
         Map<String, Object> crMap = new HashMap<>();

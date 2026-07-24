@@ -60,18 +60,61 @@ Validate and add tests to ensure the cost records are correctly inserted when jo
 
 ---
 
-## 12. API Endpoint Redundancy & OpenAPI Spec
+
+
+## 13. [Critical] Manual edits cause renders to fail and continuously retry
 
 ### Problem
 
-We currently have two different API endpoints for loading a single page in the reader: `/api/pages/{pageId}/details` and `/api/pages/{pageId}/layers`. They return largely similar or overlapping data, which is inefficient.
-Furthermore, there is no formal contract or schema for the API.
+When a user manually adds or edits a layer on the frontend (e.g. changing translation text or bounding box), the `lastEditedAt` timestamp on the Page/Layer is updated. The backend's `DebouncedRenderService` polls for pages where `lastEditedAt > lastRenderedAt` and automatically enqueues a `render` job. 
+
+If this render job crashes in the Python worker (often because manually added layers might lack required fields like `font`, `boxShape`, or `maskPolygon`), the job is marked `FAILED`. However, because the render failed, `lastRenderedAt` is never updated. 
+
+If the user dismisses the failed job from the frontend UI, it deletes the job from the DB. Because the job is deleted, the `DebouncedRenderService` no longer sees the recent failure (which would normally trigger a 5-minute cooldown), notices `lastEditedAt > lastRenderedAt` is still true, and **immediately requeues the failed render job**. This creates an inescapable loop unless the manual changes are reverted.
 
 ### Fix
 
-1. Create a proper **OpenAPI Spec** for the REST API to address the design and serve as a contract.
-2. Unify the page loading endpoints or clearly separate their concerns based on the spec.
-3. Enforce REST validation.
+1. **Worker Validation:** Update the Python render worker to provide fallbacks for missing fields in manually added layers instead of crashing.
+2. **State Management:** When a render job fails, the backend should track the failure on the `Page` or `Image` entity itself (e.g., `renderFailedAt`) rather than relying entirely on the ephemeral `Job` table to prevent infinite polling loops when jobs are deleted by the user.
+3. **Frontend Resilience:** Ensure the frontend sends all necessary default fields when a user manually creates a layer.
+
+---
+
+## 14. High Reader Latency (600ms-1s to fully load a page)
+
+### Problem
+
+Navigating between pages in the reader feels sluggish. Loading a new page can take 600ms to 1s. This is likely caused by the image and its associated layers taking a long time to fetch and construct.
+
+### Fix
+
+1. **N+1 Queries:** The `/api/pages/{pageId}/details` endpoint likely suffers from N+1 query issues when fetching layers and regions. We should use `JOIN FETCH` or `@EntityGraph` to eagerly load `layers` and `layer_elements` in a single query.
+2. **Asset Loading:** Ensure we aren't blocking the UI render on the full-resolution image download if a thumbnail/preview can be shown first. 
+3. **Response Caching:** Add appropriate `Cache-Control` headers for static assets like rendered images, which are immutable until explicitly re-rendered.
+
+---
+
+## 15. Aggressive Reader Page Dropping (No Previous Page Caching)
+
+### Problem
+
+The reader currently only caches the *next* page. If a user navigates forward and then immediately backward, the previous page is instantly dropped from memory and has to be re-fetched entirely from the network. This results in poor UX and unnecessary network strain.
+
+### Fix
+
+In `Reader.tsx`, implement a sliding window cache (e.g., `[currentPage - 2, currentPage, currentPage + 2]`). Keep the DOM/state for the previous page in memory so backward navigation is instantaneous. 
+
+---
+
+## 16. Enforce Quality Gates
+
+### Problem
+
+There are currently quality-gate flags and fallback models mentioned, but they are not strictly enforced across the pipeline. Jobs might proceed even if quality thresholds aren't met, or the system doesn't properly halt and require manual intervention when it should.
+
+### Fix
+
+Add strict quality-gate checks between pipeline stages (e.g. after OCR and after Translation). If the confidence score drops below a configured threshold, the pipeline should pause and escalate for manual review before proceeding to rendering.
 
 ---
 
@@ -92,6 +135,10 @@ Furthermore, there is no formal contract or schema for the API.
 | 10 | Validate cost DB tracking is accurate | 🔲 TODO |
 | 11 | Fallback Models Validation logic | 🔲 TODO |
 | 12 | Create OpenAPI spec & fix API redundancy | ✅ Fixed |
+| 13 | Manual edits cause renders to fail and continuously retry | ✅ Fixed |
+| 14 | High Reader Latency | ✅ Fixed |
+| 15 | Aggressive Reader Page Dropping | ✅ Fixed |
+| 16 | Enforce Quality Gates | 🔲 TODO |
 
 ## Archived Issues
 
@@ -286,3 +333,48 @@ The custom fonts (like Comic Neue) stopped working in the frontend dev environme
 #### Fix
 
 Moved the Google Fonts `@import` rule from `index.css` to standard `<link>` tags in `index.html`. This ensures Vite consistently injects and resolves external fonts across both development and production environments.
+
+---
+
+### 12. API Endpoint Redundancy & OpenAPI Spec (✅ COMPLETED)
+
+#### Problem
+
+We currently have two different API endpoints for loading a single page in the reader: `/api/pages/{pageId}/details` and `/api/pages/{pageId}/layers`. They return largely similar or overlapping data, which is inefficient.
+Furthermore, there is no formal contract or schema for the API.
+
+#### Fix
+
+1. Created a proper **OpenAPI Spec** for the REST API to address the design and serve as a contract.
+2. Unified the page loading endpoints or clearly separated their concerns based on the spec.
+3. Enforced REST validation.
+
+---
+
+### 13. [Critical] Manual edits cause renders to fail and continuously retry (✅ COMPLETED)
+
+#### Problem
+When a user manually added or edited a layer on the frontend, the `lastEditedAt` timestamp updated, triggering `DebouncedRenderService` to enqueue a `render` job. Missing fields in manual edits caused the python worker to crash. This meant `lastRenderedAt` never updated. Dismissing the failed job from the frontend deleted the job record, causing the backend to immediately requeue the render job in an infinite loop.
+
+#### Fix
+Unified the python worker endpoints to use `/images/{imageId}` to properly fetch layer elements, and added null-safety to coordinate parsing (`x`, `y`) in `render.py`.
+
+---
+
+### 14. High Reader Latency (✅ COMPLETED)
+
+#### Problem
+Navigating between pages in the reader was sluggish, taking 600ms to 1s to fully load a page due to N+1 queries when fetching regions.
+
+#### Fix
+Updated `ConversationRegionRepository` with a batch query `findByConversationIdIn` and refactored `PageController` to batch-fetch regions and group them in memory, significantly reducing latency.
+
+---
+
+### 15. Aggressive Reader Page Dropping (No Previous Page Caching) (✅ COMPLETED)
+
+#### Problem
+The reader currently only cached the next page. Backward navigation resulted in the previous page being dropped from memory and requiring a full network refetch.
+
+#### Fix
+Implemented a sliding window cache `[N-1, N, N+1, N+2]` in `Reader.tsx` by including `prevPageId` in the `activeWindowIds` Set, keeping the previous page in memory for instantaneous backward navigation.

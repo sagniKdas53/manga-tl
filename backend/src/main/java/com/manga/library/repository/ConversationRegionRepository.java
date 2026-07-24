@@ -13,6 +13,8 @@ public interface ConversationRegionRepository
 
   List<ConversationRegion> findByConversationId(UUID conversationId);
 
+  List<ConversationRegion> findByConversationIdIn(List<UUID> conversationIds);
+
   @Modifying
   @Query(
       "delete from ConversationRegion cr where cr.conversationId in (select c.id from Conversation c where c.page.id = :pageId)")
