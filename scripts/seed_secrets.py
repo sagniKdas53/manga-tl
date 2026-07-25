@@ -39,6 +39,7 @@ def main():
         "OPENROUTER_API_KEY": "OpenRouter",
         "GEMINI_API_KEY": "Google Gemini",
         "NVIDIA_API_KEY": "Nvidia NIM",
+        "NEUROMETRIC_API_KEY": "Neurometric",
         "OPENAI_API_KEY": "OpenAI",
         "ANTHROPIC_API_KEY": "Anthropic",
         "DEEPL_API_KEY": "DeepL"
