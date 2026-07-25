@@ -788,13 +788,14 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
             <Table
               size="small"
               stickyHeader
+              sx={{ tableLayout: "fixed" }}
             >
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ px: 2 }}>Job</TableCell>
-                  <TableCell sx={{ px: 2 }}>Model &amp; Status</TableCell>
+                  <TableCell sx={{ px: 2, width: "45%" }}>Job</TableCell>
+                  <TableCell sx={{ px: 2, width: "40%" }}>Model &amp; Status</TableCell>
                   <TableCell
-                    sx={{ px: 2, width: 96 }}
+                    sx={{ px: 2, width: "15%" }}
                     align="right"
                   >
                     Actions
@@ -886,7 +887,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                               }}
                             >
                               <TableCell
-                                sx={{ px: 2, py: 1.25, verticalAlign: "top" }}
+                                sx={{ px: 2, py: 1.25, verticalAlign: "top", overflow: "hidden", textOverflow: "ellipsis" }}
                               >
                                 <Box
                                   sx={{
@@ -958,8 +959,9 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 sx={{
                                   px: 2,
                                   py: 1.25,
-                                  maxWidth: 230,
                                   verticalAlign: "top",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
                                 }}
                               >
                                 <Box sx={{ minHeight: 16 }}>

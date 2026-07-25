@@ -32,9 +32,11 @@ public class JobController {
   }
 
   private static final String QUEUE_PAUSED_KEY = "system:queue:paused";
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JobController.class);
 
   @GetMapping
   public ResponseEntity<Map<String, Object>> getJobs() {
+    log.debug("Heartbeat ping received from client");
     // Return jobs that are not COMPLETED
     List<Job> jobs =
         jobRepository.findByStatusInOrderByCreatedAtAsc(

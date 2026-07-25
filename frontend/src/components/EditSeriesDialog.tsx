@@ -66,8 +66,8 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const [routingStrategy, setRoutingStrategy] = useState(
     series.routingStrategy || "",
   );
-  const [useFallbackModels, setUseFallbackModels] = useState<boolean>(
-    series.useFallbackModels ?? true,
+  const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
+    series.useFallbackModels ?? null,
   );
   const [overridesOpen, setOverridesOpen] = useState(false);
 
@@ -112,7 +112,7 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   ];
   const overriddenCount =
     overrideFields.filter((v) => v !== "").length +
-    (useFallbackModels === false ? 1 : 0);
+    (useFallbackModels !== null ? 1 : 0);
   const inheritedCount = overrideFields.length + 1 - overriddenCount;
 
   useEffect(() => {
@@ -336,14 +336,20 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                         {settings?.localOcrModel || "Local"}
                       </MenuItem>
                     ) : (
-                      (settings?.ocrVlmModelList || []).map((m) => (
-                        <MenuItem
-                          key={m}
-                          value={m}
-                        >
-                          {m}
-                        </MenuItem>
-                      ))
+                      (() => {
+                        const effProv = ocrProvider || inheritedOcrProvider || settings?.ocrProvider || "openrouter";
+                        const models = (settings?.providerModelsMap as any)?.[effProv]?.ocr;
+                        if (models && models.length > 0) {
+                          return models.map((m: any) => (
+                            <MenuItem key={m.id || m} value={m.id || m}>
+                              {m.name || m}{m.free ? " (Free)" : ""}
+                            </MenuItem>
+                          ));
+                        }
+                        return (settings?.ocrVlmModelList || []).map((m) => (
+                          <MenuItem key={m} value={m}>{m}</MenuItem>
+                        ));
+                      })()
                     )}
                   </Select>
                 </FormControl>
@@ -409,14 +415,20 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                     label="TL Model"
                     onChange={(e) => setTlModel(e.target.value)}
                   >
-                    {(settings?.tlLlmModelList || []).map((m) => (
-                      <MenuItem
-                        key={m}
-                        value={m}
-                      >
-                        {m}
-                      </MenuItem>
-                    ))}
+                    {(() => {
+                      const effProv = tlProvider || inheritedTlProvider || settings?.tlProvider || "openrouter";
+                      const models = (settings?.providerModelsMap as any)?.[effProv]?.tl;
+                      if (models && models.length > 0) {
+                        return models.map((m: any) => (
+                          <MenuItem key={m.id || m} value={m.id || m}>
+                            {m.name || m}{m.free ? " (Free)" : ""}
+                          </MenuItem>
+                        ));
+                      }
+                      return (settings?.tlLlmModelList || []).map((m) => (
+                        <MenuItem key={m} value={m}>{m}</MenuItem>
+                      ));
+                    })()}
                   </Select>
                 </FormControl>
                 {tlModel !== "" && (
@@ -518,14 +530,20 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                     disabled={qaMode === "vlm" || qaMode === "none"}
                     onChange={(e) => setQaLlmModel(e.target.value)}
                   >
-                    {(settings?.qaLlmModelList || []).map((m) => (
-                      <MenuItem
-                        key={m}
-                        value={m}
-                      >
-                        {m}
-                      </MenuItem>
-                    ))}
+                    {(() => {
+                      const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
+                      const models = (settings?.providerModelsMap as any)?.[effProv]?.qaLLM;
+                      if (models && models.length > 0) {
+                        return models.map((m: any) => (
+                          <MenuItem key={m.id || m} value={m.id || m}>
+                            {m.name || m}{m.free ? " (Free)" : ""}
+                          </MenuItem>
+                        ));
+                      }
+                      return (settings?.qaLlmModelList || []).map((m) => (
+                        <MenuItem key={m} value={m}>{m}</MenuItem>
+                      ));
+                    })()}
                   </Select>
                 </FormControl>
                 {qaLlmModel !== "" && (
@@ -555,14 +573,20 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                     disabled={qaMode === "llm" || qaMode === "none"}
                     onChange={(e) => setQaVlmModel(e.target.value)}
                   >
-                    {(settings?.qaVlmModelList || []).map((m) => (
-                      <MenuItem
-                        key={m}
-                        value={m}
-                      >
-                        {m}
-                      </MenuItem>
-                    ))}
+                    {(() => {
+                      const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
+                      const models = (settings?.providerModelsMap as any)?.[effProv]?.qaVLM;
+                      if (models && models.length > 0) {
+                        return models.map((m: any) => (
+                          <MenuItem key={m.id || m} value={m.id || m}>
+                            {m.name || m}{m.free ? " (Free)" : ""}
+                          </MenuItem>
+                        ));
+                      }
+                      return (settings?.qaVlmModelList || []).map((m) => (
+                        <MenuItem key={m} value={m}>{m}</MenuItem>
+                      ));
+                    })()}
                   </Select>
                 </FormControl>
                 {qaVlmModel !== "" && (
@@ -625,16 +649,38 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                   <InputLabel>Use Fallback Models</InputLabel>
                   <Select
                     size="small"
-                    value={useFallbackModels ? "true" : "false"}
+                    value={
+                      useFallbackModels === null
+                        ? ""
+                        : useFallbackModels
+                          ? "true"
+                          : "false"
+                    }
                     label="Use Fallback Models"
                     onChange={(e) =>
-                      setUseFallbackModels(e.target.value === "true")
+                      setUseFallbackModels(
+                        e.target.value === ""
+                          ? null
+                          : e.target.value === "true"
+                      )
                     }
                   >
+                    <MenuItem value="">
+                      <em>Inherit ({settings?.useFallbackModels !== false ? "Enabled" : "Disabled"})</em>
+                    </MenuItem>
                     <MenuItem value="true">Enabled</MenuItem>
                     <MenuItem value="false">Disabled</MenuItem>
                   </Select>
                 </FormControl>
+                {useFallbackModels !== null && (
+                  <IconButton
+                    size="small"
+                    sx={{ mt: 0.5 }}
+                    onClick={() => setUseFallbackModels(null)}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                )}
               </Box>
             </AccordionDetails>
           </Accordion>

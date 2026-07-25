@@ -95,10 +95,8 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   const [routingStrategy, setRoutingStrategy] = useState(
     editingChapter?.routingStrategy || "",
   );
-  const [useFallbackModels, setUseFallbackModels] = useState<boolean>(
-    editingChapter?.useFallbackModels ??
-      selectedSeries?.useFallbackModels ??
-      true,
+  const [useFallbackModels, setUseFallbackModels] = useState<boolean | null>(
+    editingChapter?.useFallbackModels ?? null,
   );
 
   const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
@@ -125,11 +123,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       setQaVlmModel(editingChapter.qaVlmModel || "");
       setQaMode(editingChapter.qaMode || "");
       setRoutingStrategy(editingChapter.routingStrategy || "");
-      setUseFallbackModels(
-        editingChapter.useFallbackModels ??
-          selectedSeries?.useFallbackModels ??
-          true,
-      );
+      setUseFallbackModels(editingChapter.useFallbackModels ?? null);
     } else {
       setNumber(defaultNum);
       setTitle("");
@@ -143,7 +137,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
       setQaVlmModel("");
       setQaMode("");
       setRoutingStrategy("");
-      setUseFallbackModels(selectedSeries?.useFallbackModels ?? true);
+      setUseFallbackModels(null);
     }
   } else if (!open && prevOpen) {
     setPrevOpen(false);
@@ -209,7 +203,7 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   ];
   const overriddenCount =
     overrideFields.filter((v) => v !== "").length +
-    (useFallbackModels === false ? 1 : 0);
+    (useFallbackModels !== null ? 1 : 0);
   const inheritedCount = overrideFields.length + 1 - overriddenCount;
 
   const resolvedOcrProvider =
@@ -389,14 +383,20 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                       {settings?.localOcrModel || "Local Worker Model"}
                     </MenuItem>
                   ) : (
-                    (settings?.ocrVlmModelList || []).map((m) => (
-                      <MenuItem
-                        key={m}
-                        value={m}
-                      >
-                        {m}
-                      </MenuItem>
-                    ))
+                    (() => {
+                      const effProv = ocrProvider || inheritedOcrProvider || settings?.ocrProvider || "openrouter";
+                      const models = (settings?.providerModelsMap as any)?.[effProv]?.ocr;
+                      if (models && models.length > 0) {
+                        return models.map((m: any) => (
+                          <MenuItem key={m.id || m} value={m.id || m}>
+                            {m.name || m}{m.free ? " (Free)" : ""}
+                          </MenuItem>
+                        ));
+                      }
+                      return (settings?.ocrVlmModelList || []).map((m) => (
+                        <MenuItem key={m} value={m}>{m}</MenuItem>
+                      ));
+                    })()
                   )}
                 </Select>
               </FormControl>
@@ -462,14 +462,20 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                   label="TL LLM Model"
                   onChange={(e) => setTlModel(e.target.value)}
                 >
-                  {(settings?.tlLlmModelList || []).map((m) => (
-                    <MenuItem
-                      key={m}
-                      value={m}
-                    >
-                      {m}
-                    </MenuItem>
-                  ))}
+                  {(() => {
+                    const effProv = tlProvider || inheritedTlProvider || settings?.tlProvider || "openrouter";
+                    const models = (settings?.providerModelsMap as any)?.[effProv]?.tl;
+                    if (models && models.length > 0) {
+                      return models.map((m: any) => (
+                        <MenuItem key={m.id || m} value={m.id || m}>
+                          {m.name || m}{m.free ? " (Free)" : ""}
+                        </MenuItem>
+                      ));
+                    }
+                    return (settings?.tlLlmModelList || []).map((m) => (
+                      <MenuItem key={m} value={m}>{m}</MenuItem>
+                    ));
+                  })()}
                 </Select>
               </FormControl>
               {tlModel !== "" && (
@@ -573,14 +579,20 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                   label="QA LLM Model"
                   onChange={(e) => setQaLlmModel(e.target.value)}
                 >
-                  {(settings?.qaLlmModelList || []).map((m) => (
-                    <MenuItem
-                      key={m}
-                      value={m}
-                    >
-                      {m}
-                    </MenuItem>
-                  ))}
+                  {(() => {
+                    const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
+                    const models = (settings?.providerModelsMap as any)?.[effProv]?.qaLLM;
+                    if (models && models.length > 0) {
+                      return models.map((m: any) => (
+                        <MenuItem key={m.id || m} value={m.id || m}>
+                          {m.name || m}{m.free ? " (Free)" : ""}
+                        </MenuItem>
+                      ));
+                    }
+                    return (settings?.qaLlmModelList || []).map((m) => (
+                      <MenuItem key={m} value={m}>{m}</MenuItem>
+                    ));
+                  })()}
                 </Select>
               </FormControl>
               {qaLlmModel !== "" && (
@@ -612,14 +624,20 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                   label="QA VLM Model"
                   onChange={(e) => setQaVlmModel(e.target.value)}
                 >
-                  {(settings?.qaVlmModelList || []).map((m) => (
-                    <MenuItem
-                      key={m}
-                      value={m}
-                    >
-                      {m}
-                    </MenuItem>
-                  ))}
+                  {(() => {
+                    const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
+                    const models = (settings?.providerModelsMap as any)?.[effProv]?.qaVLM;
+                    if (models && models.length > 0) {
+                      return models.map((m: any) => (
+                        <MenuItem key={m.id || m} value={m.id || m}>
+                          {m.name || m}{m.free ? " (Free)" : ""}
+                        </MenuItem>
+                      ));
+                    }
+                    return (settings?.qaVlmModelList || []).map((m) => (
+                      <MenuItem key={m} value={m}>{m}</MenuItem>
+                    ));
+                  })()}
                 </Select>
               </FormControl>
               {qaVlmModel !== "" && (
@@ -682,16 +700,38 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 <InputLabel>Use Fallback Models</InputLabel>
                 <Select
                   size="small"
-                  value={useFallbackModels ? "true" : "false"}
+                  value={
+                    useFallbackModels === null
+                      ? ""
+                      : useFallbackModels
+                        ? "true"
+                        : "false"
+                  }
                   label="Use Fallback Models"
                   onChange={(e) =>
-                    setUseFallbackModels(e.target.value === "true")
+                    setUseFallbackModels(
+                      e.target.value === ""
+                        ? null
+                        : e.target.value === "true"
+                    )
                   }
                 >
+                  <MenuItem value="">
+                    <em>Inherit ({(selectedSeries?.useFallbackModels ?? settings?.useFallbackModels) !== false ? "Enabled" : "Disabled"})</em>
+                  </MenuItem>
                   <MenuItem value="true">Enabled</MenuItem>
                   <MenuItem value="false">Disabled</MenuItem>
                 </Select>
               </FormControl>
+              {useFallbackModels !== null && (
+                <IconButton
+                  size="small"
+                  sx={{ mt: 0.5 }}
+                  onClick={() => setUseFallbackModels(null)}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              )}
             </Box>
           </AccordionDetails>
         </Accordion>

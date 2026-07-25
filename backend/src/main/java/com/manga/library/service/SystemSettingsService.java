@@ -10,16 +10,27 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.manga.library.repository.ChapterRepository;
+import com.manga.library.repository.SeriesRepository;
+import java.util.Map;
+
 @Service
 public class SystemSettingsService {
 
   private final SystemSettingsRepository systemSettingsRepository;
   private final ProviderConfigCache providerConfigCache;
+  private final SeriesRepository seriesRepository;
+  private final ChapterRepository chapterRepository;
 
   public SystemSettingsService(
-      SystemSettingsRepository systemSettingsRepository, ProviderConfigCache providerConfigCache) {
+      SystemSettingsRepository systemSettingsRepository,
+      ProviderConfigCache providerConfigCache,
+      SeriesRepository seriesRepository,
+      ChapterRepository chapterRepository) {
     this.systemSettingsRepository = systemSettingsRepository;
     this.providerConfigCache = providerConfigCache;
+    this.seriesRepository = seriesRepository;
+    this.chapterRepository = chapterRepository;
   }
 
   @org.springframework.beans.factory.annotation.Value("${OCR_MODEL_PROVIDER:openrouter}")
@@ -90,21 +101,13 @@ public class SystemSettingsService {
       actQaVlmModel = parsedQaVlmModelList.get(0);
 
     List<String> activeProviders = providerConfigCache.getProvidersForTask("tl");
-    if (activeProviders.isEmpty()) {
-      activeProviders =
-          List.of("openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio");
-    }
 
     List<String> activeOcrProviders = new java.util.ArrayList<>();
     if (!disableLocalOcr) {
       activeOcrProviders.add("local");
     }
     List<String> cachedOcr = providerConfigCache.getProvidersForTask("ocr");
-    if (!cachedOcr.isEmpty()) {
-      activeOcrProviders.addAll(cachedOcr);
-    } else {
-      activeOcrProviders.addAll(List.of("openrouter", "gemini", "nvidia", "ollama", "lmstudio"));
-    }
+    activeOcrProviders.addAll(cachedOcr);
 
     var providerModelsMap = providerConfigCache.getProviderModelsMap();
 
@@ -178,5 +181,51 @@ public class SystemSettingsService {
         .map(value -> Objects.requireNonNull(value).trim())
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
+  }
+
+  public Map<String, Object> validateOverrides() {
+    List<Map<String, Object>> orphaned = new java.util.ArrayList<>();
+    if (seriesRepository != null) {
+      for (com.manga.library.model.Series s : seriesRepository.findAll()) {
+        checkOverride(orphaned, "SERIES", s.getId(), s.getTitle(), "tlModel", s.getTlModel(), s.getTlProvider(), "tl");
+        checkOverride(orphaned, "SERIES", s.getId(), s.getTitle(), "ocrModel", s.getOcrModel(), s.getOcrProvider(), "ocr");
+        checkOverride(orphaned, "SERIES", s.getId(), s.getTitle(), "qaLlmModel", s.getQaLlmModel(), s.getQaProvider(), "qaLLM");
+        checkOverride(orphaned, "SERIES", s.getId(), s.getTitle(), "qaVlmModel", s.getQaVlmModel(), s.getQaProvider(), "qaVLM");
+      }
+    }
+    if (chapterRepository != null) {
+      for (com.manga.library.model.Chapter c : chapterRepository.findAll()) {
+        String name = c.getTitle() != null ? c.getTitle() : "Chapter " + c.getChapterNumber();
+        checkOverride(orphaned, "CHAPTER", c.getId(), name, "tlModel", c.getTlModel(), c.getTlProvider(), "tl");
+        checkOverride(orphaned, "CHAPTER", c.getId(), name, "ocrModel", c.getOcrModel(), c.getOcrProvider(), "ocr");
+        checkOverride(orphaned, "CHAPTER", c.getId(), name, "qaLlmModel", c.getQaLlmModel(), c.getQaProvider(), "qaLLM");
+        checkOverride(orphaned, "CHAPTER", c.getId(), name, "qaVlmModel", c.getQaVlmModel(), c.getQaProvider(), "qaVLM");
+      }
+    }
+    return Map.of("orphaned", orphaned);
+  }
+
+  private void checkOverride(
+      List<Map<String, Object>> orphaned,
+      String entityType,
+      java.util.UUID entityId,
+      String entityName,
+      String field,
+      String modelVal,
+      String providerVal,
+      String task) {
+    if (modelVal != null && !modelVal.trim().isEmpty() && !modelVal.equals("inherit") && !modelVal.equals("default")) {
+      String prov = providerVal != null && !providerVal.trim().isEmpty() ? providerVal : getSettingValue("tlProvider", "openrouter");
+      if (providerConfigCache != null && !providerConfigCache.isValidProviderModel(prov, modelVal, task)) {
+        Map<String, Object> entry = new java.util.HashMap<>();
+        entry.put("entityType", entityType);
+        entry.put("entityId", entityId != null ? entityId.toString() : "");
+        entry.put("entityName", entityName);
+        entry.put("field", field);
+        entry.put("value", modelVal);
+        entry.put("status", "DEPRECATED");
+        orphaned.add(entry);
+      }
+    }
   }
 }

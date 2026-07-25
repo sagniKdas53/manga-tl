@@ -11,8 +11,8 @@ export function themeObj(mode: "light" | "dark") {
       success: { main: "#10b981" },
       info: { main: mode === "dark" ? "#6ac2fd" : "#0197fc" },
       background: {
-        default: mode === "dark" ? "#0d0d0d" : "#f5f5f5",
-        paper: mode === "dark" ? "#1a1a1a" : "#ffffff",
+        default: mode === "dark" ? "#0f0f0f" : "#f5f5f5",
+        paper: mode === "dark" ? "#1e1e1e" : "#ffffff",
       },
       text: {
         primary: mode === "dark" ? "#fefefe" : "#343333",

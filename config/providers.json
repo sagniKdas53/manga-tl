@@ -27,30 +27,30 @@
           { "id": "deepseek/deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
           { "id": "google/gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
           { "id": "google/gemini-2.5-flash", "name": "Gemini 2.5 Flash" },
-          { "id": "meta-llama/llama-3-8b-instruct:free", "name": "Llama 3 8B (Free)", "free": true },
-          { "id": "google/gemini-2.5-flash:free", "name": "Gemini 2.5 Flash (Free)", "free": true }
+          { "id": "meta-llama/llama-3-8b-instruct:free", "name": "Llama 3 8B", "free": true },
+          { "id": "google/gemini-2.5-flash:free", "name": "Gemini 2.5 Flash", "free": true }
         ],
         "qaLLM": [
           { "id": "deepseek/deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
           { "id": "deepseek/deepseek-v4-pro", "name": "DeepSeek V4 Pro" },
           { "id": "google/gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
           { "id": "google/gemini-2.5-flash", "name": "Gemini 2.5 Flash" },
-          { "id": "openai/gpt-oss-20b:free", "name": "GPT-OSS 20B (Free)", "free": true },
-          { "id": "meta-llama/llama-3-8b-instruct:free", "name": "Llama 3 8B (Free)", "free": true }
+          { "id": "openai/gpt-oss-20b:free", "name": "GPT-OSS 20B", "free": true },
+          { "id": "meta-llama/llama-3-8b-instruct:free", "name": "Llama 3 8B", "free": true }
         ],
         "qaVLM": [
           { "id": "qwen/qwen3-vl-32b-instruct", "name": "Qwen 3 VL 32B Instruct" },
           { "id": "google/gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
           { "id": "google/gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
           { "id": "google/gemini-2.5-flash", "name": "Gemini 2.5 Flash" },
-          { "id": "google/gemini-2.5-flash:free", "name": "Gemini 2.5 Flash (Free)", "free": true }
+          { "id": "google/gemini-2.5-flash:free", "name": "Gemini 2.5 Flash", "free": true }
         ],
         "ocr": [
           { "id": "qwen/qwen3-vl-32b-instruct", "name": "Qwen 3 VL 32B Instruct" },
           { "id": "google/gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
           { "id": "google/gemini-2.5-flash", "name": "Gemini 2.5 Flash" },
           { "id": "google/gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "google/gemini-2.5-flash:free", "name": "Gemini 2.5 Flash (Free)", "free": true }
+          { "id": "google/gemini-2.5-flash:free", "name": "Gemini 2.5 Flash", "free": true }
         ]
       },
       "defaultTLModel": "deepseek/deepseek-v4-pro",

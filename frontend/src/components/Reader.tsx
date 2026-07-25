@@ -2839,24 +2839,20 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   };
 
-  // Page out-of-bounds protection: redirect to last valid page
+  // Page out-of-bounds protection: redirect to first valid page if page doesn't exist
   useEffect(() => {
     if (!pages || pages.length === 0 || !selectedChapter) return;
     const pageNum = pageNumber ? parseInt(pageNumber, 10) : 1;
-    if (pageNum < 1) {
+    const pageExists = pages.some((p) => p.pageNumber === pageNum);
+
+    if (!pageExists) {
+      const firstValidPage = pages[0]?.pageNumber || 1;
       const slugPart = selectedChapter.title
         ? `${toSlug(selectedChapter.title)}/`
-        : `chapter-${selectedChapter.chapterNumber}/`;
-      navigate(`/chapters/${selectedChapter.id}/${slugPart}reader/1`, {
-        replace: true,
-      });
-    } else if (pageNum > pages.length) {
-      const slugPart = selectedChapter.title
-        ? `${toSlug(selectedChapter.title)}/`
-        : `chapter-${selectedChapter.chapterNumber}/`;
+        : "";
       navigate(
-        `/chapters/${selectedChapter.id}/${slugPart}reader/${pages.length}`,
-        { replace: true },
+        `/chapters/${selectedChapter.id}/${slugPart}reader/${firstValidPage}`,
+        { replace: true }
       );
     }
   }, [pages, pageNumber, selectedChapter, navigate]);

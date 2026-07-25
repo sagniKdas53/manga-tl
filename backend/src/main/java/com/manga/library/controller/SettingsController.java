@@ -28,4 +28,9 @@ public class SettingsController {
   public ResponseEntity<SystemSettingsDto> updateSettings(@RequestBody SystemSettingsDto dto) {
     return ResponseEntity.ok(systemSettingsService.updateSettings(dto));
   }
+
+  @GetMapping("/validate")
+  public ResponseEntity<java.util.Map<String, Object>> validateSettings() {
+    return ResponseEntity.ok(systemSettingsService.validateOverrides());
+  }
 }
