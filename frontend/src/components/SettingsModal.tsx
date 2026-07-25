@@ -175,7 +175,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Select
                   value={settings.ocrProvider || ""}
                   label="Global OCR Provider"
-                  onChange={(e) => handleChange("ocrProvider", e.target.value)}
+                  onChange={(e) => {
+                    const newProv = e.target.value;
+                    const ocrModels = settings.providerModelsMap?.[newProv]?.ocr || [];
+                    const defaultModel = ocrModels.length > 0 ? ocrModels[0].id : (settings.ocrModel || "");
+                    setSettings((prev) => prev ? { ...prev, ocrProvider: newProv, ocrModel: defaultModel } : null);
+                  }}
                 >
                   {ocrProviders.map((p) => (
                     <MenuItem
@@ -210,22 +215,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       {settings.localOcrModel || "Local Worker Model"}
                     </MenuItem>
                   ) : (
-                    [
-                      <MenuItem
-                        key="_empty"
-                        value=""
-                      >
-                        -- Default / Inherit Env --
-                      </MenuItem>,
-                      ...settings.ocrVlmModelList.map((m) => (
-                        <MenuItem
-                          key={m}
-                          value={m}
-                        >
-                          {m}
-                        </MenuItem>
-                      )),
-                    ]
+                    (settings.providerModelsMap?.[settings.ocrProvider]?.ocr || []).map((m) => (
+                      <MenuItem key={m.id} value={m.id}>
+                        {m.name}{m.free ? " (Free)" : ""}
+                      </MenuItem>
+                    )).concat(
+                      (!settings.providerModelsMap?.[settings.ocrProvider]?.ocr && settings.ocrVlmModelList)
+                        ? settings.ocrVlmModelList.map((m) => (
+                            <MenuItem key={m} value={m}>{m}</MenuItem>
+                          ))
+                        : []
+                    )
                   )}
                 </Select>
               </FormControl>
@@ -255,7 +255,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Select
                   value={settings.tlProvider || ""}
                   label="Global Translation Provider"
-                  onChange={(e) => handleChange("tlProvider", e.target.value)}
+                  onChange={(e) => {
+                    const newProv = e.target.value;
+                    const tlModels = settings.providerModelsMap?.[newProv]?.tl || [];
+                    const defaultModel = tlModels.length > 0 ? tlModels[0].id : (settings.tlModel || "");
+                    setSettings((prev) => prev ? { ...prev, tlProvider: newProv, tlModel: defaultModel } : null);
+                  }}
                 >
                   {providers.map((p) => (
                     <MenuItem
@@ -280,15 +285,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   label="Global Translation LLM Model"
                   onChange={(e) => handleChange("tlModel", e.target.value)}
                 >
-                  <MenuItem value="">-- Default / Inherit Env --</MenuItem>
-                  {settings.tlLlmModelList.map((m) => (
-                    <MenuItem
-                      key={m}
-                      value={m}
-                    >
-                      {m}
+                  {(settings.providerModelsMap?.[settings.tlProvider]?.tl || []).map((m) => (
+                    <MenuItem key={m.id} value={m.id}>
+                      {m.name}{m.free ? " (Free)" : ""}
                     </MenuItem>
-                  ))}
+                  )).concat(
+                    (!settings.providerModelsMap?.[settings.tlProvider]?.tl && settings.tlLlmModelList)
+                      ? settings.tlLlmModelList.map((m) => (
+                          <MenuItem key={m} value={m}>{m}</MenuItem>
+                        ))
+                      : []
+                  )}
                 </Select>
               </FormControl>
             </Grid>
@@ -317,7 +324,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Select
                   value={settings.qaProvider || ""}
                   label="Global QA Provider"
-                  onChange={(e) => handleChange("qaProvider", e.target.value)}
+                  onChange={(e) => {
+                    const newProv = e.target.value;
+                    const qaLlmModels = settings.providerModelsMap?.[newProv]?.qaLLM || [];
+                    const qaVlmModels = settings.providerModelsMap?.[newProv]?.qaVLM || [];
+                    const defaultLlm = qaLlmModels.length > 0 ? qaLlmModels[0].id : (settings.qaLlmModel || "");
+                    const defaultVlm = qaVlmModels.length > 0 ? qaVlmModels[0].id : (settings.qaVlmModel || "");
+                    setSettings((prev) => prev ? { ...prev, qaProvider: newProv, qaLlmModel: defaultLlm, qaVlmModel: defaultVlm } : null);
+                  }}
                 >
                   {providers.map((p) => (
                     <MenuItem
@@ -368,15 +382,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   label="Global QA LLM Model"
                   onChange={(e) => handleChange("qaLlmModel", e.target.value)}
                 >
-                  <MenuItem value="">-- Default / Inherit Env --</MenuItem>
-                  {settings.qaLlmModelList.map((m) => (
-                    <MenuItem
-                      key={m}
-                      value={m}
-                    >
-                      {m}
+                  {(settings.providerModelsMap?.[settings.qaProvider]?.qaLLM || []).map((m) => (
+                    <MenuItem key={m.id} value={m.id}>
+                      {m.name}{m.free ? " (Free)" : ""}
                     </MenuItem>
-                  ))}
+                  )).concat(
+                    (!settings.providerModelsMap?.[settings.qaProvider]?.qaLLM && settings.qaLlmModelList)
+                      ? settings.qaLlmModelList.map((m) => (
+                          <MenuItem key={m} value={m}>{m}</MenuItem>
+                        ))
+                      : []
+                  )}
                 </Select>
               </FormControl>
             </Grid>
@@ -395,15 +411,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   label="Global QA VLM Model"
                   onChange={(e) => handleChange("qaVlmModel", e.target.value)}
                 >
-                  <MenuItem value="">-- Default / Inherit Env --</MenuItem>
-                  {settings.qaVlmModelList.map((m) => (
-                    <MenuItem
-                      key={m}
-                      value={m}
-                    >
-                      {m}
+                  {(settings.providerModelsMap?.[settings.qaProvider]?.qaVLM || []).map((m) => (
+                    <MenuItem key={m.id} value={m.id}>
+                      {m.name}{m.free ? " (Free)" : ""}
                     </MenuItem>
-                  ))}
+                  )).concat(
+                    (!settings.providerModelsMap?.[settings.qaProvider]?.qaVLM && settings.qaVlmModelList)
+                      ? settings.qaVlmModelList.map((m) => (
+                          <MenuItem key={m} value={m}>{m}</MenuItem>
+                        ))
+                      : []
+                  )}
                 </Select>
               </FormControl>
             </Grid>

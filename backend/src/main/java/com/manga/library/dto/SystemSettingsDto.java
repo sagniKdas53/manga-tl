@@ -1,6 +1,7 @@
 package com.manga.library.dto;
 
 import java.util.List;
+import java.util.Map;
 
 public record SystemSettingsDto(
   List<String> ocrVlmModelList,
@@ -21,6 +22,7 @@ public record SystemSettingsDto(
   String qaMode,
   Boolean useFallbackModels,
   List<String> activeProviders,
-  List<String> activeOcrProviders
+  List<String> activeOcrProviders,
+  Map<String, Map<String, List<ModelEntryDto>>> providerModelsMap
 ) {
 }
