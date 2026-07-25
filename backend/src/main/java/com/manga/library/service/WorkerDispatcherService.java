@@ -49,7 +49,10 @@ public class WorkerDispatcherService {
 
 
   private final HttpClient httpClient =
-      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+      HttpClient.newBuilder()
+          .version(HttpClient.Version.HTTP_1_1)
+          .connectTimeout(Duration.ofSeconds(3))
+          .build();
 
   private final List<String> HEAVY_QUEUES =
       List.of("queue:qa-re-ocr", "queue:region-redo-ocr", "queue:ocr", "queue:panel-detection");
@@ -72,6 +75,9 @@ public class WorkerDispatcherService {
     if (workerUrlsConfig != null) {
       for (String url : workerUrlsConfig.split(",")) {
         String trimmed = url.trim();
+        if (trimmed.endsWith("/")) {
+          trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
         if (!trimmed.isEmpty()) {
           workerUrls.add(trimmed);
         }
@@ -97,10 +103,12 @@ public class WorkerDispatcherService {
         boolean sent = false;
         for (String workerUrl : workerUrls) {
           try {
-            String targetUrl = workerUrl.trim() + "/api/v1/jobs/submit";
+            String targetUrl = workerUrl + "/api/v1/jobs/submit";
             Map<String, Object> payload = new HashMap<>();
             payload.put("queue_name", queue);
             payload.put("job_data", objectMapper.readValue(jobJson, Map.class));
+
+            String jsonBody = objectMapper.writeValueAsString(payload);
 
             HttpRequest.Builder requestBuilder =
                 HttpRequest.newBuilder()
@@ -109,7 +117,7 @@ public class WorkerDispatcherService {
                     .header("Content-Type", "application/json")
                     .POST(
                         HttpRequest.BodyPublishers.ofString(
-                            objectMapper.writeValueAsString(payload)));
+                            jsonBody, java.nio.charset.StandardCharsets.UTF_8));
 
             if (workerApiSecret != null && !workerApiSecret.isEmpty()) {
               requestBuilder.header("WORKER_API_SECRET", workerApiSecret);
@@ -122,8 +130,22 @@ public class WorkerDispatcherService {
               sent = true;
               processed = true;
               break;
+            } else if (response.statusCode() == 400 || response.statusCode() == 422) {
+              // Permanent rejection — payload invalid; do not re-queue
+              log.error(
+                  "Worker {} permanently rejected job (status {}): {}",
+                  targetUrl,
+                  response.statusCode(),
+                  response.body());
+              sent = true; // prevent re-push to queue
+              processed = true;
+              break;
             } else if (response.statusCode() != 429) {
-              log.error("Worker {} returned status {}", targetUrl, response.statusCode());
+              log.error(
+                  "Worker {} returned status {}: {}",
+                  targetUrl,
+                  response.statusCode(),
+                  response.body());
             }
           } catch (Exception e) {
             log.debug("Worker {} is unreachable: {}", workerUrl, e.getMessage());

@@ -307,6 +307,44 @@ public class WorkerDispatcherServiceTest {
     verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
   }
 
+  @Test
+  public void testDispatchJobs_PermanentRejection_400() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
+
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
+    when(mockResponse.statusCode()).thenReturn(400);
+    when(mockResponse.body()).thenReturn("{\"detail\":\"bad request\"}");
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(mockResponse);
+
+    workerDispatcherService.dispatchJobs();
+
+    // Job should be consumed, NOT re-queued (400 is permanent rejection)
+    verify(listOps, never()).leftPush(anyString(), anyString());
+  }
+
+  @Test
+  public void testDispatchJobs_PermanentRejection_422() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
+
+    HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
+    when(mockResponse.statusCode()).thenReturn(422);
+    when(mockResponse.body()).thenReturn("{\"detail\":[{\"msg\":\"field required\",\"type\":\"missing\"}]}");
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(mockResponse);
+
+    workerDispatcherService.dispatchJobs();
+
+    // Job should be consumed, NOT re-queued (422 is permanent validation failure)
+    verify(listOps, never()).leftPush(anyString(), anyString());
+  }
+
   @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
