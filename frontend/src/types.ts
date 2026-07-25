@@ -179,6 +179,12 @@ export interface LayerEditHistory {
   editedAt: string;
 }
 
+export interface ModelEntry {
+  id: string;
+  name: string;
+  free?: boolean;
+}
+
 export interface SystemSettingsDto {
   ocrVlmModelList: string[];
   tlLlmModelList: string[];
@@ -202,4 +208,5 @@ export interface SystemSettingsDto {
 
   activeProviders?: string[];
   activeOcrProviders?: string[];
+  providerModelsMap?: Record<string, Record<string, ModelEntry[]>>;
 }

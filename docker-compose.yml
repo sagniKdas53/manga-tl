@@ -171,6 +171,7 @@ services:
       - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-1.0}
       # API Keys are loaded via DOCKER_SECRETS_JSON
       - DOCKER_SECRETS_JSON=/run/secrets/api_keys
+      - PROVIDERS_CONFIG=/app/config/providers.json
       - OCR_MODEL_PROVIDER=${OCR_MODEL_PROVIDER}
       - OCR_VLM_MODEL=${OCR_VLM_MODEL}
       - OCR_VLM_MODEL_LIST=${OCR_VLM_MODEL_LIST}
@@ -221,6 +222,7 @@ services:
       - worker_api_secret
       - api_keys
     volumes:
+      - ./config/providers.json:/app/config/providers.json:ro
       - ./data/worker/huggingface:/root/.cache/huggingface
       - ./data/worker/paddlex:/root/.paddlex
       - ./data/worker/rendered_cache:/app/rendered_cache

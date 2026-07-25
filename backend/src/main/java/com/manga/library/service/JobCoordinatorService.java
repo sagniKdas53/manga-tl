@@ -36,7 +36,9 @@ public class JobCoordinatorService {
   private final SystemSettingsService systemSettingsService;
   private final JobRepository jobRepository;
   private final JobCostRepository jobCostRepository;
-  public JobCoordinatorService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, ImageRepository imageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository, ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository, LayerRepository layerRepository, LayerElementRepository layerElementRepository, PageRepository pageRepository, SseService sseService, SystemSettingsService systemSettingsService, JobRepository jobRepository, JobCostRepository jobCostRepository) {
+  private final ProviderConfigCache providerConfigCache;
+
+  public JobCoordinatorService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, ImageRepository imageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository, ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository, LayerRepository layerRepository, LayerElementRepository layerElementRepository, PageRepository pageRepository, SseService sseService, SystemSettingsService systemSettingsService, JobRepository jobRepository, JobCostRepository jobCostRepository, ProviderConfigCache providerConfigCache) {
     this.redisTemplate = redisTemplate;
     this.objectMapper = objectMapper;
     this.imageRepository = imageRepository;
@@ -51,6 +53,7 @@ public class JobCoordinatorService {
     this.systemSettingsService = systemSettingsService;
     this.jobRepository = jobRepository;
     this.jobCostRepository = jobCostRepository;
+    this.providerConfigCache = providerConfigCache;
   }
 
 
@@ -365,11 +368,13 @@ public class JobCoordinatorService {
     if (chapterVal != null
         && !chapterVal.trim().isEmpty()
         && !chapterVal.equals("inherit")
-        && !chapterVal.equals("default")) return chapterVal;
+        && !chapterVal.equals("default")
+        && !chapterVal.contains("[ORPHANED]")) return chapterVal;
     if (seriesVal != null
         && !seriesVal.trim().isEmpty()
         && !seriesVal.equals("inherit")
-        && !seriesVal.equals("default")) return seriesVal;
+        && !seriesVal.equals("default")
+        && !seriesVal.contains("[ORPHANED]")) return seriesVal;
     return globalVal;
   }
 

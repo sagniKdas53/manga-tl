@@ -22,10 +22,17 @@ public class CostEstimationService {
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
   private final com.manga.library.repository.ModelRateRepository modelRateRepository;
-  public CostEstimationService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, com.manga.library.repository.ModelRateRepository modelRateRepository) {
+  private final ProviderConfigCache providerConfigCache;
+
+  public CostEstimationService(
+      StringRedisTemplate redisTemplate,
+      ObjectMapper objectMapper,
+      com.manga.library.repository.ModelRateRepository modelRateRepository,
+      ProviderConfigCache providerConfigCache) {
     this.redisTemplate = redisTemplate;
     this.objectMapper = objectMapper;
     this.modelRateRepository = modelRateRepository;
+    this.providerConfigCache = providerConfigCache;
   }
 
 
@@ -52,7 +59,10 @@ public class CostEstimationService {
     // Free or local models are zero-cost
     if ("ollama".equalsIgnoreCase(provider)
         || "local".equalsIgnoreCase(provider)
-        || model.contains(":free")) {
+        || "lmstudio".equalsIgnoreCase(provider)
+        || model.contains(":free")
+        || providerConfigCache.isFreeTier(provider)
+        || providerConfigCache.isModelFree(provider, model)) {
       saveJobCost(0.0);
       return 0.0;
     }

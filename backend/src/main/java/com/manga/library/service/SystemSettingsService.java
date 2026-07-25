@@ -14,8 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class SystemSettingsService {
 
   private final SystemSettingsRepository systemSettingsRepository;
-  public SystemSettingsService(SystemSettingsRepository systemSettingsRepository) {
+  private final ProviderConfigCache providerConfigCache;
+
+  public SystemSettingsService(
+      SystemSettingsRepository systemSettingsRepository,
+      ProviderConfigCache providerConfigCache) {
     this.systemSettingsRepository = systemSettingsRepository;
+    this.providerConfigCache = providerConfigCache;
   }
 
 
@@ -64,15 +69,6 @@ public class SystemSettingsService {
   @org.springframework.beans.factory.annotation.Value("${QA_MODE:auto}")
   private String qaMode;
 
-  @org.springframework.beans.factory.annotation.Value("${OPENAI_API_KEY:}")
-  private String openaiApiKey;
-
-  @org.springframework.beans.factory.annotation.Value("${ANTHROPIC_API_KEY:}")
-  private String anthropicApiKey;
-
-  @org.springframework.beans.factory.annotation.Value("${LOCAL_LLM_PROVIDER:ollama}")
-  private String localLlmProvider;
-
   public SystemSettingsDto getSettings() {
     List<String> parsedOcrVlmModelList = parseList(ocrVlmModelList);
     List<String> parsedTlLlmModelList = parseList(tlLlmModelList);
@@ -95,48 +91,23 @@ public class SystemSettingsService {
     if ((actQaVlmModel == null || actQaVlmModel.isEmpty()) && !parsedQaVlmModelList.isEmpty())
       actQaVlmModel = parsedQaVlmModelList.get(0);
 
-    List<String> activeProviders = new java.util.ArrayList<>();
-    activeProviders.add("openrouter");
-    activeProviders.add("gemini");
-    activeProviders.add("nvidia");
-    if (openaiApiKey != null && !openaiApiKey.trim().isEmpty()) {
-      activeProviders.add("openai");
-    }
-    if (anthropicApiKey != null && !anthropicApiKey.trim().isEmpty()) {
-      activeProviders.add("anthropic");
-    }
-    if (!disableLocalLlm) {
-      String localProv =
-          (localLlmProvider != null) ? localLlmProvider.trim().toLowerCase() : "ollama";
-      if ("ollama".equals(localProv)) {
-        activeProviders.add("ollama");
-      } else if ("lmstudio".equals(localProv)) {
-        activeProviders.add("lmstudio");
-      } else {
-        activeProviders.add("ollama");
-        activeProviders.add("lmstudio");
-      }
+    List<String> activeProviders = providerConfigCache.getProvidersForTask("tl");
+    if (activeProviders.isEmpty()) {
+      activeProviders = List.of("openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio");
     }
 
     List<String> activeOcrProviders = new java.util.ArrayList<>();
     if (!disableLocalOcr) {
       activeOcrProviders.add("local");
     }
-    activeOcrProviders.add("openrouter");
-    activeOcrProviders.add("gemini");
-    activeOcrProviders.add("nvidia");
-    if (!disableLocalLlm) {
-      String localProv =
-          (localLlmProvider != null) ? localLlmProvider.trim().toLowerCase() : "ollama";
-      if ("ollama".equals(localProv)) {
-        activeOcrProviders.add("ollama");
-      } else if ("lmstudio".equals(localProv)) {
-        activeOcrProviders.add("lmstudio");
-      } else {
-        activeOcrProviders.add("ollama");
-        activeOcrProviders.add("lmstudio");
-      }
+    List<String> cachedOcr = providerConfigCache.getProvidersForTask("ocr");
+    if (!cachedOcr.isEmpty()) {
+      activeOcrProviders.addAll(cachedOcr);
+    } else {
+      activeOcrProviders.addAll(List.of("openrouter", "gemini", "nvidia", "ollama", "lmstudio"));
     }
+
+    var providerModelsMap = providerConfigCache.getProviderModelsMap();
 
     return new SystemSettingsDto(
       parsedOcrVlmModelList,
@@ -157,7 +128,8 @@ public class SystemSettingsService {
       getSettingValue("qaMode", qaMode),
       Boolean.parseBoolean(getSettingValue("useFallbackModels", "true")),
       activeProviders,
-      activeOcrProviders
+      activeOcrProviders,
+      providerModelsMap
     );
   }
 
