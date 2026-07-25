@@ -44,25 +44,31 @@ public class JwtTest {
         .findByEmail("admin@manga.local")
         .orElseGet(
             () -> {
-              User buildUser =
-                  new User() {{ setEmail("admin@manga.local"); setPasswordHash("mock_password_hash"); setDisplayName("Admin User"); setRole("admin"); }};
-              Objects.requireNonNull(buildUser, "user cannot be null");
+              User buildUser = new User();
+              buildUser.setEmail("admin@manga.local");
+              buildUser.setPasswordHash("mock_password_hash");
+              buildUser.setDisplayName("Admin User");
+              buildUser.setRole("admin");
               return userRepository.save(buildUser);
             });
 
     // Save test series programmatically
-    Series series =
-        new Series() {{ setTitle("Test Series"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
-    Objects.requireNonNull(series, "series cannot be null");
-    series = seriesRepository.save(series);
+    Series series = new Series();
+    series.setTitle("Test Series");
+    series.setOriginalLanguage("ja");
+    series.setReadingDirection("rtl");
+    Series savedSeries = seriesRepository.save(series);
 
     // Generate dynamically signed JWT token
     String token = "Bearer " + jwtUtils.generateToken("admin@manga.local");
 
-    ChapterDto dto = new ChapterDto(null, null, 1.0, "One", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+    ChapterDto dto =
+        new ChapterDto(
+            null, null, 1.0, "One", null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null);
     mockMvc
         .perform(
-            post("/api/series/" + series.getId() + "/chapters")
+            post("/api/series/" + savedSeries.getId() + "/chapters")
                 .header("Authorization", token)
                 .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
                 .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
@@ -112,23 +118,31 @@ public class JwtTest {
         .findByEmail("admin@manga.local")
         .orElseGet(
             () -> {
-              User buildUser =
-                  new User() {{ setEmail("admin@manga.local"); setPasswordHash("mock_password_hash"); setDisplayName("Admin User"); setRole("admin"); }};
-              Objects.requireNonNull(buildUser, "user cannot be null");
+              User buildUser = new User();
+              buildUser.setEmail("admin@manga.local");
+              buildUser.setPasswordHash("mock_password_hash");
+              buildUser.setDisplayName("Admin User");
+              buildUser.setRole("admin");
               return userRepository.save(buildUser);
             });
 
-    Series series =
-        new Series() {{ setTitle("Test Series QueryParam"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
-    Objects.requireNonNull(series, "series cannot be null");
-    series = seriesRepository.save(series);
+    Series series = new Series();
+    series.setTitle("Test Series For Chapter");
+    series.setOriginalLanguage("ja");
+    series.setSourceLanguage("ja");
+    series.setTargetLanguage("en");
+    series.setReadingDirection("rtl");
+    Series savedSeries = seriesRepository.save(series);
 
     String rawToken = jwtUtils.generateToken("admin@manga.local");
 
-    ChapterDto dto = new ChapterDto(null, null, 2.0, "Two", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+    ChapterDto dto =
+        new ChapterDto(
+            null, null, 2.0, "Two", null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null);
     mockMvc
         .perform(
-            post("/api/series/" + series.getId() + "/chapters")
+            post("/api/series/" + savedSeries.getId() + "/chapters")
                 .param("token", rawToken)
                 .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
                 .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))

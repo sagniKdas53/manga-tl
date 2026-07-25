@@ -4,40 +4,39 @@ import com.manga.library.model.OcrRegion;
 import java.util.UUID;
 
 public record OcrRegionDto(
-  UUID id,
-  String text,
-  String translatedText,
-  Boolean approved,
-  Boolean translationFailed,
-  String detectedLanguage,
-  Double confidence,
-  Double rotation,
-  Integer bboxX,
-  Integer bboxY,
-  Integer bboxW,
-  Integer bboxH,
-  Integer panelReadingOrder,
-  Integer bubbleReadingOrder,
-  String regionType,
-  String backgroundColor,
-  Integer bubbleX,
-  Integer bubbleY,
-  Integer bubbleW,
-  Integer bubbleH,
-  Double ocrScore,
-  Double translationScore,
-  Double qaScore,
-  String qaFeedback,
-  String qaStatus,
-  String bubbleId,
-  Double detectionConfidence,
-  String maskPolygon,
-  Integer safeTextX,
-  Integer safeTextY,
-  Integer safeTextW,
-  Integer safeTextH,
-  UUID panelId
-) {
+    UUID id,
+    String text,
+    String translatedText,
+    Boolean approved,
+    Boolean translationFailed,
+    String detectedLanguage,
+    Double confidence,
+    Double rotation,
+    Integer bboxX,
+    Integer bboxY,
+    Integer bboxW,
+    Integer bboxH,
+    Integer panelReadingOrder,
+    Integer bubbleReadingOrder,
+    String regionType,
+    String backgroundColor,
+    Integer bubbleX,
+    Integer bubbleY,
+    Integer bubbleW,
+    Integer bubbleH,
+    Double ocrScore,
+    Double translationScore,
+    Double qaScore,
+    String qaFeedback,
+    String qaStatus,
+    String bubbleId,
+    Double detectionConfidence,
+    String maskPolygon,
+    Integer safeTextX,
+    Integer safeTextY,
+    Integer safeTextW,
+    Integer safeTextH,
+    UUID panelId) {
 
   public static OcrRegionDto fromEntity(OcrRegion region) {
     if (region == null) {
@@ -76,7 +75,6 @@ public record OcrRegionDto(
         region.getSafeTextY(),
         region.getSafeTextW(),
         region.getSafeTextH(),
-        region.getPanelId()
-    );
+        region.getPanelId());
   }
 }

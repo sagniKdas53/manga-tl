@@ -29,7 +29,8 @@ public class MinioService {
   @PostConstruct
   public void init() {
     try {
-      boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
+      boolean found =
+          minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
       if (!found) {
         minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
         log.info("Successfully created MinIO bucket: {}", bucketName);
@@ -44,7 +45,7 @@ public class MinioService {
     try (InputStream is = file.getInputStream()) {
       minioClient.putObject(
           PutObjectArgs.builder().bucket(bucketName).object(objectPath).stream(
-              is, file.getSize(), -1L)
+                  is, file.getSize(), -1L)
               .contentType(file.getContentType())
               .build());
       return objectPath;
@@ -56,7 +57,7 @@ public class MinioService {
     try (java.io.ByteArrayInputStream byteAIS = new java.io.ByteArrayInputStream(bytes)) {
       minioClient.putObject(
           PutObjectArgs.builder().bucket(bucketName).object(objectPath).stream(
-              byteAIS, (long) bytes.length, -1L)
+                  byteAIS, (long) bytes.length, -1L)
               .contentType(contentType)
               .build());
       return objectPath;
@@ -70,13 +71,14 @@ public class MinioService {
 
   public String generatePresignedUrl(String objectPath) {
     try {
-      String url = minioClient.getPresignedObjectUrl(
-          GetPresignedObjectUrlArgs.builder()
-              .method(Http.Method.GET)
-              .bucket(bucketName)
-              .object(objectPath)
-              .expiry(10, TimeUnit.MINUTES)
-              .build());
+      String url =
+          minioClient.getPresignedObjectUrl(
+              GetPresignedObjectUrlArgs.builder()
+                  .method(Http.Method.GET)
+                  .bucket(bucketName)
+                  .object(objectPath)
+                  .expiry(10, TimeUnit.MINUTES)
+                  .build());
       if (externalUrl != null && !externalUrl.trim().isEmpty() && url != null) {
         url = url.replace(endpoint, externalUrl);
       }

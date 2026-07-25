@@ -61,7 +61,13 @@ public class InternalJobControllerTest {
   public void testGetImageInfo_Success() throws Exception {
     UUID imageId = UUID.randomUUID();
     Image image =
-        new Image() {{ setId(imageId); setFilename("test.png"); setStoragePath("orig/test.png"); }};
+        new Image() {
+          {
+            setId(imageId);
+            setFilename("test.png");
+            setStoragePath("orig/test.png");
+          }
+        };
 
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
     when(minioService.generatePresignedUrl(anyString())).thenReturn("http://presigned-url");
@@ -69,14 +75,32 @@ public class InternalJobControllerTest {
 
     // Set up active OCR layer and elements
     UUID ocrLayerId = UUID.randomUUID();
-    Layer ocrLayer = new Layer() {{ setId(ocrLayerId); setType("ocr"); setZOrder(1); }};
+    Layer ocrLayer =
+        new Layer() {
+          {
+            setId(ocrLayerId);
+            setType("ocr");
+            setZOrder(1);
+          }
+        };
     when(layerRepository.findByPageId(any())).thenReturn(Collections.singletonList(ocrLayer));
 
     UUID regionId = UUID.randomUUID();
-    OcrRegion region = new OcrRegion() {{ setId(regionId); }};
+    OcrRegion region =
+        new OcrRegion() {
+          {
+            setId(regionId);
+          }
+        };
     when(ocrRegionRepository.findByPageId(any())).thenReturn(Collections.singletonList(region));
 
-    LayerElement element = new LayerElement() {{ setId(UUID.randomUUID()); setRegion(region); }};
+    LayerElement element =
+        new LayerElement() {
+          {
+            setId(UUID.randomUUID());
+            setRegion(region);
+          }
+        };
     when(layerElementRepository.findByLayerId(ocrLayerId))
         .thenReturn(Collections.singletonList(element));
     when(layerElementRepository.findByLayerPageId(any()))
@@ -84,32 +108,86 @@ public class InternalJobControllerTest {
 
     // Page, Chapter, Series context
     Series series =
-        new Series() {{ setId(UUID.randomUUID()); setTitle("Series Title"); setOriginalLanguage("ja"); }};
+        new Series() {
+          {
+            setId(UUID.randomUUID());
+            setTitle("Series Title");
+            setOriginalLanguage("ja");
+          }
+        };
     Chapter chapter =
-        new Chapter() {{ setId(UUID.randomUUID()); setSeries(series); setChapterNumber(2.0); }};
+        new Chapter() {
+          {
+            setId(UUID.randomUUID());
+            setSeries(series);
+            setChapterNumber(2.0);
+          }
+        };
     Page page =
-        new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(2); setImage(image); }};
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(2);
+            setImage(image);
+          }
+        };
     when(pageRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(page));
 
     // Previous page text
     Page prevPage =
-        new Page() {{ setId(UUID.randomUUID()); setPageNumber(1); setImage(new Image() {{ setId(UUID.randomUUID()); }}); }};
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setPageNumber(1);
+            setImage(
+                new Image() {
+                  {
+                    setId(UUID.randomUUID());
+                  }
+                });
+          }
+        };
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(any()))
         .thenReturn(Arrays.asList(prevPage, page));
     OcrRegion prevRegion =
-        new OcrRegion() {{ setId(UUID.randomUUID()); setText("prev text"); setTranslatedText("translated prev"); }};
+        new OcrRegion() {
+          {
+            setId(UUID.randomUUID());
+            setText("prev text");
+            setTranslatedText("translated prev");
+          }
+        };
     when(ocrRegionRepository.findByPageId(prevPage.getId()))
         .thenReturn(Collections.singletonList(prevRegion));
 
     // Previous chapter summary
-    Chapter prevChapter = new Chapter() {{ setId(UUID.randomUUID()); setSummaryJson("summary"); }};
+    Chapter prevChapter =
+        new Chapter() {
+          {
+            setId(UUID.randomUUID());
+            setSummaryJson("summary");
+          }
+        };
     when(chapterRepository.findBySeriesIdAndChapterNumber(any(), eq(1.0)))
         .thenReturn(Optional.of(prevChapter));
 
     // Conversations
-    Conversation conv = new Conversation() {{ setId(UUID.randomUUID()); setSceneType("dialogue"); }};
+    Conversation conv =
+        new Conversation() {
+          {
+            setId(UUID.randomUUID());
+            setSceneType("dialogue");
+          }
+        };
     when(conversationRepository.findByPageId(any())).thenReturn(Collections.singletonList(conv));
-    ConversationRegion cr = new ConversationRegion() {{ setRegionId(regionId); setPosition(1); }};
+    ConversationRegion cr =
+        new ConversationRegion() {
+          {
+            setRegionId(regionId);
+            setPosition(1);
+          }
+        };
     when(conversationRegionRepository.findByConversationId(conv.getId()))
         .thenReturn(Collections.singletonList(cr));
 
@@ -227,8 +305,23 @@ public class InternalJobControllerTest {
   public void testRegionCallback_Success() throws Exception {
     UUID regionId = UUID.randomUUID();
     OcrRegion region =
-        new OcrRegion() {{ setId(regionId); setPage(
-                new Page() {{ setId(UUID.randomUUID()); setImage(new Image() {{ setId(UUID.randomUUID()); }}); }}); }};
+        new OcrRegion() {
+          {
+            setId(regionId);
+            setPage(
+                new Page() {
+                  {
+                    setId(UUID.randomUUID());
+                    setImage(
+                        new Image() {
+                          {
+                            setId(UUID.randomUUID());
+                          }
+                        });
+                  }
+                });
+          }
+        };
     when(ocrRegionRepository.findById(regionId)).thenReturn(Optional.of(region));
 
     Map<String, Object> payload = new HashMap<>();
@@ -364,14 +457,39 @@ public class InternalJobControllerTest {
   @Test
   public void testGetImageInfo_PageOneNoChapter() throws Exception {
     UUID imageId = UUID.randomUUID();
-    Image image = new Image() {{ setId(imageId); setFilename("test.png"); }};
+    Image image =
+        new Image() {
+          {
+            setId(imageId);
+            setFilename("test.png");
+          }
+        };
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
 
-    Series series = new Series() {{ setId(UUID.randomUUID()); setTitle("Series Title"); }};
+    Series series =
+        new Series() {
+          {
+            setId(UUID.randomUUID());
+            setTitle("Series Title");
+          }
+        };
     Chapter chapter =
-        new Chapter() {{ setId(UUID.randomUUID()); setSeries(series); setChapterNumber(1.0); }};
+        new Chapter() {
+          {
+            setId(UUID.randomUUID());
+            setSeries(series);
+            setChapterNumber(1.0);
+          }
+        };
     Page page =
-        new Page() {{ setId(UUID.randomUUID()); setPageNumber(1); setImage(image); setChapter(chapter); }};
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setPageNumber(1);
+            setImage(image);
+            setChapter(chapter);
+          }
+        };
     when(pageRepository.findByImageId(imageId)).thenReturn(Collections.singletonList(page));
 
     mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isOk());
@@ -379,7 +497,14 @@ public class InternalJobControllerTest {
 
   @Test
   public void testGetJob_Success() throws Exception {
-    Job job = new Job() {{ setId("job1"); setType("ocr"); setStatus("PENDING"); }};
+    Job job =
+        new Job() {
+          {
+            setId("job1");
+            setType("ocr");
+            setStatus("PENDING");
+          }
+        };
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     mockMvc
@@ -437,7 +562,15 @@ public class InternalJobControllerTest {
   @Test
   public void testUpdateJobStatus_WithAttemptUpdate() throws Exception {
     Job job =
-        new Job() {{ setId("job1"); setType("ocr"); setStatus("PROCESSING"); setPayload("{\"attempt\": 1, \"jobId\": \"job1\"}"); setAttempt(1); }};
+        new Job() {
+          {
+            setId("job1");
+            setType("ocr");
+            setStatus("PROCESSING");
+            setPayload("{\"attempt\": 1, \"jobId\": \"job1\"}");
+            setAttempt(1);
+          }
+        };
     when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
 
     Map<String, String> payload = new HashMap<>();

@@ -43,8 +43,19 @@ public class PageServiceTest {
     series.setId(UUID.randomUUID());
     chapter.setSeries(series);
     User user = new User();
-    Image image = new Image() {{ setId(UUID.randomUUID()); }};
-    Page page = new Page() {{ setId(UUID.randomUUID()); setImage(image); }};
+    Image image =
+        new Image() {
+          {
+            setId(UUID.randomUUID());
+          }
+        };
+    Page page =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setImage(image);
+          }
+        };
 
     when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
         .thenReturn(java.util.Optional.of(page));
@@ -75,7 +86,12 @@ public class PageServiceTest {
     Image image = new Image();
     image.setId(UUID.randomUUID());
     User user = new User();
-    Page page = new Page() {{ setId(UUID.randomUUID()); }};
+    Page page =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+          }
+        };
 
     when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
         .thenReturn(java.util.Optional.empty());
@@ -102,11 +118,35 @@ public class PageServiceTest {
   public void testDeletePageDb_Success() {
     UUID pageId = UUID.randomUUID();
     UUID chapterId = UUID.randomUUID();
-    Series series = new Series() {{ setId(UUID.randomUUID()); }};
-    Chapter chapter = new Chapter() {{ setId(chapterId); setSeries(series); }};
+    Series series =
+        new Series() {
+          {
+            setId(UUID.randomUUID());
+          }
+        };
+    Chapter chapter =
+        new Chapter() {
+          {
+            setId(chapterId);
+            setSeries(series);
+          }
+        };
     Image image =
-        new Image() {{ setId(pageId); setStoragePath("path"); setThumbnailStoragePath("thumb"); }};
-    Page page = new Page() {{ setId(pageId); setChapter(chapter); setImage(image); }};
+        new Image() {
+          {
+            setId(pageId);
+            setStoragePath("path");
+            setThumbnailStoragePath("thumb");
+          }
+        };
+    Page page =
+        new Page() {
+          {
+            setId(pageId);
+            setChapter(chapter);
+            setImage(image);
+          }
+        };
 
     when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.of(page));
     when(pageRepository.findByImageId(pageId)).thenReturn(java.util.List.of(page));
@@ -125,10 +165,35 @@ public class PageServiceTest {
   public void testDeletePageDb_SharedImage() {
     UUID pageId = UUID.randomUUID();
     UUID chapterId = UUID.randomUUID();
-    Chapter chapter = new Chapter() {{ setId(chapterId); }};
-    Image image = new Image() {{ setId(pageId); setStoragePath("path"); }};
-    Page page1 = new Page() {{ setId(pageId); setChapter(chapter); setImage(image); }};
-    Page page2 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setImage(image); }};
+    Chapter chapter =
+        new Chapter() {
+          {
+            setId(chapterId);
+          }
+        };
+    Image image =
+        new Image() {
+          {
+            setId(pageId);
+            setStoragePath("path");
+          }
+        };
+    Page page1 =
+        new Page() {
+          {
+            setId(pageId);
+            setChapter(chapter);
+            setImage(image);
+          }
+        };
+    Page page2 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setImage(image);
+          }
+        };
 
     when(pageRepository.findById(pageId)).thenReturn(java.util.Optional.of(page1));
     when(pageRepository.findByImageId(pageId)).thenReturn(java.util.List.of(page1, page2));
@@ -145,16 +210,49 @@ public class PageServiceTest {
 
   @Test
   public void testCreatePageWithExistingImage_Conflict() {
-    Chapter chapter = new Chapter() {{ setId(UUID.randomUUID()); setChapterNumber(1.0); }};
-    Series series = new Series() {{ setId(UUID.randomUUID()); }};
+    Chapter chapter =
+        new Chapter() {
+          {
+            setId(UUID.randomUUID());
+            setChapterNumber(1.0);
+          }
+        };
+    Series series =
+        new Series() {
+          {
+            setId(UUID.randomUUID());
+          }
+        };
     chapter.setSeries(series);
-    Image newImage = new Image() {{ setId(UUID.randomUUID()); }};
-    Image existingImage = new Image() {{ setId(UUID.randomUUID()); }};
+    Image newImage =
+        new Image() {
+          {
+            setId(UUID.randomUUID());
+          }
+        };
+    Image existingImage =
+        new Image() {
+          {
+            setId(UUID.randomUUID());
+          }
+        };
     User user = new User();
 
     Page conflictingPage =
-        new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(1); setImage(existingImage); }};
-    Page newPage = new Page() {{ setId(UUID.randomUUID()); }};
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(1);
+            setImage(existingImage);
+          }
+        };
+    Page newPage =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+          }
+        };
 
     when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
         .thenReturn(java.util.Optional.of(conflictingPage));
@@ -239,10 +337,38 @@ public class PageServiceTest {
     Chapter chapter = new Chapter();
     chapter.setId(chapterId);
 
-    Page p1 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(1); }};
-    Page p2 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(2); }};
-    Page p3 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(3); }};
-    Page p4 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(4); }};
+    Page p1 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(1);
+          }
+        };
+    Page p2 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(2);
+          }
+        };
+    Page p3 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(3);
+          }
+        };
+    Page p4 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(4);
+          }
+        };
 
     when(pageRepository.findById(p2.getId())).thenReturn(java.util.Optional.of(p2));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
@@ -263,10 +389,38 @@ public class PageServiceTest {
     Chapter chapter = new Chapter();
     chapter.setId(chapterId);
 
-    Page p1 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(1); }};
-    Page p2 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(2); }};
-    Page p3 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(3); }};
-    Page p4 = new Page() {{ setId(UUID.randomUUID()); setChapter(chapter); setPageNumber(4); }};
+    Page p1 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(1);
+          }
+        };
+    Page p2 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(2);
+          }
+        };
+    Page p3 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(3);
+          }
+        };
+    Page p4 =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setChapter(chapter);
+            setPageNumber(4);
+          }
+        };
 
     when(pageRepository.findById(p4.getId())).thenReturn(java.util.Optional.of(p4));
     when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))

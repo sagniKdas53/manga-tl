@@ -25,8 +25,7 @@ public class RedisSubscriptionConfig {
 
   @Bean
   public RedisMessageListenerContainer redisMessageListenerContainer(
-      RedisConnectionFactory connectionFactory,
-      MessageListener providerConfigMessageListener) {
+      RedisConnectionFactory connectionFactory, MessageListener providerConfigMessageListener) {
     RedisMessageListenerContainer container = new RedisMessageListenerContainer();
     container.setConnectionFactory(connectionFactory);
     container.addMessageListener(

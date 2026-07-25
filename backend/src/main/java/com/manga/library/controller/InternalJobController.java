@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/internal")
 @org.springframework.transaction.annotation.Transactional
 public class InternalJobController {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(InternalJobController.class);
-
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(InternalJobController.class);
 
   private final JobCoordinatorService jobCoordinatorService;
   private final ImageRepository imageRepository;
@@ -33,7 +33,22 @@ public class InternalJobController {
   private final SseService sseService;
   private final JobRepository jobRepository;
   private final ObjectMapper objectMapper;
-  public InternalJobController(JobCoordinatorService jobCoordinatorService, ImageRepository imageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository, ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository, PageRepository pageRepository, ChapterRepository chapterRepository, MinioService minioService, LayerElementRepository layerElementRepository, LayerRepository layerRepository, SseService sseService, JobRepository jobRepository, ObjectMapper objectMapper) {
+
+  public InternalJobController(
+      JobCoordinatorService jobCoordinatorService,
+      ImageRepository imageRepository,
+      PanelRepository panelRepository,
+      OcrRegionRepository ocrRegionRepository,
+      ConversationRepository conversationRepository,
+      ConversationRegionRepository conversationRegionRepository,
+      PageRepository pageRepository,
+      ChapterRepository chapterRepository,
+      MinioService minioService,
+      LayerElementRepository layerElementRepository,
+      LayerRepository layerRepository,
+      SseService sseService,
+      JobRepository jobRepository,
+      ObjectMapper objectMapper) {
     this.jobCoordinatorService = jobCoordinatorService;
     this.imageRepository = imageRepository;
     this.panelRepository = panelRepository;
@@ -49,7 +64,6 @@ public class InternalJobController {
     this.jobRepository = jobRepository;
     this.objectMapper = objectMapper;
   }
-
 
   @PatchMapping("/jobs/{jobId}/status")
   public ResponseEntity<?> updateJobStatus(

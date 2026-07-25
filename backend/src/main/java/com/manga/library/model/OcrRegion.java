@@ -8,7 +8,6 @@ import java.util.UUID;
 public class OcrRegion {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -29,11 +28,9 @@ public class OcrRegion {
   private String translatedText;
 
   @Column(name = "approved")
-  
   private Boolean approved = false;
 
   @Column(name = "translation_failed")
-  
   private Boolean translationFailed = false;
 
   @Column(name = "detected_language", nullable = false)
@@ -41,7 +38,7 @@ public class OcrRegion {
 
   private Double confidence;
 
-   private Double rotation = 0.0;
+  private Double rotation = 0.0;
 
   @Column(name = "bbox_x", nullable = false)
   private Integer bboxX;
@@ -62,7 +59,6 @@ public class OcrRegion {
   private Integer bubbleReadingOrder;
 
   @Column(name = "region_type")
-  
   private String regionType = "speech";
 
   @Column(name = "background_color")
@@ -93,7 +89,6 @@ public class OcrRegion {
   private String qaFeedback;
 
   @Column(name = "qa_status")
-  
   private String qaStatus = "pending";
 
   @Column(name = "bubble_id")

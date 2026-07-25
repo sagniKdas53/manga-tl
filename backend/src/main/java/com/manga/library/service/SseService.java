@@ -16,11 +16,14 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class SseService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SseService.class);
 
-
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
   private final ImageRepository imageRepository;
-  public SseService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, ImageRepository imageRepository) {
+
+  public SseService(
+      StringRedisTemplate redisTemplate,
+      ObjectMapper objectMapper,
+      ImageRepository imageRepository) {
     this.redisTemplate = redisTemplate;
     this.objectMapper = objectMapper;
     this.imageRepository = imageRepository;

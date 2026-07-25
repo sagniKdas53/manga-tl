@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class SettingsController {
 
   private final SystemSettingsService systemSettingsService;
+
   public SettingsController(SystemSettingsService systemSettingsService) {
     this.systemSettingsService = systemSettingsService;
   }
-
 
   @GetMapping
   public ResponseEntity<SystemSettingsDto> getSettings() {

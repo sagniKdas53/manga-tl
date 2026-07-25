@@ -9,7 +9,6 @@ import java.util.UUID;
 public class LayerElement {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -30,7 +29,6 @@ public class LayerElement {
   private Double size;
 
   @Column(name = "auto_size")
-  
   private Boolean autoSize = true;
 
   @Column(name = "max_width")
@@ -40,10 +38,9 @@ public class LayerElement {
   private Integer maxHeight;
 
   @Column(name = "word_wrap")
-  
   private Boolean wordWrap = true;
 
-   private Double rotation = 0.0;
+  private Double rotation = 0.0;
 
   @Column(nullable = false)
   private Double x;
@@ -51,9 +48,9 @@ public class LayerElement {
   @Column(nullable = false)
   private Double y;
 
-   private Boolean visible = true;
+  private Boolean visible = true;
 
-   private Boolean overflow = false;
+  private Boolean overflow = false;
 
   @Column(name = "background_color")
   private String backgroundColor;
@@ -62,22 +59,18 @@ public class LayerElement {
   private String textColor;
 
   @Column(name = "font_weight")
-  
   private String fontWeight = "normal";
 
   @Column(name = "font_style")
-  
   private String fontStyle = "normal";
 
   @Column(name = "is_manually_edited")
-  
   private Boolean isManuallyEdited = false;
 
   @Column(name = "edited_at")
   private OffsetDateTime editedAt;
 
   @Column(name = "box_shape")
-  
   private String boxShape = "rectangular";
 
   @Column(name = "mask_polygon")

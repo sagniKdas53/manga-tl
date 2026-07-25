@@ -9,11 +9,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PageService {
@@ -23,14 +22,19 @@ public class PageService {
   private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
   private final MinioService minioService;
-  public PageService(ImageRepository imageRepository, PageRepository pageRepository, SeriesRepository seriesRepository, ChapterRepository chapterRepository, MinioService minioService) {
+
+  public PageService(
+      ImageRepository imageRepository,
+      PageRepository pageRepository,
+      SeriesRepository seriesRepository,
+      ChapterRepository chapterRepository,
+      MinioService minioService) {
     this.imageRepository = imageRepository;
     this.pageRepository = pageRepository;
     this.seriesRepository = seriesRepository;
     this.chapterRepository = chapterRepository;
     this.minioService = minioService;
   }
-
 
   @Transactional
   public Page createPageAndImage(

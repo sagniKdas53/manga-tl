@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api")
 public class LayerController {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LayerController.class);
-
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(LayerController.class);
 
   private final LayerRepository layerRepository;
   private final LayerElementRepository layerElementRepository;
@@ -25,7 +25,14 @@ public class LayerController {
   private final PageRepository pageRepository;
   private final ObjectMapper objectMapper;
   private final OcrRegionRepository ocrRegionRepository;
-  public LayerController(LayerRepository layerRepository, LayerElementRepository layerElementRepository, LayerEditHistoryRepository layerEditHistoryRepository, PageRepository pageRepository, ObjectMapper objectMapper, OcrRegionRepository ocrRegionRepository) {
+
+  public LayerController(
+      LayerRepository layerRepository,
+      LayerElementRepository layerElementRepository,
+      LayerEditHistoryRepository layerEditHistoryRepository,
+      PageRepository pageRepository,
+      ObjectMapper objectMapper,
+      OcrRegionRepository ocrRegionRepository) {
     this.layerRepository = layerRepository;
     this.layerElementRepository = layerElementRepository;
     this.layerEditHistoryRepository = layerEditHistoryRepository;
@@ -33,7 +40,6 @@ public class LayerController {
     this.objectMapper = objectMapper;
     this.ocrRegionRepository = ocrRegionRepository;
   }
-
 
   @PutMapping("/layer-elements/{id}")
   @Transactional

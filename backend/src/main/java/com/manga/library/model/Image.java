@@ -9,7 +9,6 @@ import java.util.UUID;
 public class Image {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  
   private UUID id;
 
   @Column(nullable = false)

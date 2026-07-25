@@ -30,6 +30,7 @@ public class CostEstimationServiceTest {
   @Mock private HttpClient httpClient;
   @Mock private HttpResponse<String> httpResponse;
   @Mock private com.manga.library.repository.ModelRateRepository modelRateRepository;
+  @Mock private ProviderConfigCache providerConfigCache;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
   private CostEstimationService costEstimationService;
@@ -39,9 +40,8 @@ public class CostEstimationServiceTest {
   @BeforeEach
   public void setUp() {
     costEstimationService =
-        new CostEstimationService(redisTemplate, objectMapper, modelRateRepository);
-    ReflectionTestUtils.setField(
-        costEstimationService, "costCachePath", tempDir.resolve("costs.json").toString());
+        new CostEstimationService(
+            redisTemplate, objectMapper, modelRateRepository, providerConfigCache);
     ReflectionTestUtils.setField(
         costEstimationService, "openrouterModelsUrl", "https://openrouter.ai/api/v1/models");
     ReflectionTestUtils.setField(costEstimationService, "httpClient", httpClient);

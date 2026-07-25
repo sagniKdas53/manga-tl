@@ -54,7 +54,12 @@ public class LayerControllerTest {
   @Test
   public void testDeleteLayer_Success() throws Exception {
     UUID layerId = UUID.randomUUID();
-    Layer layer = new Layer() {{ setId(layerId); }};
+    Layer layer =
+        new Layer() {
+          {
+            setId(layerId);
+          }
+        };
     when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
 
     mockMvc.perform(delete("/api/layers/" + layerId)).andExpect(status().isOk());
@@ -76,8 +81,20 @@ public class LayerControllerTest {
   @Test
   public void testCreateLayer_Success() throws Exception {
     UUID pageId = UUID.randomUUID();
-    com.manga.library.model.Page page = new com.manga.library.model.Page() {{ setId(pageId); }};
-    Layer layer = new Layer() {{ setId(UUID.randomUUID()); setPage(page); setType("translation"); }};
+    com.manga.library.model.Page page =
+        new com.manga.library.model.Page() {
+          {
+            setId(pageId);
+          }
+        };
+    Layer layer =
+        new Layer() {
+          {
+            setId(UUID.randomUUID());
+            setPage(page);
+            setType("translation");
+          }
+        };
 
     when(pageRepository.findById(pageId)).thenReturn(Optional.of(page));
     when(layerRepository.save(any(Layer.class))).thenReturn(layer);
@@ -94,7 +111,12 @@ public class LayerControllerTest {
   public void testUpdateLayerElement_Success() throws Exception {
     UUID elementId = UUID.randomUUID();
     com.manga.library.model.LayerElement element =
-        new com.manga.library.model.LayerElement() {{ setId(elementId); setText("old text"); }};
+        new com.manga.library.model.LayerElement() {
+          {
+            setId(elementId);
+            setText("old text");
+          }
+        };
     when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
     when(layerElementRepository.save(any())).thenReturn(element);
 
@@ -110,7 +132,14 @@ public class LayerControllerTest {
   @Test
   public void testUpdateLayer_Success() throws Exception {
     UUID layerId = UUID.randomUUID();
-    Layer layer = new Layer() {{ setId(layerId); setZOrder(1); setVisible(true); }};
+    Layer layer =
+        new Layer() {
+          {
+            setId(layerId);
+            setZOrder(1);
+            setVisible(true);
+          }
+        };
     when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
     when(layerRepository.save(any(Layer.class))).thenReturn(layer);
 
@@ -126,11 +155,21 @@ public class LayerControllerTest {
   @Test
   public void testCreateLayerElement_Success() throws Exception {
     UUID layerId = UUID.randomUUID();
-    Layer layer = new Layer() {{ setId(layerId); }};
+    Layer layer =
+        new Layer() {
+          {
+            setId(layerId);
+          }
+        };
     when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
 
     com.manga.library.model.LayerElement element =
-        new com.manga.library.model.LayerElement() {{ setId(UUID.randomUUID()); setLayer(layer); }};
+        new com.manga.library.model.LayerElement() {
+          {
+            setId(UUID.randomUUID());
+            setLayer(layer);
+          }
+        };
     when(layerElementRepository.save(any())).thenReturn(element);
 
     mockMvc
@@ -145,7 +184,11 @@ public class LayerControllerTest {
   public void testDeleteLayerElement_Success() throws Exception {
     UUID elementId = UUID.randomUUID();
     com.manga.library.model.LayerElement element =
-        new com.manga.library.model.LayerElement() {{ setId(elementId); }};
+        new com.manga.library.model.LayerElement() {
+          {
+            setId(elementId);
+          }
+        };
     when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
 
     mockMvc.perform(delete("/api/layer-elements/" + elementId)).andExpect(status().isOk());
@@ -171,7 +214,12 @@ public class LayerControllerTest {
   public void testUpdateLayerElement_Exception() throws Exception {
     UUID elementId = UUID.randomUUID();
     com.manga.library.model.LayerElement element =
-        new com.manga.library.model.LayerElement() {{ setId(elementId); setText("old text"); }};
+        new com.manga.library.model.LayerElement() {
+          {
+            setId(elementId);
+            setText("old text");
+          }
+        };
     when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
 
     doThrow(new RuntimeException("JSON error")).when(objectMapper).writeValueAsString(any());
@@ -240,9 +288,21 @@ public class LayerControllerTest {
         new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
     metadata.put("foo", "bar");
 
-    Layer parentLayer = new Layer() {{ setId(UUID.randomUUID()); setMetadataJson(metadata); }};
+    Layer parentLayer =
+        new Layer() {
+          {
+            setId(UUID.randomUUID());
+            setMetadataJson(metadata);
+          }
+        };
     com.manga.library.model.LayerElement element =
-        new com.manga.library.model.LayerElement() {{ setId(elementId); setLayer(parentLayer); setText("old text"); }};
+        new com.manga.library.model.LayerElement() {
+          {
+            setId(elementId);
+            setLayer(parentLayer);
+            setText("old text");
+          }
+        };
 
     when(layerElementRepository.findById(elementId)).thenReturn(Optional.of(element));
     when(layerElementRepository.save(any())).thenReturn(element);
@@ -262,8 +322,20 @@ public class LayerControllerTest {
   @Test
   public void testCreateLayer_MetadataAndDoubleZOrder() throws Exception {
     UUID pageId = UUID.randomUUID();
-    com.manga.library.model.Page page = new com.manga.library.model.Page() {{ setId(pageId); }};
-    Layer layer = new Layer() {{ setId(UUID.randomUUID()); setPage(page); setType("translation"); }};
+    com.manga.library.model.Page page =
+        new com.manga.library.model.Page() {
+          {
+            setId(pageId);
+          }
+        };
+    Layer layer =
+        new Layer() {
+          {
+            setId(UUID.randomUUID());
+            setPage(page);
+            setType("translation");
+          }
+        };
 
     when(pageRepository.findById(pageId)).thenReturn(Optional.of(page));
     when(layerRepository.save(any(Layer.class))).thenReturn(layer);
@@ -281,7 +353,14 @@ public class LayerControllerTest {
   @Test
   public void testUpdateLayer_DoubleZOrder() throws Exception {
     UUID layerId = UUID.randomUUID();
-    Layer layer = new Layer() {{ setId(layerId); setZOrder(1); setVisible(true); }};
+    Layer layer =
+        new Layer() {
+          {
+            setId(layerId);
+            setZOrder(1);
+            setVisible(true);
+          }
+        };
     when(layerRepository.findById(layerId)).thenReturn(Optional.of(layer));
     when(layerRepository.save(any(Layer.class))).thenReturn(layer);
 

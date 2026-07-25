@@ -27,8 +27,8 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/series")
 public class SeriesController {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SeriesController.class);
-
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(SeriesController.class);
 
   private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
@@ -40,7 +40,18 @@ public class SeriesController {
   private final JobCoordinatorService jobCoordinatorService;
   private final ChapterExportService chapterExportService;
   private final SystemSettingsService systemSettingsService;
-  public SeriesController(SeriesRepository seriesRepository, ChapterRepository chapterRepository, PageRepository pageRepository, ImageRepository imageRepository, LayerRepository layerRepository, PageService pageService, MinioService minioService, JobCoordinatorService jobCoordinatorService, ChapterExportService chapterExportService, SystemSettingsService systemSettingsService) {
+
+  public SeriesController(
+      SeriesRepository seriesRepository,
+      ChapterRepository chapterRepository,
+      PageRepository pageRepository,
+      ImageRepository imageRepository,
+      LayerRepository layerRepository,
+      PageService pageService,
+      MinioService minioService,
+      JobCoordinatorService jobCoordinatorService,
+      ChapterExportService chapterExportService,
+      SystemSettingsService systemSettingsService) {
     this.seriesRepository = seriesRepository;
     this.chapterRepository = chapterRepository;
     this.pageRepository = pageRepository;
@@ -52,7 +63,6 @@ public class SeriesController {
     this.chapterExportService = chapterExportService;
     this.systemSettingsService = systemSettingsService;
   }
-
 
   @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:}")
   private String contextPath;
@@ -74,26 +84,25 @@ public class SeriesController {
 
   private SeriesDto toDto(Series s) {
     return new SeriesDto(
-      s.getId(),
-      s.getTitle(),
-      s.getOriginalLanguage(),
-      s.getSourceLanguage(),
-      s.getTargetLanguage(),
-      s.getReadingDirection(),
-      s.getCoverImageId() != null ? getImageUrl(s.getCoverImageId()) : null,
-      s.getOcrProvider(),
-      s.getOcrModel(),
-      s.getTlProvider(),
-      s.getTlModel(),
-      s.getQaProvider(),
-      s.getQaLlmModel(),
-      s.getQaVlmModel(),
-      s.getQaMode(),
-      s.getRoutingStrategy(),
-      s.getUseFallbackModels(),
-      s.getCreatedAt(),
-      s.getUpdatedAt()
-    );
+        s.getId(),
+        s.getTitle(),
+        s.getOriginalLanguage(),
+        s.getSourceLanguage(),
+        s.getTargetLanguage(),
+        s.getReadingDirection(),
+        s.getCoverImageId() != null ? getImageUrl(s.getCoverImageId()) : null,
+        s.getOcrProvider(),
+        s.getOcrModel(),
+        s.getTlProvider(),
+        s.getTlModel(),
+        s.getQaProvider(),
+        s.getQaLlmModel(),
+        s.getQaVlmModel(),
+        s.getQaMode(),
+        s.getRoutingStrategy(),
+        s.getUseFallbackModels(),
+        s.getCreatedAt(),
+        s.getUpdatedAt());
   }
 
   private ChapterDto toChapterDto(Chapter c, SystemSettingsDto globalSettings) {
@@ -124,7 +133,10 @@ public class SeriesController {
     }
 
     if ("local".equals(ocrProv)) {
-      ocrMod = globalSettings != null && globalSettings.localOcrModel() != null ? globalSettings.localOcrModel() : "local";
+      ocrMod =
+          globalSettings != null && globalSettings.localOcrModel() != null
+              ? globalSettings.localOcrModel()
+              : "local";
     }
     var resolvedOcr = new ChapterDto.ResolvedModelSlot(ocrProv, ocrMod, ocrSrc);
 
@@ -163,35 +175,37 @@ public class SeriesController {
       qaVlm = gQaVlmModel;
       qaMod = gQaMode;
       qaSrc = "global";
-    } else if (c.getQaProvider() != null || c.getQaLlmModel() != null || c.getQaVlmModel() != null || c.getQaMode() != null) {
+    } else if (c.getQaProvider() != null
+        || c.getQaLlmModel() != null
+        || c.getQaVlmModel() != null
+        || c.getQaMode() != null) {
       qaSrc = "chapter";
     }
     var resolvedQa = new ChapterDto.ResolvedQaSlot(qaProv, qaLlm, qaVlm, qaMod, qaSrc);
 
     return new ChapterDto(
-      c.getId(),
-      c.getSeries() != null ? c.getSeries().getId() : null,
-      c.getChapterNumber(),
-      c.getTitle(),
-      c.getCoverImageId() != null ? getImageUrl(c.getCoverImageId()) : null,
-      c.getOcrProvider(),
-      c.getOcrModel(),
-      c.getTlProvider(),
-      c.getTlModel(),
-      c.getQaProvider(),
-      c.getQaLlmModel(),
-      c.getQaVlmModel(),
-      c.getQaMode(),
-      c.getRoutingStrategy(),
-      c.getUseContextMemory(),
-      c.getUseFallbackModels(),
-      (int) pageRepository.countByChapterId(c.getId()),
-      c.getCreatedAt(),
-      c.getUpdatedAt(),
-      resolvedOcr,
-      resolvedTranslation,
-      resolvedQa
-    );
+        c.getId(),
+        c.getSeries() != null ? c.getSeries().getId() : null,
+        c.getChapterNumber(),
+        c.getTitle(),
+        c.getCoverImageId() != null ? getImageUrl(c.getCoverImageId()) : null,
+        c.getOcrProvider(),
+        c.getOcrModel(),
+        c.getTlProvider(),
+        c.getTlModel(),
+        c.getQaProvider(),
+        c.getQaLlmModel(),
+        c.getQaVlmModel(),
+        c.getQaMode(),
+        c.getRoutingStrategy(),
+        c.getUseContextMemory(),
+        c.getUseFallbackModels(),
+        (int) pageRepository.countByChapterId(c.getId()),
+        c.getCreatedAt(),
+        c.getUpdatedAt(),
+        resolvedOcr,
+        resolvedTranslation,
+        resolvedQa);
   }
 
   @PostMapping
@@ -337,9 +351,7 @@ public class SeriesController {
               s.setTitle(dto.title());
               String sourceLang =
                   resolveSetting(
-                      dto.sourceLanguage() != null
-                          ? dto.sourceLanguage()
-                          : dto.originalLanguage());
+                      dto.sourceLanguage() != null ? dto.sourceLanguage() : dto.originalLanguage());
               String targetLang = resolveSetting(dto.targetLanguage());
               if (targetLang == null) targetLang = "en";
 

@@ -19,8 +19,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 public class JobCoordinatorService {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JobCoordinatorService.class);
-
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(JobCoordinatorService.class);
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
@@ -38,7 +38,22 @@ public class JobCoordinatorService {
   private final JobCostRepository jobCostRepository;
   private final ProviderConfigCache providerConfigCache;
 
-  public JobCoordinatorService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, ImageRepository imageRepository, PanelRepository panelRepository, OcrRegionRepository ocrRegionRepository, ConversationRepository conversationRepository, ConversationRegionRepository conversationRegionRepository, LayerRepository layerRepository, LayerElementRepository layerElementRepository, PageRepository pageRepository, SseService sseService, SystemSettingsService systemSettingsService, JobRepository jobRepository, JobCostRepository jobCostRepository, ProviderConfigCache providerConfigCache) {
+  public JobCoordinatorService(
+      StringRedisTemplate redisTemplate,
+      ObjectMapper objectMapper,
+      ImageRepository imageRepository,
+      PanelRepository panelRepository,
+      OcrRegionRepository ocrRegionRepository,
+      ConversationRepository conversationRepository,
+      ConversationRegionRepository conversationRegionRepository,
+      LayerRepository layerRepository,
+      LayerElementRepository layerElementRepository,
+      PageRepository pageRepository,
+      SseService sseService,
+      SystemSettingsService systemSettingsService,
+      JobRepository jobRepository,
+      JobCostRepository jobCostRepository,
+      ProviderConfigCache providerConfigCache) {
     this.redisTemplate = redisTemplate;
     this.objectMapper = objectMapper;
     this.imageRepository = imageRepository;
@@ -55,7 +70,6 @@ public class JobCoordinatorService {
     this.jobCostRepository = jobCostRepository;
     this.providerConfigCache = providerConfigCache;
   }
-
 
   @EventListener(ApplicationReadyEvent.class)
   public void onStartup() {
@@ -236,8 +250,7 @@ public class JobCoordinatorService {
               } else {
                 job.put(
                     "ocrModel",
-                    resolveModel(
-                        chapter.getOcrModel(), series.getOcrModel(), settings.ocrModel()));
+                    resolveModel(chapter.getOcrModel(), series.getOcrModel(), settings.ocrModel()));
               }
               job.put(
                   "tlProvider",
@@ -381,8 +394,7 @@ public class JobCoordinatorService {
   @Transactional
   public void handlePanelCallback(PanelCallbackDto dto) {
     UUID imageId = dto.imageId();
-    log.info(
-        "Received panel callback for image: {} with {} panels", imageId, dto.panels().size());
+    log.info("Received panel callback for image: {} with {} panels", imageId, dto.panels().size());
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image =
@@ -416,8 +428,7 @@ public class JobCoordinatorService {
   @Transactional
   public void handleOcrCallback(OcrCallbackDto dto) {
     UUID imageId = dto.imageId();
-    log.info(
-        "Received OCR callback for image: {} with {} regions", imageId, dto.regions().size());
+    log.info("Received OCR callback for image: {} with {} regions", imageId, dto.regions().size());
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
     imageRepository
@@ -461,8 +472,7 @@ public class JobCoordinatorService {
     for (OcrCallbackDto.OcrRegionData rData : dto.regions()) {
       // Find which panel this OCR region resides in based on overlap
       Panel matchingPanel =
-          findMatchingPanel(
-              rData.x(), rData.y(), rData.width(), rData.height(), panels);
+          findMatchingPanel(rData.x(), rData.y(), rData.width(), rData.height(), panels);
 
       OcrRegion region = new OcrRegion();
       region.setPage(page);
@@ -876,7 +886,10 @@ public class JobCoordinatorService {
                       element.setFontWeight("bold");
                       element.setBackgroundColor(region.getBackgroundColor());
                       element.setTextColor(getContrastingTextColor(region.getBackgroundColor()));
-                      element.setBoxShape("speech".equalsIgnoreCase(region.getRegionType()) ? "elliptical" : "rectangular");
+                      element.setBoxShape(
+                          "speech".equalsIgnoreCase(region.getRegionType())
+                              ? "elliptical"
+                              : "rectangular");
                       element.setMaskPolygon(region.getMaskPolygon());
                     } else {
                       element.setText(translatedText);

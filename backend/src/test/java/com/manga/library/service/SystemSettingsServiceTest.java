@@ -25,7 +25,8 @@ public class SystemSettingsServiceTest {
 
   @BeforeEach
   public void setUp() {
-    systemSettingsService = new SystemSettingsService(systemSettingsRepository, providerConfigCache);
+    systemSettingsService =
+        new SystemSettingsService(systemSettingsRepository, providerConfigCache);
 
     // Set @Value properties via ReflectionTestUtils
     ReflectionTestUtils.setField(systemSettingsService, "defaultOcrProvider", "openrouter");
@@ -83,7 +84,28 @@ public class SystemSettingsServiceTest {
 
   @Test
   public void testUpdateSettings() {
-    SystemSettingsDto updateDto = new SystemSettingsDto(null, null, null, null, null, "local", "new-ocr-model", "gemini", "new-tl-model", "openai", "new-qa-llm", "new-qa-vlm", false, null, false, null, null, null, null, null);
+    SystemSettingsDto updateDto =
+        new SystemSettingsDto(
+            null,
+            null,
+            null,
+            null,
+            null,
+            "local",
+            "new-ocr-model",
+            "gemini",
+            "new-tl-model",
+            "openai",
+            "new-qa-llm",
+            "new-qa-vlm",
+            false,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null);
     SystemSetting existingOcrProvider = new SystemSetting();
     existingOcrProvider.setSettingKey("ocrProvider");
     existingOcrProvider.setSettingValue("openrouter");

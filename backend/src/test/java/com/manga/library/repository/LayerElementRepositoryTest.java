@@ -29,24 +29,42 @@ public class LayerElementRepositoryTest {
   @Test
   public void testLayerElementCRUD() {
     // Parent Image and Layer
-    Image image = new Image() {{ setFilename("el_img.png"); setStoragePath("path/el_img.png"); }};
-    image = imageRepository.save(image);
+    Image image = new Image();
+    image.setFilename("el_img.png");
+    image.setStoragePath("path/el_img.png");
+    Image savedImage = imageRepository.save(image);
 
-    Series series =
-        seriesRepository.save(
-            new Series() {{ setTitle("Test"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }});
-    Chapter chapter =
-        chapterRepository.save(new Chapter() {{ setSeries(series); setChapterNumber(1.0); }});
+    Series series = new Series();
+    series.setTitle("Test");
+    series.setOriginalLanguage("ja");
+    series.setReadingDirection("rtl");
+    Series savedSeries = seriesRepository.save(series);
 
-    Page page = new Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
-    page = pageRepository.save(page);
+    Chapter chapter = new Chapter();
+    chapter.setSeries(savedSeries);
+    chapter.setChapterNumber(1.0);
+    Chapter savedChapter = chapterRepository.save(chapter);
 
-    Layer layer = new Layer() {{ setPage(page); setType("translation"); }};
-    layer = layerRepository.save(layer);
+    Page page = new Page();
+    page.setChapter(savedChapter);
+    page.setImage(savedImage);
+    page.setPageNumber(1);
+    Page savedPage = pageRepository.save(page);
+
+    Layer layer = new Layer();
+    layer.setPage(savedPage);
+    layer.setType("translation");
+    Layer savedLayer = layerRepository.save(layer);
 
     // 1. Create
-    LayerElement element =
-        new LayerElement() {{ setLayer(layer); setText("Hello World"); setFont("Arial"); setSize(14.0); setX(100.0); setY(200.0); setVisible(true); }};
+    LayerElement element = new LayerElement();
+    element.setLayer(savedLayer);
+    element.setText("Hello World");
+    element.setFont("Arial");
+    element.setSize(14.0);
+    element.setX(100.0);
+    element.setY(200.0);
+    element.setVisible(true);
 
     LayerElement saved = layerElementRepository.save(element);
     assertNotNull(saved.getId());
@@ -56,7 +74,7 @@ public class LayerElementRepositoryTest {
     assertEquals(100.0, saved.getX());
     assertEquals(200.0, saved.getY());
     assertTrue(saved.getVisible());
-    assertEquals(layer.getId(), saved.getLayer().getId());
+    assertEquals(savedLayer.getId(), saved.getLayer().getId());
 
     // 2. Read
     Optional<LayerElement> fetchedOpt = layerElementRepository.findById(saved.getId());

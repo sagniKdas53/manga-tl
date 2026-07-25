@@ -150,7 +150,14 @@ public class PipelineFlowIntegrationTest {
             .orElseGet(
                 () -> {
                   User buildUser =
-                      new User() {{ setEmail("admin@manga.local"); setPasswordHash("mock_password_hash"); setDisplayName("Admin User"); setRole("admin"); }};
+                      new User() {
+                        {
+                          setEmail("admin@manga.local");
+                          setPasswordHash("mock_password_hash");
+                          setDisplayName("Admin User");
+                          setRole("admin");
+                        }
+                      };
                   return userRepository.save(buildUser);
                 });
     adminToken = "Bearer " + jwtUtils.generateToken(adminUser.getEmail());
@@ -229,7 +236,27 @@ public class PipelineFlowIntegrationTest {
   @Test
   public void testPipelineFlowAndLayers() throws Exception {
     // 1. Create Series
-    SeriesDto seriesDto = new SeriesDto(null, "Flow Test Series", "ja", "ja", "en", "rtl", null, null, null, null, null, null, null, null, null, null, null, null, null);
+    SeriesDto seriesDto =
+        new SeriesDto(
+            null,
+            "Flow Test Series",
+            "ja",
+            "ja",
+            "en",
+            "rtl",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     MvcResult seriesResult =
         mockMvc
             .perform(
@@ -246,7 +273,30 @@ public class PipelineFlowIntegrationTest {
     createdSeriesIds.add(savedSeries.id());
 
     // 2. Create Chapter 1
-    ChapterDto ch1Dto = new ChapterDto(null, null, 1.0, "Chapter One", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+    ChapterDto ch1Dto =
+        new ChapterDto(
+            null,
+            null,
+            1.0,
+            "Chapter One",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     MvcResult ch1Result =
         mockMvc
             .perform(
@@ -263,7 +313,30 @@ public class PipelineFlowIntegrationTest {
     createdChapterIds.add(savedCh1.id());
 
     // 3. Create Chapter 2 (for reordering check)
-    ChapterDto ch2Dto = new ChapterDto(null, null, 2.0, "Chapter Two", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+    ChapterDto ch2Dto =
+        new ChapterDto(
+            null,
+            null,
+            2.0,
+            "Chapter Two",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     MvcResult ch2Result =
         mockMvc
             .perform(
@@ -279,7 +352,30 @@ public class PipelineFlowIntegrationTest {
     createdChapterIds.add(savedCh2.id());
 
     // Reorder chapters (make Chapter Two -> Chapter 1.5)
-    ChapterDto updatedCh2 = new ChapterDto(savedCh2.id(), savedCh2.seriesId(), 1.5, savedCh2.title(), savedCh2.volume(), savedCh2.language(), savedCh2.scanlator(), savedCh2.status(), savedCh2.sourceUrl(), savedCh2.sourceName(), savedCh2.externalId(), savedCh2.ocrStatus(), savedCh2.translationStatus(), savedCh2.qaStatus(), savedCh2.ocrRequested(), savedCh2.translationRequested(), savedCh2.pageCount(), savedCh2.createdAt(), savedCh2.updatedAt(), savedCh2.resolvedOcrModel(), savedCh2.resolvedTlModel());
+    ChapterDto updatedCh2 =
+        new ChapterDto(
+            savedCh2.id(),
+            savedCh2.seriesId(),
+            1.5,
+            savedCh2.title(),
+            savedCh2.coverImageUrl(),
+            savedCh2.ocrProvider(),
+            savedCh2.ocrModel(),
+            savedCh2.tlProvider(),
+            savedCh2.tlModel(),
+            savedCh2.qaProvider(),
+            savedCh2.qaLlmModel(),
+            savedCh2.qaVlmModel(),
+            savedCh2.qaMode(),
+            savedCh2.routingStrategy(),
+            savedCh2.useContextMemory(),
+            savedCh2.useFallbackModels(),
+            savedCh2.pageCount(),
+            savedCh2.createdAt(),
+            savedCh2.updatedAt(),
+            savedCh2.resolvedOcr(),
+            savedCh2.resolvedTranslation(),
+            savedCh2.resolvedQa());
     mockMvc
         .perform(
             put("/api/series/chapters/" + savedCh2.id())
@@ -370,9 +466,9 @@ public class PipelineFlowIntegrationTest {
 
     // 6. Sequential OCR Callback Pipeline Mocking
     // Step A: Panel Detection Callback -> triggers OCR
-    PanelCallbackDto panelCallback = new PanelCallbackDto(imageId, null, null);
-    PanelCallbackDto.PanelData panelData = new PanelCallbackDto.PanelData(10, 20, 500, 400, 1, null, null);
-    panelCallback.setPanels(List.of(panelData));
+    PanelCallbackDto.PanelData panelData =
+        new PanelCallbackDto.PanelData(10, 20, 500, 400, 1, null, null);
+    PanelCallbackDto panelCallback = new PanelCallbackDto(imageId, null, List.of(panelData));
 
     mockMvc
         .perform(
@@ -385,9 +481,33 @@ public class PipelineFlowIntegrationTest {
     assertEquals(1, mockRedisListStore.get("queue:ocr").size());
 
     // Step B: OCR Callback -> triggers Layout
-    OcrCallbackDto ocrCallback = new OcrCallbackDto(imageId, null, "Tesseract/Mock", 0.95, null, null);
-    OcrCallbackDto.OcrRegionData ocrRegion = new OcrCallbackDto.OcrRegionData("こんにちは", "ja", 0.9, 0.0, 15, 25, 100, 40, null, 1, null, "#ffffff", 12, 22, 110, 50, "bubble_1", 0.99, null, null, null, null, null);
-    ocrCallback.setRegions(List.of(ocrRegion));
+    OcrCallbackDto.OcrRegionData ocrRegion =
+        new OcrCallbackDto.OcrRegionData(
+            "こんにちは",
+            "ja",
+            0.9,
+            0.0,
+            15,
+            25,
+            100,
+            40,
+            null,
+            1,
+            null,
+            "#ffffff",
+            12,
+            22,
+            110,
+            50,
+            "bubble_1",
+            0.99,
+            null,
+            null,
+            null,
+            null,
+            null);
+    OcrCallbackDto ocrCallback =
+        new OcrCallbackDto(imageId, null, "Tesseract/Mock", 0.95, null, List.of(ocrRegion));
 
     mockMvc
         .perform(
@@ -482,9 +602,33 @@ public class PipelineFlowIntegrationTest {
         .andExpect(status().isOk());
 
     // A second OCR callback triggers for the redo
-    OcrCallbackDto ocrCallback2 = new OcrCallbackDto(imageId, null, "Tesseract/Mock-v2", 0.99, null, null);
-    OcrCallbackDto.OcrRegionData ocrRegion2 = new OcrCallbackDto.OcrRegionData("こんにちは、世界", "ja", 0.98, 0.0, 15, 25, 100, 40, null, 1, null, "#ffffff", 12, 22, 110, 50, "bubble_1", 0.99, null, null, null, null, null);
-    ocrCallback2.setRegions(List.of(ocrRegion2));
+    OcrCallbackDto.OcrRegionData ocrRegion2 =
+        new OcrCallbackDto.OcrRegionData(
+            "こんにちは、世界",
+            "ja",
+            0.98,
+            0.0,
+            15,
+            25,
+            100,
+            40,
+            null,
+            1,
+            null,
+            "#ffffff",
+            12,
+            22,
+            110,
+            50,
+            "bubble_1",
+            0.99,
+            null,
+            null,
+            null,
+            null,
+            null);
+    OcrCallbackDto ocrCallback2 =
+        new OcrCallbackDto(imageId, null, "Tesseract/Mock-v2", 0.99, null, List.of(ocrRegion2));
 
     mockMvc
         .perform(
@@ -539,34 +683,62 @@ public class PipelineFlowIntegrationTest {
   public void testClonedOcrLayerRegionPreservationAndVisibility() throws Exception {
     // 1. Create a mock Image and Page
     Image image =
-        new Image() {{ setFilename("test-clone.png"); setStoragePath("originals/test-clone.png"); setHash("test-clone-hash"); }};
+        new Image() {
+          {
+            setFilename("test-clone.png");
+            setStoragePath("originals/test-clone.png");
+            setHash("test-clone-hash");
+          }
+        };
     image = imageRepository.save(image);
     createdImageIds.add(image.getId());
 
-    Series series =
-        new Series() {{ setTitle("Clone Test"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }};
+    Series series = new Series();
+    series.setTitle("Clone Test");
+    series.setOriginalLanguage("ja");
+    series.setReadingDirection("rtl");
     series = seriesRepository.save(series);
     createdSeriesIds.add(series.getId());
-    Chapter chapter = new Chapter() {{ setSeries(series); setChapterNumber(1.0); }};
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setChapterNumber(1.0);
     chapter = chapterRepository.save(chapter);
     createdChapterIds.add(chapter.getId());
 
-    Page page = new Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
+    Page page = new Page();
+    page.setChapter(chapter);
+    page.setImage(image);
+    page.setPageNumber(1);
     page = pageRepository.save(page);
     createdPageIds.add(page.getId());
 
     // 2. Create OCR Region
-    OcrRegion ocrRegion =
-        new OcrRegion() {{ setPage(page); setText("Original Text"); setDetectedLanguage("ja"); setBboxX(10); setBboxY(10); setBboxW(100); setBboxH(50); }};
+    OcrRegion ocrRegion = new OcrRegion();
+    ocrRegion.setPage(page);
+    ocrRegion.setText("Original Text");
+    ocrRegion.setDetectedLanguage("ja");
+    ocrRegion.setBboxX(10);
+    ocrRegion.setBboxY(10);
+    ocrRegion.setBboxW(100);
+    ocrRegion.setBboxH(50);
     ocrRegion = ocrRegionRepository.save(ocrRegion);
 
     // 3. Create Layer (OCR)
-    Layer ocrLayer = new Layer() {{ setPage(page); setType("ocr"); setVisible(true); setZOrder(0); }};
+    Layer ocrLayer = new Layer();
+    ocrLayer.setPage(page);
+    ocrLayer.setType("ocr");
+    ocrLayer.setVisible(true);
+    ocrLayer.setZOrder(0);
     ocrLayer = layerRepository.save(ocrLayer);
 
     // 4. Create Layer Element with Region
-    LayerElement element =
-        new LayerElement() {{ setLayer(ocrLayer); setRegion(ocrRegion); setText("Original Text"); setX(10.0); setY(10.0); }};
+    LayerElement element = new LayerElement();
+    element.setLayer(ocrLayer);
+    element.setRegion(ocrRegion);
+    element.setText("Original Text");
+    element.setX(10.0);
+    element.setY(10.0);
     element = layerElementRepository.save(element);
 
     // 5. Test frontend cloning behaviour via API /api/images/{imageId}/layers and
@@ -574,11 +746,35 @@ public class PipelineFlowIntegrationTest {
     // We clone the layer. Since the frontend would call the create layer endpoint and then POST
     // each element, we simulate this.
     // Create new layer (the clone)
-    Layer clonedLayer = new Layer() {{ setPage(page); setType("ocr"); setVisible(true); setZOrder(1); }};
+    Layer clonedLayer = new Layer();
+    clonedLayer.setPage(page);
+    clonedLayer.setType("ocr");
+    clonedLayer.setVisible(true);
+    clonedLayer.setZOrder(1);
     clonedLayer = layerRepository.save(clonedLayer);
 
     // Create cloned layer element, passing regionId in the DTO
-    com.manga.library.dto.LayerElementDto dto = new com.manga.library.dto.LayerElementDto(element.getText(), null, null, null, null, null, null, null, element.getX(), element.getY(), null, null, null, null, null, null, null, null, ocrRegion.getId());
+    com.manga.library.dto.LayerElementDto dto =
+        new com.manga.library.dto.LayerElementDto(
+            element.getText(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            element.getX(),
+            element.getY(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            ocrRegion.getId());
 
     MvcResult cloneResult =
         mockMvc

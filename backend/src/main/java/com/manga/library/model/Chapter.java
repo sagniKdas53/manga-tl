@@ -11,7 +11,6 @@ import java.util.UUID;
 public class Chapter {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -61,7 +60,6 @@ public class Chapter {
   @Column(name = "routing_strategy")
   private String routingStrategy;
 
-  
   @Column(name = "use_context_memory", nullable = false, columnDefinition = "boolean default true")
   private Boolean useContextMemory = true;
 
