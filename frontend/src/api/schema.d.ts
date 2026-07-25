@@ -516,6 +516,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refreshToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -892,6 +908,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ModelEntryDto: {
+            id?: string;
+            name?: string;
+            free?: boolean;
+        };
         SystemSettingsDto: {
             ocrVlmModelList?: string[];
             tlLlmModelList?: string[];
@@ -912,6 +933,11 @@ export interface components {
             useFallbackModels?: boolean;
             activeProviders?: string[];
             activeOcrProviders?: string[];
+            providerModelsMap?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["ModelEntryDto"][];
+                };
+            };
         };
         SeriesDto: {
             /** Format: uuid */
@@ -2248,6 +2274,26 @@ export interface operations {
                 "application/json": components["schemas"]["RegisterRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    refreshToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
