@@ -12,14 +12,14 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/api/notifications")
 public class NotificationController {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(NotificationController.class);
-
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(NotificationController.class);
 
   private final SseService sseService;
+
   public NotificationController(SseService sseService) {
     this.sseService = sseService;
   }
-
 
   @GetMapping("/stream")
   public SseEmitter stream() {

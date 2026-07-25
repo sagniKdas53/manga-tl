@@ -16,8 +16,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class WorkerDispatcherService {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WorkerDispatcherService.class);
-
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(WorkerDispatcherService.class);
 
   @org.springframework.beans.factory.annotation.Value("${WORKER_URLS:http://worker:9091}")
   private String workerUrlsConfig;
@@ -42,11 +42,11 @@ public class WorkerDispatcherService {
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
+
   public WorkerDispatcherService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
     this.redisTemplate = redisTemplate;
     this.objectMapper = objectMapper;
   }
-
 
   private final HttpClient httpClient =
       HttpClient.newBuilder()

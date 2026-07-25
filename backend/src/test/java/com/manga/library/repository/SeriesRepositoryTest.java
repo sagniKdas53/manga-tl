@@ -24,8 +24,12 @@ public class SeriesRepositoryTest {
   @Test
   public void testSeriesCRUD() {
     // 1. Create
-    Series series =
-        new Series() {{ setTitle("Test Series CRUD"); setOriginalLanguage("ja"); setSourceLanguage("ja"); setTargetLanguage("en"); setReadingDirection("rtl"); }};
+    Series series = new Series();
+    series.setTitle("Test Series CRUD");
+    series.setOriginalLanguage("ja");
+    series.setSourceLanguage("ja");
+    series.setTargetLanguage("en");
+    series.setReadingDirection("rtl");
 
     Series saved = seriesRepository.save(series);
     assertNotNull(saved.getId());

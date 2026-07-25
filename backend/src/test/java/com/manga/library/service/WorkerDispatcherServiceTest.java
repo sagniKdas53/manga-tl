@@ -333,7 +333,8 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(422);
-    when(mockResponse.body()).thenReturn("{\"detail\":[{\"msg\":\"field required\",\"type\":\"missing\"}]}");
+    when(mockResponse.body())
+        .thenReturn("{\"detail\":[{\"msg\":\"field required\",\"type\":\"missing\"}]}");
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))

@@ -10,7 +10,6 @@ import java.util.UUID;
 public class Page {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)

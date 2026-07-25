@@ -12,18 +12,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DebouncedRenderService {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DebouncedRenderService.class);
-
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(DebouncedRenderService.class);
 
   private final PageRepository pageRepository;
   private final JobCoordinatorService jobCoordinatorService;
   private final JobRepository jobRepository;
-  public DebouncedRenderService(PageRepository pageRepository, JobCoordinatorService jobCoordinatorService, JobRepository jobRepository) {
+
+  public DebouncedRenderService(
+      PageRepository pageRepository,
+      JobCoordinatorService jobCoordinatorService,
+      JobRepository jobRepository) {
     this.pageRepository = pageRepository;
     this.jobCoordinatorService = jobCoordinatorService;
     this.jobRepository = jobRepository;
   }
-
 
   // Run every 5 seconds
   @Scheduled(fixedDelay = 5000)

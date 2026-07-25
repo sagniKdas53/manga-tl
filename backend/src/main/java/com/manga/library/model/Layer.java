@@ -9,7 +9,6 @@ import java.util.UUID;
 public class Layer {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -24,10 +23,9 @@ public class Layer {
   @Column(name = "target_language")
   private String targetLanguage;
 
-   private Boolean visible = true;
+  private Boolean visible = true;
 
   @Column(name = "z_order", nullable = false)
-  
   private Integer zOrder = 0;
 
   @Column(name = "created_at", nullable = false, updatable = false)

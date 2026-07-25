@@ -13,11 +13,12 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class CostEstimationService {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CostEstimationService.class);
-  
-  @org.springframework.beans.factory.annotation.Value("${cost.openrouter-models-url:https://openrouter.ai/api/v1/models}")
-  private String openrouterModelsUrl;
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(CostEstimationService.class);
 
+  @org.springframework.beans.factory.annotation.Value(
+      "${cost.openrouter-models-url:https://openrouter.ai/api/v1/models}")
+  private String openrouterModelsUrl;
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
@@ -34,8 +35,6 @@ public class CostEstimationService {
     this.modelRateRepository = modelRateRepository;
     this.providerConfigCache = providerConfigCache;
   }
-
-
 
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -95,7 +94,6 @@ public class CostEstimationService {
       log.debug("Failed to record job cost to Redis", e);
     }
   }
-
 
   private Map<String, Double> getModelRates(String model, String provider) {
     // 1. Try Redis first

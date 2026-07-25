@@ -8,7 +8,6 @@ import java.util.UUID;
 public class Conversation {
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
-  
   private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -18,7 +17,6 @@ public class Conversation {
   private Page page;
 
   @Column(name = "scene_type", nullable = false)
-  
   private String sceneType =
       "dialogue"; // dialogue | monologue | narration | flashback | sfx_cluster
 

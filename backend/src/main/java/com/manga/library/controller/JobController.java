@@ -19,13 +19,17 @@ public class JobController {
   private final JobCoordinatorService jobCoordinatorService;
   private final StringRedisTemplate redisTemplate;
   private final SseService sseService;
-  public JobController(JobRepository jobRepository, JobCoordinatorService jobCoordinatorService, StringRedisTemplate redisTemplate, SseService sseService) {
+
+  public JobController(
+      JobRepository jobRepository,
+      JobCoordinatorService jobCoordinatorService,
+      StringRedisTemplate redisTemplate,
+      SseService sseService) {
     this.jobRepository = jobRepository;
     this.jobCoordinatorService = jobCoordinatorService;
     this.redisTemplate = redisTemplate;
     this.sseService = sseService;
   }
-
 
   private static final String QUEUE_PAUSED_KEY = "system:queue:paused";
 

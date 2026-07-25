@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ChapterExportService {
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ChapterExportService.class);
-
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(ChapterExportService.class);
 
   private final ChapterRepository chapterRepository;
   private final PageRepository pageRepository;
@@ -24,7 +24,15 @@ public class ChapterExportService {
   private final LayerElementRepository layerElementRepository;
   private final JobCostRepository jobCostRepository;
   private final SseService sseService;
-  public ChapterExportService(ChapterRepository chapterRepository, PageRepository pageRepository, MinioService minioService, LayerRepository layerRepository, LayerElementRepository layerElementRepository, JobCostRepository jobCostRepository, SseService sseService) {
+
+  public ChapterExportService(
+      ChapterRepository chapterRepository,
+      PageRepository pageRepository,
+      MinioService minioService,
+      LayerRepository layerRepository,
+      LayerElementRepository layerElementRepository,
+      JobCostRepository jobCostRepository,
+      SseService sseService) {
     this.chapterRepository = chapterRepository;
     this.pageRepository = pageRepository;
     this.minioService = minioService;
@@ -33,7 +41,6 @@ public class ChapterExportService {
     this.jobCostRepository = jobCostRepository;
     this.sseService = sseService;
   }
-
 
   @Transactional(readOnly = true)
   public void buildAndUploadExport(UUID chapterId, UUID userId, boolean force) {

@@ -17,12 +17,10 @@ public class SystemSettingsService {
   private final ProviderConfigCache providerConfigCache;
 
   public SystemSettingsService(
-      SystemSettingsRepository systemSettingsRepository,
-      ProviderConfigCache providerConfigCache) {
+      SystemSettingsRepository systemSettingsRepository, ProviderConfigCache providerConfigCache) {
     this.systemSettingsRepository = systemSettingsRepository;
     this.providerConfigCache = providerConfigCache;
   }
-
 
   @org.springframework.beans.factory.annotation.Value("${OCR_MODEL_PROVIDER:openrouter}")
   private String defaultOcrProvider;
@@ -93,7 +91,8 @@ public class SystemSettingsService {
 
     List<String> activeProviders = providerConfigCache.getProvidersForTask("tl");
     if (activeProviders.isEmpty()) {
-      activeProviders = List.of("openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio");
+      activeProviders =
+          List.of("openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio");
     }
 
     List<String> activeOcrProviders = new java.util.ArrayList<>();
@@ -110,27 +109,26 @@ public class SystemSettingsService {
     var providerModelsMap = providerConfigCache.getProviderModelsMap();
 
     return new SystemSettingsDto(
-      parsedOcrVlmModelList,
-      parsedTlLlmModelList,
-      parsedQaLlmModelList,
-      parsedQaVlmModelList,
-      getSettingValue("routingStrategy", "lowest-cost"),
-      getSettingValue("ocrProvider", defaultOcrProvider),
-      getSettingValue("ocrModel", actOcrModel),
-      getSettingValue("tlProvider", defaultTlProvider),
-      getSettingValue("tlModel", actTlModel),
-      getSettingValue("qaProvider", defaultQaProvider),
-      getSettingValue("qaLlmModel", actQaLlmModel),
-      getSettingValue("qaVlmModel", actQaVlmModel),
-      disableLocalOcr,
-      paddleOcrRecModel,
-      disableLocalLlm,
-      getSettingValue("qaMode", qaMode),
-      Boolean.parseBoolean(getSettingValue("useFallbackModels", "true")),
-      activeProviders,
-      activeOcrProviders,
-      providerModelsMap
-    );
+        parsedOcrVlmModelList,
+        parsedTlLlmModelList,
+        parsedQaLlmModelList,
+        parsedQaVlmModelList,
+        getSettingValue("routingStrategy", "lowest-cost"),
+        getSettingValue("ocrProvider", defaultOcrProvider),
+        getSettingValue("ocrModel", actOcrModel),
+        getSettingValue("tlProvider", defaultTlProvider),
+        getSettingValue("tlModel", actTlModel),
+        getSettingValue("qaProvider", defaultQaProvider),
+        getSettingValue("qaLlmModel", actQaLlmModel),
+        getSettingValue("qaVlmModel", actQaVlmModel),
+        disableLocalOcr,
+        paddleOcrRecModel,
+        disableLocalLlm,
+        getSettingValue("qaMode", qaMode),
+        Boolean.parseBoolean(getSettingValue("useFallbackModels", "true")),
+        activeProviders,
+        activeOcrProviders,
+        providerModelsMap);
   }
 
   @Transactional
@@ -162,11 +160,12 @@ public class SystemSettingsService {
     SystemSetting setting =
         systemSettingsRepository
             .findById(Objects.requireNonNull(key))
-            .orElseGet(() -> {
-              SystemSetting s = new SystemSetting();
-              s.setSettingKey(key);
-              return s;
-            });
+            .orElseGet(
+                () -> {
+                  SystemSetting s = new SystemSetting();
+                  s.setSettingKey(key);
+                  return s;
+                });
     setting.setSettingValue(value);
     systemSettingsRepository.save(Objects.requireNonNull(setting));
   }

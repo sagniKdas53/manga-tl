@@ -12,12 +12,12 @@ public class ConversationRegion {
   @Id
   @Column(name = "conversation_id")
   @SuppressWarnings("PMD.UnusedPrivateField")
-    private UUID conversationId;
+  private UUID conversationId;
 
   @Id
   @Column(name = "region_id")
   @SuppressWarnings("PMD.UnusedPrivateField")
-    private UUID regionId;
+  private UUID regionId;
 
   @Column(nullable = false)
   private Integer position;
@@ -49,7 +49,9 @@ public class ConversationRegion {
       if (this == o) return true;
       if (!(o instanceof ConversationRegionId)) return false;
       ConversationRegionId that = (ConversationRegionId) o;
-      if (conversationId != null ? !conversationId.equals(that.conversationId) : that.conversationId != null) return false;
+      if (conversationId != null
+          ? !conversationId.equals(that.conversationId)
+          : that.conversationId != null) return false;
       return regionId != null ? regionId.equals(that.regionId) : that.regionId == null;
     }
 

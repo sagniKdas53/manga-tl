@@ -72,10 +72,8 @@ public class AuthControllerTest {
     when(passwordEncoder.encode("password")).thenReturn("hashed_password");
     when(jwtUtils.generateToken("admin@test.com")).thenReturn("mocked_token");
 
-    RegisterRequest request = new RegisterRequest();
-    request.setEmail("admin@test.com");
-    request.setPassword("password");
-    request.setDisplayName("Admin User");
+    RegisterRequest request =
+        new RegisterRequest("admin@test.com", "password", "Admin User", "admin");
 
     mockMvc
         .perform(
@@ -91,13 +89,16 @@ public class AuthControllerTest {
 
   @Test
   public void testRegister_EmailAlreadyExists() throws Exception {
-    User existingUser = new User() {{ setEmail("test@test.com"); }};
+    User existingUser =
+        new User() {
+          {
+            setEmail("test@test.com");
+          }
+        };
     when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(existingUser));
 
-    RegisterRequest request = new RegisterRequest();
-    request.setEmail("test@test.com");
-    request.setPassword("password");
-    request.setDisplayName("Test User");
+    RegisterRequest request =
+        new RegisterRequest("test@test.com", "password", "Test User", "viewer");
 
     mockMvc
         .perform(
@@ -110,15 +111,20 @@ public class AuthControllerTest {
   @Test
   public void testLogin_Success() throws Exception {
     User user =
-        new User() {{ setEmail("test@test.com"); setPasswordHash("hashed_password"); setDisplayName("Test User"); setRole("viewer"); }};
+        new User() {
+          {
+            setEmail("test@test.com");
+            setPasswordHash("hashed_password");
+            setDisplayName("Test User");
+            setRole("viewer");
+          }
+        };
 
     when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("password", "hashed_password")).thenReturn(true);
     when(jwtUtils.generateToken("test@test.com")).thenReturn("mocked_token");
 
-    LoginRequest request = new LoginRequest();
-    request.setEmail("test@test.com");
-    request.setPassword("password");
+    LoginRequest request = new LoginRequest("test@test.com", "password");
 
     mockMvc
         .perform(
@@ -135,9 +141,7 @@ public class AuthControllerTest {
   public void testLogin_InvalidCredentials() throws Exception {
     when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.empty());
 
-    LoginRequest request = new LoginRequest();
-    request.setEmail("test@test.com");
-    request.setPassword("password");
+    LoginRequest request = new LoginRequest("test@test.com", "password");
 
     mockMvc
         .perform(
@@ -149,13 +153,17 @@ public class AuthControllerTest {
 
   @Test
   public void testLogin_PasswordMismatch() throws Exception {
-    User user = new User() {{ setEmail("test@test.com"); setPasswordHash("hashed"); }};
+    User user =
+        new User() {
+          {
+            setEmail("test@test.com");
+            setPasswordHash("hashed");
+          }
+        };
     when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("password", "hashed")).thenReturn(false);
 
-    LoginRequest request = new LoginRequest();
-    request.setEmail("test@test.com");
-    request.setPassword("password");
+    LoginRequest request = new LoginRequest("test@test.com", "password");
 
     mockMvc
         .perform(
@@ -172,11 +180,8 @@ public class AuthControllerTest {
     when(passwordEncoder.encode("password")).thenReturn("hashed_password");
     when(jwtUtils.generateToken("user@test.com")).thenReturn("mocked_token");
 
-    RegisterRequest request = new RegisterRequest();
-    request.setEmail("user@test.com");
-    request.setPassword("password");
-    request.setDisplayName("Normal User");
-    request.setRole("viewer");
+    RegisterRequest request =
+        new RegisterRequest("user@test.com", "password", "Normal User", "viewer");
 
     mockMvc
         .perform(
@@ -190,11 +195,8 @@ public class AuthControllerTest {
   @Test
   public void testRegister_AdminWhenNotFirstRegistration() throws Exception {
     when(userRepository.count()).thenReturn(10L);
-    RegisterRequest request = new RegisterRequest();
-    request.setEmail("newadmin@test.com");
-    request.setPassword("password");
-    request.setDisplayName("Normal User");
-    request.setRole("admin");
+    RegisterRequest request =
+        new RegisterRequest("newadmin@test.com", "password", "Normal User", "admin");
 
     mockMvc
         .perform(
@@ -211,11 +213,8 @@ public class AuthControllerTest {
     when(passwordEncoder.encode("password")).thenReturn("hashed_password");
     when(jwtUtils.generateToken("user@test.com")).thenReturn("mocked_token");
 
-    RegisterRequest request = new RegisterRequest();
-    request.setEmail("user@test.com");
-    request.setPassword("password");
-    request.setDisplayName("Normal User");
-    request.setRole("invalid_role");
+    RegisterRequest request =
+        new RegisterRequest("user@test.com", "password", "Normal User", "invalid_role");
 
     mockMvc
         .perform(
@@ -246,9 +245,7 @@ public class AuthControllerTest {
 
   @Test
   public void testChangePassword_Unauthenticated() throws Exception {
-    ChangePasswordRequest request = new ChangePasswordRequest();
-    request.setCurrentPassword("oldpass");
-    request.setNewPassword("newpassword");
+    ChangePasswordRequest request = new ChangePasswordRequest("oldpass", "newpassword");
 
     mockMvc
         .perform(

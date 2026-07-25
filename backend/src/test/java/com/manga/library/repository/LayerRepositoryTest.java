@@ -28,23 +28,35 @@ public class LayerRepositoryTest {
   @Test
   public void testLayerCRUD() {
     // Parent Image and Page
-    Image image =
-        new Image() {{ setFilename("layer_img.png"); setStoragePath("path/layer_img.png"); }};
-    image = imageRepository.save(image);
+    Image image = new Image();
+    image.setFilename("layer_img.png");
+    image.setStoragePath("path/layer_img.png");
+    Image savedImage = imageRepository.save(image);
 
-    Series series =
-        seriesRepository.save(
-            new Series() {{ setTitle("Test"); setOriginalLanguage("ja"); setReadingDirection("rtl"); }});
-    Chapter chapter =
-        chapterRepository.save(new Chapter() {{ setSeries(series); setChapterNumber(1.0); }});
+    Series series = new Series();
+    series.setTitle("Test");
+    series.setOriginalLanguage("ja");
+    series.setReadingDirection("rtl");
+    Series savedSeries = seriesRepository.save(series);
 
-    com.manga.library.model.Page page =
-        new com.manga.library.model.Page() {{ setChapter(chapter); setImage(image); setPageNumber(1); }};
-    page = pageRepository.save(page);
+    Chapter chapter = new Chapter();
+    chapter.setSeries(savedSeries);
+    chapter.setChapterNumber(1.0);
+    Chapter savedChapter = chapterRepository.save(chapter);
+
+    Page page = new Page();
+    page.setChapter(savedChapter);
+    page.setImage(savedImage);
+    page.setPageNumber(1);
+    Page savedPage = pageRepository.save(page);
 
     // 1. Create
-    Layer layer =
-        new Layer() {{ setPage(page); setType("translation"); setTargetLanguage("en"); setVisible(true); setZOrder(5); }};
+    Layer layer = new Layer();
+    layer.setPage(savedPage);
+    layer.setType("translation");
+    layer.setTargetLanguage("en");
+    layer.setVisible(true);
+    layer.setZOrder(5);
 
     Layer saved = layerRepository.save(layer);
     assertNotNull(saved.getId());
@@ -52,7 +64,7 @@ public class LayerRepositoryTest {
     assertEquals("en", saved.getTargetLanguage());
     assertTrue(saved.getVisible());
     assertEquals(5, saved.getZOrder());
-    assertEquals(page.getId(), saved.getPage().getId());
+    assertEquals(savedPage.getId(), saved.getPage().getId());
 
     // 2. Read
     Optional<Layer> fetchedOpt = layerRepository.findById(saved.getId());
