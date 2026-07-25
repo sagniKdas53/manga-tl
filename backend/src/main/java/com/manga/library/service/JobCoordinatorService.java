@@ -252,21 +252,21 @@ public class JobCoordinatorService {
                     "ocrModel",
                     resolveModel(chapter.getOcrModel(), series.getOcrModel(), settings.ocrModel()));
               }
-              job.put(
-                  "tlProvider",
+              String resolvedTlProvider =
                   resolveModel(
-                      chapter.getTlProvider(), series.getTlProvider(), settings.tlProvider()));
+                      chapter.getTlProvider(), series.getTlProvider(), settings.tlProvider());
+              job.put("tlProvider", resolvedTlProvider);
               job.put(
                   "tlModel",
-                  resolveModel(chapter.getTlModel(), series.getTlModel(), settings.tlModel()));
-              job.put(
-                  "qaProvider",
+                  resolveModelWithCheck(chapter.getTlModel(), series.getTlModel(), settings.tlModel(), resolvedTlProvider, "tl"));
+              String resolvedQaProvider =
                   resolveModel(
-                      chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider()));
+                      chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider());
+              job.put("qaProvider", resolvedQaProvider);
               job.put(
                   "qaLlmModel",
-                  resolveModel(
-                      chapter.getQaLlmModel(), series.getQaLlmModel(), settings.qaLlmModel()));
+                  resolveModelWithCheck(
+                      chapter.getQaLlmModel(), series.getQaLlmModel(), settings.qaLlmModel(), resolvedQaProvider, "qaLLM"));
               job.put(
                   "routingStrategy",
                   resolveModel(
@@ -275,8 +275,8 @@ public class JobCoordinatorService {
                       settings.routingStrategy()));
               job.put(
                   "qaVlmModel",
-                  resolveModel(
-                      chapter.getQaVlmModel(), series.getQaVlmModel(), settings.qaVlmModel()));
+                  resolveModelWithCheck(
+                      chapter.getQaVlmModel(), series.getQaVlmModel(), settings.qaVlmModel(), resolvedQaProvider, "qaVLM"));
               job.put(
                   "qaMode",
                   resolveModel(chapter.getQaMode(), series.getQaMode(), settings.qaMode()));
@@ -389,6 +389,26 @@ public class JobCoordinatorService {
         && !seriesVal.equals("default")
         && !seriesVal.contains("[ORPHANED]")) return seriesVal;
     return globalVal;
+  }
+
+  private String resolveModelWithCheck(
+      String chapterVal, String seriesVal, String globalVal, String provider, String task) {
+    String resolved = resolveModel(chapterVal, seriesVal, globalVal);
+    if (!Objects.equals(resolved, globalVal)
+        && providerConfigCache != null
+        && provider != null
+        && task != null) {
+      if (!providerConfigCache.isValidProviderModel(provider, resolved, task)) {
+        log.warn(
+            "Resolved model '{}' for task '{}' under provider '{}' is no longer valid or available — falling back to global default '{}'",
+            resolved,
+            task,
+            provider,
+            globalVal);
+        return globalVal;
+      }
+    }
+    return resolved;
   }
 
   @Transactional

@@ -45,10 +45,14 @@ public class PageService {
       Integer pageNumber,
       String hash,
       User user) {
+    List<Page> existingPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
+    int maxExisting = existingPages.stream().mapToInt(Page::getPageNumber).max().orElse(0);
+    int safePageNumber = Math.max(1, Math.min(pageNumber != null ? pageNumber : maxExisting + 1, maxExisting + 1));
+
     Optional<Page> existingPageOpt =
-        pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
+        pageRepository.findByChapterIdAndPageNumber(chapter.getId(), safePageNumber);
     if (existingPageOpt.isPresent()) {
-      shiftPagesUp(chapter.getId(), pageNumber);
+      shiftPagesUp(chapter.getId(), safePageNumber);
     }
 
     Image image = new Image();
@@ -62,12 +66,12 @@ public class PageService {
 
     Page page = new Page();
     page.setChapter(chapter);
-    page.setPageNumber(pageNumber);
+    page.setPageNumber(safePageNumber);
     page.setImage(image);
     Objects.requireNonNull(page, "page cannot be null");
     page = pageRepository.save(Objects.requireNonNull(page));
 
-    if (pageNumber == 1) {
+    if (safePageNumber == 1) {
       pageRepository.flush();
       recalculateChapterCover(chapter.getId());
     }
@@ -78,20 +82,24 @@ public class PageService {
   @Transactional
   public Page createPageWithExistingImage(
       Chapter chapter, Image existingImage, Integer pageNumber, User user) {
+    List<Page> existingPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
+    int maxExisting = existingPages.stream().mapToInt(Page::getPageNumber).max().orElse(0);
+    int safePageNumber = Math.max(1, Math.min(pageNumber != null ? pageNumber : maxExisting + 1, maxExisting + 1));
+
     Optional<Page> existingPageOpt =
-        pageRepository.findByChapterIdAndPageNumber(chapter.getId(), pageNumber);
+        pageRepository.findByChapterIdAndPageNumber(chapter.getId(), safePageNumber);
     if (existingPageOpt.isPresent()) {
       Page existingPage = existingPageOpt.get();
       if (existingPage.getImage().getId().equals(existingImage.getId())) {
         return existingPage;
       } else {
-        shiftPagesUp(chapter.getId(), pageNumber);
+        shiftPagesUp(chapter.getId(), safePageNumber);
       }
     }
 
     Page page = new Page();
     page.setChapter(chapter);
-    page.setPageNumber(pageNumber);
+    page.setPageNumber(safePageNumber);
     page.setImage(existingImage);
     Objects.requireNonNull(page, "page cannot be null");
     page = pageRepository.save(Objects.requireNonNull(page));

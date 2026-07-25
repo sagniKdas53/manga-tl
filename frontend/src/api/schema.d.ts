@@ -1076,13 +1076,13 @@ export interface components {
             editedAt?: string;
             boxShape?: string;
             maskPolygon?: string;
+            /** Format: double */
+            qaScore?: number;
             /** Format: uuid */
             layerId?: string;
             /** Format: uuid */
             regionId?: string;
             qaStatus?: string;
-            /** Format: double */
-            qaScore?: number;
             qaFeedback?: string;
         };
         PanelCallbackDto: {

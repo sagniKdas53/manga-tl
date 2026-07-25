@@ -274,14 +274,8 @@ function AppContent() {
   // Load chapter details and pages when chapterId is active in route
   useEffect(() => {
     if (user && chapterId) {
-      Promise.resolve().then(() => {
-        setSelectedChapter((prev) => {
-          if (!prev || prev.id !== chapterId) {
-            setIsLoadingDetails(true);
-          }
-          return prev;
-        });
-      });
+      setPages([]);
+      setIsLoadingDetails(true);
 
       safeFetch(`/api/series/chapters/${chapterId}`, {
         headers: { Authorization: `Bearer ${user.token}` },
