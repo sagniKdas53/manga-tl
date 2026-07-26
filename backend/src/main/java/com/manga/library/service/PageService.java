@@ -47,7 +47,8 @@ public class PageService {
       User user) {
     List<Page> existingPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
     int maxExisting = existingPages.stream().mapToInt(Page::getPageNumber).max().orElse(0);
-    int safePageNumber = Math.max(1, Math.min(pageNumber != null ? pageNumber : maxExisting + 1, maxExisting + 1));
+    int safePageNumber =
+        Math.max(1, Math.min(pageNumber != null ? pageNumber : maxExisting + 1, maxExisting + 1));
 
     Optional<Page> existingPageOpt =
         pageRepository.findByChapterIdAndPageNumber(chapter.getId(), safePageNumber);
@@ -84,7 +85,8 @@ public class PageService {
       Chapter chapter, Image existingImage, Integer pageNumber, User user) {
     List<Page> existingPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
     int maxExisting = existingPages.stream().mapToInt(Page::getPageNumber).max().orElse(0);
-    int safePageNumber = Math.max(1, Math.min(pageNumber != null ? pageNumber : maxExisting + 1, maxExisting + 1));
+    int safePageNumber =
+        Math.max(1, Math.min(pageNumber != null ? pageNumber : maxExisting + 1, maxExisting + 1));
 
     Optional<Page> existingPageOpt =
         pageRepository.findByChapterIdAndPageNumber(chapter.getId(), safePageNumber);

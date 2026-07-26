@@ -149,15 +149,11 @@ public class PipelineFlowIntegrationTest {
             .findByEmail("admin@manga.local")
             .orElseGet(
                 () -> {
-                  User buildUser =
-                      new User() {
-                        {
-                          setEmail("admin@manga.local");
-                          setPasswordHash("mock_password_hash");
-                          setDisplayName("Admin User");
-                          setRole("admin");
-                        }
-                      };
+                  User buildUser = new User();
+                  buildUser.setEmail("admin@manga.local");
+                  buildUser.setPasswordHash("mock_password_hash");
+                  buildUser.setDisplayName("Admin User");
+                  buildUser.setRole("admin");
                   return userRepository.save(buildUser);
                 });
     adminToken = "Bearer " + jwtUtils.generateToken(adminUser.getEmail());
@@ -682,14 +678,10 @@ public class PipelineFlowIntegrationTest {
   @Test
   public void testClonedOcrLayerRegionPreservationAndVisibility() throws Exception {
     // 1. Create a mock Image and Page
-    Image image =
-        new Image() {
-          {
-            setFilename("test-clone.png");
-            setStoragePath("originals/test-clone.png");
-            setHash("test-clone-hash");
-          }
-        };
+    Image image = new Image();
+    image.setFilename("test-clone.png");
+    image.setStoragePath("originals/test-clone.png");
+    image.setHash("test-clone-hash");
     image = imageRepository.save(image);
     createdImageIds.add(image.getId());
 

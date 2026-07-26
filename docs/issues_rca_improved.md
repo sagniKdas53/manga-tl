@@ -15,12 +15,14 @@
 **Action:** For every `${VAR}` reference under `backend.environment` that has a Spring Boot default, add bash fallback using `${VAR:-defaultValue}`.
 
 Find all lines like:
+
 ```yaml
 - OCR_MODEL_PROVIDER=${OCR_MODEL_PROVIDER}
 - TL_MODEL_PROVIDER=${TL_MODEL_PROVIDER}
 ```
 
 Replace them with:
+
 ```yaml
 - OCR_MODEL_PROVIDER=${OCR_MODEL_PROVIDER:-openrouter}
 - TL_MODEL_PROVIDER=${TL_MODEL_PROVIDER:-openrouter}
@@ -57,6 +59,7 @@ configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DE
 **Action:** Remove both fallback blocks. Find these two code blocks:
 
 **Block 1 (TL providers, ~lines 92-96):**
+
 ```java
 List<String> activeProviders = providerConfigCache.getProvidersForTask("tl");
 if (activeProviders.isEmpty()) {
@@ -64,12 +67,15 @@ if (activeProviders.isEmpty()) {
         List.of("openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio");
 }
 ```
+
 Replace with:
+
 ```java
 List<String> activeProviders = providerConfigCache.getProvidersForTask("tl");
 ```
 
 **Block 2 (OCR providers, ~lines 98-107):**
+
 ```java
 List<String> activeOcrProviders = new java.util.ArrayList<>();
 if (!disableLocalOcr) {
@@ -82,7 +88,9 @@ if (!cachedOcr.isEmpty()) {
     activeOcrProviders.addAll(List.of("openrouter", "gemini", "nvidia", "ollama", "lmstudio"));
 }
 ```
+
 Replace with:
+
 ```java
 List<String> activeOcrProviders = new java.util.ArrayList<>();
 if (!disableLocalOcr) {
@@ -101,6 +109,7 @@ activeOcrProviders.addAll(cachedOcr);
 **Action:** For every model entry that has `"free": true`, check if its `name` field ends with `" (Free)"` or `" (free)"`. If it does, strip that suffix from the name.
 
 Expected entries to fix (search for `"free": true`):
+
 - `"Llama 3 8B (Free)"` → `"Llama 3 8B"`
 - `"Gemini 2.5 Flash (Free)"` → `"Gemini 2.5 Flash"`
 - `"GPT-OSS 20B (Free)"` → `"GPT-OSS 20B"`
@@ -109,13 +118,15 @@ Expected entries to fix (search for `"free": true`):
 
 ### 1.3 Fix model dropdowns in series/chapter dialogs to filter by selected provider [PARALLEL]
 
-**Files:** 
+**Files:**
+
 - `frontend/src/components/EditSeriesDialog.tsx`
 - `frontend/src/components/CreateSeriesDialog.tsx`
 
 **Action:** Find every location where a model dropdown maps over a flat list like `settings?.tlLlmModelList`, `settings?.ocrVlmModelList`, `settings?.qaLlmModelList`, `settings?.qaVlmModelList`. Replace with a dynamic map that reads from `settings?.providerModelsMap?.[selectedProvider]?.[taskType]`.
 
 Example for TL models:
+
 ```tsx
 // BEFORE (CreateSeriesDialog.tsx ~line 473):
 {(settings?.tlLlmModelList || []).map((m) => (...))}
@@ -129,8 +140,9 @@ Where `selectedTlProvider` is the current value of the TL provider dropdown.
 Do the same for OCR VLM, QA LLM, and QA VLM model dropdowns in both files.
 
 The key mapping is:
+
 | Task | Provider field | Task type key in `providerModelsMap` |
-|------|---------------|--------------------------------------|
+| ------ | --------------- | -------------------------------------- |
 | TL | `tlProvider` | `tl` |
 | OCR | `ocrProvider` | `ocr` |
 | QA LLM | `qaProvider` | `qaLLM` |
@@ -140,7 +152,8 @@ The key mapping is:
 
 ### 1.4 Add clear/remove button for "Use Fallback Models" override [PARALLEL]
 
-**Files:** 
+**Files:**
+
 - `frontend/src/components/EditSeriesDialog.tsx`
 - `frontend/src/components/CreateSeriesDialog.tsx`
 
@@ -160,12 +173,14 @@ The clear action should set `useFallbackModels` to `null` (which means "inherit 
 
 **File:** `worker/src/worker/services/translation.py`
 
-**Action:** 
+**Action:**
+
 1. Add `provider` and `model` parameters to the `translate_text` function signature.
 2. Use them instead of `TL_CONFIG.provider` and `TL_CONFIG.llm_model` when they are provided.
 3. Propagate them from the caller in `worker/src/worker/handlers/translation.py`.
 
 **Step A — Update function signature (~line 602):**
+
 ```python
 def translate_text(
     text,
@@ -179,6 +194,7 @@ def translate_text(
 ```
 
 **Step B — Replace hardcoded references (~lines 615-617, 687):**
+
 ```python
 # BEFORE:
 provider = TL_CONFIG.provider
@@ -195,6 +211,7 @@ user_model = model or TL_CONFIG.llm_model
 
 **Step C — Update the caller in `worker/src/worker/handlers/translation.py`:**
 Find the call site where `translate_text` is invoked for individual fallback (the final retry loop for still-failed regions). Pass `job_data.get("tlProvider")` and `job_data.get("tlModel")`:
+
 ```python
 translated = translate_text(
     text=text,
@@ -243,8 +260,9 @@ def render_image_core(image_id, page_id=None):
 
 Or alternatively, since QA always reads by `image_id`, just remove the `page_id` preference and always use `image_id`. Keep `page_id` parameter in the signature but don't use it for the storage path — remove it as a breaking change later.
 
-**Validate:** 
-1. Trigger a render on a page. 
+**Validate:**
+
+1. Trigger a render on a page.
 2. Check MinIO/S3 — the rendered file is at `rendered/{image_id}.png`.
 3. Trigger QA on the same page — no `NoSuchKey` error.
 
@@ -263,6 +281,7 @@ Or alternatively, since QA always reads by `image_id`, just remove the `page_id`
 ### 4.1 Fix chapter transition flash [PARALLEL]
 
 **File:** Check these files for the reader component:
+
 - `frontend/src/components/Reader.tsx` (or wherever chapter pages are fetched)
 - `frontend/src/App.tsx` (if reader state lives there)
 
@@ -279,6 +298,7 @@ Example skeleton: 1-2 gray placeholder rectangles matching the typical page aspe
 **File:** `backend/src/main/java/com/manga/library/controller/PageController.java` and/or `backend/src/main/java/com/manga/library/service/PageService.java`
 
 **Action:** In the method that handles page creation (look for `createPageAndImage` or `createPage`), before saving:
+
 1. Query existing pages for the chapter.
 2. Find `maxExistingPageNumber`.
 3. If `requestedPageNumber > maxExistingPageNumber + 1`, force it to `maxExistingPageNumber + 1`.
@@ -297,10 +317,12 @@ If `findMaxPageNumberByChapterId` doesn't exist, add it to the PageRepository.
 ### 4.3 Fix "redirecting" message that doesn't redirect [PARALLEL]
 
 **Task:** Search for where the redirecting message is shown:
+
 - Search in frontend for the string `"redirecting"` (case-insensitive)
 - Check the flow after chapter creation or page upload
 
 **Action:** Find the code path that shows a "redirecting" message but doesn't actually navigate. The fix is likely:
+
 - Adding the missing `navigate()` or `window.location.href = ...` call after the message is shown
 - OR removing the misleading message if redirect isn't needed
 
@@ -312,7 +334,8 @@ If `findMaxPageNumberByChapterId` doesn't exist, add it to the PageRepository.
 
 ### 5.1 Add operational heartbeat logs [PARALLEL]
 
-**Files:** 
+**Files:**
+
 - `backend/src/main/java/com/manga/library/controller/JobController.java`
 - New file: `backend/src/main/java/com/manga/library/config/HealthReporter.java`
 
@@ -320,9 +343,11 @@ If `findMaxPageNumberByChapterId` doesn't exist, add it to the PageRepository.
 
 **A. Add debug log to getJobs:**
 In `JobController.java`, in the `getJobs()` method, add at the top:
+
 ```java
 log.debug("Heartbeat ping received from client");
 ```
+
 (If `log` field doesn't exist, add `private static final Logger log = LoggerFactory.getLogger(JobController.class);`)
 
 **B. Create HealthReporter scheduled task:**
@@ -356,6 +381,7 @@ public class HealthReporter {
 
 **C. Enable Spring Boot access logging:**
 In `backend/src/main/resources/application.properties` or `application.yml`, add:
+
 ```properties
 server.tomcat.accesslog.enabled=true
 server.tomcat.accesslog.pattern=%h %l %u %t "%r" %s %b %Dms
@@ -366,10 +392,12 @@ server.tomcat.accesslog.pattern=%h %l %u %t "%r" %s %b %Dms
 ### 5.2 Add cache key logging for translation and QA [PARALLEL]
 
 **Files:**
+
 - `worker/src/worker/services/translation.py` (find where cache keys are generated/used)
 - `worker/src/worker/handlers/qa.py` (find where cache keys are generated/used)
 
 **Action:** Search for `cache` or `cache_key` in these files. At each cache lookup/save point, add:
+
 ```python
 logger.info(f"Cache key: {cache_key} (hit={bool(cached)})")
 ```
@@ -385,6 +413,7 @@ If the cache key includes the model name, this also verifies that different mode
 ### 6.1 Implement deprecation-aware settings resolution [SEQUENTIAL — depends on understanding current resolution]
 
 **Files:**
+
 - `backend/src/main/java/com/manga/library/service/JobCoordinatorService.java`
 - `backend/src/main/java/com/manga/library/service/SystemSettingsService.java`
 
@@ -400,6 +429,7 @@ If the cache key includes the model name, this also verifies that different mode
 In `JobCoordinatorService.java` when building the job payload, add a `warnings` list to the response. If an override was deprecated, include: `"TL model 'X' is deprecated, using global default 'Y'"`. The frontend can display these in a dismissable alert.
 
 **Validate:**
+
 1. Set a series to use a model that exists in `providers.json`.
 2. Remove that model from `providers.json` and republish config.
 3. Run a translation for that series — it should fall back to global default with a warning log.
@@ -416,6 +446,7 @@ In `JobCoordinatorService.java` when building the job payload, add a `warnings` 
 3. Returns a list of "orphaned" overrides — series/chapters whose selected model/provider no longer exists.
 
 **Validation output format:**
+
 ```json
 {
   "orphaned": [
@@ -440,18 +471,22 @@ In `JobCoordinatorService.java` when building the job payload, add a `warnings` 
 ### 7.1 Investigate OCR model selection for non-JP languages [PARALLEL]
 
 **Files to check:**
+
 - `worker/src/worker/handlers/ocr.py` or similar
 - `worker/src/worker/services/ocr.py` or similar
 
-**Action:** 
+**Action:**
+
 1. Find where the OCR model is resolved for a job. Check if there's any language-based model selection.
 2. Check if the job payload passes the chapter's primary language.
 3. Look at `providers.json` for OCR models — are there better models available for Korean, Chinese, etc.?
 
 **Expected findings and fix:**
+
 - If the same OCR model is used for all languages, add a language-to-model mapping in `providers.json` or in the worker.
 - If no good non-JP OCR model exists in `providers.json`, add one (e.g., from openrouter or a free provider) that handles Korean/Chinese.
 - Add a section to `providers.json` like:
+
 ```json
 {
   "ocr-model-preference": {
@@ -471,10 +506,12 @@ In `JobCoordinatorService.java` when building the job payload, add a `warnings` 
 ### 8.1 Fix dark theme color scheme [PARALLEL]
 
 **File:** Create or update the MUI theme file:
+
 - Check `frontend/src/theme.ts` or `frontend/src/App.tsx` for `createTheme` call.
 - If no theme file exists, create `frontend/src/theme.ts`.
 
 **Action:** Define a proper dark theme palette:
+
 ```typescript
 const darkTheme = createTheme({
   palette: {
@@ -498,6 +535,7 @@ const darkTheme = createTheme({
 ```
 
 **Specific fixes to apply:**
+
 - Background: `#0f0f0f` instead of pure black `#000000`
 - Card/surface backgrounds: `#1a1a1a` or `#1e1e1e` using `<Paper>` components instead of plain divs
 - Red accents: use MUI's `error` palette tokens instead of hardcoded red hex values — they're designed for dark mode contrast
@@ -511,6 +549,7 @@ const darkTheme = createTheme({
 **File:** Find the Queue Manager component — likely `frontend/src/components/QueueManager.tsx` or similar.
 
 **Action:**
+
 1. Add `tableLayout: "fixed"` to the `<Table>` component's sx prop.
 2. Set explicit percentage-based `width` on each `<TableCell>` or use `<colgroup>` with fixed widths.
 3. Add `whiteSpace: "nowrap"`, `overflow: "hidden"`, `textOverflow: "ellipsis"` to cells that might overflow.
@@ -525,7 +564,8 @@ These are the areas the user flagged as "I sense bugs in." Each needs explorator
 
 ### 9.1 Post-manual-edit re-render [PARALLEL]
 
-**Action:** 
+**Action:**
+
 1. Open a chapter with rendered pages.
 2. Edit text in the manual edit panel.
 3. Click "Re-render" or save.
@@ -537,6 +577,7 @@ These are the areas the user flagged as "I sense bugs in." Each needs explorator
 ### 9.2 Context injection [PARALLEL]
 
 **Action:**
+
 1. Enable context injection (series description, character names, etc.).
 2. Run a translation.
 3. Check if the injected context actually appears in the prompt sent to the LLM (check worker logs).
@@ -547,6 +588,7 @@ These are the areas the user flagged as "I sense bugs in." Each needs explorator
 ### 9.3 Provider/model inheritance edge cases [PARALLEL]
 
 **Action:**
+
 1. Set series-level overrides, then set conflicting chapter-level overrides.
 2. Verify chapter overrides win.
 3. Set a chapter override, then set the chapter to "inherit"/"default".
@@ -556,6 +598,7 @@ These are the areas the user flagged as "I sense bugs in." Each needs explorator
 ### 9.4 Fallback handling [PARALLEL]
 
 **Action:**
+
 1. Configure a series to use a non-existent/failing provider.
 2. Enable "Use Fallback Models."
 3. Trigger a translation job.
@@ -565,6 +608,7 @@ These are the areas the user flagged as "I sense bugs in." Each needs explorator
 ### 9.5 Uploader reliability [PARALLEL]
 
 **Action:**
+
 1. Upload multiple images simultaneously.
 2. Upload images while a chapter is being translated.
 3. Upload images with very long filenames, special characters, or large file sizes.
@@ -576,15 +620,18 @@ These are the areas the user flagged as "I sense bugs in." Each needs explorator
 
 ### 10.1 Run detect_changes and verify impact [AFTER ALL FIXES APPLIED]
 
-**Action:** 
+**Action:**
+
 ```bash
 node .gitnexus/run.cjs analyze
 ```
+
 Then run `detect_changes` and review that only expected symbols and processes are changed.
 
 ### 10.2 E2E smoke test [AFTER ALL FIXES APPLIED]
 
 Run through this manual checklist:
+
 1. Fresh deploy (no `.env`, empty DB) → settings page shows empty providers
 2. Add API keys → providers appear
 3. Create series with custom TL provider/model → model dropdown shows only that provider's models
@@ -600,7 +647,7 @@ Run through this manual checklist:
 
 ## Task Dependency Graph (for executing out of order)
 
-```
+```txt
 Phase 0  (0.1 → 0.2)          ← start here
          ↓
 Phase 1  (all 4 tasks parallel)

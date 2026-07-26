@@ -27,7 +27,7 @@ Migrate the entire frontend from vanilla CSS + glassmorphism to Material UI v7. 
 ### Current Pain Points (what we're fixing)
 
 | Issue | Current | After MUI |
-|-------|---------|-----------|
+| ------- | --------- | ----------- |
 | **1813-line monolithic CSS** | `index.css` with all styles in one file | ~90% of CSS removed; kept only for Reader canvas overlays |
 | **Glassmorphism looks dated** | `backdrop-filter: blur(16px)` everywhere | MUI's clean card/paper elevation system |
 | **No consistent spacing** | Ad-hoc margins/padding in px | MUI's 8px spacing grid (`theme.spacing()`) |
@@ -47,7 +47,7 @@ Migrate the entire frontend from vanilla CSS + glassmorphism to Material UI v7. 
 ### Dark Mode → nHentai-inspired
 
 | Token | Hex | Usage |
-|-------|-----|-------|
+| ------- | ----- | ------- |
 | `#1f1f1f` | `#1f1f1f` | Background default |
 | `#fefefe` | `#fefefe` | Text primary |
 | `#afafaf` | `#afafaf` | Text secondary (muted) |
@@ -56,6 +56,7 @@ Migrate the entire frontend from vanilla CSS + glassmorphism to Material UI v7. 
 | `#f1af5f` | `#f1af5f` | Warning / secondary accent (Sandy brown) |
 
 Dark surface colors to derive:
+
 - Background paper (card): `#2a2a2a`
 - Background default (page): `#1f1f1f`
 - Divider: `rgba(254,254,254,0.12)`
@@ -63,7 +64,7 @@ Dark surface colors to derive:
 ### Light Mode → Pixiv-inspired
 
 | Token | Hex | Usage |
-|-------|-----|-------|
+| ------- | ----- | ------- |
 | `#f5f5f5` | `#f5f5f5` | Background default |
 | `#343333` | `#343333` | Text primary |
 | `#b0b0b0` | `#b0b0b0` | Text secondary |
@@ -74,6 +75,7 @@ Dark surface colors to derive:
 | `#786e6a` | `#786e6a` | Text disabled / tertiary (Sandstone) |
 
 Light surface colors:
+
 - Background paper (card): `#ffffff`
 - Background default (page): `#f5f5f5`
 - Divider: `rgba(52,51,51,0.12)`
@@ -83,7 +85,7 @@ Light surface colors:
 These are not in the Pixiv/nHentai palettes but needed for the app:
 
 | Token | Light | Dark | Usage |
-|-------|-------|------|-------|
+| ------- | ------- | ------ | ------- |
 | `success` | `#10b981` | `#10b981` | Completed jobs, approved translations |
 | `info` | `#0197fc` | `#6ac2fd` | Neutral info messages |
 | `conversation` | `#2563eb` | `#3b82f6` | Conversation bubbles (Reader overlay) |
@@ -228,6 +230,7 @@ declare module '@mui/material/styles' {
 **Modify `App.tsx`:**
 
 1. Add imports:
+
 ```tsx
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -235,7 +238,7 @@ import theme from './theme';
 import { useColorScheme } from '@mui/material/styles';
 ```
 
-2. Create a `ThemeSync` component. **Its real job during coexistence (Phases 0–9) is keeping the legacy `:root.light` class in sync** — the original draft removed `classList.toggle` while claiming the class was "still respected"; respected yes, but nothing would ever *apply* it, leaving every unmigrated component dark-forever in light mode:
+1. Create a `ThemeSync` component. **Its real job during coexistence (Phases 0–9) is keeping the legacy `:root.light` class in sync** — the original draft removed `classList.toggle` while claiming the class was "still respected"; respected yes, but nothing would ever *apply* it, leaving every unmigrated component dark-forever in light mode:
 
 ```tsx
 function ThemeSync() {
@@ -249,7 +252,7 @@ function ThemeSync() {
 }
 ```
 
-3. **Storage: exactly one writer.** Do NOT reimplement localStorage sync — MUI's `ThemeProvider` already persists the mode. Point it at the *existing* key so legacy saved preferences carry over (values are compatible: `'light'`/`'dark'`):
+1. **Storage: exactly one writer.** Do NOT reimplement localStorage sync — MUI's `ThemeProvider` already persists the mode. Point it at the *existing* key so legacy saved preferences carry over (values are compatible: `'light'`/`'dark'`):
 
 ```tsx
 <ThemeProvider theme={theme} defaultMode="dark" modeStorageKey="manga_theme">
@@ -257,7 +260,8 @@ function ThemeSync() {
 
 > Verify the exact prop name against the v9 docs during implementation (`modeStorageKey` in v6/v7; confirm for v9). If v9 renamed it, use the v9 equivalent — the requirement (reuse `manga_theme`, single writer, `defaultMode="dark"` to match the current default in App.tsx:153–156) is unchanged.
 
-3. Remove the local `theme` state and manual `classList.toggle("light")`:
+1. Remove the local `theme` state and manual `classList.toggle("light")`:
+
 ```tsx
 // REMOVE:
 // const [theme, setTheme] = useState<'light' | 'dark'>(
@@ -270,14 +274,16 @@ function ThemeSync() {
 // const toggleTheme = () => setTheme(prev => (prev === "dark" ? "light" : "dark"));
 ```
 
-4. Add `ThemeSync` and use `useColorScheme` for the toggle:
+1. Add `ThemeSync` and use `useColorScheme` for the toggle:
+
 ```tsx
 const { mode, setMode } = useColorScheme();
 const current = mode ?? 'dark'; // undefined on first render — never branch on raw `mode`
 const toggleTheme = () => setMode(current === 'dark' ? 'light' : 'dark');
 ```
 
-5. Wrap everything:
+1. Wrap everything:
+
 ```tsx
 <ThemeProvider theme={theme} defaultMode="dark" modeStorageKey="manga_theme">
   <CssBaseline />
@@ -286,15 +292,17 @@ const toggleTheme = () => setMode(current === 'dark' ? 'light' : 'dark');
 </ThemeProvider>
 ```
 
-6. Update the theme toggle button to use `current` from step 4 instead of the old `theme` state.
+1. Update the theme toggle button to use `current` from step 4 instead of the old `theme` state.
 
-7. **First-paint flash (Vite SPA):** with no SSR, MUI applies the scheme only after React boots — a dark-default user may see a light flash. Add a tiny blocking inline script to `index.html` before the module script:
+2. **First-paint flash (Vite SPA):** with no SSR, MUI applies the scheme only after React boots — a dark-default user may see a light flash. Add a tiny blocking inline script to `index.html` before the module script:
+
 ```html
 <script>
   document.documentElement.dataset.muiColorScheme =
     localStorage.getItem('manga_theme') === 'light' ? 'light' : 'dark';
 </script>
 ```
+
 (The SPA analogue of `InitColorSchemeScript`; verify the attribute name v9 reads — it may be `data-mui-color-scheme` — and match it.)
 
 > **Important:** The `:root.light` class bridge in `ThemeSync` is load-bearing for the whole migration: every unmigrated component reads CSS vars overridden by `:root.light` (index.css:55–125). Remove the class toggle **only** in Phase 9, in the same PR that deletes those rules.
@@ -302,6 +310,7 @@ const toggleTheme = () => setMode(current === 'dark' ? 'light' : 'dark');
 #### 0.5 Remove `body { background-image }` Radial Gradients
 
 The current `:root` has:
+
 ```css
 body {
   background-image:
@@ -315,6 +324,7 @@ MUI's background system doesn't support radial gradients natively. Replace with 
 #### 0.6 TypeScript Theme Augmentation
 
 Add `frontend/src/mui.d.ts` for all custom color module augmentations:
+
 ```ts
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type {} from '@mui/material/styles';
@@ -338,6 +348,7 @@ declare module '@mui/material/Button' {
 ---
 
 **Phase 0 Checkpoint:** App renders with MUI ThemeProvider + CssBaseline + dual theme support. No visual changes yet but the infrastructure is in place. Verify:
+
 1. `npm run build` passes (TypeScript compiles, no import errors)
 2. App shows with CssBaseline reset styles
 3. Toggle dark/light — page background color changes correctly
@@ -350,7 +361,7 @@ declare module '@mui/material/Button' {
 Replace the custom `.nav-bar` glassmorphism nav with MUI `AppBar` + `Toolbar`.
 
 | Before (custom CSS) | After (MUI) |
-|---------------------|-------------|
+| --------------------- | ------------- |
 | `<nav className="nav-bar glass">` | `<AppBar position="sticky">` |
 | `<div className="logo">` | `<Typography variant="h6">` inside `Toolbar` |
 | Manual flex layout | `<Stack direction="row" spacing={1}>` |
@@ -362,6 +373,7 @@ Replace the custom `.nav-bar` glassmorphism nav with MUI `AppBar` + `Toolbar`.
 | User badge `.user-badge` | `<Chip>` or `<Avatar>` with dropdown via `Menu` |
 
 **Components to use:**
+
 - `AppBar`, `Toolbar` from `@mui/material`
 - `Typography` for logo text
 - `IconButton` for all nav actions
@@ -371,6 +383,7 @@ Replace the custom `.nav-bar` glassmorphism nav with MUI `AppBar` + `Toolbar`.
 - Icons: `DarkMode`, `LightMode`, `Settings`, `Logout`, `Person`, `QueueMusic`
 
 **CSS to remove from `index.css`:**
+
 - `.nav-bar` (lines ~150-200, check exact range)
 - `.logo`
 - `.nav-actions`
@@ -378,6 +391,7 @@ Replace the custom `.nav-bar` glassmorphism nav with MUI `AppBar` + `Toolbar`.
 - Theme toggle styles
 
 **CSS to keep (for now):**
+
 - QueueManager-specific styles (will be replaced in Phase 3)
 - NotificationCenter-specific styles (will be replaced in Phase 3)
 
@@ -406,27 +420,33 @@ Replace all custom modal implementations with MUI `Dialog`.
 #### 2.3 Replace Hand-Built Dialogs in Components
 
 **Dashboard.tsx (Series CRUD dialogs):**
+
 - Create Series modal → extract to `CreateSeriesDialog.tsx` using `Dialog` + `TextField` + `Button`
 - Edit Series modal → extract to `EditSeriesDialog.tsx`
 - Delete confirmation → use new MUI `ConfirmModal`
 
 **SeriesDetails.tsx (Chapter CRUD dialogs):**
+
 - Create Chapter dialog → extract to `CreateChapterDialog.tsx`
 - Edit Chapter dialog → extract to `EditChapterDialog.tsx`
 - Delete confirmations → use new MUI `ConfirmModal`
 
 **ChapterGallery.tsx:**
+
 - Delete page confirm → use new MUI `ConfirmModal`
 - Upload zone → keep custom for now (drag-and-drop area)
 
 **Reader.tsx:**
+
 - Various confirm dialogs → use new MUI `ConfirmModal`
 
 **QueueManager.tsx:**
+
 - Clear queue confirm → use new MUI `ConfirmModal`
 - Pause queue confirm → use new MUI `ConfirmModal`
 
 **CSS to remove from `index.css`:**
+
 - `.modal-overlay` (~lines)
 - `.modal`
 - `.modal-actions`
@@ -444,7 +464,7 @@ Redesign the Queue Manager using MUI components. This covers D.3 queue UI refine
 **Decision (2026-07-17): MUI `Table`, not Cards and not DataGrid.** `plan-improvements.md` D.12 said "DataGrid or Table" — resolved to `Table size="small"`: `@mui/x-data-grid` is an extra dependency that cannot sensibly live in a dropdown. The 360px dropdown either widens to ~640px or converts to a right-anchored `Drawer` (decide in the PR; Drawer is preferred — it gives the table room without fighting the nav layout).
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | Custom job card `<li>` (inline styles) | `<Table size="small">` rows: status dot · Series→Ch→Page · attempt · pipeline dots · actions |
 | Status text | `<Chip>` with color-coded labels |
 | Manual status dots | **Prominent dot** (`Box sx` circle or `<Badge>`) — screenshot analysis shows current dots are too small; make them prominent per `examples/redesign-the-job-queue.jpg` |
@@ -473,6 +493,7 @@ The Phase A bugfixes (plan-improvements.md "Bugs and fixes (phase A)") are the a
 **Icons needed:** `PlayArrow`, `Pause`, `Refresh`, `Delete`, `ClearAll`, `FilterList` — import via direct paths (`@mui/icons-material/PlayArrow`).
 
 **CSS to remove:**
+
 - All `.queue-*` styles (note: job "cards" are currently inline-styled `<li>` elements — most cleanup is deleting inline style objects, not CSS)
 
 ---
@@ -484,7 +505,7 @@ Redesign the Dashboard series grid and cards.
 **File: `Dashboard.tsx`**
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | `.manga-card` div | `<Card>` with `<CardMedia>` (thumbnail) + `<CardContent>` |
 | Manual grid layout | `<Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>` |
 | Series title in card | `<CardHeader>` or `<Typography variant="h6">` |
@@ -497,7 +518,7 @@ Redesign the Dashboard series grid and cards.
 **File: `SeriesDetails.tsx`** (Chapter cards D.3)
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | `.chapter-card-nhentai` | `<Card>` with MUI layout |
 | Chapter metadata (language, direction, page count) | `<Stack>` with `<Chip>` and `<Typography>` |
 | Model info display | `<Chip>` labeled "OCR: PaddleOCR" etc. |
@@ -508,13 +529,14 @@ Redesign the Dashboard series grid and cards.
 **File: `ChapterGallery.tsx`**
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | `.pages-grid` layout | `<ImageList>` for page thumbnails |
 | `.page-thumbnail` | `<ImageListItem>` with `<ImageListItemBar>` for page number |
 | Page reorder | Keep current drag-and-drop logic, wrap in MUI `<Card>` surfaces |
 | "Open in Reader" | `<Button variant="contained">` |
 
 **CSS to remove:**
+
 - `.manga-card*`, `.dashboard-content`, `.grid-cols-*`
 - `.chapter-card-nhentai`, `.chapter-list`, `.chapter-row`
 - `.pages-grid`, `.page-thumbnail`
@@ -531,7 +553,7 @@ Replace all form inputs and settings with MUI components.
 **File: `Auth.tsx`**
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | `.auth-page` centered layout | `<Container maxWidth="sm">` + `<Paper>` centered |
 | `.auth-card` | `<Card>` + `<CardContent>` |
 | `.form-group` + `.form-input` | `<TextField fullWidth>` |
@@ -545,7 +567,7 @@ Replace all form inputs and settings with MUI components.
 > **D.10 decision (2026-07-17):** resolve the global→series→chapter inheritance chain **client-side** via a `resolveModel(chain)` utility with unit tests — no new backend endpoint in this phase. The backend is planned to return resolved settings directly later; keep the utility isolated so it deletes cleanly.
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | Custom modal | `<Dialog fullWidth maxWidth="md">` with `<DialogContent dividers>` — **screenshot insight**: current settings modal overflows with an ugly window-level scrollbar ("no scroll bar plz"). Using `<DialogContent dividers>` ensures only the inner content scrolls, not the entire dialog. |
 | Model picker selects | `<Select>` with `<MenuItem>` |
 | Provider/model groups | `<Accordion>` per category (OCR, TL, QA) |
@@ -560,6 +582,7 @@ Replace all form inputs and settings with MUI components.
 **New file: `UserManagement.tsx`**
 
 Components to use:
+
 - `<Dialog>` for the outer modal
 - `<Avatar>` for profile picture (with upload via `<Button>`)
 - `<TextField>` for username/password/email
@@ -574,7 +597,7 @@ Components to use:
 **File: `App.tsx` or new `UploadContext.tsx`**
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | Upload progress bar | `<LinearProgress>` variant="determinate" |
 | Upload widget container | `<Paper>` floating in corner via `position: fixed` |
 | Cancel button | `<IconButton>` with `<CloseIcon>` |
@@ -605,7 +628,7 @@ This also covers the toast theme fix (current toasts don't respect light theme �
 **File: `NotificationCenter.tsx`**
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | Custom dropdown div | `<Popover>` anchored to the bell icon |
 | Notification items | `<List>` + `<ListItem>` with `<ListItemIcon>` (error/warning/info icon) |
 | Mark as read | `<ListItemSecondaryAction>` with `<IconButton>` |
@@ -623,7 +646,7 @@ The Reader is 5292 lines — the most complex component. Migration must be surgi
 #### 7.1 What to Migrate (MUI components)
 
 | Current | MUI Replacement |
-|---------|-----------------|
+| --------- | ----------------- |
 | Page navigation buttons (◀ ▶) | `<IconButton>` or `<Fab>` |
 | Zoom controls (±, fit, reset) | `<IconButton>` with `ZoomIn`, `ZoomOut`, `FitScreen` icons |
 | Floating toolbar container | `<Paper elevation={3}>` instead of `glass` class |
@@ -669,17 +692,20 @@ These were discovered by Gemini's visual analysis of `examples/region-redo.jpg` 
 **Decision (2026-07-17): fix 7.4.1 and 7.4.2 in this phase — each with NEW tests added to `Reader.test.tsx`.** Reader.tsx is excluded from the coverage gate, so these must not land untested. **7.4.3 is deferred** — it changes backend layer-creation semantics and belongs to a separate workstream, not a UI migration.
 
 **Bug 7.4.1 — Shared State Bug on Redo Buttons** (fix in this phase)
+
 - **Symptom**: Clicking "Redo OCR" also shows a loading spinner on "Redo TL" (and vice versa). Both buttons share the same state.
 - **Root cause**: Lines 219-221 in Reader.tsx — `isRedoingPageOcr` and `isRedoingPageTranslation` are separate but the per-region redo buttons (popover) likely share a single `isRedoing` state (line 476).
 - **Fix**: Split `setIsRedoing` into `setIsRedoingOcr` and `setIsRedoingTl` for per-region actions. The page-level `isRedoingPageOcr`/`isRedoingPageTranslation` are already separate — verify the popover uses the correct one.
 - **Test**: trigger region redo-OCR → assert the redo-TL control does not enter loading state.
 
 **Bug 7.4.2 — Redo OCR Should Be Disabled on Translation Layer** (fix in this phase)
+
 - **Symptom**: When user selects an element on the *translation* layer, "Redo OCR" button is still enabled. Clicking it either fails silently or acts on the wrong layer.
 - **Fix**: When the selected item belongs to a translation layer, disable the "Redo OCR" button in the Element Inspector and show a tooltip: "Select an OCR layer element to redo OCR."
 - **Test**: select a translation-layer element → assert Redo OCR is disabled with the explanatory tooltip.
 
 **Bug 7.4.3 — Redo-Region Adds Layers Instead of Mutating** (DEFERRED — backend workstream)
+
 - **Symptom**: "Redo Region OCR" or "Redo Region TL" currently mutates the existing layer element. It should instead create a NEW layer stacked on top with just the re-processed region.
 - **Why deferred**: requires the backend to create a new `Layer` + `LayerElement` pair rather than updating in place — a logic/API change outside the UI-only scope of this migration. Track as its own item; the frontend already handles new layers arriving via SSE (Phase B), so the frontend half of the verification can reuse that path when the backend work lands.
 
@@ -729,6 +755,7 @@ After all phases complete, `index.css` should shrink from 1813 lines to ~200-300
 - Utility classes that are genuinely needed (check for usage first)
 
 **Remove:**
+
 - All `.glass` utility and its overrides
 - All `:root.light` theme variable overrides (MUI handles this)
 - All CSS `backdrop-filter: blur()` references
@@ -744,6 +771,7 @@ After all phases complete, `index.css` should shrink from 1813 lines to ~200-300
 #### 9.2 Remove Unused Google Fonts
 
 Current `index.css` line 1 loads 5 Google Fonts:
+
 ```css
 @import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Comic+Neue:wght@300;400;700&family=Bangers&family=Luckiest+Guy&display=swap");
 ```
@@ -799,7 +827,7 @@ Phase 9 MUST be last — it removes CSS that is still needed by non-migrated com
 ## Items D.1–D.13 Covered by MUI Migration
 
 | D Item | Description | Handled by Phase |
-|--------|-------------|------------------|
+| -------- | ------------- | ------------------ |
 | D.1 | Remove cover image URL field | Phase 4 (Dashboard refactor) |
 | D.2 | Fix Settings modal overflow | Phase 5 (MUI Dialog natively scrolls) |
 | D.3 | Chapter cards redesign | Phase 4 (MUI Card components) |
@@ -840,7 +868,7 @@ npm run build         # TypeScript compilation — must succeed
 The real MUI migration hazards and their rules:
 
 | Hazard | Rule |
-|--------|------|
+| -------- | ------ |
 | MUI `Tooltip` does NOT render a `title` attribute | Keep the `title` prop on `IconButton`s — `getAllByTitle` assertions (QueueManager ×5, Dashboard ×3, SeriesDetails ×2) stay valid behavioral queries |
 | MUI `Select` is not a native `<select>` | Wire `InputLabel id` + `labelId` so `getByLabelText` (SettingsModal ×10) keeps working; interactions change from `selectOptions` to `mouseDown` + listbox `click` |
 | MUI `Dialog` portals to `document.body` | Query via `screen.*`, never `container.*` |
@@ -848,6 +876,7 @@ The real MUI migration hazards and their rules:
 | MUI `Button` / `Dialog` roles | `screen.getByRole("button", { name: "Create" })`, `screen.getByRole("dialog")` |
 
 **New assertions per phase (behaviors, not markup):**
+
 - Phase 0: theme persists to `manga_theme`; `:root.light` class tracks MUI mode (bridge works until Phase 9)
 - Phase 3: Phase A contract — sort weights keep paused jobs in position; SSE updates merge metadata; global pause disables per-job buttons
 - Phase 6: three toasts fired in one tick → all three render (Phase A #3 regression guard)
@@ -881,7 +910,7 @@ Do NOT change these exclusions during migration. (Phase 7's 7.4.1/7.4.2 fixes st
 ## Appendix: Component → MUI Replacement Map
 
 | Current Component/Class | MUI Component | Import Path |
-|------------------------|---------------|-------------|
+| ------------------------ | --------------- | ------------- |
 | `<div className="glass">` | `<Paper>` | `@mui/material/Paper` |
 | `<nav className="nav-bar">` | `<AppBar>` | `@mui/material/AppBar` |
 | `<div className="modal-overlay">` | `<Dialog>` | `@mui/material/Dialog` |
@@ -917,7 +946,7 @@ Do NOT change these exclusions during migration. (Phase 7's 7.4.1/7.4.2 fixes st
 Use this table to track which sections of `index.css` are removed in each phase. Mark sections as you remove them.
 
 | CSS Section | Approx Lines | Removed in Phase | Status |
-|-------------|-------------|------------------|--------|
+| ------------- | ------------- | ------------------ | -------- |
 | `@import` fonts | 1 | 9 | Pending |
 | `:root` variables (dark) | 3-53 | 9 | Pending |
 | `:root.light` variables | 55-90 | 9 | Pending |
@@ -1050,6 +1079,7 @@ Additionally, lines 750–759 do a `setZoom(1.0)` and `setPan({x:0,y:0})` on eve
 **Fix**: The Reader already handles this well internally — it uses `selectedPage` based on `pageNumber` param, not re-mounting. The issue is that App.tsx passes new prop references on every render. Wrap Reader in `React.memo` (P1 fix).
 
 Additionally, the zoom/pan reset on line 750 should only happen when switching *chapters*, not pages:
+
 ```tsx
 // Change the effect dependency from [pageNumber] to [chapterId]
 ```
@@ -1059,6 +1089,7 @@ Additionally, the zoom/pan reset on line 750 should only happen when switching *
 **Root cause**: `Reader.tsx` imports `jszip` (for export), `fitText.ts` (437 lines), and `polygonUtils.ts` (292 lines) all eagerly. `jszip` alone is ~90KB minified.
 
 **Fix**: `jszip` is only used in `handleExportZip` — dynamic import it:
+
 ```tsx
 // Remove: import JSZip from "jszip";
 // In handleExportZip:
@@ -1083,6 +1114,7 @@ const IconPlay = () => (<svg width="14" height="14" ...>...</svg>);
 **Root cause**: `QueueManager.tsx` line 281: `const interval = setInterval(fetchJobs, 30000)` runs every 30 seconds even when SSE is connected and delivering events.
 
 **Fix**: Check SSE connection status and skip fetch when SSE is active:
+
 ```tsx
 if (isSseConnected) return; // skip REST poll
 ```
@@ -1092,7 +1124,7 @@ if (isSseConnected) return; // skip REST poll
 ### Priority Matrix
 
 | Priority | Issue | Fix Difficulty | Impact | When |
-|----------|-------|---------------|--------|------|
+| ---------- | ------- | --------------- | -------- | ------ |
 | **P1** | Cascading re-renders (no `React.memo`) | 1-line per component | HIGH | Now |
 | **P3** | No virtualization | Moderate (backend + frontend) | HIGH | D.9 |
 | **P2** | `backdrop-filter` on every card | Remove 2 CSS lines (immediate) | MEDIUM | Now / MUI Phase 4 |
@@ -1145,7 +1177,7 @@ Instead, build a **separate mobile-first route** with a stripped-down workflow:
 ### Components Needed
 
 | Component | MUI Component | Purpose |
-|-----------|---------------|---------|
+| ----------- | --------------- | --------- |
 | Page container | `<Container maxWidth="sm">` | Center on phone screen |
 | Step indicator | `<MobileStepper>` or `<Stepper>` | Show current phase |
 | Upload area | `<Button variant="outlined" fullWidth>` | Triggers `<input type="file">` |
@@ -1172,6 +1204,7 @@ New component, ~200-300 lines. Uses MUI components exclusively. No dependency on
 ### Route Addition
 
 In `App.tsx`:
+
 ```tsx
 // Lazy-loaded
 const MobileApp = React.lazy(() => import("./components/MobileApp"));

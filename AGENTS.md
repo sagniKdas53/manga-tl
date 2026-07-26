@@ -23,7 +23,7 @@ This project is indexed by GitNexus as **manga-library** (3885 symbols, 8774 rel
 ## Resources
 
 | Resource | Use for |
-|----------|---------|
+| ---------- | --------- |
 | `gitnexus://repo/manga-library/context` | Codebase overview, check index freshness |
 | `gitnexus://repo/manga-library/clusters` | All functional areas |
 | `gitnexus://repo/manga-library/processes` | All execution flows |
@@ -32,7 +32,7 @@ This project is indexed by GitNexus as **manga-library** (3885 symbols, 8774 rel
 ## CLI
 
 | Task | Read this skill file |
-|------|---------------------|
+| ------ | --------------------- |
 | Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
 | Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
 | Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
@@ -43,7 +43,8 @@ This project is indexed by GitNexus as **manga-library** (3885 symbols, 8774 rel
 <!-- gitnexus:end -->
 
 ## OpenAPI Schema Synchronization
-Whenever you modify the backend API (e.g. creating/updating Controllers, DTOs, or Models), you **MUST** ensure the frontend TypeScript definitions remain in sync. 
+
+Whenever you modify the backend API (e.g. creating/updating Controllers, DTOs, or Models), you **MUST** ensure the frontend TypeScript definitions remain in sync.
 
 1. Ensure the backend Docker container is running (`docker compose up backend`).
 2. Run `npm run generate-api` from the `frontend` directory.

@@ -6,7 +6,7 @@
 
 ## 1. Executive Vision & Target Architecture
 
-Currently, the system uses a hybrid model: the Frontend is built inside the Backend container, and the Worker relies on private Docker bridge DNS (`http://backend:8080`, `http://minio:9000`, `http://redis:6379`). 
+Currently, the system uses a hybrid model: the Frontend is built inside the Backend container, and the Worker relies on private Docker bridge DNS (`http://backend:8080`, `http://minio:9000`, `http://redis:6379`).
 
 The target architecture decouples all three components into **clean, independent micro-services**:
 
@@ -60,6 +60,7 @@ graph TB
 ## 2. Component 1: Frontend Decoupling
 
 ### 2.1 Git Submodule Structure
+
 - Extract `frontend/` into a dedicated repository (e.g. `github.com/sagniKdas53/manga-tl-frontend.git`).
 - Add to main repo as a submodule at `frontend/`.
 
@@ -68,6 +69,7 @@ graph TB
 Replace Spring Boot's static file serving with a lightweight NGINX Alpine container.
 
 #### [NEW] `frontend/Dockerfile`
+
 ```dockerfile
 # Stage 1: Build static assets
 FROM node:26-alpine AS build
@@ -90,6 +92,7 @@ CMD ["nginx", "-g", "daemon off;"]
 ```
 
 #### [NEW] `frontend/nginx.conf`
+
 ```nginx
 server {
     listen 80;
@@ -137,6 +140,7 @@ server {
 ### 3.1 Strip Static Frontend from Backend
 
 #### [MODIFY] `backend/Dockerfile`
+
 Remove Node.js build stage completely. Spring Boot becomes a lean Java 25 microservice without static web assets.
 
 ```dockerfile
@@ -161,6 +165,7 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 Eliminate the worker's need to make HTTP GET calls back to `http://backend:8080/api/internal/images/{id}` to fetch image info and OCR regions.
 
 **Target Payload Format sent by Backend to Worker:**
+
 ```json
 {
   "queue_name": "queue:translation",
@@ -223,15 +228,18 @@ worker:
 To allow workers to run anywhere (local Docker, AWS EC2, RunPod GPU, Google Cloud):
 
 ### 4.1 Asset Access via Presigned S3 URLs
+
 - Workers **never** access `http://minio:9000`.
 - Instead, workers download input images via `assets.imageGetUrl` and upload rendered outputs via `assets.renderPutUrl`.
 - **Result:** MinIO does not need to be exposed internally or linked via Docker bridge network.
 
 ### 4.2 Dynamic Callback Routing
+
 - Workers **never** call hardcoded `http://backend:8080`.
 - Workers post completion/failure payloads directly to `job_data.callbackUrl` using the `job_data.callbackToken` for HTTP Bearer auth.
 
 ### 4.3 Redis Isolation per Worker Node
+
 - Remote cloud workers do **not** connect to the backend's internal Redis.
 - Rate limiting and model TTL eviction (`model_manager.py`) operate **in-memory** within the worker process (or via an optional local Redis container co-located with the GPU node).
 - OpenRouter model prices are fetched directly from OpenRouter API or passed in the job payload.
@@ -263,7 +271,7 @@ sequenceDiagram
 ## 5. Comparative Analysis: Current vs. Decoupled
 
 | Metric / Capability | Current Architecture | Decoupled Architecture |
-|---|---|---|
+| --- | --- | --- |
 | **Frontend Deployment** | Embedded in Spring Boot JAR | Standalone NGINX container (SPA) |
 | **Backend Responsibilities** | REST API + Static Asset Host | Pure REST API & Task Orchestrator |
 | **Remote Cloud GPUs** | ❌ Fails (hardcoded `backend:8080`, `minio:9000`, local secrets) | ✅ Fully supported (presigned S3 + HTTPS callbacks) |
@@ -277,17 +285,20 @@ sequenceDiagram
 ## 6. Phased Implementation Roadmap
 
 ### Phase 1: Payload & Asset Self-Containment (Backend & Worker)
+
 1. Add presigned GET/PUT URL generation to Spring Boot S3 service.
 2. Update job submit payload schema to include `assets`, `context`, `callbackUrl`, and `callbackToken`.
 3. Update worker handlers (`ocr`, `render`, `qa`, `translation`) to download/upload via presigned URLs if present.
 
 ### Phase 2: Frontend Extraction & NGINX Setup
+
 1. Create `frontend` repository/submodule.
 2. Add `frontend/Dockerfile` and `frontend/nginx.conf`.
 3. Strip `frontend-build` stage from `backend/Dockerfile`.
 4. Add `frontend` service to `docker-compose.yml`.
 
 ### Phase 3: Remote Worker Security & Router
+
 1. Implement worker pool router in Spring Boot (`WorkerPoolManager`) supporting multiple worker URLs with health checking.
 2. Add Bearer token authentication to worker endpoints and callback endpoints.
 3. Deploy a remote GPU worker instance (e.g. RunPod) to verify cloud execution over HTTPS.
