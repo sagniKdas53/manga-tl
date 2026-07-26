@@ -46,7 +46,11 @@ public class PageService {
       String hash,
       User user) {
     List<Page> existingPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
-    int maxExisting = existingPages.stream().mapToInt(Page::getPageNumber).max().orElse(0);
+    int maxExisting =
+        existingPages.stream()
+            .mapToInt(p -> p != null && p.getPageNumber() != null ? p.getPageNumber() : 0)
+            .max()
+            .orElse(0);
     int safePageNumber =
         Math.max(1, Math.min(pageNumber != null ? pageNumber : maxExisting + 1, maxExisting + 1));
 
@@ -84,7 +88,11 @@ public class PageService {
   public Page createPageWithExistingImage(
       Chapter chapter, Image existingImage, Integer pageNumber, User user) {
     List<Page> existingPages = pageRepository.findByChapterIdOrderByPageNumberAsc(chapter.getId());
-    int maxExisting = existingPages.stream().mapToInt(Page::getPageNumber).max().orElse(0);
+    int maxExisting =
+        existingPages.stream()
+            .mapToInt(p -> p != null && p.getPageNumber() != null ? p.getPageNumber() : 0)
+            .max()
+            .orElse(0);
     int safePageNumber =
         Math.max(1, Math.min(pageNumber != null ? pageNumber : maxExisting + 1, maxExisting + 1));
 
@@ -106,7 +114,7 @@ public class PageService {
     Objects.requireNonNull(page, "page cannot be null");
     page = pageRepository.save(Objects.requireNonNull(page));
 
-    if (pageNumber == 1) {
+    if (pageNumber != null && pageNumber == 1) {
       pageRepository.flush();
       recalculateChapterCover(chapter.getId());
     }

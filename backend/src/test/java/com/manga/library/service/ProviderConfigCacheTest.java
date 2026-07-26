@@ -16,11 +16,12 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings("null")
 public class ProviderConfigCacheTest {
 
-  @Mock private StringRedisTemplate redisTemplate;
-  @Mock private ValueOperations<String, String> valueOperations;
+  @Mock
+  private StringRedisTemplate redisTemplate;
+  @Mock
+  private ValueOperations<String, String> valueOperations;
 
   private ObjectMapper objectMapper = new ObjectMapper();
   private ProviderConfigCache providerConfigCache;
@@ -32,8 +33,7 @@ public class ProviderConfigCacheTest {
 
   @Test
   public void testReload_WithValidJson() {
-    String mockJson =
-        """
+    String mockJson = """
         {
           "version": 1,
           "providers": {
@@ -87,8 +87,7 @@ public class ProviderConfigCacheTest {
     assertTrue(providerConfigCache.isModelFree("openrouter", "google/gemini-2.5-flash:free"));
     assertFalse(providerConfigCache.isModelFree("openrouter", "deepseek/deepseek-v4-pro"));
 
-    Map<String, Map<String, List<ModelEntryDto>>> modelMap =
-        providerConfigCache.getProviderModelsMap();
+    Map<String, Map<String, List<ModelEntryDto>>> modelMap = providerConfigCache.getProviderModelsMap();
     assertNotNull(modelMap);
     assertTrue(modelMap.containsKey("openrouter"));
   }

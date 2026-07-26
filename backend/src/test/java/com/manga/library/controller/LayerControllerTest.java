@@ -20,8 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(LayerController.class)
@@ -31,17 +32,16 @@ public class LayerControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockBean private LayerRepository layerRepository;
-  @MockBean private LayerElementRepository layerElementRepository;
-  @MockBean private LayerEditHistoryRepository layerEditHistoryRepository;
-  @MockBean private ImageRepository imageRepository;
-  @MockBean private com.manga.library.repository.PageRepository pageRepository;
-  @MockBean private OcrRegionRepository ocrRegionRepository;
+  @MockitoBean private LayerRepository layerRepository;
+  @MockitoBean private LayerElementRepository layerElementRepository;
+  @MockitoBean private LayerEditHistoryRepository layerEditHistoryRepository;
+  @MockitoBean private ImageRepository imageRepository;
+  @MockitoBean private com.manga.library.repository.PageRepository pageRepository;
+  @MockitoBean private OcrRegionRepository ocrRegionRepository;
 
-  @MockBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private JwtAuthFilter jwtAuthFilter;
 
-  @org.springframework.boot.test.mock.mockito.SpyBean
-  private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+  @MockitoSpyBean private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
   @Test
   public void testDeleteLayer_NotFound() throws Exception {

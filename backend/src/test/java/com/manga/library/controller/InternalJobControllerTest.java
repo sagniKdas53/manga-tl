@@ -21,8 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(InternalJobController.class)
@@ -33,21 +33,21 @@ public class InternalJobControllerTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
 
-  @MockBean private JobCoordinatorService jobCoordinatorService;
-  @MockBean private ImageRepository imageRepository;
-  @MockBean private PanelRepository panelRepository;
-  @MockBean private OcrRegionRepository ocrRegionRepository;
-  @MockBean private ConversationRepository conversationRepository;
-  @MockBean private ConversationRegionRepository conversationRegionRepository;
-  @MockBean private PageRepository pageRepository;
-  @MockBean private ChapterRepository chapterRepository;
-  @MockBean private MinioService minioService;
-  @MockBean private LayerElementRepository layerElementRepository;
-  @MockBean private LayerRepository layerRepository;
-  @MockBean private SeriesRepository seriesRepository;
-  @MockBean private SseService sseService;
-  @MockBean private JwtAuthFilter jwtAuthFilter;
-  @MockBean private JobRepository jobRepository;
+  @MockitoBean private JobCoordinatorService jobCoordinatorService;
+  @MockitoBean private ImageRepository imageRepository;
+  @MockitoBean private PanelRepository panelRepository;
+  @MockitoBean private OcrRegionRepository ocrRegionRepository;
+  @MockitoBean private ConversationRepository conversationRepository;
+  @MockitoBean private ConversationRegionRepository conversationRegionRepository;
+  @MockitoBean private PageRepository pageRepository;
+  @MockitoBean private ChapterRepository chapterRepository;
+  @MockitoBean private MinioService minioService;
+  @MockitoBean private LayerElementRepository layerElementRepository;
+  @MockitoBean private LayerRepository layerRepository;
+  @MockitoBean private SeriesRepository seriesRepository;
+  @MockitoBean private SseService sseService;
+  @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private JobRepository jobRepository;
 
   @Test
   public void testGetImageInfo_NotFound() throws Exception {

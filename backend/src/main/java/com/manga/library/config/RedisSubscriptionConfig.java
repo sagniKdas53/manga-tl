@@ -27,9 +27,10 @@ public class RedisSubscriptionConfig {
   public RedisMessageListenerContainer redisMessageListenerContainer(
       RedisConnectionFactory connectionFactory, MessageListener providerConfigMessageListener) {
     RedisMessageListenerContainer container = new RedisMessageListenerContainer();
-    container.setConnectionFactory(connectionFactory);
+    container.setConnectionFactory(java.util.Objects.requireNonNull(connectionFactory));
     container.addMessageListener(
-        providerConfigMessageListener, new ChannelTopic("provider:config:updated"));
+        java.util.Objects.requireNonNull(providerConfigMessageListener),
+        new ChannelTopic("provider:config:updated"));
     return container;
   }
 }

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(SeriesController.class)
@@ -32,18 +32,18 @@ public class SeriesControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockBean private SeriesRepository seriesRepository;
-  @MockBean private ChapterRepository chapterRepository;
-  @MockBean private PageRepository pageRepository;
-  @MockBean private ImageRepository imageRepository;
-  @MockBean private LayerRepository layerRepository;
-  @MockBean private LayerElementRepository layerElementRepository;
-  @MockBean private PageService pageService;
-  @MockBean private MinioService minioService;
-  @MockBean private JobCoordinatorService jobCoordinatorService;
-  @MockBean private com.manga.library.service.ChapterExportService chapterExportService;
-  @MockBean private SystemSettingsService systemSettingsService;
-  @MockBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private SeriesRepository seriesRepository;
+  @MockitoBean private ChapterRepository chapterRepository;
+  @MockitoBean private PageRepository pageRepository;
+  @MockitoBean private ImageRepository imageRepository;
+  @MockitoBean private LayerRepository layerRepository;
+  @MockitoBean private LayerElementRepository layerElementRepository;
+  @MockitoBean private PageService pageService;
+  @MockitoBean private MinioService minioService;
+  @MockitoBean private JobCoordinatorService jobCoordinatorService;
+  @MockitoBean private com.manga.library.service.ChapterExportService chapterExportService;
+  @MockitoBean private SystemSettingsService systemSettingsService;
+  @MockitoBean private JwtAuthFilter jwtAuthFilter;
 
   @Test
   public void testGetSeries_NotFound() throws Exception {

@@ -24,8 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PageController.class)
@@ -35,22 +35,22 @@ public class PageControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockBean private SeriesRepository seriesRepository;
-  @MockBean private ChapterRepository chapterRepository;
-  @MockBean private ImageRepository imageRepository;
-  @MockBean private PageRepository pageRepository;
-  @MockBean private PanelRepository panelRepository;
-  @MockBean private OcrRegionRepository ocrRegionRepository;
-  @MockBean private LayerRepository layerRepository;
-  @MockBean private LayerElementRepository layerElementRepository;
-  @MockBean private MinioService minioService;
-  @MockBean private JobCoordinatorService jobCoordinatorService;
-  @MockBean private PageService pageService;
-  @MockBean private ConversationRepository conversationRepository;
-  @MockBean private ConversationRegionRepository conversationRegionRepository;
-  @MockBean private SseService sseService;
-  @MockBean private LayerEditHistoryRepository layerEditHistoryRepository;
-  @MockBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private SeriesRepository seriesRepository;
+  @MockitoBean private ChapterRepository chapterRepository;
+  @MockitoBean private ImageRepository imageRepository;
+  @MockitoBean private PageRepository pageRepository;
+  @MockitoBean private PanelRepository panelRepository;
+  @MockitoBean private OcrRegionRepository ocrRegionRepository;
+  @MockitoBean private LayerRepository layerRepository;
+  @MockitoBean private LayerElementRepository layerElementRepository;
+  @MockitoBean private MinioService minioService;
+  @MockitoBean private JobCoordinatorService jobCoordinatorService;
+  @MockitoBean private PageService pageService;
+  @MockitoBean private ConversationRepository conversationRepository;
+  @MockitoBean private ConversationRegionRepository conversationRegionRepository;
+  @MockitoBean private SseService sseService;
+  @MockitoBean private LayerEditHistoryRepository layerEditHistoryRepository;
+  @MockitoBean private JwtAuthFilter jwtAuthFilter;
 
   @Test
   public void testGetPage_Success() throws Exception {

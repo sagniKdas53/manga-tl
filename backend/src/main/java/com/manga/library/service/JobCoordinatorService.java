@@ -410,16 +410,15 @@ public class JobCoordinatorService {
     if (!Objects.equals(resolved, globalVal)
         && providerConfigCache != null
         && provider != null
-        && task != null) {
-      if (!providerConfigCache.isValidProviderModel(provider, resolved, task)) {
-        log.warn(
-            "Resolved model '{}' for task '{}' under provider '{}' is no longer valid or available — falling back to global default '{}'",
-            resolved,
-            task,
-            provider,
-            globalVal);
-        return globalVal;
-      }
+        && task != null
+        && !providerConfigCache.isValidProviderModel(provider, resolved, task)) {
+      log.warn(
+          "Resolved model '{}' for task '{}' under provider '{}' is no longer valid or available — falling back to global default '{}'",
+          resolved,
+          task,
+          provider,
+          globalVal);
+      return globalVal;
     }
     return resolved;
   }

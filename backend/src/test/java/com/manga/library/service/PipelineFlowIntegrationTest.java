@@ -48,10 +48,10 @@ public class PipelineFlowIntegrationTest {
   @Autowired private LayerRepository layerRepository;
   @Autowired private LayerElementRepository layerElementRepository;
 
-  @org.springframework.boot.test.mock.mockito.MockBean
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
-  @org.springframework.boot.test.mock.mockito.MockBean private MinioService minioService;
+  @org.springframework.test.context.bean.override.mockito.MockitoBean private MinioService minioService;
 
   private String adminToken;
 
@@ -463,7 +463,7 @@ public class PipelineFlowIntegrationTest {
     // 6. Sequential OCR Callback Pipeline Mocking
     // Step A: Panel Detection Callback -> triggers OCR
     PanelCallbackDto.PanelData panelData =
-        new PanelCallbackDto.PanelData(10, 20, 500, 400, 1, null, null);
+        new PanelCallbackDto.PanelData(10, 20, 500, 400, 1, 1, 1);
     PanelCallbackDto panelCallback = new PanelCallbackDto(imageId, null, List.of(panelData));
 
     mockMvc

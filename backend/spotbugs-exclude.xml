@@ -7,4 +7,11 @@
     <Match>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <Match>
+        <Class name="com.manga.library.service.ProviderConfigCache$ProviderData"/>
+        <Or>
+            <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+            <Bug pattern="UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+        </Or>
+    </Match>
 </FindBugsFilter>

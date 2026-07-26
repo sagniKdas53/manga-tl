@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -23,9 +23,9 @@ public class NotificationControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockBean private SseService sseService;
-  @MockBean private UserRepository userRepository;
-  @MockBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private SseService sseService;
+  @MockitoBean private UserRepository userRepository;
+  @MockitoBean private JwtAuthFilter jwtAuthFilter;
 
   @Test
   public void testStream_Unauthorized() throws Exception {
