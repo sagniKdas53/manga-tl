@@ -11,7 +11,7 @@ The single-class design is actually your real limitation, not the YOLO11 backbon
 This is the best fit in your list, and it's not close:
 
 | | Your current model | ShadowB YOLO26s |
-|---|---|---|
+| --- | --- | --- |
 | Backbone | YOLO11n-seg | YOLO26s-seg |
 | Classes | 1 (bubble only) | 3: `frame`, `text`, `balloon` |
 | Params | ~2.7M (nano) | 11.4M |

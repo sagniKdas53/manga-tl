@@ -119,7 +119,7 @@ Add strict quality-gate checks between pipeline stages (e.g. after OCR and after
 ## Action Items Summary
 
 | # | Issue | Status |
-|---|-------|--------|
+| --- | ------- | -------- |
 | 1 | `/api/pages/{id}/details` — proxy/lazy init issues | ✅ Fixed |
 | 1b | `/api/pages/{id}/details` — `IllegalArgumentException` → 404, not 500 | ✅ Fixed |
 | 2 | Proper 4XX/5XX error responses with messages | ✅ Fixed |
@@ -151,7 +151,7 @@ Add strict quality-gate checks between pipeline stages (e.g. after OCR and after
 #### Fixes Applied
 
 | # | Fix | File |
-|---|-----|------|
+| --- | ----- | ------ |
 | 1 | `open-in-view: false` → `true` | `application.yml:16` |
 | 2 | `fail-on-empty-beans: false` | `application.yml:31-33` |
 | 3 | Raw `Page` entity → plain `Map` | `PageController.java:762-766` |
@@ -203,7 +203,7 @@ Every error returns the same useless blob:
 Actual failures observed that should be different:
 
 | What happens | Current HTTP | Should be | Error message |
-|-------------|-------------|-----------|---------------|
+| ------------- | ------------- | ----------- | --------------- |
 | Page not found | 500 | **404** | `"Page 0a82cf1a not found"` |
 | Page ID is null | 500 | **400** | `"pageId is required"` |
 | Chapter not found | 500 | **404** | `"Chapter X not found"` |

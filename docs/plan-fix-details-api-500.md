@@ -56,7 +56,7 @@ and prefetch re-fetches pages that are already cached.
 ## 3. Fix Overview
 
 | Task | Scope | What it fixes | Risk |
-|------|-------|---------------|------|
+| ------ | ------- | --------------- | ------ |
 | **1** | `frontend/src/components/Reader.tsx` | Root cause: wrong UUID passed + cache-key mismatch | Low |
 | **2** | Backend (new files + 3 controllers) | Correct HTTP semantics: 404 with message instead of opaque 500 | Low |
 | **3** | Tests (frontend + backend) | Regression coverage for both fixes | Low |
@@ -315,7 +315,7 @@ identical. Add `import com.manga.library.exception.ResourceNotFoundException;` t
 modified file.
 
 | File | Line | Current throw |
-|------|------|---------------|
+| ------ | ------ | --------------- |
 | `controller/PageController.java` | 150 | `new IllegalArgumentException("Chapter not found: " + chapterId)` |
 | `controller/PageController.java` | 736 | `new IllegalArgumentException("Page not found: " + pageId)` |
 | `controller/PageController.java` | 789 | `new IllegalArgumentException("Image not found: " + imageId)` |
@@ -459,7 +459,7 @@ Run: `cd backend && ./mvnw test -Dtest=PageControllerTest`.
 ## 6. Appendix: evidence trail
 
 | Evidence | Where |
-|----------|-------|
+| ---------- | ------- |
 | 36 × `IllegalArgumentException: Page not found` at `PageController:736` | `logs/run-13.log` |
 | Same pattern, earlier run | `logs/run-12.log` (6 occurrences) |
 | All 6 logged UUIDs exist in `images`, none in `pages` | live query on `manga-db` (psql) |

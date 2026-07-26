@@ -2,17 +2,16 @@ package com.manga.library.service;
 
 import com.manga.library.dto.SystemSettingsDto;
 import com.manga.library.model.SystemSetting;
+import com.manga.library.repository.ChapterRepository;
+import com.manga.library.repository.SeriesRepository;
 import com.manga.library.repository.SystemSettingsRepository;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.manga.library.repository.ChapterRepository;
-import com.manga.library.repository.SeriesRepository;
-import java.util.Map;
 
 @Service
 public class SystemSettingsService {
@@ -187,19 +186,83 @@ public class SystemSettingsService {
     List<Map<String, Object>> orphaned = new java.util.ArrayList<>();
     if (seriesRepository != null) {
       for (com.manga.library.model.Series s : seriesRepository.findAll()) {
-        checkOverride(orphaned, "SERIES", s.getId(), s.getTitle(), "tlModel", s.getTlModel(), s.getTlProvider(), "tl");
-        checkOverride(orphaned, "SERIES", s.getId(), s.getTitle(), "ocrModel", s.getOcrModel(), s.getOcrProvider(), "ocr");
-        checkOverride(orphaned, "SERIES", s.getId(), s.getTitle(), "qaLlmModel", s.getQaLlmModel(), s.getQaProvider(), "qaLLM");
-        checkOverride(orphaned, "SERIES", s.getId(), s.getTitle(), "qaVlmModel", s.getQaVlmModel(), s.getQaProvider(), "qaVLM");
+        checkOverride(
+            orphaned,
+            "SERIES",
+            s.getId(),
+            s.getTitle(),
+            "tlModel",
+            s.getTlModel(),
+            s.getTlProvider(),
+            "tl");
+        checkOverride(
+            orphaned,
+            "SERIES",
+            s.getId(),
+            s.getTitle(),
+            "ocrModel",
+            s.getOcrModel(),
+            s.getOcrProvider(),
+            "ocr");
+        checkOverride(
+            orphaned,
+            "SERIES",
+            s.getId(),
+            s.getTitle(),
+            "qaLlmModel",
+            s.getQaLlmModel(),
+            s.getQaProvider(),
+            "qaLLM");
+        checkOverride(
+            orphaned,
+            "SERIES",
+            s.getId(),
+            s.getTitle(),
+            "qaVlmModel",
+            s.getQaVlmModel(),
+            s.getQaProvider(),
+            "qaVLM");
       }
     }
     if (chapterRepository != null) {
       for (com.manga.library.model.Chapter c : chapterRepository.findAll()) {
         String name = c.getTitle() != null ? c.getTitle() : "Chapter " + c.getChapterNumber();
-        checkOverride(orphaned, "CHAPTER", c.getId(), name, "tlModel", c.getTlModel(), c.getTlProvider(), "tl");
-        checkOverride(orphaned, "CHAPTER", c.getId(), name, "ocrModel", c.getOcrModel(), c.getOcrProvider(), "ocr");
-        checkOverride(orphaned, "CHAPTER", c.getId(), name, "qaLlmModel", c.getQaLlmModel(), c.getQaProvider(), "qaLLM");
-        checkOverride(orphaned, "CHAPTER", c.getId(), name, "qaVlmModel", c.getQaVlmModel(), c.getQaProvider(), "qaVLM");
+        checkOverride(
+            orphaned,
+            "CHAPTER",
+            c.getId(),
+            name,
+            "tlModel",
+            c.getTlModel(),
+            c.getTlProvider(),
+            "tl");
+        checkOverride(
+            orphaned,
+            "CHAPTER",
+            c.getId(),
+            name,
+            "ocrModel",
+            c.getOcrModel(),
+            c.getOcrProvider(),
+            "ocr");
+        checkOverride(
+            orphaned,
+            "CHAPTER",
+            c.getId(),
+            name,
+            "qaLlmModel",
+            c.getQaLlmModel(),
+            c.getQaProvider(),
+            "qaLLM");
+        checkOverride(
+            orphaned,
+            "CHAPTER",
+            c.getId(),
+            name,
+            "qaVlmModel",
+            c.getQaVlmModel(),
+            c.getQaProvider(),
+            "qaVLM");
       }
     }
     return Map.of("orphaned", orphaned);
@@ -214,9 +277,16 @@ public class SystemSettingsService {
       String modelVal,
       String providerVal,
       String task) {
-    if (modelVal != null && !modelVal.trim().isEmpty() && !modelVal.equals("inherit") && !modelVal.equals("default")) {
-      String prov = providerVal != null && !providerVal.trim().isEmpty() ? providerVal : getSettingValue("tlProvider", "openrouter");
-      if (providerConfigCache != null && !providerConfigCache.isValidProviderModel(prov, modelVal, task)) {
+    if (modelVal != null
+        && !modelVal.trim().isEmpty()
+        && !modelVal.equals("inherit")
+        && !modelVal.equals("default")) {
+      String prov =
+          providerVal != null && !providerVal.trim().isEmpty()
+              ? providerVal
+              : getSettingValue("tlProvider", "openrouter");
+      if (providerConfigCache != null
+          && !providerConfigCache.isValidProviderModel(prov, modelVal, task)) {
         Map<String, Object> entry = new java.util.HashMap<>();
         entry.put("entityType", entityType);
         entry.put("entityId", entityId != null ? entityId.toString() : "");

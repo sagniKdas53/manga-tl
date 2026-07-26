@@ -5,7 +5,7 @@
 ### Local (on-device inference)
 
 | Model | Format | Framework | Purpose |
-|-------|--------|-----------|---------|
+| ------- | -------- | ----------- | --------- |
 | **YOLO11n-seg** (`yolo11n_bubble.onnx`) | ONNX | ONNX Runtime (CPU) | Speech bubble segmentation |
 | **PP-OCRv6_medium_det** | PaddlePaddle | PaddleOCR (CPU) | Text detection |
 | **PP-OCRv6_medium_rec** | PaddlePaddle | PaddleOCR (CPU) | Text recognition |
@@ -15,7 +15,7 @@
 ### Cloud API (via OpenRouter / provider)
 
 | Model | Type | Purpose |
-|-------|------|---------|
+| ------- | ------ | --------- |
 | **qwen/qwen3-vl-32b-instruct** | VLM | Primary cloud OCR |
 | **deepseek/deepseek-v4-pro** | LLM | Primary translation |
 | **deepseek/deepseek-v4-flash** | LLM | QA (text) |
@@ -331,7 +331,7 @@ typeset page (right) [...]
 All translation responses go through `is_valid_translation()` which applies:
 
 | Check | Condition | Reason |
-|-------|-----------|--------|
+| ------- | ----------- | -------- |
 | Empty | `not translated` | Model returned nothing |
 | Boilerplate | Contains "translate the following text", "text:", "output:", "json" | Model failed to follow instructions |
 | Identical to source | `translated == source` for Japanese text | Model didn't translate |

@@ -258,7 +258,12 @@ public class JobCoordinatorService {
               job.put("tlProvider", resolvedTlProvider);
               job.put(
                   "tlModel",
-                  resolveModelWithCheck(chapter.getTlModel(), series.getTlModel(), settings.tlModel(), resolvedTlProvider, "tl"));
+                  resolveModelWithCheck(
+                      chapter.getTlModel(),
+                      series.getTlModel(),
+                      settings.tlModel(),
+                      resolvedTlProvider,
+                      "tl"));
               String resolvedQaProvider =
                   resolveModel(
                       chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider());
@@ -266,7 +271,11 @@ public class JobCoordinatorService {
               job.put(
                   "qaLlmModel",
                   resolveModelWithCheck(
-                      chapter.getQaLlmModel(), series.getQaLlmModel(), settings.qaLlmModel(), resolvedQaProvider, "qaLLM"));
+                      chapter.getQaLlmModel(),
+                      series.getQaLlmModel(),
+                      settings.qaLlmModel(),
+                      resolvedQaProvider,
+                      "qaLLM"));
               job.put(
                   "routingStrategy",
                   resolveModel(
@@ -276,7 +285,11 @@ public class JobCoordinatorService {
               job.put(
                   "qaVlmModel",
                   resolveModelWithCheck(
-                      chapter.getQaVlmModel(), series.getQaVlmModel(), settings.qaVlmModel(), resolvedQaProvider, "qaVLM"));
+                      chapter.getQaVlmModel(),
+                      series.getQaVlmModel(),
+                      settings.qaVlmModel(),
+                      resolvedQaProvider,
+                      "qaVLM"));
               job.put(
                   "qaMode",
                   resolveModel(chapter.getQaMode(), series.getQaMode(), settings.qaMode()));
@@ -779,7 +792,7 @@ public class JobCoordinatorService {
     String provider = "Translation Worker";
     String model = modelIdentifier;
     if (modelIdentifier.contains("/")) {
-      int slashIdx = modelIdentifier.indexOf("/");
+      int slashIdx = modelIdentifier.indexOf('/');
       provider = modelIdentifier.substring(0, slashIdx);
       model = modelIdentifier.substring(slashIdx + 1);
     }

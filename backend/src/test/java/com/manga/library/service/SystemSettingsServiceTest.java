@@ -20,13 +20,16 @@ public class SystemSettingsServiceTest {
 
   @Mock private SystemSettingsRepository systemSettingsRepository;
   @Mock private ProviderConfigCache providerConfigCache;
+  @Mock private com.manga.library.repository.SeriesRepository seriesRepository;
+  @Mock private com.manga.library.repository.ChapterRepository chapterRepository;
 
   private SystemSettingsService systemSettingsService;
 
   @BeforeEach
   public void setUp() {
     systemSettingsService =
-        new SystemSettingsService(systemSettingsRepository, providerConfigCache);
+        new SystemSettingsService(
+            systemSettingsRepository, providerConfigCache, seriesRepository, chapterRepository);
 
     // Set @Value properties via ReflectionTestUtils
     ReflectionTestUtils.setField(systemSettingsService, "defaultOcrProvider", "openrouter");

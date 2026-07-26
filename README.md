@@ -98,7 +98,7 @@ The worker supports multiple cloud and local model providers for both textual an
 You can enable or disable different fallback layers in [.env](file:///home/sagnik/Projects/docker-composes/manga-library/.env) using the following environment variables:
 
 | Environment Variable       | Description                                                                                                     |
-|:---------------------------|:----------------------------------------------------------------------------------------------------------------|
+|:--------------------------- |:---------------------------------------------------------------------------------------------------------------- |
 | `DISABLE_LOCAL_OCR`        | Set to `true` to disable local OCR engines and use Cloud VLMs for OCR instead.                                  |
 | `DISABLE_LOCAL_LLM`        | Set to `true` to skip all Local LLM (Ollama/LMStudio) lookups. Useful if local models are unconfigured or slow. |
 | `DISABLE_DEEPL_TRANSLATE`  | Set to `true` to skip DeepL fallback translation.                                                               |

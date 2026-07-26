@@ -189,7 +189,7 @@ These are the foundation. Nothing else can be trusted until shared-image deletio
 ## Bugs and fixes (phase 2)
 
 | ID | Component | Change |
-|----|-----------|--------|
+| ---- | ----------- | -------- |
 | 5.1 | `ChapterExportService.java` | Aggregated modelsUsed from cost breakdowns across QA and Translation |
 | 5.2 | `ChapterExportService.java` | Added `needsReRender` flag based on lastEditedAt vs lastRenderedAt |
 | 5.3 | `JobCoordinatorService.java` | Added padding to `LayerElement` bounds during OCR to Layout generation to improve `render.py` text fitting |
@@ -365,7 +365,7 @@ The `attempt` field in the job payload is set to `1` at creation time in `enqueu
 ## Summary: Files Changed
 
 | Phase | File | Change |
-|-------|------|--------|
+| ------- | ------ | -------- |
 | 1.1 | `PageService.java` | Check reference count before deleting Image |
 | 1.2 | `JobCoordinatorService.java`, `PageRepository.java` | Add chapterId param to pipeline methods |
 | 1.2 | `PageController.java`, `SeriesController.java` | Pass chapterId to startPipeline calls |

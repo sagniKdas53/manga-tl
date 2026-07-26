@@ -12,4 +12,6 @@ public interface JobRepository extends JpaRepository<Job, String> {
   List<Job> findByStatusInOrderByCreatedAtAsc(List<String> statuses);
 
   Job findFirstByImageIdAndTypeOrderByCreatedAtDesc(java.util.UUID imageId, String type);
+
+  long countByStatus(String status);
 }

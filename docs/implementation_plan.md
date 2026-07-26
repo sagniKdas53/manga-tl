@@ -15,6 +15,7 @@ Based on thorough analysis of screenshots, source code, export JSONs, worker log
 #### [MODIFY] [SeriesController.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/controller/SeriesController.java)
 
 Add all 9 override fields to the `createSeries` builder:
+
 ```diff
  Series series =
      Series.builder()
@@ -40,10 +41,12 @@ Add all 9 override fields to the `createSeries` builder:
 
 > [!IMPORTANT]
 > The existing tests should have caught this obvious bug. Audit the `SeriesController` test class to understand why they didn't, and add/fix test coverage:
+>
 > - Verify that `createSeries` tests assert override fields are persisted in the saved entity
 > - If no such test exists, add one that creates a series with overrides and verifies they round-trip through the API
 
 ### Verification
+
 - Create a series with 6+ overrides → reload page → verify overrides are persisted
 - Edit the series → verify overrides appear pre-populated
 - Run `./mvnw test` — ensure new/fixed tests catch the override bug
@@ -60,6 +63,7 @@ Add all 9 override fields to the `createSeries` builder:
 **Semantics (confirmed by user):** When `useFallbackModels = false`, the worker should **only use the requested model**. If that model fails, **fail the job** — do NOT cascade to global default model, local LLM, DeepL, or Google Translate. This maps to the concept of `"allow_fallbacks": false` in OpenRouter's provider routing, but at the **application level** across all handlers (OCR, Translation, QA).
 
 The current fallback cascade in the worker is:
+
 1. Try user-specified model
 2. Try global default model (if different from user model)
 3. Try local LLM fallback
@@ -70,21 +74,27 @@ With `useFallbackModels = false`: **Only step 1 runs.** Steps 2-4 are skipped en
 #### Backend Changes
 
 ##### [MODIFY] Database schema [init.sql](file:///home/sagnik/Projects/docker-composes/manga-library/database/init.sql)
+
 Add `use_fallback_models BOOLEAN` column to `series` and `chapters` tables.
 
 ##### [MODIFY] [Series.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/model/Series.java)
+
 Add `useFallbackModels` Boolean field (nullable → `null` means inherit from global).
 
 ##### [MODIFY] [Chapter.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/model/Chapter.java)
+
 Add `useFallbackModels` Boolean field.
 
 ##### [MODIFY] [SeriesDto.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/dto/SeriesDto.java)
+
 Add `useFallbackModels` field.
 
 ##### [MODIFY] [ChapterDto.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/dto/ChapterDto.java)
+
 Add `useFallbackModels` field.
 
 ##### [MODIFY] [SeriesController.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/controller/SeriesController.java)
+
 - Add `useFallbackModels` to series and chapter builders
 - Pass `useFallbackModels` through `populateChapterDto` for the resolved config
 - Include `useFallbackModels` in the job data sent to worker queue
@@ -92,30 +102,39 @@ Add `useFallbackModels` field.
 #### Worker Changes
 
 ##### [MODIFY] [translation.py (handler)](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/handlers/translation.py)
+
 Read `job_data.get("useFallbackModels", True)`. When `False`:
+
 - Skip the "Fallback to global default model" block at [line 1060-1073](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/services/translation.py#L1060-L1073)
 - Skip the individual fallback pass at [line 237-266](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/handlers/translation.py#L237-L266)
 
 ##### [MODIFY] [translation.py (service)](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/services/translation.py)
+
 - `translate_batch_llm()` and `translate_text()` accept a `use_fallback` parameter
 - When `False`, skip the global fallback model attempt
 
 ##### [MODIFY] [ocr.py](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/handlers/ocr.py)
+
 Read `job_data.get("useFallbackModels", True)`. When `False`:
+
 - Skip the global fallback VLM model block at [line 728-764](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/handlers/ocr.py#L728-L764)
 
 ##### [MODIFY] [qa.py](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/handlers/qa.py)
+
 Same pattern — skip global model fallback when `useFallbackModels = false`.
 
 #### Frontend Changes
 
 ##### [MODIFY] [CreateSeriesDialog.tsx](file:///home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/CreateSeriesDialog.tsx)
+
 Add a `useFallbackModels` toggle (default: `true` / inherit) inside the Overrides accordion.
 
 ##### [MODIFY] [EditSeriesDialog.tsx](file:///home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/EditSeriesDialog.tsx)
+
 Same toggle.
 
 ##### [MODIFY] [CreateChapterDialog.tsx](file:///home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/CreateChapterDialog.tsx)
+
 Same toggle.
 
 ---
@@ -127,7 +146,9 @@ Same toggle.
 Currently [_inject_openrouter_routing](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/services/translation.py#L314-L323) silently injects the provider block with no logging.
 
 ##### [MODIFY] [translation.py (service)](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/services/translation.py)
+
 Add logging to `_inject_openrouter_routing` (**OpenRouter only** — this function already gates on `provider == "openrouter"`):
+
 ```python
 def _inject_openrouter_routing(provider, routing_strategy, payload):
     if provider == "openrouter":
@@ -158,7 +179,9 @@ def _inject_openrouter_routing(provider, routing_strategy, payload):
 **Fix — Graceful degradation:** First try `json_schema` (best parsing). If the provider returns a **400**, catch it and **retry with `json_object`** instead. This consumes one of the 3 retry attempts, which is acceptable since the second attempt should succeed on the same provider with the simpler format.
 
 ##### [MODIFY] [translation.py (service)](file:///home/sagnik/Projects/docker-composes/manga-library/unified-workers/worker/services/translation.py)
+
 In `try_cloud_ai()` retry loop:
+
 - On 400 response, check if `response_format` is `json_schema`
 - If so, log a warning, downgrade `response_format` to `{"type": "json_object"}`, and continue to next retry attempt
 - This costs one retry but ensures compatibility with budget providers like StreamLake
@@ -170,14 +193,17 @@ In `try_cloud_ai()` retry loop:
 `openai/gpt-oss-120b:free` was removed from OpenRouter.
 
 ##### [MODIFY] Worker config / `.env` / system settings
+
 Replace `openai/gpt-oss-120b:free` → `openai/gpt-oss-20b:free` wherever it appears in default model lists or fallback configs.
 
 > [!NOTE]
 > The following models are confirmed still available — **no changes needed**:
+>
 > - `google/gemma-4-26b-a4b-it:free` ✅
 > - `deepseek/deepseek-v4-flash` ✅
 
 ### Verification (Phase 2)
+
 - Create a series with `useFallbackModels = false`, run OCR → verify job fails cleanly if model is unavailable (no fallback cascade)
 - Create a series with `useFallbackModels = true` (default) → verify fallback behavior works as before
 - Check worker logs for routing strategy info on every request
@@ -209,13 +235,16 @@ Current: 6 buttons in [ChapterHeader.tsx:156-175](file:///home/sagnik/Projects/d
 #### [MODIFY] [ChapterHeader.tsx](file:///home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/ChapterHeader.tsx)
 
 **Split Button** for Export:
+
 - Primary action: "Export Chapter (ZIP)" — uses cached export if available
 - Dropdown arrow: "Force Re-export" option
 
 **Overflow Menu** (⋮ icon):
+
 - "Clear Exports" → moved here from the main action row
 
 **Result:** 4 main buttons + 1 overflow menu:
+
 1. Upload Page (primary)
 2. Import Project (ZIP) (outlined)
 3. Export Chapter ▾ (split button, outlined)
@@ -227,9 +256,11 @@ Current: 6 buttons in [ChapterHeader.tsx:156-175](file:///home/sagnik/Projects/d
 ### Issue 3c: Show Provider & Routing Info in UI
 
 #### [MODIFY] [SeriesHeader.tsx](file:///home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/SeriesHeader.tsx)
+
 Add resolved provider chip and routing strategy chip to the "Configured Models" section.
 
 #### [MODIFY] [ChapterHeader.tsx](file:///home/sagnik/Projects/docker-composes/manga-library/frontend/src/components/ChapterHeader.tsx)
+
 Add resolved provider chip and routing strategy chip to the "Configured Models" section.
 
 > [!NOTE]
@@ -242,12 +273,15 @@ Add resolved provider chip and routing strategy chip to the "Configured Models" 
 #### Backend — Add provider/routing to resolved slots
 
 ##### [MODIFY] [ChapterDto.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/dto/ChapterDto.java)
+
 Add `provider` field to `ResolvedModelSlot` and `routingStrategy` to `ResolvedQaSlot`.
 
 ##### [MODIFY] [SeriesController.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/controller/SeriesController.java)
+
 Include provider + routing strategy in the `populateChapterDto` resolved slots.
 
 ### Verification (Phase 3)
+
 - Color picker shows 16+ presets, transparency works cleanly
 - Chapter card has 4 buttons + overflow menu
 - Series/Chapter headers show provider + routing strategy chips
@@ -264,6 +298,7 @@ Include provider + routing strategy in the `populateChapterDto` resolved slots.
 The `downloadExport` endpoint at [SeriesController.java:634-654](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/controller/SeriesController.java#L634-L654) throws when the ZIP has been cleaned up.
 
 #### [MODIFY] [SeriesController.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/controller/SeriesController.java)
+
 Add pre-download existence check → return HTTP 410 Gone with message "Export expired, please re-export to download."
 
 ---
@@ -271,6 +306,7 @@ Add pre-download existence check → return HTTP 410 Gone with message "Export e
 ### Issue 4b: SSE Log Noise
 
 #### [MODIFY] [SseService.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/service/SseService.java)
+
 Downgrade "Failed to send live event to user, removing emitter" from `ERROR` to `WARN`.
 
 ---
@@ -278,7 +314,9 @@ Downgrade "Failed to send live event to user, removing emitter" from `ERROR` to 
 ### Issue 4c: Export Metadata Enhancements
 
 #### [MODIFY] [ChapterExportService.java](file:///home/sagnik/Projects/docker-composes/manga-library/backend/src/main/java/com/manga/library/service/ChapterExportService.java)
+
 Add to chapter-level metadata in `meta-data.json`:
+
 - `routingStrategy`
 - `useFallbackModels`
 
@@ -288,6 +326,7 @@ Add to chapter-level metadata in `meta-data.json`:
 > No changes to `project.json` or its importer — routing/provider details don't belong there.
 
 ### Verification (Phase 4)
+
 - Download an expired export → get clean 410 instead of stack trace
 - Trigger SSE disconnect → verify WARN level in logs
 - Export chapter → verify `meta-data.json` includes `routingStrategy` and `useFallbackModels`
@@ -304,7 +343,7 @@ Flagged as TODO per user. This is a rendering/layout engine issue in the text ty
 ## Execution Order
 
 | Phase | Scope | Est. Files Changed | Risk |
-|-------|-------|--------------------|------|
+| ------- | ------- | -------------------- | ------ |
 | **Phase 1** | Backend fix (1 file) | 1 | 🟢 Low |
 | **Phase 2** | Worker + Backend + Frontend | ~12 | 🟡 Medium |
 | **Phase 3** | Frontend + Backend DTO | ~5 | 🟢 Low |

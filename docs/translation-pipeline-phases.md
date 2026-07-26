@@ -60,7 +60,7 @@ the re-OCR branch (`qa → qa-re-ocr → translation → render → qa`, :1130) 
 re-translate branch.
 
 | #  | Step            | Trigger                                                        |
-|----|-----------------|---------------------------------------------------------------|
+| ---- | ----------------- | --------------------------------------------------------------- |
 | 1  | panel-detection | ingest (:103)                                                 |
 | 2  | ocr             | panel callback (:334)                                          |
 | 3  | layout          | ocr callback (:453)                                            |

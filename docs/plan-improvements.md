@@ -1084,7 +1084,7 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 ### Bug Pattern Catalog (Phase H)
 
 | Pattern | Symptoms | Fix Strategy |
-|----------|----------|----------------|
+| ---------- | ---------- | ---------------- |
 | Boolean field excluded from override counting | Override Chip shows `"0 overridden"` when field is set to non-default | Check every boolean setting against its default; add to count denominator |
 | `useFallbackModels` undefined in worker | `F821 Undefined name` at runtime | Thread every DB setting through job data → handler parameters with sensible defaults |
 | `response` unbound in `except` block | `NameError` when HTTP connection fails before assignment | `response = None` before try; guard with `is not None` |
@@ -1136,7 +1136,7 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 ### ✅ Checkpoint I — Summary
 
 | Item | Severity | Effort | Status |
-|------|----------|--------|--------|
+| ------ | ---------- | -------- | -------- |
 | I.1 — Strip console.log from prod builds | Medium | Small | ✅ Done |
 | I.2 — Reader component de-duplication | Low | Large | ✅ Done |
 | I.3 — Backend coverage ≥80% | Medium | Medium | ✅ Done |
@@ -1148,7 +1148,7 @@ To maximize throughput and prevent heavy local GPU tasks (like OCR) from blockin
 ## Summary: Files Changed (Phase H–I)
 
 | Phase | File | Change |
-|--------|------|--------|
+| -------- | ------ | -------- |
 | H.1 | `CreateSeriesDialog.tsx`, `CreateChapterDialog.tsx`, `EditSeriesDialog.tsx`, `ImportChapterDialog.tsx` | Added `useFallbackModels` to override count; standardized Select labels to "Enabled"/"Disabled" |
 | H.1 | `SettingsModal.tsx` | Changed menu labels "True"/"False" → "Enabled"/"Disabled" |
 | H.2 | `database/init.sql` | `layers`, `conversations`, `ocr_regions`: `image_id` → `page_id` columns + FK references to `pages(id)` |
