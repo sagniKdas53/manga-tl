@@ -18,3 +18,4 @@ examples/
 backend/.settings/
 backend/.classpath
 backend/.project
+pytest*
