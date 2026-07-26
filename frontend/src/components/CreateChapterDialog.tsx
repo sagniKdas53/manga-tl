@@ -20,7 +20,7 @@ import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import type { User, Chapter, Series, SystemSettingsDto } from "../types";
+import type { User, Chapter, Series, SystemSettingsDto, ModelEntry } from "../types";
 import { safeFetch } from "../utils";
 
 interface CreateChapterDialogProps {
@@ -385,9 +385,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                   ) : (
                     (() => {
                       const effProv = ocrProvider || inheritedOcrProvider || settings?.ocrProvider || "openrouter";
-                      const models = (settings?.providerModelsMap as any)?.[effProv]?.ocr;
+                      const models = settings?.providerModelsMap?.[effProv]?.ocr;
                       if (models && models.length > 0) {
-                        return models.map((m: any) => (
+                        return models.map((m: ModelEntry) => (
                           <MenuItem key={m.id || m} value={m.id || m}>
                             {m.name || m}{m.free ? " (Free)" : ""}
                           </MenuItem>
@@ -464,9 +464,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 >
                   {(() => {
                     const effProv = tlProvider || inheritedTlProvider || settings?.tlProvider || "openrouter";
-                    const models = (settings?.providerModelsMap as any)?.[effProv]?.tl;
+                    const models = settings?.providerModelsMap?.[effProv]?.tl;
                     if (models && models.length > 0) {
-                      return models.map((m: any) => (
+                      return models.map((m: ModelEntry) => (
                         <MenuItem key={m.id || m} value={m.id || m}>
                           {m.name || m}{m.free ? " (Free)" : ""}
                         </MenuItem>
@@ -581,9 +581,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 >
                   {(() => {
                     const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
-                    const models = (settings?.providerModelsMap as any)?.[effProv]?.qaLLM;
+                    const models = settings?.providerModelsMap?.[effProv]?.qaLLM;
                     if (models && models.length > 0) {
-                      return models.map((m: any) => (
+                      return models.map((m: ModelEntry) => (
                         <MenuItem key={m.id || m} value={m.id || m}>
                           {m.name || m}{m.free ? " (Free)" : ""}
                         </MenuItem>
@@ -626,9 +626,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 >
                   {(() => {
                     const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
-                    const models = (settings?.providerModelsMap as any)?.[effProv]?.qaVLM;
+                    const models = settings?.providerModelsMap?.[effProv]?.qaVLM;
                     if (models && models.length > 0) {
-                      return models.map((m: any) => (
+                      return models.map((m: ModelEntry) => (
                         <MenuItem key={m.id || m} value={m.id || m}>
                           {m.name || m}{m.free ? " (Free)" : ""}
                         </MenuItem>

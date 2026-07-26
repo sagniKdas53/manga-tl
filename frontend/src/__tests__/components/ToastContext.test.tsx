@@ -4,12 +4,15 @@ import { describe, it, expect, vi } from "vitest";
 import { ToastProvider, useToast } from "../../components/ToastContext";
 
 const TestComponent = () => {
-  const { showToast } = useToast();
+  const { showToast, showSuccess, showError, showInfo } = useToast();
   return (
     <div>
-      <button onClick={() => showToast("Success message", "success")}>Show Success</button>
-      <button onClick={() => showToast("Error message", "error")}>Show Error</button>
-      <button onClick={() => showToast("Info message", "info")}>Show Info</button>
+      <button onClick={() => showToast("Success message", "success")}>Show Toast</button>
+      <button onClick={() => showSuccess("Success helper")}>Show Success</button>
+      <button onClick={() => showError("Error helper")}>Show Error</button>
+      <button onClick={() => showInfo("Info helper", { action: { label: "Undo", onClick: vi.fn() } })}>
+        Show Action
+      </button>
     </div>
   );
 };
@@ -21,17 +24,26 @@ describe("ToastContext", () => {
     render(
       <ToastProvider>
         <TestComponent />
-      </ToastProvider>
+      </ToastProvider>,
     );
 
-    fireEvent.click(screen.getByText("Show Success"));
+    fireEvent.click(screen.getByText("Show Toast"));
     expect(screen.getByText("Success message")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByText("Show Success"));
+    expect(screen.getByText("Success helper")).toBeInTheDocument();
+
     fireEvent.click(screen.getByText("Show Error"));
-    expect(screen.getByText("Error message")).toBeInTheDocument();
+    expect(screen.getByText("Error helper")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Show Action"));
+    expect(screen.getByText("Info helper")).toBeInTheDocument();
+
+    const undoBtn = screen.getByRole("button", { name: "Undo" });
+    fireEvent.click(undoBtn);
 
     act(() => {
-      vi.advanceTimersByTime(4500);
+      vi.advanceTimersByTime(6500);
     });
 
     vi.useRealTimers();
