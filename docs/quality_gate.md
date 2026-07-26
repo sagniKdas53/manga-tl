@@ -48,7 +48,7 @@ npm run test:coverage
 npm run build
 ```
 
-### Worker (Python) — `cd unified-workers`
+### Worker (Python) — `cd worker`
 
 ```bash
 # 1. Lint (catches bugs, unused imports, style issues)
