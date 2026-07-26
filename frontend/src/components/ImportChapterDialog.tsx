@@ -20,7 +20,7 @@ import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import type { User, Series, Chapter, SystemSettingsDto } from "../types";
+import type { User, Series, Chapter, SystemSettingsDto, ModelEntry } from "../types";
 import { safeFetch } from "../utils";
 
 interface ImportChapterDialogProps {
@@ -314,9 +314,9 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                     ) : (
                       (() => {
                         const effProv = ocrProvider || inheritedOcrProvider || settings?.ocrProvider || "openrouter";
-                        const models = (settings?.providerModelsMap as any)?.[effProv]?.ocr;
+                        const models = settings?.providerModelsMap?.[effProv]?.ocr;
                         if (models && models.length > 0) {
-                          return models.map((m: any) => (
+                          return models.map((m: ModelEntry) => (
                             <MenuItem key={m.id || m} value={m.id || m}>
                               {m.name || m}{m.free ? " (Free)" : ""}
                             </MenuItem>
@@ -393,9 +393,9 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     {(() => {
                       const effProv = tlProvider || inheritedTlProvider || settings?.tlProvider || "openrouter";
-                      const models = (settings?.providerModelsMap as any)?.[effProv]?.tl;
+                      const models = settings?.providerModelsMap?.[effProv]?.tl;
                       if (models && models.length > 0) {
-                        return models.map((m: any) => (
+                        return models.map((m: ModelEntry) => (
                           <MenuItem key={m.id || m} value={m.id || m}>
                             {m.name || m}{m.free ? " (Free)" : ""}
                           </MenuItem>
@@ -508,9 +508,9 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     {(() => {
                       const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
-                      const models = (settings?.providerModelsMap as any)?.[effProv]?.qaLLM;
+                      const models = settings?.providerModelsMap?.[effProv]?.qaLLM;
                       if (models && models.length > 0) {
-                        return models.map((m: any) => (
+                        return models.map((m: ModelEntry) => (
                           <MenuItem key={m.id || m} value={m.id || m}>
                             {m.name || m}{m.free ? " (Free)" : ""}
                           </MenuItem>
@@ -551,9 +551,9 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
                   >
                     {(() => {
                       const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
-                      const models = (settings?.providerModelsMap as any)?.[effProv]?.qaVLM;
+                      const models = settings?.providerModelsMap?.[effProv]?.qaVLM;
                       if (models && models.length > 0) {
-                        return models.map((m: any) => (
+                        return models.map((m: ModelEntry) => (
                           <MenuItem key={m.id || m} value={m.id || m}>
                             {m.name || m}{m.free ? " (Free)" : ""}
                           </MenuItem>

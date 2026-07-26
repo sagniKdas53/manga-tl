@@ -203,7 +203,7 @@ describe("ChapterGallery Component", () => {
           qaVlmModel: null,
           qaMode: null,
           routingStrategy: null,
-          useFallbackModels: true,
+          useFallbackModels: null,
         }),
       });
       expect(mockSetSelectedChapter).toHaveBeenCalled();
