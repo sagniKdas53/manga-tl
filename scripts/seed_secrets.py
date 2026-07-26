@@ -42,7 +42,9 @@ def main():
         "NEUROMETRIC_API_KEY": "Neurometric",
         "OPENAI_API_KEY": "OpenAI",
         "ANTHROPIC_API_KEY": "Anthropic",
-        "DEEPL_API_KEY": "DeepL"
+        "DEEPL_API_KEY": "DeepL",
+        "CLOUDFLARE_API_TOKEN": "Cloudflare API Token",
+        "CLOUDFLARE_ACCOUNT_ID": "Cloudflare Account ID",
     }
 
     print("Enter the API keys for the providers you want to use.")
