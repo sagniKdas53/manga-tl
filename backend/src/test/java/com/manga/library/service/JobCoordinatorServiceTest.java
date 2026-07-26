@@ -34,7 +34,7 @@ public class JobCoordinatorServiceTest {
   @Autowired private SeriesRepository seriesRepository;
   @Autowired private JobCostRepository jobCostRepository;
 
-  @org.springframework.boot.test.mock.mockito.MockBean
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
   private BiConsumer<String, String> rightPushHook;

@@ -16,9 +16,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(JobController.class)
@@ -30,11 +30,11 @@ public class JobControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockBean private JobRepository jobRepository;
-  @MockBean private JobCoordinatorService jobCoordinatorService;
-  @MockBean private StringRedisTemplate redisTemplate;
-  @MockBean private JwtAuthFilter jwtAuthFilter;
-  @MockBean private SseService sseService;
+  @MockitoBean private JobRepository jobRepository;
+  @MockitoBean private JobCoordinatorService jobCoordinatorService;
+  @MockitoBean private StringRedisTemplate redisTemplate;
+  @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private SseService sseService;
 
   @Test
   public void testGetJobs() throws Exception {

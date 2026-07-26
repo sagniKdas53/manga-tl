@@ -55,7 +55,7 @@ public class ProviderConfigCache {
       }
 
       Map<String, ProviderData> newMap = new HashMap<>();
-      Iterator<Map.Entry<String, JsonNode>> fields = providersNode.fields();
+      Iterator<Map.Entry<String, JsonNode>> fields = providersNode.properties().iterator();
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> entry = fields.next();
         String pName = entry.getKey();
@@ -68,7 +68,7 @@ public class ProviderConfigCache {
         pData.priority = pNode.has("priority") ? pNode.get("priority").asInt(99) : 99;
 
         if (pNode.has("models") && pNode.get("models").isObject()) {
-          Iterator<Map.Entry<String, JsonNode>> mFields = pNode.get("models").fields();
+          Iterator<Map.Entry<String, JsonNode>> mFields = pNode.get("models").properties().iterator();
           while (mFields.hasNext()) {
             Map.Entry<String, JsonNode> mEntry = mFields.next();
             String task = mEntry.getKey();
@@ -87,7 +87,8 @@ public class ProviderConfigCache {
         }
 
         if (pNode.has("defaults") && pNode.get("defaults").isObject()) {
-          Iterator<Map.Entry<String, JsonNode>> dFields = pNode.get("defaults").fields();
+          Iterator<Map.Entry<String, JsonNode>> dFields =
+              pNode.get("defaults").properties().iterator();
           while (dFields.hasNext()) {
             Map.Entry<String, JsonNode> dEntry = dFields.next();
             if (!dEntry.getValue().isNull()) {

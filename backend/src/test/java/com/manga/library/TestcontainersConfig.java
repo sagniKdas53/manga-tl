@@ -14,6 +14,7 @@ public class TestcontainersConfig {
 
   @Bean
   @ServiceConnection
+  @SuppressWarnings("resource")
   public PostgreSQLContainer<?> postgresContainer() {
     return new PostgreSQLContainer<>("postgres:15-alpine")
         .withDatabaseName("testdb")
