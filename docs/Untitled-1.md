@@ -28,7 +28,5 @@ Fix needed:
 - Or use a longer polling interval (30s) with shorter when queues are non-empty
 Issue #4: Rate Limit Validation
 Partially fixed — rateLimits in providers.json are validated against provider docs, but the actual enforcement is still broken per issue #2.
-Issue #5: Missing Defaults in providers.json
-Fixed — all providers have proper defaults with rpmLimit, rpdLimit, rpmPerModelLimit, and maxTokens fields.
 
 ---
