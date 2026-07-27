@@ -34,23 +34,7 @@ interface CreateChapterDialogProps {
   onError: (message: string) => void;
 }
 
-const DEFAULT_PROVIDERS = [
-  "openrouter",
-  "gemini",
-  "nvidia",
-  "openai",
-  "anthropic",
-  "ollama",
-  "lmstudio",
-];
-const DEFAULT_OCR_PROVIDERS = [
-  "local",
-  "openrouter",
-  "gemini",
-  "nvidia",
-  "ollama",
-  "lmstudio",
-];
+
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
 const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
@@ -169,8 +153,8 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     user.token,
   ]);
 
-  const providers = settings?.activeProviders || DEFAULT_PROVIDERS;
-  const ocrProviders = settings?.activeOcrProviders || DEFAULT_OCR_PROVIDERS;
+  const providers = settings?.activeProviders || [];
+  const ocrProviders = settings?.activeOcrProviders || [];
 
   const inheritedOcrProvider =
     selectedSeries?.ocrProvider || settings?.ocrProvider;
@@ -385,6 +369,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                   ) : (
                     (() => {
                       const effProv = ocrProvider || inheritedOcrProvider || settings?.ocrProvider || "openrouter";
+                      if (effProv !== "local" && (!settings?.providerModelsMap?.[effProv]?.ocr || settings?.providerModelsMap?.[effProv]?.ocr.length === 0)) {
+                        return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+                      }
                       const models = settings?.providerModelsMap?.[effProv]?.ocr;
                       if (models && models.length > 0) {
                         return models.map((m: ModelEntry) => (
@@ -626,6 +613,9 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
                 >
                   {(() => {
                     const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
+                    if (!settings?.providerModelsMap?.[effProv]?.qaVLM || settings?.providerModelsMap?.[effProv]?.qaVLM.length === 0) {
+                      return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+                    }
                     const models = settings?.providerModelsMap?.[effProv]?.qaVLM;
                     if (models && models.length > 0) {
                       return models.map((m: ModelEntry) => (
@@ -661,6 +651,11 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
               <FormControl
                 fullWidth
                 size="small"
+                disabled={![
+                  ocrProvider || inheritedOcrProvider || settings?.ocrProvider,
+                  tlProvider || inheritedTlProvider || settings?.tlProvider,
+                  qaProvider || inheritedQaProvider || settings?.qaProvider
+                ].includes("openrouter")}
               >
                 <InputLabel>Routing Strategy</InputLabel>
                 <Select

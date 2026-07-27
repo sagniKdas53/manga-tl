@@ -39,23 +39,7 @@ const DIR_OPTS = [
 ];
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
-const DEFAULT_PROVIDERS = [
-  "openrouter",
-  "gemini",
-  "nvidia",
-  "openai",
-  "anthropic",
-  "ollama",
-  "lmstudio",
-];
-const DEFAULT_OCR_PROVIDERS = [
-  "local",
-  "openrouter",
-  "gemini",
-  "nvidia",
-  "ollama",
-  "lmstudio",
-];
+
 
 const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   open,
@@ -156,8 +140,8 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     }
   }, [open, settings, editingSeries, user.token]);
 
-  const providers = settings?.activeProviders || DEFAULT_PROVIDERS;
-  const ocrProviders = settings?.activeOcrProviders || DEFAULT_OCR_PROVIDERS;
+  const providers = settings?.activeProviders || [];
+  const ocrProviders = settings?.activeOcrProviders || [];
 
   const inheritedOcrProvider = settings?.ocrProvider;
   const inheritedOcrModel = settings?.ocrModel;
@@ -399,6 +383,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                   ) : (
                     (() => {
                       const effProv = ocrProvider || inheritedOcrProvider || settings?.ocrProvider || "openrouter";
+                      if (effProv !== "local" && (!settings?.providerModelsMap?.[effProv]?.ocr || settings?.providerModelsMap?.[effProv]?.ocr.length === 0)) {
+                        return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+                      }
                       const models = settings?.providerModelsMap?.[effProv]?.ocr;
                       if (models && models.length > 0) {
                         return models.map((m: ModelEntry) => (
@@ -640,6 +627,9 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
                 >
                   {(() => {
                     const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
+                    if (!settings?.providerModelsMap?.[effProv]?.qaVLM || settings?.providerModelsMap?.[effProv]?.qaVLM.length === 0) {
+                      return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+                    }
                     const models = settings?.providerModelsMap?.[effProv]?.qaVLM;
                     if (models && models.length > 0) {
                       return models.map((m: ModelEntry) => (
@@ -675,6 +665,11 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
               <FormControl
                 fullWidth
                 size="small"
+                disabled={![
+                  ocrProvider || inheritedOcrProvider || settings?.ocrProvider,
+                  tlProvider || inheritedTlProvider || settings?.tlProvider,
+                  qaProvider || inheritedQaProvider || settings?.qaProvider
+                ].includes("openrouter")}
               >
                 <InputLabel>Routing Strategy</InputLabel>
                 <Select

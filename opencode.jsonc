@@ -11,5 +11,10 @@
             ]
         }
     },
-    "lsp": true
+    "lsp": true,
+    "formatter": true,
+    "autoupdate": true,
+    "experimental": {
+        "batch_tool": true
+    }
 }

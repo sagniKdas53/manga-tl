@@ -5,7 +5,10 @@
     "tl": "deepseek/deepseek-v4-pro",
     "qaLLM": "deepseek/deepseek-v4-flash",
     "qaVLM": "google/gemini-3.1-flash-lite",
-    "ocr": "qwen/qwen3-vl-32b-instruct"
+    "ocr": "qwen/qwen3-vl-32b-instruct",
+    "qaMode": "auto",
+    "useFallbackModels": true,
+    "openRouterRoutingStrategy": "lowest-cost"
   },
   "providers": {
     "openrouter": {

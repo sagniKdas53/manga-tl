@@ -71,23 +71,8 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   );
   const [overridesOpen, setOverridesOpen] = useState(false);
 
-  const actualProviders = settings?.activeProviders || [
-    "openrouter",
-    "gemini",
-    "nvidia",
-    "openai",
-    "anthropic",
-    "ollama",
-    "lmstudio",
-  ];
-  const actualOcrProviders = settings?.activeOcrProviders || [
-    "local",
-    "openrouter",
-    "gemini",
-    "nvidia",
-    "ollama",
-    "lmstudio",
-  ];
+  const actualProviders = settings?.activeProviders || [];
+  const actualOcrProviders = settings?.activeOcrProviders || [];
 
   const inheritedOcrProvider = settings?.ocrProvider;
   const inheritedOcrModel = settings?.ocrModel;
@@ -338,6 +323,9 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                     ) : (
                       (() => {
                         const effProv = ocrProvider || inheritedOcrProvider || settings?.ocrProvider || "openrouter";
+                        if (effProv !== "local" && (!settings?.providerModelsMap?.[effProv]?.ocr || settings?.providerModelsMap?.[effProv]?.ocr.length === 0)) {
+                          return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+                        }
                         const models = settings?.providerModelsMap?.[effProv]?.ocr;
                         if (models && models.length > 0) {
                           return models.map((m: ModelEntry) => (
@@ -575,6 +563,9 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                   >
                     {(() => {
                       const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
+                      if (!settings?.providerModelsMap?.[effProv]?.qaVLM || settings?.providerModelsMap?.[effProv]?.qaVLM.length === 0) {
+                        return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+                      }
                       const models = settings?.providerModelsMap?.[effProv]?.qaVLM;
                       if (models && models.length > 0) {
                         return models.map((m: ModelEntry) => (
@@ -610,6 +601,11 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
                 <FormControl
                   fullWidth
                   size="small"
+                  disabled={![
+                    ocrProvider || inheritedOcrProvider || settings?.ocrProvider,
+                    tlProvider || inheritedTlProvider || settings?.tlProvider,
+                    qaProvider || inheritedQaProvider || settings?.qaProvider
+                  ].includes("openrouter")}
                 >
                   <InputLabel>Routing Strategy</InputLabel>
                   <Select

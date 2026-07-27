@@ -72,6 +72,9 @@ body,
   --primary-glow-approved: rgba(237, 37, 83, 0.08);
   --success-glow: rgba(16, 185, 129, 0.12);
 
+  /* Reader canvas background — dark by default */
+  --bg-canvas: #1a1a1e;
+
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -112,6 +115,9 @@ body,
   --conversation-glow: rgba(37, 99, 235, 0.08);
   --conversation-glow-selected: rgba(37, 99, 235, 0.2);
   --conversation-glow-approved: rgba(37, 99, 235, 0.08);
+
+  /* Reader canvas background — light grey in light mode */
+  --bg-canvas: #e9e9ec;
 }
 
 :root.light .glass {
