@@ -2,7 +2,7 @@
 
 > **Last updated**: 2026-07-26  
 > Audited via Git history & GitNexus analysis  
-> Status legend: `[ ]` = not started, `[/]` = in progress, `[x]` = done, `[P]` = planned (in a plan doc)
+> Status legend: `[ ]` = not started, `[/]` = in progress, `[x]` = done, `[P]` = planned (in a plan doc), `[D]` = deferred
 
 ---
 
@@ -10,15 +10,17 @@
 
 ### Java 25 Upgrade
 
-- [x] Follow [Java upgrade plan](docs/archive/java-upgrade-plan.md) — compile Java 25 locally via SDKMAN, run Java 26 in Docker
+- [x] Follow [Java upgrade plan](docs/archive/java-upgrade-plan.md) — compile Java 25 locally via SDKMAN, run Java 26 in Docker (we are sticking to 25 for now, will go to 27 when it comes out)
   - Update `pom.xml`: `java.version=25`, `release=25`
   - Update Dockerfile: `maven:3-eclipse-temurin-25` + `eclipse-temurin:25-jre-alpine`
 
 ### Output & Rendering Quality
 
 - [ ] Rendered output quality gap vs mangatranslator.ai
-  - See [sample 2](examples/sample2/original.jpg): [theirs](examples/sample2/en-mangatranslator.ai.jpg) vs [ours](examples/sample2/en-local.png)
-  - See [sample 3](examples/sample3/original.jpg): [theirs](examples/sample3/en-mangatranslator.ai.jpg) vs [ours](examples/sample3/en-local.png)
+  - See Example 1:
+    - Original: <br/><img src="examples/sample2/original.jpg" alt="original" width="600"/>
+    - mangatranslator.ai: <br/><img src="examples/sample2/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>
+    - Ours: <br/><img src="examples/sample2/en-local.png" alt="ours" width="600"/>
 - [ ] **Multimodal VLM Quality Benchmarks & Render Tuning** — use VLMs (e.g. Kimi K2.7/K3, Qwen-VL) to analyze translation and typesetting output against competitor benchmarks and refine `render.py` text fitting and inpainting algorithms.
 
 ---
@@ -27,7 +29,7 @@
 
 ### ML Models & Providers
 
-- [ ] **F.1 YOLO model upgrade** (Failed & Reverted) — current `juithealien/manga109-segmentation-bubble` (yolo11n) appears abandoned, only detects text bubbles. Upgrade to multi-class model (e.g. `ShadowB/Manga109-panel-balloon-text-yolov26-segmentation`) with size filtering fix.
+- [D] **F.1 YOLO model upgrade** (Failed & Reverted) — current `juithealien/manga109-segmentation-bubble` (yolo11n) appears abandoned, only detects text bubbles. Upgrade to multi-class model (e.g. `ShadowB/Manga109-panel-balloon-text-yolov26-segmentation`) with size filtering fix.
 
 ---
 
@@ -73,6 +75,7 @@
 ### Critical Bugs (plan-critical-bugfixes.md)
 
 #### Phase 1 — Data Integrity
+
 - [x] **1.1** Shared image cascade delete — deleting a page from one chapter destroys the image in all chapters
 - [x] **1.2** Per-chapter model override uses wrong chapter — `findFirst()` picks arbitrary chapter for config resolution
 - [x] **1.3** Re-upload after cross-chapter delete fails with `pages_chapter_id_page_number_key` duplicate key constraint
@@ -81,6 +84,7 @@
 - [x] **1.6** `project.json` `metadataJson` showing single model (e.g. PaddleOCR) instead of list of models (e.g. PaddleOCR + Gemini), and Gemini costs not captured.
 
 #### Phase 2 — Backend API & Export
+
 - [x] **2.1** Chapter export returns 500 — `LazyInitializationException` after OSIV disabled
 - [x] **2.2** Clear queue API returns `{status: 999}` — missing `@Transactional`, incomplete Redis queue list, deletes PROCESSING jobs
 - [x] **2.3** QA_MODE `auto` not recognized by worker — falls back to auto-pass instead of resolving to vlm/llm/hybrid
@@ -94,11 +98,13 @@
 - [x] **2.11** Separated QA models from Translation models in export metadata `modelsUsed` payload and guaranteed base keys.
 
 #### Phase 3 — Upload Validation & Security
+
 - [x] **3.1** Non-image files accepted on upload (`.md`, `.txt` etc.) — no file type validation
 - [x] **3.2** Duplicate image idempotency guard for same chapter/same slot
 - [x] **3.3** Image file endpoint (`/api/images/{id}/file`) works without auth
 
 #### Phase 4 — Worker & Pipeline Robustness
+
 - [x] **4.1** Worker health server `BrokenPipeError` clutters logs
 - [x] **4.2** Translation romanization in outputs from cheap models
 - [x] **4.3** Job retry counter never increments — frontend always shows `Attempt: 1/3`
@@ -109,22 +115,27 @@
 ### Improvements (plan-improvements.md)
 
 #### Phase 0 — CI Foundation
+
 - [x] **0.1** Add static analysis to Python CI (ruff check, pyright)
 
 #### Phase A — SSE Job System Migration
+
 - [x] **A.1** Replace polling with SSE for job state updates (Queue/Per-job events)
 - [x] **A.2** Frontend SSE-driven Queue Manager
 - [x] **A.3** Queue Manager UI redesign
 
 #### Phase B — Reader Auto-Refresh
+
 - [x] **B.1** SSE-driven layer auto-refresh in Reader
 
 #### Phase C — Thumbnail & Image Optimization
+
 - [x] **C.1** WebP thumbnails with bicubic interpolation
 - [x] **C.2** Frontend: use `/thumbnail` URLs everywhere
 - [x] **C.3** Async thumbnail generation off the upload request path
 
 #### Phase D — Frontend UI Fixes & Redesign
+
 - [x] **D.1** Remove "Cover Image URL" field from create/edit series dialogs
 - [x] **D.2** Fix settings modal overflow
 - [x] **D.3** Chapter cards redesign
@@ -138,6 +149,7 @@
 - [x] **D.12** Migrate frontend to Material UI (MUI)
 
 #### Phase E — Backend Resilience
+
 - [x] **E.1** Cross-provider failover
 - [x] **E.2** Strict HTTP timeouts
 - [x] **E.3** Move cost tracking from `costs.json` filesystem to PostgreSQL
@@ -147,11 +159,13 @@
 - [x] **E.7** Model Routing Strategy Selector (UI + Backend)
 
 #### Phase F — ML Models & Prompts
+
 - [x] **F.2** OCR VLM prompt improvements
 - [x] **F.3** Translation prompt improvements
 - [x] **F.4** QA prompt improvements
 
 #### Phase G — Concurrency & Slot Allocation
+
 - [x] **G.1** Dual-Slot Dispatcher (Heavy/Light queues)
 - [x] **G.2** Configurable Worker Slots (MAX_HEAVY_SLOTS / MAX_LIGHT_SLOTS)
 - [x] **G.3** Deployment & Documentation
