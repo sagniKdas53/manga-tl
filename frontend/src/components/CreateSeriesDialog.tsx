@@ -132,9 +132,6 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
         .then((res) => res.json())
         .then((d) => {
           setSettings(d);
-          if (!editingSeries && d?.useFallbackModels !== undefined) {
-            setUseFallbackModels(d.useFallbackModels);
-          }
         })
         .catch(() => {});
     }

@@ -135,13 +135,6 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
         .then((r) => r.json())
         .then((d) => {
           setSettings(d);
-          if (
-            !editingChapter &&
-            selectedSeries?.useFallbackModels === undefined &&
-            d?.useFallbackModels !== undefined
-          ) {
-            setUseFallbackModels(d.useFallbackModels);
-          }
         })
         .catch(() => {});
     }

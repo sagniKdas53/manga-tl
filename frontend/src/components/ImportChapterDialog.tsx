@@ -103,12 +103,6 @@ export const ImportChapterDialog: React.FC<ImportChapterDialogProps> = ({
         .then((d) => {
           if (d) {
             setSettings(d);
-            if (
-              series.useFallbackModels === undefined &&
-              d.useFallbackModels !== undefined
-            ) {
-              setUseFallbackModels(d.useFallbackModels);
-            }
           }
         })
         .catch(() => {});
