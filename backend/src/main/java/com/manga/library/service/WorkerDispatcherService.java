@@ -1,5 +1,6 @@
 package com.manga.library.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.net.URI;
@@ -9,7 +10,9 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,17 @@ public class WorkerDispatcherService {
 
   @org.springframework.beans.factory.annotation.Value("${WORKER_API_SECRET_FILE:}")
   private String workerApiSecretFile;
+
+  /** Base cooldown duration (seconds) after a 429 from a worker. Doubles each consecutive 429. */
+  private static final int COOLDOWN_BASE_SECONDS = 10;
+
+  private static final int COOLDOWN_MAX_SECONDS = 60;
+
+  /** Per-worker state: cooldown expiry time. */
+  private final Map<String, Instant> workerCooldowns = new ConcurrentHashMap<>();
+
+  /** Per-worker consecutive 429 counter (for exponential backoff). */
+  private final Map<String, Integer> workerConsecutive429s = new ConcurrentHashMap<>();
 
   @PostConstruct
   public void init() {
@@ -71,28 +85,78 @@ public class WorkerDispatcherService {
       return;
     }
 
-    List<String> workerUrls = new ArrayList<>();
-    if (workerUrlsConfig != null) {
-      for (String url : workerUrlsConfig.split(",")) {
-        String trimmed = url.trim();
-        if (trimmed.endsWith("/")) {
-          trimmed = trimmed.substring(0, trimmed.length() - 1);
-        }
-        if (!trimmed.isEmpty()) {
-          workerUrls.add(trimmed);
-        }
-      }
-    }
+    List<String> workerUrls = buildWorkerUrlList();
     if (workerUrls.isEmpty()) {
       return;
     }
 
-    dispatchFromSlot(HEAVY_QUEUES, workerUrls);
-    dispatchFromSlot(LIGHT_QUEUES, workerUrls);
+    // Query capabilities of all workers that are not in cooldown
+    Map<String, WorkerCapacity> capacities = queryCapacities(workerUrls);
+    if (capacities.isEmpty()) {
+      // All workers are in cooldown or unreachable — skip this cycle
+      return;
+    }
+
+    dispatchFromSlot(HEAVY_QUEUES, workerUrls, capacities, true);
+    dispatchFromSlot(LIGHT_QUEUES, workerUrls, capacities, false);
   }
 
-  private void dispatchFromSlot(List<String> queues, List<String> workerUrls) {
+  /** Returns a map of workerUrl → WorkerCapacity for workers that are available (not in cooldown). */
+  private Map<String, WorkerCapacity> queryCapacities(List<String> workerUrls) {
+    Map<String, WorkerCapacity> result = new LinkedHashMap<>();
+    Instant now = Instant.now();
+    for (String workerUrl : workerUrls) {
+      // Skip workers in cooldown
+      Instant cooldownExpiry = workerCooldowns.get(workerUrl);
+      if (cooldownExpiry != null && now.isBefore(cooldownExpiry)) {
+        log.debug("Worker {} is in cooldown until {}", workerUrl, cooldownExpiry);
+        continue;
+      }
+
+      try {
+        HttpRequest.Builder reqBuilder =
+            HttpRequest.newBuilder()
+                .uri(URI.create(workerUrl + "/capabilities"))
+                .timeout(Duration.ofSeconds(3))
+                .GET();
+        if (workerApiSecret != null && !workerApiSecret.isEmpty()) {
+          reqBuilder.header("WORKER_API_SECRET", workerApiSecret);
+        }
+        HttpResponse<String> resp =
+            httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() == 200) {
+          JsonNode node = objectMapper.readTree(resp.body());
+          int maxJobs = node.path("max_concurrent_jobs").asInt(2);
+          int activeJobs = node.path("active_jobs").asInt(0);
+          int maxHeavy = node.path("max_heavy_slots").asInt(1);
+          int activeHeavy = node.path("active_heavy_jobs").asInt(0);
+          int maxLight = node.path("max_light_slots").asInt(1);
+          int activeLight = node.path("active_light_jobs").asInt(0);
+          result.put(workerUrl, new WorkerCapacity(maxJobs, activeJobs, maxHeavy, activeHeavy, maxLight, activeLight));
+          // Clear consecutive 429 counter on successful ping
+          workerConsecutive429s.remove(workerUrl);
+        }
+      } catch (Exception e) {
+        log.debug("Worker {} capabilities query failed: {}", workerUrl, e.getMessage());
+      }
+    }
+    return result;
+  }
+
+  private void dispatchFromSlot(
+      List<String> queues,
+      List<String> workerUrls,
+      Map<String, WorkerCapacity> capacities,
+      boolean isHeavy) {
+
     for (String queue : queues) {
+      // Check if any worker has capacity for this slot type before popping
+      boolean anyCapacity = capacities.values().stream()
+          .anyMatch(c -> isHeavy ? c.hasHeavySlot() : c.hasLightSlot());
+      if (!anyCapacity) {
+        continue;
+      }
+
       boolean processed = true;
       while (processed) {
         processed = false;
@@ -102,6 +166,11 @@ public class WorkerDispatcherService {
 
         boolean sent = false;
         for (String workerUrl : workerUrls) {
+          WorkerCapacity cap = capacities.get(workerUrl);
+          if (cap == null) continue; // Worker in cooldown or unreachable
+          if (isHeavy && !cap.hasHeavySlot()) continue;
+          if (!isHeavy && !cap.hasLightSlot()) continue;
+
           try {
             String targetUrl = workerUrl + "/api/v1/jobs/submit";
             Map<String, Object> payload = new HashMap<>();
@@ -129,6 +198,11 @@ public class WorkerDispatcherService {
             if (response.statusCode() == 202) {
               sent = true;
               processed = true;
+              // Update in-memory capacity so subsequent iterations see the new load
+              if (isHeavy) cap.activeHeavy++;
+              else cap.activeLight++;
+              cap.activeTotal++;
+              workerConsecutive429s.remove(workerUrl);
               break;
             } else if (response.statusCode() == 400 || response.statusCode() == 422) {
               // Permanent rejection — payload invalid; do not re-queue
@@ -140,7 +214,17 @@ public class WorkerDispatcherService {
               sent = true; // prevent re-push to queue
               processed = true;
               break;
-            } else if (response.statusCode() != 429) {
+            } else if (response.statusCode() == 429) {
+              // Apply exponential backoff
+              int consecutive = workerConsecutive429s.merge(workerUrl, 1, Integer::sum);
+              int cooldownSecs = Math.min(COOLDOWN_BASE_SECONDS * (1 << (consecutive - 1)), COOLDOWN_MAX_SECONDS);
+              workerCooldowns.put(workerUrl, Instant.now().plusSeconds(cooldownSecs));
+              log.warn(
+                  "Worker {} returned 429 (consecutive={}). Cooling down for {}s.",
+                  workerUrl, consecutive, cooldownSecs);
+              // Remove from capacities map so we don't retry this worker in this cycle
+              capacities.remove(workerUrl);
+            } else {
               log.error(
                   "Worker {} returned status {}: {}",
                   targetUrl,
@@ -153,12 +237,56 @@ public class WorkerDispatcherService {
         }
 
         if (!sent) {
+          // Re-push to the BACK of the queue so other jobs can proceed
           redisTemplate
               .opsForList()
-              .leftPush(Objects.requireNonNull(queue), Objects.requireNonNull(jobJson));
+              .rightPush(Objects.requireNonNull(queue), Objects.requireNonNull(jobJson));
           return;
         }
       }
+    }
+  }
+
+  private List<String> buildWorkerUrlList() {
+    List<String> workerUrls = new ArrayList<>();
+    if (workerUrlsConfig != null) {
+      for (String url : workerUrlsConfig.split(",")) {
+        String trimmed = url.trim();
+        if (trimmed.endsWith("/")) {
+          trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        if (!trimmed.isEmpty()) {
+          workerUrls.add(trimmed);
+        }
+      }
+    }
+    return workerUrls;
+  }
+
+  /** Snapshot of a worker's current concurrency state. */
+  private static class WorkerCapacity {
+    final int maxTotal;
+    int activeTotal;
+    final int maxHeavy;
+    int activeHeavy;
+    final int maxLight;
+    int activeLight;
+
+    WorkerCapacity(int maxTotal, int activeTotal, int maxHeavy, int activeHeavy, int maxLight, int activeLight) {
+      this.maxTotal = maxTotal;
+      this.activeTotal = activeTotal;
+      this.maxHeavy = maxHeavy;
+      this.activeHeavy = activeHeavy;
+      this.maxLight = maxLight;
+      this.activeLight = activeLight;
+    }
+
+    boolean hasHeavySlot() {
+      return activeHeavy < maxHeavy && activeTotal < maxTotal;
+    }
+
+    boolean hasLightSlot() {
+      return activeLight < maxLight && activeTotal < maxTotal;
     }
   }
 }

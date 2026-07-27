@@ -368,7 +368,15 @@ public class InternalJobController {
         Map<String, Object> c = (Map<String, Object>) payload.get("cost");
         cost = c;
       }
+      // Inject pageId into first translation entry so coordinator can resolve the right page
+      String rawPageId = payload.containsKey("pageId") && payload.get("pageId") != null
+          ? payload.get("pageId").toString()
+          : null;
+      if (rawPageId != null && !translations.isEmpty()) {
+        translations.get(0).put("pageId", rawPageId);
+      }
       jobCoordinatorService.handleTranslationCallback(imageId, translations, cost);
+
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing translation callback", e);
@@ -466,10 +474,13 @@ public class InternalJobController {
   public ResponseEntity<?> renderCallback(@RequestBody Map<String, String> payload) {
     UUID imageId = UUID.fromString(payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
+    UUID pageId = payload.containsKey("pageId") && payload.get("pageId") != null
+        ? UUID.fromString(payload.get("pageId"))
+        : null;
     log.info("Received render callback for image: {}", imageId);
     resolveNotificationContext(imageId);
     try {
-      jobCoordinatorService.handleRenderCallback(imageId);
+      jobCoordinatorService.handleRenderCallback(imageId, pageId);
       imageRepository
           .findById(imageId)
           .ifPresent(

@@ -2956,7 +2956,7 @@ export const Reader: React.FC<ReaderProps> = ({
           className="reader-main-nhentai"
           style={{
             position: "relative",
-            backgroundColor: "var(--bg-canvas, #e9e9ec)",
+            backgroundColor: "var(--bg-canvas)",
             backgroundImage:
               "radial-gradient(ellipse at center, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.07) 100%)",
           }}

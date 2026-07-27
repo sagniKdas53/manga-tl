@@ -50,14 +50,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
 
-  const providers =
-    settings?.activeProviders ||
-    PROVIDERS.filter(
-      (p) => !["ollama", "lmstudio"].includes(p) || !settings?.disableLocalLlm,
-    );
-  const ocrProviders =
-    settings?.activeOcrProviders ||
-    OCR_PROVIDERS.filter((p) => p !== "local" || !settings?.disableLocalOcr);
+  const providers = settings?.activeProviders || [];
+  const ocrProviders = settings?.activeOcrProviders || [];
 
   useEffect(() => {
     if (isOpen) {
@@ -205,7 +199,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   value={
                     settings.ocrProvider === "local"
                       ? settings.localOcrModel || "local"
-                      : settings.ocrModel || ""
+                      : (!settings.providerModelsMap?.[settings.ocrProvider]?.ocr || settings.providerModelsMap?.[settings.ocrProvider]?.ocr.length === 0)
+                        ? "N/A"
+                        : settings.ocrModel || ""
                   }
                   label="Global OCR VLM Model"
                   onChange={(e) => handleChange("ocrModel", e.target.value)}
@@ -214,6 +210,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <MenuItem value={settings.localOcrModel || "local"}>
                       {settings.localOcrModel || "Local Worker Model"}
                     </MenuItem>
+                  ) : (!settings.providerModelsMap?.[settings.ocrProvider]?.ocr || settings.providerModelsMap?.[settings.ocrProvider]?.ocr.length === 0) ? (
+                    <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>
                   ) : (
                     (settings.providerModelsMap?.[settings.ocrProvider]?.ocr || []).map((m) => (
                       <MenuItem key={m.id} value={m.id}>
@@ -407,20 +405,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <InputLabel>Global QA VLM Model</InputLabel>
                 <Select
-                  value={settings.qaVlmModel || ""}
+                  value={
+                    settings.qaMode === "llm" || settings.qaMode === "none" || (!settings.providerModelsMap?.[settings.qaProvider]?.qaVLM || settings.providerModelsMap?.[settings.qaProvider]?.qaVLM.length === 0)
+                      ? "N/A"
+                      : settings.qaVlmModel || ""
+                  }
                   label="Global QA VLM Model"
                   onChange={(e) => handleChange("qaVlmModel", e.target.value)}
                 >
-                  {(settings.providerModelsMap?.[settings.qaProvider]?.qaVLM || []).map((m) => (
-                    <MenuItem key={m.id} value={m.id}>
-                      {m.name}{m.free ? " (Free)" : ""}
-                    </MenuItem>
-                  )).concat(
-                    (!settings.providerModelsMap?.[settings.qaProvider]?.qaVLM && settings.qaVlmModelList)
-                      ? settings.qaVlmModelList.map((m) => (
-                          <MenuItem key={m} value={m}>{m}</MenuItem>
-                        ))
-                      : []
+                  {(!settings.providerModelsMap?.[settings.qaProvider]?.qaVLM || settings.providerModelsMap?.[settings.qaProvider]?.qaVLM.length === 0) ? (
+                    <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>
+                  ) : (
+                    (settings.providerModelsMap?.[settings.qaProvider]?.qaVLM || []).map((m) => (
+                      <MenuItem key={m.id} value={m.id}>
+                        {m.name}{m.free ? " (Free)" : ""}
+                      </MenuItem>
+                    )).concat(
+                      (!settings.providerModelsMap?.[settings.qaProvider]?.qaVLM && settings.qaVlmModelList)
+                        ? settings.qaVlmModelList.map((m) => (
+                            <MenuItem key={m} value={m}>{m}</MenuItem>
+                          ))
+                        : []
+                    )
                   )}
                 </Select>
               </FormControl>
@@ -445,6 +451,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <FormControl
                 fullWidth
                 size="small"
+                disabled={![settings.ocrProvider, settings.tlProvider, settings.qaProvider].includes("openrouter")}
               >
                 <InputLabel>OpenRouter Routing Strategy</InputLabel>
                 <Select

@@ -127,6 +127,31 @@ public class JobCoordinatorService {
     }
   }
 
+  /**
+   * Resolves the target {@link Page} for a job callback. When {@code pageId} is provided (as sent
+   * by the worker in callback payloads), it is used directly for a precise lookup — this is the
+   * correct behaviour when the same image is referenced by multiple chapters. Falls back to
+   * {@code findByImageId().stream().findFirst()} only when no pageId is available.
+   */
+  private Page resolvePageForCallback(UUID imageId, UUID pageId) {
+    if (pageId != null) {
+      return pageRepository.findById(pageId).orElse(null);
+    }
+    return pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
+  }
+
+  /**
+   * Safely extracts a UUID value from a map by key. Returns null if missing or unparseable.
+   */
+  private UUID extractUuid(Map<String, Object> map, String key) {
+    if (map == null || !map.containsKey(key) || map.get(key) == null) return null;
+    try {
+      return UUID.fromString(map.get(key).toString());
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+  }
+
   @Transactional
   public void startPipeline(UUID imageId) {
     startPipeline(imageId, null);
@@ -479,7 +504,7 @@ public class JobCoordinatorService {
       return;
     }
 
-    Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
+    Page page = resolvePageForCallback(imageId, dto.pageId());
 
     // Keep existing layers and regions for multi-pass history, but hide old OCR layers
     List<Layer> existingLayers =
@@ -644,7 +669,7 @@ public class JobCoordinatorService {
             }
           }
 
-          Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
+          Page page = resolvePageForCallback(imageId, null);
           Conversation conv = new Conversation();
           conv.setPage(page);
           conv.setSceneType(sceneType != null ? sceneType : "dialogue");
@@ -671,12 +696,11 @@ public class JobCoordinatorService {
 
     // 4. Enqueue translation job
     boolean isReaderMode = false;
+    Page layoutPage = resolvePageForCallback(imageId, null);
     Series series =
-        pageRepository.findByImageId(imageId).stream()
-            .findFirst()
-            .map(page -> page.getChapter())
-            .map(chapter -> chapter.getSeries())
-            .orElse(null);
+        layoutPage != null && layoutPage.getChapter() != null
+            ? layoutPage.getChapter().getSeries()
+            : null;
     if (series != null
         && series.getSourceLanguage() != null
         && series.getTargetLanguage() != null) {
@@ -708,18 +732,17 @@ public class JobCoordinatorService {
         .findById(Objects.requireNonNull(imageId))
         .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
+    UUID tlPageId =
+        (translations != null && !translations.isEmpty())
+            ? extractUuid(translations.get(0), "pageId")
+            : null;
+    Page page = resolvePageForCallback(imageId, tlPageId);
     Series series =
-        pageRepository.findByImageId(imageId).stream()
-            .findFirst()
-            .map(page -> page.getChapter())
-            .map(chapter -> chapter.getSeries())
-            .orElse(null);
+        page != null && page.getChapter() != null ? page.getChapter().getSeries() : null;
     String targetLang =
         (series != null && series.getTargetLanguage() != null)
             ? series.getTargetLanguage().trim().toLowerCase()
             : "en";
-
-    Page page = pageRepository.findByImageId(imageId).stream().findFirst().orElse(null);
 
     long successCount =
         translations == null
@@ -1085,7 +1108,15 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleRenderCallback(UUID imageId) {
-    List<Page> pages = pageRepository.findByImageId(imageId);
+    handleRenderCallback(imageId, null);
+  }
+
+  @Transactional
+  public void handleRenderCallback(UUID imageId, UUID pageId) {
+    List<Page> pages =
+        pageId != null
+            ? pageRepository.findById(pageId).map(List::of).orElse(List.of())
+            : pageRepository.findByImageId(imageId);
     for (Page page : pages) {
       page.setLastRenderedAt(OffsetDateTime.now());
       pageRepository.save(page);
@@ -1127,9 +1158,9 @@ public class JobCoordinatorService {
     Objects.requireNonNull(imageId, "imageId cannot be null");
 
     // Find the latest translation layer
-    List<Page> pages = pageRepository.findByImageId(imageId);
+    Page hybridPage = resolvePageForCallback(imageId, null);
     List<Layer> layers =
-        pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
+        hybridPage != null ? layerRepository.findByPageId(hybridPage.getId()) : List.of();
     Layer latestTranslationLayer = null;
     for (Layer l : layers) {
 
