@@ -75,7 +75,7 @@ public class WorkerDispatcherService {
       List.of(
           "queue:region-redo-tl", "queue:qa", "queue:render", "queue:translation", "queue:layout");
 
-  @Scheduled(fixedDelay = 2000)
+  @Scheduled(fixedDelayString = "${WORKER_POLL_MS:30000}")
   public void dispatchJobs() {
     if (redisTemplate == null || redisTemplate.opsForValue() == null) {
       return;
@@ -90,7 +90,10 @@ public class WorkerDispatcherService {
       return;
     }
 
-    // Query capabilities of all workers that are not in cooldown
+    if (!anyQueueHasItems()) {
+      return;
+    }
+
     Map<String, WorkerCapacity> capacities = queryCapacities(workerUrls);
     if (capacities.isEmpty()) {
       // All workers are in cooldown or unreachable — skip this cycle
@@ -261,6 +264,18 @@ public class WorkerDispatcherService {
       }
     }
     return workerUrls;
+  }
+
+  /** Quick Redis check: are any work queues non-empty? Avoids expensive /capabilities calls. */
+  private boolean anyQueueHasItems() {
+    List<String> allQueues = new ArrayList<>();
+    allQueues.addAll(HEAVY_QUEUES);
+    allQueues.addAll(LIGHT_QUEUES);
+    for (String q : allQueues) {
+      Long size = redisTemplate.opsForList().size(q);
+      if (size != null && size > 0) return true;
+    }
+    return false;
   }
 
   /** Snapshot of a worker's current concurrency state. */
