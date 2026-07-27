@@ -414,7 +414,7 @@ public class InternalJobControllerTest {
   public void testRenderCallback_Failure() throws Exception {
     Map<String, String> payload = new HashMap<>();
     payload.put("imageId", UUID.randomUUID().toString());
-    doThrow(new RuntimeException("error")).when(jobCoordinatorService).handleRenderCallback(any());
+    doThrow(new RuntimeException("error")).when(jobCoordinatorService).handleRenderCallback(any(), any());
 
     mockMvc
         .perform(
@@ -630,6 +630,6 @@ public class InternalJobControllerTest {
                 .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isOk());
 
-    verify(jobCoordinatorService, times(1)).handleRenderCallback(any());
+    verify(jobCoordinatorService, times(1)).handleRenderCallback(any(), any());
   }
 }
