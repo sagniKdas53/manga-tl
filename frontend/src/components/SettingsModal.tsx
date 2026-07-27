@@ -21,23 +21,6 @@ export interface SettingsModalProps {
   token?: string;
 }
 
-const PROVIDERS = [
-  "openrouter",
-  "gemini",
-  "nvidia",
-  "openai",
-  "anthropic",
-  "ollama",
-  "lmstudio",
-];
-const OCR_PROVIDERS = [
-  "local",
-  "openrouter",
-  "gemini",
-  "nvidia",
-  "ollama",
-  "lmstudio",
-];
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
