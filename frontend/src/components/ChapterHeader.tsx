@@ -222,6 +222,46 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       }
                     />
                   </Grid>
+                  <Grid>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Strategy
+                    </Typography>
+                    {selectedChapter.resolvedQa?.routingStrategy ? (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        label={selectedChapter.resolvedQa.routingStrategy}
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        N/A
+                      </Typography>
+                    )}
+                  </Grid>
+                  <Grid>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      QA Mode
+                    </Typography>
+                    {selectedChapter.resolvedQa?.mode ? (
+                      <Chip
+                        size="small"
+                        label={`${selectedChapter.resolvedQa.mode} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        N/A
+                      </Typography>
+                    )}
+                  </Grid>
                 </Grid>
 
                 {/* Models Info */}
@@ -267,25 +307,12 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                         label={`Translation: ${selectedChapter.resolvedTranslation.model} ${selectedChapter.resolvedTranslation.source === "chapter" ? "(overridden)" : "(inherited)"}`}
                       />
                     )}
-                    {selectedChapter.resolvedQa?.routingStrategy && (
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        label={`Strategy: ${selectedChapter.resolvedQa.routingStrategy}`}
-                      />
-                    )}
-                    {selectedChapter.resolvedQa?.mode && (
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={`QA Mode: ${selectedChapter.resolvedQa.mode} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
-                      />
-                    )}
+
                     {selectedChapter.resolvedQa?.llmModel && (
                       <Chip
                         size="small"
                         variant="outlined"
+                        disabled={selectedChapter.resolvedQa?.mode === "vlm" || selectedChapter.resolvedQa?.mode === "none"}
                         label={`QA LLM: ${selectedChapter.resolvedQa.llmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
                       />
                     )}
@@ -293,6 +320,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       <Chip
                         size="small"
                         variant="outlined"
+                        disabled={selectedChapter.resolvedQa?.mode === "llm" || selectedChapter.resolvedQa?.mode === "none"}
                         label={`QA VLM: ${selectedChapter.resolvedQa.vlmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
                       />
                     )}

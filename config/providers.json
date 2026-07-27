@@ -22,7 +22,7 @@
       },
       "keyEnvVar": "OPENROUTER_API_KEY",
       "freeTier": false,
-      "rateLimits": null,
+      "rateLimits": 200,
       "priority": 1,
       "models": {
         "tl": [
@@ -101,7 +101,7 @@
       "authPrefix": "Bearer ",
       "keyEnvVar": "CLOUDFLARE_API_TOKEN",
       "freeTier": true,
-      "rateLimits": null,
+      "rateLimits": 40,
       "priority": 3,
       "models": {
         "tl": [
@@ -174,7 +174,7 @@
       "authPrefix": "Bearer ",
       "keyEnvVar": "NEUROMETRIC_API_KEY",
       "freeTier": true,
-      "rateLimits": null,
+      "rateLimits": 60,
       "priority": 4,
       "models": {
         "tl": [
@@ -202,7 +202,7 @@
       },
       "keyEnvVar": "ANTHROPIC_API_KEY",
       "freeTier": false,
-      "rateLimits": null,
+      "rateLimits": 50,
       "priority": 7,
       "models": {
         "tl": [
@@ -238,7 +238,7 @@
       "authPrefix": "Bearer ",
       "keyEnvVar": "OPENAI_API_KEY",
       "freeTier": false,
-      "rateLimits": null,
+      "rateLimits": 500,
       "priority": 6,
       "models": {
         "tl": [

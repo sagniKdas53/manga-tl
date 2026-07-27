@@ -221,6 +221,46 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                     }
                   />
                 </Grid>
+                <Grid>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    Strategy
+                  </Typography>
+                  {resolvedQaRouting.value ? (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      label={resolvedQaRouting.value}
+                    />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      N/A
+                    </Typography>
+                  )}
+                </Grid>
+                <Grid>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    QA Mode
+                  </Typography>
+                  {resolvedQaMode.value ? (
+                    <Chip
+                      size="small"
+                      label={`${resolvedQaMode.value} ${resolvedQaMode.source === "series" ? "(overridden)" : "(inherited)"}`}
+                    />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      N/A
+                    </Typography>
+                  )}
+                </Grid>
               </Grid>
 
               {/* Models Info */}
@@ -266,25 +306,12 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                       label={`Translation: ${resolvedTl.value} ${resolvedTl.source === "series" ? "(overridden)" : "(inherited)"}`}
                     />
                   )}
-                  {resolvedQaRouting.value && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      label={`Strategy: ${resolvedQaRouting.value}`}
-                    />
-                  )}
-                  {resolvedQaMode.value && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={`QA Mode: ${resolvedQaMode.value} ${resolvedQaMode.source === "series" ? "(overridden)" : "(inherited)"}`}
-                    />
-                  )}
+
                   {resolvedQa.value && (
                     <Chip
                       size="small"
                       variant="outlined"
+                      disabled={resolvedQaMode.value === "vlm" || resolvedQaMode.value === "none"}
                       label={`QA LLM: ${resolvedQa.value} ${resolvedQa.source === "series" ? "(overridden)" : "(inherited)"}`}
                     />
                   )}
@@ -292,6 +319,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                     <Chip
                       size="small"
                       variant="outlined"
+                      disabled={resolvedQaMode.value === "llm" || resolvedQaMode.value === "none"}
                       label={`QA VLM: ${resolvedQaVlm.value} ${resolvedQaVlm.source === "series" ? "(overridden)" : "(inherited)"}`}
                     />
                   )}
