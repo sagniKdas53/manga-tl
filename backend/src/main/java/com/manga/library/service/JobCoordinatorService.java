@@ -95,8 +95,22 @@ public class JobCoordinatorService {
     try {
       List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
       for (Job job : processingJobs) {
-        log.info("Resetting processing job {} to PENDING on startup", job.getId());
-        job.setStatus("PENDING");
+        int attempt = job.getAttempt() != null ? job.getAttempt() + 1 : 1;
+        int maxAttempts = job.getMaxAttempts() != null ? job.getMaxAttempts() : 3;
+        if (attempt > maxAttempts) {
+          log.warn(
+              "Startup: Job {} exhausted max attempts ({}/{}), marking FAILED",
+              job.getId(), attempt - 1, maxAttempts);
+          job.setStatus("FAILED");
+          job.setError(
+              "Max attempts exhausted (" + (attempt - 1) + "/" + maxAttempts + ") on startup");
+        } else {
+          log.info("Resetting processing job {} to PENDING on startup (attempt {}/{})",
+              job.getId(), attempt, maxAttempts);
+          job.setStatus("PENDING");
+          job.setAttempt(attempt);
+          job.setPayload(updatePayloadAttempt(job.getPayload(), attempt));
+        }
         jobRepository.save(Objects.requireNonNull(job));
       }
     } catch (Exception e) {
@@ -113,13 +127,26 @@ public class JobCoordinatorService {
 
       for (Job job : processingJobs) {
         if (job.getUpdatedAt() != null && job.getUpdatedAt().isBefore(threshold)) {
+          int attempt = job.getAttempt() != null ? job.getAttempt() + 1 : 1;
+          int maxAttempts = job.getMaxAttempts() != null ? job.getMaxAttempts() : 3;
           log.warn(
-              "Recovering stale PROCESSING job {} (last updated at {})",
-              job.getId(),
-              job.getUpdatedAt());
-          job.setStatus("PENDING");
+              "Recovering stale PROCESSING job {} (attempt {}/{}, last updated at {})",
+              job.getId(), attempt, maxAttempts, job.getUpdatedAt());
+          if (attempt > maxAttempts) {
+            log.warn(
+                "Job {} exhausted max attempts ({}/{}), marking FAILED instead of requeuing",
+                job.getId(), attempt - 1, maxAttempts);
+            job.setStatus("FAILED");
+            job.setError("Max attempts exhausted after stale recovery");
+          } else {
+            job.setStatus("PENDING");
+            job.setAttempt(attempt);
+            job.setPayload(updatePayloadAttempt(job.getPayload(), attempt));
+          }
           jobRepository.save(Objects.requireNonNull(job));
-          pushPersistedJobIfQueueRunning(job);
+          if ("PENDING".equals(job.getStatus())) {
+            pushPersistedJobIfQueueRunning(job);
+          }
         }
       }
     } catch (Exception e) {
@@ -412,6 +439,20 @@ public class JobCoordinatorService {
     List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
     for (Job job : pendingJobs) {
       pushJobToRedis(job);
+    }
+  }
+
+  private String updatePayloadAttempt(String payload, int attempt) {
+    if (payload == null) return null;
+    try {
+      Map<String, Object> payloadMap =
+          objectMapper.readValue(
+              payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+      payloadMap.put("attempt", attempt);
+      return objectMapper.writeValueAsString(payloadMap);
+    } catch (Exception e) {
+      log.error("Failed to update payload attempt: {}", e.getMessage());
+      return payload;
     }
   }
 
