@@ -36,6 +36,7 @@ public class WorkerDispatcherServiceTest {
     MockitoAnnotations.openMocks(this);
     when(redisTemplate.opsForValue()).thenReturn(valueOps);
     when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(anyString())).thenReturn(1L);
 
     ReflectionTestUtils.setField(workerDispatcherService, "workerUrlsConfig", "http://worker:9091");
     ReflectionTestUtils.setField(workerDispatcherService, "workerApiSecret", "test_secret");
@@ -60,9 +61,11 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -70,7 +73,7 @@ public class WorkerDispatcherServiceTest {
     // Verify it popped the job and didn't push it back
     verify(listOps, times(2)).leftPop("queue:panel-detection");
     verify(listOps, never()).leftPush(anyString(), anyString());
-    verify(httpClient, times(1)).send(any(HttpRequest.class), any());
+    verify(httpClient, times(2)).send(any(HttpRequest.class), any());
   }
 
   @Test
@@ -81,15 +84,17 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(429);
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
 
     // Verify it pushed the job back to the left
-    verify(listOps).leftPush("queue:panel-detection", "{\"id\": \"123\"}");
+    verify(listOps).rightPush("queue:panel-detection", "{\"id\": \"123\"}");
   }
 
   @Test
@@ -104,18 +109,18 @@ public class WorkerDispatcherServiceTest {
     HttpResponse<String> mockResponse2 = mockGeneric(HttpResponse.class);
     when(mockResponse2.statusCode()).thenReturn(202);
 
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
-        .thenReturn(mockResponse1)
-        .thenReturn(mockResponse2);
+        .thenReturn(capResponse, capResponse, mockResponse1, mockResponse2);
 
     workerDispatcherService.dispatchJobs();
 
     // Verify it popped the job and didn't push it back (because worker2 accepted it)
     verify(listOps, times(2)).leftPop("queue:panel-detection");
     verify(listOps, never()).leftPush(anyString(), anyString());
-    verify(httpClient, times(2)).send(any(HttpRequest.class), any());
+    verify(httpClient, times(4)).send(any(HttpRequest.class), any());
   }
 
   @Test
@@ -128,16 +133,17 @@ public class WorkerDispatcherServiceTest {
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(429);
 
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
-        .thenReturn(mockResponse);
+        .thenReturn(capResponse, capResponse, mockResponse, mockResponse);
 
     workerDispatcherService.dispatchJobs();
 
     // Verify it pushed the job back to the left because all workers failed/rate-limited
-    verify(listOps).leftPush("queue:panel-detection", "{\"id\": \"123\"}");
-    verify(httpClient, times(2)).send(any(HttpRequest.class), any());
+    verify(listOps).rightPush("queue:panel-detection", "{\"id\": \"123\"}");
+    verify(httpClient, times(4)).send(any(HttpRequest.class), any());
   }
 
   @Test
@@ -151,9 +157,11 @@ public class WorkerDispatcherServiceTest {
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
 
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse, capResponse)
         .thenThrow(new java.io.IOException("Connection refused"))
         .thenReturn(mockResponse);
 
@@ -162,7 +170,7 @@ public class WorkerDispatcherServiceTest {
     // Verify it popped the job and didn't push it back because worker2 accepted it
     verify(listOps, times(2)).leftPop("queue:panel-detection");
     verify(listOps, never()).leftPush(anyString(), anyString());
-    verify(httpClient, times(2)).send(any(HttpRequest.class), any());
+    verify(httpClient, times(4)).send(any(HttpRequest.class), any());
   }
 
   @Test
@@ -175,9 +183,11 @@ public class WorkerDispatcherServiceTest {
 
     org.mockito.ArgumentCaptor<HttpRequest> requestCaptor =
         org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             requestCaptor.capture(),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -207,30 +217,33 @@ public class WorkerDispatcherServiceTest {
 
   @Test
   public void testDispatchJobs_IndependentSlots_HeavyRejectedLightAccepted() throws Exception {
+    ReflectionTestUtils.setField(
+        workerDispatcherService, "workerUrlsConfig", "http://worker1:9091,http://worker2:9091");
     when(valueOps.get("system:queue:paused")).thenReturn("false");
 
-    // Heavy queue has a job, light queue has a job
     when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}");
     when(listOps.leftPop("queue:region-redo-tl"))
         .thenReturn("{\"id\": \"light1\"}")
         .thenReturn(null);
 
-    // First call (heavy) → 429, second call (light) → 202
     HttpResponse<String> heavyResponse = mockGeneric(HttpResponse.class);
     when(heavyResponse.statusCode()).thenReturn(429);
     HttpResponse<String> lightResponse = mockGeneric(HttpResponse.class);
     when(lightResponse.statusCode()).thenReturn(202);
 
+    // Worker1: full capacity. Worker2: heavy slot full (no heavy slot), light slot available.
+    HttpResponse<String> capW1 = mockCapabilitiesResponse();
+    HttpResponse<String> capW2 = mockCapabilitiesResponse(2, 0, 1, 1, 1, 0);
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
-        .thenReturn(heavyResponse)
-        .thenReturn(lightResponse);
+        .thenReturn(capW1, capW2, heavyResponse, lightResponse);
 
     workerDispatcherService.dispatchJobs();
 
-    // Heavy job was pushed back, light job was accepted
-    verify(listOps).leftPush("queue:qa-re-ocr", "{\"id\": \"heavy1\"}");
+    // Heavy: worker1 429'd → only worker with heavy slot → pushed back.
+    // Light: worker2 has light slot → accepted.
+    verify(listOps).rightPush("queue:qa-re-ocr", "{\"id\": \"heavy1\"}");
     verify(listOps, times(2)).leftPop("queue:region-redo-tl");
     verify(listOps, never()).leftPush(eq("queue:region-redo-tl"), anyString());
   }
@@ -249,9 +262,11 @@ public class WorkerDispatcherServiceTest {
     HttpResponse<String> lightResponse = mockGeneric(HttpResponse.class);
     when(lightResponse.statusCode()).thenReturn(429);
 
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
         .thenReturn(heavyResponse)
         .thenReturn(lightResponse);
 
@@ -260,7 +275,7 @@ public class WorkerDispatcherServiceTest {
     // Heavy job was accepted, light job was pushed back
     verify(listOps, times(2)).leftPop("queue:qa-re-ocr");
     verify(listOps, never()).leftPush(eq("queue:qa-re-ocr"), anyString());
-    verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
+    verify(listOps).rightPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
   }
 
   @Test
@@ -274,9 +289,12 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
+        .thenReturn(mockResponse)
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -284,11 +302,13 @@ public class WorkerDispatcherServiceTest {
     verify(listOps, times(2)).leftPop("queue:qa-re-ocr");
     verify(listOps, times(2)).leftPop("queue:region-redo-tl");
     verify(listOps, never()).leftPush(anyString(), anyString());
-    verify(httpClient, times(2)).send(any(HttpRequest.class), any());
+    verify(httpClient, times(3)).send(any(HttpRequest.class), any());
   }
 
   @Test
   public void testDispatchJobs_BothSlotsRejected() throws Exception {
+    ReflectionTestUtils.setField(
+        workerDispatcherService, "workerUrlsConfig", "http://worker1:9091,http://worker2:9091");
     when(valueOps.get("system:queue:paused")).thenReturn("false");
 
     when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"heavy1\"}");
@@ -296,15 +316,21 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(429);
+
+    // Worker1: full capacity. Worker2: heavy slot full (no heavy slot), light slot available.
+    HttpResponse<String> capW1 = mockCapabilitiesResponse();
+    HttpResponse<String> capW2 = mockCapabilitiesResponse(2, 0, 1, 1, 1, 0);
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
-        .thenReturn(mockResponse);
+        .thenReturn(capW1, capW2, mockResponse, mockResponse);
 
     workerDispatcherService.dispatchJobs();
 
-    verify(listOps).leftPush("queue:qa-re-ocr", "{\"id\": \"heavy1\"}");
-    verify(listOps).leftPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
+    // Heavy: worker1 429'd → only worker with heavy slot → pushed back.
+    // Light: worker2 has light slot, 429'd → pushed back.
+    verify(listOps).rightPush("queue:qa-re-ocr", "{\"id\": \"heavy1\"}");
+    verify(listOps).rightPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
   }
 
   @Test
@@ -315,9 +341,11 @@ public class WorkerDispatcherServiceTest {
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(400);
     when(mockResponse.body()).thenReturn("{\"detail\":\"bad request\"}");
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -335,9 +363,11 @@ public class WorkerDispatcherServiceTest {
     when(mockResponse.statusCode()).thenReturn(422);
     when(mockResponse.body())
         .thenReturn("{\"detail\":[{\"msg\":\"field required\",\"type\":\"missing\"}]}");
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
             any(HttpRequest.class),
             org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -349,5 +379,21 @@ public class WorkerDispatcherServiceTest {
   @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
+  }
+
+  private HttpResponse<String> mockCapabilitiesResponse() {
+    return mockCapabilitiesResponse(2, 0, 1, 0, 1, 0);
+  }
+
+  private HttpResponse<String> mockCapabilitiesResponse(
+      int maxTotal, int activeTotal, int maxHeavy, int activeHeavy, int maxLight, int activeLight) {
+    HttpResponse<String> cap = mockGeneric(HttpResponse.class);
+    when(cap.statusCode()).thenReturn(200);
+    when(cap.body())
+        .thenReturn(
+            String.format(
+                "{\"max_concurrent_jobs\": %d, \"active_jobs\": %d, \"max_heavy_slots\": %d, \"active_heavy_jobs\": %d, \"max_light_slots\": %d, \"active_light_jobs\": %d}",
+                maxTotal, activeTotal, maxHeavy, activeHeavy, maxLight, activeLight));
+    return cap;
   }
 }

@@ -2,6 +2,7 @@ package com.manga.library.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.manga.library.RedisTestcontainersConfig;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
 import java.util.*;
@@ -14,11 +15,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(RedisTestcontainersConfig.class)
 @SuppressWarnings("null")
 public class JobCoordinatorServiceTest {
 
