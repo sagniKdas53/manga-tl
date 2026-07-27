@@ -3,7 +3,7 @@
   "defaults": {
     "provider": "openrouter",
     "tl": "deepseek/deepseek-v4-pro",
-    "qaLLM": "deepseek/deepseek-v4-flash",
+    "qaLLM": "deepseek/deepseek-v4-pro",
     "qaVLM": "google/gemini-3.1-flash-lite",
     "ocr": "qwen/qwen3-vl-32b-instruct",
     "qaMode": "auto",
@@ -22,76 +22,140 @@
       },
       "keyEnvVar": "OPENROUTER_API_KEY",
       "freeTier": false,
-      "rateLimits": 200,
+      "rateLimits": 40,
       "priority": 1,
       "models": {
         "tl": [
-          { "id": "deepseek/deepseek-v4-pro", "name": "DeepSeek V4 Pro" },
-          { "id": "deepseek/deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
-          { "id": "google/gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
-          { "id": "google/gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "deepseek/deepseek-v4-flash:free", "name": "DeepSeek V4 Flash", "free": true },
-          { "id": "meta-llama/llama-4-maverick:free", "name": "Llama 4 Maverick", "free": true }
+          {
+            "id": "deepseek/deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro"
+          },
+          {
+            "id": "deepseek/deepseek-v4-flash",
+            "name": "DeepSeek V4 Flash"
+          },
+          {
+            "id": "google/gemini-3.5-flash",
+            "name": "Gemini 3.5 Flash"
+          },
+          {
+            "id": "google/gemini-3.1-flash-lite",
+            "name": "Gemini 3.1 Flash Lite"
+          },
+          {
+            "id": "inclusionai/ling-3.0-flash:free",
+            "name": "Inclusion AI Ling 3.0 Flash",
+            "free": true
+          },
+          {
+            "id": "poolside/laguna-s-2.1:free",
+            "name": "Poolside Laguna S 2.1",
+            "free": true
+          },
+          {
+            "id": "openai/gpt-oss-20b:free",
+            "name": "GPT-OSS 20B",
+            "free": true
+          }
         ],
         "qaLLM": [
-          { "id": "deepseek/deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
-          { "id": "deepseek/deepseek-v4-pro", "name": "DeepSeek V4 Pro" },
-          { "id": "google/gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
-          { "id": "google/gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "openai/gpt-oss-20b:free", "name": "GPT-OSS 20B", "free": true },
-          { "id": "deepseek/deepseek-v4-flash:free", "name": "DeepSeek V4 Flash", "free": true }
+          {
+            "id": "deepseek/deepseek-v4-flash",
+            "name": "DeepSeek V4 Flash"
+          },
+          {
+            "id": "deepseek/deepseek-v4-pro",
+            "name": "DeepSeek V4 Pro"
+          },
+          {
+            "id": "google/gemini-3.5-flash",
+            "name": "Gemini 3.5 Flash"
+          },
+          {
+            "id": "google/gemini-3.1-flash-lite",
+            "name": "Gemini 3.1 Flash Lite"
+          },
+          {
+            "id": "openai/gpt-oss-20b:free",
+            "name": "GPT-OSS 20B",
+            "free": true
+          },
+          {
+            "id": "inclusionai/ling-3.0-flash:free",
+            "name": "Inclusion AI Ling 3.0 Flash",
+            "free": true
+          },
+          {
+            "id": "poolside/laguna-s-2.1:free",
+            "name": "Poolside Laguna S 2.1",
+            "free": true
+          }
         ],
         "qaVLM": [
-          { "id": "qwen/qwen3-vl-32b-instruct", "name": "Qwen 3 VL 32B Instruct" },
-          { "id": "google/gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "google/gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
-          { "id": "qwen/qwen-2.5-vl-72b-instruct:free", "name": "Qwen 2.5 VL 72B", "free": true }
+          {
+            "id": "qwen/qwen3-vl-32b-instruct",
+            "name": "Qwen 3 VL 32B Instruct"
+          },
+          {
+            "id": "google/gemini-3.1-flash-lite",
+            "name": "Gemini 3.1 Flash Lite"
+          },
+          {
+            "id": "google/gemini-3.5-flash",
+            "name": "Gemini 3.5 Flash"
+          },
+          {
+            "id": "qwen/qwen-2.5-vl-72b-instruct:free",
+            "name": "Qwen 2.5 VL 72B",
+            "free": true
+          },
+          {
+            "id": "google/gemma-4-26b-a4b-it:free",
+            "name": "Gemma 4 26B A4B IT",
+            "free": true
+          }
         ],
         "ocr": [
-          { "id": "qwen/qwen3-vl-32b-instruct", "name": "Qwen 3 VL 32B Instruct" },
-          { "id": "google/gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
-          { "id": "google/gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "qwen/qwen-2.5-vl-72b-instruct:free", "name": "Qwen 2.5 VL 72B", "free": true }
+          {
+            "id": "qwen/qwen3-vl-8b-instruct",
+            "name": "Qwen 3 VL 8B Instruct"
+          },
+          {
+            "id": "qwen/qwen3-vl-32b-instruct",
+            "name": "Qwen 3 VL 32B Instruct"
+          },
+          {
+            "id": "qwen/qwen2.5-vl-72b-instruct",
+            "name": "Qwen 2.5 VL 72B"
+          },
+          {
+            "id": "qwen/qwen3-vl-235b-a22b-instruct",
+            "name": "Qwen 3 VL 235B A22B Instruct"
+          },
+          {
+            "id": "google/gemini-3.5-flash",
+            "name": "Gemini 3.5 Flash"
+          },
+          {
+            "id": "google/gemini-3.1-flash-lite",
+            "name": "Gemini 3.1 Flash Lite"
+          },
+          {
+            "id": "google/gemma-4-26b-a4b-it:free",
+            "name": "Gemma 4 26B A4B IT",
+            "free": true
+          },
+          {
+            "id": "nvidia/nemotron-nano-12b-v2-vl:free",
+            "name": "Nemotron Nano 12B V2 VL",
+            "free": true
+          }
         ]
       },
       "defaultTLModel": "deepseek/deepseek-v4-pro",
-      "defaultQALLMModel": "deepseek/deepseek-v4-flash",
+      "defaultQALLMModel": "deepseek/deepseek-v4-pro",
       "defaultQAVLMModel": "google/gemini-3.1-flash-lite",
       "defaultOCRModel": "qwen/qwen3-vl-32b-instruct"
-    },
-    "gemini": {
-      "displayName": "Google AI Studio",
-      "type": "openai-compatible",
-      "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      "authHeader": "Authorization",
-      "authPrefix": "Bearer ",
-      "keyEnvVar": "GEMINI_API_KEY",
-      "freeTier": true,
-      "rateLimits": 15,
-      "priority": 5,
-      "models": {
-        "tl": [
-          { "id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
-          { "id": "gemini-3.1-pro", "name": "Gemini 3.1 Pro" }
-        ],
-        "qaLLM": [
-          { "id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash" }
-        ],
-        "qaVLM": [
-          { "id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash" }
-        ],
-        "ocr": [
-          { "id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite" },
-          { "id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash" }
-        ]
-      },
-      "defaultTLModel": "gemini-3.5-flash",
-      "defaultQALLMModel": "gemini-3.5-flash",
-      "defaultQAVLMModel": "gemini-3.1-flash-lite",
-      "defaultOCRModel": "gemini-3.1-flash-lite"
     },
     "cloudflare": {
       "displayName": "Cloudflare Workers AI",
@@ -105,30 +169,82 @@
       "priority": 3,
       "models": {
         "tl": [
-          { "id": "@cf/zai-org/glm-4.7-flash", "name": "GLM 4.7 Flash" },
-          { "id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "name": "Llama 3.3 70B" },
-          { "id": "@cf/zai-org/glm-5.2", "name": "GLM 5.2" },
-          { "id": "@cf/moonshotai/kimi-k2.6", "name": "Kimi K2.6" }
+          {
+            "id": "@cf/zai-org/glm-4.7-flash",
+            "name": "GLM 4.7 Flash"
+          },
+          {
+            "id": "@cf/zai-org/glm-5.2",
+            "name": "GLM 5.2"
+          },
+          {
+            "id": "@cf/moonshotai/kimi-k2.6",
+            "name": "Kimi K2.6"
+          },
+          {
+            "id": "@cf/openai/gpt-oss-20b",
+            "name": "GPT-OSS 20B"
+          },
+          {
+            "id": "@cf/openai/gpt-oss-120b",
+            "name": "GPT-OSS 120B"
+          },
+          {
+            "id": "@cf/google/gemma-4-26b-a4b-it",
+            "name": "Gemma 4 26B A4B IT"
+          }
         ],
         "qaLLM": [
-          { "id": "@cf/ibm-granite/granite-4.0-h-micro", "name": "Granite 4.0 H Micro" },
-          { "id": "@cf/openai/gpt-oss-20b", "name": "GPT-OSS 20B" },
-          { "id": "@cf/openai/gpt-oss-120b", "name": "GPT-OSS 120B" },
-          { "id": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", "name": "DeepSeek R1 Distill Qwen 32B" }
+          {
+            "id": "@cf/ibm-granite/granite-4.0-h-micro",
+            "name": "Granite 4.0 H Micro"
+          },
+          {
+            "id": "@cf/openai/gpt-oss-20b",
+            "name": "GPT-OSS 20B"
+          },
+          {
+            "id": "@cf/openai/gpt-oss-120b",
+            "name": "GPT-OSS 120B"
+          },
+          {
+            "id": "@cf/google/gemma-4-26b-a4b-it",
+            "name": "Gemma 4 26B A4B IT"
+          }
         ],
         "qaVLM": [
-          { "id": "@cf/meta/llama-3.2-11b-vision-instruct", "name": "Llama 3.2 11B Vision" },
-          { "id": "@cf/moondream/moondream3.1-9B-A2B", "name": "Moondream 3.1 9B" }
+          {
+            "id": "@cf/moonshotai/kimi-k2.7-code",
+            "name": "Kimi K2.7 Code"
+          },
+          {
+            "id": "@cf/moondream/moondream3.1-9B-A2B",
+            "name": "Moondream 3.1 9B"
+          },
+          {
+            "id": "@cf/google/gemma-4-26b-a4b-it",
+            "name": "Gemma 4 26B A4B IT"
+          }
         ],
         "ocr": [
-          { "id": "@cf/meta/llama-3.2-11b-vision-instruct", "name": "Llama 3.2 11B Vision" },
-          { "id": "@cf/moondream/moondream3.1-9B-A2B", "name": "Moondream 3.1 9B" }
+          {
+            "id": "@cf/moonshotai/kimi-k2.7-code",
+            "name": "Kimi K2.7 Code"
+          },
+          {
+            "id": "@cf/moondream/moondream3.1-9B-A2B",
+            "name": "Moondream 3.1 9B"
+          },
+          {
+            "id": "@cf/google/gemma-4-26b-a4b-it",
+            "name": "Gemma 4 26B A4B IT"
+          }
         ]
       },
-      "defaultTLModel": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-      "defaultQALLMModel": "@cf/openai/gpt-oss-20b",
-      "defaultQAVLMModel": "@cf/meta/llama-3.2-11b-vision-instruct",
-      "defaultOCRModel": "@cf/meta/llama-3.2-11b-vision-instruct"
+      "defaultTLModel": "@cf/openai/gpt-oss-120b",
+      "defaultQALLMModel": "@cf/openai/gpt-oss-120b",
+      "defaultQAVLMModel": "@cf/google/gemma-4-26b-a4b-it",
+      "defaultOCRModel": "@cf/google/gemma-4-26b-a4b-it"
     },
     "nvidia": {
       "displayName": "NVIDIA NIM",
@@ -142,26 +258,87 @@
       "priority": 2,
       "models": {
         "tl": [
-          { "id": "nvidia/riva-translate-4b-instruct-v1.1", "name": "Riva Translate 4B" },
-          { "id": "nvidia/llama-3.1-nemotron-70b-instruct", "name": "Llama 3.1 Nemotron 70B Instruct" },
-          { "id": "openai/gpt-oss-120b", "name": "GPT-OSS 120B" },
-          { "id": "meta/llama-3.1-405b-instruct", "name": "Llama 3.1 405B Instruct" }
+          {
+            "id": "riva-translate-4b-instruct-v2",
+            "name": "Riva Translate 4B v2"
+          },
+          {
+            "id": "thinkingmachines/inkling",
+            "name": "Inkling"
+          },
+          {
+            "id": "openai/gpt-oss-120b",
+            "name": "GPT-OSS 120B"
+          },
+          {
+            "id": "z-ai/glm-5.2",
+            "name": "GLM 5.2"
+          },
+          {
+            "id": "minimaxai/minimax-m3",
+            "name": "Minimax M3"
+          },
+          {
+            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+            "name": "Nemotron 3 Nano Omni 30B A3B Reasoning"
+          }
         ],
         "qaLLM": [
-          { "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "name": "Nemotron 3 Nano Reasoning" },
-          { "id": "nvidia/llama-3.1-nemotron-70b-instruct", "name": "Llama 3.1 Nemotron 70B Instruct" },
-          { "id": "openai/gpt-oss-120b", "name": "GPT-OSS 120B" }
+          {
+            "id": "riva-translate-4b-instruct-v2",
+            "name": "Riva Translate 4B v2"
+          },
+          {
+            "id": "thinkingmachines/inkling",
+            "name": "Inkling"
+          },
+          {
+            "id": "openai/gpt-oss-120b",
+            "name": "GPT-OSS 120B"
+          },
+          {
+            "id": "z-ai/glm-5.2",
+            "name": "GLM 5.2"
+          },
+          {
+            "id": "minimaxai/minimax-m3",
+            "name": "Minimax M3"
+          },
+          {
+            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+            "name": "Nemotron 3 Nano Omni 30B A3B Reasoning"
+          }
         ],
         "qaVLM": [
-          { "id": "nvidia/nemotron-nano-12b-v2-vl", "name": "Nemotron Nano 12B VL" },
-          { "id": "nvidia/neva-22b", "name": "Neva 22B" }
+          {
+            "id": "nvidia/nemotron-nano-12b-v2-vl",
+            "name": "Nemotron Nano 12B VL"
+          },
+          {
+            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+            "name": "Nemotron 3 Nano Omni 30B A3B Reasoning"
+          },
+          {
+            "id": "thinkingmachines/inkling",
+            "name": "Inkling"
+          }
         ],
         "ocr": [
-          { "id": "nvidia/nemotron-nano-12b-v2-vl", "name": "Nemotron Nano 12B VL" },
-          { "id": "nvidia/neva-22b", "name": "Neva 22B" }
+          {
+            "id": "nvidia/nemotron-nano-12b-v2-vl",
+            "name": "Nemotron Nano 12B VL"
+          },
+          {
+            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+            "name": "Nemotron 3 Nano Omni 30B A3B Reasoning"
+          },
+          {
+            "id": "thinkingmachines/inkling",
+            "name": "Inkling"
+          }
         ]
       },
-      "defaultTLModel": "nvidia/riva-translate-4b-instruct-v1.1",
+      "defaultTLModel": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
       "defaultQALLMModel": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
       "defaultQAVLMModel": "nvidia/nemotron-nano-12b-v2-vl",
       "defaultOCRModel": "nvidia/nemotron-nano-12b-v2-vl"
@@ -178,10 +355,16 @@
       "priority": 4,
       "models": {
         "tl": [
-          { "id": "neurometric/clawpack", "name": "ClawPack (task router, free)" }
+          {
+            "id": "neurometric/clawpack",
+            "name": "ClawPack (task router, free)"
+          }
         ],
         "qaLLM": [
-          { "id": "neurometric/clawpack", "name": "ClawPack (task router, free)" }
+          {
+            "id": "neurometric/clawpack",
+            "name": "ClawPack (task router, free)"
+          }
         ],
         "qaVLM": null,
         "ocr": null
@@ -190,143 +373,6 @@
       "defaultQALLMModel": "neurometric/clawpack",
       "defaultQAVLMModel": null,
       "defaultOCRModel": null
-    },
-    "anthropic": {
-      "displayName": "Anthropic",
-      "type": "anthropic",
-      "baseUrl": "https://api.anthropic.com/v1/messages",
-      "authHeader": "x-api-key",
-      "authPrefix": "",
-      "extraHeaders": {
-        "anthropic-version": "2023-06-01"
-      },
-      "keyEnvVar": "ANTHROPIC_API_KEY",
-      "freeTier": false,
-      "rateLimits": 50,
-      "priority": 7,
-      "models": {
-        "tl": [
-          { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5" },
-          { "id": "claude-sonnet-5", "name": "Claude Sonnet 5" },
-          { "id": "claude-opus-4-8", "name": "Claude Opus 4.8" },
-          { "id": "claude-fable-5", "name": "Claude Fable 5" }
-        ],
-        "qaLLM": [
-          { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5" },
-          { "id": "claude-sonnet-5", "name": "Claude Sonnet 5" },
-          { "id": "claude-opus-4-8", "name": "Claude Opus 4.8" }
-        ],
-        "qaVLM": [
-          { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5" },
-          { "id": "claude-sonnet-5", "name": "Claude Sonnet 5" }
-        ],
-        "ocr": [
-          { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5" },
-          { "id": "claude-sonnet-5", "name": "Claude Sonnet 5" }
-        ]
-      },
-      "defaultTLModel": "claude-sonnet-5",
-      "defaultQALLMModel": "claude-haiku-4-5-20251001",
-      "defaultQAVLMModel": "claude-sonnet-5",
-      "defaultOCRModel": "claude-sonnet-5"
-    },
-    "openai": {
-      "displayName": "OpenAI",
-      "type": "openai-compatible",
-      "baseUrl": "https://api.openai.com/v1/chat/completions",
-      "authHeader": "Authorization",
-      "authPrefix": "Bearer ",
-      "keyEnvVar": "OPENAI_API_KEY",
-      "freeTier": false,
-      "rateLimits": 500,
-      "priority": 6,
-      "models": {
-        "tl": [
-          { "id": "gpt-5.6-luna", "name": "GPT-5.6 Luna" },
-          { "id": "gpt-5.6-terra", "name": "GPT-5.6 Terra" },
-          { "id": "gpt-5.6-sol", "name": "GPT-5.6 Sol" }
-        ],
-        "qaLLM": [
-          { "id": "gpt-5.6-luna", "name": "GPT-5.6 Luna" },
-          { "id": "gpt-5.6-terra", "name": "GPT-5.6 Terra" }
-        ],
-        "qaVLM": [
-          { "id": "gpt-5.6-terra", "name": "GPT-5.6 Terra" },
-          { "id": "gpt-5.6-sol", "name": "GPT-5.6 Sol" }
-        ],
-        "ocr": [
-          { "id": "gpt-5.6-terra", "name": "GPT-5.6 Terra" },
-          { "id": "gpt-5.6-sol", "name": "GPT-5.6 Sol" }
-        ]
-      },
-      "defaultTLModel": "gpt-5.6-terra",
-      "defaultQALLMModel": "gpt-5.6-luna",
-      "defaultQAVLMModel": "gpt-5.6-terra",
-      "defaultOCRModel": "gpt-5.6-terra"
-    },
-    "ollama": {
-      "displayName": "Ollama (Local)",
-      "type": "openai-compatible",
-      "baseUrl": "${LOCAL_LLM_ENDPOINT:-http://ollama:11434}/v1/chat/completions",
-      "authHeader": null,
-      "authPrefix": null,
-      "keyEnvVar": null,
-      "freeTier": true,
-      "rateLimits": null,
-      "priority": 10,
-      "models": {
-        "tl": [
-          { "id": "gemma3:12b", "name": "Gemma 3 12B" },
-          { "id": "qwen3:14b", "name": "Qwen 3 14B" }
-        ],
-        "qaLLM": [
-          { "id": "gemma3:12b", "name": "Gemma 3 12B" },
-          { "id": "qwen3:14b", "name": "Qwen 3 14B" }
-        ],
-        "qaVLM": [
-          { "id": "qwen2.5vl:7b", "name": "Qwen 2.5 VL 7B" },
-          { "id": "moondream:1.8b", "name": "Moondream 1.8B" }
-        ],
-        "ocr": [
-          { "id": "qwen2.5vl:7b", "name": "Qwen 2.5 VL 7B" },
-          { "id": "moondream:1.8b", "name": "Moondream 1.8B" }
-        ]
-      },
-      "defaultTLModel": "gemma3:12b",
-      "defaultQALLMModel": "gemma3:12b",
-      "defaultQAVLMModel": "qwen2.5vl:7b",
-      "defaultOCRModel": "qwen2.5vl:7b"
-    },
-    "lmstudio": {
-      "displayName": "LM Studio (Local)",
-      "type": "openai-compatible",
-      "baseUrl": "${LOCAL_LLM_ENDPOINT:-http://lmstudio:1234}/v1/chat/completions",
-      "authHeader": null,
-      "authPrefix": null,
-      "keyEnvVar": null,
-      "freeTier": true,
-      "rateLimits": null,
-      "priority": 10,
-      "models": {
-        "tl": [
-          { "id": "gemma-3-12b", "name": "Gemma 3 12B" },
-          { "id": "qwen3-14b", "name": "Qwen 3 14B" }
-        ],
-        "qaLLM": [
-          { "id": "gemma-3-12b", "name": "Gemma 3 12B" },
-          { "id": "qwen3-14b", "name": "Qwen 3 14B" }
-        ],
-        "qaVLM": [
-          { "id": "qwen2.5-vl-7b", "name": "Qwen 2.5 VL 7B" }
-        ],
-        "ocr": [
-          { "id": "qwen2.5-vl-7b", "name": "Qwen 2.5 VL 7B" }
-        ]
-      },
-      "defaultTLModel": "gemma-3-12b",
-      "defaultQALLMModel": "gemma-3-12b",
-      "defaultQAVLMModel": "qwen2.5-vl-7b",
-      "defaultOCRModel": "qwen2.5-vl-7b"
     }
   }
 }
