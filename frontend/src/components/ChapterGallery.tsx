@@ -609,6 +609,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       }}
     >
       <ChapterHeader
+        user={user}
         selectedSeries={selectedSeries}
         selectedChapter={selectedChapter}
         onBack={() => {

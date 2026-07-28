@@ -127,6 +127,14 @@ public class SeriesController {
     String gQaVlmModel = globalSettings != null ? globalSettings.qaVlmModel() : null;
     String gQaMode = globalSettings != null ? globalSettings.qaMode() : null;
 
+    // -------------------------------------------------------------------------------------
+    // MODEL INHERITANCE LOGIC:
+    // Overrides fall back using a Global -> Series -> Chapter hierarchy.
+    // If a chapter value is null, it inherits from the series.
+    // If the series value is null, it inherits from the global settings.
+    // The frontend relies on this resolved state in `ResolvedModelSlot` and `ResolvedQaSlot`.
+    // -------------------------------------------------------------------------------------
+
     String ocrProv = c.getOcrProvider();
     String ocrMod = c.getOcrModel();
     String ocrSrc = "global";

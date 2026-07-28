@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
@@ -16,9 +16,11 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import type { Series, Chapter } from "../types";
+import type { Series, Chapter, User, SystemSettingsDto } from "../types";
+import { safeFetch } from "../utils";
 
 export interface ChapterHeaderProps {
+  user?: User;
   selectedSeries: Series;
   selectedChapter: Chapter;
   onBack: () => void;
@@ -34,6 +36,7 @@ export interface ChapterHeaderProps {
 }
 
 const ChapterHeader: React.FC<ChapterHeaderProps> = ({
+  user,
   selectedSeries,
   selectedChapter,
   onBack,
@@ -50,6 +53,41 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
     null,
   );
   const openOverflow = Boolean(overflowAnchorEl);
+
+  const [settings, setSettings] = useState<SystemSettingsDto | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    safeFetch("/api/settings", {
+      headers: { Authorization: `Bearer ${user.token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => setSettings(d))
+      .catch(() => {});
+  }, [user?.token]);
+
+  // -------------------------------------------------------------------------------------
+  // MODEL INHERITANCE LOGIC:
+  // The backend already resolves the model inheritance (Global -> Series -> Chapter)
+  // and returns it in `selectedChapter.resolvedQa`. 
+  // However, we fetch `settings` here to dynamically check `providerModelsMap` 
+  // so we know whether to hide the `QA VLM` chip if the provider doesn't support VLMs.
+  // -------------------------------------------------------------------------------------
+  const qaVlmModels =
+    settings?.providerModelsMap?.[
+      selectedChapter.resolvedQa?.provider || "openrouter"
+    ]?.["qaVLM"] || [];
+  const qaVlmCapabilityMissing = qaVlmModels.length === 0 && settings !== null;
+
+  const usesOpenRouter =
+    selectedChapter.resolvedOcr?.provider === "openrouter" ||
+    selectedChapter.resolvedTranslation?.provider === "openrouter" ||
+    selectedChapter.resolvedQa?.provider === "openrouter";
+
+  const routingStrategy =
+    selectedChapter.routingStrategy ||
+    selectedSeries.routingStrategy ||
+    "lowest-cost";
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -228,6 +266,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       }
                     />
                   </Grid>
+                {usesOpenRouter && (
                   <Grid>
                     <Typography
                       variant="body2"
@@ -236,12 +275,11 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     >
                       Strategy
                     </Typography>
-                    {selectedChapter.resolvedQa?.routingStrategy ? (
+                    {routingStrategy ? (
                       <Chip
                         size="small"
-                        variant="outlined"
-                        color="primary"
-                        label={selectedChapter.resolvedQa.routingStrategy}
+                        color="secondary"
+                        label={routingStrategy}
                       />
                     ) : (
                       <Typography variant="body2" color="text.secondary">
@@ -249,6 +287,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       </Typography>
                     )}
                   </Grid>
+                )}
                   <Grid>
                     <Typography
                       variant="body2"
@@ -322,7 +361,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                         label={`QA LLM: ${selectedChapter.resolvedQa.llmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
                       />
                     )}
-                    {selectedChapter.resolvedQa?.vlmModel && (
+                    {selectedChapter.resolvedQa?.vlmModel && !qaVlmCapabilityMissing && (
                       <Chip
                         size="small"
                         variant="outlined"

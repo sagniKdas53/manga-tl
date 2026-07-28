@@ -347,6 +347,13 @@ public class JobCoordinatorService {
               boolean vlmUsable = hasUsableModel(resolvedQaProvider, resolvedQaVlmModel, "qaVLM");
               boolean llmUsable = hasUsableModel(resolvedQaProvider, resolvedQaLlmModel, "qaLLM");
 
+              // -------------------------------------------------------------------------------------
+              // MODEL INHERITANCE LOGIC & SMART ROUTING:
+              // - Mode "auto" prefers VLM over LLM. If VLM is not supported by the provider, 
+              //   it automatically falls back to LLM.
+              // - Explicit modes ("vlm" or "llm") will also gracefully fallback to the other
+              //   if the requested mode is unsupported by the current provider.
+              // -------------------------------------------------------------------------------------
               if ("auto".equalsIgnoreCase(resolvedQaMode)) {
                 if (vlmUsable) {
                   resolvedQaMode = "vlm";

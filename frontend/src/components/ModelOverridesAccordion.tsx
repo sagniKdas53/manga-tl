@@ -118,16 +118,22 @@ const fieldBoxSx = {
 } as const;
 
 /**
- * ModelOverridesAccordion allows setting overrides for Series or Chapter models.
+ * Renders the Model Overrides accordion in the Edit Chapter or Series dialogs.
  * 
- * Model Resolution Logic:
+ * -------------------------------------------------------------------------------------
+ * MODEL INHERITANCE LOGIC & CAPABILITY CHECKING:
+ * - This component manages the state for chapter/series overrides.
+ * - Missing capabilities (e.g. `isCapabilityMissing` for `qaVLM`) will disable the
+ *   relevant dropdown and force the value to "N/A (Capability Missing)".
+ * - Inheritance operates strictly Global -> Series -> Chapter.
+ * -------------------------------------------------------------------------------------
+ * 
  * The frontend receives provider capabilities via `providerModelsMap`. 
- * 
- * - If a provider has a capability array (even if empty `[]`), it is considered the absolute source of truth.
- *   For example, if `neurometric` has `qaVLM: []`, it means VLM is definitively not supported by Neurometric.
+ * - For a given provider (e.g. 'openai'), `providerModelsMap['openai'].qaVLM` 
+ *   contains the list of vision models.
  * - If the backend does not provide `providerModelsMap` (legacy) or completely omits a capability array, 
- *   the UI will safely fall back to legacy global configuration lists (e.g., `qaVlmModelList`).
- * 
+ *   it falls back to checking legacy specific lists like `settings?.qaVlmModelList`.
+ *
  * This ensures that modern backend configurations take precedence and capabilities missing from
  * 
  * QA Mode Routing Logic:
