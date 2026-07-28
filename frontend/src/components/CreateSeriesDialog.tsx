@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from "react";
-import Accordion from "@mui/material/Accordion";
-import AccordionDetails from "@mui/material/AccordionDetails";
-import AccordionSummary from "@mui/material/AccordionSummary";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
@@ -12,15 +9,12 @@ import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
-import Box from "@mui/material/Box";
-import Chip from "@mui/material/Chip";
-import IconButton from "@mui/material/IconButton";
-import CloseIcon from "@mui/icons-material/Close";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import type { User, Series, SystemSettingsDto, ModelEntry } from "../types";
+import type { User, Series, SystemSettingsDto } from "../types";
 import { safeFetch } from "../utils";
 import { useToast } from "./ToastContext";
+import ModelOverridesAccordion, {
+  type ModelOverridesValue,
+} from "./ModelOverridesAccordion";
 
 interface CreateSeriesDialogProps {
   open: boolean;
@@ -37,9 +31,6 @@ const DIR_OPTS = [
   { value: "ltr", label: "Left to Right — Comics" },
   { value: "ttb", label: "Top to Bottom — Webtoons" },
 ];
-const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
-
-
 
 const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
   open,
@@ -137,44 +128,40 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
     }
   }, [open, settings, editingSeries, user.token]);
 
-  const providers = settings?.activeProviders || [];
-  const ocrProviders = settings?.activeOcrProviders || [];
-
-  const inheritedOcrProvider = settings?.ocrProvider;
-  const inheritedOcrModel = settings?.ocrModel;
-  const inheritedTlProvider = settings?.tlProvider;
-  const inheritedTlModel = settings?.tlModel;
-  const inheritedQaProvider = settings?.qaProvider;
-  const inheritedQaMode = settings?.qaMode;
-  const inheritedQaLlmModel = settings?.qaLlmModel;
-  const inheritedQaVlmModel = settings?.qaVlmModel;
-  const inheritedRoutingStrategy = settings?.routingStrategy || "lowest-cost";
-
-  const overrideFields = [
+  const overridesValue: ModelOverridesValue = {
     ocrProvider,
     ocrModel,
     tlProvider,
     tlModel,
     qaProvider,
-    qaMode,
     qaLlmModel,
     qaVlmModel,
+    qaMode,
     routingStrategy,
-  ];
-  const overriddenCount =
-    overrideFields.filter((v) => v !== "").length +
-    (useFallbackModels !== null ? 1 : 0);
-  const inheritedCount = overrideFields.length + 1 - overriddenCount;
+    useFallbackModels,
+  };
 
-  const ocrDisabled =
-    ocrProvider === "local" ||
-    (ocrProvider === "" && settings?.ocrProvider === "local");
-  const qaLlmDisabled =
-    (qaMode || settings?.qaMode) === "vlm" ||
-    (qaMode || settings?.qaMode) === "none";
-  const qaVlmDisabled =
-    (qaMode || settings?.qaMode) === "llm" ||
-    (qaMode || settings?.qaMode) === "none";
+  const overrideSetters: {
+    [K in keyof ModelOverridesValue]: (v: ModelOverridesValue[K]) => void;
+  } = {
+    ocrProvider: setOcrProvider,
+    ocrModel: setOcrModel,
+    tlProvider: setTlProvider,
+    tlModel: setTlModel,
+    qaProvider: setQaProvider,
+    qaLlmModel: setQaLlmModel,
+    qaVlmModel: setQaVlmModel,
+    qaMode: setQaMode,
+    routingStrategy: setRoutingStrategy,
+    useFallbackModels: setUseFallbackModels,
+  };
+
+  const handleOverrideChange = <K extends keyof ModelOverridesValue>(
+    field: K,
+    fieldValue: ModelOverridesValue[K],
+  ) => {
+    overrideSetters[field](fieldValue);
+  };
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -297,450 +284,25 @@ const CreateSeriesDialog: React.FC<CreateSeriesDialogProps> = ({
           </Select>
         </FormControl>
 
-        <Accordion
+        <ModelOverridesAccordion
           expanded={showOverrides}
-          onChange={() => setShowOverrides(!showOverrides)}
-          sx={{ mt: 2 }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="body2">Model Overrides (Optional)</Typography>
-            <Chip
-              size="small"
-              label={`${overriddenCount} overridden, ${inheritedCount} inherited`}
-              variant="outlined"
-              sx={{ ml: 1 }}
-            />
-          </AccordionSummary>
-          <AccordionDetails
-            sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl fullWidth>
-                <InputLabel>OCR Provider</InputLabel>
-                <Select
-                  size="small"
-                  value={ocrProvider || inheritedOcrProvider || ""}
-                  label="OCR Provider"
-                  onChange={(e) => setOcrProvider(e.target.value)}
-                >
-                  {ocrProviders.map((p) => (
-                    <MenuItem
-                      key={p}
-                      value={p}
-                    >
-                      {p}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {ocrProvider !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setOcrProvider("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl
-                fullWidth
-                disabled={ocrDisabled}
-              >
-                <InputLabel>OCR VLM Model</InputLabel>
-                <Select
-                  size="small"
-                  value={
-                    ocrDisabled
-                      ? settings?.localOcrModel || "local"
-                      : ocrModel || inheritedOcrModel || ""
-                  }
-                  label="OCR VLM Model"
-                  onChange={(e) => setOcrModel(e.target.value)}
-                >
-                  {ocrDisabled ? (
-                    <MenuItem value={settings?.localOcrModel || "local"}>
-                      {settings?.localOcrModel || "Local Worker Model"}
-                    </MenuItem>
-                  ) : (
-                    (() => {
-                      const effProv = ocrProvider || inheritedOcrProvider || settings?.ocrProvider || "openrouter";
-                      if (effProv !== "local" && (!settings?.providerModelsMap?.[effProv]?.ocr || settings?.providerModelsMap?.[effProv]?.ocr.length === 0)) {
-                        return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
-                      }
-                      const models = settings?.providerModelsMap?.[effProv]?.ocr;
-                      if (models && models.length > 0) {
-                        return models.map((m: ModelEntry) => (
-                          <MenuItem key={m.id || m} value={m.id || m}>
-                            {m.name || m}{m.free ? " (Free)" : ""}
-                          </MenuItem>
-                        ));
-                      }
-                      return (settings?.ocrVlmModelList || []).map((m) => (
-                        <MenuItem key={m} value={m}>{m}</MenuItem>
-                      ));
-                    })()
-                  )}
-                </Select>
-              </FormControl>
-              {ocrModel !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setOcrModel("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl fullWidth>
-                <InputLabel>TL Provider</InputLabel>
-                <Select
-                  size="small"
-                  value={tlProvider || inheritedTlProvider || ""}
-                  label="TL Provider"
-                  onChange={(e) => setTlProvider(e.target.value)}
-                >
-                  {providers.map((p) => (
-                    <MenuItem
-                      key={p}
-                      value={p}
-                    >
-                      {p}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {tlProvider !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setTlProvider("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl fullWidth>
-                <InputLabel>TL LLM Model</InputLabel>
-                <Select
-                  size="small"
-                  value={tlModel || inheritedTlModel || ""}
-                  label="TL LLM Model"
-                  onChange={(e) => setTlModel(e.target.value)}
-                >
-                  {(() => {
-                    const effProv = tlProvider || inheritedTlProvider || settings?.tlProvider || "openrouter";
-                    const models = settings?.providerModelsMap?.[effProv]?.tl;
-                    if (models && models.length > 0) {
-                      return models.map((m: ModelEntry) => (
-                        <MenuItem key={m.id || m} value={m.id || m}>
-                          {m.name || m}{m.free ? " (Free)" : ""}
-                        </MenuItem>
-                      ));
-                    }
-                    return (settings?.tlLlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>{m}</MenuItem>
-                    ));
-                  })()}
-                </Select>
-              </FormControl>
-              {tlModel !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setTlModel("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl fullWidth>
-                <InputLabel>QA Provider</InputLabel>
-                <Select
-                  size="small"
-                  value={qaProvider || inheritedQaProvider || ""}
-                  label="QA Provider"
-                  onChange={(e) => setQaProvider(e.target.value)}
-                >
-                  {providers.map((p) => (
-                    <MenuItem
-                      key={p}
-                      value={p}
-                    >
-                      {p}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {qaProvider !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setQaProvider("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl fullWidth>
-                <InputLabel>QA Mode</InputLabel>
-                <Select
-                  size="small"
-                  value={qaMode || inheritedQaMode || ""}
-                  label="QA Mode"
-                  onChange={(e) => setQaMode(e.target.value)}
-                >
-                  {QA_MODES.map((m) => (
-                    <MenuItem
-                      key={m}
-                      value={m}
-                    >
-                      {m}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {qaMode !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setQaMode("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl
-                fullWidth
-                disabled={qaLlmDisabled}
-              >
-                <InputLabel>QA LLM Model</InputLabel>
-                <Select
-                  size="small"
-                  value={qaLlmModel || inheritedQaLlmModel || ""}
-                  label="QA LLM Model"
-                  onChange={(e) => setQaLlmModel(e.target.value)}
-                >
-                  {(() => {
-                    const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
-                    const models = settings?.providerModelsMap?.[effProv]?.qaLLM;
-                    if (models && models.length > 0) {
-                      return models.map((m: ModelEntry) => (
-                        <MenuItem key={m.id || m} value={m.id || m}>
-                          {m.name || m}{m.free ? " (Free)" : ""}
-                        </MenuItem>
-                      ));
-                    }
-                    return (settings?.qaLlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>{m}</MenuItem>
-                    ));
-                  })()}
-                </Select>
-              </FormControl>
-              {qaLlmModel !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setQaLlmModel("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl
-                fullWidth
-                disabled={qaVlmDisabled}
-              >
-                <InputLabel>QA VLM Model</InputLabel>
-                <Select
-                  size="small"
-                  value={qaVlmModel || inheritedQaVlmModel || ""}
-                  label="QA VLM Model"
-                  onChange={(e) => setQaVlmModel(e.target.value)}
-                >
-                  {(() => {
-                    const effProv = qaProvider || inheritedQaProvider || settings?.qaProvider || "openrouter";
-                    if (!settings?.providerModelsMap?.[effProv]?.qaVLM || settings?.providerModelsMap?.[effProv]?.qaVLM.length === 0) {
-                      return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
-                    }
-                    const models = settings?.providerModelsMap?.[effProv]?.qaVLM;
-                    if (models && models.length > 0) {
-                      return models.map((m: ModelEntry) => (
-                        <MenuItem key={m.id || m} value={m.id || m}>
-                          {m.name || m}{m.free ? " (Free)" : ""}
-                        </MenuItem>
-                      ));
-                    }
-                    return (settings?.qaVlmModelList || []).map((m) => (
-                      <MenuItem key={m} value={m}>{m}</MenuItem>
-                    ));
-                  })()}
-                </Select>
-              </FormControl>
-              {qaVlmModel !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setQaVlmModel("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl
-                fullWidth
-                size="small"
-                disabled={![
-                  ocrProvider || inheritedOcrProvider || settings?.ocrProvider,
-                  tlProvider || inheritedTlProvider || settings?.tlProvider,
-                  qaProvider || inheritedQaProvider || settings?.qaProvider
-                ].includes("openrouter")}
-              >
-                <InputLabel>Routing Strategy</InputLabel>
-                <Select
-                  size="small"
-                  value={routingStrategy || inheritedRoutingStrategy}
-                  label="Routing Strategy"
-                  onChange={(e) => setRoutingStrategy(e.target.value)}
-                >
-                  <MenuItem value="lowest-cost">Lowest Cost</MenuItem>
-                  <MenuItem value="highest-throughput">
-                    Highest Throughput
-                  </MenuItem>
-                </Select>
-              </FormControl>
-              {routingStrategy !== "" && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setRoutingStrategy("")}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 0.5,
-                minWidth: 0,
-              }}
-            >
-              <FormControl
-                fullWidth
-                size="small"
-              >
-                <InputLabel>Use Fallback Models</InputLabel>
-                <Select
-                  size="small"
-                  value={
-                    useFallbackModels === null
-                      ? ""
-                      : useFallbackModels
-                        ? "true"
-                        : "false"
-                  }
-                  label="Use Fallback Models"
-                  onChange={(e) =>
-                    setUseFallbackModels(
-                      e.target.value === ""
-                        ? null
-                        : e.target.value === "true"
-                    )
-                  }
-                >
-                  <MenuItem value="">
-                    <em>Inherit ({settings?.useFallbackModels !== false ? "Enabled" : "Disabled"})</em>
-                  </MenuItem>
-                  <MenuItem value="true">Enabled</MenuItem>
-                  <MenuItem value="false">Disabled</MenuItem>
-                </Select>
-              </FormControl>
-              {useFallbackModels !== null && (
-                <IconButton
-                  size="small"
-                  sx={{ mt: 0.5 }}
-                  onClick={() => setUseFallbackModels(null)}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-          </AccordionDetails>
-        </Accordion>
+          onToggle={() => setShowOverrides(!showOverrides)}
+          value={overridesValue}
+          onChange={handleOverrideChange}
+          settings={settings}
+          inherited={{
+            ocrProvider: settings?.ocrProvider,
+            ocrModel: settings?.ocrModel,
+            tlProvider: settings?.tlProvider,
+            tlModel: settings?.tlModel,
+            qaProvider: settings?.qaProvider,
+            qaMode: settings?.qaMode,
+            qaLlmModel: settings?.qaLlmModel,
+            qaVlmModel: settings?.qaVlmModel,
+            routingStrategy: settings?.routingStrategy,
+            useFallbackModels: settings?.useFallbackModels,
+          }}
+        />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>

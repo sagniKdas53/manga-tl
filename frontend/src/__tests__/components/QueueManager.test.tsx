@@ -112,7 +112,12 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Clear Queue")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Clear Pending/Failed Queue"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Kill/Flush Queue (Force)"),
+      ).toBeInTheDocument();
       expect(screen.getByText("OCR Processing")).toBeInTheDocument();
       expect(screen.getByText("Translation")).toBeInTheDocument();
     });
@@ -124,6 +129,51 @@ describe("QueueManager", () => {
     expect(screen.getAllByLabelText("Pause")[0]).toBeInTheDocument();
     expect(screen.getAllByLabelText("Retry").length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText("Delete").length).toBeGreaterThan(0);
+  });
+
+  it("force kills/flushes the whole queue via /api/jobs/clear?force=true", async () => {
+    (safeFetch as Mock).mockImplementation(
+      (url: string, init?: RequestInit) => {
+        if (url === "/api/jobs") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ isPaused: false, jobs: mockJobs }),
+          });
+        }
+        if (url === "/api/jobs/clear?force=true" && init?.method === "DELETE") {
+          return Promise.resolve({ ok: true });
+        }
+        return Promise.reject(new Error("Unknown URL"));
+      },
+    );
+
+    render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Kill/Flush Queue (Force)"),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText("Kill/Flush Queue (Force)"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          /force delete ALL jobs, including those currently processing/i,
+        ),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Confirm"));
+
+    await waitFor(() => {
+      expect(safeFetch).toHaveBeenCalledWith(
+        "/api/jobs/clear?force=true",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
   });
 
   it("toggles global queue status (pause/resume) with modal", async () => {

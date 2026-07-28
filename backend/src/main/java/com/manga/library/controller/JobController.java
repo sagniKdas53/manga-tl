@@ -70,10 +70,15 @@ public class JobController {
 
   @DeleteMapping("/clear")
   @org.springframework.transaction.annotation.Transactional
-  public ResponseEntity<?> clearQueue() {
+  public ResponseEntity<?> clearQueue(
+      @RequestParam(required = false, defaultValue = "false") boolean force) {
     try {
+      List<String> statusesToClear = force 
+          ? List.of("PENDING", "PAUSED", "FAILED", "PROCESSING")
+          : List.of("PENDING", "PAUSED", "FAILED");
+          
       List<Job> jobsToClear =
-          jobRepository.findByStatusInOrderByCreatedAtAsc(List.of("PENDING", "PAUSED", "FAILED"));
+          jobRepository.findByStatusInOrderByCreatedAtAsc(statusesToClear);
       jobRepository.deleteAll(java.util.Objects.requireNonNull(jobsToClear));
 
       // Clear Redis queues

@@ -21,6 +21,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LoopIcon from "@mui/icons-material/Loop";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
@@ -501,6 +502,37 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     });
   };
 
+  const handleKillQueue = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Kill/Flush Queue",
+      message:
+        "Are you sure you want to KILL the queue? This will force delete ALL jobs, including those currently processing.",
+      isDangerous: true,
+      action: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        if (!token) return;
+        try {
+          const res = await safeFetch("/api/jobs/clear?force=true", {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            setJobs([]);
+            showToast("Queue forcefully killed", "success");
+          } else if (res.status === 403) {
+            showToast("You don't have permission to kill the queue.", "error");
+          } else {
+            showToast("Failed to kill queue", "error");
+          }
+        } catch (err) {
+          console.error("Failed to kill queue", err);
+          showToast("Error killing queue", "error");
+        }
+      },
+    });
+  };
+
   const handlePauseResumeQueue = () => {
     if (isPaused) {
       performPauseResumeQueue();
@@ -710,12 +742,21 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
               </Tooltip>
             </Box>
             <Box sx={{ display: "flex", gap: 1 }}>
-              <Tooltip title="Clear Queue">
+              <Tooltip title="Clear Pending/Failed Queue">
                 <IconButton
                   size="small"
                   onClick={handleClearQueue}
                 >
                   <ClearAllIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Kill/Flush Queue (Force)">
+                <IconButton
+                  size="small"
+                  onClick={handleKillQueue}
+                  color="error"
+                >
+                  <DeleteForeverIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title={isPaused ? "Resume Queue" : "Pause Queue"}>
