@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
@@ -23,6 +23,74 @@ export interface SettingsModalProps {
 
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
+const PROVIDER_REFETCH_DELAY_MS = 2000;
+const MAX_PROVIDER_REFETCH_ATTEMPTS = 5;
+
+/** A provider is unavailable when unset or not among the active providers. */
+const isProviderUnavailable = (
+  value: string | undefined,
+  activeProviders: string[],
+) => !value || (activeProviders.length > 0 && !activeProviders.includes(value));
+
+const isAnyProviderUnavailable = (data: SystemSettingsDto) => {
+  const activeProviders = data.activeProviders || [];
+  return (
+    isProviderUnavailable(data.tlProvider, activeProviders) ||
+    isProviderUnavailable(data.qaProvider, activeProviders)
+  );
+};
+
+const isCapabilityMissing = (
+  providerMap: SystemSettingsDto["providerModelsMap"],
+  provider: string,
+  capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
+  legacyList: string[] | undefined
+) => {
+  if (providerMap) {
+    const models = providerMap[provider]?.[capability];
+    return !models || models.length === 0;
+  }
+  return !legacyList || legacyList.length === 0;
+};
+
+const renderModelOptions = (
+  providerMap: SystemSettingsDto["providerModelsMap"],
+  provider: string,
+  capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
+  legacyList: string[] | undefined
+) => {
+  let models: { id: string; name: string; free?: boolean }[] = [];
+  if (providerMap) {
+    models = providerMap[provider]?.[capability] || [];
+  } else if (legacyList) {
+    models = legacyList.map((m) => ({ id: m, name: m }));
+  }
+
+  if (models.length === 0) {
+    return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+  }
+
+  return models.map((m) => (
+    <MenuItem key={m.id} value={m.id}>
+      {m.name}{m.free ? " (Free)" : ""}
+    </MenuItem>
+  ));
+};
+
+/**
+ * SettingsModal component allows users to configure global system defaults.
+ * 
+ * Model Resolution Logic:
+ * The frontend receives provider capabilities via `providerModelsMap`. 
+ * 
+ * - If a provider has a capability array (even if empty `[]`), it is considered the absolute source of truth.
+ *   For example, if `neurometric` has `qaVLM: []`, it means VLM is definitively not supported by Neurometric.
+ * - If the backend does not provide `providerModelsMap` (legacy) or completely omits a capability array, 
+ *   the UI will safely fall back to legacy global configuration lists (e.g., `qaVlmModelList`).
+ * 
+ * This ensures that modern backend configurations take precedence and capabilities missing from
+ * a provider are cleanly greyed out in the interface as "Capability Missing".
+ */
 const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
@@ -36,25 +104,92 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const providers = settings?.activeProviders || [];
   const ocrProviders = settings?.activeOcrProviders || [];
 
+  const tlProviderUnavailable = isProviderUnavailable(
+    settings?.tlProvider,
+    providers,
+  );
+  const qaProviderUnavailable = isProviderUnavailable(
+    settings?.qaProvider,
+    providers,
+  );
+
+  const refetchAttemptsRef = useRef(0);
+  const refetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savingRef = useRef(false);
+
   useEffect(() => {
-    if (isOpen) {
+    savingRef.current = saving;
+  }, [saving]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    refetchAttemptsRef.current = 0;
+
+    // Silently refetch settings in the background while the backend has not
+    // published usable providers yet. Merges only the provider-related fields
+    // so in-progress user edits are never clobbered.
+    const scheduleRefetch = () => {
+      if (refetchAttemptsRef.current >= MAX_PROVIDER_REFETCH_ATTEMPTS) return;
+      refetchAttemptsRef.current += 1;
+      refetchTimeoutRef.current = setTimeout(
+        refetchSettings,
+        PROVIDER_REFETCH_DELAY_MS,
+      );
+    };
+
+    const refetchSettings = () => {
+      if (savingRef.current) return;
       safeFetch("/api/settings", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch settings");
-          return res.json();
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: SystemSettingsDto | null) => {
+          if (data) {
+            setSettings((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    tlProvider: data.tlProvider ?? prev.tlProvider,
+                    qaProvider: data.qaProvider ?? prev.qaProvider,
+                    activeProviders:
+                      data.activeProviders ?? prev.activeProviders,
+                    providerModelsMap:
+                      data.providerModelsMap ?? prev.providerModelsMap,
+                  }
+                : prev,
+            );
+          }
+          if (!data || isAnyProviderUnavailable(data)) scheduleRefetch();
         })
-        .then((data) => {
-          setSettings(data);
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error(err);
-          showToast("Failed to load settings", "error");
-          setLoading(false);
+        .catch(() => {
+          scheduleRefetch();
         });
-    }
+    };
+
+    safeFetch("/api/settings", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch settings");
+        return res.json();
+      })
+      .then((data) => {
+        setSettings(data);
+        setLoading(false);
+        if (isAnyProviderUnavailable(data)) scheduleRefetch();
+      })
+      .catch((err) => {
+        console.error(err);
+        showToast("Failed to load settings", "error");
+        setLoading(false);
+      });
+
+    return () => {
+      if (refetchTimeoutRef.current) {
+        clearTimeout(refetchTimeoutRef.current);
+        refetchTimeoutRef.current = null;
+      }
+    };
   }, [isOpen, token, showToast]);
 
   const handleSave = async () => {
@@ -90,6 +225,41 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     value: SystemSettingsDto[keyof SystemSettingsDto],
   ) => {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const getFirstValidModel = (
+    provider: string,
+    capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
+    legacyList: string[] | undefined
+  ) => {
+    if (settings?.providerModelsMap) {
+      const models = settings.providerModelsMap[provider]?.[capability];
+      if (models && models.length > 0) return models[0].id;
+      return null;
+    }
+    if (legacyList && legacyList.length > 0) return legacyList[0];
+    return null;
+  };
+
+  const handleProviderChange = (field: "ocrProvider" | "tlProvider" | "qaProvider", value: string) => {
+    handleChange(field, value);
+
+    if (field === "ocrProvider") {
+      if (value === "local") {
+        handleChange("ocrModel", "");
+      } else {
+        const first = getFirstValidModel(value, "ocr", settings?.ocrVlmModelList);
+        handleChange("ocrModel", first || "");
+      }
+    } else if (field === "tlProvider") {
+      const first = getFirstValidModel(value, "tl", settings?.tlLlmModelList);
+      handleChange("tlModel", first || "");
+    } else if (field === "qaProvider") {
+      const firstLlm = getFirstValidModel(value, "qaLLM", settings?.qaLlmModelList);
+      handleChange("qaLlmModel", firstLlm || "");
+      const firstVlm = getFirstValidModel(value, "qaVLM", settings?.qaVlmModelList);
+      handleChange("qaVlmModel", firstVlm || "");
+    }
   };
 
   return (
@@ -182,7 +352,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   value={
                     settings.ocrProvider === "local"
                       ? settings.localOcrModel || "local"
-                      : (!settings.providerModelsMap?.[settings.ocrProvider]?.ocr || settings.providerModelsMap?.[settings.ocrProvider]?.ocr.length === 0)
+                      : isCapabilityMissing(settings.providerModelsMap, settings.ocrProvider, "ocr", settings.ocrVlmModelList)
                         ? "N/A"
                         : settings.ocrModel || ""
                   }
@@ -193,20 +363,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <MenuItem value={settings.localOcrModel || "local"}>
                       {settings.localOcrModel || "Local Worker Model"}
                     </MenuItem>
-                  ) : (!settings.providerModelsMap?.[settings.ocrProvider]?.ocr || settings.providerModelsMap?.[settings.ocrProvider]?.ocr.length === 0) ? (
-                    <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>
                   ) : (
-                    (settings.providerModelsMap?.[settings.ocrProvider]?.ocr || []).map((m) => (
-                      <MenuItem key={m.id} value={m.id}>
-                        {m.name}{m.free ? " (Free)" : ""}
-                      </MenuItem>
-                    )).concat(
-                      (!settings.providerModelsMap?.[settings.ocrProvider]?.ocr && settings.ocrVlmModelList)
-                        ? settings.ocrVlmModelList.map((m) => (
-                            <MenuItem key={m} value={m}>{m}</MenuItem>
-                          ))
-                        : []
-                    )
+                    renderModelOptions(settings.providerModelsMap, settings.ocrProvider, "ocr", settings.ocrVlmModelList)
                   )}
                 </Select>
               </FormControl>
@@ -234,15 +392,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <InputLabel>Global Translation Provider</InputLabel>
                 <Select
-                  value={settings.tlProvider || ""}
+                  value={tlProviderUnavailable ? "" : settings.tlProvider}
                   label="Global Translation Provider"
-                  onChange={(e) => {
-                    const newProv = e.target.value;
-                    const tlModels = settings.providerModelsMap?.[newProv]?.tl || [];
-                    const defaultModel = tlModels.length > 0 ? tlModels[0].id : (settings.tlModel || "");
-                    setSettings((prev) => prev ? { ...prev, tlProvider: newProv, tlModel: defaultModel } : null);
-                  }}
+                  onChange={(e) => handleProviderChange("tlProvider", e.target.value)}
                 >
+                  {tlProviderUnavailable && (
+                    <MenuItem
+                      value=""
+                      disabled
+                    >
+                      Not Available
+                    </MenuItem>
+                  )}
                   {providers.map((p) => (
                     <MenuItem
                       key={p}
@@ -262,21 +423,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <InputLabel>Global Translation LLM Model</InputLabel>
                 <Select
-                  value={settings.tlModel || ""}
+                  value={
+                    isCapabilityMissing(settings.providerModelsMap, settings.tlProvider, "tl", settings.tlLlmModelList)
+                      ? "N/A"
+                      : settings.tlModel || ""
+                  }
                   label="Global Translation LLM Model"
                   onChange={(e) => handleChange("tlModel", e.target.value)}
                 >
-                  {(settings.providerModelsMap?.[settings.tlProvider]?.tl || []).map((m) => (
-                    <MenuItem key={m.id} value={m.id}>
-                      {m.name}{m.free ? " (Free)" : ""}
-                    </MenuItem>
-                  )).concat(
-                    (!settings.providerModelsMap?.[settings.tlProvider]?.tl && settings.tlLlmModelList)
-                      ? settings.tlLlmModelList.map((m) => (
-                          <MenuItem key={m} value={m}>{m}</MenuItem>
-                        ))
-                      : []
-                  )}
+                  {renderModelOptions(settings.providerModelsMap, settings.tlProvider, "tl", settings.tlLlmModelList)}
                 </Select>
               </FormControl>
             </Grid>
@@ -303,17 +458,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <InputLabel>Global QA Provider</InputLabel>
                 <Select
-                  value={settings.qaProvider || ""}
+                  value={qaProviderUnavailable ? "" : settings.qaProvider}
                   label="Global QA Provider"
-                  onChange={(e) => {
-                    const newProv = e.target.value;
-                    const qaLlmModels = settings.providerModelsMap?.[newProv]?.qaLLM || [];
-                    const qaVlmModels = settings.providerModelsMap?.[newProv]?.qaVLM || [];
-                    const defaultLlm = qaLlmModels.length > 0 ? qaLlmModels[0].id : (settings.qaLlmModel || "");
-                    const defaultVlm = qaVlmModels.length > 0 ? qaVlmModels[0].id : (settings.qaVlmModel || "");
-                    setSettings((prev) => prev ? { ...prev, qaProvider: newProv, qaLlmModel: defaultLlm, qaVlmModel: defaultVlm } : null);
-                  }}
+                  onChange={(e) => handleProviderChange("qaProvider", e.target.value)}
                 >
+                  {qaProviderUnavailable && (
+                    <MenuItem
+                      value=""
+                      disabled
+                    >
+                      Not Available
+                    </MenuItem>
+                  )}
                   {providers.map((p) => (
                     <MenuItem
                       key={p}
@@ -323,6 +479,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
+                {(tlProviderUnavailable || qaProviderUnavailable) && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                  >
+                    Providers not available yet — retrying in the background…
+                  </Typography>
+                )}
               </FormControl>
             </Grid>
 
@@ -359,21 +523,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <InputLabel>Global QA LLM Model</InputLabel>
                 <Select
-                  value={settings.qaLlmModel || ""}
+                  value={
+                    isCapabilityMissing(settings.providerModelsMap, settings.qaProvider, "qaLLM", settings.qaLlmModelList)
+                      ? "N/A"
+                      : settings.qaLlmModel || ""
+                  }
                   label="Global QA LLM Model"
                   onChange={(e) => handleChange("qaLlmModel", e.target.value)}
                 >
-                  {(settings.providerModelsMap?.[settings.qaProvider]?.qaLLM || []).map((m) => (
-                    <MenuItem key={m.id} value={m.id}>
-                      {m.name}{m.free ? " (Free)" : ""}
-                    </MenuItem>
-                  )).concat(
-                    (!settings.providerModelsMap?.[settings.qaProvider]?.qaLLM && settings.qaLlmModelList)
-                      ? settings.qaLlmModelList.map((m) => (
-                          <MenuItem key={m} value={m}>{m}</MenuItem>
-                        ))
-                      : []
-                  )}
+                  {renderModelOptions(settings.providerModelsMap, settings.qaProvider, "qaLLM", settings.qaLlmModelList)}
                 </Select>
               </FormControl>
             </Grid>
@@ -389,28 +547,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <InputLabel>Global QA VLM Model</InputLabel>
                 <Select
                   value={
-                    settings.qaMode === "llm" || settings.qaMode === "none" || (!settings.providerModelsMap?.[settings.qaProvider]?.qaVLM || settings.providerModelsMap?.[settings.qaProvider]?.qaVLM.length === 0)
+                    isCapabilityMissing(settings.providerModelsMap, settings.qaProvider, "qaVLM", settings.qaVlmModelList)
                       ? "N/A"
                       : settings.qaVlmModel || ""
                   }
                   label="Global QA VLM Model"
                   onChange={(e) => handleChange("qaVlmModel", e.target.value)}
                 >
-                  {(!settings.providerModelsMap?.[settings.qaProvider]?.qaVLM || settings.providerModelsMap?.[settings.qaProvider]?.qaVLM.length === 0) ? (
-                    <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>
-                  ) : (
-                    (settings.providerModelsMap?.[settings.qaProvider]?.qaVLM || []).map((m) => (
-                      <MenuItem key={m.id} value={m.id}>
-                        {m.name}{m.free ? " (Free)" : ""}
-                      </MenuItem>
-                    )).concat(
-                      (!settings.providerModelsMap?.[settings.qaProvider]?.qaVLM && settings.qaVlmModelList)
-                        ? settings.qaVlmModelList.map((m) => (
-                            <MenuItem key={m} value={m}>{m}</MenuItem>
-                          ))
-                        : []
-                    )
-                  )}
+                  {renderModelOptions(settings.providerModelsMap, settings.qaProvider, "qaVLM", settings.qaVlmModelList)}
                 </Select>
               </FormControl>
             </Grid>

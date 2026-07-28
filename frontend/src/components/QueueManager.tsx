@@ -21,7 +21,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LoopIcon from "@mui/icons-material/Loop";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
+import PlaylistRemoveIcon from "@mui/icons-material/PlaylistRemove";
 import { safeFetch } from "../utils";
 import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
@@ -34,7 +34,7 @@ interface Job {
   type: string;
   imageId: string;
   status:
-    "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
+  "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
   payload: string | null;
   error: string | null;
   attempt: number;
@@ -269,7 +269,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     title: "",
     message: "",
     isDangerous: false,
-    action: () => {},
+    action: () => { },
   });
 
   useDependencyLogger(
@@ -466,7 +466,16 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       } else if (event.type === "queue_resumed") {
         setIsPaused(false);
       } else if (event.type === "queue_cleared") {
-        setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
+        try {
+          const data = JSON.parse(event.data);
+          if (data?.force === true) {
+            setJobs([]);
+          } else {
+            setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
+          }
+        } catch {
+          setJobs((prev) => prev.filter((j) => j.status === "PROCESSING"));
+        }
       }
     });
   }, [token, subscribe]);
@@ -474,7 +483,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
   const handleClearQueue = () => {
     setConfirmModal({
       isOpen: true,
-      title: "Clear Queue",
+      title: "Clear Pending/Failed Jobs",
       message:
         "Are you sure you want to clear the queue? This will delete all pending, paused, and failed jobs.",
       isDangerous: true,
@@ -502,12 +511,12 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     });
   };
 
-  const handleKillQueue = () => {
+  const handleForceClearQueue = () => {
     setConfirmModal({
       isOpen: true,
-      title: "Kill/Flush Queue",
+      title: "Force Clear Queue",
       message:
-        "Are you sure you want to KILL the queue? This will force delete ALL jobs, including those currently processing.",
+        "Are you sure you want to immediately clear ALL jobs, including those currently running? This action cannot be undone.",
       isDangerous: true,
       action: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
@@ -519,15 +528,18 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
           });
           if (res.ok) {
             setJobs([]);
-            showToast("Queue forcefully killed", "success");
+            showToast("Queue force cleared successfully", "success");
           } else if (res.status === 403) {
-            showToast("You don't have permission to kill the queue.", "error");
+            showToast(
+              "You don't have permission to force clear the queue.",
+              "error",
+            );
           } else {
-            showToast("Failed to kill queue", "error");
+            showToast("Failed to force clear queue", "error");
           }
         } catch (err) {
-          console.error("Failed to kill queue", err);
-          showToast("Error killing queue", "error");
+          console.error("Failed to force clear queue", err);
+          showToast("Error force clearing queue", "error");
         }
       },
     });
@@ -742,21 +754,20 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
               </Tooltip>
             </Box>
             <Box sx={{ display: "flex", gap: 1 }}>
-              <Tooltip title="Clear Pending/Failed Queue">
+              <Tooltip title="Force Clear Queue">
+                <IconButton
+                  size="small"
+                  onClick={handleForceClearQueue}
+                >
+                  <PlaylistRemoveIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Clear Pending/Failed Jobs">
                 <IconButton
                   size="small"
                   onClick={handleClearQueue}
                 >
                   <ClearAllIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Kill/Flush Queue (Force)">
-                <IconButton
-                  size="small"
-                  onClick={handleKillQueue}
-                  color="error"
-                >
-                  <DeleteForeverIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title={isPaused ? "Resume Queue" : "Pause Queue"}>
@@ -1138,7 +1149,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     sx={{
                                       visibility:
                                         job.status === "PENDING" ||
-                                        job.status === "PAUSED"
+                                          job.status === "PAUSED"
                                           ? "visible"
                                           : "hidden",
                                       width: 28,

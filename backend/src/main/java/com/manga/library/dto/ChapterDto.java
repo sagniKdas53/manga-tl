@@ -20,6 +20,7 @@ public record ChapterDto(
     String routingStrategy,
     Boolean useContextMemory,
     Boolean useFallbackModels,
+    Boolean resolvedUseFallbackModels,
     Integer pageCount,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,

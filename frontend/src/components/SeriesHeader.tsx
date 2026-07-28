@@ -212,12 +212,20 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   <Chip
                     size="small"
                     label={
-                      series.useFallbackModels === false
-                        ? "Disabled"
-                        : "Enabled"
+                      series.useFallbackModels === null
+                        ? series.resolvedUseFallbackModels
+                          ? "Enabled (inherited)"
+                          : "Disabled (inherited)"
+                        : series.resolvedUseFallbackModels
+                          ? "Enabled"
+                          : "Disabled"
                     }
                     color={
-                      series.useFallbackModels === false ? "warning" : "default"
+                      series.useFallbackModels === null
+                        ? "default"
+                        : series.resolvedUseFallbackModels
+                          ? "success"
+                          : "warning"
                     }
                   />
                 </Grid>

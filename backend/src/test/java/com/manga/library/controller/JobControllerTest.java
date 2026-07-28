@@ -85,6 +85,40 @@ public class JobControllerTest {
 
     verify(jobRepository).deleteAll(List.of(job1, job2));
     verify(redisTemplate).delete(anyList());
+    verify(sseService)
+        .emitEventToAllUsers(
+            "queue_cleared",
+            Map.of("event", "queue_cleared", "clearedCount", 2, "force", false));
+  }
+
+  @Test
+  public void testClearQueueForce() throws Exception {
+    Job job1 =
+        new Job() {
+          {
+            setId("job1");
+            setType("ocr");
+            setStatus("FAILED");
+          }
+        };
+    Job job2 =
+        new Job() {
+          {
+            setId("job2");
+            setType("ocr");
+            setStatus("PROCESSING");
+          }
+        };
+    when(jobRepository.findByStatusInOrderByCreatedAtAsc(any())).thenReturn(List.of(job1, job2));
+
+    mockMvc.perform(delete("/api/jobs/clear").param("force", "true")).andExpect(status().isOk());
+
+    verify(jobRepository).deleteAll(List.of(job1, job2));
+    verify(redisTemplate).delete(anyList());
+    verify(sseService)
+        .emitEventToAllUsers(
+            "queue_cleared",
+            Map.of("event", "queue_cleared", "clearedCount", 2, "force", true));
   }
 
   @Test

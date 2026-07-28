@@ -211,14 +211,20 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                     <Chip
                       size="small"
                       label={
-                        selectedChapter.useFallbackModels === false
-                          ? "Disabled"
-                          : "Enabled"
+                        selectedChapter.useFallbackModels === null
+                          ? selectedChapter.resolvedUseFallbackModels
+                            ? "Enabled (inherited)"
+                            : "Disabled (inherited)"
+                          : selectedChapter.resolvedUseFallbackModels
+                            ? "Enabled"
+                            : "Disabled"
                       }
                       color={
-                        selectedChapter.useFallbackModels === false
-                          ? "warning"
-                          : "default"
+                        selectedChapter.useFallbackModels === null
+                          ? "default"
+                          : selectedChapter.resolvedUseFallbackModels
+                            ? "success"
+                            : "warning"
                       }
                     />
                   </Grid>

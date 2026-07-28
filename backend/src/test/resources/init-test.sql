@@ -31,7 +31,7 @@ CREATE TABLE public.series (
     tl_provider character varying(255),
     updated_at timestamp(6) with time zone NOT NULL,
     routing_strategy character varying(255),
-    use_fallback_models boolean DEFAULT true,
+    use_fallback_models boolean,
     created_by uuid,
     CONSTRAINT series_pkey PRIMARY KEY (id),
     CONSTRAINT fkit9xuhijj1sr30xihwikew938 FOREIGN KEY (created_by) REFERENCES public.users(id)
@@ -55,7 +55,7 @@ CREATE TABLE public.chapters (
     tl_provider character varying(255),
     updated_at timestamp(6) with time zone NOT NULL,
     use_context_memory boolean DEFAULT true NOT NULL,
-    use_fallback_models boolean DEFAULT true,
+    use_fallback_models boolean,
     routing_strategy character varying(255),
     series_id uuid NOT NULL,
     CONSTRAINT chapters_pkey PRIMARY KEY (id),

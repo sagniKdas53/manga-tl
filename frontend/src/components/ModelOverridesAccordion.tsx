@@ -12,7 +12,7 @@ import Select from "@mui/material/Select";
 import Typography from "@mui/material/Typography";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import type { ModelEntry, SystemSettingsDto } from "../types";
+import type { SystemSettingsDto } from "../types";
 
 const QA_MODES = ["auto", "llm", "vlm", "hybrid", "none"];
 
@@ -73,6 +73,43 @@ interface ModelOverridesAccordionProps {
   useResolvedQaModeForDisable?: boolean;
 }
 
+const isCapabilityMissing = (
+  providerMap: SystemSettingsDto["providerModelsMap"] | undefined,
+  provider: string,
+  capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
+  legacyList: string[] | undefined
+) => {
+  if (providerMap) {
+    const models = providerMap[provider]?.[capability];
+    return !models || models.length === 0;
+  }
+  return !legacyList || legacyList.length === 0;
+};
+
+const renderModelOptions = (
+  providerMap: SystemSettingsDto["providerModelsMap"] | undefined,
+  provider: string,
+  capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
+  legacyList: string[] | undefined
+) => {
+  let models: { id: string; name: string; free?: boolean }[] = [];
+  if (providerMap) {
+    models = providerMap[provider]?.[capability] || [];
+  } else if (legacyList) {
+    models = legacyList.map((m) => ({ id: m, name: m }));
+  }
+
+  if (models.length === 0) {
+    return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+  }
+
+  return models.map((m) => (
+    <MenuItem key={m.id} value={m.id}>
+      {m.name}{m.free ? " (Free)" : ""}
+    </MenuItem>
+  ));
+};
+
 const fieldBoxSx = {
   display: "flex",
   alignItems: "flex-start",
@@ -80,6 +117,24 @@ const fieldBoxSx = {
   minWidth: 0,
 } as const;
 
+/**
+ * ModelOverridesAccordion allows setting overrides for Series or Chapter models.
+ * 
+ * Model Resolution Logic:
+ * The frontend receives provider capabilities via `providerModelsMap`. 
+ * 
+ * - If a provider has a capability array (even if empty `[]`), it is considered the absolute source of truth.
+ *   For example, if `neurometric` has `qaVLM: []`, it means VLM is definitively not supported by Neurometric.
+ * - If the backend does not provide `providerModelsMap` (legacy) or completely omits a capability array, 
+ *   the UI will safely fall back to legacy global configuration lists (e.g., `qaVlmModelList`).
+ * 
+ * This ensures that modern backend configurations take precedence and capabilities missing from
+ * 
+ * QA Mode Routing Logic:
+ * - When `qaMode` is "auto", the backend intelligently routes to VLM if available.
+ * - If VLM is not available for the selected provider (e.g., Neurometric), it gracefully falls back to LLM.
+ * - This prevents failures and future-proofs against providers that only offer one type of model.
+ */
 const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
   value,
   onChange,
@@ -92,6 +147,51 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
   localOcrModelLabel = "Local Worker Model",
   useResolvedQaModeForDisable = true,
 }) => {
+  const getFirstValidModel = (
+    provider: string,
+    capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
+    legacyList: string[] | undefined
+  ) => {
+    if (settings?.providerModelsMap) {
+      const models = settings.providerModelsMap[provider]?.[capability];
+      if (models && models.length > 0) return models[0].id;
+      return null;
+    }
+    if (legacyList && legacyList.length > 0) return legacyList[0];
+    return null;
+  };
+
+  const handleProviderChange = (field: "ocrProvider" | "tlProvider" | "qaProvider", value: string) => {
+    onChange(field, value);
+    
+    if (value === "") {
+      if (field === "ocrProvider") onChange("ocrModel", "");
+      if (field === "tlProvider") onChange("tlModel", "");
+      if (field === "qaProvider") {
+        onChange("qaLlmModel", "");
+        onChange("qaVlmModel", "");
+      }
+      return;
+    }
+
+    if (field === "ocrProvider") {
+      if (value === "local") {
+        onChange("ocrModel", "");
+      } else {
+        const first = getFirstValidModel(value, "ocr", settings?.ocrVlmModelList);
+        onChange("ocrModel", first || "");
+      }
+    } else if (field === "tlProvider") {
+      const first = getFirstValidModel(value, "tl", settings?.tlLlmModelList);
+      onChange("tlModel", first || "");
+    } else if (field === "qaProvider") {
+      const firstLlm = getFirstValidModel(value, "qaLLM", settings?.qaLlmModelList);
+      onChange("qaLlmModel", firstLlm || "");
+      const firstVlm = getFirstValidModel(value, "qaVLM", settings?.qaVlmModelList);
+      onChange("qaVlmModel", firstVlm || "");
+    }
+  };
+
   const {
     ocrProvider,
     ocrModel,
@@ -127,11 +227,18 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
   const inheritedCount = overrideFields.length + 1 - overriddenCount;
 
   const ocrDisabled = (ocrProvider || inherited.ocrProvider) === "local";
+  const effOcrProv = ocrProvider || inherited.ocrProvider || settings?.ocrProvider || "openrouter";
+  const ocrCapabilityMissing = effOcrProv !== "local" && isCapabilityMissing(settings?.providerModelsMap, effOcrProv, "ocr", settings?.ocrVlmModelList);
   const disableQaMode = useResolvedQaModeForDisable
     ? qaMode || inherited.qaMode || ""
     : qaMode;
+  const effTlProv = tlProvider || inherited.tlProvider || settings?.tlProvider || "openrouter";
+  const tlCapabilityMissing = isCapabilityMissing(settings?.providerModelsMap, effTlProv, "tl", settings?.tlLlmModelList);
   const qaLlmDisabled = disableQaMode === "vlm" || disableQaMode === "none";
   const qaVlmDisabled = disableQaMode === "llm" || disableQaMode === "none";
+  const effQaProv = qaProvider || inherited.qaProvider || settings?.qaProvider || "openrouter";
+  const qaLlmCapabilityMissing = isCapabilityMissing(settings?.providerModelsMap, effQaProv, "qaLLM", settings?.qaLlmModelList);
+  const qaVlmCapabilityMissing = isCapabilityMissing(settings?.providerModelsMap, effQaProv, "qaVLM", settings?.qaVlmModelList);
 
   // When inheriting, display the inherited value so the select is never blank.
   // Picking an option sets an explicit override; the X button reverts to inherit.
@@ -168,7 +275,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
               size="small"
               value={ocrProvider || inherited.ocrProvider || ""}
               label="OCR Provider"
-              onChange={(e) => onChange("ocrProvider", e.target.value)}
+              onChange={(e) => handleProviderChange("ocrProvider", e.target.value)}
             >
               {ocrProviders.map((p) => (
                 <MenuItem
@@ -184,25 +291,18 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
             <IconButton
               size="small"
               sx={{ mt: 0.5 }}
-              onClick={() => onChange("ocrProvider", "")}
+              onClick={() => handleProviderChange("ocrProvider", "")}
             >
               <CloseIcon fontSize="small" />
             </IconButton>
           )}
         </Box>
         <Box sx={fieldBoxSx}>
-          <FormControl
-            fullWidth
-            disabled={ocrDisabled}
-          >
+          <FormControl fullWidth disabled={ocrDisabled || ocrCapabilityMissing}>
             <InputLabel>{ocrModelLabel}</InputLabel>
             <Select
               size="small"
-              value={
-                ocrDisabled
-                  ? settings?.localOcrModel || "local"
-                  : ocrModel || inherited.ocrModel || ""
-              }
+              value={ocrDisabled ? (settings?.localOcrModel || "local") : ocrCapabilityMissing ? "N/A" : (ocrModel || inherited.ocrModel || "")}
               label={ocrModelLabel}
               onChange={(e) => onChange("ocrModel", e.target.value)}
             >
@@ -211,47 +311,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
                   {settings?.localOcrModel || localOcrModelLabel}
                 </MenuItem>
               ) : (
-                (() => {
-                  const effProv =
-                    ocrProvider ||
-                    inherited.ocrProvider ||
-                    settings?.ocrProvider ||
-                    "openrouter";
-                  if (
-                    effProv !== "local" &&
-                    (!settings?.providerModelsMap?.[effProv]?.ocr ||
-                      settings?.providerModelsMap?.[effProv]?.ocr.length === 0)
-                  ) {
-                    return (
-                      <MenuItem
-                        value="N/A"
-                        disabled
-                      >
-                        N/A (Capability Missing)
-                      </MenuItem>
-                    );
-                  }
-                  const models = settings?.providerModelsMap?.[effProv]?.ocr;
-                  if (models && models.length > 0) {
-                    return models.map((m: ModelEntry) => (
-                      <MenuItem
-                        key={m.id || m}
-                        value={m.id || m}
-                      >
-                        {m.name || m}
-                        {m.free ? " (Free)" : ""}
-                      </MenuItem>
-                    ));
-                  }
-                  return (settings?.ocrVlmModelList || []).map((m) => (
-                    <MenuItem
-                      key={m}
-                      value={m}
-                    >
-                      {m}
-                    </MenuItem>
-                  ));
-                })()
+                renderModelOptions(settings?.providerModelsMap, effOcrProv, "ocr", settings?.ocrVlmModelList)
               )}
             </Select>
           </FormControl>
@@ -272,7 +332,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
               size="small"
               value={tlProvider || inherited.tlProvider || ""}
               label="TL Provider"
-              onChange={(e) => onChange("tlProvider", e.target.value)}
+              onChange={(e) => handleProviderChange("tlProvider", e.target.value)}
             >
               {providers.map((p) => (
                 <MenuItem
@@ -288,48 +348,22 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
             <IconButton
               size="small"
               sx={{ mt: 0.5 }}
-              onClick={() => onChange("tlProvider", "")}
+              onClick={() => handleProviderChange("tlProvider", "")}
             >
               <CloseIcon fontSize="small" />
             </IconButton>
           )}
         </Box>
         <Box sx={fieldBoxSx}>
-          <FormControl fullWidth>
+          <FormControl fullWidth disabled={tlCapabilityMissing}>
             <InputLabel>{tlModelLabel}</InputLabel>
             <Select
               size="small"
-              value={tlModel || inherited.tlModel || ""}
+              value={tlCapabilityMissing ? "N/A" : (tlModel || inherited.tlModel || "")}
               label={tlModelLabel}
               onChange={(e) => onChange("tlModel", e.target.value)}
             >
-              {(() => {
-                const effProv =
-                  tlProvider ||
-                  inherited.tlProvider ||
-                  settings?.tlProvider ||
-                  "openrouter";
-                const models = settings?.providerModelsMap?.[effProv]?.tl;
-                if (models && models.length > 0) {
-                  return models.map((m: ModelEntry) => (
-                    <MenuItem
-                      key={m.id || m}
-                      value={m.id || m}
-                    >
-                      {m.name || m}
-                      {m.free ? " (Free)" : ""}
-                    </MenuItem>
-                  ));
-                }
-                return (settings?.tlLlmModelList || []).map((m) => (
-                  <MenuItem
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </MenuItem>
-                ));
-              })()}
+              {renderModelOptions(settings?.providerModelsMap, effTlProv, "tl", settings?.tlLlmModelList)}
             </Select>
           </FormControl>
           {tlModel !== "" && (
@@ -349,7 +383,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
               size="small"
               value={qaProvider || inherited.qaProvider || ""}
               label="QA Provider"
-              onChange={(e) => onChange("qaProvider", e.target.value)}
+              onChange={(e) => handleProviderChange("qaProvider", e.target.value)}
             >
               {providers.map((p) => (
                 <MenuItem
@@ -365,7 +399,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
             <IconButton
               size="small"
               sx={{ mt: 0.5 }}
-              onClick={() => onChange("qaProvider", "")}
+              onClick={() => handleProviderChange("qaProvider", "")}
             >
               <CloseIcon fontSize="small" />
             </IconButton>
@@ -401,44 +435,15 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           )}
         </Box>
         <Box sx={fieldBoxSx}>
-          <FormControl
-            fullWidth
-            disabled={qaLlmDisabled}
-          >
+          <FormControl fullWidth disabled={qaLlmDisabled || qaLlmCapabilityMissing}>
             <InputLabel>QA LLM Model</InputLabel>
             <Select
               size="small"
-              value={qaLlmModel || inherited.qaLlmModel || ""}
+              value={qaLlmCapabilityMissing ? "N/A" : (qaLlmModel || inherited.qaLlmModel || "")}
               label="QA LLM Model"
               onChange={(e) => onChange("qaLlmModel", e.target.value)}
             >
-              {(() => {
-                const effProv =
-                  qaProvider ||
-                  inherited.qaProvider ||
-                  settings?.qaProvider ||
-                  "openrouter";
-                const models = settings?.providerModelsMap?.[effProv]?.qaLLM;
-                if (models && models.length > 0) {
-                  return models.map((m: ModelEntry) => (
-                    <MenuItem
-                      key={m.id || m}
-                      value={m.id || m}
-                    >
-                      {m.name || m}
-                      {m.free ? " (Free)" : ""}
-                    </MenuItem>
-                  ));
-                }
-                return (settings?.qaLlmModelList || []).map((m) => (
-                  <MenuItem
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </MenuItem>
-                ));
-              })()}
+              {renderModelOptions(settings?.providerModelsMap, effQaProv, "qaLLM", settings?.qaLlmModelList)}
             </Select>
           </FormControl>
           {qaLlmModel !== "" && (
@@ -452,57 +457,15 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           )}
         </Box>
         <Box sx={fieldBoxSx}>
-          <FormControl
-            fullWidth
-            disabled={qaVlmDisabled}
-          >
+          <FormControl fullWidth disabled={qaVlmDisabled || qaVlmCapabilityMissing}>
             <InputLabel>QA VLM Model</InputLabel>
             <Select
               size="small"
-              value={qaVlmModel || inherited.qaVlmModel || ""}
+              value={qaVlmCapabilityMissing ? "N/A" : (qaVlmModel || inherited.qaVlmModel || "")}
               label="QA VLM Model"
               onChange={(e) => onChange("qaVlmModel", e.target.value)}
             >
-              {(() => {
-                const effProv =
-                  qaProvider ||
-                  inherited.qaProvider ||
-                  settings?.qaProvider ||
-                  "openrouter";
-                if (
-                  !settings?.providerModelsMap?.[effProv]?.qaVLM ||
-                  settings?.providerModelsMap?.[effProv]?.qaVLM.length === 0
-                ) {
-                  return (
-                    <MenuItem
-                      value="N/A"
-                      disabled
-                    >
-                      N/A (Capability Missing)
-                    </MenuItem>
-                  );
-                }
-                const models = settings?.providerModelsMap?.[effProv]?.qaVLM;
-                if (models && models.length > 0) {
-                  return models.map((m: ModelEntry) => (
-                    <MenuItem
-                      key={m.id || m}
-                      value={m.id || m}
-                    >
-                      {m.name || m}
-                      {m.free ? " (Free)" : ""}
-                    </MenuItem>
-                  ));
-                }
-                return (settings?.qaVlmModelList || []).map((m) => (
-                  <MenuItem
-                    key={m}
-                    value={m}
-                  >
-                    {m}
-                  </MenuItem>
-                ));
-              })()}
+              {renderModelOptions(settings?.providerModelsMap, effQaProv, "qaVLM", settings?.qaVlmModelList)}
             </Select>
           </FormControl>
           {qaVlmModel !== "" && (

@@ -142,6 +142,7 @@ public class SystemSettingsService {
     saveSetting("qaProvider", dto.qaProvider());
     saveSetting("qaLlmModel", dto.qaLlmModel());
     saveSetting("qaVlmModel", dto.qaVlmModel());
+    saveSetting("qaMode", dto.qaMode());
     saveSetting("routingStrategy", dto.routingStrategy());
     if (dto.useFallbackModels() != null) {
       saveSetting("useFallbackModels", String.valueOf(dto.useFallbackModels()));

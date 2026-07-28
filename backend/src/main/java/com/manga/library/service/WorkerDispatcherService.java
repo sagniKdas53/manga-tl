@@ -82,6 +82,7 @@ public class WorkerDispatcherService {
     }
     String paused = redisTemplate.opsForValue().get("system:queue:paused");
     if ("true".equals(paused)) {
+      log.debug("Queue is globally paused — skipping dispatch cycle");
       return;
     }
 
@@ -157,6 +158,10 @@ public class WorkerDispatcherService {
       boolean anyCapacity = capacities.values().stream()
           .anyMatch(c -> isHeavy ? c.hasHeavySlot() : c.hasLightSlot());
       if (!anyCapacity) {
+        log.debug(
+            "No free {} slot on any worker — throttling queue {}",
+            isHeavy ? "heavy" : "light",
+            queue);
         continue;
       }
 
@@ -206,6 +211,9 @@ public class WorkerDispatcherService {
               else cap.activeLight++;
               cap.activeTotal++;
               workerConsecutive429s.remove(workerUrl);
+              log.info(
+                  "Dispatched job from {} to worker {} (activeHeavy={}, activeLight={}, activeTotal={})",
+                  queue, workerUrl, cap.activeHeavy, cap.activeLight, cap.activeTotal);
               break;
             } else if (response.statusCode() == 400 || response.statusCode() == 422) {
               // Permanent rejection — payload invalid; do not re-queue
@@ -244,6 +252,9 @@ public class WorkerDispatcherService {
           redisTemplate
               .opsForList()
               .rightPush(Objects.requireNonNull(queue), Objects.requireNonNull(jobJson));
+          log.debug(
+              "Job from {} not dispatched (worker rejected/unreachable) — pushed back to queue",
+              queue);
           return;
         }
       }

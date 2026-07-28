@@ -70,6 +70,11 @@ public class InternalJobController {
       @PathVariable String jobId, @RequestBody Map<String, String> payload) {
     Objects.requireNonNull(jobId, "jobId cannot be null");
     log.info("Worker updating job {} status to {}", jobId, payload.get("status"));
+    if ("PENDING".equals(payload.get("status"))) {
+      log.info("Worker re-queued job {} for retry (attempt {})", jobId, payload.get("attempt"));
+    } else if ("FAILED".equals(payload.get("status"))) {
+      log.warn("Job {} marked FAILED by worker: {}", jobId, payload.get("error"));
+    }
     return jobRepository
         .findById(jobId)
         .map(

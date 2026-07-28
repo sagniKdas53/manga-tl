@@ -67,7 +67,7 @@ public class JwtTest {
     ChapterDto dto =
         new ChapterDto(
             null, null, 1.0, "One", null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null);
     mockMvc
         .perform(
             post("/api/series/" + savedSeries.getId() + "/chapters")
@@ -141,7 +141,7 @@ public class JwtTest {
     ChapterDto dto =
         new ChapterDto(
             null, null, 2.0, "Two", null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null);
     mockMvc
         .perform(
             post("/api/series/" + savedSeries.getId() + "/chapters")

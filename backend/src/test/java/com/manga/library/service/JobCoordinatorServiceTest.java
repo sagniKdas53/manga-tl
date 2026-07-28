@@ -1315,6 +1315,267 @@ public class JobCoordinatorServiceTest {
     seriesRepository.deleteAll();
   }
 
+  @Test
+  public void testQaModeAutoResolvesToVlmWhenVlmModelUsable() {
+    Series series = new Series();
+    series.setTitle("QA Auto VLM Series");
+    series.setOriginalLanguage("ja");
+    series.setSourceLanguage("ja");
+    series.setTargetLanguage("en");
+    series.setReadingDirection("rtl");
+    series = seriesRepository.save(series);
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setChapterNumber(1.0);
+    chapter.setQaMode("auto");
+    chapter.setQaVlmModel("vlm-model-x");
+    chapter.setQaLlmModel("llm-model-y");
+    chapter = chapterRepository.save(chapter);
+
+    Image image = new Image();
+    image.setFilename("qa_auto_vlm.png");
+    image.setStoragePath("qa/qa_auto_vlm.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(chapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    pageRepository.save(page);
+
+    ProviderConfigCache mockCache = org.mockito.Mockito.mock(ProviderConfigCache.class);
+    org.mockito.Mockito.when(
+            mockCache.isValidProviderModel(
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString()))
+        .thenReturn(true);
+    ProviderConfigCache originalCache =
+        (ProviderConfigCache)
+            org.springframework.test.util.ReflectionTestUtils.getField(
+                jobCoordinatorService, "providerConfigCache");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        jobCoordinatorService, "providerConfigCache", mockCache);
+
+    AtomicReference<String> pushedQaMode = new AtomicReference<>();
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> m =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            pushedQaMode.set((String) m.get("qaMode"));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
+
+    try {
+      jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
+      assertEquals("vlm", pushedQaMode.get());
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          jobCoordinatorService, "providerConfigCache", originalCache);
+    }
+
+    // Clean up
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+    chapterRepository.delete(chapter);
+    seriesRepository.delete(series);
+  }
+
+  @Test
+  public void testQaModeAutoResolvesToLlmWhenVlmModelUnusable() {
+    Series series = new Series();
+    series.setTitle("QA Auto LLM Series");
+    series.setOriginalLanguage("ja");
+    series.setSourceLanguage("ja");
+    series.setTargetLanguage("en");
+    series.setReadingDirection("rtl");
+    series = seriesRepository.save(series);
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setChapterNumber(1.0);
+    chapter.setQaMode("auto");
+    chapter.setQaVlmModel("N/A");
+    chapter.setQaLlmModel("llm-model-y");
+    chapter = chapterRepository.save(chapter);
+
+    Image image = new Image();
+    image.setFilename("qa_auto_llm.png");
+    image.setStoragePath("qa/qa_auto_llm.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(chapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    pageRepository.save(page);
+
+    ProviderConfigCache mockCache = org.mockito.Mockito.mock(ProviderConfigCache.class);
+    org.mockito.Mockito.when(
+            mockCache.isValidProviderModel(
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString()))
+        .thenReturn(true);
+    ProviderConfigCache originalCache =
+        (ProviderConfigCache)
+            org.springframework.test.util.ReflectionTestUtils.getField(
+                jobCoordinatorService, "providerConfigCache");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        jobCoordinatorService, "providerConfigCache", mockCache);
+
+    AtomicReference<String> pushedQaMode = new AtomicReference<>();
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> m =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            pushedQaMode.set((String) m.get("qaMode"));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
+
+    try {
+      jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
+      assertEquals("llm", pushedQaMode.get());
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          jobCoordinatorService, "providerConfigCache", originalCache);
+    }
+
+    // Clean up
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+    chapterRepository.delete(chapter);
+    seriesRepository.delete(series);
+  }
+
+  @Test
+  public void testQaModeAutoStaysAutoWhenNoModelUsable() {
+    Series series = new Series();
+    series.setTitle("QA Auto None Series");
+    series.setOriginalLanguage("ja");
+    series.setSourceLanguage("ja");
+    series.setTargetLanguage("en");
+    series.setReadingDirection("rtl");
+    series = seriesRepository.save(series);
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setChapterNumber(1.0);
+    chapter.setQaMode("auto");
+    chapter.setQaVlmModel("vlm-model-x");
+    chapter.setQaLlmModel("llm-model-y");
+    chapter = chapterRepository.save(chapter);
+
+    Image image = new Image();
+    image.setFilename("qa_auto_none.png");
+    image.setStoragePath("qa/qa_auto_none.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(chapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    pageRepository.save(page);
+
+    // Cache rejects every model -> resolveModelWithCheck falls back to empty global defaults,
+    // so neither VLM nor LLM is usable and AUTO must be kept for the worker to resolve.
+    ProviderConfigCache mockCache = org.mockito.Mockito.mock(ProviderConfigCache.class);
+    org.mockito.Mockito.when(
+            mockCache.isValidProviderModel(
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString()))
+        .thenReturn(false);
+    ProviderConfigCache originalCache =
+        (ProviderConfigCache)
+            org.springframework.test.util.ReflectionTestUtils.getField(
+                jobCoordinatorService, "providerConfigCache");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        jobCoordinatorService, "providerConfigCache", mockCache);
+
+    AtomicReference<String> pushedQaMode = new AtomicReference<>();
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> m =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            pushedQaMode.set((String) m.get("qaMode"));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
+
+    try {
+      jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
+      assertEquals("auto", pushedQaMode.get());
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          jobCoordinatorService, "providerConfigCache", originalCache);
+    }
+
+    // Clean up
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+    chapterRepository.delete(chapter);
+    seriesRepository.delete(series);
+  }
+
+  @Test
+  public void testQaModeExplicitPassesThroughUntouched() {
+    Series series = new Series();
+    series.setTitle("QA Explicit Series");
+    series.setOriginalLanguage("ja");
+    series.setSourceLanguage("ja");
+    series.setTargetLanguage("en");
+    series.setReadingDirection("rtl");
+    series = seriesRepository.save(series);
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setChapterNumber(1.0);
+    chapter.setQaMode("llm");
+    chapter = chapterRepository.save(chapter);
+
+    Image image = new Image();
+    image.setFilename("qa_explicit.png");
+    image.setStoragePath("qa/qa_explicit.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(chapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    pageRepository.save(page);
+
+    AtomicReference<String> pushedQaMode = new AtomicReference<>();
+    rightPushHook =
+        (queueName, payload) -> {
+          try {
+            Map<?, ?> m =
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, Map.class);
+            pushedQaMode.set((String) m.get("qaMode"));
+          } catch (Exception e) {
+            throw new AssertionError(e);
+          }
+        };
+
+    jobCoordinatorService.startPipeline(image.getId(), chapter.getId());
+    assertEquals("llm", pushedQaMode.get());
+
+    // Clean up
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+    chapterRepository.delete(chapter);
+    seriesRepository.delete(series);
+  }
+
   @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);

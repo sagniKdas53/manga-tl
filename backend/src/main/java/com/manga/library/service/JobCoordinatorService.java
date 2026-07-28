@@ -320,31 +320,57 @@ public class JobCoordinatorService {
                   resolveModel(
                       chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider());
               job.put("qaProvider", resolvedQaProvider);
-              job.put(
-                  "qaLlmModel",
+              String resolvedQaLlmModel =
                   resolveModelWithCheck(
                       chapter.getQaLlmModel(),
                       series.getQaLlmModel(),
                       settings.qaLlmModel(),
                       resolvedQaProvider,
-                      "qaLLM"));
+                      "qaLLM");
+              job.put("qaLlmModel", resolvedQaLlmModel);
               job.put(
                   "routingStrategy",
                   resolveModel(
                       chapter.getRoutingStrategy(),
                       series.getRoutingStrategy(),
                       settings.routingStrategy()));
-              job.put(
-                  "qaVlmModel",
+              String resolvedQaVlmModel =
                   resolveModelWithCheck(
                       chapter.getQaVlmModel(),
                       series.getQaVlmModel(),
                       settings.qaVlmModel(),
                       resolvedQaProvider,
-                      "qaVLM"));
-              job.put(
-                  "qaMode",
-                  resolveModel(chapter.getQaMode(), series.getQaMode(), settings.qaMode()));
+                      "qaVLM");
+              job.put("qaVlmModel", resolvedQaVlmModel);
+              String resolvedQaMode =
+                  resolveModel(chapter.getQaMode(), series.getQaMode(), settings.qaMode());
+              boolean vlmUsable = hasUsableModel(resolvedQaProvider, resolvedQaVlmModel, "qaVLM");
+              boolean llmUsable = hasUsableModel(resolvedQaProvider, resolvedQaLlmModel, "qaLLM");
+
+              if ("auto".equalsIgnoreCase(resolvedQaMode)) {
+                if (vlmUsable) {
+                  resolvedQaMode = "vlm";
+                } else if (llmUsable) {
+                  resolvedQaMode = "llm";
+                }
+              } else if ("vlm".equalsIgnoreCase(resolvedQaMode) && !vlmUsable && llmUsable) {
+                log.warn("VLM mode explicitly requested but not available for provider '{}'. Falling back to LLM.", resolvedQaProvider);
+                resolvedQaMode = "llm";
+              } else if ("llm".equalsIgnoreCase(resolvedQaMode) && !llmUsable && vlmUsable) {
+                log.warn("LLM mode explicitly requested but not available for provider '{}'. Falling back to VLM.", resolvedQaProvider);
+                resolvedQaMode = "vlm";
+              }
+
+              if (!"auto".equalsIgnoreCase(resolvedQaMode)) {
+                log.info(
+                    "QA mode resolved to '{}' for image {} (provider={}, vlmModel='{}', llmModel='{}')",
+                    resolvedQaMode,
+                    imageId,
+                    resolvedQaProvider,
+                    resolvedQaVlmModel,
+                    resolvedQaLlmModel);
+              }
+              job.put("qaMode", resolvedQaMode);
 
               // useFallbackModels: chapter overrides series overrides global; null = inherit
               Boolean chapterFallback = chapter.getUseFallbackModels();
@@ -437,6 +463,7 @@ public class JobCoordinatorService {
                 "queue:region-redo-tl")));
 
     List<Job> pendingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PENDING");
+    log.info("Re-queuing {} PENDING jobs onto Redis queues", pendingJobs.size());
     for (Job job : pendingJobs) {
       pushJobToRedis(job);
     }
@@ -487,6 +514,19 @@ public class JobCoordinatorService {
       return globalVal;
     }
     return resolved;
+  }
+
+  private boolean hasUsableModel(String provider, String model, String task) {
+    if (model == null || model.trim().isEmpty()) return false;
+    String m = model.trim();
+    if (m.equalsIgnoreCase("N/A")
+        || m.equals("inherit")
+        || m.equals("default")
+        || m.contains("[ORPHANED]")) return false;
+    // ProviderConfigCache.isValidProviderModel returns true when its cache is empty (permissive
+    // pre-startup), which is fine here.
+    return providerConfigCache == null
+        || providerConfigCache.isValidProviderModel(provider, m, task);
   }
 
   @Transactional
