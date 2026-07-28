@@ -225,19 +225,17 @@ describe("Reader Component", () => {
     );
 
     // Wait for the Promise.resolve().then() to execute the state update and trigger the fetch
+    // We check for the specific url inside waitFor to prevent flakiness if other fetches occur
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalled();
+      const fetchCalls = mockSafeFetch.mock.calls as unknown as [
+        string,
+        RequestInit?,
+      ][];
+      const fetchUrls = fetchCalls.map((call) => call[0] || "");
+      expect(
+        fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
+      ).toBe(true);
     });
-
-    // Verify that the fetch was called again for the image/page and layers, indicating cache was busted
-    const fetchCalls = mockSafeFetch.mock.calls as unknown as [
-      string,
-      RequestInit?,
-    ][];
-    const fetchUrls = fetchCalls.map((call) => call[0] || "");
-    expect(
-      fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
-    ).toBe(true);
   });
 
   it("prefetches next two pages and applies synchronous cache hits", async () => {
