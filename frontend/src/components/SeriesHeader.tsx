@@ -58,6 +58,14 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
     };
   }
 
+  // -------------------------------------------------------------------------------------
+  // MODEL INHERITANCE LOGIC:
+  // We use `resolveOverride(fallback, override, base)` to compute the effective values.
+  // The backend handles resolving chapters, but for Series, we compute it on the frontend.
+  // We check `settings?.providerModelsMap` to ensure we don't display chips for 
+  // models (like qaVLM) if the configured provider does not support them.
+  // -------------------------------------------------------------------------------------
+
   const resolvedTlProvider = resolveOverride(
     null,
     series.tlProvider,
@@ -81,6 +89,23 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
     settings?.qaVlmModel,
   );
   const resolvedQaMode = resolveOverride(null, series.qaMode, settings?.qaMode);
+
+  const resolvedQaProvider = resolveOverride(
+    null,
+    series.qaProvider,
+    settings?.qaProvider,
+  );
+
+  const qaVlmModels =
+    settings?.providerModelsMap?.[resolvedQaProvider.value || "openrouter"]?.[
+      "qaVLM"
+    ] || [];
+  const qaVlmCapabilityMissing = qaVlmModels.length === 0;
+
+  const usesOpenRouter =
+    resolvedOcrProvider.value === "openrouter" ||
+    resolvedTlProvider.value === "openrouter" ||
+    resolvedQaProvider.value === "openrouter";
 
   return (
     <Card
@@ -229,27 +254,28 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                     }
                   />
                 </Grid>
-                <Grid>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    Strategy
-                  </Typography>
-                  {resolvedQaRouting.value ? (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      label={resolvedQaRouting.value}
-                    />
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      N/A
+                {usesOpenRouter && (
+                  <Grid>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      gutterBottom
+                    >
+                      Strategy
                     </Typography>
-                  )}
-                </Grid>
+                    {resolvedQaRouting.value ? (
+                      <Chip
+                        size="small"
+                        color="secondary"
+                        label={resolvedQaRouting.value}
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        N/A
+                      </Typography>
+                    )}
+                  </Grid>
+                )}
                 <Grid>
                   <Typography
                     variant="body2"
@@ -323,7 +349,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                       label={`QA LLM: ${resolvedQa.value} ${resolvedQa.source === "series" ? "(overridden)" : "(inherited)"}`}
                     />
                   )}
-                  {resolvedQaVlm.value && (
+                  {resolvedQaVlm.value && !qaVlmCapabilityMissing && (
                     <Chip
                       size="small"
                       variant="outlined"

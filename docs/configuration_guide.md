@@ -226,3 +226,30 @@ DISABLE_LOCAL_OCR=false
 * **VLM OCR is too slow or times out**: If cloud VLM is failing, set `DISABLE_LOCAL_OCR=false` to fall back to the ultra-fast local PaddleOCR.
 * **OpenRouter costs are high**: Set `TL_LLM_MODEL` to a `:free` model (e.g. `google/gemma-4-31b-it:free`) to run translation completely free of charge on OpenRouter.
 * **Ollama Connection Refused inside Docker**: Ensure `LOCAL_LLM_ENDPOINT` uses `http://host.docker.internal:11434` instead of `localhost` so the Docker container can resolve the host machine.
+
+## 🧬 Model Inheritance & Override Logic
+
+The Manga Library uses a strict **Global -> Series -> Chapter** inheritance hierarchy for models, routing, and QA modes. This ensures minimal repetition while allowing fine-grained control when needed.
+
+### Inheritance Hierarchy
+
+1. **Global Settings (`system_settings`)**: The base settings for the entire application. Configured via the `SettingsModal.tsx`.
+2. **Series Settings (`series`)**: Overrides that apply to all chapters within a specific series. Configured via `ModelOverridesAccordion.tsx` inside the Series dialog.
+3. **Chapter Settings (`chapters`)**: The most granular overrides. Configured via `ModelOverridesAccordion.tsx` inside the Edit Chapter dialog.
+
+### Resolution Logic (Backend & Frontend)
+
+- **Backend Logic (`SeriesController.java`, `ChapterDto.java`)**: 
+  The backend performs the heavy lifting for resolving these overrides. When returning a `ChapterDto`, the backend computes `ResolvedModelSlot` (for OCR and Translation) and `ResolvedQaSlot` (for QA) which contain the effective values. It checks the Chapter first; if null, it checks the Series; if null, it falls back to the Global Setting.
+- **Frontend Logic (`SeriesHeader.tsx`, `ChapterHeader.tsx`)**:
+  The frontend uses the `resolveOverride` utility function to compute these on the fly for Series cards (which pull settings via context), or directly consumes the backend's `resolvedQa` slots for Chapters.
+
+### Handling VLM vs LLM Capabilities
+
+The application dynamically checks if a chosen provider supports Vision-Language Models (VLM) via `providerModelsMap` (`SettingsController.java`). 
+
+- **Smart QA Routing (`JobCoordinatorService.java`)**: If `qaMode` is `auto`, the backend intelligently prefers the VLM over the LLM. If the provider does not support a VLM, the backend falls back to using the configured LLM, ensuring the job doesn't fail.
+- **Dynamic Frontend Filtering (`ModelOverridesAccordion.tsx`, `SeriesHeader.tsx`, `ChapterHeader.tsx`)**:
+  - The UI uses the `qaVLM` capability key (not to be confused with `vlm`) to check if the current provider supports VLMs. 
+  - If a capability is missing, the dropdown is disabled, and the choice is forced to `"N/A"`.
+  - When rendering the configuration chips in the `SeriesHeader` and `ChapterHeader`, the UI explicitly checks `qaVlmCapabilityMissing` and gracefully hides the `QA VLM` chip to prevent displaying inherited VLM models for a provider that doesn't support them.

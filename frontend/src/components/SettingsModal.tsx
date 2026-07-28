@@ -227,6 +227,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
+  // -------------------------------------------------------------------------------------
+  // MODEL INHERITANCE LOGIC & CAPABILITY CHECKING:
+  // - This modal manages the GLOBAL state. These settings act as the ultimate fallback 
+  //   for Series and Chapter overrides.
+  // - Missing capabilities (e.g. `isCapabilityMissing` for `qaVLM`) will disable the
+  //   relevant dropdown and force the value to "N/A (Capability Missing)".
+  // -------------------------------------------------------------------------------------
   const getFirstValidModel = (
     provider: string,
     capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
