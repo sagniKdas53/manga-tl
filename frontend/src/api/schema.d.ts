@@ -620,6 +620,22 @@ export interface paths {
         patch: operations["updateJobStatus"];
         trace?: never;
     };
+    "/api/settings/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["validateSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/series/chapters/{chapterId}/export": {
         parameters: {
             query?: never;
@@ -1076,13 +1092,13 @@ export interface components {
             editedAt?: string;
             boxShape?: string;
             maskPolygon?: string;
-            /** Format: double */
-            qaScore?: number;
             /** Format: uuid */
             layerId?: string;
             /** Format: uuid */
             regionId?: string;
             qaStatus?: string;
+            /** Format: double */
+            qaScore?: number;
             qaFeedback?: string;
         };
         PanelCallbackDto: {
@@ -2438,6 +2454,28 @@ export interface operations {
             };
         };
     };
+    validateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: Record<string, never>;
+                    };
+                };
+            };
+        };
+    };
     exportChapter: {
         parameters: {
             query?: {
@@ -2848,7 +2886,9 @@ export interface operations {
     };
     clearQueue: {
         parameters: {
-            query?: never;
+            query?: {
+                force?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
