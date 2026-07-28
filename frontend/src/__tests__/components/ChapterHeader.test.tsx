@@ -226,7 +226,7 @@ describe("ChapterHeader", () => {
         }}
       />,
     );
-    expect(screen.getByText(/QA Mode: hybrid/)).toBeDefined();
+    expect(screen.getByText(/hybrid \(overridden\)/)).toBeDefined();
     expect(screen.getByText(/QA LLM: gpt-4/)).toBeDefined();
     expect(screen.getByText(/QA VLM: gpt-4v/)).toBeDefined();
   });
