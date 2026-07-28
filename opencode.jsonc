@@ -1,5 +1,76 @@
 {
     "$schema": "https://opencode.ai/config.json",
+    "default_agent": "orchestrator",
+    "attachment": {
+        "image": {
+            "auto_resize": true
+        }
+    },
+    "plugin": [
+        "opencode-helicone-session",
+        "opencode-wakatime"
+    ],
+    "mode": {
+        "orchestrator": {
+            "mode": "primary",
+            "model": "openrouter/moonshotai/kimi-k3",
+            "description": "Main orchestrator. Analyzes tasks, creates plans, and delegates to subagents.",
+            "system": "CRITICAL INSTRUCTION: You are STRICTLY an orchestrator and project manager. YOU MUST NOT WRITE IMPLEMENTATION CODE OR TESTS YOURSELF. Your ONLY job is to analyze the user's request, formulate a step-by-step plan, and delegate tasks to your available subagents ('worker' for coding, 'tester' for testing).\n\nIf the user asks for code, you MUST invoke the 'worker' agent. If the user asks for tests, you MUST invoke the 'tester' agent. Failure to delegate is a failure of your primary directive.",
+            "permissions": [
+                {
+                    "action": "edit",
+                    "resource": "*",
+                    "effect": "ask"
+                },
+                {
+                    "action": "shell",
+                    "resource": "*",
+                    "effect": "ask"
+                }
+            ]
+        },
+        "worker": {
+            "mode": "primary",
+            "model": "deepseek/deepseek-v4-pro",
+            "description": "Heavy-duty coding worker for implementing complex features.",
+            "system": "You are the primary worker. Execute the coding tasks assigned by the orchestrator. Write clean, efficient code.",
+            "permissions": [
+                {
+                    "action": "edit",
+                    "resource": "*",
+                    "effect": "allow"
+                },
+                {
+                    "action": "shell",
+                    "resource": "*",
+                    "effect": "allow"
+                }
+            ]
+        },
+        "tester": {
+            "mode": "subagent",
+            "model": "deepseek/deepseek-v4-flash",
+            "description": "Specialized in writing unit tests, running test suites, and fixing minor regressions.",
+            "system": "You are a fast testing subagent. Generate comprehensive test files, run them, and report results back to the primary agent.",
+            "permissions": [
+                {
+                    "action": "edit",
+                    "resource": "*",
+                    "effect": "allow"
+                },
+                {
+                    "action": "shell",
+                    "resource": "*",
+                    "effect": "allow"
+                }
+            ]
+        },
+        "compaction": {
+            "mode": "subagent",
+            "description": "Aggressively prunes context to save tokens.",
+            "system": "You are the compaction agent. Summarize the conversation strictly. Discard massive file diffs, old terminal outputs, and trial-and-error steps. Keep only the high-level architectural plan, outstanding tasks, and active file paths to prevent context bloat."
+        }
+    },
     "mcp": {
         "mui-mcp": {
             "type": "local",

@@ -83,6 +83,16 @@ public class SeriesController {
   }
 
   private SeriesDto toDto(Series s) {
+    Boolean resolvedUseFallbackModels = s.getUseFallbackModels();
+    if (resolvedUseFallbackModels == null) {
+      SystemSettingsDto globalSettings = systemSettingsService.getSettings();
+      if (globalSettings != null && globalSettings.useFallbackModels() != null) {
+        resolvedUseFallbackModels = globalSettings.useFallbackModels();
+      } else {
+        resolvedUseFallbackModels = true;
+      }
+    }
+
     return new SeriesDto(
         s.getId(),
         s.getTitle(),
@@ -101,6 +111,7 @@ public class SeriesController {
         s.getQaMode(),
         s.getRoutingStrategy(),
         s.getUseFallbackModels(),
+        resolvedUseFallbackModels,
         s.getCreatedAt(),
         s.getUpdatedAt());
   }
@@ -183,6 +194,17 @@ public class SeriesController {
     }
     var resolvedQa = new ChapterDto.ResolvedQaSlot(qaProv, qaLlm, qaVlm, qaMod, qaSrc);
 
+    Boolean resolvedUseFallbackModels = c.getUseFallbackModels();
+    if (resolvedUseFallbackModels == null && series != null) {
+      resolvedUseFallbackModels = series.getUseFallbackModels();
+    }
+    if (resolvedUseFallbackModels == null && globalSettings != null && globalSettings.useFallbackModels() != null) {
+      resolvedUseFallbackModels = globalSettings.useFallbackModels();
+    }
+    if (resolvedUseFallbackModels == null) {
+      resolvedUseFallbackModels = true;
+    }
+
     return new ChapterDto(
         c.getId(),
         c.getSeries() != null ? c.getSeries().getId() : null,
@@ -200,6 +222,7 @@ public class SeriesController {
         c.getRoutingStrategy(),
         c.getUseContextMemory(),
         c.getUseFallbackModels(),
+        resolvedUseFallbackModels,
         (int) pageRepository.countByChapterId(c.getId()),
         c.getCreatedAt(),
         c.getUpdatedAt(),

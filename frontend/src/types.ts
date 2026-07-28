@@ -24,6 +24,7 @@ export interface Series {
   qaMode?: string;
   routingStrategy?: string;
   useFallbackModels?: boolean | null;
+  resolvedUseFallbackModels?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -58,6 +59,7 @@ export interface Chapter {
   qaMode?: string;
   routingStrategy?: string;
   useFallbackModels?: boolean | null;
+  resolvedUseFallbackModels?: boolean;
   useContextMemory?: boolean;
   pageCount?: number;
   createdAt?: string;

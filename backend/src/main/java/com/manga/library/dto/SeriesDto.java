@@ -20,5 +20,6 @@ public record SeriesDto(
     String qaMode,
     String routingStrategy,
     Boolean useFallbackModels,
+    Boolean resolvedUseFallbackModels,
     java.time.OffsetDateTime createdAt,
     java.time.OffsetDateTime updatedAt) {}

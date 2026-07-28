@@ -113,10 +113,10 @@ describe("QueueManager", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Clear Pending/Failed Queue"),
+        screen.getByLabelText("Clear Pending/Failed Jobs"),
       ).toBeInTheDocument();
       expect(
-        screen.getByLabelText("Kill/Flush Queue (Force)"),
+        screen.getByLabelText("Force Clear Queue"),
       ).toBeInTheDocument();
       expect(screen.getByText("OCR Processing")).toBeInTheDocument();
       expect(screen.getByText("Translation")).toBeInTheDocument();
@@ -152,16 +152,16 @@ describe("QueueManager", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Kill/Flush Queue (Force)"),
+        screen.getByLabelText("Force Clear Queue"),
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText("Kill/Flush Queue (Force)"));
+    fireEvent.click(screen.getByLabelText("Force Clear Queue"));
 
     await waitFor(() => {
       expect(
         screen.getByText(
-          /force delete ALL jobs, including those currently processing/i,
+          /immediately clear all jobs, including those currently running/i,
         ),
       ).toBeInTheDocument();
     });

@@ -55,6 +55,7 @@ public class JobController {
 
   @PostMapping("/pause")
   public ResponseEntity<?> pauseQueue() {
+    log.info("Queue PAUSED via API");
     redisTemplate.opsForValue().set(QUEUE_PAUSED_KEY, "true");
     sseService.emitEventToAllUsers("queue_paused", Map.of("event", "queue_paused"));
     return ResponseEntity.ok().build();
@@ -62,6 +63,7 @@ public class JobController {
 
   @PostMapping("/resume")
   public ResponseEntity<?> resumeQueue() {
+    log.info("Queue RESUMED via API — re-queuing PENDING jobs");
     redisTemplate.opsForValue().set(QUEUE_PAUSED_KEY, "false");
     jobCoordinatorService.requeuePendingJobs();
     sseService.emitEventToAllUsers("queue_resumed", Map.of("event", "queue_resumed"));
@@ -73,12 +75,17 @@ public class JobController {
   public ResponseEntity<?> clearQueue(
       @RequestParam(required = false, defaultValue = "false") boolean force) {
     try {
-      List<String> statusesToClear = force 
+      List<String> statusesToClear = force
           ? List.of("PENDING", "PAUSED", "FAILED", "PROCESSING")
           : List.of("PENDING", "PAUSED", "FAILED");
-          
+
       List<Job> jobsToClear =
           jobRepository.findByStatusInOrderByCreatedAtAsc(statusesToClear);
+      log.info(
+          "Clearing queue via API (force={}): removing {} jobs with statuses {}",
+          force,
+          jobsToClear.size(),
+          statusesToClear);
       jobRepository.deleteAll(java.util.Objects.requireNonNull(jobsToClear));
 
       // Clear Redis queues
@@ -97,7 +104,8 @@ public class JobController {
                   "queue:region-redo-tl")));
 
       sseService.emitEventToAllUsers(
-          "queue_cleared", Map.of("event", "queue_cleared", "clearedCount", jobsToClear.size()));
+          "queue_cleared",
+          Map.of("event", "queue_cleared", "clearedCount", jobsToClear.size(), "force", force));
 
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -116,6 +124,11 @@ public class JobController {
               job.setStatus("PENDING");
               job.setError(null);
               job.setAttempt(1);
+              log.info(
+                  "Retrying job {} (type={}, imageId={}) — resetting to PENDING, attempt=1",
+                  job.getId(),
+                  job.getType(),
+                  job.getImageId());
               jobRepository.save(job);
 
               // Push to Redis if not paused
@@ -137,6 +150,11 @@ public class JobController {
         .findById(id)
         .map(
             job -> {
+              log.info(
+                  "Pausing job {} (type={}, imageId={})",
+                  job.getId(),
+                  job.getType(),
+                  job.getImageId());
               if ("PENDING".equals(job.getStatus())) {
                 job.setStatus("PAUSED");
                 jobRepository.save(job);
@@ -155,6 +173,11 @@ public class JobController {
         .findById(id)
         .map(
             job -> {
+              log.info(
+                  "Resuming job {} (type={}, imageId={})",
+                  job.getId(),
+                  job.getType(),
+                  job.getImageId());
               if ("PAUSED".equals(job.getStatus())) {
                 job.setStatus("PENDING");
                 jobRepository.save(job);
@@ -162,6 +185,11 @@ public class JobController {
                 String paused = redisTemplate.opsForValue().get(QUEUE_PAUSED_KEY);
                 if (!"true".equals(paused)) {
                   jobCoordinatorService.pushJobToRedis(job);
+                  log.debug("Job {} re-pushed to Redis queue", job.getId());
+                } else {
+                  log.debug(
+                      "Job {} held in DB (queue globally paused) — not re-pushed to Redis",
+                      job.getId());
                 }
                 emitJobUpdateEvent(job);
                 return ResponseEntity.ok().build();
@@ -178,6 +206,12 @@ public class JobController {
         .findById(id)
         .map(
             job -> {
+              log.info(
+                  "Deleting job {} (type={}, status={}, imageId={})",
+                  job.getId(),
+                  job.getType(),
+                  job.getStatus(),
+                  job.getImageId());
               jobRepository.delete(java.util.Objects.requireNonNull(job));
               Map<String, Object> deletedJobData = new HashMap<>();
               deletedJobData.put("jobId", job.getId());

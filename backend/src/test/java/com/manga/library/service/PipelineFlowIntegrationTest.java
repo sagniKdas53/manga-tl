@@ -252,6 +252,7 @@ public class PipelineFlowIntegrationTest {
             null,
             null,
             null,
+            null,
             null);
     MvcResult seriesResult =
         mockMvc
@@ -275,6 +276,7 @@ public class PipelineFlowIntegrationTest {
             null,
             1.0,
             "Chapter One",
+            null,
             null,
             null,
             null,
@@ -332,6 +334,7 @@ public class PipelineFlowIntegrationTest {
             null,
             null,
             null,
+            null,
             null);
     MvcResult ch2Result =
         mockMvc
@@ -366,6 +369,7 @@ public class PipelineFlowIntegrationTest {
             savedCh2.routingStrategy(),
             savedCh2.useContextMemory(),
             savedCh2.useFallbackModels(),
+            savedCh2.resolvedUseFallbackModels(),
             savedCh2.pageCount(),
             savedCh2.createdAt(),
             savedCh2.updatedAt(),
