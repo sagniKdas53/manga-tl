@@ -19,3 +19,5 @@ backend/.settings/
 backend/.classpath
 backend/.project
 pytest*
+exported_minio/*
+exported_images/*

@@ -2,6 +2,14 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import ChapterHeader, { type ChapterHeaderProps } from "../../components/ChapterHeader";
 
+vi.mock("../../utils", () => ({
+  safeFetch: () =>
+    Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({}),
+    }),
+}));
+
 const defaultProps: ChapterHeaderProps = {
   selectedSeries: {
     id: "s1",
@@ -16,6 +24,7 @@ const defaultProps: ChapterHeaderProps = {
     title: "Romance Dawn",
     pageCount: 42,
     useFallbackModels: true,
+    resolvedUseFallbackModels: true,
     useContextMemory: true,
   },
   onBack: vi.fn(),
@@ -86,6 +95,7 @@ describe("ChapterHeader", () => {
         selectedChapter={{
           ...defaultProps.selectedChapter,
           useFallbackModels: false,
+          resolvedUseFallbackModels: false,
         }}
       />,
     );
