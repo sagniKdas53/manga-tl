@@ -1,5 +1,10 @@
 {
     "java.compile.nullAnalysis.mode": "automatic",
     "python.useEnvironmentsExtension": false,
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "markdownlint.config": {
+        "MD033": {
+            "allowed_elements": ["img", "br", "details", "summary", "a", "div", "span"]
+        }
+    }
 }

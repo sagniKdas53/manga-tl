@@ -1,5 +1,6 @@
 package com.manga.library;
 
+import java.util.Objects;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +16,7 @@ public class TestcontainersConfig {
     System.setProperty("api.version", "1.44");
   }
 
+  @SuppressWarnings("resource")
   static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
       .withExposedPorts(6379);
 
@@ -34,8 +36,7 @@ public class TestcontainersConfig {
   }
 
   @Bean
-  @SuppressWarnings("resource")
   public RedisConnectionFactory redisConnectionFactory() {
-    return new LettuceConnectionFactory(REDIS.getHost(), REDIS.getMappedPort(6379));
+    return new LettuceConnectionFactory(Objects.requireNonNull(REDIS.getHost()), REDIS.getMappedPort(6379));
   }
 }
