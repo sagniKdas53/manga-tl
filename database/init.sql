@@ -150,7 +150,7 @@ CREATE TABLE public.job_costs (
 );
 
 
-ALTER TABLE public.job_costs OWNER TO postgres;
+ALTER TABLE public.job_costs OWNER TO tladmin;
 
 --
 -- Name: jobs; Type: TABLE; Schema: public; Owner: tladmin
