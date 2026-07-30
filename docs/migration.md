@@ -1,6 +1,6 @@
 # Migrate Backend to a usable language form that bullshit that is Java
 
-## 8. [MILESTONE] Migration strategy — Java/Spring → Python/FastAPI
+## Migration strategy — Java/Spring → Python/FastAPI
 
 ### Why
 

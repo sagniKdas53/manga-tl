@@ -117,10 +117,10 @@ This means a GPU-intensive OCR job and a cloud-only translation job can run **in
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `CONCURRENT_WORKERS`| Total max concurrent jobs/pages (heavy + light combined). Alias: `CONCURRENT_JOBS` | `1` |
+| `CONCURRENT_WORKERS` | Total max concurrent jobs/pages (heavy + light combined). Alias: `CONCURRENT_JOBS` | `1` |
 | `MAX_HEAVY_SLOTS` | Max concurrent heavy (GPU-bound) jobs | `1` |
 | `MAX_LIGHT_SLOTS` | Max concurrent light (cloud/fast) jobs | `CONCURRENT_WORKERS - MAX_HEAVY_SLOTS` |
-| `REUSE_IDLE_SLOTS`| When `true`, light jobs can use idle heavy slots for extra throughput. | `true` |
+| `REUSE_IDLE_SLOTS` | When `true`, light jobs can use idle heavy slots for extra throughput. | `true` |
 
 #### Default Slot Allocation
 
@@ -239,17 +239,17 @@ The Manga Library uses a strict **Global -> Series -> Chapter** inheritance hier
 
 ### Resolution Logic (Backend & Frontend)
 
-- **Backend Logic (`SeriesController.java`, `ChapterDto.java`)**: 
+* **Backend Logic (`SeriesController.java`, `ChapterDto.java`)**:
   The backend performs the heavy lifting for resolving these overrides. When returning a `ChapterDto`, the backend computes `ResolvedModelSlot` (for OCR and Translation) and `ResolvedQaSlot` (for QA) which contain the effective values. It checks the Chapter first; if null, it checks the Series; if null, it falls back to the Global Setting.
-- **Frontend Logic (`SeriesHeader.tsx`, `ChapterHeader.tsx`)**:
+* **Frontend Logic (`SeriesHeader.tsx`, `ChapterHeader.tsx`)**:
   The frontend uses the `resolveOverride` utility function to compute these on the fly for Series cards (which pull settings via context), or directly consumes the backend's `resolvedQa` slots for Chapters.
 
 ### Handling VLM vs LLM Capabilities
 
-The application dynamically checks if a chosen provider supports Vision-Language Models (VLM) via `providerModelsMap` (`SettingsController.java`). 
+The application dynamically checks if a chosen provider supports Vision-Language Models (VLM) via `providerModelsMap` (`SettingsController.java`).
 
-- **Smart QA Routing (`JobCoordinatorService.java`)**: If `qaMode` is `auto`, the backend intelligently prefers the VLM over the LLM. If the provider does not support a VLM, the backend falls back to using the configured LLM, ensuring the job doesn't fail.
-- **Dynamic Frontend Filtering (`ModelOverridesAccordion.tsx`, `SeriesHeader.tsx`, `ChapterHeader.tsx`)**:
-  - The UI uses the `qaVLM` capability key (not to be confused with `vlm`) to check if the current provider supports VLMs. 
-  - If a capability is missing, the dropdown is disabled, and the choice is forced to `"N/A"`.
-  - When rendering the configuration chips in the `SeriesHeader` and `ChapterHeader`, the UI explicitly checks `qaVlmCapabilityMissing` and gracefully hides the `QA VLM` chip to prevent displaying inherited VLM models for a provider that doesn't support them.
+* **Smart QA Routing (`JobCoordinatorService.java`)**: If `qaMode` is `auto`, the backend intelligently prefers the VLM over the LLM. If the provider does not support a VLM, the backend falls back to using the configured LLM, ensuring the job doesn't fail.
+* **Dynamic Frontend Filtering (`ModelOverridesAccordion.tsx`, `SeriesHeader.tsx`, `ChapterHeader.tsx`)**:
+  * The UI uses the `qaVLM` capability key (not to be confused with `vlm`) to check if the current provider supports VLMs.
+  * If a capability is missing, the dropdown is disabled, and the choice is forced to `"N/A"`.
+  * When rendering the configuration chips in the `SeriesHeader` and `ChapterHeader`, the UI explicitly checks `qaVlmCapabilityMissing` and gracefully hides the `QA VLM` chip to prevent displaying inherited VLM models for a provider that doesn't support them.
