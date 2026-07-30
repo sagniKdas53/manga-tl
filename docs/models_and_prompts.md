@@ -31,7 +31,7 @@ Each model has a configurable fallback chain via `_MODEL_LIST` env vars. See `wo
 
 **File:** `worker/services/ocr.py:57-63`
 
-```
+```text
 Respond with a JSON object containing the text shown in this image
 and your confidence score. Use the format:
 {"text": "<extracted text>", "confidence": <0.0-1.0>}.
@@ -73,7 +73,7 @@ Do not add any explanations or notes outside the JSON.
 
 **System prompt:**
 
-```
+```text
 You are an expert manga OCR system. Perform OCR on each of the provided
 image crops. The source language is {lang_name}. Return ONLY a valid
 JSON object matching the schema.
@@ -119,7 +119,7 @@ JSON object matching the schema.
 
 **File:** `worker/services/translation.py:678-682`
 
-```
+```text
 You are an expert manga OCR system. Perform OCR on each of the provided
 image crops. Each crop is labeled with a Region ID header (e.g.,
 'Region ID: crop_0'). Extract the text and map it back to the ID exactly
@@ -139,7 +139,7 @@ as specified in the JSON schema.
 
 **File:** `worker/services/translation.py:711-712`
 
-```
+```text
 Respond with a valid JSON object matching the requested schema.
 ```
 
@@ -151,7 +151,7 @@ Respond with a valid JSON object matching the requested schema.
 
 **File:** `worker/handlers/ocr.py:777-779`
 
-```
+```text
 Extract the text from this speech bubble.
 ```
 
@@ -168,7 +168,7 @@ Extract the text from this speech bubble.
 
 **File:** `worker/services/translation.py:49-62`
 
-```
+```text
 You are an expert manga translator.
 Translate the list of manga text regions into natural English.
 These regions appear in reading order. Maintain context, tone, emotion,
@@ -208,7 +208,7 @@ conversational prefix, suffix, or markdown formatting.
 
 **File:** `worker/services/translation.py:64-74`
 
-```
+```text
 You are an expert manga translator.
 
 Translate Japanese manga dialogue into natural English.
@@ -243,7 +243,7 @@ Rules:
 
 **File:** `worker/services/translation.py:1007`
 
-```
+```text
 Translate the following text to natural {tgt_name}, maintaining its tone
 and context. Respond ONLY with the translated text. Do not include any
 tags, notes, or explanations.
@@ -257,9 +257,9 @@ Text: {text}
 
 ### 9. Batch Translation (user prompt)
 
-**File:** `worker/services/translation.py:1278-1327**
+**File:** `worker/services/translation.py:1278-1327`
 
-```
+```text
 {context_str}These text regions appear in reading order.
 [... full prompt as documented above ...]
 
@@ -279,9 +279,9 @@ Input:
 
 ### 10. LLM Text-Only QA
 
-**File:** `worker/handlers/qa.py:142-164` / `666-688`
+**File:** `worker/handlers/qa.py:142-164 / 666-688`
 
-```
+```text
 You are an expert bilingual Japanese-to-English manga translator and QA
 reviewer.
 [... full prompt as documented above ...]
@@ -307,9 +307,9 @@ You MUST return a JSON object containing a "results" key [...]
 
 ### 11. VLM Vision QA
 
-**File:** `worker/handlers/qa.py:368-392` / `940-964**
+**File:** `worker/handlers/qa.py:368-392 / 940-964`
 
-```
+```text
 You are an expert Japanese-to-English manga translator and typesetting
 reviewer. Given the original Japanese manga page (left) and the English
 typeset page (right) [...]
@@ -401,7 +401,7 @@ All translation responses go through `is_valid_translation()` which applies:
 
 **Suggestion:** Standardize all structured-output prompts to a consistent closing style, e.g.:
 
-```
+```text
 Return ONLY a valid JSON object conforming to the requested schema. No conversational prefix, suffix, or markdown formatting.
 ```
 

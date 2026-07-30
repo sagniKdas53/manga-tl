@@ -13,7 +13,7 @@ This report outlines the current state of the backend API, identifies missing be
 - **Undocumented Error Responses:** The generated spec defaults to showing only `200 OK` for most endpoints, omitting crucial error states (e.g., `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `500 Internal Server Error`).
 - **Missing Request/Response Schemas:** Without annotations, some complex generic payload types or `Map<String, String>` bodies (such as in `AuthController.updateProfile`) are not strongly typed in the specification, making it harder for frontend clients to generate types.
 
-### Recommendations
+### Documentation Recommendations
 
 - Annotate all controllers with `@Tag(name = "...", description = "...")`.
 - Annotate all endpoints with `@Operation(summary = "...", description = "...")`.
@@ -34,7 +34,7 @@ This report outlines the current state of the backend API, identifies missing be
   - `PUT` is used heavily for actions that seem to be partial updates (e.g., `/api/pages/{pageId}/number`). `PATCH` is semantically more correct for partial modifications, whereas `PUT` implies replacing the entire resource.
 - **Inconsistent Pluralization:** Most resources are correctly pluralized (`/api/series`, `/api/chapters`), but ensuring this remains consistent across all new endpoints is critical.
 
-### Recommendations
+### REST & API Design Recommendations
 
 - **Adopt `PATCH` for Partial Updates:** Transition endpoints like `/api/pages/{pageId}/number` to use `PATCH`.
 - **Standardize Pagination & Filtering:** Ensure that list endpoints (`GET /api/series`, `GET /api/jobs`) clearly document their query parameters for pagination (`page`, `size`) and sorting (`sort`).

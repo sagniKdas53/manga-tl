@@ -35,7 +35,7 @@ You can tune slot allocation using environment variables defined in the worker's
 | `CONCURRENT_JOBS` | The maximum total number of jobs the worker can process at once. | `2` |
 | `MAX_HEAVY_SLOTS` | The subset of concurrent jobs reserved for GPU/Heavy queues. | `1` |
 | `MAX_LIGHT_SLOTS` | The subset of concurrent jobs reserved for Cloud/Light queues. | `CONCURRENT_JOBS - MAX_HEAVY_SLOTS` |
-| `REUSE_IDLE_SLOTS`| When `true`, light jobs can use idle heavy slots for extra throughput without exceeding `CONCURRENT_JOBS`. | `true` |
+| `REUSE_IDLE_SLOTS` | When `true`, light jobs can use idle heavy slots for extra throughput without exceeding `CONCURRENT_JOBS`. | `true` |
 
 ### Default Slot Allocation Matrix
 
