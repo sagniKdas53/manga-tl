@@ -227,7 +227,11 @@ public class WorkerDispatcherService {
               break;
             } else if (response.statusCode() == 429) {
               // Apply exponential backoff
-              int consecutive = workerConsecutive429s.merge(workerUrl, 1, Integer::sum);
+              int consecutive =
+                  workerConsecutive429s.merge(
+                      workerUrl,
+                      1,
+                      (a, b) -> Integer.sum(Objects.requireNonNull(a), Objects.requireNonNull(b)));
               int cooldownSecs = Math.min(COOLDOWN_BASE_SECONDS * (1 << (consecutive - 1)), COOLDOWN_MAX_SECONDS);
               workerCooldowns.put(workerUrl, Instant.now().plusSeconds(cooldownSecs));
               log.warn(
@@ -283,7 +287,7 @@ public class WorkerDispatcherService {
     allQueues.addAll(HEAVY_QUEUES);
     allQueues.addAll(LIGHT_QUEUES);
     for (String q : allQueues) {
-      Long size = redisTemplate.opsForList().size(q);
+      Long size = redisTemplate.opsForList().size(Objects.requireNonNull(q));
       if (size != null && size > 0) return true;
     }
     return false;

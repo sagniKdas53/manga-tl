@@ -23,13 +23,18 @@ import org.springframework.test.util.ReflectionTestUtils;
 @SuppressWarnings("null")
 public class WorkerDispatcherServiceTest {
 
-  @Mock private StringRedisTemplate redisTemplate;
+  @Mock
+  private StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper = new ObjectMapper();
-  @Mock private HttpClient httpClient;
-  @Mock private ValueOperations<String, String> valueOps;
-  @Mock private ListOperations<String, String> listOps;
+  @Mock
+  private HttpClient httpClient;
+  @Mock
+  private ValueOperations<String, String> valueOps;
+  @Mock
+  private ListOperations<String, String> listOps;
 
-  @InjectMocks private WorkerDispatcherService workerDispatcherService;
+  @InjectMocks
+  private WorkerDispatcherService workerDispatcherService;
 
   @BeforeEach
   public void setUp() {
@@ -63,8 +68,8 @@ public class WorkerDispatcherServiceTest {
     when(mockResponse.statusCode()).thenReturn(202);
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
@@ -86,8 +91,8 @@ public class WorkerDispatcherServiceTest {
     when(mockResponse.statusCode()).thenReturn(429);
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
@@ -98,6 +103,7 @@ public class WorkerDispatcherServiceTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void testDispatchJobs_MultipleWorkers_FirstFailsSecondAccepts() throws Exception {
     ReflectionTestUtils.setField(
         workerDispatcherService, "workerUrlsConfig", "http://worker1:9091,http://worker2:9091");
@@ -111,19 +117,21 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse, capResponse, mockResponse1, mockResponse2);
 
     workerDispatcherService.dispatchJobs();
 
-    // Verify it popped the job and didn't push it back (because worker2 accepted it)
+    // Verify it popped the job and didn't push it back (because worker2 accepted
+    // it)
     verify(listOps, times(2)).leftPop("queue:panel-detection");
     verify(listOps, never()).leftPush(anyString(), anyString());
     verify(httpClient, times(4)).send(any(HttpRequest.class), any());
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void testDispatchJobs_MultipleWorkers_AllFail() throws Exception {
     ReflectionTestUtils.setField(
         workerDispatcherService, "workerUrlsConfig", "http://worker1:9091,http://worker2:9091");
@@ -135,18 +143,20 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse, capResponse, mockResponse, mockResponse);
 
     workerDispatcherService.dispatchJobs();
 
-    // Verify it pushed the job back to the left because all workers failed/rate-limited
+    // Verify it pushed the job back to the left because all workers
+    // failed/rate-limited
     verify(listOps).rightPush("queue:panel-detection", "{\"id\": \"123\"}");
     verify(httpClient, times(4)).send(any(HttpRequest.class), any());
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void testDispatchJobs_MultipleWorkers_FirstThrowsExceptionSecondAccepts()
       throws Exception {
     ReflectionTestUtils.setField(
@@ -159,8 +169,8 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse, capResponse)
         .thenThrow(new java.io.IOException("Connection refused"))
         .thenReturn(mockResponse);
@@ -181,12 +191,11 @@ public class WorkerDispatcherServiceTest {
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(202);
 
-    org.mockito.ArgumentCaptor<HttpRequest> requestCaptor =
-        org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
+    org.mockito.ArgumentCaptor<HttpRequest> requestCaptor = org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            requestCaptor.capture(),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        requestCaptor.capture(),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
@@ -208,14 +217,14 @@ public class WorkerDispatcherServiceTest {
         workerDispatcherService, "workerApiSecretFile", tempFile.toString());
     workerDispatcherService.init();
 
-    String secret =
-        (String) ReflectionTestUtils.getField(workerDispatcherService, "workerApiSecret");
+    String secret = (String) ReflectionTestUtils.getField(workerDispatcherService, "workerApiSecret");
     assertEquals("file_secret", secret);
 
     Files.deleteIfExists(tempFile);
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void testDispatchJobs_IndependentSlots_HeavyRejectedLightAccepted() throws Exception {
     ReflectionTestUtils.setField(
         workerDispatcherService, "workerUrlsConfig", "http://worker1:9091,http://worker2:9091");
@@ -231,12 +240,13 @@ public class WorkerDispatcherServiceTest {
     HttpResponse<String> lightResponse = mockGeneric(HttpResponse.class);
     when(lightResponse.statusCode()).thenReturn(202);
 
-    // Worker1: full capacity. Worker2: heavy slot full (no heavy slot), light slot available.
+    // Worker1: full capacity. Worker2: heavy slot full (no heavy slot), light slot
+    // available.
     HttpResponse<String> capW1 = mockCapabilitiesResponse();
     HttpResponse<String> capW2 = mockCapabilitiesResponse(2, 0, 1, 1, 1, 0);
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capW1, capW2, heavyResponse, lightResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -264,8 +274,8 @@ public class WorkerDispatcherServiceTest {
 
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse)
         .thenReturn(heavyResponse)
         .thenReturn(lightResponse);
@@ -291,8 +301,8 @@ public class WorkerDispatcherServiceTest {
     when(mockResponse.statusCode()).thenReturn(202);
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse)
         .thenReturn(mockResponse)
         .thenReturn(mockResponse);
@@ -306,6 +316,7 @@ public class WorkerDispatcherServiceTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   public void testDispatchJobs_BothSlotsRejected() throws Exception {
     ReflectionTestUtils.setField(
         workerDispatcherService, "workerUrlsConfig", "http://worker1:9091,http://worker2:9091");
@@ -317,12 +328,13 @@ public class WorkerDispatcherServiceTest {
     HttpResponse<String> mockResponse = mockGeneric(HttpResponse.class);
     when(mockResponse.statusCode()).thenReturn(429);
 
-    // Worker1: full capacity. Worker2: heavy slot full (no heavy slot), light slot available.
+    // Worker1: full capacity. Worker2: heavy slot full (no heavy slot), light slot
+    // available.
     HttpResponse<String> capW1 = mockCapabilitiesResponse();
     HttpResponse<String> capW2 = mockCapabilitiesResponse(2, 0, 1, 1, 1, 0);
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capW1, capW2, mockResponse, mockResponse);
 
     workerDispatcherService.dispatchJobs();
@@ -343,8 +355,8 @@ public class WorkerDispatcherServiceTest {
     when(mockResponse.body()).thenReturn("{\"detail\":\"bad request\"}");
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
@@ -365,8 +377,8 @@ public class WorkerDispatcherServiceTest {
         .thenReturn("{\"detail\":[{\"msg\":\"field required\",\"type\":\"missing\"}]}");
     HttpResponse<String> capResponse = mockCapabilitiesResponse();
     when(httpClient.send(
-            any(HttpRequest.class),
-            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
         .thenReturn(capResponse)
         .thenReturn(mockResponse);
 
