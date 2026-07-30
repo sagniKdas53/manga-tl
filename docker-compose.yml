@@ -25,7 +25,7 @@ services:
   db-backup:
     image: prodrigestivill/postgres-backup-local:15
     container_name: manga-db-backup
-    restart: unless-stopped
+    restart: none
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_DB=${POSTGRES_DB:-manga_library}
