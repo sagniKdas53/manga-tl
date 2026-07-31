@@ -29,14 +29,33 @@ COPY backend/src ./src
 RUN --mount=type=cache,target=/root/.m2 \
     mvn clean package -DskipTests -P!frontend
 
-# Stage 3: Runtime JRE Image
+# Stage 3: Build musl libwebp-imageio.so
+# com.github.gotson:webp-imageio ships glibc builds only (native/Linux/<arch>), so on
+# Alpine/musl the JNI lib fails to load with UnsatisfiedLinkError and thumbnails 404.
+# Compile the wrapper (vendored from gotson/webp-imageio) against Alpine's musl libwebp.
+FROM alpine:3.23 AS webp-native-build
+RUN apk add --no-cache libwebp-dev musl-dev build-base
+WORKDIR /src
+COPY backend/src/main/c/ ./
+RUN gcc -shared -fPIC -O2 \
+      -I/src -I/src/jni -I/src/jni/unix \
+      -I/usr/include/webp -I/usr/include \
+      webp-imageio.c -lwebp -o libwebp-imageio.so
+
+# Stage 4: Runtime JRE Image
 FROM eclipse-temurin:25-jre-alpine
+
+# libwebp.so.7 is a runtime dependency of the musl wrapper; install before dropping privileges
+RUN apk add --no-cache libwebp
 
 # Non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
 
 WORKDIR /app
 COPY --from=backend-build /app/target/library-0.0.1-SNAPSHOT.jar app.jar
+# Place musl wrapper on java.library.path (NativeLoader falls back to it when the
+# jar has no Linux-Alpine native resource)
+COPY --from=webp-native-build /src/libwebp-imageio.so /usr/lib/libwebp-imageio.so
 
 USER spring
 

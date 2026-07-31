@@ -108,6 +108,10 @@
           generation. The fork ships newer libwebp with those crash fixes. Same ImageIO SPI,
           so registry-based usage (ImageIO.getImageReaders / getImageWritersByFormatName) is
           unaffected.
+          NOTE: The Maven jar only bundles glibc native builds (native/Linux/<arch>), which do
+          NOT load on the Alpine/musl runtime image -> UnsatisfiedLinkError and missing
+          thumbnails. The Dockerfile therefore compiles a musl libwebp-imageio.so from the
+          vendored sources in backend/src/main/c/ and installs it on java.library.path.
         -->
         <dependency>
             <groupId>com.github.gotson</groupId>
