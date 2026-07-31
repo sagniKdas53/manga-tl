@@ -247,4 +247,75 @@ public class CostEstimationServiceTest {
     assertDoesNotThrow(
         () -> costEstimationService.estimateCost("google/gemini-2.5-flash", 10, 10, "ollama"));
   }
+
+  @Test
+  public void testEstimateCost_NoRatesUnknownProvider() {
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(redisTemplate.opsForList()).thenReturn(listOperations);
+    when(valueOperations.get(anyString())).thenReturn(null);
+    when(modelRateRepository.findById(anyString())).thenReturn(Optional.empty());
+
+    Double cost =
+        costEstimationService.estimateCost("unknown/model", 100, 100, "anthropic");
+
+    assertNull(cost);
+  }
+
+  @Test
+  public void testEstimateCost_DatabaseReadException() {
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(redisTemplate.opsForList()).thenReturn(listOperations);
+    when(valueOperations.get(anyString())).thenReturn(null);
+    when(modelRateRepository.findById(anyString()))
+        .thenThrow(new RuntimeException("db down"));
+
+    Double cost =
+        costEstimationService.estimateCost("unknown/model", 100, 100, "anthropic");
+
+    assertNull(cost);
+  }
+
+  @Test
+  public void testScheduledModelCostsSync() throws Exception {
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(httpResponse);
+    when(httpResponse.statusCode()).thenReturn(200);
+    when(httpResponse.body())
+        .thenReturn("{\"data\":[{\"id\":\"gpt-4o\",\"pricing\":{}}]}");
+
+    costEstimationService.scheduledModelCostsSync();
+
+    verify(valueOperations).set(eq("model_cost:gpt-4o"), anyString());
+  }
+
+  @Test
+  public void testUpdateModelCosts_HttpException() throws Exception {
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenThrow(new java.io.IOException("conn refused"));
+
+    assertDoesNotThrow(() -> costEstimationService.updateModelCosts(List.of("gpt-4o")));
+  }
+
+  @Test
+  public void testUpdateCaches_DbSaveException() throws Exception {
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(httpClient.send(
+            any(HttpRequest.class),
+            org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(httpResponse);
+    when(httpResponse.statusCode()).thenReturn(200);
+    when(httpResponse.body())
+        .thenReturn(
+            "{\"data\":[{\"id\":\"gpt-4o\",\"pricing\":{\"prompt\":0.1,\"completion\":0.2}}]}");
+    doThrow(new RuntimeException("db fail"))
+        .when(modelRateRepository)
+        .save(any(com.manga.library.model.ModelRate.class));
+
+    assertDoesNotThrow(() -> costEstimationService.updateModelCosts(List.of("gpt-4o")));
+  }
 }

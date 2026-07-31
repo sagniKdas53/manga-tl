@@ -122,4 +122,32 @@ public class MinioServiceTest {
     InputStream result = minioService.getFileStream("path/to/file.png");
     assertSame(mockResponse, result);
   }
+
+  @Test
+  public void testFileExists_True() throws Exception {
+    when(minioClient.statObject(any(StatObjectArgs.class)))
+        .thenReturn(mock(StatObjectResponse.class));
+
+    assertTrue(minioService.fileExists("path/to/file.png"));
+  }
+
+  @Test
+  public void testFileExists_False() throws Exception {
+    doThrow(new RuntimeException("not found"))
+        .when(minioClient)
+        .statObject(any(StatObjectArgs.class));
+
+    assertFalse(minioService.fileExists("path/to/file.png"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testListObjects() throws Exception {
+    Iterable<Result<io.minio.messages.Item>> items = mock(Iterable.class);
+    when(minioClient.listObjects(any(ListObjectsArgs.class))).thenReturn(items);
+
+    Iterable<Result<io.minio.messages.Item>> result = minioService.listObjects("prefix/");
+
+    assertSame(items, result);
+  }
 }

@@ -22,4 +22,9 @@ public class RedisTestcontainersConfig {
   public RedisConnectionFactory redisConnectionFactory() {
     return new LettuceConnectionFactory(Objects.requireNonNull(REDIS.getHost()), REDIS.getMappedPort(6379));
   }
+
+  @Bean(name = "taskScheduler")
+  public org.springframework.scheduling.TaskScheduler noOpTaskScheduler() {
+    return org.mockito.Mockito.mock(org.springframework.scheduling.TaskScheduler.class);
+  }
 }
