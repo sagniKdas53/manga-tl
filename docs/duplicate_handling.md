@@ -21,20 +21,17 @@ When an image is uploaded, the system computes its SHA-256 hash. If an image wit
 - When restoring a `project.json` backup for a specific slot, the system deletes all existing layers/elements for that slot.
 - If the uploaded image hash is the same as the existing image, it reuses the image and rebuilds the layers.
 
-## The Model Testing Issue
+## Architecture & Intelligent Cloning
 
-Because `Layer`, `Panel`, and `OcrRegion` entities are currently tied to the `Image` entity (not the `Page`), and because we completely deduplicate `Image` entities (reusing the exact same database row when the hash matches), a structural limitation exists:
+Because `Layer`, `Panel`, and `OcrRegion` entities are tied to the **`Page`** entity (not the `Image`), duplicate images uploaded to different chapters (or different slots) result in a brand new `Page` entity.
 
-If an identical image is uploaded to a different chapter (for example, to test a different OCR/Translation model on the same raw page), it will reuse the existing `Image` entity. Consequently, it inherits the exact same layers and won't get re-processed. If it were re-processed, it would overwrite the layers for the original chapter.
+To save time, cost, and storage, the system performs **intelligent layer cloning** when a duplicate image is detected:
 
-## Proposed Future Fix
+1. **OCR Data Cloning**: The system compares the new chapter's OCR configuration (provider, model) against the source page's configuration. If they match, the system clones all `OcrRegion` entities to the new page. If they differ, the OCR layer is not cloned, and a full pipeline run is triggered to generate new OCR regions.
+2. **Translation Data Cloning**: If the OCR data was successfully cloned, the system also checks the Translation configuration (provider, model, QA mode, QA provider, QA LLM/VLM models). If these perfectly match, the Translation layers and all their corresponding `LayerElement`s are cloned.
+3. **Pipeline Triggering**: 
+   - If both OCR and Translation are successfully cloned, the system skips downstream heavy AI tasks and only triggers the **Render** job for the new page.
+   - If OCR is cloned but Translation configs do not match, the system enqueues a **Translation** job for the new page.
+   - If OCR configs do not match, the entire AI pipeline starts from the beginning.
 
-To fix this without a massive architectural rewrite, we should change how we deduplicate. Instead of reusing the `Image` **entity** (the database row), we should only deduplicate the **MinIO file**.
-
-**Proposed Flow for Duplicate Hashes:**
-
-1. Create a brand new `Image` entity with a new UUID.
-2. Set its `storagePath` to the exact same path as the existing file in MinIO.
-3. This new `Image` entity will get its own fresh set of `Layer`, `Panel`, and `OcrRegion` rows in the database.
-
-This allows the new chapter to run its own pipeline with different models (e.g., Gemini vs Local OCR), while still saving storage space since the raw file is only stored once in MinIO.
+This cloning operates securely: it deep-copies all layout and text data (assigning new UUIDs to the new layers and regions) while correctly remapping element references. Thus, modifying layers on the original page will not affect the duplicated page in another chapter, and vice-versa, allowing independent testing and edits.

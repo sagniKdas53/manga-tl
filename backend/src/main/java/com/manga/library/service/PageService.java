@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -22,18 +24,27 @@ public class PageService {
   private final SeriesRepository seriesRepository;
   private final ChapterRepository chapterRepository;
   private final MinioService minioService;
+  private final LayerRepository layerRepository;
+  private final LayerElementRepository layerElementRepository;
+  private final OcrRegionRepository ocrRegionRepository;
 
   public PageService(
       ImageRepository imageRepository,
       PageRepository pageRepository,
       SeriesRepository seriesRepository,
       ChapterRepository chapterRepository,
-      MinioService minioService) {
+      MinioService minioService,
+      LayerRepository layerRepository,
+      LayerElementRepository layerElementRepository,
+      OcrRegionRepository ocrRegionRepository) {
     this.imageRepository = imageRepository;
     this.pageRepository = pageRepository;
     this.seriesRepository = seriesRepository;
     this.chapterRepository = chapterRepository;
     this.minioService = minioService;
+    this.layerRepository = layerRepository;
+    this.layerElementRepository = layerElementRepository;
+    this.ocrRegionRepository = ocrRegionRepository;
   }
 
   @Transactional
@@ -376,5 +387,201 @@ public class PageService {
     if (oldPageNumber == 1 || newPageNumber == 1) {
       recalculateChapterCover(chapterId);
     }
+  }
+
+  @Transactional
+  public Map<UUID, UUID> cloneOcrData(Page sourcePage, Page targetPage) {
+    List<Layer> sourceLayers = layerRepository.findByPageId(sourcePage.getId());
+    Layer sourceOcrLayer = sourceLayers.stream()
+        .filter(l -> "ocr".equals(l.getType()) && Boolean.TRUE.equals(l.getVisible()))
+        .max(java.util.Comparator.comparingInt(Layer::getZOrder))
+        .orElse(null);
+
+    Map<UUID, UUID> regionIdMap = new HashMap<>();
+
+    if (sourceOcrLayer == null) {
+      return regionIdMap; // No OCR layer to clone
+    }
+
+    // Clone OcrRegions
+    List<OcrRegion> sourceRegions = ocrRegionRepository.findByPageId(sourcePage.getId());
+    for (OcrRegion sourceRegion : sourceRegions) {
+      OcrRegion clonedRegion = new OcrRegion();
+      clonedRegion.setPage(targetPage);
+      // Panel relationship is handled via Image, so we don't need to clone panels since they share the Image
+      clonedRegion.setPanel(sourceRegion.getPanel());
+      clonedRegion.setText(sourceRegion.getText());
+      // Skip TL/QA fields in OCR cloning just to be clean, but they will be overwritten if TL is cloned.
+      // Wait, actually OcrRegion contains TL/QA fields. If we ONLY clone OCR, we should clear TL fields.
+      clonedRegion.setTranslatedText(null);
+      clonedRegion.setApproved(false);
+      clonedRegion.setTranslationFailed(false);
+      clonedRegion.setTranslationScore(null);
+      clonedRegion.setQaScore(null);
+      clonedRegion.setQaFeedback(null);
+      clonedRegion.setQaStatus("pending");
+
+      clonedRegion.setDetectedLanguage(sourceRegion.getDetectedLanguage());
+      clonedRegion.setConfidence(sourceRegion.getConfidence());
+      clonedRegion.setRotation(sourceRegion.getRotation());
+      clonedRegion.setBboxX(sourceRegion.getBboxX());
+      clonedRegion.setBboxY(sourceRegion.getBboxY());
+      clonedRegion.setBboxW(sourceRegion.getBboxW());
+      clonedRegion.setBboxH(sourceRegion.getBboxH());
+      clonedRegion.setPanelReadingOrder(sourceRegion.getPanelReadingOrder());
+      clonedRegion.setBubbleReadingOrder(sourceRegion.getBubbleReadingOrder());
+      clonedRegion.setRegionType(sourceRegion.getRegionType());
+      clonedRegion.setBackgroundColor(sourceRegion.getBackgroundColor());
+      clonedRegion.setBubbleX(sourceRegion.getBubbleX());
+      clonedRegion.setBubbleY(sourceRegion.getBubbleY());
+      clonedRegion.setBubbleW(sourceRegion.getBubbleW());
+      clonedRegion.setBubbleH(sourceRegion.getBubbleH());
+      clonedRegion.setOcrScore(sourceRegion.getOcrScore());
+      clonedRegion.setBubbleId(sourceRegion.getBubbleId());
+      clonedRegion.setDetectionConfidence(sourceRegion.getDetectionConfidence());
+      clonedRegion.setMaskPolygon(sourceRegion.getMaskPolygon());
+      clonedRegion.setSafeTextX(sourceRegion.getSafeTextX());
+      clonedRegion.setSafeTextY(sourceRegion.getSafeTextY());
+      clonedRegion.setSafeTextW(sourceRegion.getSafeTextW());
+      clonedRegion.setSafeTextH(sourceRegion.getSafeTextH());
+
+      clonedRegion = ocrRegionRepository.save(clonedRegion);
+      regionIdMap.put(sourceRegion.getId(), clonedRegion.getId());
+    }
+
+    ocrRegionRepository.flush();
+
+    // Clone OCR Layer
+    Layer clonedOcrLayer = new Layer();
+    clonedOcrLayer.setPage(targetPage);
+    clonedOcrLayer.setType(sourceOcrLayer.getType());
+    clonedOcrLayer.setTargetLanguage(sourceOcrLayer.getTargetLanguage());
+    clonedOcrLayer.setVisible(sourceOcrLayer.getVisible());
+    clonedOcrLayer.setZOrder(sourceOcrLayer.getZOrder());
+    if (sourceOcrLayer.getMetadataJson() != null) {
+      clonedOcrLayer.setMetadataJson(sourceOcrLayer.getMetadataJson().deepCopy());
+    }
+    clonedOcrLayer = layerRepository.save(clonedOcrLayer);
+
+    // Clone OCR LayerElements
+    List<LayerElement> sourceElements = layerElementRepository.findByLayerPageId(sourcePage.getId()).stream()
+        .filter(e -> e.getLayer().getId().equals(sourceOcrLayer.getId()))
+        .toList();
+
+    for (LayerElement sourceEl : sourceElements) {
+      LayerElement clonedEl = new LayerElement();
+      clonedEl.setLayer(clonedOcrLayer);
+      if (sourceEl.getRegion() != null && regionIdMap.containsKey(sourceEl.getRegion().getId())) {
+        UUID newRegionId = regionIdMap.get(sourceEl.getRegion().getId());
+        clonedEl.setRegion(ocrRegionRepository.findById(newRegionId).orElse(null));
+      }
+      clonedEl.setText(sourceEl.getText());
+      clonedEl.setFont(sourceEl.getFont());
+      clonedEl.setSize(sourceEl.getSize());
+      clonedEl.setAutoSize(sourceEl.getAutoSize());
+      clonedEl.setMaxWidth(sourceEl.getMaxWidth());
+      clonedEl.setMaxHeight(sourceEl.getMaxHeight());
+      clonedEl.setWordWrap(sourceEl.getWordWrap());
+      clonedEl.setRotation(sourceEl.getRotation());
+      clonedEl.setX(sourceEl.getX());
+      clonedEl.setY(sourceEl.getY());
+      clonedEl.setVisible(sourceEl.getVisible());
+      clonedEl.setOverflow(sourceEl.getOverflow());
+      clonedEl.setBackgroundColor(sourceEl.getBackgroundColor());
+      clonedEl.setTextColor(sourceEl.getTextColor());
+      clonedEl.setFontWeight(sourceEl.getFontWeight());
+      clonedEl.setFontStyle(sourceEl.getFontStyle());
+      clonedEl.setIsManuallyEdited(sourceEl.getIsManuallyEdited());
+      clonedEl.setEditedAt(sourceEl.getEditedAt());
+      clonedEl.setBoxShape(sourceEl.getBoxShape());
+      clonedEl.setMaskPolygon(sourceEl.getMaskPolygon());
+
+      layerElementRepository.save(clonedEl);
+    }
+
+    layerElementRepository.flush();
+    return regionIdMap;
+  }
+
+  @Transactional
+  public void cloneTranslationData(Page sourcePage, Page targetPage, Map<UUID, UUID> regionIdMap) {
+    List<Layer> sourceLayers = layerRepository.findByPageId(sourcePage.getId());
+    Layer sourceTlLayer = sourceLayers.stream()
+        .filter(l -> "translation".equals(l.getType()) && Boolean.TRUE.equals(l.getVisible()))
+        .max(java.util.Comparator.comparingInt(Layer::getZOrder))
+        .orElse(null);
+
+    if (sourceTlLayer == null) {
+      return; // No TL layer to clone
+    }
+
+    // Update OcrRegions with TL/QA data from source
+    List<OcrRegion> sourceRegions = ocrRegionRepository.findByPageId(sourcePage.getId());
+    for (OcrRegion sourceRegion : sourceRegions) {
+      if (regionIdMap.containsKey(sourceRegion.getId())) {
+        UUID newRegionId = regionIdMap.get(sourceRegion.getId());
+        ocrRegionRepository.findById(newRegionId).ifPresent(targetRegion -> {
+          targetRegion.setTranslatedText(sourceRegion.getTranslatedText());
+          targetRegion.setApproved(sourceRegion.getApproved());
+          targetRegion.setTranslationFailed(sourceRegion.getTranslationFailed());
+          targetRegion.setTranslationScore(sourceRegion.getTranslationScore());
+          targetRegion.setQaScore(sourceRegion.getQaScore());
+          targetRegion.setQaFeedback(sourceRegion.getQaFeedback());
+          targetRegion.setQaStatus(sourceRegion.getQaStatus());
+          ocrRegionRepository.save(targetRegion);
+        });
+      }
+    }
+    ocrRegionRepository.flush();
+
+    // Clone TL Layer
+    Layer clonedTlLayer = new Layer();
+    clonedTlLayer.setPage(targetPage);
+    clonedTlLayer.setType(sourceTlLayer.getType());
+    clonedTlLayer.setTargetLanguage(sourceTlLayer.getTargetLanguage());
+    clonedTlLayer.setVisible(sourceTlLayer.getVisible());
+    clonedTlLayer.setZOrder(sourceTlLayer.getZOrder());
+    if (sourceTlLayer.getMetadataJson() != null) {
+      clonedTlLayer.setMetadataJson(sourceTlLayer.getMetadataJson().deepCopy());
+    }
+    clonedTlLayer = layerRepository.save(clonedTlLayer);
+
+    // Clone TL LayerElements
+    List<LayerElement> sourceElements = layerElementRepository.findByLayerPageId(sourcePage.getId()).stream()
+        .filter(e -> e.getLayer().getId().equals(sourceTlLayer.getId()))
+        .toList();
+
+    for (LayerElement sourceEl : sourceElements) {
+      LayerElement clonedEl = new LayerElement();
+      clonedEl.setLayer(clonedTlLayer);
+      if (sourceEl.getRegion() != null && regionIdMap.containsKey(sourceEl.getRegion().getId())) {
+        UUID newRegionId = regionIdMap.get(sourceEl.getRegion().getId());
+        clonedEl.setRegion(ocrRegionRepository.findById(newRegionId).orElse(null));
+      }
+      clonedEl.setText(sourceEl.getText());
+      clonedEl.setFont(sourceEl.getFont());
+      clonedEl.setSize(sourceEl.getSize());
+      clonedEl.setAutoSize(sourceEl.getAutoSize());
+      clonedEl.setMaxWidth(sourceEl.getMaxWidth());
+      clonedEl.setMaxHeight(sourceEl.getMaxHeight());
+      clonedEl.setWordWrap(sourceEl.getWordWrap());
+      clonedEl.setRotation(sourceEl.getRotation());
+      clonedEl.setX(sourceEl.getX());
+      clonedEl.setY(sourceEl.getY());
+      clonedEl.setVisible(sourceEl.getVisible());
+      clonedEl.setOverflow(sourceEl.getOverflow());
+      clonedEl.setBackgroundColor(sourceEl.getBackgroundColor());
+      clonedEl.setTextColor(sourceEl.getTextColor());
+      clonedEl.setFontWeight(sourceEl.getFontWeight());
+      clonedEl.setFontStyle(sourceEl.getFontStyle());
+      clonedEl.setIsManuallyEdited(sourceEl.getIsManuallyEdited());
+      clonedEl.setEditedAt(sourceEl.getEditedAt());
+      clonedEl.setBoxShape(sourceEl.getBoxShape());
+      clonedEl.setMaskPolygon(sourceEl.getMaskPolygon());
+
+      layerElementRepository.save(clonedEl);
+    }
+
+    layerElementRepository.flush();
   }
 }
