@@ -35,6 +35,11 @@ public class TestcontainersConfig {
         .withInitScript("init-test.sql");
   }
 
+  @Bean(name = "taskScheduler")
+  public org.springframework.scheduling.TaskScheduler noOpTaskScheduler() {
+    return org.mockito.Mockito.mock(org.springframework.scheduling.TaskScheduler.class);
+  }
+
   @Bean
   public RedisConnectionFactory redisConnectionFactory() {
     return new LettuceConnectionFactory(Objects.requireNonNull(REDIS.getHost()), REDIS.getMappedPort(6379));

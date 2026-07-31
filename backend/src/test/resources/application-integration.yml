@@ -1,4 +1,6 @@
 spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:

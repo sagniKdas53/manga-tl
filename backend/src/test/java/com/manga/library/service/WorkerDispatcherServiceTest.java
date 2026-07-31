@@ -10,6 +10,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -386,6 +388,132 @@ public class WorkerDispatcherServiceTest {
 
     // Job should be consumed, NOT re-queued (422 is permanent validation failure)
     verify(listOps, never()).leftPush(anyString(), anyString());
+  }
+
+  @Test
+  public void testDispatchJobs_NullRedis() {
+    WorkerDispatcherService svc = new WorkerDispatcherService(null, objectMapper);
+    assertDoesNotThrow(() -> svc.dispatchJobs());
+  }
+
+  @Test
+  public void testDispatchJobs_EmptyWorkerUrls() {
+    ReflectionTestUtils.setField(workerDispatcherService, "workerUrlsConfig", "");
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps, never()).leftPop(anyString());
+  }
+
+  @Test
+  public void testDispatchJobs_NoQueueItems() {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    when(listOps.size(anyString())).thenReturn(0L);
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps, never()).leftPop(anyString());
+  }
+
+  @Test
+  public void testDispatchJobs_AllWorkersInCooldown() {
+    Map<String, Instant> cooldowns =
+        (Map<String, Instant>) ReflectionTestUtils.getField(workerDispatcherService, "workerCooldowns");
+    cooldowns.put("http://worker:9091", Instant.now().plusSeconds(60));
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps, never()).leftPop(anyString());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testDispatchJobs_CapabilitiesQueryFails() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    when(httpClient.send(
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenThrow(new java.io.IOException("Connection refused"));
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps, never()).leftPop(anyString());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testDispatchJobs_LightSlotFull() throws Exception {
+    ReflectionTestUtils.setField(
+        workerDispatcherService, "workerUrlsConfig", "http://worker1:9091,http://worker2:9091");
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+
+    // Heavy queues are empty (unstubbed leftPop returns null), so only light runs.
+    when(listOps.leftPop("queue:region-redo-tl")).thenReturn("{\"id\": \"light1\"}");
+
+    HttpResponse<String> capW1 = mockCapabilitiesResponse(2, 0, 1, 0, 1, 0);
+    HttpResponse<String> capW2 = mockCapabilitiesResponse(2, 0, 1, 0, 1, 1);
+    HttpResponse<String> rateLimited = mockGeneric(HttpResponse.class);
+    when(rateLimited.statusCode()).thenReturn(429);
+    when(httpClient.send(
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capW1, capW2, rateLimited);
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps).rightPush("queue:region-redo-tl", "{\"id\": \"light1\"}");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testDispatchJobs_ServerError500() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}");
+
+    HttpResponse<String> serverError = mockGeneric(HttpResponse.class);
+    when(serverError.statusCode()).thenReturn(500);
+    when(serverError.body()).thenReturn("internal error");
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
+    when(httpClient.send(
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
+        .thenReturn(serverError);
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps).rightPush("queue:panel-detection", "{\"id\": \"123\"}");
+  }
+
+  @Test
+  public void testInit_SecretFileReadError() {
+    ReflectionTestUtils.setField(
+        workerDispatcherService, "workerApiSecretFile", "/nonexistent/path/secret.txt");
+    assertDoesNotThrow(() -> workerDispatcherService.init());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testDispatchJobs_TrailingSlashWorkerUrl() throws Exception {
+    ReflectionTestUtils.setField(
+        workerDispatcherService, "workerUrlsConfig", "http://worker:9091/");
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
+
+    HttpResponse<String> accepted = mockGeneric(HttpResponse.class);
+    when(accepted.statusCode()).thenReturn(202);
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
+    when(httpClient.send(
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
+        .thenReturn(accepted);
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(listOps, times(2)).leftPop("queue:panel-detection");
   }
 
   @SuppressWarnings("unchecked")

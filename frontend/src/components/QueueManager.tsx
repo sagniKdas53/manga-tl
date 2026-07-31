@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
@@ -253,6 +253,9 @@ interface QueueManagerProps {
   onClose: () => void;
 }
 
+const parsedPayloadCache = new Map<string, ParsedPayload>();
+const MAX_PARSED_PAYLOAD_CACHE = 500;
+
 export const QueueManager: React.FC<QueueManagerProps> = ({
   token,
   forceOpen,
@@ -267,17 +270,16 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
   const { subscribe } = useNotifications();
   const { showToast } = useToast();
 
-  /** Parse-once cache: job.id → parsed payload object */
-  const parsedPayloadCache = useRef<Map<string, ParsedPayload>>(new Map());
-
-  /** Get (or parse and cache) the payload for a job */
   const getParsed = useCallback((job: Job): ParsedPayload | null => {
     if (!job.payload) return null;
-    const cached = parsedPayloadCache.current.get(job.id);
+    const cached = parsedPayloadCache.get(job.payload);
     if (cached) return cached;
     try {
       const parsed = JSON.parse(job.payload) as ParsedPayload;
-      parsedPayloadCache.current.set(job.id, parsed);
+      if (parsedPayloadCache.size >= MAX_PARSED_PAYLOAD_CACHE) {
+        parsedPayloadCache.clear();
+      }
+      parsedPayloadCache.set(job.payload, parsed);
       return parsed;
     } catch {
       return null;
