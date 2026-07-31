@@ -36,6 +36,57 @@ import { useNotifications } from "./useNotifications";
 import { useToast } from "./ToastContext";
 import CircularProgress from "@mui/material/CircularProgress";
 
+// ---------------------------------------------------------------------------
+// Decoded page-image cache (module-level so it survives Reader remounts).
+// Holding the HTMLImageElement keeps the decoded bitmap resident; the reader's
+// <img> uses the same URL, so the browser serves it from the memory cache and
+// renders instantly. LRU with a hard byte cap to bound memory usage.
+// ---------------------------------------------------------------------------
+const IMAGE_CACHE_MAX_BYTES = 256 * 1024 * 1024; // 256 MB decoded RGBA estimate
+
+interface CachedPageImage {
+  img: HTMLImageElement;
+  bytes: number;
+  lastUsed: number;
+}
+
+const pageImageCache = new Map<string, CachedPageImage>();
+let pageImageCacheBytes = 0;
+
+function evictPageImages(keepId?: string) {
+  const lru = [...pageImageCache.entries()].sort(
+    (a, b) => a[1].lastUsed - b[1].lastUsed,
+  );
+  for (const [id, entry] of lru) {
+    if (pageImageCacheBytes <= IMAGE_CACHE_MAX_BYTES) break;
+    if (id === keepId) continue;
+    pageImageCache.delete(id);
+    pageImageCacheBytes -= entry.bytes;
+  }
+}
+
+/** Decode & retain a page image in the cache. Idempotent; refreshes LRU order on hit. */
+function cachePageImage(pageId: string, url: string) {
+  const existing = pageImageCache.get(pageId);
+  if (existing) {
+    existing.lastUsed = Date.now();
+    pageImageCache.delete(pageId);
+    pageImageCache.set(pageId, existing);
+    return;
+  }
+  const img = new Image();
+  img.decoding = "async";
+  img.onload = () => {
+    const bytes = img.naturalWidth * img.naturalHeight * 4;
+    if (!pageImageCache.has(pageId)) {
+      pageImageCache.set(pageId, { img, bytes, lastUsed: Date.now() });
+      pageImageCacheBytes += bytes;
+      evictPageImages(pageId);
+    }
+  };
+  img.src = url;
+}
+
 interface ReaderProps {
   user: User;
   selectedSeries: Series | null;
@@ -678,10 +729,6 @@ export const Reader: React.FC<ReaderProps> = ({
           ) {
             prefetchQueue.current.add(p.id);
 
-            // Prefetch image itself (lightweight progressive loading)
-            const img = new Image();
-            img.src = `${p.url}?token=${user.token}`;
-
             // Prefetch details (must use the PAGE id, not the image id)
             fetchPageDetails(p.id).catch((e) => {
               // Allow retry on next navigation instead of staying queued forever
@@ -691,7 +738,22 @@ export const Reader: React.FC<ReaderProps> = ({
           }
         });
 
-        // 2. Evict pages outside of window [N-1, N, N+1, N+2] to save memory
+        // 2. Bi-directional decoded-image cache: keep prev + current + next page
+        //    images resident so the reader's <img> renders instantly (same URL
+        //    hits the browser memory cache). Bounded by IMAGE_CACHE_MAX_BYTES.
+        const windowPages: Page[] = [];
+        if (currentPageIndex > 0) {
+          windowPages.push(pages[currentPageIndex - 1]);
+        }
+        windowPages.push(pages[currentPageIndex]);
+        if (currentPageIndex < pages.length - 1) {
+          windowPages.push(pages[currentPageIndex + 1]);
+        }
+        windowPages.forEach((p) => {
+          cachePageImage(p.id, `${p.url}?token=${user.token}`);
+        });
+
+        // 3. Evict page-details outside of window [N-1, N, N+1, N+2] to save memory
         const prevPageId =
           currentPageIndex > 0 ? pages[currentPageIndex - 1].id : null;
 

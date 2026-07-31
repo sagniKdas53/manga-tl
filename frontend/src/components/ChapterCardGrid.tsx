@@ -89,6 +89,8 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                   component="img"
                   image={c.coverImageUrl}
                   alt={c.title || `Chapter ${c.chapterNumber}`}
+                  loading="lazy"
+                  decoding="async"
                   sx={{
                     aspectRatio: "2/3",
                     objectFit: "cover",
@@ -100,6 +102,8 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                   component="img"
                   image={series.coverImageUrl}
                   alt="Fallback Cover"
+                  loading="lazy"
+                  decoding="async"
                   sx={{
                     aspectRatio: "2/3",
                     objectFit: "cover",
