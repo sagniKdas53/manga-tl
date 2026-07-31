@@ -46,8 +46,6 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
               src={p.thumbnailUrl || `${p.url}?token=${token}`}
               className="page-thumbnail"
               alt={`Page ${p.pageNumber}`}
-              loading="lazy"
-              decoding="async"
             />
             <span className="page-num-tag">Page {p.pageNumber}</span>
 

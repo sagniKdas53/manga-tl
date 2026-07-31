@@ -136,8 +136,6 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       selectedChapter.title ||
                       `Chapter ${selectedChapter.chapterNumber}`
                     }
-                    loading="lazy"
-                    decoding="async"
                     sx={{
                       width: "100%",
                       height: "100%",

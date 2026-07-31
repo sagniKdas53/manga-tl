@@ -237,8 +237,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 component="img"
                 image={s.coverImageUrl}
                 alt={s.title}
-                loading="lazy"
-                decoding="async"
                 sx={{ aspectRatio: "2/3", objectFit: "cover", bgcolor: "#000" }}
               />
             ) : (
