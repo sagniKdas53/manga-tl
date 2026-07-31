@@ -13,6 +13,7 @@ import UploadIcon from "@mui/icons-material/Upload";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import type { Series, User, SystemSettingsDto } from "../types";
+import LazyImage from "./LazyImage";
 import { safeFetch, resolveOverride } from "../utils";
 
 interface SeriesHeaderProps {
@@ -140,8 +141,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
               }}
             >
               {series.coverImageUrl ? (
-                <Box
-                  component="img"
+                <LazyImage
                   src={series.coverImageUrl}
                   alt={series.title}
                   sx={{

@@ -39,6 +39,9 @@ describe("ChapterPageGrid", () => {
     expect(screen.getByText("Pages (2)")).toBeInTheDocument();
     expect(screen.getByText("Page 1")).toBeInTheDocument();
     expect(screen.getByText("Page 2")).toBeInTheDocument();
+
+    // A missing thumbnail must not fall back to the full-resolution page URL.
+    expect(screen.getByAltText("Page 2")).not.toHaveAttribute("src");
   });
 
   it("triggers page selection on thumbnail container click", () => {

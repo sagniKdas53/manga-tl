@@ -974,6 +974,7 @@ export interface components {
             qaMode?: string;
             routingStrategy?: string;
             useFallbackModels?: boolean;
+            resolvedUseFallbackModels?: boolean;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -999,6 +1000,7 @@ export interface components {
             routingStrategy?: string;
             useContextMemory?: boolean;
             useFallbackModels?: boolean;
+            resolvedUseFallbackModels?: boolean;
             /** Format: int32 */
             pageCount?: number;
             /** Format: date-time */
@@ -2699,7 +2701,10 @@ export interface operations {
     };
     getImageInfo: {
         parameters: {
-            query?: never;
+            query?: {
+                chapterId?: string;
+                pageId?: string;
+            };
             header?: never;
             path: {
                 imageId: string;

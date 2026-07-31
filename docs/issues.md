@@ -154,7 +154,23 @@ The previously described bug where the older chapter content remains visible for
 
 Also when there are too many jobs the queue and notification managers have noticeable lag.
 
-##
+## UI fixes needed
+
+### Add lazy loading of thumbs for all surfaces, like series, chapters and pages
+
+Loading all of them is a waste, this is implemented wrongly as the lazy-image initiator seems to load full image and not the thumbs.
+
+### Add bi-direction 2 page cache for the reader, if possible add a hard memory cap
+
+That way the UX would be much better. this is also wrongly implemented, because when going forward it loads the next image but when going back it doesn't load the previous image. Also the hard memory cap seems to be doing more harm than good, it should be a soft cap. The act of calculating it might be causing more issues than good.
+
+### Every Chapter shows the spinner now
+
+Even with cache turned on, looks like the entire component is getting unmounted and re-mounted again.
+
+### The UI is so loaggy and shitty now that it caused firefox to crash
+
+Impressive work really, revert the last commit, and do all of these again but slowly and properly this time.
 
 ## Add an export rendered PNG button (done)
 

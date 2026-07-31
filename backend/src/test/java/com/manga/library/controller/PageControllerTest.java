@@ -1,6 +1,7 @@
 package com.manga.library.controller;
 
 import static org.mockito.Mockito.*;
+import static org.hamcrest.Matchers.endsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -140,7 +141,10 @@ public class PageControllerTest {
         .perform(get("/api/chapters/" + chapterId + "/pages"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].id").value(pageId.toString()))
-        .andExpect(jsonPath("$[0].pageNumber").value(1));
+        .andExpect(jsonPath("$[0].pageNumber").value(1))
+        .andExpect(
+            jsonPath("$[0].thumbnailUrl")
+                .value(endsWith("/api/images/" + imageId + "/thumbnail")));
   }
 
   @Test
@@ -256,6 +260,25 @@ public class PageControllerTest {
         .thenReturn(new java.io.ByteArrayInputStream("dummy".getBytes()));
 
     mockMvc.perform(get("/api/images/" + imageId + "/thumbnail")).andExpect(status().isOk());
+  }
+
+  @Test
+  public void testGetImageThumbnail_MissingThumbnailDoesNotStreamOriginal() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Image image =
+        new Image() {
+          {
+            setId(imageId);
+            setStoragePath("path/original.png");
+          }
+        };
+    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+
+    mockMvc
+        .perform(get("/api/images/" + imageId + "/thumbnail"))
+        .andExpect(status().isNotFound());
+
+    verify(minioService, never()).getFileStream(anyString());
   }
 
   @Test

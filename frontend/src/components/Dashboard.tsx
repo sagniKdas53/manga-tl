@@ -8,7 +8,6 @@ import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardActions from "@mui/material/CardActions";
 import CardContent from "@mui/material/CardContent";
-import CardMedia from "@mui/material/CardMedia";
 import Chip from "@mui/material/Chip";
 import FormControl from "@mui/material/FormControl";
 import IconButton from "@mui/material/IconButton";
@@ -21,6 +20,7 @@ import type { User, Series } from "../types";
 import { safeFetch, toSlug } from "../utils";
 import ConfirmModal from "./ConfirmModal";
 import CreateSeriesDialog from "./CreateSeriesDialog";
+import LazyImage from "./LazyImage";
 
 interface DashboardProps {
   user: User;
@@ -233,11 +233,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
             }}
           >
             {s.coverImageUrl ? (
-              <CardMedia
-                component="img"
-                image={s.coverImageUrl}
+              <LazyImage
+                src={s.coverImageUrl}
                 alt={s.title}
-                sx={{ aspectRatio: "2/3", objectFit: "cover", bgcolor: "#000" }}
+                sx={{
+                  display: "block",
+                  width: "100%",
+                  aspectRatio: "2/3",
+                  objectFit: "cover",
+                  bgcolor: "#000",
+                }}
               />
             ) : (
               <Box
