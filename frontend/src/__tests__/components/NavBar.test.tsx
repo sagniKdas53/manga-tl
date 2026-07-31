@@ -25,9 +25,45 @@ vi.mock("../../components/QueueManager", () => ({
       />
     </div>
   ),
+  default: ({
+    onRequestOpen,
+    onClose,
+  }: {
+    onRequestOpen: () => void;
+    onClose: () => void;
+  }) => (
+    <div data-testid="queue-manager">
+      <button
+        onClick={onRequestOpen}
+        data-testid="qm-open"
+      />
+      <button
+        onClick={onClose}
+        data-testid="qm-close"
+      />
+    </div>
+  ),
 }));
 vi.mock("../../components/NotificationCenter", () => ({
   NotificationCenter: ({
+    onRequestOpen,
+    onClose,
+  }: {
+    onRequestOpen: () => void;
+    onClose: () => void;
+  }) => (
+    <div data-testid="notification-center">
+      <button
+        onClick={onRequestOpen}
+        data-testid="nc-open"
+      />
+      <button
+        onClick={onClose}
+        data-testid="nc-close"
+      />
+    </div>
+  ),
+  default: ({
     onRequestOpen,
     onClose,
   }: {
@@ -89,7 +125,7 @@ describe("NavBar", () => {
     expect(screen.queryByTitle("Sign Out")).not.toBeInTheDocument();
   });
 
-  it("renders all elements when user is logged in", () => {
+  it("renders all elements when user is logged in", async () => {
     renderWithRouter(
       <NavBar
         {...defaultProps}
@@ -100,9 +136,11 @@ describe("NavBar", () => {
     expect(screen.getByText("tl-hub")).toBeInTheDocument();
     expect(screen.getByTitle("Switch to Light Mode")).toBeInTheDocument();
 
-    // Authenticated components should be rendered
-    expect(screen.getByTestId("queue-manager")).toBeInTheDocument();
-    expect(screen.getByTestId("notification-center")).toBeInTheDocument();
+    // Authenticated components should be rendered (lazy — wait for them)
+    expect(await screen.findByTestId("queue-manager")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("notification-center"),
+    ).toBeInTheDocument();
     expect(screen.getByTitle("Settings")).toBeInTheDocument();
     expect(screen.getByTitle("Account")).toBeInTheDocument();
     expect(screen.getByTitle("Sign Out")).toBeInTheDocument();

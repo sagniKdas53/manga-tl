@@ -28,7 +28,12 @@ describe("LazyImage", () => {
       },
     );
 
-    render(<LazyImage src="/api/images/thumb/thumbnail" alt="Thumbnail" />);
+    render(
+      <LazyImage
+        src="/api/images/thumb/thumbnail"
+        alt="Thumbnail"
+      />,
+    );
 
     const image = screen.getByAltText("Thumbnail");
     expect(image).not.toHaveAttribute("src");

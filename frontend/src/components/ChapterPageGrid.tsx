@@ -9,7 +9,6 @@ import LazyImage from "./LazyImage";
 
 export interface ChapterPageGridProps {
   pages: Page[];
-  token: string;
   onDeletePage: (pageId: string) => void;
   onMovePage: (index: number, direction: "left" | "right") => void;
   onSelectPage: (page: Page, index: number) => void;
@@ -18,7 +17,6 @@ export interface ChapterPageGridProps {
 
 const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
   pages,
-  token,
   onDeletePage,
   onMovePage,
   onSelectPage,

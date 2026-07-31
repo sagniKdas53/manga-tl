@@ -29,7 +29,6 @@ describe("ChapterPageGrid", () => {
     render(
       <ChapterPageGrid
         pages={mockPages}
-        token="tok123"
         onDeletePage={mockOnDeletePage}
         onMovePage={mockOnMovePage}
         onSelectPage={mockOnSelectPage}
@@ -48,7 +47,6 @@ describe("ChapterPageGrid", () => {
     render(
       <ChapterPageGrid
         pages={mockPages}
-        token="tok123"
         onDeletePage={mockOnDeletePage}
         onMovePage={mockOnMovePage}
         onSelectPage={mockOnSelectPage}
@@ -65,7 +63,6 @@ describe("ChapterPageGrid", () => {
     render(
       <ChapterPageGrid
         pages={mockPages}
-        token="tok123"
         onDeletePage={mockOnDeletePage}
         onMovePage={mockOnMovePage}
         onSelectPage={mockOnSelectPage}
