@@ -205,6 +205,7 @@ export const Reader: React.FC<ReaderProps> = ({
     >
   >({});
   const prefetchQueue = useRef<Set<string>>(new Set());
+  const prefetchedImageUrls = useRef<Set<string>>(new Set());
   const [zoom, setZoom] = usePersistedState("manga_zoom", 1.0);
 
   // Phase 4 Layer System states
@@ -664,23 +665,30 @@ export const Reader: React.FC<ReaderProps> = ({
           });
       }
 
-      // --- STRICT SLIDING WINDOW PREFETCH & EVICTION ---
+      // --- SMALL BI-DIRECTIONAL PREFETCH WINDOW ---
       if (currentPageIndex !== -1) {
-        // 1. Prefetch next 2 pages (N+1, N+2)
-        const pagesToPrefetch = pages.slice(
-          currentPageIndex + 1,
-          currentPageIndex + 3,
-        );
+        // Warm the browser cache for two pages in either direction.  We do not
+        // retain Image objects or estimate decoded bitmap size: that manual
+        // bookkeeping was expensive and prevented normal browser eviction.
+        const windowStart = Math.max(0, currentPageIndex - 2);
+        const windowEnd = Math.min(pages.length, currentPageIndex + 3);
+        const nearbyPages = pages.slice(windowStart, windowEnd);
+        const pagesToPrefetch = nearbyPages.filter((p) => p.id !== currentPageId);
+
         pagesToPrefetch.forEach((p) => {
+          const imageUrl = `${p.url}?token=${user.token}`;
+          if (!prefetchedImageUrls.current.has(imageUrl)) {
+            prefetchedImageUrls.current.add(imageUrl);
+            const image = new Image();
+            image.decoding = "async";
+            image.src = imageUrl;
+          }
+
           if (
             !pageDetailsCache.current[p.id] &&
             !prefetchQueue.current.has(p.id)
           ) {
             prefetchQueue.current.add(p.id);
-
-            // Prefetch image itself (lightweight progressive loading)
-            const img = new Image();
-            img.src = `${p.url}?token=${user.token}`;
 
             // Prefetch details (must use the PAGE id, not the image id)
             fetchPageDetails(p.id).catch((e) => {
@@ -691,17 +699,9 @@ export const Reader: React.FC<ReaderProps> = ({
           }
         });
 
-        // 2. Evict pages outside of window [N-1, N, N+1, N+2] to save memory
-        const prevPageId =
-          currentPageIndex > 0 ? pages[currentPageIndex - 1].id : null;
-
-        const activeWindowIds = new Set([
-          currentPageId,
-          ...pagesToPrefetch.map((p) => p.id),
-        ]);
-        if (prevPageId) {
-          activeWindowIds.add(prevPageId);
-        }
+        // Keep details only for the small nearby window. Image memory is a
+        // browser-managed soft cap rather than a home-grown hard limit.
+        const activeWindowIds = new Set(nearbyPages.map((p) => p.id));
 
         // Evict from cache
         Object.keys(pageDetailsCache.current).forEach((cachedId) => {

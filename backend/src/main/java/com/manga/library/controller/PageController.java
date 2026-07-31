@@ -732,9 +732,7 @@ public class PageController {
                         p.getChapter().getId(),
                         p.getImage().getFilename(),
                         getImageUrl(p.getImage().getId()),
-                        p.getImage().getThumbnailStoragePath() != null
-                            ? getThumbnailUrl(p.getImage().getId())
-                            : null))
+                        getThumbnailUrl(p.getImage().getId())))
             .collect(Collectors.toList());
     return ResponseEntity.ok(list);
   }
@@ -929,10 +927,13 @@ public class PageController {
               .findById(Objects.requireNonNull(imageId))
               .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
-      String path =
-          image.getThumbnailStoragePath() != null
-              ? image.getThumbnailStoragePath()
-              : image.getStoragePath();
+      String path = image.getThumbnailStoragePath();
+      if (path == null) {
+        // A thumbnail URL must never silently stream the original file.  The
+        // gallery can retry after asynchronous thumbnail generation completes;
+        // reader images continue to use the explicit /file endpoint.
+        return ResponseEntity.notFound().build();
+      }
       org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
           outputStream -> {
             try (java.io.InputStream is = minioService.getFileStream(path)) {

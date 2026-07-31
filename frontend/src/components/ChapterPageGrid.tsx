@@ -1,11 +1,11 @@
 import React from "react";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
-import Box from "@mui/material/Box";
 import CloseIcon from "@mui/icons-material/Close";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import type { Page } from "../types";
+import LazyImage from "./LazyImage";
 
 export interface ChapterPageGridProps {
   pages: Page[];
@@ -41,9 +41,8 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
             }}
             style={{ position: "relative" }}
           >
-            <Box
-              component="img"
-              src={p.thumbnailUrl || `${p.url}?token=${token}`}
+            <LazyImage
+              src={p.thumbnailUrl}
               className="page-thumbnail"
               alt={`Page ${p.pageNumber}`}
             />

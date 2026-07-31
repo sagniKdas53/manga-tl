@@ -4,7 +4,6 @@ import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardActions from "@mui/material/CardActions";
 import CardContent from "@mui/material/CardContent";
-import CardMedia from "@mui/material/CardMedia";
 import Chip from "@mui/material/Chip";
 import Typography from "@mui/material/Typography";
 import IconButton from "@mui/material/IconButton";
@@ -13,6 +12,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import ImportExportIcon from "@mui/icons-material/ImportExport";
 import type { Series, Chapter, SystemSettingsDto } from "../types";
 import { toSlug } from "../utils";
+import LazyImage from "./LazyImage";
 
 interface ChapterCardGridProps {
   chapters: Chapter[];
@@ -85,22 +85,24 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
               }}
             >
               {c.coverImageUrl ? (
-                <CardMedia
-                  component="img"
-                  image={c.coverImageUrl}
+                <LazyImage
+                  src={c.coverImageUrl}
                   alt={c.title || `Chapter ${c.chapterNumber}`}
                   sx={{
+                    display: "block",
+                    width: "100%",
                     aspectRatio: "2/3",
                     objectFit: "cover",
                     bgcolor: "#000",
                   }}
                 />
               ) : series.coverImageUrl ? (
-                <CardMedia
-                  component="img"
-                  image={series.coverImageUrl}
+                <LazyImage
+                  src={series.coverImageUrl}
                   alt="Fallback Cover"
                   sx={{
+                    display: "block",
+                    width: "100%",
                     aspectRatio: "2/3",
                     objectFit: "cover",
                     bgcolor: "#000",

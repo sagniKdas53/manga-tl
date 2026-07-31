@@ -438,4 +438,39 @@ describe("Reader Component", () => {
       ).toBe(false);
     });
   });
+
+  it("prefetches the two previous and two following pages", async () => {
+    const { useParams } = await import("react-router-dom");
+    vi.mocked(useParams).mockReturnValue({
+      pageNumber: "3",
+      seriesId: "s1",
+      chapterId: "c1",
+    });
+    const pages = [1, 2, 3, 4, 5].map((pageNumber) => ({
+      ...mockPage,
+      id: `p${pageNumber}`,
+      imageId: `img${pageNumber}`,
+      pageNumber,
+      url: `/url${pageNumber}`,
+    }));
+
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={pages}
+        theme="dark"
+      />,
+    );
+
+    await waitFor(() => {
+      const urls = mockSafeFetch.mock.calls.map((call) => call[0] as string);
+      expect(urls).toContain("/api/pages/p1");
+      expect(urls).toContain("/api/pages/p2");
+      expect(urls).toContain("/api/pages/p4");
+      expect(urls).toContain("/api/pages/p5");
+    });
+  });
 });

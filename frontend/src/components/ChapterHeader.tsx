@@ -17,6 +17,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import type { Series, Chapter, User, SystemSettingsDto } from "../types";
+import LazyImage from "./LazyImage";
 import { safeFetch } from "../utils";
 
 export interface ChapterHeaderProps {
@@ -129,8 +130,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                 }}
               >
                 {selectedChapter.coverImageUrl ? (
-                  <Box
-                    component="img"
+                  <LazyImage
                     src={selectedChapter.coverImageUrl}
                     alt={
                       selectedChapter.title ||
