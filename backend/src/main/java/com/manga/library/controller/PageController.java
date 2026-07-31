@@ -854,10 +854,25 @@ public class PageController {
       getPageRenderedFile(@PathVariable UUID pageId) {
     try {
       Objects.requireNonNull(pageId, "pageId cannot be null");
-      String storagePath = "rendered/" + pageId + ".png";
+      
+      Page page = pageRepository.findById(pageId)
+          .orElseThrow(() -> new ResourceNotFoundException("Page not found: " + pageId));
+      UUID imageId = page.getImage().getId();
+      
+      String storagePath = "rendered/" + imageId + ".png";
+      
+      if (!minioService.fileExists(storagePath)) {
+        storagePath = "rendered/" + pageId + ".png";
+        if (!minioService.fileExists(storagePath)) {
+          log.warn("Rendered page file not found in MinIO for page {} / image {}", pageId, imageId);
+          return ResponseEntity.notFound().build();
+        }
+      }
+
+      final String finalStoragePath = storagePath;
       org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
           outputStream -> {
-            try (java.io.InputStream is = minioService.getFileStream(storagePath)) {
+            try (java.io.InputStream is = minioService.getFileStream(finalStoragePath)) {
               is.transferTo(outputStream);
             } catch (Exception e) {
               log.error("Error streaming rendered page file", e);
@@ -867,9 +882,12 @@ public class PageController {
       return ResponseEntity.ok()
           .contentType(org.springframework.http.MediaType.parseMediaType("image/png"))
           .body(responseBody);
+    } catch (ResourceNotFoundException e) {
+      log.warn("Page not found for rendered image: {}", pageId);
+      return ResponseEntity.notFound().build();
     } catch (Exception e) {
       log.error("Failed to retrieve rendered page file for {}", pageId, e);
-      return ResponseEntity.notFound().build();
+      return ResponseEntity.internalServerError().build();
     }
   }
 

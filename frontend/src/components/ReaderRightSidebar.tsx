@@ -65,6 +65,7 @@ export interface ReaderRightSidebarProps {
   handleRedoPageTranslation: () => void;
   isRedoingPageTranslation: boolean;
   handleExportPng: () => void;
+  handleExportRenderedPng: () => void;
   handleExportZip: () => void;
   interactionMode: string;
   setInteractionMode: React.Dispatch<
@@ -103,6 +104,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     handleRedoPageTranslation,
     isRedoingPageTranslation,
     handleExportPng,
+    handleExportRenderedPng,
     handleExportZip,
     interactionMode,
     setInteractionMode,
@@ -162,7 +164,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     sortedLayers.findIndex(
                       (l) => l.layer.id === activeLayerId,
                     ) ===
-                      sortedLayers.length - 1
+                    sortedLayers.length - 1
                   }
                   onClick={() =>
                     activeLayerId && handleMoveLayer(activeLayerId, "up")
@@ -319,7 +321,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         }}
                       >
                         {typeof lData.layer.metadataJson?.layer_name ===
-                        "string"
+                          "string"
                           ? lData.layer.metadataJson.layer_name
                           : lData.layer.type === "translation"
                             ? `Translation (${lData.layer.targetLanguage?.toUpperCase() || "EN"})`
@@ -557,12 +559,27 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               onClick={handleExportZip}
               fullWidth
               sx={{
+                mb: 1,
                 color: "var(--primary)",
                 borderColor: "var(--primary)",
                 "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
               }}
             >
               Export Project (ZIP)
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportRenderedPng}
+              fullWidth
+              sx={{
+                color: "var(--primary)",
+                borderColor: "var(--primary)",
+                "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
+              }}
+            >
+              Export Rendered PNG
             </Button>
           </SidebarSection>
         </>
@@ -697,9 +714,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     }
                     title={
                       selectedItem &&
-                      "layerType" in selectedItem &&
-                      (selectedItem.layerType === "translation" ||
-                        selectedItem.layerType === "tl")
+                        "layerType" in selectedItem &&
+                        (selectedItem.layerType === "translation" ||
+                          selectedItem.layerType === "tl")
                         ? "Select an OCR layer element to redo OCR"
                         : undefined
                     }
@@ -1200,7 +1217,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 label="Mask Background Color"
                 value={
                   selectedItem.backgroundColor !== undefined &&
-                  selectedItem.backgroundColor !== null
+                    selectedItem.backgroundColor !== null
                     ? selectedItem.backgroundColor
                     : "#ffffff"
                 }
@@ -1220,7 +1237,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 label="Text Color"
                 value={
                   selectedItem.textColor !== undefined &&
-                  selectedItem.textColor !== null
+                    selectedItem.textColor !== null
                     ? selectedItem.textColor
                     : "#000000"
                 }
