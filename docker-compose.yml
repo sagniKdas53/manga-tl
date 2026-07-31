@@ -106,6 +106,7 @@ services:
       - CONTEXT_PATH=${CONTEXT_PATH:-/tlhub}
       - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
       - WORKER_URLS=${WORKER_URLS:-http://worker:8000}
+      - WORKER_POLL_MS=${WORKER_POLL_MS:-2000}
       - WORKER_API_SECRET_FILE=/run/secrets/worker_api_secret
       - USE_REMOTE_ML=${USE_REMOTE_ML:-false}
       - REMOTE_ML_URL=${REMOTE_ML_URL:-http://worker:8000}
