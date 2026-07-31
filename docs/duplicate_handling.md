@@ -25,11 +25,13 @@ When an image is uploaded, the system computes its SHA-256 hash. If an image wit
 
 Because `Layer`, `Panel`, and `OcrRegion` entities are tied to the **`Page`** entity (not the `Image`), duplicate images uploaded to different chapters (or different slots) result in a brand new `Page` entity.
 
-To save time, cost, and storage, the system performs **intelligent layer cloning** when a duplicate image is detected:
+To save time, cost, and storage, the system performs **intelligent layer cloning** when a duplicate image is detected. The process follows these steps:
 
-1. **OCR Data Cloning**: The system compares the new chapter's OCR configuration (provider, model) against the source page's configuration. If they match, the system clones all `OcrRegion` entities to the new page. If they differ, the OCR layer is not cloned, and a full pipeline run is triggered to generate new OCR regions.
-2. **Translation Data Cloning**: If the OCR data was successfully cloned, the system also checks the Translation configuration (provider, model, QA mode, QA provider, QA LLM/VLM models). If these perfectly match, the Translation layers and all their corresponding `LayerElement`s are cloned.
-3. **Pipeline Triggering**: 
+1. **Source Page Selection**: The system searches all existing pages that use the identical image to find a source to clone from. It prioritizes the best candidate by scoring them: pages from the *same chapter* are preferred first (score 2), followed by pages from the *same series* (score 1), and finally pages from any other series (score 0). In the case of ties, it picks the oldest page. If no existing page has successfully run the OCR pipeline, cloning is skipped.
+
+2. **OCR Data Cloning**: The system compares the new chapter's OCR configuration (provider, model) against the source page's configuration. If they match, the system clones all `OcrRegion` entities to the new page. If they differ, the OCR layer is not cloned, and a full pipeline run is triggered to generate new OCR regions.
+3. **Translation Data Cloning**: If the OCR data was successfully cloned, the system also checks the Translation configuration (provider, model, QA mode, QA provider, QA LLM/VLM models). If these perfectly match, the Translation layers and all their corresponding `LayerElement`s are cloned.
+4. **Pipeline Triggering**: 
    - If both OCR and Translation are successfully cloned, the system skips downstream heavy AI tasks and only triggers the **Render** job for the new page.
    - If OCR is cloned but Translation configs do not match, the system enqueues a **Translation** job for the new page.
    - If OCR configs do not match, the entire AI pipeline starts from the beginning.
