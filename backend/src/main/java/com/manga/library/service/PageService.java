@@ -295,7 +295,10 @@ public class PageService {
                 imageRepository.save(Objects.requireNonNull(img));
               });
       log.info("Successfully generated and uploaded WebP thumbnail to {}", thumbnailStoragePath);
-    } catch (IOException | RuntimeException | MinioException e) {
+    } catch (IOException | RuntimeException | Error | MinioException e) {
+      // Error is caught so JNI/native failures (e.g. UnsatisfiedLinkError from a missing
+      // musl libwebp-imageio) are logged with context instead of escaping to the async
+      // uncaught handler. Thumbnail generation is best-effort; the gallery retries lazily.
       log.error("Failed to generate async thumbnail for image {}", imageId, e);
     }
   }
