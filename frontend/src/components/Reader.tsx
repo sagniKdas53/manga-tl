@@ -2223,6 +2223,28 @@ export const Reader: React.FC<ReaderProps> = ({
     saveAllPendingChanges,
   ]);
 
+  const handleExportRenderedPng = useCallback(async () => {
+    if (!selectedPage || !user?.token) return;
+    try {
+      const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      if (!res.ok) throw new Error("Failed to export rendered PNG");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `page-${selectedPage.pageNumber}-rendered.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export rendered PNG failed:", err);
+      // Optional: showError("Failed to export rendered PNG");
+    }
+  }, [selectedPage, user]);
+
   const handleExportZip = useCallback(async () => {
     if (!selectedPage || !imgRef.current) return;
 
@@ -3623,6 +3645,7 @@ export const Reader: React.FC<ReaderProps> = ({
             handleRedoPageTranslation={handleRedoPageTranslation}
             isRedoingPageTranslation={isRedoingPageTranslation}
             handleExportPng={handleExportPng}
+            handleExportRenderedPng={handleExportRenderedPng}
             handleExportZip={handleExportZip}
             interactionMode={interactionMode}
             setInteractionMode={setInteractionMode}

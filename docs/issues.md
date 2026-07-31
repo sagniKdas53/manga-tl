@@ -1,6 +1,6 @@
 # Issues and What I want for them
 
-## CI failing
+## CI failing (done)
 
 ### Build and test backend
 
@@ -37,6 +37,22 @@ Error: Process completed with exit code 1.
 
 Error: AssertionError: expected false to be true // Object.is equality
 ```
+
+## Same image handling had not worked for a long time now (done)
+
+Idea [duplicate_handling](./duplicate_handling.md)
+
+## The queue manangemt has become absolute shit
+
+It takes 2 hours to process 50 images, just check the logs.
+
+Log in question [run-3-fresh.log](../logs/run-3-fresh.log) for details.
+
+Atlest the OCR which has a deidated slot as described in [slot_allocation](./slot_allocation.md) should have been prioritized and completed.
+
+Also check if the queue docs are upto date [queue_management_system](./translation_pipeline_phases.md) and if there are any optimizations not yet uncovered.
+
+Check out the provider intgeration guide as well [workers_providers](./worker_provider_integration.md) same idea check if outdated and update also check for optimizations, I believe this was created before the `providers.json` was added so more likely outdated.
 
 ## `index.js` is still too big
 
@@ -81,29 +97,13 @@ transforming...✓ 1007 modules transformed.
 
 These files can't possibly be that complex, something funky is going on.
 
-## Same image handling had not worked for a long time now
-
-Idea [duplicate_handling](./duplicate_handling.md)
-
-## The queue manangemt has become absolute shit
-
-It takes 2 hours to process 50 images, just check the logs.
-
-Log in question [run-3-fresh.log](../logs/run-3-fresh.log) for details.
-
-Atlest the OCR which has a deidated slot as described in [slot_allocation](./slot_allocation.md) should have been prioritized and completed.
-
-Also check if the queue docs are upto date [queue_management_system](./translation_pipeline_phases.md) and if there are any optimizations not yet uncovered.
-
-Check out the provider intgeration guide as well [workers_providers](./worker_provider_integration.md) same idea check if outdated and update also check for optimizations, I believe this was created before the `providers.json` was added so more likely outdated.
-
 ## The UI is laggy and loads slow
 
 General observation, will do a proper firefox profile analysis later.
 
 Most probably the backend holding it back, but it's probably just the inhertiatnace and overrides + the logic bugs.
 
-## Add an export rendered PNG button
+## Add an export rendered PNG button (done)
 
 See: ![image](./Add_an_export_rendered_PNG_button.png)
 
