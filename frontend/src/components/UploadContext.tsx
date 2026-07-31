@@ -25,24 +25,47 @@ export interface UploadQueueItem {
   error?: string;
 }
 
-interface UploadContextValue {
-  items: UploadQueueItem[];
-  showPanel: boolean;
-  isExpanded: boolean;
-  setIsExpanded: (v: boolean) => void;
+/** Stable dispatch functions — never changes reference, no re-render on progress ticks */
+interface UploadDispatchContextValue {
   addItems: (items: UploadQueueItem[]) => void;
   updateItem: (id: string, update: Partial<UploadQueueItem>) => void;
   clearCompleted: () => void;
   dismiss: () => void;
 }
 
-const UploadContext = createContext<UploadContextValue | null>(null);
+/** Reactive state — changes on every progress tick */
+interface UploadStateContextValue {
+  items: UploadQueueItem[];
+  showPanel: boolean;
+  isExpanded: boolean;
+  setIsExpanded: (v: boolean) => void;
+}
 
-export const useUploadQueue = (): UploadContextValue => {
-  const ctx = useContext(UploadContext);
-  if (!ctx)
-    throw new Error("useUploadQueue must be used inside <UploadProvider>");
+/** Legacy combined shape for backwards compatibility */
+interface UploadContextValue extends UploadDispatchContextValue, UploadStateContextValue {}
+
+const UploadDispatchContext = createContext<UploadDispatchContextValue | null>(null);
+const UploadStateContext = createContext<UploadStateContextValue | null>(null);
+
+/** Use only the stable dispatch functions — zero re-renders from progress ticks */
+export const useUploadDispatch = (): UploadDispatchContextValue => {
+  const ctx = useContext(UploadDispatchContext);
+  if (!ctx) throw new Error("useUploadDispatch must be used inside <UploadProvider>");
   return ctx;
+};
+
+/** Use the reactive state (items, showPanel, isExpanded) */
+export const useUploadState = (): UploadStateContextValue => {
+  const ctx = useContext(UploadStateContext);
+  if (!ctx) throw new Error("useUploadState must be used inside <UploadProvider>");
+  return ctx;
+};
+
+/** Legacy hook — composes both contexts. Prefer useUploadDispatch for components that only call actions. */
+export const useUploadQueue = (): UploadContextValue => {
+  const dispatch = useUploadDispatch();
+  const state = useUploadState();
+  return { ...dispatch, ...state };
 };
 
 interface UploadProviderProps {
@@ -83,31 +106,22 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
     setItems([]);
   }, []);
 
-  const value = useMemo(
-    () => ({
-      items,
-      showPanel,
-      isExpanded,
-      setIsExpanded,
-      addItems,
-      updateItem,
-      clearCompleted,
-      dismiss,
-    }),
-    [
-      items,
-      showPanel,
-      isExpanded,
-      addItems,
-      updateItem,
-      clearCompleted,
-      dismiss,
-    ],
+  /** Stable dispatch object — memoized on stable callbacks, never changes */
+  const dispatchValue = useMemo<UploadDispatchContextValue>(
+    () => ({ addItems, updateItem, clearCompleted, dismiss }),
+    [addItems, updateItem, clearCompleted, dismiss],
+  );
+
+  /** State object — changes on every progress tick */
+  const stateValue = useMemo<UploadStateContextValue>(
+    () => ({ items, showPanel, isExpanded, setIsExpanded }),
+    [items, showPanel, isExpanded],
   );
 
   return (
-    <UploadContext.Provider value={value}>
-      {children}
+    <UploadDispatchContext.Provider value={dispatchValue}>
+      <UploadStateContext.Provider value={stateValue}>
+        {children}
       {showPanel && (
         <Paper
           sx={{
@@ -248,6 +262,7 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
           </Collapse>
         </Paper>
       )}
-    </UploadContext.Provider>
+      </UploadStateContext.Provider>
+    </UploadDispatchContext.Provider>
   );
 };

@@ -47,5 +47,33 @@ export default defineConfig({
     esbuild: {
       drop: ["console", "debugger"],
     },
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          // React core — smallest possible initial chunk
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
+            return "vendor-react";
+          }
+          // MUI + emotion — large but stable; cache well between deploys
+          if (
+            id.includes("node_modules/@mui/") ||
+            id.includes("node_modules/@emotion/")
+          ) {
+            return "vendor-mui";
+          }
+          // Router
+          if (id.includes("node_modules/react-router")) {
+            return "vendor-router";
+          }
+          // Heavy libs used only in certain routes
+          if (id.includes("node_modules/jszip")) {
+            return "lib-jszip";
+          }
+          if (id.includes("node_modules/zod")) {
+            return "lib-zod";
+          }
+        },
+      },
+    },
   },
 });

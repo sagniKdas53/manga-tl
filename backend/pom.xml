@@ -101,10 +101,18 @@
 
 
         <!-- WebP Support -->
+        <!--
+          com.github.gotson:webp-imageio is the actively maintained fork of the abandoned
+          org.sejda.imageio:webp-imageio. The sejda 0.1.6 native decoder can SIGSEGV the JVM
+          (UpsampleBgraLinePair_SSE2) on certain WebP inputs / under concurrent thumbnail
+          generation. The fork ships newer libwebp with those crash fixes. Same ImageIO SPI,
+          so registry-based usage (ImageIO.getImageReaders / getImageWritersByFormatName) is
+          unaffected.
+        -->
         <dependency>
-            <groupId>org.sejda.imageio</groupId>
+            <groupId>com.github.gotson</groupId>
             <artifactId>webp-imageio</artifactId>
-            <version>0.1.6</version>
+            <version>0.2.2</version>
         </dependency>
 
         <!-- Actuator: health checks, metrics, readiness probes -->

@@ -95,6 +95,53 @@ transforming...✓ 1007 modules transformed.
 #33 DONE 3.2s
 ```
 
+---
+
+```log
+#32 [backend frontend-build 5/6] COPY frontend/ ./
+#32 DONE 0.2s
+
+#33 [backend frontend-build 6/6] RUN npm run build
+#33 1.814 
+#33 1.814 > frontend@0.0.0 build
+#33 1.814 > vite build
+#33 1.814 
+#33 2.447 vite v8.1.5 building client environment for production...
+transforming...✓ 1007 modules transformed.
+#33 3.338 rendering chunks...
+#33 3.643 computing gzip size...
+#33 3.673 dist/index.html                                    1.67 kB │ gzip:   0.63 kB
+#33 3.673 dist/assets/index-25aYWvJ6.css                    19.82 kB │ gzip:   4.19 kB
+#33 3.673 dist/assets/ConfirmModal-BUBVeALP.js               0.91 kB │ gzip:   0.49 kB
+#33 3.673 dist/assets/rolldown-runtime-VI8nWfbz.js           0.95 kB │ gzip:   0.56 kB
+#33 3.673 dist/assets/Auth-AWwyR39r.js                       3.29 kB │ gzip:   1.53 kB
+#33 3.673 dist/assets/CreateChapterDialog-DMcBS7wo.js        3.92 kB │ gzip:   1.60 kB
+#33 3.673 dist/assets/UserManagementModal-CTg7iqu_.js        4.36 kB │ gzip:   1.62 kB
+#33 3.673 dist/assets/NotificationCenter-ClrYgZnQ.js         5.31 kB │ gzip:   2.25 kB
+#33 3.673 dist/assets/ModelOverridesAccordion-CuQGCXgi.js    7.19 kB │ gzip:   1.89 kB
+#33 3.673 dist/assets/SettingsModal-DjOGBkPW.js              8.55 kB │ gzip:   2.49 kB
+#33 3.673 dist/assets/Dashboard-PP5SmUkw.js                  9.01 kB │ gzip:   3.42 kB
+#33 3.673 dist/assets/QueueManager-BVQudvOs.js              16.86 kB │ gzip:   5.87 kB
+#33 3.673 dist/assets/ChapterGallery-CqfXBGJN.js            18.71 kB │ gzip:   6.04 kB
+#33 3.673 dist/assets/SeriesDetails-BOKSXjWN.js             19.51 kB │ gzip:   5.82 kB
+#33 3.673 dist/assets/index-CzuOeM61.js                     22.74 kB │ gzip:   8.01 kB
+#33 3.673 dist/assets/vendor-router-DfqQ43_2.js             47.94 kB │ gzip:  17.03 kB
+#33 3.673 dist/assets/Reader-BuoVjdvd.js                    94.09 kB │ gzip:  26.03 kB
+#33 3.673 dist/assets/lib-jszip-tkj_gTQH.js                 97.29 kB │ gzip:  29.96 kB
+#33 3.673 dist/assets/vendor-react-CLntpiwb.js             179.29 kB │ gzip:  57.10 kB
+#33 3.673 dist/assets/vendor-mui-Dsrvn5RX.js               381.24 kB │ gzip: 119.66 kB
+#33 3.673 
+#33 3.675 ✓ built in 1.23s
+#33 3.741 npm notice
+#33 3.741 npm notice New major version of npm available! 11.17.0 -> 12.0.2
+#33 3.741 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+#33 3.741 npm notice To update run: npm install -g npm@12.0.2
+#33 3.741 npm notice
+#33 DONE 3.8s
+
+#34 [backend backend-build 2/7] WORKDIR /app
+```
+
 These files can't possibly be that complex, something funky is going on.
 
 ## The UI is laggy and loads slow
@@ -102,6 +149,12 @@ These files can't possibly be that complex, something funky is going on.
 General observation, will do a proper firefox profile analysis later.
 
 Most probably the backend holding it back, but it's probably just the inhertiatnace and overrides + the logic bugs.
+
+The previously described bug where the older chapter content remains visible for a slit second when loading a new one seems to still exist
+
+Also when there are too many jobs the queue and notification managers have noticeable lag.
+
+##
 
 ## Add an export rendered PNG button (done)
 
