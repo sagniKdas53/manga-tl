@@ -1,6 +1,12 @@
 # Worker Provider Communication Architecture & Workflow
 
-This document explains how the background worker connects to external AI/LLM providers (such as OpenAI, Anthropic, Gemini, OpenRouter, DeepSeek, Nvidia, Neurometric, etc.), packages requests, manages failovers/retries, and normalizes responses.
+This document explains how the background worker connects to external AI/LLM providers (such as OpenAI, Anthropic, Gemini, OpenRouter, Cloudflare, Nvidia, Neurometric, etc.), packages requests, manages failovers/retries, and normalizes responses.
+
+> **Providers are runtime-configured via `config/providers.json`.** The worker never hard-codes
+> an active provider list — `ProviderConfigLoader` reads that file, interpolates API keys from
+> environment variables, and marks a provider *active* only if its key is present. A provider
+> is usable in a run only if it is both (a) in `providers.json` **and** (b) has its env key set
+> (`openrouter`, `cloudflare`, `nvidia`, `neurometric` are the current entries).
 
 ---
 
@@ -32,9 +38,9 @@ graph TD
 
     subgraph External Provider APIs
         Retry -->|HTTP POST| OR[OpenRouter API]
-        Retry -->|HTTP POST| OAI[OpenAI API]
-        Retry -->|HTTP POST| ANT[Anthropic API]
-        Retry -->|HTTP POST| GEM[Google Gemini API]
+        Retry -->|HTTP POST| CF[Cloudflare Workers AI]
+        Retry -->|HTTP POST| NV[Nvidia API]
+        Retry -->|HTTP POST| NM[Neurometric API]
         Retry -->|HTTP POST| OTH[Other Compatible APIs]
     end
 
@@ -79,7 +85,7 @@ sequenceDiagram
     
     Client->>Client: Build Payload (_build_payload)<br>- Format system prompt<br>- Inject Anthropic/OpenRouter caching & schema
     
-    loop Tenacity Retry Loop (Up to 4 attempts)
+    loop Tenacity Retry Loop (3 attempts total)
         Client->>HTTP: Dispatch HTTP POST to provider URL
         HTTP->>Provider: Send JSON Payload + Headers
         
@@ -90,7 +96,7 @@ sequenceDiagram
             Client-->>Task: Return LLMResponse(content, prompt_tokens, cost, ...)
         else 429 Rate Limit
             Provider-->>HTTP: HTTP 429 Too Many Requests
-            HTTP-->>Client: Set Cooldown (PROVIDER_COOLDOWNS[provider] = +5s)
+            HTTP-->>Client: Set Cooldown (10s base, doubles per consecutive 429, cap 120s)
             Client-->>Client: Raise TransientAPIError (Triggers Retry)
         else 400 Bad Request (JSON Schema rejection)
             Provider-->>HTTP: HTTP 400 Bad Request
@@ -120,8 +126,13 @@ If a provider rejects a complex `json_schema` (returning HTTP 400), `LLMClient` 
 
 ### 3. Fault Tolerance & Retry Logic
 
-- Uses **Tenacity** (`@retry`) with exponential backoff (`multiplier=2, min=2, max=30`) for transient errors (`TransientAPIError`, HTTP 429, HTTP 5xx, timeouts).
-- Maintains a global `PROVIDER_COOLDOWNS` registry. If a provider issues HTTP 429, it sets a cooldown window and pauses subsequent requests to that provider.
+- Uses **Tenacity** (`@retry`) with `stop_after_attempt(3)` (1 initial + 2 retries) and
+  exponential backoff (`wait_exponential(multiplier=2, min=2, max=30)`) for transient errors
+  (`TransientAPIError`, HTTP 429, HTTP 5xx, timeouts).
+- Maintains a global `PROVIDER_COOLDOWNS` registry. If a provider issues HTTP 429, it sets a
+  cooldown window — **10s base**, doubling per consecutive 429 (cap **120s**), or honoring a
+  `Retry-After` header when present — and pauses subsequent requests to that provider
+  (`wait_for_cooldown`).
 
 ### 4. Prompt Caching & Routing Optimization
 
@@ -131,3 +142,45 @@ If a provider rejects a complex `json_schema` (returning HTTP 400), `LLMClient` 
 ### 5. Cost & Usage Telemetry
 
 Every completed request calculates total tokens, prompt token usage, completion token usage, cache hit ratio (`cached_tokens / prompt_tokens`), and estimates request cost using `estimate_cost()`.
+
+---
+
+## 5. `providers.json` Schema (`config/providers.json`)
+
+`ProviderConfigLoader` (`worker/src/worker/provider_config.py`) parses this file at startup.
+Top-level keys: `version`, `defaults`, `providers`.
+
+- **`defaults`** — global fallback models used when a series/chapter doesn't override them:
+  `provider`, `tl`, `qaLLM`, `qaVLM`, `ocr`, `qaMode`, `useFallbackModels`,
+  `openRouterRoutingStrategy`.
+- **`providers`** — map of provider name → config. Per-provider keys:
+
+  | Key | Meaning |
+  | :--- | :--- |
+  | `displayName` | Human-readable name. |
+  | `type` | `openai-compatible` (all current entries) or `anthropic`. |
+  | `baseUrl` | Provider endpoint; supports `${ENV_VAR}` interpolation. |
+  | `authHeader` / `authPrefix` | e.g. `Authorization` + `Bearer `. |
+  | `keyEnvVar` | Env var holding the API key. Provider is **active** only if this resolves. |
+  | `freeTier` | Whether free models are available. |
+  | `rateLimits` | Requests-per-minute cap used by the rate limiter. |
+  | `priority` | Fallback ordering hint (lower = preferred). |
+  | `models` | `{tl, qaLLM, qaVLM}` model lists, each `[{id, name, free}]`. |
+
+  Current entries: `openrouter` (priority 1), `cloudflare` (Workers AI, priority 3),
+  `nvidia` (priority 2), `neurometric` (priority 4). The builtin fallback registry in
+  `provider_config.py` additionally knows `gemini`, `openai`, and `anthropic` endpoints.
+
+## 6. OCR: local vs cloud (`ocr.py`)
+
+`ocr.py` is **dual-mode**, which the older doc omitted:
+
+- **Local (default)**: `ocrProvider: 'local'` runs **PaddleOCR** (PP-OCRv6) on the worker via
+  `worker/model_manager.py`, serialized by the Valkey `ocr` lock. No provider call is made;
+  the "provider" is the local CPU/GPU model. This is what the heavy slot runs.
+- **Cloud**: `ocrProvider` set to a provider name invokes a vision-capable model (e.g. the
+  `defaults.ocr` model in `providers.json`) through the normal `LLMClient` path with a base64
+  image payload.
+
+Whichever path runs, OCR is dispatched as a heavy-tier job and is subject to the same
+`WORKER_POLL_MS` dispatch cadence as every other phase (see `slot_allocation.md`).

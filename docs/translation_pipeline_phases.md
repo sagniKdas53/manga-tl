@@ -13,12 +13,12 @@ The pipeline runs as a callback-chained sequence of worker jobs. Each phase's co
 callback enqueues the next phase.
 
 1. **panel-detection** — detect manga panels. Enqueued when the pipeline starts
-   (`startPipeline` → `enqueueJob("panel-detection")`, :103).
-2. **ocr** — extract text regions (triggered by the panel callback, :334).
-3. **layout** — analyze region types and conversation grouping (triggered by the OCR callback, :453).
-4. **translation** — LLM batch translation of regions (triggered by the layout callback, :560).
-5. **render** — typeset / inpaint translated text onto the image (triggered by the translation callback, :767).
-6. **qa** — quality assurance pass (triggered by the render callback, :845).
+   (`startPipeline` → `enqueueJob("panel-detection")`, :210).
+2. **ocr** — extract text regions (triggered by the panel callback, :620).
+3. **layout** — analyze region types and conversation grouping (triggered by the OCR callback, :752).
+4. **translation** — LLM batch translation of regions (triggered by the layout callback, :853).
+5. **render** — typeset / inpaint translated text onto the image (triggered by the translation callback, :1096).
+6. **qa** — quality assurance pass (triggered by the render callback, :1270).
 
 > **Reader mode:** If a series' source language equals its target language, translation,
 > render, and QA are all skipped (:552).
@@ -27,28 +27,28 @@ callback enqueues the next phase.
 
 QA is not a single atomic phase. It has several modes and internal loops.
 
-### QA modes (`unified-workers/worker/handlers/qa.py:95`, `docs/models_and_prompts.md:304`)
+### QA modes (`worker/src/worker/handlers/qa.py:70` `process_qa`, mode resolution :90-97; `docs/models_and_prompts.md:304`)
 
 - **llm** — text-only semantic review (one pass).
 - **vlm** — visual layout review on the rendered image (one pass).
 - **hybrid** — two passes: (1) LLM text review → `/qa-hybrid-prepare` applies fixes →
-  **inline re-render** (`render_image_core`, `qa.py:290`) → (2) VLM visual check on the
+  **inline re-render** (`render_image_core`, `qa.py:316-319`) → (2) VLM visual check on the
   re-rendered output. The intermediate re-render is inline, not a separately queued job.
 - **none** — auto-pass all regions.
 
-### QA result handling / retry loop (`handleQaCallback`, :934)
+### QA result handling / retry loop (`handleQaCallback`, :1363)
 
 Each region receives a status and the pipeline branches:
 
-1. **direct_fix / fixed** — apply corrected text & font inline (:969).
-2. **failed → escalation** (:986):
-   - `needsManualIntervention` → **halt** pipeline, returns `MANUAL_REVIEW` (:1117).
-   - `needsReOcr` → enqueue **`qa-re-ocr`** job → `handleQaReOcrCallback` re-runs OCR then
-     loops back to **translation** (:1130, :839).
+1. **direct_fix / fixed** — apply corrected text & font inline.
+2. **failed → escalation** (:1467-1470):
+   - `needsManualIntervention` → **halt** pipeline, returns `MANUAL_REVIEW` (:1545).
+   - `needsReOcr` → enqueue **`qa-re-ocr`** job (high priority) → `handleQaReOcrCallback`
+     (:1195) re-runs OCR then loops back to **translation** (:1229).
    - `ocrBad` → correct source text; `orderBad` → fix reading order.
-3. **failed (retryable)** → re-enqueue **translation** with reason `qa-re-translate` (:1138).
-4. Retries are capped at **2** (`image:qa:retries:`, :1121). On exhaustion or a pass, the
-   pipeline completes (:1141).
+3. **failed (retryable)** → re-enqueue **translation** with reason `qa-re-translate` (:1571).
+4. Retries are capped at **2** (`needsRetry && retries < 2`, :1550, counter key
+   `image:qa:retries:` :1479). On exhaustion or a pass, the pipeline completes (:1582).
 
 ## Worst-case number of steps for a single job
 
@@ -85,17 +85,19 @@ are not separate queue entries, but if the inline re-render is counted as a step
 
 ## Where does thumbnail generation happen?
 
-Thumbnail generation is **not** a pipeline phase. It happens **synchronously at upload/ingest
-time, before the async pipeline is triggered**.
+Thumbnail generation is **not** a pipeline phase. It is fired **asynchronously at upload/ingest
+time**, before the async pipeline is triggered.
 
-During upload, the controller calls `pageService.generateThumbnail()`
-(`backend/src/main/java/com/manga/library/service/PageService.java:108`), which resizes the
-original image and uploads the thumbnail to MinIO, storing the path in
-`Image.thumbnailStoragePath`. In the standard single-page upload this occurs at
-`PageController.java:537-548`, immediately **before**
-`jobCoordinatorService.startPipeline()` (`PageController.java:562`) enqueues `panel-detection`.
+During upload, the controller calls `pageService.generateAndSaveThumbnailAsync()`
+(`backend/src/main/java/com/manga/library/service/PageService.java:209`, annotated
+`@Async("thumbnailExecutor")`), which resizes the original image and uploads a **WebP**
+thumbnail to MinIO, storing the path in `Image.thumbnailStoragePath`. It runs on a separate
+executor thread, so it does **not** block the ingest request.
 
-The same synchronous pattern is repeated across the import paths:
+The upload call-sites (thumbnail fired before/around `startPipeline`) are:
 
-- ZIP / project import — `PageController.java:204`, `:248`, `:449`, `:1030`, `:1090`
-- Chapter ZIP import — `SeriesController.java:574`
+- Standard single-page upload — `PageController.java:375`
+- Multi-page / next-number upload — `PageController.java:415`, `:600` (immediately followed by
+  `jobCoordinatorService.startPipeline(...)`)
+- ZIP / project import — `PageController.java:600`, `:693`, `:1278`, `:1329`
+- Chapter ZIP import — `SeriesController.java:689`

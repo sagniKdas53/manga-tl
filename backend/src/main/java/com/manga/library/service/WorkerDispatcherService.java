@@ -75,7 +75,7 @@ public class WorkerDispatcherService {
       List.of(
           "queue:region-redo-tl", "queue:qa", "queue:render", "queue:translation", "queue:layout");
 
-  @Scheduled(fixedDelayString = "${WORKER_POLL_MS:30000}")
+  @Scheduled(fixedDelayString = "${WORKER_POLL_MS:2000}")
   public void dispatchJobs() {
     if (redisTemplate == null || redisTemplate.opsForValue() == null) {
       return;
