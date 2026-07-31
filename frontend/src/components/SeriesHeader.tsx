@@ -144,6 +144,8 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                   component="img"
                   src={series.coverImageUrl}
                   alt={series.title}
+                  loading="lazy"
+                  decoding="async"
                   sx={{
                     width: "100%",
                     height: "100%",

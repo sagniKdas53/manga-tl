@@ -54,7 +54,7 @@ Also check if the queue docs are upto date [queue_management_system](./translati
 
 Check out the provider intgeration guide as well [workers_providers](./worker_provider_integration.md) same idea check if outdated and update also check for optimizations, I believe this was created before the `providers.json` was added so more likely outdated.
 
-## `index.js` is still too big
+## `index.js` is still too big (mitigated)
 
 ```log
 #33 1.753 vite v8.1.5 building client environment for production...
@@ -144,7 +144,7 @@ transforming...✓ 1007 modules transformed.
 
 These files can't possibly be that complex, something funky is going on.
 
-## The UI is laggy and loads slow
+## The UI is laggy and loads slow (mitigated, still slow but faster)
 
 General observation, will do a proper firefox profile analysis later.
 
@@ -154,7 +154,19 @@ The previously described bug where the older chapter content remains visible for
 
 Also when there are too many jobs the queue and notification managers have noticeable lag.
 
-##
+## Other UI fixes needed
+
+### Add lazy loading of thumbs for all surfaces, like series, chapters and pages
+
+Loading all of them is a waster
+
+### Add bi-direction 2 page cache for the reader, if possible add a hard memory cap
+
+That way the UX would be much better.
+
+### Every Chapter shows the spinner now
+
+Even with cache turned on, looks like the entire component is getting unmounted and re-mounted again.
 
 ## Add an export rendered PNG button (done)
 
