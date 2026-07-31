@@ -653,7 +653,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
       <ChapterPageGrid
         pages={pages}
-        token={user.token}
         onDeletePage={handleDeletePage}
         onMovePage={handleMovePage}
         onSelectPage={(p) => {

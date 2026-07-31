@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-interface LazyImageProps
-  extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, "src"> {
+interface LazyImageProps extends Omit<
+  React.ImgHTMLAttributes<HTMLImageElement>,
+  "src"
+> {
   src?: string | null;
   sx?: SxProps<Theme>;
 }
