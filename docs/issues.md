@@ -38,6 +38,49 @@ Error: Process completed with exit code 1.
 Error: AssertionError: expected false to be true // Object.is equality
 ```
 
+## `index.js` is still too big
+
+```log
+#33 1.753 vite v8.1.5 building client environment for production...
+transforming...✓ 1007 modules transformed.
+#33 2.544 rendering chunks...
+#33 2.786 computing gzip size...
+#33 2.797 dist/index.html                                1.40 kB │ gzip:   0.58 kB
+#33 2.797 dist/assets/index-25aYWvJ6.css                19.82 kB │ gzip:   4.19 kB
+#33 2.797 dist/assets/Add-D2elZn0Y.js                    0.15 kB │ gzip:   0.15 kB
+#33 2.797 dist/assets/ChevronRight-BbxKGv4f.js           0.17 kB │ gzip:   0.17 kB
+#33 2.797 dist/assets/Delete-q3BXIOR3.js                 0.19 kB │ gzip:   0.18 kB
+#33 2.797 dist/assets/CardContent-COFQLqYd.js            0.99 kB │ gzip:   0.49 kB
+#33 2.797 dist/assets/CardMedia-CDWC0WiR.js              1.90 kB │ gzip:   0.85 kB
+#33 2.797 dist/assets/Divider-D9Ns4fN2.js                3.45 kB │ gzip:   1.22 kB
+#33 2.797 dist/assets/MenuItem-DKQP0Xf7.js               3.73 kB │ gzip:   1.57 kB
+#33 2.797 dist/assets/Upload-C0VoJ9V1.js                 4.03 kB │ gzip:   1.67 kB
+#33 2.797 dist/assets/TextField-BxS6ZWMI.js              4.16 kB │ gzip:   1.77 kB
+#33 2.797 dist/assets/Grid-BEwsF91D.js                   4.73 kB │ gzip:   1.93 kB
+#33 2.797 dist/assets/Auth-DB-yZvzM.js                   5.24 kB │ gzip:   2.25 kB
+#33 2.797 dist/assets/UserManagementModal-CxinLifm.js    7.18 kB │ gzip:   2.91 kB
+#33 2.797 dist/assets/FormControlLabel-56vLE-I7.js       7.57 kB │ gzip:   2.92 kB
+#33 2.797 dist/assets/SettingsModal-DBfmqmJx.js          8.60 kB │ gzip:   2.51 kB
+#33 2.797 dist/assets/Dashboard-GcV4I_73.js              9.10 kB │ gzip:   3.45 kB
+#33 2.797 dist/assets/Edit-BDoM0XnO.js                  13.40 kB │ gzip:   3.95 kB
+#33 2.797 dist/assets/ChapterGallery-DWF3ROVN.js        19.17 kB │ gzip:   6.23 kB
+#33 2.797 dist/assets/SeriesDetails-Dzbh-P6w.js         19.76 kB │ gzip:   5.95 kB
+#33 2.797 dist/assets/Select-DIbBijrF.js                56.21 kB │ gzip:  17.61 kB
+#33 2.797 dist/assets/useSlotProps-EjgVaUNX.js         159.72 kB │ gzip:  54.07 kB
+#33 2.797 dist/assets/Reader-c57_Ipdj.js               220.20 kB │ gzip:  65.52 kB
+#33 2.797 dist/assets/index-qL-64He4.js                375.16 kB │ gzip: 120.29 kB
+#33 2.797 
+#33 2.798 ✓ built in 1.04s
+#33 2.826 npm notice
+#33 2.826 npm notice New major version of npm available! 11.17.0 -> 12.0.2
+#33 2.826 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+#33 2.826 npm notice To update run: npm install -g npm@12.0.2
+#33 2.826 npm notice
+#33 DONE 3.2s
+```
+
+These files can't possibly be that complex, something funky is going on.
+
 ## Same image handling had not worked for a long time now
 
 Idea [duplicate_handling](./duplicate_handling.md)

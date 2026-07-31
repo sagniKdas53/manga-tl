@@ -284,6 +284,51 @@ public class SeriesController {
     return ResponseEntity.ok(list);
   }
 
+
+  private void handleDuplicateImageCloning(Page newPage, Image existingImage, Chapter targetChapter) {
+    List<Page> existingPages = pageRepository.findByImageId(existingImage.getId());
+    if (existingPages.isEmpty()) return;
+
+    Page sourcePage = existingPages.stream()
+        .filter(p -> !p.getId().equals(newPage.getId()))
+        .filter(p -> layerRepository.findByPageId(p.getId()).stream().anyMatch(l -> "ocr".equals(l.getType())))
+        .max(Comparator.comparing((Page p) -> p.getChapter().getId().equals(targetChapter.getId()) ? 2 :
+             p.getChapter().getSeries() != null && targetChapter.getSeries() != null &&
+             p.getChapter().getSeries().getId().equals(targetChapter.getSeries().getId()) ? 1 : 0)
+             .thenComparing(p -> p.getId()))
+        .orElse(null);
+
+    if (sourcePage == null) {
+      jobCoordinatorService.startPipeline(newPage.getImage().getId(), targetChapter.getId());
+      return;
+    }
+
+    JobCoordinatorService.ResolvedPipelineConfig sourceConfig = jobCoordinatorService.resolveConfigForChapter(sourcePage.getChapter());
+    JobCoordinatorService.ResolvedPipelineConfig targetConfig = jobCoordinatorService.resolveConfigForChapter(targetChapter);
+
+    boolean ocrMatches = Objects.equals(sourceConfig.ocrProvider(), targetConfig.ocrProvider()) &&
+                         Objects.equals(sourceConfig.ocrModel(), targetConfig.ocrModel());
+
+    if (!ocrMatches) {
+      jobCoordinatorService.startPipeline(newPage.getImage().getId(), targetChapter.getId());
+      return;
+    }
+
+    Map<UUID, UUID> regionMap = pageService.cloneOcrData(sourcePage, newPage);
+
+    boolean tlMatches = Objects.equals(sourceConfig.tlProvider(), targetConfig.tlProvider()) &&
+                        Objects.equals(sourceConfig.tlModel(), targetConfig.tlModel()) &&
+                        Objects.equals(sourceConfig.qaProvider(), targetConfig.qaProvider()) &&
+                        Objects.equals(sourceConfig.qaMode(), targetConfig.qaMode());
+
+    if (tlMatches) {
+      pageService.cloneTranslationData(sourcePage, newPage, regionMap);
+      jobCoordinatorService.triggerPageRedo(newPage.getId(), "render", targetChapter.getId());
+    } else {
+      jobCoordinatorService.triggerPageRedo(newPage.getId(), "translation", targetChapter.getId());
+    }
+  }
+
   @GetMapping("/{seriesId}")
   public ResponseEntity<SeriesDto> getSeries(@PathVariable UUID seriesId) {
     Objects.requireNonNull(seriesId, "seriesId cannot be null");
@@ -607,21 +652,7 @@ public class SeriesController {
           Page page =
               pageService.createPageWithExistingImage(chapter, existingImage, pageNum, user);
 
-          // Check if target language layer exists
-          String targetLang =
-              series.getTargetLanguage() != null
-                  ? series.getTargetLanguage().trim().toLowerCase()
-                  : "en";
-          boolean targetTranslationExists =
-              layerRepository.findByPageId(page.getId()).stream()
-                  .anyMatch(
-                      l ->
-                          "translation".equalsIgnoreCase(l.getType())
-                              && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
-
-          if (!targetTranslationExists) {
-            jobCoordinatorService.triggerPageRedo(page.getId(), "translation");
-          }
+          handleDuplicateImageCloning(page, existingImage, chapter);
 
           pageNum++;
           continue;

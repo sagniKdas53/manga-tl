@@ -19,8 +19,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 public class JobCoordinatorService {
-  private static final org.slf4j.Logger log =
-      org.slf4j.LoggerFactory.getLogger(JobCoordinatorService.class);
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JobCoordinatorService.class);
+
+  public record ResolvedPipelineConfig(
+      String ocrProvider, String ocrModel,
+      String tlProvider, String tlModel,
+      String qaProvider, String qaLlmModel, String qaVlmModel, String qaMode
+  ) {}
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
@@ -155,10 +160,14 @@ public class JobCoordinatorService {
   }
 
   /**
-   * Resolves the target {@link Page} for a job callback. When {@code pageId} is provided (as sent
-   * by the worker in callback payloads), it is used directly for a precise lookup — this is the
-   * correct behaviour when the same image is referenced by multiple chapters. Falls back to
-   * {@code findByImageId().stream().findFirst()} only when no pageId is available.
+   * Resolves the target {@link Page} for a job callback. When {@code pageId} is
+   * provided (as sent
+   * by the worker in callback payloads), it is used directly for a precise lookup
+   * — this is the
+   * correct behaviour when the same image is referenced by multiple chapters.
+   * Falls back to
+   * {@code findByImageId().stream().findFirst()} only when no pageId is
+   * available.
    */
   private Page resolvePageForCallback(UUID imageId, UUID pageId) {
     if (pageId != null) {
@@ -168,10 +177,12 @@ public class JobCoordinatorService {
   }
 
   /**
-   * Safely extracts a UUID value from a map by key. Returns null if missing or unparseable.
+   * Safely extracts a UUID value from a map by key. Returns null if missing or
+   * unparsable.
    */
   private UUID extractUuid(Map<String, Object> map, String key) {
-    if (map == null || !map.containsKey(key) || map.get(key) == null) return null;
+    if (map == null || !map.containsKey(key) || map.get(key) == null)
+      return null;
     try {
       return UUID.fromString(map.get(key).toString());
     } catch (IllegalArgumentException e) {
@@ -200,11 +211,13 @@ public class JobCoordinatorService {
   }
 
   private void enqueueJob(String jobType, UUID imageId) {
-    enqueueJob(jobType, imageId, (UUID) null, job -> {});
+    enqueueJob(jobType, imageId, (UUID) null, job -> {
+    });
   }
 
   private void enqueueJob(String jobType, UUID imageId, UUID chapterId) {
-    enqueueJob(jobType, imageId, chapterId, job -> {});
+    enqueueJob(jobType, imageId, chapterId, job -> {
+    });
   }
 
   private void enqueueJob(
@@ -265,10 +278,9 @@ public class JobCoordinatorService {
       job.put("maxAttempts", 3);
       job.put("createdAt", OffsetDateTime.now().toString());
 
-      Optional<Page> pageOpt =
-          chapterId != null
-              ? pageRepository.findByChapterIdAndImageId(chapterId, imageId)
-              : pageRepository.findByImageId(imageId).stream().findFirst();
+      Optional<Page> pageOpt = chapterId != null
+          ? pageRepository.findByChapterIdAndImageId(chapterId, imageId)
+          : pageRepository.findByImageId(imageId).stream().findFirst();
 
       pageOpt.ifPresent(
           page -> {
@@ -286,15 +298,15 @@ public class JobCoordinatorService {
               }
               job.put("pageNumber", page.getPageNumber());
               job.put("chapterNumber", chapter.getChapterNumber());
-              if (chapter.getTitle() != null) job.put("chapterTitle", chapter.getTitle());
-              if (series.getTitle() != null) job.put("seriesTitle", series.getTitle());
+              if (chapter.getTitle() != null)
+                job.put("chapterTitle", chapter.getTitle());
+              if (series.getTitle() != null)
+                job.put("seriesTitle", series.getTitle());
 
-              com.manga.library.dto.SystemSettingsDto settings =
-                  systemSettingsService.getSettings();
+              com.manga.library.dto.SystemSettingsDto settings = systemSettingsService.getSettings();
 
-              String resolvedOcrProvider =
-                  resolveModel(
-                      chapter.getOcrProvider(), series.getOcrProvider(), settings.ocrProvider());
+              String resolvedOcrProvider = resolveModel(
+                  chapter.getOcrProvider(), series.getOcrProvider(), settings.ocrProvider());
               job.put("ocrProvider", resolvedOcrProvider);
 
               if ("local".equals(resolvedOcrProvider)) {
@@ -304,9 +316,8 @@ public class JobCoordinatorService {
                     "ocrModel",
                     resolveModel(chapter.getOcrModel(), series.getOcrModel(), settings.ocrModel()));
               }
-              String resolvedTlProvider =
-                  resolveModel(
-                      chapter.getTlProvider(), series.getTlProvider(), settings.tlProvider());
+              String resolvedTlProvider = resolveModel(
+                  chapter.getTlProvider(), series.getTlProvider(), settings.tlProvider());
               job.put("tlProvider", resolvedTlProvider);
               job.put(
                   "tlModel",
@@ -316,17 +327,15 @@ public class JobCoordinatorService {
                       settings.tlModel(),
                       resolvedTlProvider,
                       "tl"));
-              String resolvedQaProvider =
-                  resolveModel(
-                      chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider());
+              String resolvedQaProvider = resolveModel(
+                  chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider());
               job.put("qaProvider", resolvedQaProvider);
-              String resolvedQaLlmModel =
-                  resolveModelWithCheck(
-                      chapter.getQaLlmModel(),
-                      series.getQaLlmModel(),
-                      settings.qaLlmModel(),
-                      resolvedQaProvider,
-                      "qaLLM");
+              String resolvedQaLlmModel = resolveModelWithCheck(
+                  chapter.getQaLlmModel(),
+                  series.getQaLlmModel(),
+                  settings.qaLlmModel(),
+                  resolvedQaProvider,
+                  "qaLLM");
               job.put("qaLlmModel", resolvedQaLlmModel);
               job.put(
                   "routingStrategy",
@@ -334,25 +343,23 @@ public class JobCoordinatorService {
                       chapter.getRoutingStrategy(),
                       series.getRoutingStrategy(),
                       settings.routingStrategy()));
-              String resolvedQaVlmModel =
-                  resolveModelWithCheck(
-                      chapter.getQaVlmModel(),
-                      series.getQaVlmModel(),
-                      settings.qaVlmModel(),
-                      resolvedQaProvider,
-                      "qaVLM");
+              String resolvedQaVlmModel = resolveModelWithCheck(
+                  chapter.getQaVlmModel(),
+                  series.getQaVlmModel(),
+                  settings.qaVlmModel(),
+                  resolvedQaProvider,
+                  "qaVLM");
               job.put("qaVlmModel", resolvedQaVlmModel);
-              String resolvedQaMode =
-                  resolveModel(chapter.getQaMode(), series.getQaMode(), settings.qaMode());
+              String resolvedQaMode = resolveModel(chapter.getQaMode(), series.getQaMode(), settings.qaMode());
               boolean vlmUsable = hasUsableModel(resolvedQaProvider, resolvedQaVlmModel, "qaVLM");
               boolean llmUsable = hasUsableModel(resolvedQaProvider, resolvedQaLlmModel, "qaLLM");
 
               // -------------------------------------------------------------------------------------
               // MODEL INHERITANCE LOGIC & SMART ROUTING:
-              // - Mode "auto" prefers VLM over LLM. If VLM is not supported by the provider, 
-              //   it automatically falls back to LLM.
+              // - Mode "auto" prefers VLM over LLM. If VLM is not supported by the provider,
+              // it automatically falls back to LLM.
               // - Explicit modes ("vlm" or "llm") will also gracefully fallback to the other
-              //   if the requested mode is unsupported by the current provider.
+              // if the requested mode is unsupported by the current provider.
               // -------------------------------------------------------------------------------------
               if ("auto".equalsIgnoreCase(resolvedQaMode)) {
                 if (vlmUsable) {
@@ -361,10 +368,12 @@ public class JobCoordinatorService {
                   resolvedQaMode = "llm";
                 }
               } else if ("vlm".equalsIgnoreCase(resolvedQaMode) && !vlmUsable && llmUsable) {
-                log.warn("VLM mode explicitly requested but not available for provider '{}'. Falling back to LLM.", resolvedQaProvider);
+                log.warn("VLM mode explicitly requested but not available for provider '{}'. Falling back to LLM.",
+                    resolvedQaProvider);
                 resolvedQaMode = "llm";
               } else if ("llm".equalsIgnoreCase(resolvedQaMode) && !llmUsable && vlmUsable) {
-                log.warn("LLM mode explicitly requested but not available for provider '{}'. Falling back to VLM.", resolvedQaProvider);
+                log.warn("LLM mode explicitly requested but not available for provider '{}'. Falling back to VLM.",
+                    resolvedQaProvider);
                 resolvedQaMode = "vlm";
               }
 
@@ -389,8 +398,7 @@ public class JobCoordinatorService {
                 resolvedFallback = seriesFallback;
               } else {
                 // Fall through to global setting (default true if not configured)
-                resolvedFallback =
-                    settings.useFallbackModels() == null || settings.useFallbackModels();
+                resolvedFallback = settings.useFallbackModels() == null || settings.useFallbackModels();
               }
               job.put("useFallbackModels", resolvedFallback);
             }
@@ -477,11 +485,12 @@ public class JobCoordinatorService {
   }
 
   private String updatePayloadAttempt(String payload, int attempt) {
-    if (payload == null) return null;
+    if (payload == null)
+      return null;
     try {
-      Map<String, Object> payloadMap =
-          objectMapper.readValue(
-              payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+      Map<String, Object> payloadMap = objectMapper.readValue(
+          payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+          });
       payloadMap.put("attempt", attempt);
       return objectMapper.writeValueAsString(payloadMap);
     } catch (Exception e) {
@@ -490,21 +499,23 @@ public class JobCoordinatorService {
     }
   }
 
-  private String resolveModel(String chapterVal, String seriesVal, String globalVal) {
+  public String resolveModel(String chapterVal, String seriesVal, String globalVal) {
     if (chapterVal != null
         && !chapterVal.trim().isEmpty()
         && !chapterVal.equals("inherit")
         && !chapterVal.equals("default")
-        && !chapterVal.contains("[ORPHANED]")) return chapterVal;
+        && !chapterVal.contains("[ORPHANED]"))
+      return chapterVal;
     if (seriesVal != null
         && !seriesVal.trim().isEmpty()
         && !seriesVal.equals("inherit")
         && !seriesVal.equals("default")
-        && !seriesVal.contains("[ORPHANED]")) return seriesVal;
+        && !seriesVal.contains("[ORPHANED]"))
+      return seriesVal;
     return globalVal;
   }
 
-  private String resolveModelWithCheck(
+  public String resolveModelWithCheck(
       String chapterVal, String seriesVal, String globalVal, String provider, String task) {
     String resolved = resolveModel(chapterVal, seriesVal, globalVal);
     if (!Objects.equals(resolved, globalVal)
@@ -523,14 +534,54 @@ public class JobCoordinatorService {
     return resolved;
   }
 
+  public ResolvedPipelineConfig resolveConfigForChapter(Chapter chapter) {
+    Series series = chapter.getSeries();
+    if (series == null) {
+      series = new Series(); // Dummy series to avoid null checks
+    }
+    com.manga.library.dto.SystemSettingsDto settings = systemSettingsService.getSettings();
+
+    String resolvedOcrProvider = resolveModel(
+        chapter.getOcrProvider(), series.getOcrProvider(), settings.ocrProvider());
+    String resolvedOcrModel = resolveModelWithCheck(
+        chapter.getOcrModel(), series.getOcrModel(), settings.ocrModel(), resolvedOcrProvider, "ocr");
+
+    if ("local".equals(resolvedOcrProvider)) {
+      resolvedOcrModel = settings.localOcrModel();
+    }
+
+    String resolvedTlProvider = resolveModel(
+        chapter.getTlProvider(), series.getTlProvider(), settings.tlProvider());
+    String resolvedTlModel = resolveModelWithCheck(
+        chapter.getTlModel(), series.getTlModel(), settings.tlModel(), resolvedTlProvider, "translation");
+
+    String resolvedQaProvider = resolveModel(
+        chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider());
+    String resolvedQaLlmModel = resolveModelWithCheck(
+        chapter.getQaLlmModel(), series.getQaLlmModel(), settings.qaLlmModel(), resolvedQaProvider, "translation");
+    String resolvedQaVlmModel = resolveModelWithCheck(
+        chapter.getQaVlmModel(), series.getQaVlmModel(), settings.qaVlmModel(), resolvedQaProvider, "qa");
+    String resolvedQaMode = resolveModel(
+        chapter.getQaMode(), series.getQaMode(), settings.qaMode());
+
+    return new ResolvedPipelineConfig(
+        resolvedOcrProvider, resolvedOcrModel,
+        resolvedTlProvider, resolvedTlModel,
+        resolvedQaProvider, resolvedQaLlmModel, resolvedQaVlmModel, resolvedQaMode
+    );
+  }
+
   private boolean hasUsableModel(String provider, String model, String task) {
-    if (model == null || model.trim().isEmpty()) return false;
+    if (model == null || model.trim().isEmpty())
+      return false;
     String m = model.trim();
     if (m.equalsIgnoreCase("N/A")
         || m.equals("inherit")
         || m.equals("default")
-        || m.contains("[ORPHANED]")) return false;
-    // ProviderConfigCache.isValidProviderModel returns true when its cache is empty (permissive
+        || m.contains("[ORPHANED]"))
+      return false;
+    // ProviderConfigCache.isValidProviderModel returns true when its cache is empty
+    // (permissive
     // pre-startup), which is fine here.
     return providerConfigCache == null
         || providerConfigCache.isValidProviderModel(provider, m, task);
@@ -542,10 +593,9 @@ public class JobCoordinatorService {
     log.info("Received panel callback for image: {} with {} panels", imageId, dto.panels().size());
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    Image image =
-        imageRepository
-            .findById(Objects.requireNonNull(imageId))
-            .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+    Image image = imageRepository
+        .findById(Objects.requireNonNull(imageId))
+        .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
     // Delete existing panels if any
     panelRepository.deleteByImageId(imageId);
@@ -594,9 +644,9 @@ public class JobCoordinatorService {
 
     Page page = resolvePageForCallback(imageId, dto.pageId());
 
-    // Keep existing layers and regions for multi-pass history, but hide old OCR layers
-    List<Layer> existingLayers =
-        page != null ? layerRepository.findByPageId(page.getId()) : List.of();
+    // Keep existing layers and regions for multi-pass history, but hide old OCR
+    // layers
+    List<Layer> existingLayers = page != null ? layerRepository.findByPageId(page.getId()) : List.of();
     int maxZ = 0;
     for (Layer layer : existingLayers) {
       if (layer.getZOrder() > maxZ) {
@@ -616,8 +666,7 @@ public class JobCoordinatorService {
     List<OcrRegion> regionsToSave = new ArrayList<>();
     for (OcrCallbackDto.OcrRegionData rData : dto.regions()) {
       // Find which panel this OCR region resides in based on overlap
-      Panel matchingPanel =
-          findMatchingPanel(rData.x(), rData.y(), rData.width(), rData.height(), panels);
+      Panel matchingPanel = findMatchingPanel(rData.x(), rData.y(), rData.width(), rData.height(), panels);
 
       OcrRegion region = new OcrRegion();
       region.setPage(page);
@@ -647,8 +696,7 @@ public class JobCoordinatorService {
       region.setSafeTextH(rData.safeTextH());
       regionsToSave.add(region);
     }
-    List<OcrRegion> savedRegions =
-        ocrRegionRepository.saveAll(Objects.requireNonNull(regionsToSave));
+    List<OcrRegion> savedRegions = ocrRegionRepository.saveAll(Objects.requireNonNull(regionsToSave));
 
     // Create default OCR overlay layer
     com.fasterxml.jackson.databind.node.ObjectNode metadata = objectMapper.createObjectNode();
@@ -785,15 +833,13 @@ public class JobCoordinatorService {
     // 4. Enqueue translation job
     boolean isReaderMode = false;
     Page layoutPage = resolvePageForCallback(imageId, null);
-    Series series =
-        layoutPage != null && layoutPage.getChapter() != null
-            ? layoutPage.getChapter().getSeries()
-            : null;
+    Series series = layoutPage != null && layoutPage.getChapter() != null
+        ? layoutPage.getChapter().getSeries()
+        : null;
     if (series != null
         && series.getSourceLanguage() != null
         && series.getTargetLanguage() != null) {
-      isReaderMode =
-          series.getSourceLanguage().trim().equalsIgnoreCase(series.getTargetLanguage().trim());
+      isReaderMode = series.getSourceLanguage().trim().equalsIgnoreCase(series.getTargetLanguage().trim());
     }
 
     if (isReaderMode && series != null) {
@@ -820,28 +866,25 @@ public class JobCoordinatorService {
         .findById(Objects.requireNonNull(imageId))
         .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
-    UUID tlPageId =
-        (translations != null && !translations.isEmpty())
-            ? extractUuid(translations.get(0), "pageId")
-            : null;
+    UUID tlPageId = (translations != null && !translations.isEmpty())
+        ? extractUuid(translations.get(0), "pageId")
+        : null;
     Page page = resolvePageForCallback(imageId, tlPageId);
-    Series series =
-        page != null && page.getChapter() != null ? page.getChapter().getSeries() : null;
-    String targetLang =
-        (series != null && series.getTargetLanguage() != null)
-            ? series.getTargetLanguage().trim().toLowerCase()
-            : "en";
+    Series series = page != null && page.getChapter() != null ? page.getChapter().getSeries() : null;
+    String targetLang = (series != null && series.getTargetLanguage() != null)
+        ? series.getTargetLanguage().trim().toLowerCase()
+        : "en";
 
-    long successCount =
-        translations == null
-            ? 0
-            : translations.stream()
-                .filter(
-                    r -> {
-                      Object text = r.get("translatedText");
-                      return text != null && !text.toString().trim().isEmpty();
-                    })
-                .count();
+    long successCount = translations == null
+        ? 0
+        : translations.stream()
+            .filter(
+                r -> {
+                  Object failedObj = r.get("translationFailed");
+                  boolean failed = failedObj != null && Boolean.parseBoolean(failedObj.toString());
+                  return !failed;
+                })
+            .count();
 
     if (successCount == 0) {
       log.warn("All translations failed for image {} — not creating empty layer", imageId);
@@ -876,7 +919,8 @@ public class JobCoordinatorService {
       }
     }
 
-    // Compute z-order from ALL layers (not just translation), so it's always at the top
+    // Compute z-order from ALL layers (not just translation), so it's always at the
+    // top
     int maxZ = 0;
     for (Layer l : allLayers) {
       if (l.getZOrder() > maxZ) {
@@ -928,7 +972,8 @@ public class JobCoordinatorService {
     if (cost != null) {
       com.fasterxml.jackson.databind.node.ObjectNode tlNode = objectMapper.createObjectNode();
       tlNode.set("cost", objectMapper.valueToTree(cost));
-      // if summary is passed inside cost object, we can leave it there, or if we need to we can
+      // if summary is passed inside cost object, we can leave it there, or if we need
+      // to we can
       // extract it.
       // But user said move tl cost and summary under 'tl'.
       // If summary is in cost, it'll naturally move under 'tl'.
@@ -948,8 +993,7 @@ public class JobCoordinatorService {
 
     if (translations != null) {
       // Find all existing elements for this layer
-      List<LayerElement> existingElements =
-          layerElementRepository.findByLayerId(translationLayer.getId());
+      List<LayerElement> existingElements = layerElementRepository.findByLayerId(translationLayer.getId());
       Map<UUID, LayerElement> elementMap = new HashMap<>();
       for (LayerElement el : existingElements) {
         if (el.getRegion() != null) {
@@ -962,13 +1006,11 @@ public class JobCoordinatorService {
           UUID regionId = UUID.fromString((String) t.get("regionId"));
           String translatedText = (String) t.get("translatedText");
           Object failedVal = t.get("translationFailed");
-          boolean translationFailed =
-              failedVal != null && Boolean.parseBoolean(failedVal.toString());
+          boolean translationFailed = failedVal != null && Boolean.parseBoolean(failedVal.toString());
 
-          Double translationScore =
-              t.get("translationScore") != null
-                  ? ((Number) t.get("translationScore")).doubleValue()
-                  : null;
+          Double translationScore = t.get("translationScore") != null
+              ? ((Number) t.get("translationScore")).doubleValue()
+              : null;
 
           Objects.requireNonNull(regionId, "regionId cannot be null");
           ocrRegionRepository
@@ -985,30 +1027,26 @@ public class JobCoordinatorService {
                     LayerElement element = elementMap.get(regionId);
                     if (element == null) {
                       double padding = 10.0;
-                      double rawEx =
-                          region.getSafeTextX() != null
-                              ? region.getSafeTextX().doubleValue()
-                              : region.getBubbleX() != null
-                                  ? region.getBubbleX().doubleValue()
-                                  : region.getBboxX().doubleValue();
-                      double rawEy =
-                          region.getSafeTextY() != null
-                              ? region.getSafeTextY().doubleValue()
-                              : region.getBubbleY() != null
-                                  ? region.getBubbleY().doubleValue()
-                                  : region.getBboxY().doubleValue();
-                      int rawEw =
-                          region.getSafeTextW() != null
-                              ? region.getSafeTextW()
-                              : region.getBubbleW() != null
-                                  ? region.getBubbleW()
-                                  : region.getBboxW();
-                      int rawEh =
-                          region.getSafeTextH() != null
-                              ? region.getSafeTextH()
-                              : region.getBubbleH() != null
-                                  ? region.getBubbleH()
-                                  : region.getBboxH();
+                      double rawEx = region.getSafeTextX() != null
+                          ? region.getSafeTextX().doubleValue()
+                          : region.getBubbleX() != null
+                              ? region.getBubbleX().doubleValue()
+                              : region.getBboxX().doubleValue();
+                      double rawEy = region.getSafeTextY() != null
+                          ? region.getSafeTextY().doubleValue()
+                          : region.getBubbleY() != null
+                              ? region.getBubbleY().doubleValue()
+                              : region.getBboxY().doubleValue();
+                      int rawEw = region.getSafeTextW() != null
+                          ? region.getSafeTextW()
+                          : region.getBubbleW() != null
+                              ? region.getBubbleW()
+                              : region.getBboxW();
+                      int rawEh = region.getSafeTextH() != null
+                          ? region.getSafeTextH()
+                          : region.getBubbleH() != null
+                              ? region.getBubbleH()
+                              : region.getBboxH();
 
                       double ex = Math.max(0, rawEx - padding);
                       double ey = Math.max(0, rawEy - padding);
@@ -1063,10 +1101,9 @@ public class JobCoordinatorService {
     log.info("Triggering redo for region {} with type {}", regionId, redoType);
 
     Objects.requireNonNull(regionId, "regionId cannot be null");
-    OcrRegion region =
-        ocrRegionRepository
-            .findById(Objects.requireNonNull(regionId))
-            .orElseThrow(() -> new IllegalArgumentException("Region not found: " + regionId));
+    OcrRegion region = ocrRegionRepository
+        .findById(Objects.requireNonNull(regionId))
+        .orElseThrow(() -> new IllegalArgumentException("Region not found: " + regionId));
 
     Page page = region.getPage();
     UUID imageId = page != null ? page.getImage().getId() : null;
@@ -1100,10 +1137,9 @@ public class JobCoordinatorService {
         jobType,
         chapterId);
     Objects.requireNonNull(pageId, "pageId cannot be null");
-    Page page =
-        pageRepository
-            .findById(Objects.requireNonNull(pageId))
-            .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
+    Page page = pageRepository
+        .findById(Objects.requireNonNull(pageId))
+        .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
     UUID imageId = page.getImage().getId();
     if ("ocr".equals(jobType)) {
       redisTemplate.opsForValue().set("page:ocr:reason:" + pageId, "manual-re-ocr");
@@ -1168,8 +1204,7 @@ public class JobCoordinatorService {
         try {
           UUID regionId = UUID.fromString((String) r.get("regionId"));
           String text = (String) r.get("text");
-          Double confidence =
-              r.get("confidence") != null ? ((Number) r.get("confidence")).doubleValue() : null;
+          Double confidence = r.get("confidence") != null ? ((Number) r.get("confidence")).doubleValue() : null;
           String detectedLanguage = (String) r.get("detectedLanguage");
 
           ocrRegionRepository
@@ -1201,10 +1236,9 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleRenderCallback(UUID imageId, UUID pageId) {
-    List<Page> pages =
-        pageId != null
-            ? pageRepository.findById(pageId).map(List::of).orElse(List.of())
-            : pageRepository.findByImageId(imageId);
+    List<Page> pages = pageId != null
+        ? pageRepository.findById(pageId).map(List::of).orElse(List.of())
+        : pageRepository.findByImageId(imageId);
     for (Page page : pages) {
       page.setLastRenderedAt(OffsetDateTime.now());
       pageRepository.save(page);
@@ -1247,8 +1281,7 @@ public class JobCoordinatorService {
 
     // Find the latest translation layer
     Page hybridPage = resolvePageForCallback(imageId, null);
-    List<Layer> layers =
-        hybridPage != null ? layerRepository.findByPageId(hybridPage.getId()) : List.of();
+    List<Layer> layers = hybridPage != null ? layerRepository.findByPageId(hybridPage.getId()) : List.of();
     Layer latestTranslationLayer = null;
     for (Layer l : layers) {
 
@@ -1266,8 +1299,7 @@ public class JobCoordinatorService {
         try {
           UUID regionId = UUID.fromString((String) r.get("regionId"));
           String qaStatus = (String) r.get("qaStatus");
-          Double qaScore =
-              r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
+          Double qaScore = r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
           String qaFeedback = (String) r.get("qaFeedback");
 
           ocrRegionRepository
@@ -1306,12 +1338,12 @@ public class JobCoordinatorService {
       }
     }
 
-    // Set correct layer visibility: latest translation visible, others invisible. OCR invisible.
+    // Set correct layer visibility: latest translation visible, others invisible.
+    // OCR invisible.
     for (Layer l : layers) {
       boolean shouldBeVisible;
       if ("translation".equalsIgnoreCase(l.getType())) {
-        shouldBeVisible =
-            (latestTranslationLayer != null && l.getId().equals(latestTranslationLayer.getId()));
+        shouldBeVisible = (latestTranslationLayer != null && l.getId().equals(latestTranslationLayer.getId()));
       } else if ("ocr".equalsIgnoreCase(l.getType())) {
         shouldBeVisible = false;
       } else if ("sfx".equalsIgnoreCase(l.getType())) {
@@ -1341,8 +1373,7 @@ public class JobCoordinatorService {
     List<String> regionsToReOcr = new ArrayList<>();
 
     final List<Map<String, Object>> failedRegionsList = new ArrayList<>();
-    final int[] stats =
-        new int[5]; // 0: total, 1: passed, 2: failed, 3: direct_fix/fixed, 4: manual_review
+    final int[] stats = new int[5]; // 0: total, 1: passed, 2: failed, 3: direct_fix/fixed, 4: manual_review
     final double[] scoreStats = new double[2]; // 0: sum, 1: count
 
     if (qaResults != null) {
@@ -1350,8 +1381,7 @@ public class JobCoordinatorService {
         try {
           UUID regionId = UUID.fromString((String) r.get("regionId"));
           String qaStatus = (String) r.get("qaStatus");
-          Double qaScore =
-              r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
+          Double qaScore = r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
           String qaFeedback = (String) r.get("qaFeedback");
 
           ocrRegionRepository
@@ -1453,13 +1483,12 @@ public class JobCoordinatorService {
     // Save QA info into translation layer metadata_json
     try {
       List<Page> pages = pageRepository.findByImageId(imageId);
-      List<Layer> layers =
-          pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
+      List<Layer> layers = pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
 
       for (Layer layer : layers) {
         if ("translation".equalsIgnoreCase(layer.getType())) {
-          com.fasterxml.jackson.databind.node.ObjectNode metadata =
-              layer.getMetadataJson() != null && layer.getMetadataJson().isObject()
+          com.fasterxml.jackson.databind.node.ObjectNode metadata = layer.getMetadataJson() != null
+              && layer.getMetadataJson().isObject()
                   ? (com.fasterxml.jackson.databind.node.ObjectNode) layer.getMetadataJson()
                   : objectMapper.createObjectNode();
 
@@ -1484,8 +1513,7 @@ public class JobCoordinatorService {
           qaNode.put("last_qa_at", OffsetDateTime.now().toString());
           qaNode.put("retries_used", retries);
 
-          com.fasterxml.jackson.databind.node.ArrayNode failedRegionsNode =
-              objectMapper.createArrayNode();
+          com.fasterxml.jackson.databind.node.ArrayNode failedRegionsNode = objectMapper.createArrayNode();
           for (Map<String, Object> failedRegion : failedRegionsList) {
             failedRegionsNode.add(objectMapper.valueToTree(failedRegion));
           }
@@ -1500,8 +1528,7 @@ public class JobCoordinatorService {
 
           // Legacy layer_name logic for manual review
           if (needsManualIntervention) {
-            String currentName =
-                metadata.has("layer_name") ? metadata.get("layer_name").asText() : "Translation";
+            String currentName = metadata.has("layer_name") ? metadata.get("layer_name").asText() : "Translation";
             if (!currentName.contains("qa-manual-review-needed")) {
               metadata.put("layer_name", currentName + " (qa-manual-review-needed)");
             }
@@ -1561,10 +1588,8 @@ public class JobCoordinatorService {
     double maxOverlapArea = 0;
 
     for (Panel p : panels) {
-      int overlapX =
-          Math.max(0, Math.min(rx + rw, p.getBboxX() + p.getBboxW()) - Math.max(rx, p.getBboxX()));
-      int overlapY =
-          Math.max(0, Math.min(ry + rh, p.getBboxY() + p.getBboxH()) - Math.max(ry, p.getBboxY()));
+      int overlapX = Math.max(0, Math.min(rx + rw, p.getBboxX() + p.getBboxW()) - Math.max(rx, p.getBboxX()));
+      int overlapY = Math.max(0, Math.min(ry + rh, p.getBboxY() + p.getBboxH()) - Math.max(ry, p.getBboxY()));
       double overlapArea = overlapX * overlapY;
 
       if (overlapArea > maxOverlapArea) {
@@ -1591,7 +1616,8 @@ public class JobCoordinatorService {
   }
 
   private void saveJobCosts(UUID imageId, Map<String, Object> costMap) {
-    if (costMap == null || costMap.isEmpty()) return;
+    if (costMap == null || costMap.isEmpty())
+      return;
     try {
       if (costMap.get("breakdown") instanceof List<?> breakdown) {
         for (Object entry : breakdown) {
@@ -1621,8 +1647,10 @@ public class JobCoordinatorService {
   private void saveJobCostEntry(UUID imageId, Map<String, Object> cost) {
     JobCost jobCost = new JobCost();
     jobCost.setImageId(imageId);
-    if (cost.get("provider") != null) jobCost.setProvider(cost.get("provider").toString());
-    if (cost.get("model") != null) jobCost.setModel(cost.get("model").toString());
+    if (cost.get("provider") != null)
+      jobCost.setProvider(cost.get("provider").toString());
+    if (cost.get("model") != null)
+      jobCost.setModel(cost.get("model").toString());
     if (cost.get("prompt_tokens") instanceof Number promptTokens) {
       jobCost.setPromptTokens(promptTokens.intValue());
     }

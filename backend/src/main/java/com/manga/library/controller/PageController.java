@@ -90,6 +90,50 @@ public class PageController {
     return cleanContext + "/api/images/" + imageId + "/file";
   }
 
+  private void handleDuplicateImageCloning(Page newPage, Image existingImage, Chapter targetChapter) {
+    List<Page> existingPages = pageRepository.findByImageId(existingImage.getId());
+    if (existingPages.isEmpty()) return;
+
+    Page sourcePage = existingPages.stream()
+        .filter(p -> !p.getId().equals(newPage.getId()))
+        .filter(p -> layerRepository.findByPageId(p.getId()).stream().anyMatch(l -> "ocr".equals(l.getType())))
+        .max(Comparator.comparing((Page p) -> p.getChapter().getId().equals(targetChapter.getId()) ? 2 :
+             p.getChapter().getSeries() != null && targetChapter.getSeries() != null &&
+             p.getChapter().getSeries().getId().equals(targetChapter.getSeries().getId()) ? 1 : 0)
+             .thenComparing(p -> p.getId()))
+        .orElse(null);
+
+    if (sourcePage == null) {
+      jobCoordinatorService.startPipeline(newPage.getImage().getId(), targetChapter.getId());
+      return;
+    }
+
+    JobCoordinatorService.ResolvedPipelineConfig sourceConfig = jobCoordinatorService.resolveConfigForChapter(sourcePage.getChapter());
+    JobCoordinatorService.ResolvedPipelineConfig targetConfig = jobCoordinatorService.resolveConfigForChapter(targetChapter);
+
+    boolean ocrMatches = Objects.equals(sourceConfig.ocrProvider(), targetConfig.ocrProvider()) &&
+                         Objects.equals(sourceConfig.ocrModel(), targetConfig.ocrModel());
+
+    if (!ocrMatches) {
+      jobCoordinatorService.startPipeline(newPage.getImage().getId(), targetChapter.getId());
+      return;
+    }
+
+    Map<UUID, UUID> regionMap = pageService.cloneOcrData(sourcePage, newPage);
+
+    boolean tlMatches = Objects.equals(sourceConfig.tlProvider(), targetConfig.tlProvider()) &&
+                        Objects.equals(sourceConfig.tlModel(), targetConfig.tlModel()) &&
+                        Objects.equals(sourceConfig.qaProvider(), targetConfig.qaProvider()) &&
+                        Objects.equals(sourceConfig.qaMode(), targetConfig.qaMode());
+
+    if (tlMatches) {
+      pageService.cloneTranslationData(sourcePage, newPage, regionMap);
+      jobCoordinatorService.triggerPageRedo(newPage.getId(), "render", targetChapter.getId());
+    } else {
+      jobCoordinatorService.triggerPageRedo(newPage.getId(), "translation", targetChapter.getId());
+    }
+  }
+
   private record ProcessedImage(byte[] bytes, String extension, String filename) {}
 
   private ProcessedImage validateAndProcessImageBytes(String originalFilename, byte[] fileBytes) {
@@ -522,20 +566,7 @@ public class PageController {
                   pageService.createPageWithExistingImage(chapter, existingImage, nextNum, user);
               if (firstPage == null) firstPage = pg;
 
-              String targetLang =
-                  chapter.getSeries().getTargetLanguage() != null
-                      ? chapter.getSeries().getTargetLanguage().trim().toLowerCase()
-                      : "en";
-              boolean targetTranslationExists =
-                  layerRepository.findByPageId(pg.getId()).stream()
-                      .anyMatch(
-                          l ->
-                              "translation".equalsIgnoreCase(l.getType())
-                                  && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
-
-              if (!targetTranslationExists) {
-                jobCoordinatorService.triggerPageRedo(pg.getId(), "translation", chapter.getId());
-              }
+              handleDuplicateImageCloning(pg, existingImage, chapter);
 
               nextNum++;
               continue;
@@ -632,26 +663,8 @@ public class PageController {
         Page page =
             pageService.createPageWithExistingImage(chapter, existingImage, safePageNumber, user);
 
-        // Check if target language layer exists
-        String targetLang =
-            chapter.getSeries().getTargetLanguage() != null
-                ? chapter.getSeries().getTargetLanguage().trim().toLowerCase()
-                : "en";
-        boolean targetTranslationExists =
-            layerRepository.findByPageId(page.getId()).stream()
-                .anyMatch(
-                    l ->
-                        "translation".equalsIgnoreCase(l.getType())
-                            && targetLang.equalsIgnoreCase(l.getTargetLanguage()));
-
-        if (!targetTranslationExists) {
-          log.info(
-              "Target translation layer ({}) missing for existing page {}, queuing translation",
-              targetLang,
-              page.getId());
-          jobCoordinatorService.triggerPageRedo(page.getId(), "translation", chapter.getId());
-          if (user != null) sseService.mapImageToUser(existingImage.getId(), user.getId());
-        }
+        handleDuplicateImageCloning(page, existingImage, chapter);
+        if (user != null) sseService.mapImageToUser(existingImage.getId(), user.getId());
 
         return ResponseEntity.ok(
             new UploadResponse(page.getId(), existingImage.getId(), "duplicate"));

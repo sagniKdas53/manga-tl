@@ -131,7 +131,10 @@ public class InternalJobController {
   }
 
   @GetMapping("/images/{imageId}")
-  public ResponseEntity<?> getImageInfo(@PathVariable UUID imageId) {
+  public ResponseEntity<?> getImageInfo(
+      @PathVariable UUID imageId,
+      @RequestParam(required = false) UUID chapterId,
+      @RequestParam(required = false) UUID pageId) {
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Worker requested metadata for image: {}", imageId);
     return imageRepository
@@ -139,14 +142,34 @@ public class InternalJobController {
         .map(
             image -> {
               Map<String, Object> map = new HashMap<>();
-              map.put("id", image.getId().toString());
               map.put("filename", image.getFilename());
               map.put("storagePath", image.getStoragePath());
+              map.put("id", image.getId());
               map.put("presignedUrl", minioService.generatePresignedUrl(image.getStoragePath()));
               map.put("panels", panelRepository.findByImageId(imageId));
 
               List<Page> pages = pageRepository.findByImageId(imageId);
-              Page page = pages.isEmpty() ? null : pages.get(0);
+              Page tempPage = null;
+              if (pageId != null) {
+                for (Page p : pages) {
+                  if (p.getId().equals(pageId)) {
+                    tempPage = p;
+                    break;
+                  }
+                }
+              }
+              if (tempPage == null && chapterId != null) {
+                for (Page p : pages) {
+                  if (p.getChapter() != null && p.getChapter().getId().equals(chapterId)) {
+                    tempPage = p;
+                    break;
+                  }
+                }
+              }
+              if (tempPage == null) {
+                tempPage = pages.isEmpty() ? null : pages.get(0);
+              }
+              final Page page = tempPage;
 
               // Load OCR regions FIRST (as real entities) before any LayerElement
               // queries that would create lazy proxies in the persistence context
@@ -163,9 +186,14 @@ public class InternalJobController {
                   latestOcrLayer = l;
                 }
               }
+              log.info("DEBUG_TL: selected pageId = {}", page != null ? page.getId() : "null");
+              log.info("DEBUG_TL: allOcrRegions size = {}", allOcrRegions.size());
+              log.info("DEBUG_TL: allLayers size = {}", allLayers.size());
               if (latestOcrLayer != null) {
+                log.info("DEBUG_TL: latestOcrLayer id = {}", latestOcrLayer.getId());
                 List<LayerElement> ocrElements =
                     layerElementRepository.findByLayerId(latestOcrLayer.getId());
+                log.info("DEBUG_TL: ocrElements size = {}", ocrElements.size());
                 Set<UUID> activeRegionIds = new HashSet<>();
                 for (LayerElement el : ocrElements) {
                   if (el.getRegion() != null) {

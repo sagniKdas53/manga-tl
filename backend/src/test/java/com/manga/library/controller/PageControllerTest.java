@@ -660,16 +660,37 @@ public class PageControllerTest {
         };
     when(imageRepository.findByHash(anyString())).thenReturn(Optional.of(existingImage));
 
-    when(layerRepository.findByPageId(any())).thenReturn(Collections.emptyList());
-
     Page page =
         new Page() {
           {
             setId(UUID.randomUUID());
             setImage(existingImage);
+            setChapter(chapter);
           }
         };
     when(pageService.createPageWithExistingImage(any(), any(), any(), any())).thenReturn(page);
+
+    Page sourcePage = new Page();
+    sourcePage.setId(UUID.randomUUID());
+    Chapter sourceChapter = new Chapter();
+    sourceChapter.setId(UUID.randomUUID());
+    sourcePage.setChapter(sourceChapter);
+
+    when(pageRepository.findByImageId(existingImageId)).thenReturn(java.util.Collections.singletonList(sourcePage));
+
+    com.manga.library.model.Layer ocrLayer = new com.manga.library.model.Layer();
+    ocrLayer.setType("ocr");
+    when(layerRepository.findByPageId(sourcePage.getId())).thenReturn(java.util.Collections.singletonList(ocrLayer));
+
+    com.manga.library.service.JobCoordinatorService.ResolvedPipelineConfig sourceConfig =
+        new com.manga.library.service.JobCoordinatorService.ResolvedPipelineConfig("ocr1", "model1", "tl1", "tlmodel1", "qa1", "qallm1", "qavlm1", "qamode1");
+    com.manga.library.service.JobCoordinatorService.ResolvedPipelineConfig targetConfig =
+        new com.manga.library.service.JobCoordinatorService.ResolvedPipelineConfig("ocr1", "model1", "tl2", "tlmodel2", "qa2", "qallm2", "qavlm2", "qamode2");
+
+    when(jobCoordinatorService.resolveConfigForChapter(sourceChapter)).thenReturn(sourceConfig);
+    when(jobCoordinatorService.resolveConfigForChapter(chapter)).thenReturn(targetConfig);
+    when(pageService.cloneOcrData(sourcePage, page)).thenReturn(java.util.Collections.emptyMap());
+
 
     org.springframework.mock.web.MockMultipartFile file =
         new org.springframework.mock.web.MockMultipartFile(

@@ -8,7 +8,11 @@ import com.manga.library.model.*;
 import com.manga.library.repository.ImageRepository;
 import com.manga.library.repository.PageRepository;
 import com.manga.library.repository.SeriesRepository;
+import com.manga.library.repository.LayerRepository;
+import com.manga.library.repository.LayerElementRepository;
+import com.manga.library.repository.OcrRegionRepository;
 import java.util.UUID;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +28,9 @@ public class PageServiceTest {
   @Mock private SeriesRepository seriesRepository;
   @Mock private com.manga.library.repository.ChapterRepository chapterRepository;
   @Mock private MinioService minioService;
+  @Mock private LayerRepository layerRepository;
+  @Mock private LayerElementRepository layerElementRepository;
+  @Mock private OcrRegionRepository ocrRegionRepository;
 
   private PageService pageService;
 
@@ -31,7 +38,7 @@ public class PageServiceTest {
   public void setUp() {
     pageService =
         new PageService(
-            imageRepository, pageRepository, seriesRepository, chapterRepository, minioService);
+            imageRepository, pageRepository, seriesRepository, chapterRepository, minioService, layerRepository, layerElementRepository, ocrRegionRepository);
   }
 
   @Test
@@ -433,5 +440,78 @@ public class PageServiceTest {
     verify(pageRepository, times(1)).save(argThat(p -> p.getId().equals(p2.getId())));
     verify(pageRepository, times(1)).save(argThat(p -> p.getId().equals(p3.getId())));
     verify(pageRepository, times(2)).save(argThat(p -> p.getId().equals(p4.getId())));
+  }
+
+  @Test
+  public void testCloneOcrData_NoSourceLayer_ReturnsEmpty() {
+    Page sourcePage = new Page();
+    sourcePage.setId(UUID.randomUUID());
+    Page targetPage = new Page();
+    targetPage.setId(UUID.randomUUID());
+
+    when(layerRepository.findByPageId(sourcePage.getId())).thenReturn(java.util.Collections.emptyList());
+
+    Map<UUID, UUID> result = pageService.cloneOcrData(sourcePage, targetPage);
+
+    assertTrue(result.isEmpty());
+    verify(ocrRegionRepository, never()).save(any(OcrRegion.class));
+    verify(layerRepository, never()).save(any(Layer.class));
+  }
+
+  @Test
+  public void testCloneOcrData_CopiesRegionsAndLayer() {
+    Page sourcePage = new Page();
+    sourcePage.setId(UUID.randomUUID());
+    Page targetPage = new Page();
+    targetPage.setId(UUID.randomUUID());
+
+    Layer sourceOcrLayer = new Layer();
+    sourceOcrLayer.setId(UUID.randomUUID());
+    sourceOcrLayer.setType("ocr");
+    sourceOcrLayer.setVisible(true);
+    sourceOcrLayer.setZOrder(1);
+
+    when(layerRepository.findByPageId(sourcePage.getId())).thenReturn(java.util.List.of(sourceOcrLayer));
+
+    OcrRegion sourceRegion = new OcrRegion();
+    sourceRegion.setId(UUID.randomUUID());
+    sourceRegion.setText("Test Text");
+    sourceRegion.setDetectedLanguage("ja");
+    sourceRegion.setBboxX(10);
+    sourceRegion.setBboxY(20);
+    sourceRegion.setBboxW(100);
+    sourceRegion.setBboxH(200);
+
+    when(ocrRegionRepository.findByPageId(sourcePage.getId())).thenReturn(java.util.List.of(sourceRegion));
+    when(ocrRegionRepository.save(any(OcrRegion.class))).thenAnswer(i -> {
+      OcrRegion r = i.getArgument(0);
+      r.setId(UUID.randomUUID());
+      return r;
+    });
+
+    when(layerRepository.save(any(Layer.class))).thenAnswer(i -> {
+      Layer l = i.getArgument(0);
+      l.setId(UUID.randomUUID());
+      return l;
+    });
+
+    LayerElement sourceEl = new LayerElement();
+    sourceEl.setId(UUID.randomUUID());
+    sourceEl.setLayer(sourceOcrLayer);
+    sourceEl.setRegion(sourceRegion);
+    sourceEl.setText("Test Text");
+    sourceEl.setX(10.0);
+    sourceEl.setY(20.0);
+
+    when(layerElementRepository.findByLayerPageId(sourcePage.getId())).thenReturn(java.util.List.of(sourceEl));
+
+    Map<UUID, UUID> result = pageService.cloneOcrData(sourcePage, targetPage);
+
+    assertFalse(result.isEmpty());
+    assertTrue(result.containsKey(sourceRegion.getId()));
+
+    verify(ocrRegionRepository, times(1)).save(any(OcrRegion.class));
+    verify(layerRepository, times(1)).save(any(Layer.class));
+    verify(layerElementRepository, times(1)).save(any(LayerElement.class));
   }
 }

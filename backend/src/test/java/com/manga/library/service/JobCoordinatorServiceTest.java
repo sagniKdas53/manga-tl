@@ -1,6 +1,7 @@
 package com.manga.library.service;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import com.manga.library.RedisTestcontainersConfig;
 import com.manga.library.model.*;
@@ -1574,6 +1575,127 @@ public class JobCoordinatorServiceTest {
     imageRepository.delete(image);
     chapterRepository.delete(chapter);
     seriesRepository.delete(series);
+  }
+
+  @Test
+  public void testResolveConfigForChapter_ChapterOverride() {
+    Series series = new Series();
+    series.setOcrProvider("seriesOcr");
+    series.setOcrModel("seriesModel");
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setOcrProvider("chapterOcr");
+    chapter.setOcrModel("chapterModel");
+    chapter.setTlProvider("chapterTl");
+    chapter.setTlModel("chapterTlModel");
+    chapter.setQaProvider("chapterQa");
+    chapter.setQaMode("chapterQaMode");
+
+    com.manga.library.dto.SystemSettingsDto globalSettings = new com.manga.library.dto.SystemSettingsDto(
+        null, null, null, null, null,
+        "globalOcr", "globalModel",
+        "globalTl", "globalTlModel",
+        "globalQa", "globalQaLlm", "globalQaVlm",
+        false, "localOcr", false, "globalQaMode", true,
+        null, null, null
+    );
+
+    com.manga.library.service.SystemSettingsService mockSystemSettingsService = mockGeneric(com.manga.library.service.SystemSettingsService.class);
+    when(mockSystemSettingsService.getSettings()).thenReturn(globalSettings);
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "systemSettingsService", mockSystemSettingsService);
+
+    com.manga.library.service.ProviderConfigCache mockProviderConfigCache = mockGeneric(com.manga.library.service.ProviderConfigCache.class);
+    when(mockProviderConfigCache.isValidProviderModel(any(), any(), any())).thenReturn(true);
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "providerConfigCache", mockProviderConfigCache);
+
+    JobCoordinatorService.ResolvedPipelineConfig config = jobCoordinatorService.resolveConfigForChapter(chapter);
+
+    assertEquals("chapterOcr", config.ocrProvider());
+    assertEquals("chapterModel", config.ocrModel());
+    assertEquals("chapterTl", config.tlProvider());
+    assertEquals("chapterTlModel", config.tlModel());
+    assertEquals("chapterQa", config.qaProvider());
+    assertEquals("chapterQaMode", config.qaMode());
+  }
+
+  @Test
+  public void testResolveConfigForChapter_SeriesFallback() {
+    Series series = new Series();
+    series.setOcrProvider("seriesOcr");
+    series.setOcrModel("seriesModel");
+    series.setTlProvider("seriesTl");
+    series.setTlModel("seriesTlModel");
+    series.setQaProvider("seriesQa");
+    series.setQaMode("seriesQaMode");
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setOcrProvider("inherit");
+    chapter.setTlProvider(null);
+    chapter.setQaProvider("");
+
+    com.manga.library.dto.SystemSettingsDto globalSettings = new com.manga.library.dto.SystemSettingsDto(
+        null, null, null, null, null,
+        "globalOcr", "globalModel",
+        "globalTl", "globalTlModel",
+        "globalQa", "globalQaLlm", "globalQaVlm",
+        false, "localOcr", false, "globalQaMode", true,
+        null, null, null
+    );
+
+    com.manga.library.service.SystemSettingsService mockSystemSettingsService = mockGeneric(com.manga.library.service.SystemSettingsService.class);
+    when(mockSystemSettingsService.getSettings()).thenReturn(globalSettings);
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "systemSettingsService", mockSystemSettingsService);
+
+    com.manga.library.service.ProviderConfigCache mockProviderConfigCache = mockGeneric(com.manga.library.service.ProviderConfigCache.class);
+    when(mockProviderConfigCache.isValidProviderModel(any(), any(), any())).thenReturn(true);
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "providerConfigCache", mockProviderConfigCache);
+
+    JobCoordinatorService.ResolvedPipelineConfig config = jobCoordinatorService.resolveConfigForChapter(chapter);
+
+    assertEquals("seriesOcr", config.ocrProvider());
+    assertEquals("seriesModel", config.ocrModel());
+    assertEquals("seriesTl", config.tlProvider());
+    assertEquals("seriesTlModel", config.tlModel());
+    assertEquals("seriesQa", config.qaProvider());
+    assertEquals("seriesQaMode", config.qaMode());
+  }
+
+  @Test
+  public void testResolveConfigForChapter_GlobalFallback() {
+    Series series = new Series();
+    series.setOcrProvider("default");
+    series.setTlProvider("inherit");
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+
+    com.manga.library.dto.SystemSettingsDto globalSettings = new com.manga.library.dto.SystemSettingsDto(
+        null, null, null, null, null,
+        "globalOcr", "globalModel",
+        "globalTl", "globalTlModel",
+        "globalQa", "globalQaLlm", "globalQaVlm",
+        false, "localOcr", false, "globalQaMode", true,
+        null, null, null
+    );
+
+    com.manga.library.service.SystemSettingsService mockSystemSettingsService = mockGeneric(com.manga.library.service.SystemSettingsService.class);
+    when(mockSystemSettingsService.getSettings()).thenReturn(globalSettings);
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "systemSettingsService", mockSystemSettingsService);
+
+    com.manga.library.service.ProviderConfigCache mockProviderConfigCache = mockGeneric(com.manga.library.service.ProviderConfigCache.class);
+    when(mockProviderConfigCache.isValidProviderModel(any(), any(), any())).thenReturn(true);
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "providerConfigCache", mockProviderConfigCache);
+
+    JobCoordinatorService.ResolvedPipelineConfig config = jobCoordinatorService.resolveConfigForChapter(chapter);
+
+    assertEquals("globalOcr", config.ocrProvider());
+    assertEquals("globalModel", config.ocrModel());
+    assertEquals("globalTl", config.tlProvider());
+    assertEquals("globalTlModel", config.tlModel());
+    assertEquals("globalQa", config.qaProvider());
+    assertEquals("globalQaMode", config.qaMode());
   }
 
   @SuppressWarnings("unchecked")
