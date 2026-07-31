@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -241,7 +242,31 @@ public class PageControllerTest {
     when(minioService.getFileStream(anyString()))
         .thenReturn(new java.io.ByteArrayInputStream("dummy".getBytes()));
 
-    mockMvc.perform(get("/api/images/" + imageId + "/file")).andExpect(status().isOk());
+    mockMvc
+        .perform(get("/api/images/" + imageId + "/file"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType("image/png"));
+  }
+
+  @Test
+  public void testGetImageFile_WebpContentType() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    Image image =
+        new Image() {
+          {
+            setId(imageId);
+            setFilename("test.webp");
+            setStoragePath("path/test.webp");
+          }
+        };
+    when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+    when(minioService.getFileStream(anyString()))
+        .thenReturn(new java.io.ByteArrayInputStream("dummy".getBytes()));
+
+    mockMvc
+        .perform(get("/api/images/" + imageId + "/file"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType("image/webp"));
   }
 
   @Test
@@ -252,14 +277,17 @@ public class PageControllerTest {
           {
             setId(imageId);
             setFilename("test.png");
-            setThumbnailStoragePath("path/thumb.jpg");
+            setThumbnailStoragePath("path/thumb.webp");
           }
         };
     when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
     when(minioService.getFileStream(anyString()))
         .thenReturn(new java.io.ByteArrayInputStream("dummy".getBytes()));
 
-    mockMvc.perform(get("/api/images/" + imageId + "/thumbnail")).andExpect(status().isOk());
+    mockMvc
+        .perform(get("/api/images/" + imageId + "/thumbnail"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType("image/webp"));
   }
 
   @Test

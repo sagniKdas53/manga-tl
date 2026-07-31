@@ -42,7 +42,7 @@ Error: AssertionError: expected false to be true // Object.is equality
 
 Idea [duplicate_handling](./duplicate_handling.md)
 
-## The queue manangemt has become absolute shit
+## The queue manangemt has become absolute shit (pending)
 
 It takes 2 hours to process 50 images, just check the logs.
 
@@ -144,7 +144,7 @@ transforming...✓ 1007 modules transformed.
 
 These files can't possibly be that complex, something funky is going on.
 
-## The UI is laggy and loads slow
+## The UI is laggy and loads slow (partially fixed)
 
 General observation, will do a proper firefox profile analysis later.
 
@@ -154,21 +154,21 @@ The previously described bug where the older chapter content remains visible for
 
 Also when there are too many jobs the queue and notification managers have noticeable lag.
 
-## UI fixes needed
+## UI fixes needed (done)
 
-### Add lazy loading of thumbs for all surfaces, like series, chapters and pages
+### Add lazy loading of thumbs for all surfaces, like series, chapters and pages (done)
 
 Loading all of them is a waste, this is implemented wrongly as the lazy-image initiator seems to load full image and not the thumbs.
 
-### Add bi-direction 2 page cache for the reader, if possible add a hard memory cap
+### Add bi-direction 2 page cache for the reader, if possible add a hard memory cap (done)
 
 That way the UX would be much better. this is also wrongly implemented, because when going forward it loads the next image but when going back it doesn't load the previous image. Also the hard memory cap seems to be doing more harm than good, it should be a soft cap. The act of calculating it might be causing more issues than good.
 
-### Every Chapter shows the spinner now
+### Every Chapter shows the spinner now (done)
 
 Even with cache turned on, looks like the entire component is getting unmounted and re-mounted again.
 
-### The UI is so loaggy and shitty now that it caused firefox to crash
+### The UI is so loaggy and shitty now that it caused firefox to crash (done)
 
 Impressive work really, revert the last commit, and do all of these again but slowly and properly this time.
 

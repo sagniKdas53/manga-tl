@@ -2,6 +2,8 @@ inputs/
 .claude/
 .agents/
 backend/target/
+# Compiled native artifacts (built in the Dockerfile webp-native-build stage)
+backend/src/main/c/*.so
 data/
 logs/
 *__pycache__

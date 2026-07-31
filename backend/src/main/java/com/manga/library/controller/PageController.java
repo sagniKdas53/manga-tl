@@ -718,6 +718,19 @@ public class PageController {
     return cleanContext + "/api/images/" + imageId + "/thumbnail";
   }
 
+  /** Resolves the media type from a MinIO object path's extension. */
+  private org.springframework.http.MediaType resolveImageContentType(String path) {
+    if (path == null) return org.springframework.http.MediaType.APPLICATION_OCTET_STREAM;
+    String lower = path.toLowerCase();
+    if (lower.endsWith(".png")) return org.springframework.http.MediaType.parseMediaType("image/png");
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg"))
+      return org.springframework.http.MediaType.parseMediaType("image/jpeg");
+    if (lower.endsWith(".webp")) return org.springframework.http.MediaType.parseMediaType("image/webp");
+    if (lower.endsWith(".gif")) return org.springframework.http.MediaType.parseMediaType("image/gif");
+    if (lower.endsWith(".bmp")) return org.springframework.http.MediaType.parseMediaType("image/bmp");
+    return org.springframework.http.MediaType.APPLICATION_OCTET_STREAM;
+  }
+
   @GetMapping("/chapters/{chapterId}/pages")
   @Transactional(readOnly = true)
   public ResponseEntity<List<PageDto>> listPages(@PathVariable UUID chapterId) {
@@ -909,7 +922,7 @@ public class PageController {
           };
 
       return ResponseEntity.ok()
-          .contentType(org.springframework.http.MediaType.parseMediaType("image/png"))
+          .contentType(resolveImageContentType(image.getStoragePath()))
           .body(responseBody);
     } catch (Exception e) {
       log.error("Failed to retrieve image file for {}", imageId, e);
@@ -944,7 +957,7 @@ public class PageController {
           };
 
       return ResponseEntity.ok()
-          .contentType(org.springframework.http.MediaType.parseMediaType("image/jpeg"))
+          .contentType(resolveImageContentType(path))
           .body(responseBody);
     } catch (Exception e) {
       log.error("Failed to retrieve image thumbnail for {}", imageId, e);
