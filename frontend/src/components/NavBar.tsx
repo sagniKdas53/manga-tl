@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
@@ -16,8 +16,11 @@ import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 
 import { useColorMode } from "../hooks/useColorMode";
 import type { User } from "../types";
-import { NotificationCenter } from "./NotificationCenter";
-import { QueueManager } from "./QueueManager";
+
+// Lazy-load heavy drawer components — only fetched when user clicks the nav icons
+const NotificationCenter = React.lazy(() => import("./NotificationCenter"));
+const QueueManager = React.lazy(() => import("./QueueManager"));
+
 import logoDark from "../assets/logo-dark.svg";
 import logoLight from "../assets/logo-light.svg";
 
@@ -97,17 +100,21 @@ export const NavBar: React.FC<NavBarProps> = ({
               >
                 <SettingsIcon />
               </IconButton>
-              <QueueManager
-                token={user?.token || null}
-                forceOpen={activeDrawer === "queue"}
-                onRequestOpen={() => setActiveDrawer("queue")}
-                onClose={() => setActiveDrawer("none")}
-              />
-              <NotificationCenter
-                forceOpen={activeDrawer === "notifications"}
-                onRequestOpen={() => setActiveDrawer("notifications")}
-                onClose={() => setActiveDrawer("none")}
-              />
+              <Suspense fallback={null}>
+                <QueueManager
+                  token={user?.token || null}
+                  forceOpen={activeDrawer === "queue"}
+                  onRequestOpen={() => setActiveDrawer("queue")}
+                  onClose={() => setActiveDrawer("none")}
+                />
+              </Suspense>
+              <Suspense fallback={null}>
+                <NotificationCenter
+                  forceOpen={activeDrawer === "notifications"}
+                  onRequestOpen={() => setActiveDrawer("notifications")}
+                  onClose={() => setActiveDrawer("none")}
+                />
+              </Suspense>
               <IconButton
                 onClick={() => setIsUserModalOpen(true)}
                 color="inherit"

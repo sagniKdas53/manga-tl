@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
@@ -42,6 +42,24 @@ interface Job {
   createdAt: string;
   jobCreatedAt: string;
   updatedAt: string;
+}
+
+/** Cached result of JSON.parse(job.payload) — keyed by job id */
+interface ParsedPayload {
+  seriesTitle?: string;
+  chapterTitle?: string;
+  chapterNumber?: number;
+  pageNumber?: number;
+  ocrProvider?: string;
+  ocrModel?: string;
+  tlProvider?: string;
+  tlModel?: string;
+  qaProvider?: string;
+  qaMode?: string;
+  qaVlmModel?: string;
+  qaLlmModel?: string;
+  redoType?: string;
+  [key: string]: unknown;
 }
 
 const statusColor: Record<string, string> = {
@@ -152,60 +170,51 @@ interface JobLocation {
   pageLabel: string | null;
 }
 
-const renderJobLocation = (job: Job): JobLocation => {
-  if (!job.payload) return { chapterPath: null, pageLabel: null };
-  try {
-    const payload = JSON.parse(job.payload);
-    const parts: string[] = [];
-    if (payload.seriesTitle) parts.push(payload.seriesTitle);
-    if (payload.chapterTitle) {
-      parts.push(`${payload.chapterTitle} (Ch.${payload.chapterNumber})`);
-    } else if (payload.chapterNumber !== undefined) {
-      parts.push(`Ch.${payload.chapterNumber}`);
-    }
-    return {
-      chapterPath: parts.length ? parts.join(" › ") : null,
-      pageLabel:
-        payload.pageNumber !== undefined ? `Page ${payload.pageNumber}` : null,
-    };
-  } catch {
-    return { chapterPath: null, pageLabel: null };
+const renderJobLocation = (job: Job, parsed: ParsedPayload | null): JobLocation => {
+  if (!parsed) return { chapterPath: null, pageLabel: null };
+  const parts: string[] = [];
+  if (parsed.seriesTitle) parts.push(parsed.seriesTitle);
+  if (parsed.chapterTitle) {
+    parts.push(`${parsed.chapterTitle} (Ch.${parsed.chapterNumber})`);
+  } else if (parsed.chapterNumber !== undefined) {
+    parts.push(`Ch.${parsed.chapterNumber}`);
   }
+  return {
+    chapterPath: parts.length ? parts.join(" › ") : null,
+    pageLabel:
+      parsed.pageNumber !== undefined ? `Page ${parsed.pageNumber}` : null,
+  };
 };
 
-const renderProviderModel = (job: Job) => {
-  if (!job.payload) return null;
-  try {
-    const payload = JSON.parse(job.payload);
-    let providerModel = "";
+const renderProviderModel = (job: Job, parsed: ParsedPayload | null) => {
+  if (!parsed) return null;
+  let providerModel = "";
 
-    if (job.type === "ocr") {
-      if (payload.ocrProvider) {
-        providerModel = `${payload.ocrProvider} / ${payload.ocrModel || "default"}`;
-      }
-    } else if (job.type === "translation") {
-      if (payload.tlProvider) {
-        providerModel = `${payload.tlProvider} / ${payload.tlModel || "default"}`;
-      }
-    } else if (job.type === "qa") {
-      const model =
-        payload.qaMode === "vlm" ? payload.qaVlmModel : payload.qaLlmModel;
-      if (payload.qaProvider) {
-        providerModel = `${payload.qaProvider} / ${model || "default"}`;
-      }
-    } else if (job.type === "qa-re-ocr") {
-      if (payload.ocrProvider) {
-        providerModel = `${payload.ocrProvider} / ${payload.ocrModel || "default"}`;
-      }
-    } else if (job.type === "region-redo") {
-      providerModel = `Redo: ${payload.redoType || "manual"}`;
+  if (job.type === "ocr") {
+    if (parsed.ocrProvider) {
+      providerModel = `${parsed.ocrProvider} / ${parsed.ocrModel || "default"}`;
     }
-
-    return providerModel || null;
-  } catch {
-    return null;
+  } else if (job.type === "translation") {
+    if (parsed.tlProvider) {
+      providerModel = `${parsed.tlProvider} / ${parsed.tlModel || "default"}`;
+    }
+  } else if (job.type === "qa") {
+    const model =
+      parsed.qaMode === "vlm" ? parsed.qaVlmModel : parsed.qaLlmModel;
+    if (parsed.qaProvider) {
+      providerModel = `${parsed.qaProvider} / ${model || "default"}`;
+    }
+  } else if (job.type === "qa-re-ocr") {
+    if (parsed.ocrProvider) {
+      providerModel = `${parsed.ocrProvider} / ${parsed.ocrModel || "default"}`;
+    }
+  } else if (job.type === "region-redo") {
+    providerModel = `Redo: ${parsed.redoType || "manual"}`;
   }
+
+  return providerModel || null;
 };
+
 
 const formatErrorMessage = (error: string) => {
   if (!error) return "";
@@ -258,6 +267,23 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
   const { subscribe } = useNotifications();
   const { showToast } = useToast();
 
+  /** Parse-once cache: job.id → parsed payload object */
+  const parsedPayloadCache = useRef<Map<string, ParsedPayload>>(new Map());
+
+  /** Get (or parse and cache) the payload for a job */
+  const getParsed = useCallback((job: Job): ParsedPayload | null => {
+    if (!job.payload) return null;
+    const cached = parsedPayloadCache.current.get(job.id);
+    if (cached) return cached;
+    try {
+      const parsed = JSON.parse(job.payload) as ParsedPayload;
+      parsedPayloadCache.current.set(job.id, parsed);
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -282,7 +308,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     "QueueManager",
   );
 
-  const sortJobs = (jobsList: Job[]) => {
+  const sortJobs = useCallback((jobsList: Job[]) => {
     const statusOrder: Record<string, number> = {
       PROCESSING: 1,
       PENDING: 1,
@@ -296,7 +322,8 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     const groups = new Map<string, Job[]>();
     const groupOrder: string[] = [];
     jobsList.forEach((job) => {
-      const key = renderJobLocation(job).chapterPath || `__solo__${job.id}`;
+      const parsed = getParsed(job);
+      const key = renderJobLocation(job, parsed).chapterPath || `__solo__${job.id}`;
       if (!groups.has(key)) {
         groups.set(key, []);
         groupOrder.push(key);
@@ -332,7 +359,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
         );
       }),
     );
-  };
+  }, [getParsed]);
 
   const fetchJobs = useCallback(async () => {
     if (!token) return;
@@ -651,7 +678,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     return statusColor[job.status] || "#9e9e9e";
   };
 
-  const statusSummary = jobs.reduce(
+  const statusSummary = useMemo(() => jobs.reduce(
     (acc, job) => {
       const label = getDisplayStatus(job.status).replace("...", "");
       const color = getJobStatusColor(job);
@@ -661,7 +688,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       return acc;
     },
     [] as { label: string; color: string; count: number }[],
-  );
+  ), [jobs, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // jobs is already sorted so that a chapter's jobs are always contiguous;
   // this just folds consecutive same-chapter jobs into groups for rendering.
@@ -672,7 +699,8 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       groupJobs: Job[];
     }[] = [];
     jobs.forEach((job) => {
-      const { chapterPath } = renderJobLocation(job);
+      const parsed = getParsed(job);
+      const { chapterPath } = renderJobLocation(job, parsed);
       const key = chapterPath || `__solo__${job.id}`;
       const last = result[result.length - 1];
       if (last && last.key === key) {
@@ -682,7 +710,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
       }
     });
     return result;
-  }, [jobs]);
+  }, [jobs, getParsed]);
 
   const toggleChapterCollapse = (key: string) => {
     setCollapsedChapters((prev) => {
@@ -925,8 +953,9 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                       {!isCollapsed &&
                         group.groupJobs.map((job) => {
                           const color = getJobStatusColor(job);
-                          const { pageLabel } = renderJobLocation(job);
-                          const providerModel = renderProviderModel(job);
+                          const parsed = getParsed(job);
+                          const { pageLabel } = renderJobLocation(job, parsed);
+                          const providerModel = renderProviderModel(job, parsed);
                           const isRetry = isRetryLoopType(job.type);
 
                           return (
@@ -1216,3 +1245,5 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     </>
   );
 };
+
+export default QueueManager;

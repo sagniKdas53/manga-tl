@@ -405,3 +405,5 @@ export const NotificationCenter: React.FC<Props> = ({
     </>
   );
 };
+
+export default NotificationCenter;

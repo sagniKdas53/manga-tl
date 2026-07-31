@@ -44,6 +44,12 @@ vi.mock("../../components/UploadContext", () => ({
     addItems: vi.fn(),
     updateItem: vi.fn(),
   }),
+  useUploadDispatch: () => ({
+    addItems: vi.fn(),
+    updateItem: vi.fn(),
+    clearCompleted: vi.fn(),
+    dismiss: vi.fn(),
+  }),
   UploadQueueItem: {} as unknown,
 }));
 

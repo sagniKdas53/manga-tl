@@ -631,6 +631,13 @@ export const Reader: React.FC<ReaderProps> = ({
         setLoadedImageId(currentPageId);
         setIsLoadingPageDetails(false);
       } else {
+        // Clear stale data immediately so old chapter's overlays don't flash
+        // on the new image while the fetch is in-flight.
+        setPanels([]);
+        setOcrRegions([]);
+        setConversations([]);
+        setLayers([]);
+        setSelectedItem(null);
         setIsLoadingPageDetails(true);
         fetchPageDetails(currentPageId)
           .then((data) => {
@@ -3062,7 +3069,13 @@ export const Reader: React.FC<ReaderProps> = ({
               <svg
                 className="svg-overlay"
                 viewBox={`0 0 ${imageDims.w} ${imageDims.h}`}
-                style={{ pointerEvents: "auto" }}
+                style={{
+                  pointerEvents: "auto",
+                  // Hide stale overlays while new page data is loading.
+                  // The loading spinner covers the image anyway; this
+                  // eliminates any residual flicker of old annotations.
+                  visibility: isLoadingPageDetails ? "hidden" : "visible",
+                }}
               >
                 {showPanels &&
                   !cleanScanlationView &&

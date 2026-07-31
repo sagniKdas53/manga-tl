@@ -19,6 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PageService {
   private static final Logger log = LoggerFactory.getLogger(PageService.class);
+
+  // Serializes access to the WebP native codec (webp-imageio). The JNI library is not safe to
+  // call concurrently from multiple threads; a racing call can SIGSEGV the whole JVM. The lock is
+  // scoped to WebP work only so the thread-safe built-in PNG/JPEG/BMP codecs can still run in
+  // parallel.
+  private static final Object WEBP_LOCK = new Object();
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
   private final SeriesRepository seriesRepository;
@@ -203,36 +209,40 @@ public class PageService {
   public void generateAndSaveThumbnailAsync(UUID imageId, String uuid, byte[] originalBytes) {
     try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(originalBytes)) {
       in.mark(Integer.MAX_VALUE);
-      javax.imageio.stream.ImageInputStream iis = javax.imageio.ImageIO.createImageInputStream(in);
-      java.util.Iterator<javax.imageio.ImageReader> readers =
-          javax.imageio.ImageIO.getImageReaders(iis);
-      if (!readers.hasNext()) {
-        log.warn("No image reader found for image {}", imageId);
-        iis.close();
-        return;
-      }
-      javax.imageio.ImageReader reader = readers.next();
-      reader.setInput(iis, true, true);
-
-      int originalWidth = reader.getWidth(0);
-      int originalHeight = reader.getHeight(0);
-
+      java.awt.image.BufferedImage subsampledImage;
       int targetWidth = 512;
-      double ratio = (double) originalHeight / originalWidth;
-      int targetHeight = (int) (targetWidth * ratio);
-      if (targetHeight <= 0) targetHeight = 1;
+      int targetHeight;
+      synchronized (WEBP_LOCK) {
+        javax.imageio.stream.ImageInputStream iis = javax.imageio.ImageIO.createImageInputStream(in);
+        java.util.Iterator<javax.imageio.ImageReader> readers =
+            javax.imageio.ImageIO.getImageReaders(iis);
+        if (!readers.hasNext()) {
+          log.warn("No image reader found for image {}", imageId);
+          iis.close();
+          return;
+        }
+        javax.imageio.ImageReader reader = readers.next();
+        reader.setInput(iis, true, true);
 
-      // Subsampling: only subsample if the image is extremely large to save memory,
-      // but keep it at least 3x the target width for high-quality downscaling
-      javax.imageio.ImageReadParam param = reader.getDefaultReadParam();
-      int scale = originalWidth / (targetWidth * 3);
-      if (scale > 1) {
-        param.setSourceSubsampling(scale, scale, 0, 0);
+        int originalWidth = reader.getWidth(0);
+        int originalHeight = reader.getHeight(0);
+
+        double ratio = (double) originalHeight / originalWidth;
+        targetHeight = (int) (targetWidth * ratio);
+        if (targetHeight <= 0) targetHeight = 1;
+
+        // Subsampling: only subsample if the image is extremely large to save memory,
+        // but keep it at least 3x the target width for high-quality downscaling
+        javax.imageio.ImageReadParam param = reader.getDefaultReadParam();
+        int scale = originalWidth / (targetWidth * 3);
+        if (scale > 1) {
+          param.setSourceSubsampling(scale, scale, 0, 0);
+        }
+
+        subsampledImage = reader.read(0, param);
+        reader.dispose();
+        iis.close();
       }
-
-      java.awt.image.BufferedImage subsampledImage = reader.read(0, param);
-      reader.dispose();
-      iis.close();
 
       // High-quality area-averaging scaling
       java.awt.Image scaled =
@@ -246,30 +256,33 @@ public class PageService {
       g.drawImage(scaled, 0, 0, null);
       g.dispose();
 
-      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-      java.util.Iterator<javax.imageio.ImageWriter> writers =
-          javax.imageio.ImageIO.getImageWritersByFormatName("webp");
-      if (writers.hasNext()) {
-        javax.imageio.ImageWriter writer = writers.next();
-        javax.imageio.ImageWriteParam writeParam = writer.getDefaultWriteParam();
-        if (writeParam.canWriteCompressed()) {
-          writeParam.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
-          String[] types = writeParam.getCompressionTypes();
-          if (types != null && types.length > 0) {
-            writeParam.setCompressionType(types[0]); // Lossy
+      byte[] thumbBytes;
+      synchronized (WEBP_LOCK) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        java.util.Iterator<javax.imageio.ImageWriter> writers =
+            javax.imageio.ImageIO.getImageWritersByFormatName("webp");
+        if (writers.hasNext()) {
+          javax.imageio.ImageWriter writer = writers.next();
+          javax.imageio.ImageWriteParam writeParam = writer.getDefaultWriteParam();
+          if (writeParam.canWriteCompressed()) {
+            writeParam.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+            String[] types = writeParam.getCompressionTypes();
+            if (types != null && types.length > 0) {
+              writeParam.setCompressionType(types[0]); // Lossy
+            }
+            writeParam.setCompressionQuality(0.85f);
           }
-          writeParam.setCompressionQuality(0.85f);
+          javax.imageio.stream.ImageOutputStream ios =
+              javax.imageio.ImageIO.createImageOutputStream(out);
+          writer.setOutput(ios);
+          writer.write(null, new javax.imageio.IIOImage(thumbnail, null, null), writeParam);
+          ios.close();
+          writer.dispose();
+        } else {
+          javax.imageio.ImageIO.write(thumbnail, "webp", out);
         }
-        javax.imageio.stream.ImageOutputStream ios =
-            javax.imageio.ImageIO.createImageOutputStream(out);
-        writer.setOutput(ios);
-        writer.write(null, new javax.imageio.IIOImage(thumbnail, null, null), writeParam);
-        ios.close();
-        writer.dispose();
-      } else {
-        javax.imageio.ImageIO.write(thumbnail, "webp", out);
+        thumbBytes = out.toByteArray();
       }
-      byte[] thumbBytes = out.toByteArray();
 
       String thumbnailStoragePath = "thumbnails/" + uuid + ".webp";
       minioService.uploadFile(thumbnailStoragePath, thumbBytes, "image/webp");

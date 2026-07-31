@@ -11,7 +11,7 @@ import ChapterHeader from "./ChapterHeader";
 import ChapterPageGrid from "./ChapterPageGrid";
 import ChapterDragOverlay from "./ChapterDragOverlay";
 import { useToast } from "./ToastContext";
-import { useUploadQueue, type UploadQueueItem } from "./UploadContext";
+import { useUploadDispatch, type UploadQueueItem } from "./UploadContext";
 
 interface ChapterGalleryProps {
   user: User;
@@ -42,7 +42,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [dragCounter, setDragCounter] = useState(0);
 
   // Upload state from app-level context (survives route changes)
-  const { addItems, updateItem } = useUploadQueue();
+  const { addItems, updateItem } = useUploadDispatch();
   const [isImportingProject, setIsImportingProject] = useState(false);
 
   // Use global toast hook
