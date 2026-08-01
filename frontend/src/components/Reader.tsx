@@ -2801,7 +2801,10 @@ export const Reader: React.FC<ReaderProps> = ({
     setIsRedoingPageOcr(true);
     try {
       const res = await safeFetch(
-        `/api/images/${selectedPage.imageId}/redo?type=ocr`,
+        // chapterId disambiguates which page to redo: the same image can back
+        // pages in several chapters after a duplicate upload.
+        `/api/images/${selectedPage.imageId}/redo?type=ocr` +
+          (selectedChapter ? `&chapterId=${selectedChapter.id}` : ""),
         {
           method: "POST",
           headers: { Authorization: `Bearer ${user.token}` },
@@ -2837,7 +2840,10 @@ export const Reader: React.FC<ReaderProps> = ({
     setIsRedoingPageTranslation(true);
     try {
       const res = await safeFetch(
-        `/api/images/${selectedPage.imageId}/redo?type=translation`,
+        // chapterId disambiguates which page to redo: the same image can back
+        // pages in several chapters after a duplicate upload.
+        `/api/images/${selectedPage.imageId}/redo?type=translation` +
+          (selectedChapter ? `&chapterId=${selectedChapter.id}` : ""),
         {
           method: "POST",
           headers: { Authorization: `Bearer ${user.token}` },

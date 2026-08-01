@@ -364,7 +364,8 @@ public class InternalJobController {
           }
         }
       }
-      jobCoordinatorService.handleLayoutCallback(imageId, regionTypes, conversations);
+      jobCoordinatorService.handleLayoutCallback(
+          imageId, extractPageId(payload), regionTypes, conversations);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing layout callback", e);
@@ -440,7 +441,7 @@ public class InternalJobController {
           }
         }
       }
-      jobCoordinatorService.handleQaReOcrCallback(imageId, results);
+      jobCoordinatorService.handleQaReOcrCallback(imageId, extractPageId(payload), results);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing QA Re-OCR callback", e);
@@ -550,7 +551,7 @@ public class InternalJobController {
           }
         }
       }
-      jobCoordinatorService.prepareHybridQa(imageId, qaResults);
+      jobCoordinatorService.prepareHybridQa(imageId, extractPageId(payload), qaResults);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error preparing hybrid QA", e);
@@ -587,7 +588,8 @@ public class InternalJobController {
         Map<String, Object> c = (Map<String, Object>) payload.get("cost");
         cost = c;
       }
-      String qaResultState = jobCoordinatorService.handleQaCallback(imageId, qaResults, cost);
+      String qaResultState =
+          jobCoordinatorService.handleQaCallback(imageId, extractPageId(payload), qaResults, cost);
       if ("COMPLETED".equals(qaResultState)) {
         sseService.emitNotificationForImage(
             imageId,
@@ -614,6 +616,21 @@ public class InternalJobController {
           formatMessage("An error occurred during QA checks.", ctx),
           ctx);
       return ResponseEntity.internalServerError().body(e.getMessage());
+    }
+  }
+
+  /**
+   * Reads the pageId the worker echoed back from the job payload. Callbacks must be attributed to
+   * the exact page they were queued for — an image can back pages in several chapters.
+   */
+  private UUID extractPageId(Map<String, ?> payload) {
+    Object raw = payload == null ? null : payload.get("pageId");
+    if (raw == null) return null;
+    try {
+      return UUID.fromString(raw.toString());
+    } catch (IllegalArgumentException e) {
+      log.warn("Callback carried an unparsable pageId: {}", raw);
+      return null;
     }
   }
 
