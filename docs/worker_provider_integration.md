@@ -184,3 +184,19 @@ Top-level keys: `version`, `defaults`, `providers`.
 
 Whichever path runs, OCR is dispatched as a heavy-tier job and is subject to the same
 `WORKER_POLL_MS` dispatch cadence as every other phase (see `slot_allocation.md`).
+
+> **Caveat — cloud OCR is only half registry-driven.** The *batch* crop path
+> (`try_cloud_ai_vision_batch`, used by `handlers/ocr.py`) does go through `LLMClient`. The
+> *single-crop* path, `try_cloud_ocr` in `services/ocr.py`, does **not** — it builds its own
+> `url`/`headers`/`payload` with hardcoded provider endpoints (lines 111, 140, 173, 191) and so
+> ignores `providers.json` entirely. `perform_redo_ocr`, and therefore the whole QA re-OCR
+> escalation loop, inherits that. Routing it through `LLMClient` is Phase 0 of
+> [mock_router.md](./mock_router.md).
+
+## 7. Testing the provider layer
+
+Every test of this layer currently monkeypatches `requests.post`, so the assembled request and
+the HTTP error branches (429 cooldown escalation, `json_schema` → `json_object` degradation,
+timeouts) are never exercised over a socket. [mock_router.md](./mock_router.md) designs a mock
+provider container to close that gap — it also documents which `baseUrl` entries are
+env-interpolatable and how a test stack redirects egress.

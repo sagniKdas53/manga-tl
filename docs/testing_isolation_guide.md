@@ -56,6 +56,13 @@ In `docker-compose.yml`, MinIO only exposes port `9001` (console) to the host. T
 - We fixed this by pointing `minio.endpoint` and `worker.urls` to `http://127.0.0.1:1` in `application-test.yml`.
 - **Result:** Port `1` is guaranteed to be closed on your machine. This forces an immediate "Connection Refused" error, which the backend safely catches and ignores, allowing the tests to start instantly.
 
+## Related: integration testing against a mocked provider
+
+This guide covers *unit* test isolation only. For running the **full stack** end to end without
+touching real LLM providers — a container that speaks the OpenAI/Anthropic wire format and
+returns deterministic fixture payloads — see [mock_router.md](./mock_router.md) (design only,
+not yet implemented).
+
 ## Summary
 
 Even when `docker compose up` is running in the background, your tests are now safely quarantined in their own parallel universe (In-memory H2, Redis DB 1, mocked Python services, and closed ports). You can run tests at any time without fear of disrupting the real stack!
