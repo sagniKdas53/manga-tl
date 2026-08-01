@@ -25,7 +25,11 @@ services:
   db-backup:
     image: prodrigestivill/postgres-backup-local:15
     container_name: manga-db-backup
-    restart: none
+    # NOTE: `restart: none` is not a valid Compose restart policy (the spec allows
+    # no | always | on-failure | unless-stopped). Compose passes it through without
+    # validating, so the service silently never started and backups stopped on
+    # 2026-07-30 (commit 7e4a3c8) until the 2026-08-01 audit found it.
+    restart: unless-stopped
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_DB=${POSTGRES_DB:-manga_library}
@@ -39,9 +43,22 @@ services:
     secrets:
       - db_password
     depends_on:
-      - db
+      # The original "kept going unhealthy" symptom: with the plain list form this
+      # started before Postgres accepted connections, so BACKUP_ON_START failed and
+      # the image's healthcheck (curl localhost:$HEALTHCHECK_PORT) reported red.
+      db:
+        condition: service_healthy
     networks:
       - manga-net
+    # The image's built-in healthcheck probes every 5m with no start_period, so a
+    # cold start spends 5 minutes in "starting" and one slow first dump flips it to
+    # unhealthy. Give the first backup room before the probe counts.
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:${HEALTHCHECK_PORT:-8080}/ || exit 1" ]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 5m
 
   redis:
     image: valkey/valkey:8-alpine

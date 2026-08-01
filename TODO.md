@@ -11,6 +11,10 @@
 ### Fix recent issues
 
 - [ ] See [issues.md](./docs/issues.md)
+- [ ] **Full-stack audit backlog (2026-08-01)** — ~50 findings across backend, worker, frontend and
+  Docker, logged as `AUDIT-*` in [issues.md](./docs/issues.md#full-stack-audit--2026-08-01) with
+  `file:line` anchors and a suggested fix order. Start with the fail-open secrets
+  (`AUDIT-S1`/`S2`/`S3`) and confirming DB backups are still running (`AUDIT-D1`).
 
 ### Output & Rendering Quality
 
@@ -82,7 +86,42 @@ Design doc: [worker_pull_model.md](./docs/worker_pull_model.md) (status: design 
   `PageService.java`), so the 4-thread `thumbnailExecutor` still processes thumbnails one at a
   time; `getScaledInstance` (slow AWT scaling path) is also flagged there as worth replacing
   with a `Graphics2D` LANCZOS draw.
+- [ ] **`mock-router` — deterministic LLM provider mock for full-stack testing** — a container
+  speaking the OpenAI/Anthropic chat-completions wire format that returns hardcoded, shape-correct
+  payloads, so the whole pipeline can run end to end with no API spend and no nondeterminism.
+  Modelled on `yt-diff`'s `validation/mock-tube`. Design doc:
+  [mock_router.md](./docs/mock_router.md) (status: design only, not implemented).
+  The mock impersonates **Ollama**, not a new provider: every handler already branches on
+  `provider in ("ollama", "lmstudio")` and routes to a single `LOCAL_LLM_ENDPOINT` env var, and the
+  worker only ever speaks Ollama's OpenAI-compatible shim (no native `/api/*` calls anywhere). So
+  Mode A needs no code and no `providers.json` change. A *new* provider name would not work —
+  `handlers/qa.py` dispatches on a hardcoded `openrouter`/`gemini`/`nvidia` if/elif chain and
+  returns `None` for anything else.
+  - [ ] **Phase 0 (prerequisites)**:
+    - [ ] Fix `try_local_ai` dropping its `prompt` argument — see [issues.md](./docs/issues.md).
+    - [ ] Route `try_cloud_ocr` / `perform_redo_ocr` through `LLMClient` + `PROVIDER_REGISTRY` —
+      `worker/src/worker/services/ocr.py` still hardcodes per-provider URLs (lines 111/140/173/191),
+      so single-crop cloud OCR and the QA re-OCR escalation loop bypass `providers.json` and would
+      hit the real internet even in mock mode.
+  - [ ] **Phase 1 — Mode A (Ollama drop-in) + happy path**: mock service, OpenAI envelope, the four
+    response contracts with region-ID echo (static bodies won't work — the worker matches responses
+    back by `id`/`regionId`, which are per-upload backend values), model-name routing, and
+    `validation/docker-compose.test.yml` on an `internal: true` network as an egress guard.
+  - [ ] **Phase 2 — Mode B (cloud substitution) + fault injection**: `config/providers.mock.json`,
+    then `429` cooldown escalation, `json_schema`→`json_object` degradation, timeouts, malformed
+    JSON, refusal text, ID drift — plus a `/__requests` capture endpoint to assert on the *request*
+    side (OpenRouter `cache_control`, `provider.sort`, `response-healing`, Anthropic auth headers).
+    None of that has over-the-wire coverage today, and Mode A can't reach it: the local path
+    bypasses `LLMClient` entirely.
+  - [ ] **Phase 3 — record & replay baseline**: proxy mode that forwards to a real provider once
+    over a curated page set and writes cassettes, keyed on a canonicalized
+    `(task, model, system prompt, ordered source texts)` hash with IDs and image bytes normalized
+    out. Doubles as a prompt-regression diff: re-record on demand and compare against committed
+    responses.
+  - [ ] **Phase 4**: fold into the Playwright E2E item below; add a CI job (with cassettes committed
+    it needs no secrets).
 - [ ] **Playwright End-to-End Pipeline Integration Test Suite** — create end-to-end Playwright test suite that uploads test manga images, triggers full OCR/TL/Render pipeline, and asserts layer correctness.
+  - Should run against [`mock-router`](./docs/mock_router.md) rather than live providers.
 
 ---
 
