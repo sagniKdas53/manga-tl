@@ -324,7 +324,8 @@ public class JobCoordinatorServiceTest {
     region.setQaStatus("pending");
     region = ocrRegionRepository.save(region);
 
-    String retryKey = "image:qa:retries:" + image.getId();
+    // QA retries are tracked per page so duplicate images in other chapters keep their own budget
+    String retryKey = "page:qa:retries:" + page.getId();
     redisTemplate.delete(retryKey);
 
     Map<String, Object> qaResult = new HashMap<>();
@@ -385,7 +386,8 @@ public class JobCoordinatorServiceTest {
     region.setQaStatus("pending");
     region = ocrRegionRepository.save(region);
 
-    String retryKey = "image:qa:retries:" + image.getId();
+    // QA retries are tracked per page so duplicate images in other chapters keep their own budget
+    String retryKey = "page:qa:retries:" + page.getId();
     redisTemplate.opsForValue().set(retryKey, "2");
 
     Map<String, Object> qaResult = new HashMap<>();

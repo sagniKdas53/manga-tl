@@ -197,7 +197,13 @@ public class JobCoordinatorService {
 
   @Transactional
   public void startPipeline(UUID imageId, UUID chapterId) {
-    log.info("Starting pipeline for image {} and chapter {}", imageId, chapterId);
+    startPipeline(imageId, null, chapterId);
+  }
+
+  @Transactional
+  public void startPipeline(UUID imageId, UUID pageId, UUID chapterId) {
+    log.info(
+        "Starting pipeline for image {} (page {}) and chapter {}", imageId, pageId, chapterId);
     if (redisTemplate != null && redisTemplate.opsForValue() != null) {
       String traceId = UUID.randomUUID().toString();
       redisTemplate
@@ -207,16 +213,31 @@ public class JobCoordinatorService {
               Objects.requireNonNull(traceId),
               Objects.requireNonNull(Duration.ofHours(2)));
     }
-    enqueueJob("panel-detection", imageId, chapterId);
+
+    // Panels are a property of the Image, not the Page: panel detection is a purely
+    // geometric step whose output is identical for every page that reuses this image,
+    // and existing ocr_regions (possibly on other chapters' pages) reference those
+    // panel rows. Re-running detection would try to delete rows that are still
+    // referenced, so reuse them and start the pipeline at OCR instead.
+    if (!panelRepository.findByImageId(imageId).isEmpty()) {
+      log.info(
+          "Panels already exist for image {} — reusing them and starting pipeline at OCR", imageId);
+      enqueueJobDirectly("ocr", imageId, pageId, chapterId, "normal", job -> {
+      });
+      return;
+    }
+
+    enqueueJobDirectly("panel-detection", imageId, pageId, chapterId, "normal", job -> {
+    });
   }
 
   private void enqueueJob(String jobType, UUID imageId) {
-    enqueueJob(jobType, imageId, (UUID) null, job -> {
+    enqueueJobDirectly(jobType, imageId, null, null, "normal", job -> {
     });
   }
 
   private void enqueueJob(String jobType, UUID imageId, UUID chapterId) {
-    enqueueJob(jobType, imageId, chapterId, job -> {
+    enqueueJobDirectly(jobType, imageId, null, chapterId, "normal", job -> {
     });
   }
 
@@ -225,20 +246,33 @@ public class JobCoordinatorService {
       UUID imageId,
       String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
-    enqueueJobDirectly(jobType, imageId, null, priority, payloadCustomizer);
+    enqueueJobDirectly(jobType, imageId, null, null, priority, payloadCustomizer);
   }
 
-  private void enqueueJob(
+  /**
+   * Enqueues the next pipeline stage for a specific page. The same image can back pages in several
+   * chapters (duplicate upload), each with its own provider/model configuration, so every hand-off
+   * between stages must carry the page it belongs to — otherwise the payload is built from whichever
+   * page happens to come first for that image.
+   */
+  private void enqueueJobForPage(String jobType, UUID imageId, UUID pageId) {
+    enqueueJobForPage(jobType, imageId, pageId, "normal", job -> {
+    });
+  }
+
+  private void enqueueJobForPage(
       String jobType,
       UUID imageId,
-      UUID chapterId,
+      UUID pageId,
+      String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
-    enqueueJobDirectly(jobType, imageId, chapterId, "normal", payloadCustomizer);
+    enqueueJobDirectly(jobType, imageId, pageId, null, priority, payloadCustomizer);
   }
 
   private void enqueueJobDirectly(
       String jobType,
       UUID imageId,
+      UUID pageId,
       UUID chapterId,
       String priority,
       Consumer<Map<String, Object>> payloadCustomizer) {
@@ -278,12 +312,36 @@ public class JobCoordinatorService {
       job.put("maxAttempts", 3);
       job.put("createdAt", OffsetDateTime.now().toString());
 
-      Optional<Page> pageOpt = chapterId != null
-          ? pageRepository.findByChapterIdAndImageId(chapterId, imageId)
-          : pageRepository.findByImageId(imageId).stream().findFirst();
+      // Resolve the page this job belongs to, most specific identifier first. Falling
+      // back to "first page for this image" is only correct while an image backs a
+      // single page; for duplicates it would silently pick another chapter's config.
+      Optional<Page> pageOpt = Optional.empty();
+      if (pageId != null) {
+        pageOpt = pageRepository.findById(pageId);
+      }
+      if (pageOpt.isEmpty() && chapterId != null) {
+        pageOpt = pageRepository.findByChapterIdAndImageId(chapterId, imageId);
+      }
+      if (pageOpt.isEmpty()) {
+        List<Page> imagePages = pageRepository.findByImageId(imageId);
+        if (imagePages.size() > 1) {
+          log.warn(
+              "Job {} for image {} has no page/chapter context but the image backs {} pages —"
+                  + " falling back to the first one, configuration may be wrong",
+              jobType,
+              imageId,
+              imagePages.size());
+        }
+        pageOpt = imagePages.stream().findFirst();
+      }
 
       pageOpt.ifPresent(
           page -> {
+            // Stamp the resolved identity so every downstream stage inherits it.
+            job.put("pageId", page.getId().toString());
+            if (page.getChapter() != null) {
+              job.put("chapterId", page.getChapter().getId().toString());
+            }
             if (page.getChapter() != null && page.getChapter().getSeries() != null) {
               Series series = page.getChapter().getSeries();
               Chapter chapter = page.getChapter();
@@ -597,27 +655,37 @@ public class JobCoordinatorService {
         .findById(Objects.requireNonNull(imageId))
         .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
-    // Delete existing panels if any
-    panelRepository.deleteByImageId(imageId);
+    Page page = resolvePageForCallback(imageId, dto.pageId());
 
-    // Save new panels
-    List<Panel> panelsToSave = new ArrayList<>();
-    for (PanelCallbackDto.PanelData pData : dto.panels()) {
-      Panel panel = new Panel();
-      panel.setImage(image);
-      panel.setBboxX(pData.x());
-      panel.setBboxY(pData.y());
-      panel.setBboxW(pData.width());
-      panel.setBboxH(pData.height());
-      panel.setGridRow(pData.gridRow());
-      panel.setGridCol(pData.gridCol());
-      panel.setReadingOrder(pData.readingOrder());
-      panelsToSave.add(panel);
+    // Panels belong to the Image and are shared by every Page that reuses it. Replacing
+    // them would orphan the panel_id of ocr_regions belonging to other chapters' pages
+    // (a foreign key violation that aborts the whole callback), and detection is
+    // deterministic for a given image anyway — so keep whatever is already there.
+    List<Panel> existingPanels = panelRepository.findByImageId(imageId);
+    if (existingPanels.isEmpty()) {
+      List<Panel> panelsToSave = new ArrayList<>();
+      for (PanelCallbackDto.PanelData pData : dto.panels()) {
+        Panel panel = new Panel();
+        panel.setImage(image);
+        panel.setBboxX(pData.x());
+        panel.setBboxY(pData.y());
+        panel.setBboxW(pData.width());
+        panel.setBboxH(pData.height());
+        panel.setGridRow(pData.gridRow());
+        panel.setGridCol(pData.gridCol());
+        panel.setReadingOrder(pData.readingOrder());
+        panelsToSave.add(panel);
+      }
+      panelRepository.saveAll(Objects.requireNonNull(panelsToSave));
+    } else {
+      log.info(
+          "Image {} already has {} panels — reusing them instead of re-detecting",
+          imageId,
+          existingPanels.size());
     }
-    panelRepository.saveAll(Objects.requireNonNull(panelsToSave));
 
     // Trigger OCR
-    enqueueJob("ocr", imageId);
+    enqueueJobForPage("ocr", imageId, page != null ? page.getId() : null);
   }
 
   @Transactional
@@ -749,12 +817,21 @@ public class JobCoordinatorService {
     layerElementRepository.saveAll(Objects.requireNonNull(elementsToSave));
 
     // Trigger Layout analysis
-    enqueueJob("layout", imageId);
+    enqueueJobForPage("layout", imageId, page != null ? page.getId() : null);
   }
 
   @Transactional
   public void handleLayoutCallback(
       UUID imageId,
+      List<Map<String, String>> regionTypes,
+      List<Map<String, Object>> conversations) {
+    handleLayoutCallback(imageId, null, regionTypes, conversations);
+  }
+
+  @Transactional
+  public void handleLayoutCallback(
+      UUID imageId,
+      UUID callbackPageId,
       List<Map<String, String>> regionTypes,
       List<Map<String, Object>> conversations) {
     log.info(
@@ -805,7 +882,7 @@ public class JobCoordinatorService {
             }
           }
 
-          Page page = resolvePageForCallback(imageId, null);
+          Page page = resolvePageForCallback(imageId, callbackPageId);
           Conversation conv = new Conversation();
           conv.setPage(page);
           conv.setSceneType(sceneType != null ? sceneType : "dialogue");
@@ -832,7 +909,7 @@ public class JobCoordinatorService {
 
     // 4. Enqueue translation job
     boolean isReaderMode = false;
-    Page layoutPage = resolvePageForCallback(imageId, null);
+    Page layoutPage = resolvePageForCallback(imageId, callbackPageId);
     Series series = layoutPage != null && layoutPage.getChapter() != null
         ? layoutPage.getChapter().getSeries()
         : null;
@@ -850,7 +927,7 @@ public class JobCoordinatorService {
       return;
     }
 
-    enqueueJob("translation", imageId);
+    enqueueJobForPage("translation", imageId, layoutPage != null ? layoutPage.getId() : null);
   }
 
   @Transactional
@@ -1093,7 +1170,7 @@ public class JobCoordinatorService {
       }
     }
 
-    enqueueJob("render", imageId);
+    enqueueJobForPage("render", imageId, page != null ? page.getId() : null);
   }
 
   @Transactional
@@ -1111,16 +1188,14 @@ public class JobCoordinatorService {
 
     String jobType = "ocr".equalsIgnoreCase(redoType) ? "region-redo-ocr" : "region-redo-tl";
 
-    enqueueJob(
+    enqueueJobForPage(
         jobType,
         imageId,
+        pageId,
         "high",
         job -> {
           job.put("regionId", regionId.toString());
           job.put("redoType", redoType);
-          if (pageId != null) {
-            job.put("pageId", pageId.toString());
-          }
         });
   }
 
@@ -1151,18 +1226,12 @@ public class JobCoordinatorService {
       redisTemplate.delete("pipeline:trace:" + pageId);
     }
 
-    enqueueJob(
-        jobType,
-        imageId,
-        "normal",
-        job -> {
-          job.put("pageId", pageId.toString());
-          if (chapterId != null) {
-            job.put("chapterId", chapterId.toString());
-          } else if (page.getChapter() != null) {
-            job.put("chapterId", page.getChapter().getId().toString());
-          }
-        });
+    UUID effectiveChapterId = chapterId != null
+        ? chapterId
+        : (page.getChapter() != null ? page.getChapter().getId() : null);
+
+    enqueueJobDirectly(jobType, imageId, pageId, effectiveChapterId, "normal", job -> {
+    });
   }
 
   @Transactional
@@ -1193,6 +1262,12 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleQaReOcrCallback(UUID imageId, List<Map<String, Object>> results) {
+    handleQaReOcrCallback(imageId, null, results);
+  }
+
+  @Transactional
+  public void handleQaReOcrCallback(
+      UUID imageId, UUID callbackPageId, List<Map<String, Object>> results) {
     log.info(
         "Received QA Re-OCR callback for image: {} with {} results",
         imageId,
@@ -1225,8 +1300,9 @@ public class JobCoordinatorService {
 
     // Now proceed to retry translation with the new OCR text
     log.info("QA Re-OCR complete for image {}. Enqueuing translation job...", imageId);
+    Page reOcrPage = resolvePageForCallback(imageId, callbackPageId);
     redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "qa-re-ocr");
-    enqueueJob("translation", imageId);
+    enqueueJobForPage("translation", imageId, reOcrPage != null ? reOcrPage.getId() : null);
   }
 
   @Transactional
@@ -1264,15 +1340,33 @@ public class JobCoordinatorService {
       }
     } else {
       log.info("Received Render callback for image: {}. Enqueuing QA job...", imageId);
-      String retryKey = "image:qa:retries:" + imageId;
+      UUID qaPageId = pageId != null
+          ? pageId
+          : pages.stream().findFirst().map(Page::getId).orElse(null);
+      String retryKey = qaRetryKey(imageId, qaPageId);
       String retryValStr = redisTemplate.opsForValue().get(retryKey);
       int retries = retryValStr != null ? Integer.parseInt(retryValStr) : 0;
-      enqueueJob("qa", imageId, "normal", job -> job.put("qaPass", retries + 1));
+      enqueueJobForPage(
+          "qa", imageId, qaPageId, "normal", job -> job.put("qaPass", retries + 1));
     }
+  }
+
+  /**
+   * QA retries are counted per page, not per image: two chapters can be running their own QA passes
+   * over the same duplicated image and must not consume each other's retry budget.
+   */
+  private String qaRetryKey(UUID imageId, UUID pageId) {
+    return pageId != null ? "page:qa:retries:" + pageId : "image:qa:retries:" + imageId;
   }
 
   @Transactional
   public void prepareHybridQa(UUID imageId, List<Map<String, Object>> qaResults) {
+    prepareHybridQa(imageId, null, qaResults);
+  }
+
+  @Transactional
+  public void prepareHybridQa(
+      UUID imageId, UUID callbackPageId, List<Map<String, Object>> qaResults) {
     log.info(
         "Preparing hybrid QA for image: {} with {} LLM first pass results",
         imageId,
@@ -1280,7 +1374,7 @@ public class JobCoordinatorService {
     Objects.requireNonNull(imageId, "imageId cannot be null");
 
     // Find the latest translation layer
-    Page hybridPage = resolvePageForCallback(imageId, null);
+    Page hybridPage = resolvePageForCallback(imageId, callbackPageId);
     List<Layer> layers = hybridPage != null ? layerRepository.findByPageId(hybridPage.getId()) : List.of();
     Layer latestTranslationLayer = null;
     for (Layer l : layers) {
@@ -1362,6 +1456,15 @@ public class JobCoordinatorService {
   @Transactional
   public String handleQaCallback(
       UUID imageId, List<Map<String, Object>> qaResults, Map<String, Object> cost) {
+    return handleQaCallback(imageId, null, qaResults, cost);
+  }
+
+  @Transactional
+  public String handleQaCallback(
+      UUID imageId,
+      UUID callbackPageId,
+      List<Map<String, Object>> qaResults,
+      Map<String, Object> cost) {
     log.info(
         "Received QA callback for image: {} with {} results",
         imageId,
@@ -1476,14 +1579,15 @@ public class JobCoordinatorService {
       }
     }
 
-    String retryKey = "image:qa:retries:" + imageId;
+    Page qaPage = resolvePageForCallback(imageId, callbackPageId);
+    UUID qaPageId = qaPage != null ? qaPage.getId() : null;
+    String retryKey = qaRetryKey(imageId, qaPageId);
     String retryValStr = redisTemplate.opsForValue().get(retryKey);
     int retries = retryValStr != null ? Integer.parseInt(retryValStr) : 0;
 
     // Save QA info into translation layer metadata_json
     try {
-      List<Page> pages = pageRepository.findByImageId(imageId);
-      List<Layer> layers = pages.isEmpty() ? List.of() : layerRepository.findByPageId(pages.get(0).getId());
+      List<Layer> layers = qaPage == null ? List.of() : layerRepository.findByPageId(qaPageId);
 
       for (Layer layer : layers) {
         if ("translation".equalsIgnoreCase(layer.getType())) {
@@ -1560,15 +1664,19 @@ public class JobCoordinatorService {
             imageId,
             retries + 1);
         List<String> regionsToReOcrPayload = List.copyOf(regionsToReOcr);
-        enqueueJob(
-            "qa-re-ocr", imageId, "high", job -> job.put("regionsToReOcr", regionsToReOcrPayload));
+        enqueueJobForPage(
+            "qa-re-ocr",
+            imageId,
+            qaPageId,
+            "high",
+            job -> job.put("regionsToReOcr", regionsToReOcrPayload));
       } else {
         log.info(
             "QA failed for image {}. Retry {}/2. Enqueuing translation job...",
             imageId,
             retries + 1);
         redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "qa-re-translate");
-        enqueueJob("translation", imageId);
+        enqueueJobForPage("translation", imageId, qaPageId);
       }
       return "RETRIED";
     } else {

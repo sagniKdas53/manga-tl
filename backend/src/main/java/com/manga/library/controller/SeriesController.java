@@ -289,17 +289,24 @@ public class SeriesController {
     List<Page> existingPages = pageRepository.findByImageId(existingImage.getId());
     if (existingPages.isEmpty()) return;
 
+    // Prefer the same chapter, then the same series, then anything else; break ties on the
+    // lowest page id so the choice is deterministic across retries.
+    Comparator<Page> byAffinity = Comparator
+        .comparingInt((Page p) -> p.getChapter().getId().equals(targetChapter.getId()) ? 2 :
+             p.getChapter().getSeries() != null && targetChapter.getSeries() != null &&
+             p.getChapter().getSeries().getId().equals(targetChapter.getSeries().getId()) ? 1 : 0)
+        .reversed()
+        .thenComparing(Page::getId);
+
     Page sourcePage = existingPages.stream()
         .filter(p -> !p.getId().equals(newPage.getId()))
         .filter(p -> layerRepository.findByPageId(p.getId()).stream().anyMatch(l -> "ocr".equals(l.getType())))
-        .max(Comparator.comparing((Page p) -> p.getChapter().getId().equals(targetChapter.getId()) ? 2 :
-             p.getChapter().getSeries() != null && targetChapter.getSeries() != null &&
-             p.getChapter().getSeries().getId().equals(targetChapter.getSeries().getId()) ? 1 : 0)
-             .thenComparing(p -> p.getId()))
+        .min(byAffinity)
         .orElse(null);
 
     if (sourcePage == null) {
-      jobCoordinatorService.startPipeline(newPage.getImage().getId(), targetChapter.getId());
+      jobCoordinatorService.startPipeline(
+          newPage.getImage().getId(), newPage.getId(), targetChapter.getId());
       return;
     }
 
@@ -310,7 +317,8 @@ public class SeriesController {
                          Objects.equals(sourceConfig.ocrModel(), targetConfig.ocrModel());
 
     if (!ocrMatches) {
-      jobCoordinatorService.startPipeline(newPage.getImage().getId(), targetChapter.getId());
+      jobCoordinatorService.startPipeline(
+          newPage.getImage().getId(), newPage.getId(), targetChapter.getId());
       return;
     }
 
@@ -689,7 +697,8 @@ public class SeriesController {
         pageService.generateAndSaveThumbnailAsync(page.getImage().getId(), uuid, originalBytes);
 
         // Queue pipeline
-        jobCoordinatorService.startPipeline(page.getImage().getId(), chapter.getId());
+        jobCoordinatorService.startPipeline(
+            page.getImage().getId(), page.getId(), chapter.getId());
         pageNum++;
       }
 

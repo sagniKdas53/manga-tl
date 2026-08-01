@@ -27,7 +27,7 @@ Because `Layer`, `Panel`, and `OcrRegion` entities are tied to the **`Page`** en
 
 To save time, cost, and storage, the system performs **intelligent layer cloning** when a duplicate image is detected. The process follows these steps:
 
-1. **Source Page Selection**: The system searches all existing pages that use the identical image to find a source to clone from. It prioritizes the best candidate by scoring them: pages from the *same chapter* are preferred first (score 2), followed by pages from the *same series* (score 1), and finally pages from any other series (score 0). In the case of ties, it picks the oldest page. If no existing page has successfully run the OCR pipeline, cloning is skipped.
+1. **Source Page Selection**: The system searches all existing pages that use the identical image to find a source to clone from. It prioritizes the best candidate by scoring them: pages from the *same chapter* are preferred first (score 2), followed by pages from the *same series* (score 1), and finally pages from any other series (score 0). Ties are broken on the lowest page id, so the choice is stable across retries. If no existing page has successfully run the OCR pipeline, cloning is skipped.
 
 2. **OCR Data Cloning**: The system compares the new chapter's OCR configuration (provider, model) against the source page's configuration. If they match, the system clones all `OcrRegion` entities to the new page. If they differ, the OCR layer is not cloned, and a full pipeline run is triggered to generate new OCR regions.
 3. **Translation Data Cloning**: If the OCR data was successfully cloned, the system also checks the Translation configuration (provider, model, QA mode, QA provider, QA LLM/VLM models). If these perfectly match, the Translation layers and all their corresponding `LayerElement`s are cloned.
@@ -37,3 +37,18 @@ To save time, cost, and storage, the system performs **intelligent layer cloning
    - If OCR configs do not match, the entire AI pipeline starts from the beginning.
 
 This cloning operates securely: it deep-copies all layout and text data (assigning new UUIDs to the new layers and regions) while correctly remapping element references. Thus, modifying layers on the original page will not affect the duplicated page in another chapter, and vice-versa, allowing independent testing and edits.
+
+## Image-Scoped vs Page-Scoped State
+
+Two pieces of state deliberately live on the **`Image`** rather than the **`Page`**, and the pipeline has to respect that:
+
+- **`Panel`s** are attached to the `Image`. Panel detection is a purely geometric step whose output is identical for every page reusing that image, and `OcrRegion.panel_id` — including regions belonging to *other* chapters' pages — points at those rows. Therefore panels are detected exactly once per image: `startPipeline` skips the panel-detection stage when panels already exist and starts at OCR instead, and the panel callback reuses existing panels rather than replacing them. Replacing them would violate the `ocr_regions → panels` foreign key and abort the callback transaction, killing the pipeline for the duplicate before OCR ever ran.
+- **The rendered output and the source file** are shared, as expected for identical bytes.
+
+Everything else — layers, elements, OCR regions, conversations, QA retry counters — is page-scoped.
+
+## Page-Scoped Job Routing
+
+Because one image can back pages in several chapters with *different* provider/model configurations, every job carries the `pageId` it was queued for, and each stage hand-off (panel → OCR → layout → translation → render → QA) passes that `pageId` to the next stage. The job payload's configuration (providers, models, QA mode, chapter/series titles) is resolved from that page's chapter.
+
+Without this, a job resolves its configuration from "the first page that uses this image", which for a duplicate is another chapter's page — the queue would show, and the worker would run, the *original* chapter's models. Workers echo `pageId` back in their callbacks so the results are attributed to the right page.

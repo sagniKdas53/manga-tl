@@ -264,7 +264,7 @@ public class InternalJobControllerTest {
   @Test
   public void testLayoutCallback_Success() throws Exception {
     PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
-    doNothing().when(jobCoordinatorService).handleLayoutCallback(any(), any(), any());
+    doNothing().when(jobCoordinatorService).handleLayoutCallback(any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -277,7 +277,7 @@ public class InternalJobControllerTest {
   @Test
   public void testQaCallback_Success() throws Exception {
     PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
-    doReturn("PASSED").when(jobCoordinatorService).handleQaCallback(any(), any(), any());
+    doReturn("PASSED").when(jobCoordinatorService).handleQaCallback(any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -355,7 +355,7 @@ public class InternalJobControllerTest {
     payload.put("imageId", UUID.randomUUID().toString());
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
-        .handleLayoutCallback(any(), any(), any());
+        .handleLayoutCallback(any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -387,7 +387,7 @@ public class InternalJobControllerTest {
     payload.put("imageId", UUID.randomUUID().toString());
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
-        .handleQaReOcrCallback(any(), any());
+        .handleQaReOcrCallback(any(), any(), any());
 
     mockMvc
         .perform(
@@ -430,7 +430,7 @@ public class InternalJobControllerTest {
     payload.put("imageId", UUID.randomUUID().toString());
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
-        .handleQaCallback(any(), any(), any());
+        .handleQaCallback(any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -529,7 +529,7 @@ public class InternalJobControllerTest {
         "qaResults",
         List.of(Map.of("regionId", UUID.randomUUID().toString(), "qaStatus", "passed")));
 
-    doNothing().when(jobCoordinatorService).prepareHybridQa(any(), any());
+    doNothing().when(jobCoordinatorService).prepareHybridQa(any(), any(), any());
 
     mockMvc
         .perform(
@@ -549,7 +549,7 @@ public class InternalJobControllerTest {
 
     doThrow(new RuntimeException("prepare error"))
         .when(jobCoordinatorService)
-        .prepareHybridQa(any(), any());
+        .prepareHybridQa(any(), any(), any());
 
     mockMvc
         .perform(
