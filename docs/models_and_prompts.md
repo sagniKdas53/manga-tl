@@ -368,11 +368,11 @@ All translation responses go through `is_valid_translation()` which applies:
 
 ### 5. Add retry with temperature=0 for JSON parse failures
 
-**Not yet implemented.** When JSON parsing fails (e.g., model returns markdown-wrapped JSON), a simple retry with `temperature=0` would likely succeed. This applies to all structured output paths (OCR batch, translation, QA). Implementation would require storing the prompt + schema and re-calling with adjusted parameters.
+**Not yet implemented.** When JSON parsing fails (e.g., model returns markdown-wrapped JSON, or a batch OCR/QA region is auto-passed/skipped after a parse failure), a simple retry with `temperature=0` (or lower temperature) would likely succeed, since these failures are often due to model creativity. This applies to all structured output paths (OCR batch, translation, QA). Implementation would require storing the prompt + schema and re-calling with adjusted parameters.
 
 **Trade-off:** Increases API call volume and latency. Recommendation: implement only if parse failures are observed in production.
 
-### 2. Stricter response validation for OCR paths
+### 6. Stricter response validation for OCR paths
 
 **Current:** The cloud OCR response is trusted at face value — `if text and len(text.strip()) > 0: return text.strip(), 1.0`. A model returning `"I cannot process this image"` would be treated as valid OCR text with confidence 1.0.
 
@@ -381,17 +381,17 @@ All translation responses go through `is_valid_translation()` which applies:
 - Reject if response contains refusal phrases (`"I cannot"`, `"I'm sorry"`, `"As an AI"`).
 - Reject if response is unexpectedly long relative to a typical speech bubble (<200 chars expected).
 
-### 3. Use strict schema for local VLM crops
+### 7. Use strict schema for local VLM crops
 
 **Current:** The local VLM path (`worker/handlers/ocr.py:777-779`) passes a schema but only sets `payload["format"] = "json"` for Ollama — no strict schema enforcement. The fallback path (`except Exception`) catches parse errors and uses raw text.
 
 **Suggested fix:** For Ollama, use the newer structured output API if available, or at minimum validate the parsed response has a `text` field before falling back to raw text.
 
-### 4. Add per-region confidence from VLM OCR
+### 8. Add per-region confidence from VLM OCR
 
 **Current:** When VLM OCR is used, every region gets a hardcoded `confidence: 0.99`. The VLM could provide per-region confidence scores if the schema included a `confidence` field, enabling downstream quality filtering.
 
-### 5. Normalize prompt style across all VLM/LLM calls
+### 9. Normalize prompt style across all VLM/LLM calls
 
 **Current style inconsistencies:**
 
@@ -404,7 +404,3 @@ All translation responses go through `is_valid_translation()` which applies:
 ```text
 Return ONLY a valid JSON object conforming to the requested schema. No conversational prefix, suffix, or markdown formatting.
 ```
-
-### 6. Consider adding retry with temperature=0 for JSON parse failures
-
-**Current:** When JSON parsing fails, the region is auto-passed or skipped. A simple retry with `temperature=0` (or lower temperature) would likely succeed on the second attempt since JSON schema failures are often due to model creativity.

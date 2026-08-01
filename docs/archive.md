@@ -10,6 +10,20 @@
 
 ## ✅ Completed (Archive)
 
+### Issues Board Audit (`issues.md` → archived 2026-08-01)
+
+Each item below was re-verified against current code/docs (not just taken on the word of the original "(done)" tag) before being moved out of `issues.md`.
+
+- [x] **CI failing** — both failures fixed. Backend: `backend/pom.xml` pins `java.version=25` and `.github/workflows/ci-maven.yml` matches (`java-version: "25"`, `distribution: temurin`), resolving the "release version 25 not supported" error. Frontend: the flaky `AssertionError: expected false to be true` test was fixed by scoping the fetch-URL assertion inside `waitFor` in the Reader component test (commit `0a5296a`).
+- [x] **Same-image handling had not worked for a long time** — the full intelligent-cloning architecture is implemented and documented end-to-end in [duplicate_handling.md](./duplicate_handling.md): source-page scoring for cloning candidates, OCR/translation config-matched layer cloning, image-scoped panels vs. page-scoped everything-else, and page-scoped job routing so a shared image backing pages in different chapters no longer resolves the wrong chapter's model config (commits `7f080ea`, `5e2d5ce`, `72d8a4f`).
+- [x] **`index.js` is still too big** — `frontend/vite.config.ts` now splits the bundle via `manualChunks` (`vendor-react`, `vendor-mui`, `vendor-router`, `lib-jszip`, `lib-zod`); the before/after build logs pasted into the original issue show the single ~375 KB `index-*.js` dropping to a ~23 KB main chunk with the rest cached in stable vendor chunks (commit `849cb81`).
+- [x] **UI fixes needed**:
+  - Lazy-loading thumbnails across series/chapter/page surfaces, fixing the earlier bug where the "lazy" loader still fetched full images (commit `6a94e97`).
+  - Reader bi-directional cache with a soft cap — verified in `frontend/src/components/Reader.tsx` (~L668-719): a `[-2, +3]` sliding window prefetches both page details and images in *both* directions and evicts on window slide, with no hand-rolled memory-size cap (the earlier hard-cap calculation was removed; eviction is now purely window-based and lets the browser manage image memory).
+  - Every-chapter-shows-spinner (component remount on cached data) fixed.
+  - The Firefox-crashing regression was reverted (`5511ce8`) and the same features (lazy loading, bi-directional cache) were redone incrementally and safely (`e9567e7` → `6a94e97` → `48ba3a5` → `8f66c1f`).
+- [x] **Add an export rendered PNG button** — `handleExportRenderedPng` implemented in `Reader.tsx` (~L2233) and wired into `ReaderRightSidebar` (commit `8f00564`). (The screenshot originally linked from this entry was removed from `docs/` in an unrelated cleanup; this entry is kept text-only.)
+
 ### Audited & Verified Completed Items (Git History & Code Base Audit)
 
 - [x] **Cloudflare Workers AI Integration** — added Cloudflare Workers AI provider to worker (`providers.json` & `llm_client.py`) with schema validation and session affinity support (commits `14532cf`, `f90902f`).

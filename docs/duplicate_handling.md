@@ -1,6 +1,6 @@
 # Duplicate Image Handling
 
-This document explains how the Manga Library backend handles duplicate image uploads and outlines the planned future architecture for model testing across chapters.
+This document explains how the Manga Library backend handles duplicate image uploads, including the intelligent layer-cloning architecture that enables independent model testing across chapters.
 
 ## Current Behavior
 
