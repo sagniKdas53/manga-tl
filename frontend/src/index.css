@@ -552,39 +552,10 @@ input:checked + .slider:before {
   min-height: 60px;
 }
 
-/* Loading spinner — replaced by MUI CircularProgress */
-/* .spinner, .spinner-mini, @keyframes spin removed */
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
+/* No custom @keyframes live here any more. Loading state is MUI
+   CircularProgress; the fadeIn/scaleIn/slideIn rules were removed once nothing
+   referenced them. If you need motion, reach for a MUI transition (Fade, Grow,
+   Collapse) rather than hand-rolling keyframes — see docs/perf_analysis_frontend. */
 
 /* Reader Canvas Area */
 .reader-canvas-area {

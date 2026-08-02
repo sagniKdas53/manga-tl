@@ -699,13 +699,6 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       />
 
       {/* Toasts rendered globally by ToastProvider in App.tsx */}
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.08); }
-        }
-      `}</style>
     </Box>
   );
 };

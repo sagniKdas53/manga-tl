@@ -28,7 +28,6 @@ const ChapterDragOverlay: React.FC<ChapterDragOverlayProps> = ({
         borderRadius: "16px",
         margin: "16px",
         pointerEvents: "none",
-        animation: "fadeIn 0.15s ease-out",
       }}
     >
       <div
@@ -55,7 +54,6 @@ const ChapterDragOverlay: React.FC<ChapterDragOverlayProps> = ({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            animation: "pulse 2s infinite",
           }}
         >
           <svg

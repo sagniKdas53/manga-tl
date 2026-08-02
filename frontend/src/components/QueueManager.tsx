@@ -137,13 +137,6 @@ const PipelineStepper: React.FC<{
                     ? `repeating-linear-gradient(45deg, ${color} 0px, ${color} 2px, transparent 2px, transparent 4px)`
                     : "none",
                 opacity: isDone ? 0.4 : 1,
-                animation: isCurrent
-                  ? "queuePulse 1.3s ease-in-out infinite"
-                  : "none",
-                "@keyframes queuePulse": {
-                  "0%, 100%": { opacity: 1 },
-                  "50%": { opacity: 0.3 },
-                },
               }}
             />
           );

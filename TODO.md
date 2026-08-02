@@ -79,7 +79,14 @@ Design doc: [worker_pull_model.md](./docs/worker_pull_model.md) (status: design 
 ## 🧪 Testing & QA
 
 - [ ] Test at higher concurrency not just 2 slots.
-- [ ] Reserve CPU/memory for ML container (like Immich does for its ML container)
+- [x] Reserve CPU/memory for ML container (like Immich does for its ML container) — worker capped
+  at 2 CPUs / 4g (`deploy.resources` in `docker-compose.yml`, overridable via `WORKER_CPUS` /
+  `WORKER_MEMORY` / `WORKER_THREADS`). Sized from the 2026-08-01 runs: worker mean 76-93% CPU,
+  peak 216%, peak RSS 2.1 GiB, while all containers together peaked at 279% of a 4-core box.
+  `OMP/MKL/OPENBLAS_NUM_THREADS` are pinned to match the quota — Paddle can't see a cgroup limit
+  and would otherwise start 4 threads to contend for 2 cores. **Not yet benchmarked**: this caps
+  the heavy OCR stage, so re-baseline `stage_summary.csv` before reading any throughput
+  comparison against the 2026-08-01 runs.
 - [ ] Larger upload optimization (100+ images) — noticeable slowdown, need to optimize. Known
   contributor per [webp_thumbnail_encoding.md](./docs/webp_thumbnail_encoding.md): thumbnail
   generation is serialized behind one global lock (`WEBP_LOCK` wraps both decode and encode in
