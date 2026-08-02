@@ -878,6 +878,33 @@ Both are an assistant reasoning with itself, left in the source. Worth a grep fo
 + `resolveModel:561-573` — checks `!chapterVal.equals("inherit")` without trimming first, though the
   preceding condition trims. `" inherit "` passes through as a real model name.
 
+### Status of the fix order — 2026-08-02
+
+Items 1–5 of the list below are **implemented and the full quality gate passes** (backend 330 tests
++ PMD + SpotBugs + JaCoCo, frontend 253 tests + lint + build, worker 241 tests + ruff + pyright,
+85.4% coverage). What landed:
+
+| item | what changed |
+| --- | --- |
+| **S1/S2/S3** | `application.yml` ships no secret fallbacks; `SecretsStartupValidator` fails startup on a missing, too-short or known-public secret; dev values moved to `application-local.yml`; `DockerSecretsEnvironmentPostProcessor` warns on every missing/empty secret file instead of continuing silently; `InternalAuthFilter` uses `MessageDigest.isEqual`; the worker refuses to start without `WORKER_API_SECRET` and `verify_auth` denies when it is unset. |
+| **S4** | `SseTicketService` issues single-use 60s tickets; `SseTicketAuthFilter` redeems them; `JwtAuthFilter` no longer accepts `?token=` at all; access-log pattern `%r` → `%m %U %H`; `useSSE.ts` exchanges the JWT for a ticket over a header-authenticated POST. |
+| **W10/W6** | Defaults raised to `CONCURRENT_JOBS=5 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=4`; `resolve_slot_config` clamps any combination that computes to zero or negative slots and logs each adjustment. |
+| **P4** | New `jobs.callback_applied_at` column plus `JobRepository.claimCallback`, a conditional UPDATE that makes the check-and-set atomic. Every result callback claims before writing, so a duplicate run is dropped instead of writing a second region set, layer and cost. A genuinely failed job never claimed, so its retry still applies. |
+| **P1 / W1** | `resolveConfigForChapter` now passes `tl` / `qaLLM` / `qaVLM`, matching `providers.json`. `handlers/qa.py`'s four hardcoded `if/elif` provider chains are replaced by `_qa_cloud_llm` / `_qa_cloud_vlm`, so `cloudflare` and `neurometric` work and an unresolvable model logs why. |
+
+Also fixed in passing, because the quality gate was already red before this batch: two dead private
+`enqueueJob` overloads (SpotBugs `UPM_UNCALLED_PRIVATE_METHOD`), a bare `catch (Exception)` in
+`WorkerDispatcherService.dispatchFromSlot` that swallowed interrupts, and a `UselessParentheses`
+PMD violation. The `JwtAuthFilter` double-registration from AUDIT-B8 is closed too, via
+`FilterRegistrationBean(setEnabled(false))`.
+
+**Not done, and why:** the callback dedup key is `Job.id` resolved through the existing
+`findFirstByImageIdAndTypeOrderByCreatedAtDesc` lookup rather than a `jobId` carried on the callback
+body. Adding a field to the callback DTOs changes the OpenAPI spec, and `npm run generate-api` reads
+the spec from the *running* backend container — so regenerating `schema.d.ts` correctly would mean
+rebuilding and redeploying the live stack mid-change. **AUDIT-P5** already tracks carrying the job
+id; doing it there removes the residual ambiguity noted in `claimCallback`'s javadoc.
+
 ### Suggested fix order
 
 **Revised 2026-08-02** against measured data from the first drained run
@@ -909,5 +936,21 @@ had ever drained.
 remove **408 s of 49,058 s of queue wait (0.83%)**. Worth building for latency, resilience and
 multi-worker scaling — not for throughput, and not before #3.
 
-**Untriaged:** `translation` failed **11 of 50 (22%)** on the drained run, with 33 tracebacks in
-`worker.log`. No audit item covers this yet; it may belong above #4.
+**Triaged 2026-08-02 — not a code defect, and it does not belong above #4.** All 33 tracebacks are
+the same `RuntimeError: All N translation(s) failed`, and every one of them bottoms out in
+**HTTP 401 `Invalid API key provided.` from `neurometric`, 323 times across the run**. Chapters
+pinned to `neurometric` failed 100% of their translations; chapters on `openrouter` succeeded —
+that is the 22%. **The `neurometric` API key in `secrets/api_keys.json` is invalid and needs
+replacing; no code change fixes that.**
+
+The run did expose one real defect, now fixed: nothing treated a 401 as terminal. `PermanentAPIError`
+stopped Tenacity, but the layers above kept retrying the same dead provider — batch, then a retry
+pass, then per-region individual fallback, then the RQ job three times — so one bad credential cost
+9 identical 401s per region. `llm_client.py` now parks a provider that answers 401/403 in
+`PROVIDER_AUTH_FAILURES` for 300s and short-circuits without sleeping (deliberately not the 429
+cooldown, which blocks for up to 60s per call while holding a job slot).
+
+Also visible in the same traces and still open: `No fallback applied (global provider different or
+model identical)`. With the chapter pinned to a provider that is down and the global default set to
+a working one, the fallback declines to cross providers, so a dead chapter-level override has no
+escape hatch. Worth its own item.

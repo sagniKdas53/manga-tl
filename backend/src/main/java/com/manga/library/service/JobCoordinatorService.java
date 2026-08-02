@@ -231,22 +231,9 @@ public class JobCoordinatorService {
     });
   }
 
-  private void enqueueJob(String jobType, UUID imageId) {
-    enqueueJobDirectly(jobType, imageId, null, null, "normal", job -> {
-    });
-  }
-
   private void enqueueJob(String jobType, UUID imageId, UUID chapterId) {
     enqueueJobDirectly(jobType, imageId, null, chapterId, "normal", job -> {
     });
-  }
-
-  private void enqueueJob(
-      String jobType,
-      UUID imageId,
-      String priority,
-      Consumer<Map<String, Object>> payloadCustomizer) {
-    enqueueJobDirectly(jobType, imageId, null, null, priority, payloadCustomizer);
   }
 
   /**
@@ -614,17 +601,24 @@ public class JobCoordinatorService {
       resolvedOcrModel = settings.localOcrModel();
     }
 
+    // The task keys must match providers.json, which uses tl / qaLLM / qaVLM / ocr — not the
+    // pipeline stage names. Passing "translation" and "qa" made ProviderConfigCache.models.get(task)
+    // return null, isValidProviderModel return false, and resolveModelWithCheck discard every
+    // resolved value in favour of the global default (AUDIT-P1). The duplicate-page comparison in
+    // PageController and SeriesController then compared global defaults against global defaults and
+    // decided two differently-configured chapters were identical, so the clone path reused OCR/TL
+    // data it should have regenerated. enqueueJobDirectly above already passes the correct keys.
     String resolvedTlProvider = resolveModel(
         chapter.getTlProvider(), series.getTlProvider(), settings.tlProvider());
     String resolvedTlModel = resolveModelWithCheck(
-        chapter.getTlModel(), series.getTlModel(), settings.tlModel(), resolvedTlProvider, "translation");
+        chapter.getTlModel(), series.getTlModel(), settings.tlModel(), resolvedTlProvider, "tl");
 
     String resolvedQaProvider = resolveModel(
         chapter.getQaProvider(), series.getQaProvider(), settings.qaProvider());
     String resolvedQaLlmModel = resolveModelWithCheck(
-        chapter.getQaLlmModel(), series.getQaLlmModel(), settings.qaLlmModel(), resolvedQaProvider, "translation");
+        chapter.getQaLlmModel(), series.getQaLlmModel(), settings.qaLlmModel(), resolvedQaProvider, "qaLLM");
     String resolvedQaVlmModel = resolveModelWithCheck(
-        chapter.getQaVlmModel(), series.getQaVlmModel(), settings.qaVlmModel(), resolvedQaProvider, "qa");
+        chapter.getQaVlmModel(), series.getQaVlmModel(), settings.qaVlmModel(), resolvedQaProvider, "qaVLM");
     String resolvedQaMode = resolveModel(
         chapter.getQaMode(), series.getQaMode(), settings.qaMode());
 
@@ -651,10 +645,63 @@ public class JobCoordinatorService {
         || providerConfigCache.isValidProviderModel(provider, m, task);
   }
 
+  /**
+   * Claims the right to apply a result callback, returning false when this job's result has already
+   * been written once (AUDIT-P4).
+   *
+   * <p>Two paths requeue a job without telling the worker to stop — {@link
+   * #resetProcessingJobsToPending()} at every backend boot, and {@link
+   * #recoverStaleProcessingJobs()} after ten minutes of silence, which is shorter than a slow
+   * cloud-VLM OCR pass on a busy page. The worker is a separate container that does not restart with
+   * the backend, so its in-flight work keeps running and the requeued copy runs alongside it. Both
+   * eventually call back for the same job row. None of these handlers were idempotent, so the second
+   * callback wrote a second full region set, a second layer, and double-counted cost: the drained
+   * run of 2026-08-02 logged 277 dispatches for 255 jobs and produced 12 duplicate (subject, type)
+   * rows, with one subject running translation, qa and render three times each.
+   *
+   * <p>A genuinely failed job never reaches its callback — the worker raises before posting — so it
+   * leaves the claim unset and its retry is applied normally. Only a *second* result for work that
+   * already landed is dropped.
+   *
+   * <p>The job row is resolved the same way the handlers themselves resolve it. That inherits
+   * AUDIT-P5's ambiguity when a redo is in flight or an image backs pages in two chapters; carrying
+   * the job id on the callback would remove it, and is tracked there. When no job row can be found
+   * there is nothing to deduplicate against, so the callback is applied.
+   */
+  private boolean claimCallback(UUID imageId, String jobType) {
+    if (imageId == null) {
+      return true;
+    }
+    Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, jobType);
+    if (job == null) {
+      return true;
+    }
+    OffsetDateTime now = OffsetDateTime.now();
+    if (jobRepository.claimCallback(job.getId(), now) == 0) {
+      log.warn(
+          "Ignoring duplicate {} callback for image {} — job {} already applied its result at {}. "
+              + "A recovery path requeued this job while the original worker was still running.",
+          jobType,
+          imageId,
+          job.getId(),
+          job.getCallbackAppliedAt());
+      return false;
+    }
+    // The claim is a bulk UPDATE, which does not reach the copy of this row already in the
+    // persistence context. Mirror it so a later save() of the same entity cannot write the old
+    // null back over the claim.
+    job.setCallbackAppliedAt(now);
+    return true;
+  }
+
   @Transactional
   public void handlePanelCallback(PanelCallbackDto dto) {
     UUID imageId = dto.imageId();
     log.info("Received panel callback for image: {} with {} panels", imageId, dto.panels().size());
+
+    if (!claimCallback(imageId, "panel-detection")) {
+      return;
+    }
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
     Image image = imageRepository
@@ -698,6 +745,10 @@ public class JobCoordinatorService {
   public void handleOcrCallback(OcrCallbackDto dto) {
     UUID imageId = dto.imageId();
     log.info("Received OCR callback for image: {} with {} regions", imageId, dto.regions().size());
+
+    if (!claimCallback(imageId, "ocr")) {
+      return;
+    }
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
     imageRepository
@@ -846,6 +897,10 @@ public class JobCoordinatorService {
         regionTypes != null ? regionTypes.size() : 0,
         conversations != null ? conversations.size() : 0);
 
+    if (!claimCallback(imageId, "layout")) {
+      return;
+    }
+
     Objects.requireNonNull(imageId, "imageId cannot be null");
     imageRepository
         .findById(Objects.requireNonNull(imageId))
@@ -943,6 +998,10 @@ public class JobCoordinatorService {
         "Received Translation callback for image: {} with {} translations",
         imageId,
         translations != null ? translations.size() : 0);
+
+    if (!claimCallback(imageId, "translation")) {
+      return;
+    }
 
     Objects.requireNonNull(imageId, "imageId cannot be null");
     imageRepository
@@ -1232,9 +1291,8 @@ public class JobCoordinatorService {
       redisTemplate.delete("pipeline:trace:" + pageId);
     }
 
-    UUID effectiveChapterId = chapterId != null
-        ? chapterId
-        : (page.getChapter() != null ? page.getChapter().getId() : null);
+    UUID chapterFromPage = page.getChapter() != null ? page.getChapter().getId() : null;
+    UUID effectiveChapterId = chapterId != null ? chapterId : chapterFromPage;
 
     enqueueJobDirectly(jobType, imageId, pageId, effectiveChapterId, "normal", job -> {
     });
@@ -1280,6 +1338,10 @@ public class JobCoordinatorService {
         results != null ? results.size() : 0);
     Objects.requireNonNull(imageId, "imageId cannot be null");
 
+    if (!claimCallback(imageId, "qa-re-ocr")) {
+      return;
+    }
+
     if (results != null) {
       for (Map<String, Object> r : results) {
         try {
@@ -1318,6 +1380,9 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleRenderCallback(UUID imageId, UUID pageId) {
+    if (!claimCallback(imageId, "render")) {
+      return;
+    }
     List<Page> pages = pageId != null
         ? pageRepository.findById(pageId).map(List::of).orElse(List.of())
         : pageRepository.findByImageId(imageId);
@@ -1476,6 +1541,10 @@ public class JobCoordinatorService {
         imageId,
         qaResults != null ? qaResults.size() : 0);
     Objects.requireNonNull(imageId, "imageId cannot be null");
+
+    if (!claimCallback(imageId, "qa")) {
+      return "DUPLICATE";
+    }
 
     boolean needsRetry = false;
     boolean needsManualIntervention = false;

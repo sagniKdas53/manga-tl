@@ -78,8 +78,7 @@ public class JwtTest {
         .andExpect(status().isOk());
   }
 
-  @org.springframework.beans.factory.annotation.Value(
-      "${internal.api-token:manga-library-internal-token-12345}")
+  @org.springframework.beans.factory.annotation.Value("${internal.api-token}")
   private String internalApiToken;
 
   @Test
@@ -114,8 +113,14 @@ public class JwtTest {
         .andExpect(status().isNotFound());
   }
 
+  /**
+   * A JWT in the query string is no longer a credential (AUDIT-S4). It used to be, so that {@code
+   * EventSource} — which cannot set headers — could authenticate; the cost was that Tomcat's access
+   * log recorded every SSE URL, tokens included. SSE now uses a single-use ticket, and a valid
+   * token presented as {@code ?token=} must be ignored everywhere.
+   */
   @Test
-  public void testPostChapter_QueryParameterToken() throws Exception {
+  public void testPostChapter_QueryParameterTokenIsRejected() throws Exception {
     userRepository
         .findByEmail("admin@manga.local")
         .orElseGet(
@@ -146,6 +151,41 @@ public class JwtTest {
         .perform(
             post("/api/series/" + savedSeries.getId() + "/chapters")
                 .param("token", rawToken)
+                .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
+                .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  public void testPostChapter_HeaderTokenStillWorks() throws Exception {
+    userRepository
+        .findByEmail("admin@manga.local")
+        .orElseGet(
+            () -> {
+              User buildUser = new User();
+              buildUser.setEmail("admin@manga.local");
+              buildUser.setPasswordHash("mock_password_hash");
+              buildUser.setDisplayName("Admin User");
+              buildUser.setRole("admin");
+              return userRepository.save(buildUser);
+            });
+
+    Series series = new Series();
+    series.setTitle("Test Series For Header Token");
+    series.setOriginalLanguage("ja");
+    series.setSourceLanguage("ja");
+    series.setTargetLanguage("en");
+    series.setReadingDirection("rtl");
+    Series savedSeries = seriesRepository.save(series);
+
+    ChapterDto dto =
+        new ChapterDto(
+            null, null, 3.0, "Three", null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null);
+    mockMvc
+        .perform(
+            post("/api/series/" + savedSeries.getId() + "/chapters")
+                .header("Authorization", "Bearer " + jwtUtils.generateToken("admin@manga.local"))
                 .contentType(Objects.requireNonNull(MediaType.APPLICATION_JSON))
                 .content(Objects.requireNonNull(objectMapper.writeValueAsString(dto))))
         .andDo(print())

@@ -13,18 +13,18 @@ class PageTest {
         Page page = new Page();
         UUID id = UUID.randomUUID();
         page.setId(id);
-        
+
         Chapter chapter = new Chapter();
         page.setChapter(chapter);
-        
+
         page.setPageNumber(1);
-        
+
         Image image = new Image();
         page.setImage(image);
-        
+
         OffsetDateTime editedAt = OffsetDateTime.now();
         OffsetDateTime renderedAt = OffsetDateTime.now().plusHours(1);
-        
+
         page.setLastEditedAt(editedAt);
         page.setLastRenderedAt(renderedAt);
 
@@ -43,10 +43,10 @@ class PageTest {
 
         Page p1 = new Page();
         p1.setId(id1);
-        
+
         Page p2 = new Page();
         p2.setId(id1);
-        
+
         Page p3 = new Page();
         p3.setId(id2);
 
@@ -55,7 +55,7 @@ class PageTest {
         assertNotEquals(p1, p3);
         assertNotEquals(p1, null);
         assertNotEquals(p1, new Object());
-        
+
         assertEquals(p1.hashCode(), p2.hashCode());
     }
 }

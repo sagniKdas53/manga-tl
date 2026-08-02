@@ -1,5 +1,22 @@
 # Handoff — fixing the urgent issues
 
+> **Worked through 2026-08-02. Sections 1–5 below are implemented and the full quality gate passes.**
+> See [issues.md § Status of the fix order](./issues.md#status-of-the-fix-order--2026-08-02) for what
+> landed in each. The rest of this file is kept as written, as the record of why each item was on the
+> list. Two things it asked for are **still outstanding and need a human**:
+>
+> 1. **§2 asks for a re-run of the drained capture** after raising the slots. Not done — it needs
+>    ~20 pages processed end to end against live providers. Run
+>    `./scripts/capture-run.sh start` → ~20 pages → drain fully → `stop` and compare against
+>    `20260802-163445`.
+> 2. **§5's translation failures are an invalid `neurometric` API key** (401 × 323). Replace it in
+>    `secrets/api_keys.json`. The retry-amplification defect around it is fixed.
+>
+> Also note: this batch added `POST /api/notifications/ticket`, so `frontend/src/api/schema.d.ts` is
+> a deploy behind. Per `CLAUDE.md` run `npm run generate-api` from `frontend/` **after** the next
+> `docker compose build backend && docker compose up -d backend` — nothing is broken meanwhile, as
+> `useSSE.ts` calls the endpoint with a plain `fetch` rather than the generated client.
+
 Written 2026-08-02 at the end of the performance-measurement work. **Measurement is done; this is
 the build list.** Everything below is backed by numbers, not hypotheses — do not re-derive them.
 

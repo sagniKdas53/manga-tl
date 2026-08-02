@@ -34,6 +34,7 @@ public class JobControllerTest {
   @MockitoBean private JobCoordinatorService jobCoordinatorService;
   @MockitoBean private StringRedisTemplate redisTemplate;
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
   @MockitoBean private SseService sseService;
 
   @Test

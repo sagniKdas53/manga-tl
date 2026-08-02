@@ -45,6 +45,8 @@ public class AuthControllerTest {
 
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
 
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
+
   @Test
   public void testIsSetupRequired_True() throws Exception {
     when(userRepository.count()).thenReturn(0L);

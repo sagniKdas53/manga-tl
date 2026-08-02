@@ -2,6 +2,7 @@ package com.manga.library.config;
 
 import java.util.Arrays;
 import java.util.Collections;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -23,9 +24,11 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
   private final JwtAuthFilter jwtAuthFilter;
+  private final SseTicketAuthFilter sseTicketAuthFilter;
 
-  public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+  public SecurityConfig(JwtAuthFilter jwtAuthFilter, SseTicketAuthFilter sseTicketAuthFilter) {
     this.jwtAuthFilter = jwtAuthFilter;
+    this.sseTicketAuthFilter = sseTicketAuthFilter;
   }
 
   @Bean
@@ -50,9 +53,30 @@ public class SecurityConfig {
                     .authenticated()
                     .anyRequest()
                     .permitAll())
+        .addFilterBefore(sseTicketAuthFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
     return http.build();
+  }
+
+  /**
+   * Both filters are {@code @Component}s, which makes Spring Boot register them in the plain
+   * servlet chain as well as the security chain — so each would run twice per request. The security
+   * chain is where they belong; this disables the servlet-container registration (AUDIT-B8).
+   */
+  @Bean
+  public FilterRegistrationBean<JwtAuthFilter> jwtAuthFilterRegistration(JwtAuthFilter filter) {
+    FilterRegistrationBean<JwtAuthFilter> registration = new FilterRegistrationBean<>(filter);
+    registration.setEnabled(false);
+    return registration;
+  }
+
+  @Bean
+  public FilterRegistrationBean<SseTicketAuthFilter> sseTicketAuthFilterRegistration(
+      SseTicketAuthFilter filter) {
+    FilterRegistrationBean<SseTicketAuthFilter> registration = new FilterRegistrationBean<>(filter);
+    registration.setEnabled(false);
+    return registration;
   }
 
   @Bean
