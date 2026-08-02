@@ -148,6 +148,14 @@ request we actually put on the wire or the 429/timeout/schema-degradation branch
 [mock_router.md](./mock_router.md) designs a real over-the-wire mock provider to close that
 specific gap; tracked in [TODO.md](../TODO.md) under Testing & QA.
 
+**Update 2026-08-03 — a concrete instance, on the frontend this time.** The Reader test
+`"reloads layers and shows toast on job_update SSE event"` was de-flaked on 2026-07-28 (`0a5296a`)
+by widening its assertion into a `waitFor`. It flaked again, and the cause turned out to be a real
+lost-invalidation race in `Reader.tsx` — see [archive.md](./archive.md#reader-lost-invalidation-race-2026-08-03).
+The lesson generalises past that one test: **a flaky test is a hypothesis about a race, and
+relaxing its timing discards the hypothesis.** Worth grepping for other assertions that were widened
+rather than diagnosed before trusting the frontend suite as a regression guard.
+
 **Correction 2026-08-01 (audit):** the "nothing verifies the request we put on the wire" half of
 that claim is wrong — `tests/test_llm_client.py` *does* assert on `mock_post.call_args.kwargs["json"]`
 for the Anthropic `cache_control`, the OpenRouter session/caching injection, and the Cloudflare
@@ -525,6 +533,21 @@ Also `:459` defaults `LOCAL_LLM_MODEL` to `gemma3:4b`, while `docker-compose.yml
 `.env.example:81` default it to `gemma4:e4b` — a tag that does not exist (probably meant
 `gemma3n:e4b`). And `:456` defaults `LOCAL_LLM_PROVIDER` to `lmstudio` where compose defaults to
 `ollama`. Three different defaults for the same two settings.
+
+#### AUDIT-W11 **[M]** — a chapter pinned to a dead provider has no escape hatch
+
+*Added 2026-08-03, split out of the translation-failure triage at the bottom of this file.*
+
+Visible in every traceback from run `20260802-163445`: `No fallback applied (global provider
+different or model identical)`. When a chapter-level override pins a provider that is down — the
+invalid `neurometric` key, 401 × 323 — the fallback logic declines to cross provider boundaries, so
+the global default (a working `openrouter`) is never tried and the chapter fails 100% of its
+translations.
+
+The safety argument for not crossing providers is real (a chapter pinned to a specific model
+presumably wants *that* model), but "the pinned provider is authenticating-failed and parked in
+`PROVIDER_AUTH_FAILURES`" is exactly the case where it should. Fallback should cross providers when
+the pinned one is parked, and say so in the log.
 
 ### Backend (Spring)
 
@@ -905,6 +928,26 @@ the spec from the *running* backend container — so regenerating `schema.d.ts` 
 rebuilding and redeploying the live stack mid-change. **AUDIT-P5** already tracks carrying the job
 id; doing it there removes the residual ambiguity noted in `claimCallback`'s javadoc.
 
+#### Still outstanding from that batch — 2026-08-03
+
+Carried over from `docs/Next Steps.md`, which was retired once items 1–5 landed. These three need a
+human and are not code work:
+
+1. **Re-run the drained capture.** W10 raised the slots but the win is unmeasured. Run
+   `./scripts/capture-run.sh start` → ~20 pages end to end → drain fully → `stop`, and compare
+   against the `20260802-163445` baseline. Expect the light-tier p50 wait (591 s for `layout`) to be
+   the headline number. Watch two things while it runs: AUDIT-W6's clamped slot arithmetic in the
+   worker startup log, and whether the UI degrades — 71% of the browser's LongTask wall was already
+   descheduling on this 4-core box, so if it worsens, cap worker CPU rather than reverting the slots.
+2. **Replace the `neurometric` API key** in `secrets/api_keys.json`. It returned 401 × 323 on the
+   baseline run and caused 100% translation failure on every chapter pinned to it. The
+   retry-amplification defect around it is fixed; the dead credential is not.
+3. **Regenerate `frontend/src/api/schema.d.ts`.** The S4 batch added `POST /api/notifications/ticket`,
+   so the generated client is a deploy behind. Per `CLAUDE.md`, run `npm run generate-api` from
+   `frontend/` *after* the next `docker compose build backend && docker compose up -d backend`.
+   Nothing is broken meanwhile: `useSSE.ts` calls the endpoint with a plain `fetch`, not the
+   generated client.
+
 ### Suggested fix order
 
 **Revised 2026-08-02** against measured data from the first drained run
@@ -913,17 +956,18 @@ ordering ranked AUDIT-W2 as "likely the single largest throughput win available"
 the item that actually holds throughput (**AUDIT-W10**) was not in the list at all, because no run
 had ever drained.
 
-1. **AUDIT-S1 / S2 / S3** — the fail-open secrets. One afternoon, removes the worst exposure.
-   Unchanged: severity is independent of the perf data.
-2. **AUDIT-D1** — confirm whether backups are actually running. Everything else is recoverable.
-3. **AUDIT-W10** — raise `MAX_LIGHT_SLOTS`. Config-only, attacks 99% of measured queue wait, and
-   nothing else on this list moves throughput comparably. Change `CONCURRENT_JOBS` with it and
-   sanity-check AUDIT-W6's arithmetic. Re-run the drained capture afterwards to confirm.
-4. **AUDIT-P4** — duplicate work. The one correctness defect measurably costing work today
-   (22 re-dispatches / 255 jobs). Needs callback idempotency, not just the tombstone.
-5. **AUDIT-P1 / W1** — the provider/task-key mismatches. Both are silent-wrong-answer bugs, which
-   are the expensive kind. The display half of P1 is already fixed; the clone-path half is not.
-6. **AUDIT-T2** — the error-branch tests, before the mock-router build rather than after.
+1. ~~**AUDIT-S1 / S2 / S3** — the fail-open secrets.~~ **Done 2026-08-02** (with S4).
+2. ~~**AUDIT-D1** — confirm whether backups are actually running.~~ **Done** — container healthy,
+   `restart: unless-stopped`, backups current.
+3. **AUDIT-W10** — ~~raise `MAX_LIGHT_SLOTS`~~ **code done 2026-08-02**
+   (`CONCURRENT_JOBS=5 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=4`, W6 clamping alongside), **but the
+   re-run that confirms the win has not happened** — see "Still outstanding from that batch" above.
+   This is the top of the list until it is measured.
+4. ~~**AUDIT-P4** — duplicate work.~~ **Done 2026-08-02** via `jobs.callback_applied_at` +
+   `claimCallback`. The residual `jobId`-on-the-callback-body work stays under **AUDIT-P5**.
+5. ~~**AUDIT-P1 / W1** — the provider/task-key mismatches.~~ **Done 2026-08-02.**
+6. **AUDIT-T2** — the error-branch tests, before the mock-router build rather than after. **Now the
+   top of the un-started work.**
 7. **AUDIT-P2 / P3 / B1** — the dispatcher defects. Demoted from #3: all three are real, but the
    drained run shows they are costing ~nothing right now (3.2% / 1.3% starvation, 0 stranded jobs).
    Fix as latent correctness, not as a throughput measure.
@@ -953,4 +997,4 @@ cooldown, which blocks for up to 60s per call while holding a job slot).
 Also visible in the same traces and still open: `No fallback applied (global provider different or
 model identical)`. With the chapter pinned to a provider that is down and the global default set to
 a working one, the fallback declines to cross providers, so a dead chapter-level override has no
-escape hatch. Worth its own item.
+escape hatch. **Split out 2026-08-03 as [AUDIT-W11](#audit-w11-m--a-chapter-pinned-to-a-dead-provider-has-no-escape-hatch).**

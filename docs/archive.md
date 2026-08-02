@@ -14,7 +14,7 @@
 
 Each item below was re-verified against current code/docs (not just taken on the word of the original "(done)" tag) before being moved out of `issues.md`.
 
-- [x] **CI failing** — both failures fixed. Backend: `backend/pom.xml` pins `java.version=25` and `.github/workflows/ci-maven.yml` matches (`java-version: "25"`, `distribution: temurin`), resolving the "release version 25 not supported" error. Frontend: the flaky `AssertionError: expected false to be true` test was fixed by scoping the fetch-URL assertion inside `waitFor` in the Reader component test (commit `0a5296a`).
+- [x] **CI failing** — both failures fixed. Backend: `backend/pom.xml` pins `java.version=25` and `.github/workflows/ci-maven.yml` matches (`java-version: "25"`, `distribution: temurin`), resolving the "release version 25 not supported" error. Frontend: the flaky `AssertionError: expected false to be true` test was scoped inside `waitFor` in the Reader component test (commit `0a5296a`). **Correction 2026-08-03:** that did not fix it — the test flaked again in CI, and the cause was a product bug in `Reader.tsx`, not test timing. See "Reader lost-invalidation race" below.
 - [x] **Same-image handling had not worked for a long time** — the full intelligent-cloning architecture is implemented and documented end-to-end in [duplicate_handling.md](./duplicate_handling.md): source-page scoring for cloning candidates, OCR/translation config-matched layer cloning, image-scoped panels vs. page-scoped everything-else, and page-scoped job routing so a shared image backing pages in different chapters no longer resolves the wrong chapter's model config (commits `7f080ea`, `5e2d5ce`, `72d8a4f`).
 - [x] **`index.js` is still too big** — `frontend/vite.config.ts` now splits the bundle via `manualChunks` (`vendor-react`, `vendor-mui`, `vendor-router`, `lib-jszip`, `lib-zod`); the before/after build logs pasted into the original issue show the single ~375 KB `index-*.js` dropping to a ~23 KB main chunk with the rest cached in stable vendor chunks (commit `849cb81`).
 - [x] **UI fixes needed**:
@@ -23,6 +23,33 @@ Each item below was re-verified against current code/docs (not just taken on the
   - Every-chapter-shows-spinner (component remount on cached data) fixed.
   - The Firefox-crashing regression was reverted (`5511ce8`) and the same features (lazy loading, bi-directional cache) were redone incrementally and safely (`e9567e7` → `6a94e97` → `48ba3a5` → `8f66c1f`).
 - [x] **Add an export rendered PNG button** — `handleExportRenderedPng` implemented in `Reader.tsx` (~L2233) and wired into `ReaderRightSidebar` (commit `8f00564`). (The screenshot originally linked from this entry was removed from `docs/` in an unrelated cleanup; this entry is kept text-only.)
+
+### Reader lost-invalidation race (2026-08-03)
+
+- [x] **A `job_update` that arrived while page details were still loading was silently swallowed.**
+  Diagnosed from a CI failure of `"reloads layers and shows toast on job_update SSE event"` — the
+  same test `0a5296a` had already tried to de-flake by widening the assertion into `waitFor`. It was
+  never a timing problem: in the losing interleaving the refetch is *never* issued, so `waitFor` can
+  only time out.
+
+  The SSE handler busts `pageDetailsCache` and nulls `loadedImageId` to force a refetch. If the
+  initial `/api/pages/{id}` request was still in flight, its `.then` landed afterwards, rewrote the
+  cache entry that had just been cleared and set `loadedImageId` back to the page id — so the effect
+  saw nothing to do. The guard that should have caught this, `if (selectedPage.id === currentPageId)`,
+  compared two values from the same closure and was always true, so every late response applied
+  unconditionally.
+
+  User-visible symptom: the "New layers available — refreshed" toast appears, and the reader keeps
+  showing stale layers until you navigate away and back.
+
+  Fixed with a cache-invalidation epoch (`cacheEpochRef` + a `cacheEpoch` state entry in the effect's
+  dependencies): the SSE handler bumps it, `fetchPageDetails` refuses to write a response whose epoch
+  is stale, and the tautological guard is replaced by `isCurrentRequest()`, which checks both the
+  epoch and the most recently requested page id — so a late response for a page you navigated away
+  from is dropped too. Reproduced deterministically with a 30 ms mocked response before the fix, and
+  that case is now a regression test. The test file's `useParams` mock is also reset per-test; it was
+  being set with `mockReturnValue` inside individual tests, which persists file-wide and made the
+  suite order-dependent.
 
 ### Audited & Verified Completed Items (Git History & Code Base Audit)
 
