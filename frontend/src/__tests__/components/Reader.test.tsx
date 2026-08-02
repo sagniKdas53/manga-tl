@@ -74,7 +74,7 @@ describe("Reader Component", () => {
     processingProgress: 0,
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
     mockSafeFetch.mockReset();
     mockSubscribe.mockClear();
@@ -84,6 +84,10 @@ describe("Reader Component", () => {
       json: () => Promise.resolve([]),
     });
     mockNavigate.mockClear();
+    // Tests below override useParams with mockReturnValue, which persists for
+    // the rest of the file. Reset it so tests do not depend on their order.
+    const { useParams } = await import("react-router-dom");
+    vi.mocked(useParams).mockReturnValue({ pageNumber: "1" });
   });
 
   it("renders reader component basic controls", async () => {
@@ -235,6 +239,57 @@ describe("Reader Component", () => {
       expect(
         fetchUrls.some((url) => url.includes("p1") || url.includes("img1")),
       ).toBe(true);
+    });
+  });
+
+  it("refreshes on job_update even when the first page fetch is still in flight", async () => {
+    // Regression: the SSE handler busts pageDetailsCache, but a request started
+    // before the bust used to refill the cache and set loadedImageId back to
+    // the page id — swallowing the invalidation so no refetch ever happened.
+    mockSafeFetch.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () => resolve({ ok: true, json: () => Promise.resolve([]) }),
+            30,
+          ),
+        ),
+    );
+
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />,
+    );
+
+    await screen.findByText(/Test Series/);
+
+    const sseCallback = (
+      mockSubscribe.mock.calls as [
+        ((event: { type: string; data: string }) => void)?,
+      ][]
+    )[0]?.[0];
+    expect(sseCallback).toBeDefined();
+
+    // Fire the job completion while the initial /api/pages/p1 fetch is pending.
+    mockSafeFetch.mockClear();
+    sseCallback?.({
+      type: "job_update",
+      data: JSON.stringify({
+        status: "COMPLETED",
+        imageId: "img1",
+        type: "ocr",
+      }),
+    });
+
+    await waitFor(() => {
+      const urls = mockSafeFetch.mock.calls.map((call) => call[0] as string);
+      expect(urls).toContain("/api/pages/p1");
     });
   });
 
