@@ -21,6 +21,19 @@ misconception, not a bug — see [slot_allocation.md](./slot_allocation.md) §6:
 single Heavy slot with panel-detection/re-OCR jobs, but it's polled first in priority order, so
 in practice it isn't actually starved. Measured queue depth at OCR dispatch time was always 0.
 
+**Update 2026-08-02 — measured, root cause found.** The first fully-drained run
+(`logs/runs/20260802-163445`, 42 pages, 255 jobs, 100% dispatch-log coverage) split queue wait
+from work for the first time. Full analysis:
+[perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md).
+
+> **90.8% of total job lifetime is queue wait** — 49,073 s of waiting against 4,959 s of work.
+> `layout` has a p50 wait of **591 s** around **0.2 s** of actual work.
+
+The cause is **not** the dispatcher (slots sat idle *with work queued* only 3.2% of samples) and
+**not** the rate limiter (AUDIT-W2, falsified below). It is `MAX_LIGHT_SLOTS=1`: four light stages
+costing 0.2 s to 110 s each share one slot, so trivial jobs queue behind LLM calls. See
+**AUDIT-W10**. The heavy tier is no longer the floor — the light tier is now 4× slower.
+
 The queue docs were checked and are current as of 2026-08-01:
 [slot_allocation.md](./slot_allocation.md) and
 [translation_pipeline_phases.md](./translation_pipeline_phases.md) reflect the current
@@ -42,8 +55,30 @@ when loading a new one seems to still exist.
 Also when there are too many jobs the queue and notification managers have noticeable lag.
 
 **Update:** the frontend bundle-splitting fix (see [archive.md](./archive.md)) addresses initial
-load weight, but that's load-time, not runtime — the remaining lag described above is still
-open and still needs the Firefox profiling pass.
+load weight, but that's load-time, not runtime.
+
+**Update 2026-08-02 — profiling pass done.** See
+[perf_analysis_frontend_2026-08-02.md](./perf_analysis_frontend_2026-08-02.md). The "lag when many
+jobs are running" was largely a permanently-running CSS animation in the Queue Manager: **27.8% of
+one CPU core sustained to display a static list**, via the 60 fps refresh-driver/WebRender loop
+rather than restyle. All custom `@keyframes` have been removed from the frontend (commit `bcc86e0`);
+loading state is MUI `CircularProgress`, and any future motion should use a MUI transition.
+
+"Most probably the backend holding it back" is **falsified**: backend CPU averaged 3.8% across the
+drained run. Two items remain open — per-chapter GC churn (2.93 s of major GC per 55 s window) and
+per-chapter GC churn (2.93 s of major GC per 55 s window).
+
+**Verified 2026-08-02 (run `20260802-210118`).** Post-fix the Queue Manager costs **1.0% of one
+core** where it cost 27.8%, with **zero** `CSS animation iteration` markers and `RefreshDriverTick`
+down from 59.68/s to 2.24/s.
+
+The two remaining complaints are measured, and neither is fixable in frontend code:
+
++ **"Noticeable lag when background jobs are running"** — app CPU is only 4.9% of a core; **71% of
+  LongTask wall time is the main thread descheduled**, not computing. Containers hit p95 204% of a
+  400% box. Host CPU contention. See AUDIT-W10's interaction note.
++ **"Reader has some lag"** — 18.9% of a core, 41% descheduled. Of 8.80 s of JS self CPU, **app code
+  is 0.715 s (8%)**; the rest is React reconciliation (2.71 s) and MUI (~2.1 s). See AUDIT-F2.
 
 ---
 
@@ -224,9 +259,14 @@ four providers). `enqueueJobDirectly` uses those keys correctly. But
 | `:619` qaLlmModel | `"translation"` | ❌ (should be `qaLLM`) |
 | `:621` qaVlmModel | `"qa"` | ❌ (should be `qaVLM`) |
 
-`ProviderConfigCache.isValidProviderModel:155-156` does `pData.models.get(task)` and returns
-`false` on a null list, so `resolveModelWithCheck` **always** discards the resolved value and
-returns the global default. Net effect: the duplicate-page config comparison in
+**Confirmed 2026-08-02.** `ProviderConfigCache.isValidProviderModel` does `pData.models.get(task)`
+and returns `false` on a null list, so `resolveModelWithCheck` **always** discards the resolved
+value and returns the global default.
+
+Scope correction: `resolveConfigForChapter` is **not on the dispatch path**. The job payload is
+built by `enqueueJobDirectly`, which passes the correct keys (`tl`, `qaLLM`, `qaVLM`) and uses a
+plain `resolveModel` — no validity check — for `ocrModel`. So the pipeline is unaffected; the defect
+is confined to the duplicate-page config comparison in `PageController` and `SeriesController`. Net effect: the duplicate-page config comparison in
 `PageController:118-119` and `SeriesController:313-314` compares global defaults against global
 defaults, so it will report two chapters as configuration-identical when they are not, and the
 clone path will make the wrong call about whether OCR/TL data can be reused.
@@ -249,8 +289,12 @@ The user-visible symptom is a pipeline that stops at a stage with no error anywh
 `return`s, abandoning the rest of the loop. `HEAVY_QUEUES` is ordered
 `[qa-re-ocr, region-redo-ocr, ocr, panel-detection]`, so a single stuck job on `queue:qa-re-ocr`
 prevents `queue:ocr` from being polled *at all* for that cycle. `continue` to the next queue is
-almost certainly what was meant. This is head-of-line blocking across unrelated work and is a
-direct contributor to the throughput complaint at the top of this file.
+almost certainly what was meant. This is head-of-line blocking across unrelated work.
+
+**Measured 2026-08-02: real bug, not currently costing throughput.** On the drained run a slot sat
+idle *with work queued in its own class* in only **3.2%** (light) / **1.3%** (heavy) of 3,253
+samples. Worth fixing as a latent correctness issue, but it is not the cause of the throughput
+complaint at the top of this file — see AUDIT-W10.
 
 #### AUDIT-P4 **[H]** — job recovery re-runs work the worker is still doing
 
@@ -266,6 +310,11 @@ Because none of the callback handlers are idempotent (`handleOcrCallback:734-817
 produces **a second full set of `ocr_regions`, a second layer, and double-counted cost**. There is
 no dedup key, and the `jobId` that would provide one is already in the payload but unused
 (AUDIT-P5).
+
+**Confirmed 2026-08-02 — this is the one correctness defect measurably costing work.** The drained
+run logged **277 dispatches for 255 jobs (22 re-dispatches)** and produced 12 duplicate
+`(subject, type)` rows across 4 subjects; `e185e276` ran `translation`, `qa` **and** `render` 3×
+each. `translation` shows n=50 for 42 pages.
 
 `worker_pull_model.md` §5.4 already proposes the cancellation tombstone that fixes half of this;
 the idempotency half is not tracked anywhere.
@@ -339,10 +388,15 @@ to the `RATE_LIMIT` env var under the lock key `"global"` (`:37`). `.env.example
 `RATE_LIMIT=10`, i.e. **one LLM call every 6 seconds across the entire worker** — OCR, translation
 and QA all queue behind the same token bucket, regardless of which provider each is hitting.
 
-With 50 pages × (1 TL + 1 QA + n OCR) calls this alone accounts for a large share of the 2-hour
-run. It is a much bigger throughput lever than the dispatcher poll interval that was already fixed,
-and it is not mentioned in `slot_allocation.md`. Per-provider limits should come from
-`providers.json`; the global fallback should default to unlimited.
+**FALSIFIED IN PRACTICE 2026-08-02 — deprioritised.** The code reading above is correct, but the
+fallback never engages: all four providers in `config/providers.json` carry their own `rate_limits`
+(openrouter 40, cloudflare 40, nvidia 40, neurometric 60), so the `"global"` bucket is never used.
+Measured on the drained run: **0.0 s of sleep across 1 sleep** in 7,924 s.
+
+This item was previously ranked "likely the single largest throughput win available". It is inert.
+The hardening is still worth doing — the global fallback should default to unlimited so that adding
+a provider without `rate_limits` does not silently throttle everything — but it buys no throughput
+today.
 
 #### AUDIT-W3 **[M]** — cooldowns and lock waits burn a job slot doing nothing
 
@@ -373,6 +427,51 @@ The worker will accept a light job into a spare global slot (`main.py:171-175`) 
 `WorkerDispatcherService:318` `hasLightSlot() → activeLight < maxLight && activeTotal < maxTotal`,
 which never allows the overflow. So the feature can only ever fire for a job the dispatcher would
 not have sent. Either teach the dispatcher about it or delete the flag.
+
+**Confirmed 2026-08-02.** Across 3,253 samples of a clean drained run, `active_light` **never
+exceeded 1**, despite the worker reporting `reuse_idle_slots=true` and the heavy slot being free
+95.9% of the time. Every previous run that touched this was contended; this one was not.
+
+#### AUDIT-W10 **[C]** — `MAX_LIGHT_SLOTS=1` serialises four wildly different workloads
+
+*Added 2026-08-02 from the first drained run. This is the largest measured throughput lever in the
+codebase and it is a config change, not code.*
+
+`environment.md` for run `20260802-163445`:
+
+```
+max_concurrent_jobs=2, max_heavy_slots=1, max_light_slots=1, reuse_idle_slots=true
+```
+
+Four light stages share that one slot, and their per-job costs differ by three orders of magnitude:
+
+| light stage | total work | share of light tier | work p50 |
+| --- | ---: | ---: | ---: |
+| qa | 2,083 s | 52.4% | 53.8 s |
+| translation | 1,774 s | 44.6% | 30.5 s |
+| render | 96 s | 2.4% | 1.0 s |
+| layout | 24 s | 0.6% | **0.2 s** |
+
+So a **0.2 s** layout job queues behind 30–110 s LLM calls, one at a time, for a **591 s median
+wait**. Little's law closes the loop: mean layout queue depth 4.49 × 7,924 s ÷ 42 jobs = 847 s
+predicted vs 879 s measured.
+
+**The tier that bounds throughput has flipped.** Every throughput argument in `docs/` still assumes
+the single heavy slot is the floor — true when OCR was 13.7 s/page and QA was ~0.2 s/page. Today:
+
+| tier | per page | pages/min bound |
+| --- | ---: | ---: |
+| heavy (`ocr`, `panel-detection`) | 23.4 s | 2.57 |
+| **light** (`qa`, `translation`, `render`, `layout`) | **94.7 s** | **0.63** |
+
+The light tier is **4× slower** than the heavy tier, and the heavy slot sits idle 95.9% of the time.
+Headroom is available — worker CPU averaged **22.5%** (p95 191% of its 200% cap), and light work is
+network-bound LLM calls, not CPU.
+
+Raising `MAX_LIGHT_SLOTS` (and `CONCURRENT_JOBS` with it) attacks 99% of the measured queue wait.
+Note AUDIT-W6 below: the slot maths is unvalidated, so change both knobs together and check the
+resulting values. Interacts with AUDIT-W3 — light jobs that block on cooldowns/locks hold a slot,
+which matters more, not less, once several run concurrently.
 
 #### AUDIT-W6 **[M]** — slot maths can compute to zero or negative with no validation
 
@@ -781,12 +880,34 @@ Both are an assistant reasoning with itself, left in the source. Worth a grep fo
 
 ### Suggested fix order
 
+**Revised 2026-08-02** against measured data from the first drained run
+([perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md)). The previous
+ordering ranked AUDIT-W2 as "likely the single largest throughput win available" — it is inert, and
+the item that actually holds throughput (**AUDIT-W10**) was not in the list at all, because no run
+had ever drained.
+
 1. **AUDIT-S1 / S2 / S3** — the fail-open secrets. One afternoon, removes the worst exposure.
+   Unchanged: severity is independent of the perf data.
 2. **AUDIT-D1** — confirm whether backups are actually running. Everything else is recoverable.
-3. **AUDIT-P2 / P3 / B1** — the three dispatcher defects. Together they explain more of the queue
-   behaviour than the poll interval that was already fixed, and they are small, local changes.
-4. **AUDIT-W2** — the global `RATE_LIMIT`. Likely the single largest throughput win available.
+3. **AUDIT-W10** — raise `MAX_LIGHT_SLOTS`. Config-only, attacks 99% of measured queue wait, and
+   nothing else on this list moves throughput comparably. Change `CONCURRENT_JOBS` with it and
+   sanity-check AUDIT-W6's arithmetic. Re-run the drained capture afterwards to confirm.
+4. **AUDIT-P4** — duplicate work. The one correctness defect measurably costing work today
+   (22 re-dispatches / 255 jobs). Needs callback idempotency, not just the tombstone.
 5. **AUDIT-P1 / W1** — the provider/task-key mismatches. Both are silent-wrong-answer bugs, which
-   are the expensive kind.
+   are the expensive kind. The display half of P1 is already fixed; the clone-path half is not.
 6. **AUDIT-T2** — the error-branch tests, before the mock-router build rather than after.
-7. Everything else as it is touched.
+7. **AUDIT-P2 / P3 / B1** — the dispatcher defects. Demoted from #3: all three are real, but the
+   drained run shows they are costing ~nothing right now (3.2% / 1.3% starvation, 0 stranded jobs).
+   Fix as latent correctness, not as a throughput measure.
+8. **AUDIT-W2** — demoted from #4. Falsified in practice; keep only the "global fallback should be
+   unlimited" hardening so a future provider without `rate_limits` cannot silently throttle
+   everything.
+9. Everything else as it is touched.
+
+**Not on this list on purpose:** the [worker pull model](./worker_pull_model.md). Measured, it would
+remove **408 s of 49,058 s of queue wait (0.83%)**. Worth building for latency, resilience and
+multi-worker scaling — not for throughput, and not before #3.
+
+**Untriaged:** `translation` failed **11 of 50 (22%)** on the drained run, with 33 tracebacks in
+`worker.log`. No audit item covers this yet; it may belong above #4.

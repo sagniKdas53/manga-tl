@@ -8,6 +8,21 @@
 > Context: the immediate fix (restoring the dispatcher poll to 2s) is already applied — see
 > `docs/slot_allocation.md` §5. This doc is the next step.
 
+> ## ⚠️ Priority verdict — 2026-08-02: DO NOT prioritise this for throughput
+>
+> The first fully-drained run (`logs/runs/20260802-163445`, 42 pages, 255 jobs, 100% dispatch-log
+> coverage) measured what pull would actually recover, and it is **0.83%**. See §6.1 below and
+> [perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md).
+>
+> The premise in §2 and §6 — that the single **heavy** slot is the throughput floor — has since
+> **inverted**. The light tier is now 4× slower than the heavy tier, and `MAX_LIGHT_SLOTS=1` is
+> the real bottleneck. Sections 2 and 6 are preserved below as written but are superseded by §6.1.
+>
+> This design is still worth doing **for its qualitative wins** — sub-second tail latency, removing
+> the dispatcher as a single point of failure, native multi-worker scaling — which §2 always stated
+> honestly. Just do not schedule it expecting a throughput improvement, and do it *after* the slot
+> config change, which is config-only and attacks 99% of the measured wait.
+
 ---
 
 ## 1. Current model: backend push + fixed cadence
@@ -232,6 +247,48 @@ Notes:
   borrowing the idle heavy slot.
 - Pull's qualitative wins — latency, no single point of failure, multi-worker scaling —
   do not show in the throughput column.
+
+---
+
+## 6.1 Measured against a drained run — 2026-08-02
+
+§6 above was estimated from `run-3-fresh.log`. Run `20260802-163445` is the first run that drained
+to idle with per-job dispatch timestamps, so the poll-boundary cost can now be measured rather than
+bounded. Method and full numbers in
+[perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md).
+
+**The prediction in §6 was correct, and it is small.** For every stage that is not slot-blocked,
+`Enqueue → Dispatch` lands at 1.1–1.8 s p50 — exactly the "up to 2s" poll boundary this document
+predicts. Pull would take that to ~0.
+
+```
+total Enqueue -> Dispatch wait   49,058 s
+poll-boundary component (<=2s)      408 s   = 0.83% of queue wait, 5.15% of the run
+```
+
+**What §2 and §6 get wrong is which slot is the floor.** Both assume the heavy tier bounds
+throughput ("OCR runs ~13.7s/page on CPU… ~4 pages/min"). Measured today:
+
+| tier | per page | pages/min bound | §6 assumed |
+| --- | ---: | ---: | --- |
+| heavy (`ocr`, `panel-detection`) | 23.4 s | 2.57 | the floor |
+| **light** (`qa`, `translation`, `render`, `layout`) | **94.7 s** | **0.63** | "mostly absorbed by `REUSE_IDLE_SLOTS`" |
+
+The per-phase table in §6 is also stale — `qa` has gone from ~0.2 s to **53.8 s** and `translation`
+from 7.4 s to **30.5 s**, because both now make real LLM/VLM calls. `layout` is 0.2 s, not 0.7 s.
+
+Two further corrections to §6's notes:
+
+- **`REUSE_IDLE_SLOTS` absorbs nothing.** It never fires — `active_light` never exceeded 1 across
+  3,253 samples on a clean drained run (AUDIT-W5, confirmed). The idle heavy slot, free 95.9% of the
+  time, is never borrowed.
+- **The "~10–25% throughput win" in §2 is too generous** for this workload. On these numbers it is
+  under 1%.
+
+**Conclusion.** Implement for latency, resilience and multi-worker scaling — all real, none of them
+throughput. Sequence it *after* raising `MAX_LIGHT_SLOTS`, and re-measure the poll boundary
+afterwards: once several light jobs run concurrently, handoff granularity matters more than it does
+at a concurrency of one, so pull's share should be re-derived rather than carried forward from here.
 
 ---
 
