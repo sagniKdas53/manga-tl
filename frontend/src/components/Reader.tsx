@@ -206,6 +206,15 @@ export const Reader: React.FC<ReaderProps> = ({
   >({});
   const prefetchQueue = useRef<Set<string>>(new Set());
   const prefetchedImageUrls = useRef<Set<string>>(new Set());
+  // Bumped whenever the details cache is invalidated (e.g. a job completed for
+  // the open page). Requests started before the bump are stale: they must not
+  // repopulate the cache nor mark the page as loaded, otherwise an invalidation
+  // that lands while a fetch is in flight is silently lost.
+  const cacheEpochRef = useRef(0);
+  const [cacheEpoch, setCacheEpoch] = useState(0);
+  // Page id of the most recent request made by the page-details effect, so a
+  // late response for a page we already navigated away from is discarded.
+  const requestedPageIdRef = useRef<string | null>(null);
   const [zoom, setZoom] = usePersistedState("manga_zoom", 1.0);
 
   // Phase 4 Layer System states
@@ -342,11 +351,16 @@ export const Reader: React.FC<ReaderProps> = ({
                 `SSE event: Reloading page layers due to ${data.type} job completion`,
               );
 
-              // Bust cache for this page & image so fresh data is fetched
+              // Bust cache for this page & image so fresh data is fetched.
+              // Bumping the epoch also invalidates any request already in
+              // flight, which would otherwise refill the cache we just cleared.
               delete pageDetailsCache.current[selectedPage.id];
               delete pageDetailsCache.current[selectedPage.imageId];
+              prefetchQueue.current.delete(selectedPage.id);
+              cacheEpochRef.current += 1;
 
               Promise.resolve().then(() => {
+                setCacheEpoch(cacheEpochRef.current);
                 setLoadedImageId(null);
               });
               showToast("New layers available — refreshed", "success");
@@ -584,6 +598,7 @@ export const Reader: React.FC<ReaderProps> = ({
         return pageDetailsCache.current[cacheKey];
       }
 
+      const epoch = cacheEpochRef.current;
       const detailsUrl = `/api/pages/${pageId}`;
 
       const detailsRes = await safeFetch(detailsUrl, {
@@ -601,7 +616,10 @@ export const Reader: React.FC<ReaderProps> = ({
         layers: detailsData.layers || [],
       };
 
-      pageDetailsCache.current[cacheKey] = cachedData;
+      // Only cache if no invalidation happened while we were awaiting.
+      if (cacheEpochRef.current === epoch) {
+        pageDetailsCache.current[cacheKey] = cachedData;
+      }
       return cachedData;
     },
     [user.token],
@@ -640,9 +658,19 @@ export const Reader: React.FC<ReaderProps> = ({
         setLayers([]);
         setSelectedItem(null);
         setIsLoadingPageDetails(true);
+
+        // Snapshot what this request is for. A response is only applied if the
+        // reader still wants this page (no navigation) and the cache has not
+        // been invalidated meanwhile (no job completed for it).
+        const requestEpoch = cacheEpochRef.current;
+        requestedPageIdRef.current = currentPageId;
+        const isCurrentRequest = () =>
+          requestedPageIdRef.current === currentPageId &&
+          cacheEpochRef.current === requestEpoch;
+
         fetchPageDetails(currentPageId)
           .then((data) => {
-            if (selectedPage.id === currentPageId) {
+            if (isCurrentRequest()) {
               setPanels(data.panels);
               setOcrRegions(data.ocrRegions);
               setConversations(data.conversations);
@@ -659,7 +687,7 @@ export const Reader: React.FC<ReaderProps> = ({
           })
           .catch((err) => {
             console.error("Error loading page details:", err);
-            if (selectedPage.id === currentPageId) {
+            if (isCurrentRequest()) {
               setIsLoadingPageDetails(false);
             }
           });
@@ -718,7 +746,16 @@ export const Reader: React.FC<ReaderProps> = ({
         });
       }
     }
-  }, [selectedPage, loadedImageId, pages, fetchPageDetails, user.token]);
+    // cacheEpoch is a dependency so an invalidation re-runs this effect even
+    // when loadedImageId is already null and nothing else changed.
+  }, [
+    selectedPage,
+    loadedImageId,
+    pages,
+    fetchPageDetails,
+    user.token,
+    cacheEpoch,
+  ]);
 
   // Reset pan/zoom on page changes
   useEffect(() => {
