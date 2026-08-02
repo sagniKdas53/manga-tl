@@ -66,14 +66,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     return false;
   }
 
+  /**
+   * Header only. A {@code ?token=} fallback used to exist for {@code EventSource}, which cannot set
+   * headers — but Tomcat's access log recorded the full request line, so every SSE connection wrote
+   * a 24-hour bearer token into the log in plaintext (AUDIT-S4). SSE now authenticates with a
+   * single-use ticket via {@link SseTicketAuthFilter} instead.
+   */
   private String parseJwt(HttpServletRequest request) {
     String headerAuth = request.getHeader("Authorization");
     if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
       return headerAuth.substring(7);
-    }
-    String queryToken = request.getParameter("token");
-    if (StringUtils.hasText(queryToken)) {
-      return queryToken;
     }
     return null;
   }

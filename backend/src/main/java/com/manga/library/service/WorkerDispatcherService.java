@@ -257,8 +257,13 @@ public class WorkerDispatcherService {
                   response.statusCode(),
                   response.body());
             }
-          } catch (Exception e) {
+          } catch (java.io.IOException | RuntimeException e) {
             log.debug("Worker {} is unreachable: {}", workerUrl, e.getMessage());
+          } catch (InterruptedException e) {
+            // Restore the flag: this runs on the shared scheduler thread, and swallowing the
+            // interrupt outright would leave a shutting-down application still dispatching.
+            Thread.currentThread().interrupt();
+            log.debug("Interrupted while dispatching to worker {}", workerUrl);
           }
         }
 

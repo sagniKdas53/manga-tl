@@ -24,8 +24,10 @@ public class NotificationControllerTest {
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private SseService sseService;
+  @MockitoBean private com.manga.library.service.SseTicketService sseTicketService;
   @MockitoBean private UserRepository userRepository;
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
 
   @Test
   public void testStream_Unauthorized() throws Exception {

@@ -53,6 +53,7 @@ public class PageControllerTest {
   @MockitoBean private SseService sseService;
   @MockitoBean private LayerEditHistoryRepository layerEditHistoryRepository;
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
 
   @Test
   public void testGetPage_Success() throws Exception {

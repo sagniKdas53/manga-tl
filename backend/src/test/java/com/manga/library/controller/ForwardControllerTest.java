@@ -20,6 +20,8 @@ public class ForwardControllerTest {
 
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
 
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
+
   @Test
   public void testForwardFrontendPath() throws Exception {
     mockMvc

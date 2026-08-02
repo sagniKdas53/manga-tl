@@ -17,7 +17,7 @@ class UserTest {
         user.setPasswordHash("hash");
         user.setDisplayName("Test User");
         user.setRole("admin");
-        
+
         OffsetDateTime now = OffsetDateTime.now();
         user.setCreatedAt(now);
 
@@ -36,10 +36,10 @@ class UserTest {
 
         User u1 = new User();
         u1.setId(id1);
-        
+
         User u2 = new User();
         u2.setId(id1);
-        
+
         User u3 = new User();
         u3.setId(id2);
 
@@ -48,7 +48,7 @@ class UserTest {
         assertNotEquals(u1, u3);
         assertNotEquals(u1, null);
         assertNotEquals(u1, new Object());
-        
+
         assertEquals(u1.hashCode(), u2.hashCode());
     }
 

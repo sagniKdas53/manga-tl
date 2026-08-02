@@ -159,6 +159,7 @@ ALTER TABLE public.job_costs OWNER TO tladmin;
 CREATE TABLE public.jobs (
     id character varying(255) NOT NULL,
     attempt integer,
+    callback_applied_at timestamp(6) with time zone,
     created_at timestamp(6) with time zone,
     error text,
     image_id uuid,

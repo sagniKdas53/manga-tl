@@ -44,6 +44,7 @@ public class SeriesControllerTest {
   @MockitoBean private com.manga.library.service.ChapterExportService chapterExportService;
   @MockitoBean private SystemSettingsService systemSettingsService;
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
 
   @Test
   public void testGetSeries_NotFound() throws Exception {

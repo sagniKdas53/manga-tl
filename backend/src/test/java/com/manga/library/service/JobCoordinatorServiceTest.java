@@ -693,6 +693,110 @@ public class JobCoordinatorServiceTest {
     imageRepository.delete(image);
   }
 
+  /**
+   * AUDIT-P4: a job requeued by resetProcessingJobsToPending or recoverStaleProcessingJobs runs
+   * alongside the original worker, so the same job row produces two result callbacks. No handler
+   * was idempotent, so the second wrote a second full region set, a second layer and double-counted
+   * cost — 12 duplicate (subject, type) rows on the 2026-08-02 drained run.
+   */
+  @Test
+  public void testHandleOcrCallback_DuplicateIsIgnored() {
+    Image image = new Image();
+    image.setFilename("test_ocr_dupe.png");
+    image.setStoragePath("test/test_ocr_dupe.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    Job job = new Job();
+    job.setId(UUID.randomUUID().toString());
+    job.setType("ocr");
+    job.setImageId(image.getId());
+    job.setPageId(page.getId());
+    job.setStatus("PROCESSING");
+    jobRepository.save(job);
+
+    com.manga.library.dto.OcrCallbackDto.OcrRegionData r =
+        new com.manga.library.dto.OcrCallbackDto.OcrRegionData(
+            "test", "ja", 0.98, 0.0, 0, 0, 100, 100, null, 1, null, null, null, null, null, null,
+            null, 0.99, null, null, null, null, null);
+    com.manga.library.dto.OcrCallbackDto dto =
+        new com.manga.library.dto.OcrCallbackDto(
+            image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r));
+
+    jobCoordinatorService.handleOcrCallback(dto);
+
+    int layersAfterFirst = layerRepository.findByPageId(page.getId()).size();
+    int regionsAfterFirst = ocrRegionRepository.findByPageId(page.getId()).size();
+    assertEquals(1, layersAfterFirst, "the first callback should create the OCR layer");
+    assertEquals(1, regionsAfterFirst, "the first callback should create the region");
+
+    // The duplicate carries identical, valid content — it is rejected on identity, not on content.
+    jobCoordinatorService.handleOcrCallback(dto);
+
+    assertEquals(
+        layersAfterFirst,
+        layerRepository.findByPageId(page.getId()).size(),
+        "duplicate callback created a second layer");
+    assertEquals(
+        regionsAfterFirst,
+        ocrRegionRepository.findByPageId(page.getId()).size(),
+        "duplicate callback wrote a second region set");
+
+    Job reloaded = jobRepository.findById(job.getId()).orElseThrow();
+    assertNotNull(reloaded.getCallbackAppliedAt(), "the first callback should claim the job");
+
+    layerRepository.deleteAll(layerRepository.findByPageId(page.getId()));
+    ocrRegionRepository.deleteAll(ocrRegionRepository.findByPageId(page.getId()));
+    jobRepository.delete(reloaded);
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
+  /** A job that genuinely failed never claimed, so its retry must still be applied. */
+  @Test
+  public void testHandleOcrCallback_RetryOfAnUnclaimedJobIsApplied() {
+    Image image = new Image();
+    image.setFilename("test_ocr_retry.png");
+    image.setStoragePath("test/test_ocr_retry.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    Job job = new Job();
+    job.setId(UUID.randomUUID().toString());
+    job.setType("ocr");
+    job.setImageId(image.getId());
+    job.setPageId(page.getId());
+    job.setStatus("PENDING");
+    job.setAttempt(2);
+    jobRepository.save(job);
+
+    com.manga.library.dto.OcrCallbackDto.OcrRegionData r =
+        new com.manga.library.dto.OcrCallbackDto.OcrRegionData(
+            "test", "ja", 0.98, 0.0, 0, 0, 100, 100, null, 1, null, null, null, null, null, null,
+            null, 0.99, null, null, null, null, null);
+    jobCoordinatorService.handleOcrCallback(
+        new com.manga.library.dto.OcrCallbackDto(
+            image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r)));
+
+    assertEquals(1, layerRepository.findByPageId(page.getId()).size());
+
+    layerRepository.deleteAll(layerRepository.findByPageId(page.getId()));
+    ocrRegionRepository.deleteAll(ocrRegionRepository.findByPageId(page.getId()));
+    jobRepository.deleteById(job.getId());
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
   @Test
   public void testPrepareHybridQa() {
     Image image = new Image();
@@ -1698,6 +1802,59 @@ public class JobCoordinatorServiceTest {
     assertEquals("globalTlModel", config.tlModel());
     assertEquals("globalQa", config.qaProvider());
     assertEquals("globalQaMode", config.qaMode());
+  }
+
+  /**
+   * AUDIT-P1: resolveConfigForChapter passed pipeline stage names ("translation", "qa") as the
+   * providers.json task key, but that file keys its model lists tl / qaLLM / qaVLM / ocr. A
+   * mismatched key makes models.get(task) return null, isValidProviderModel return false, and
+   * resolveModelWithCheck discard the chapter override for the global default — so the
+   * duplicate-page comparison in PageController and SeriesController compared global defaults
+   * against global defaults and cloned data it should have regenerated.
+   */
+  @Test
+  public void testResolveConfigForChapter_UsesProvidersJsonTaskKeys() {
+    Chapter chapter = new Chapter();
+    chapter.setOcrProvider("p");
+    chapter.setOcrModel("chapterOcrModel");
+    chapter.setTlProvider("p");
+    chapter.setTlModel("chapterTlModel");
+    chapter.setQaProvider("p");
+    chapter.setQaLlmModel("chapterQaLlmModel");
+    chapter.setQaVlmModel("chapterQaVlmModel");
+
+    com.manga.library.dto.SystemSettingsDto globalSettings = new com.manga.library.dto.SystemSettingsDto(
+        null, null, null, null, null,
+        "globalOcr", "globalModel",
+        "globalTl", "globalTlModel",
+        "globalQa", "globalQaLlm", "globalQaVlm",
+        false, "localOcr", false, "globalQaMode", true,
+        null, null, null
+    );
+
+    com.manga.library.service.SystemSettingsService mockSystemSettingsService = mockGeneric(com.manga.library.service.SystemSettingsService.class);
+    when(mockSystemSettingsService.getSettings()).thenReturn(globalSettings);
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "systemSettingsService", mockSystemSettingsService);
+
+    // Only the real providers.json keys are recognised, exactly as ProviderConfigCache behaves.
+    com.manga.library.service.ProviderConfigCache mockProviderConfigCache = mockGeneric(com.manga.library.service.ProviderConfigCache.class);
+    when(mockProviderConfigCache.isValidProviderModel(any(), any(), any())).thenReturn(false);
+    when(mockProviderConfigCache.isValidProviderModel(eq("p"), any(), eq("ocr"))).thenReturn(true);
+    when(mockProviderConfigCache.isValidProviderModel(eq("p"), any(), eq("tl"))).thenReturn(true);
+    when(mockProviderConfigCache.isValidProviderModel(eq("p"), any(), eq("qaLLM"))).thenReturn(true);
+    when(mockProviderConfigCache.isValidProviderModel(eq("p"), any(), eq("qaVLM"))).thenReturn(true);
+    org.springframework.test.util.ReflectionTestUtils.setField(jobCoordinatorService, "providerConfigCache", mockProviderConfigCache);
+
+    JobCoordinatorService.ResolvedPipelineConfig config = jobCoordinatorService.resolveConfigForChapter(chapter);
+
+    assertEquals("chapterOcrModel", config.ocrModel());
+    assertEquals("chapterTlModel", config.tlModel(), "tl override was discarded — wrong task key");
+    assertEquals("chapterQaLlmModel", config.qaLlmModel(), "qaLLM override was discarded — wrong task key");
+    assertEquals("chapterQaVlmModel", config.qaVlmModel(), "qaVLM override was discarded — wrong task key");
+
+    verify(mockProviderConfigCache).isValidProviderModel("p", "chapterTlModel", "tl");
+    verify(mockProviderConfigCache).isValidProviderModel("p", "chapterQaLlmModel", "qaLLM");
+    verify(mockProviderConfigCache).isValidProviderModel("p", "chapterQaVlmModel", "qaVLM");
   }
 
   @SuppressWarnings("unchecked")

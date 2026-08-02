@@ -41,12 +41,15 @@ minio:
   secretKey: ${MINIO_SECRET_KEY:minioadmin}
   bucketName: manga-library
 
+# No fallbacks here on purpose (AUDIT-S1/S2). An unset secret must fail startup via
+# SecretsStartupValidator, not silently boot on a shared default. Dev values live in
+# application-local.yml, which production never activates.
 jwt:
-  secret: ${JWT_SECRET:5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437}
+  secret: ${JWT_SECRET:}
   expirationMs: 86400000 # 24 hours
 
 internal:
-  api-token: ${INTERNAL_API_TOKEN:manga-library-internal-token-12345}
+  api-token: ${INTERNAL_API_TOKEN:}
 
 worker:
   health-url: ${WORKER_HEALTH_URL:http://localhost:8000/health}
@@ -63,7 +66,9 @@ server:
   tomcat:
     accesslog:
       enabled: true
-      pattern: '%h %l %u %t "%r" %s %b %Dms'
+      # %U (path only), not %r (full request line) — %r includes the query string, which is how
+      # SSE session tokens ended up in the access log in plaintext (AUDIT-S4).
+      pattern: '%h %l %u %t "%m %U %H" %s %b %Dms'
 
 logging:
   level:

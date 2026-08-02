@@ -875,13 +875,13 @@ public class PageController {
       getPageRenderedFile(@PathVariable UUID pageId) {
     try {
       Objects.requireNonNull(pageId, "pageId cannot be null");
-      
+
       Page page = pageRepository.findById(pageId)
           .orElseThrow(() -> new ResourceNotFoundException("Page not found: " + pageId));
       UUID imageId = page.getImage().getId();
-      
+
       String storagePath = "rendered/" + imageId + ".png";
-      
+
       if (!minioService.fileExists(storagePath)) {
         storagePath = "rendered/" + pageId + ".png";
         if (!minioService.fileExists(storagePath)) {

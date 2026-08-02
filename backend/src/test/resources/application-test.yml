@@ -21,3 +21,11 @@ minio:
 worker:
   health-url: http://127.0.0.1:1/health
   urls: http://127.0.0.1:1
+
+# SecretsStartupValidator requires these to be non-blank; the "test" profile is on its
+# development list, so placeholder values are accepted here (AUDIT-S1).
+jwt:
+  secret: test-profile-jwt-secret-not-used-outside-tests-0000000000
+
+internal:
+  api-token: test-profile-internal-token

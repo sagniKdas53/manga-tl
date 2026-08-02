@@ -25,6 +25,7 @@ public class SettingsControllerTest {
 
   @MockitoBean private SystemSettingsService systemSettingsService;
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
 
   @Test
   public void testGetSettings() throws Exception {

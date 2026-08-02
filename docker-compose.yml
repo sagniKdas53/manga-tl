@@ -217,7 +217,9 @@ services:
       - QA_MODE=${QA_MODE:-auto}
       - RENDER_CACHE_DIR=/app/rendered_cache
       # Finally the remote workers, to distribute load to shouldn't this be added to the back-end
-      - CONCURRENT_JOBS=${CONCURRENT_JOBS:-2}
+      # See .env.example: raised from 2 on 2026-08-02 per AUDIT-W10, together with a light-slot
+      # default of CONCURRENT_JOBS - MAX_HEAVY_SLOTS = 4.
+      - CONCURRENT_JOBS=${CONCURRENT_JOBS:-5}
       - MAX_HEAVY_SLOTS=${MAX_HEAVY_SLOTS:-}
       - MAX_LIGHT_SLOTS=${MAX_LIGHT_SLOTS:-}
       - REUSE_IDLE_SLOTS=${REUSE_IDLE_SLOTS:-true}

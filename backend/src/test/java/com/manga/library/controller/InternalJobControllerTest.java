@@ -47,6 +47,7 @@ public class InternalJobControllerTest {
   @MockitoBean private SeriesRepository seriesRepository;
   @MockitoBean private SseService sseService;
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
   @MockitoBean private JobRepository jobRepository;
 
   @Test

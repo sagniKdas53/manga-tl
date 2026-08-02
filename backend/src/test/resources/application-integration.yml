@@ -16,3 +16,10 @@ minio:
 worker:
   health-url: http://127.0.0.1:1/health
   urls: http://127.0.0.1:1
+
+# See application-test.yml — the "integration" profile is likewise a development profile.
+jwt:
+  secret: integration-profile-jwt-secret-not-used-outside-tests-000000
+
+internal:
+  api-token: integration-profile-internal-token

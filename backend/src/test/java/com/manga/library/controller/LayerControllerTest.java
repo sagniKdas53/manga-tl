@@ -41,6 +41,8 @@ public class LayerControllerTest {
 
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
 
+  @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
+
   @MockitoSpyBean private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
   @Test

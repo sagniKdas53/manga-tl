@@ -48,6 +48,23 @@ public class Job {
   @Column(name = "updated_at")
   private OffsetDateTime updatedAt;
 
+  /**
+   * When this job's result callback was first applied, or null if none has been.
+   *
+   * <p>The dedup key for AUDIT-P4. Two paths requeue a job without telling the worker to stop —
+   * {@code resetProcessingJobsToPending} at every backend boot and {@code
+   * recoverStaleProcessingJobs} after ten minutes, which is shorter than a slow cloud-VLM OCR pass.
+   * The original worker keeps running, so the same job row ends up with two workers producing two
+   * result callbacks. No handler was idempotent, so the second one wrote a second full region set,
+   * a second layer, and double-counted cost. The drained run of 2026-08-02 logged 277 dispatches
+   * for 255 jobs and produced 12 duplicate (subject, type) rows.
+   *
+   * <p>Claimed through {@code JobRepository.claimCallback}, whose conditional UPDATE makes the
+   * check-and-set atomic even when both callbacks land at once.
+   */
+  @Column(name = "callback_applied_at")
+  private OffsetDateTime callbackAppliedAt;
+
   @PrePersist
   protected void onCreate() {
     createdAt = OffsetDateTime.now();
@@ -75,6 +92,14 @@ public class Job {
 
   public void setTraceId(String traceId) {
     this.traceId = traceId;
+  }
+
+  public OffsetDateTime getCallbackAppliedAt() {
+    return this.callbackAppliedAt;
+  }
+
+  public void setCallbackAppliedAt(OffsetDateTime callbackAppliedAt) {
+    this.callbackAppliedAt = callbackAppliedAt;
   }
 
   public String getType() {
