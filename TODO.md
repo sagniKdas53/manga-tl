@@ -13,6 +13,9 @@
 Carried over from the retired `docs/Next Steps.md`. The first three are the tail of the 2026-08-02
 audit batch and need a human, not code.
 
+> Analysing the run afterwards has its own handoff: **[next-step.md](./docs/next-step.md)** — baseline
+> numbers, six falsifiable predictions in the order to check them, and a prompt for that chat.
+
 - [ ] **Re-run the drained capture to confirm the AUDIT-W10 win.** `./scripts/capture-run.sh start`
   → ~20 pages end to end → drain fully → `stop`, then compare against the `20260802-163445`
   baseline. The slots went `1` → `4` light but the win is **unmeasured**; the headline number is
