@@ -44,6 +44,7 @@ export default defineConfig({
   },
   build: {
     minify: "esbuild",
+    sourcemap: true,
     esbuild: {
       drop: ["console", "debugger"],
     },
@@ -51,7 +52,10 @@ export default defineConfig({
       output: {
         manualChunks: (id) => {
           // React core — smallest possible initial chunk
-          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
+          if (
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/")
+          ) {
             return "vendor-react";
           }
           // MUI + emotion — large but stable; cache well between deploys

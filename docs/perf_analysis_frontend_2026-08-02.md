@@ -168,7 +168,8 @@ collapse, they were starvation.
 
 | # | fix | measured cost today | size | confidence |
 | --- | --- | --- | --- | --- |
-| 1 | Hoist `@keyframes queuePulse` to a single static definition; stop animating rows that aren't visible | 3822 animation events; 3–6× restyle/display-list cost | ~5 lines | High |
+| 1 | ~~Hoist `@keyframes queuePulse` to a single static definition~~ **done 2026-08-02** | 3–6× restyle/display-list cost | ~5 lines | High |
+| 1b | Stop animating rows that aren't visible | 3822 animation events | medium | Medium |
 | 2 | Cut per-chapter allocation churn | 2.93 s major GC per 55 s (5.3% of wall) | investigate first | Medium |
 | 3 | Optimise the two hot Reader-bundle closures | 2.44 s of 8.65 s LongTask CPU (28%) | unknown | **Blocked on sourcemaps** |
 | 4 | Memoise the MUI theme across toggles (AUDIT-F1) | 96 ms per toggle | small | High, low value |
@@ -216,5 +217,19 @@ One structural gap remains, and no re-run fixes it on its own:
 
 Re-derived over the full evening, `layout` has a p50 of **810 s** and a max of **2306 s** against an
 OCR p50 of 20 s. Almost all of that is queue wait, but nothing in the current instrumentation proves
-it. Fix by adding `started_at` to `jobs`, set at dispatch, or by logging the job id on the dispatch
-line.
+it.
+
+**Fixed 2026-08-02** (`WorkerDispatcherService.java:215`): the dispatch line now logs the job id.
+
+```
+Dispatched job <jobId> from queue:ocr to worker ... (activeHeavy=…, activeLight=…, activeTotal=…)
+```
+
+The payload's `jobId` is the `jobs.id` primary key — `JobCoordinatorService` sets both from one UUID
+— so `backend.log` joins directly to `jobs.csv`. From the next run onward:
+
+- **queue wait** = dispatch timestamp − `created_at`
+- **work** = `updated_at` − dispatch timestamp
+
+which is what deliverable #1 needs. This is instrumentation only; it adds no work to the dispatch
+path and cannot confound a throughput comparison.

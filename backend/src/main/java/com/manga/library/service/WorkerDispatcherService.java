@@ -181,9 +181,20 @@ public class WorkerDispatcherService {
 
           try {
             String targetUrl = workerUrl + "/api/v1/jobs/submit";
+            @SuppressWarnings("unchecked")
+            Map<String, Object> jobData = objectMapper.readValue(jobJson, Map.class);
+
+            // Logged on dispatch below. jobs has no dispatch timestamp, so this
+            // line is the only way to tell a stage's queue wait apart from its
+            // actual work: without it, updated_at - created_at is all we have and
+            // it conflates the two. payload "jobId" is the jobs.id primary key
+            // (JobCoordinatorService sets both from the same UUID), so a run's
+            // backend.log joins directly to jobs.csv.
+            String jobId = String.valueOf(jobData.getOrDefault("jobId", "unknown"));
+
             Map<String, Object> payload = new HashMap<>();
             payload.put("queue_name", queue);
-            payload.put("job_data", objectMapper.readValue(jobJson, Map.class));
+            payload.put("job_data", jobData);
 
             String jsonBody = objectMapper.writeValueAsString(payload);
 
@@ -212,8 +223,8 @@ public class WorkerDispatcherService {
               cap.activeTotal++;
               workerConsecutive429s.remove(workerUrl);
               log.info(
-                  "Dispatched job from {} to worker {} (activeHeavy={}, activeLight={}, activeTotal={})",
-                  queue, workerUrl, cap.activeHeavy, cap.activeLight, cap.activeTotal);
+                  "Dispatched job {} from {} to worker {} (activeHeavy={}, activeLight={}, activeTotal={})",
+                  jobId, queue, workerUrl, cap.activeHeavy, cap.activeLight, cap.activeTotal);
               break;
             } else if (response.statusCode() == 400 || response.statusCode() == 422) {
               // Permanent rejection — payload invalid; do not re-queue

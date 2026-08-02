@@ -232,6 +232,14 @@ services:
       - PADDLEOCR_DET_MODEL=${PADDLEOCR_DET_MODEL:-PP-OCRv6_medium_det}
       - PADDLEOCR_REC_MODEL=${PADDLEOCR_REC_MODEL:-PP-OCRv6_medium_rec}
       - PADDLEOCR_DEVICE=${PADDLEOCR_DEVICE:-cpu}
+      # Must stay in step with the CPU quota under `deploy` below. Neither Paddle
+      # nor OpenMP can see a cgroup quota: they size their thread pools from the
+      # host's core count and would start 4 threads that then contend for 2 cores'
+      # worth of runtime. The context switching costs more than the cap saves, so
+      # the limit and the thread count have to be raised or lowered together.
+      - OMP_NUM_THREADS=${WORKER_THREADS:-2}
+      - MKL_NUM_THREADS=${WORKER_THREADS:-2}
+      - OPENBLAS_NUM_THREADS=${WORKER_THREADS:-2}
     depends_on:
       - redis
       - minio
@@ -257,6 +265,27 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+    # Measured on the 2026-08-01 runs: the worker is the sustained CPU consumer
+    # (mean 76-93%, peak 216%, above 150% in 22 of 54 samples) while db and redis
+    # sit near 2%. With every container together peaking at 279% of a 4-core box,
+    # the browser was left competing for scraps, and two thirds of the Queue
+    # Manager jank measured as main-thread time where no work happened at all.
+    # Capping the worker at 2 CPUs leaves 2 cores for the UI and everything else.
+    #
+    # Compose honours these without Swarm from V2 onward (this is V5); the old
+    # advice that `deploy` only applies to `docker stack deploy` is out of date.
+    #
+    # The memory cap is a blast radius, not a target: observed peak was 2.1 GiB,
+    # so 4g is roughly 2x headroom. Exceeding it kills the container rather than
+    # the host, which on this box also means killing the desktop session.
+    deploy:
+      resources:
+        limits:
+          cpus: "${WORKER_CPUS:-2.0}"
+          memory: ${WORKER_MEMORY:-4g}
+        reservations:
+          cpus: "0.5"
+          memory: 512m
 
 networks:
   manga-net:
