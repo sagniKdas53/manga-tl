@@ -374,7 +374,8 @@ cmd_stop() {
     echo "# Log signals"
     echo
     echo "## Backend"
-    for pat in "Dispatched job from" "not dispatched" "permanently rejected" "returned 429" \
+    # "Dispatched job <id> from queue:X" — the id was added 2026-08-02, so match around it.
+    for pat in "Dispatched job .* from" "not dispatched" "permanently rejected" "returned 429" \
                "Cooling down" "No free .* slot" "Recovering stale" "exhausted max attempts" \
                "falling back to the first one" "DEBUG_TL"; do
       printf '  %-42s %s\n' "$pat" "$(grep -Ec "$pat" "$run/backend.log" 2>/dev/null | head -1)"

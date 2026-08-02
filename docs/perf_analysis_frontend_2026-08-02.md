@@ -89,6 +89,10 @@ Emotion. I cannot name the two functions — the deployed bundles ship without s
 sources carry content, and the Reader bundle has no `sourceMapURL`). Fixing that is a prerequisite
 for acting on this item.
 
+> **Superseded 2026-08-02** — see [§4 of the verification run](#4-audit-f2-item-3--resolved-after-being-blocked-since-2026-08-01).
+> The two closures are React reconciliation, not the Reader bundle; the original attribution was a
+> bundle mix-up.
+
 ### The "old chapter content stays visible" bug: **FIXED, confirmed by the profile**
 
 Matches `NOTES.md`. There is no long paint of stale content; the spinner path is taken instead.
@@ -171,7 +175,8 @@ collapse, they were starvation.
 | 1 | ~~Hoist `@keyframes queuePulse` to a single static definition~~ **done 2026-08-02** | 3–6× restyle/display-list cost | ~5 lines | High |
 | 1b | Stop animating rows that aren't visible | 3822 animation events | medium | Medium |
 | 2 | Cut per-chapter allocation churn | 2.93 s major GC per 55 s (5.3% of wall) | investigate first | Medium |
-| 3 | Optimise the two hot Reader-bundle closures | 2.44 s of 8.65 s LongTask CPU (28%) | unknown | **Blocked on sourcemaps** |
+| 3 | ~~Optimise the two hot Reader-bundle closures~~ **withdrawn 2026-08-02** — React reconciliation, not app code | — | — | Resolved |
+| 3b | Cut `useButtonBase` cost in the reader (fewer button re-renders, or disable ripples on hot ones) | 1.023 s of 8.80 s JS self CPU (12%) | unknown | High |
 | 4 | Memoise the MUI theme across toggles (AUDIT-F1) | 96 ms per toggle | small | High, low value |
 
 Items 2 and 3 are deliberately not costed. For #3 the data cannot name the function; for #2 it shows
@@ -181,8 +186,11 @@ the GC but not the allocator.
 
 ## 6. Changes to the capture method
 
-1. **Build with sourcemaps** for profiling runs. This is the single change that unblocks the largest
-   measured item. Everything else is guesswork while frames read `io/qn</t/xe<`.
+1. ~~**Build with sourcemaps** for profiling runs.~~ **Done** — `vite.config.ts` sets
+   `sourcemap: true`. Two gotchas found in use: the profiler records `sourceMapURL` but does **not**
+   embed sourcemap content, so saved profiles still show minified names and must be resolved offline
+   against the `.map` files in the deployed jar; and `funcTable.source` cannot be trusted to say
+   which bundle a frame came from — match by line/column geometry instead.
 2. **Profile the frontend with the pipeline idle**, at least once, to separate CPU starvation from
    frontend cost on a 4-core box.
 3. **Keep profiles to 10–20 s** as the playbook says. The 528 s queue capture dilutes its own
@@ -233,3 +241,102 @@ The payload's `jobId` is the `jobs.id` primary key — `JobCoordinatorService` s
 
 which is what deliverable #1 needs. This is instrumentation only; it adds no work to the dispatch
 path and cannot confound a throughput comparison.
+
+---
+
+# Verification run `20260802-210118` — after the fixes
+
+Three profiles taken against the rebuilt image (animation removal + sourcemaps + the chapter-card
+model fix), batched by interaction. App process is `Isolated Web Content` pid 1539590 in all three —
+selected by matching `usedInnerWindowIDs` against the `tlhub` page, because the **Parent Process
+also references that window** and out-scores the content process on CPU in the reader profile.
+Picking by CPU alone gives you Firefox's extension machinery, not the app.
+
+| profile | window | app CPU | % of one core | LongTask n | LT wall | LT CPU | descheduled |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| A — add 20 jobs, pause, scroll | 301.5 s | 3.16 s | **1.0%** | 25 | 4.76 s | 1.49 s | 69% |
+| B — resume jobs (background load) | 150.0 s | 7.41 s | 4.9% | 62 | 10.87 s | 3.21 s | 71% |
+| C — reader interaction | 82.6 s | 15.63 s | 18.9% | 107 | 16.14 s | 9.52 s | 41% |
+
+## 1. The animation removal is confirmed
+
+| | before (queue mgr, 2026-08-01) | after (profile A) |
+| --- | ---: | ---: |
+| `CSS animation iteration` markers | 3822 `animationiteration` events, #1 DOM event | **0** |
+| `RefreshDriverTick` | 59.68 /s | **2.24 /s** |
+| app CPU to display a static list | **27.8% of one core** | **1.0%** |
+
+> **27.8% of a core → 1.0%.** `animationiteration` no longer appears in the top DOM events at all.
+
+## 2. The one remaining animation is deliberate
+
+Profile B contains 6 `CSS animation iteration` markers, each **exactly 1400 ms**. That is MUI
+`CircularProgress`'s indeterminate cycle (1.4 s), not the removed 1.3 s `queuePulse`. It only ticks
+while a spinner is on screen, and the `<CircularProgress>` sites were kept on purpose. 8.4 s of
+animation in a 150 s window — leave it.
+
+## 3. "Lag when background jobs run" is host CPU contention, not frontend code
+
+Profile B, taken deliberately under load:
+
+- App CPU is **4.9% of one core**. The frontend is barely working.
+- LongTask wall **10.87 s** vs CPU **3.21 s** — **71% of the jank is the main thread descheduled**,
+  not computing.
+- Containers reach p95 **204%** of a 400% box (worker max 207%, backend max 154.8%), and Firefox's
+  own parent + WebExtensions processes take more on top.
+
+This is the same conclusion as §4 of the 2026-08-01 analysis, now measured with the animation gone,
+so it can no longer be confounded by it. **No frontend change will fix this** — it is the browser
+competing with the pipeline for four cores.
+
+> **Interaction to watch:** AUDIT-W10 recommends raising `MAX_LIGHT_SLOTS`. That raises worker
+> concurrency and therefore contention. Light work is network-bound LLM calls so the CPU cost should
+> be modest, but if the UI gets worse under load after that change, this is why — cap the worker's
+> CPU rather than reverting the slot change.
+
+## 4. AUDIT-F2 item #3 — resolved, after being blocked since 2026-08-01
+
+Sourcemaps now ship (`map=YES` on every app bundle). The profiler records `sourceMapURL` but does
+**not** embed sourcemap content, so the saved JSON still shows minified names — resolution has to be
+done offline against the `.map` files, which are in the deployed jar under
+`BOOT-INF/classes/static/assets/`.
+
+Reader JS self CPU, **8.80 s**, by original source file:
+
+| self CPU | original source | |
+| ---: | --- | --- |
+| 2.706 s | `react-dom/cjs/react-dom-client.production.js` | reconciliation |
+| **1.023 s** | `@mui/material/ButtonBase/useButtonBase.mjs` | **biggest single non-React item** |
+| **0.475 s** | **`src/utils/fitText.ts`** | **top app file** |
+| 0.386 s | `react/cjs/react.production.js` | |
+| 0.260 s | `@mui/system/createStyled/createStyled.mjs` | |
+| **0.240 s** | **`src/components/Reader.tsx`** | |
+| 0.222 s | `@mui/system/styleFunctionSx/styleFunctionSx.mjs` | |
+| 0.275 s | `@emotion/serialize` + `@emotion/cache` | combined |
+
+> **App code is 0.715 s of 8.80 s — 8%.** The reader is slow because of React reconciliation and
+> MUI, not because of our logic.
+
+**The two unnamed closures are not our code.** The 2026-08-01 analysis blamed `io/qn</t/xe<` and
+`io/qn</t/F<` (2.44 s of 8.65 s) on the Reader bundle. Their analogues here —
+`Br/<.children<.children<` and `io/<.children<.children<` — carry generated positions on line 8 at
+columns 130043 / 130759. The Reader bundle is only 4 lines long; **`vendor-react` line 8 is 132,536
+characters**, and both resolve to `react-dom-client.production.js:12679` and `:12772`. The old
+finding attributed React internals to the Reader chunk.
+
+**AUDIT-F2's mechanism needs one more amendment.** "Emotion insertion is the cost" was falsified
+(`t.insert` never above 0.073 s) and that still holds — but the `sx` pipeline *does* cost about
+**0.85 s (≈10% of JS self CPU)**, spread across `styleFunctionSx`, `createStyled` and Emotion's
+serialize/cache rather than concentrated in `insert`. Hoisting static `sx` objects is still worth
+doing; it is just worth ~10%, not the headline.
+
+**The actionable target is `useButtonBase` at 1.023 s (12%)** — MUI's ButtonBase hook, running for
+every `Button` / `IconButton` / `MenuItem` / `Tab` in the reader chrome. Worth checking how many
+button instances re-render per interaction, and whether ripples can be disabled on the hot ones.
+
+## 5. Method note for the next run
+
+`funcTable.source` **cannot be trusted** to identify which bundle a frame came from — it
+mis-attributed both React frames above to the Reader chunk. Resolve by geometry instead: try every
+`.map`, keep the candidate with a mapping segment at or just before the target column on that
+generated line. That is what produced the table in §4.

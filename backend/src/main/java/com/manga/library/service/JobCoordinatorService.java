@@ -557,18 +557,24 @@ public class JobCoordinatorService {
     }
   }
 
+  /**
+   * Whether a stored chapter/series value counts as a real override rather than a placeholder.
+   *
+   * <p>Anything that reads this must use the same predicate the pipeline uses, otherwise the UI can
+   * report a different model from the one that actually runs — see SeriesController.toChapterDto.
+   */
+  public static boolean isOverride(String value) {
+    return value != null
+        && !value.trim().isEmpty()
+        && !value.equals("inherit")
+        && !value.equals("default")
+        && !value.contains("[ORPHANED]");
+  }
+
   public String resolveModel(String chapterVal, String seriesVal, String globalVal) {
-    if (chapterVal != null
-        && !chapterVal.trim().isEmpty()
-        && !chapterVal.equals("inherit")
-        && !chapterVal.equals("default")
-        && !chapterVal.contains("[ORPHANED]"))
+    if (isOverride(chapterVal))
       return chapterVal;
-    if (seriesVal != null
-        && !seriesVal.trim().isEmpty()
-        && !seriesVal.equals("inherit")
-        && !seriesVal.equals("default")
-        && !seriesVal.contains("[ORPHANED]"))
+    if (isOverride(seriesVal))
       return seriesVal;
     return globalVal;
   }

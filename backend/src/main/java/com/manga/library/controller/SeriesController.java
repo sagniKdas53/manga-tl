@@ -75,6 +75,19 @@ public class SeriesController {
     return cleanContext + "/api/images/" + imageId + "/thumbnail";
   }
 
+  /**
+   * Whether any of a slot's fields is set at this level, using the pipeline's own definition of
+   * "set" so that `source` cannot claim an override for a value the pipeline treats as a
+   * placeholder.
+   */
+  private static boolean hasOverride(String... values) {
+    for (String v : values) {
+      if (JobCoordinatorService.isOverride(v))
+        return true;
+    }
+    return false;
+  }
+
   private String resolveSetting(String value) {
     if (value != null && (value.equals("inherit") || value.equals("default") || value.isBlank())) {
       return null;
@@ -129,77 +142,72 @@ public class SeriesController {
 
     // -------------------------------------------------------------------------------------
     // MODEL INHERITANCE LOGIC:
-    // Overrides fall back using a Global -> Series -> Chapter hierarchy.
-    // If a chapter value is null, it inherits from the series.
-    // If the series value is null, it inherits from the global settings.
+    // Overrides fall back using a Chapter -> Series -> Global hierarchy, and every field falls
+    // back INDEPENDENTLY. A chapter may set a model without setting a provider, in which case the
+    // model comes from the chapter and the provider from the series or global settings.
+    //
+    // This must agree with JobCoordinatorService.enqueueJobDirectly, which is what builds the job
+    // payload the worker actually runs, so it calls the very same resolvers with the very same
+    // task keys rather than reimplementing them. The two used to be separate implementations, and
+    // the display copy resolved provider and model as a coupled pair: it chose a level based on the
+    // provider alone and then took that level's model, discarding a chapter-level model whenever
+    // the chapter left the provider unset. The card then advertised a model the pipeline never used.
+    //
+    // NOTE: do NOT reach for resolveConfigForChapter here. Despite the name it is not on the
+    // dispatch path — only the duplicate-page comparison uses it — and it passes task keys
+    // ("translation", "qa") that do not exist in providers.json, so its models always collapse to
+    // the global default (AUDIT-P1). enqueueJobDirectly is the authority.
+    //
+    // resolveModel/resolveModelWithCheck take explicit values and touch no settings, so calling
+    // them per chapter costs nothing extra.
     // The frontend relies on this resolved state in `ResolvedModelSlot` and `ResolvedQaSlot`.
     // -------------------------------------------------------------------------------------
 
-    String ocrProv = c.getOcrProvider();
-    String ocrMod = c.getOcrModel();
-    String ocrSrc = "global";
-    if (ocrProv == null && series != null) {
-      ocrProv = series.getOcrProvider();
-      ocrMod = series.getOcrModel();
-      ocrSrc = "series";
-    }
-    if (ocrProv == null) {
-      ocrProv = gOcrProvider;
-      ocrMod = gOcrModel;
-      ocrSrc = "global";
-    } else if (c.getOcrProvider() != null) {
-      ocrSrc = "chapter";
-    }
+    String sOcrProvider = series != null ? series.getOcrProvider() : null;
+    String sOcrModel = series != null ? series.getOcrModel() : null;
+    String sTlProvider = series != null ? series.getTlProvider() : null;
+    String sTlModel = series != null ? series.getTlModel() : null;
+    String sQaProvider = series != null ? series.getQaProvider() : null;
+    String sQaLlmModel = series != null ? series.getQaLlmModel() : null;
+    String sQaVlmModel = series != null ? series.getQaVlmModel() : null;
+    String sQaMode = series != null ? series.getQaMode() : null;
 
-    if ("local".equals(ocrProv)) {
-      ocrMod =
-          globalSettings != null && globalSettings.localOcrModel() != null
-              ? globalSettings.localOcrModel()
-              : "local";
-    }
+    String ocrProv = jobCoordinatorService.resolveModel(c.getOcrProvider(), sOcrProvider, gOcrProvider);
+    // enqueueJobDirectly resolves ocrModel with a plain resolveModel — no validity check — so
+    // this must not add one, or the card would show a global default the worker never receives.
+    String ocrMod =
+        "local".equals(ocrProv)
+            ? (globalSettings != null ? globalSettings.localOcrModel() : null)
+            : jobCoordinatorService.resolveModel(c.getOcrModel(), sOcrModel, gOcrModel);
+    String ocrSrc =
+        hasOverride(c.getOcrProvider(), c.getOcrModel())
+            ? "chapter"
+            : hasOverride(sOcrProvider, sOcrModel) ? "series" : "global";
     var resolvedOcr = new ChapterDto.ResolvedModelSlot(ocrProv, ocrMod, ocrSrc);
 
-    String tlProv = c.getTlProvider();
-    String tlMod = c.getTlModel();
-    String tlSrc = "global";
-    if (tlProv == null && series != null) {
-      tlProv = series.getTlProvider();
-      tlMod = series.getTlModel();
-      tlSrc = "series";
-    }
-    if (tlProv == null) {
-      tlProv = gTlProvider;
-      tlMod = gTlModel;
-      tlSrc = "global";
-    } else if (c.getTlProvider() != null) {
-      tlSrc = "chapter";
-    }
+    String tlProv = jobCoordinatorService.resolveModel(c.getTlProvider(), sTlProvider, gTlProvider);
+    String tlMod =
+        jobCoordinatorService.resolveModelWithCheck(
+            c.getTlModel(), sTlModel, gTlModel, tlProv, "tl");
+    String tlSrc =
+        hasOverride(c.getTlProvider(), c.getTlModel())
+            ? "chapter"
+            : hasOverride(sTlProvider, sTlModel) ? "series" : "global";
     var resolvedTranslation = new ChapterDto.ResolvedModelSlot(tlProv, tlMod, tlSrc);
 
-    String qaProv = c.getQaProvider();
-    String qaLlm = c.getQaLlmModel();
-    String qaVlm = c.getQaVlmModel();
-    String qaMod = c.getQaMode();
-    String qaSrc = "global";
-    if (qaProv == null && qaLlm == null && qaVlm == null && qaMod == null && series != null) {
-      qaProv = series.getQaProvider();
-      qaLlm = series.getQaLlmModel();
-      qaVlm = series.getQaVlmModel();
-      qaMod = series.getQaMode();
-      qaSrc = "series";
-    }
-    if (qaProv == null && qaLlm == null && qaVlm == null && qaMod == null) {
-      qaProv = gQaProvider;
-      qaLlm = gQaLlmModel;
-      qaVlm = gQaVlmModel;
-      qaMod = gQaMode;
-      qaSrc = "global";
-    } else if (c.getQaProvider() != null
-        || c.getQaLlmModel() != null
-        || c.getQaVlmModel() != null
-        || c.getQaMode() != null) {
-      qaSrc = "chapter";
-    }
+    String qaProv = jobCoordinatorService.resolveModel(c.getQaProvider(), sQaProvider, gQaProvider);
+    // Task keys must match providers.json exactly: tl / qaLLM / qaVLM / ocr.
+    String qaLlm =
+        jobCoordinatorService.resolveModelWithCheck(
+            c.getQaLlmModel(), sQaLlmModel, gQaLlmModel, qaProv, "qaLLM");
+    String qaVlm =
+        jobCoordinatorService.resolveModelWithCheck(
+            c.getQaVlmModel(), sQaVlmModel, gQaVlmModel, qaProv, "qaVLM");
+    String qaMod = jobCoordinatorService.resolveModel(c.getQaMode(), sQaMode, gQaMode);
+    String qaSrc =
+        hasOverride(c.getQaProvider(), c.getQaLlmModel(), c.getQaVlmModel(), c.getQaMode())
+            ? "chapter"
+            : hasOverride(sQaProvider, sQaLlmModel, sQaVlmModel, sQaMode) ? "series" : "global";
     var resolvedQa = new ChapterDto.ResolvedQaSlot(qaProv, qaLlm, qaVlm, qaMod, qaSrc);
 
     Boolean resolvedUseFallbackModels = c.getUseFallbackModels();
