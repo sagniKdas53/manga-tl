@@ -10,8 +10,11 @@ public interface LayerElementRepository extends JpaRepository<LayerElement, UUID
 
   List<LayerElement> findByRegionId(UUID regionId);
 
+  // The region is LEFT JOIN FETCHed (it is nullable) so LayerElement's serialized layerType /
+  // layerVisible / regionType read from memory instead of triggering a query per element.
   @org.springframework.data.jpa.repository.Query(
-      "SELECT le FROM LayerElement le JOIN FETCH le.layer l WHERE l.page.id = :pageId")
+      "SELECT le FROM LayerElement le JOIN FETCH le.layer l"
+          + " LEFT JOIN FETCH le.region WHERE l.page.id = :pageId")
   List<LayerElement> findByLayerPageId(
       @org.springframework.data.repository.query.Param("pageId") UUID pageId);
 }
