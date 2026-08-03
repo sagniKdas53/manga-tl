@@ -82,6 +82,39 @@ public class LayerElement {
     return layer != null ? layer.getId() : null;
   }
 
+  /**
+   * The owning layer's type and visibility, flattened onto the element.
+   *
+   * <p>{@code layer} itself is {@code @JsonIgnore}d, so without these the worker's renderer had no
+   * way to tell an OCR element from a translation one. Its filter reads exactly these two names and
+   * treated a missing {@code layerType} as "render it anyway", so <em>every</em> element on the page
+   * was drawn — source text included, underneath the translated bubbles. Layer visibility toggled
+   * in the reader was invisible to the renderer for the same reason.
+   *
+   * <p>Free to serialize: {@code findByLayerPageId} already {@code JOIN FETCH}es the layer, so this
+   * reads memory rather than issuing a query.
+   */
+  @com.fasterxml.jackson.annotation.JsonProperty("layerType")
+  public String getLayerTypeSerialized() {
+    return layer != null ? layer.getType() : null;
+  }
+
+  @com.fasterxml.jackson.annotation.JsonProperty("layerVisible")
+  public Boolean getLayerVisibleSerialized() {
+    return layer != null ? layer.getVisible() : null;
+  }
+
+  /**
+   * The source region's type, used by the renderer to decide sentence case vs uppercase.
+   *
+   * <p>Without it the renderer fell back to guessing from {@code boxShape == "elliptical"}, so
+   * speech in a rectangular box was never uppercased.
+   */
+  @com.fasterxml.jackson.annotation.JsonProperty("regionType")
+  public String getRegionTypeSerialized() {
+    return region != null ? region.getRegionType() : null;
+  }
+
   @com.fasterxml.jackson.annotation.JsonProperty("regionId")
   public UUID getRegionIdSerialized() {
     return region != null ? region.getId() : null;
