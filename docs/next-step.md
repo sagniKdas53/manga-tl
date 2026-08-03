@@ -1,5 +1,16 @@
 # Handoff — analysing the post-W10 benchmark run
 
+> **SUPERSEDED IN PART, 2026-08-03 — read
+> [immediate-next-steps.md](./immediate-next-steps.md) first.** This analysis was carried out. Of
+> the six predictions below: **#1 failed** (the slot change was never in force — `.env` overrode the
+> compose default), **#5's metric is invalid** (`duplicate_jobs.csv` counts QA retry cycles, and the
+> run had zero re-dispatches so AUDIT-P4's path never ran), and **#6 passed** (translation failures
+> 11/50 → 0/9). **#2 was later confirmed** on `20260803-103311` — `layout` p50 150.64 s → 2.65 s.
+> **#3 and #4 remain untested** and need one clean drained run at the now-correct `4/1/3`.
+> The baseline numbers and working constraints below are still accurate and still worth reading.
+>
+> ---
+>
 > Written 2026-08-03. **Purpose: a single comparison.** The 2026-08-02 batch changed the slot
 > configuration and three correctness paths; none of it is measured yet. This file exists so the
 > next session can walk into the numbers without re-deriving the codebase or the baseline.
