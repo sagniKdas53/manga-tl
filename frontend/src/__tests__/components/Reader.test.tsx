@@ -412,6 +412,62 @@ describe("Reader Component", () => {
     });
   });
 
+  /**
+   * The measured reason this gate exists: the old bidirectional window fired on navigation,
+   * putting five image requests on the wire within 25 ms and pushing image p95 to 2482 ms
+   * against a p50 of 706 ms. Those five were competing with the one the reader was waiting
+   * for. The invariant — nothing warms until the displayed image has loaded — is invisible
+   * once it holds, so it regresses quietly.
+   */
+  it("warms no images until the displayed page has loaded", async () => {
+    const p1 = { ...mockPage, id: "p1", pageNumber: 1, imageId: "img1" };
+    const p2 = { ...mockPage, id: "p2", pageNumber: 2, imageId: "img2" };
+    const p3 = { ...mockPage, id: "p3", pageNumber: 3, imageId: "img3" };
+
+    const warmed: { src: string; fetchPriority?: string }[] = [];
+    const RealImage = globalThis.Image;
+    class RecordingImage {
+      fetchPriority?: string;
+      set src(value: string) {
+        warmed.push({ src: value, fetchPriority: this.fetchPriority });
+      }
+    }
+    vi.stubGlobal("Image", RecordingImage);
+
+    try {
+      render(
+        <Reader
+          user={mockUser}
+          selectedSeries={mockSeries}
+          selectedChapter={mockChapter}
+          chapters={[mockChapter]}
+          pages={[p1, p2, p3]}
+          theme="dark"
+        />,
+      );
+
+      const img = await screen.findByAltText(`Page ${p1.pageNumber}`);
+
+      // Nothing may be on the wire yet. Give the effects a chance to run first, otherwise
+      // this asserts only that React has not flushed rather than that the gate holds.
+      await waitFor(() => {
+        expect(img.getAttribute("src")).toBe(toReaderUrl(p1.url));
+      });
+      expect(warmed).toHaveLength(0);
+
+      fireEvent.load(img);
+
+      // And once it has loaded, the warming does happen — otherwise this test would still
+      // pass with prefetching removed entirely.
+      await waitFor(() => {
+        expect(warmed.length).toBeGreaterThan(0);
+      });
+      expect(warmed.every((w) => w.fetchPriority === "low")).toBe(true);
+    } finally {
+      vi.stubGlobal("Image", RealImage);
+    }
+  });
+
   it("prefetches next two pages and applies synchronous cache hits", async () => {
     const p1 = {
       ...mockPage,
