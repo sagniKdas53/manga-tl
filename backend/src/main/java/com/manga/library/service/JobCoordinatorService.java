@@ -1553,11 +1553,25 @@ public class JobCoordinatorService {
     final List<Map<String, Object>> failedRegionsList = new ArrayList<>();
     final int[] stats = new int[5]; // 0: total, 1: passed, 2: failed, 3: direct_fix/fixed, 4: manual_review
     final double[] scoreStats = new double[2]; // 0: sum, 1: count
+    int discardedResults = 0;
 
     if (qaResults != null) {
       for (Map<String, Object> r : qaResults) {
         try {
-          UUID regionId = UUID.fromString((String) r.get("regionId"));
+          // When the QA model hits its output token cap the response is truncated mid-value and
+          // repaired into an object that is structurally valid but has lost its identifying
+          // fields. Passing that null to UUID.fromString throws, and because the catch below
+          // swallows it the counters stayed at zero — which scored as a clean "passed".
+          String rawRegionId = (String) r.get("regionId");
+          if (rawRegionId == null || rawRegionId.isBlank()) {
+            discardedResults++;
+            log.warn(
+                "Discarding QA result without a regionId for image {} (likely a truncated model"
+                    + " response)",
+                imageId);
+            continue;
+          }
+          UUID regionId = UUID.fromString(rawRegionId);
           String qaStatus = (String) r.get("qaStatus");
           Double qaScore = r.get("qaScore") != null ? ((Number) r.get("qaScore")).doubleValue() : null;
           String qaFeedback = (String) r.get("qaFeedback");
@@ -1649,9 +1663,21 @@ public class JobCoordinatorService {
             }
           }
         } catch (Exception e) {
+          discardedResults++;
           log.error("Error processing QA result for region", e);
         }
       }
+    }
+
+    // A QA pass that scored nothing is not a QA pass. Reporting it as one marked the pipeline
+    // complete with QA never actually applied, and stamped "passed / total_regions: 0" over the
+    // page's translation layers.
+    final boolean qaUnusable = discardedResults > 0 && stats[0] == 0;
+    if (qaUnusable) {
+      log.error(
+          "QA produced no usable results for image {} ({} discarded). Not reporting a pass.",
+          imageId,
+          discardedResults);
     }
 
     Page qaPage = resolvePageForCallback(imageId, callbackPageId);
@@ -1664,8 +1690,19 @@ public class JobCoordinatorService {
     try {
       List<Layer> layers = qaPage == null ? List.of() : layerRepository.findByPageId(qaPageId);
 
-      for (Layer layer : layers) {
-        if ("translation".equalsIgnoreCase(layer.getType())) {
+      // Only the newest translation layer belongs to this QA pass. Writing to every translation
+      // layer on the page meant the final callback of a QA retry cycle overwrote the per-cycle
+      // results already recorded on the earlier layers.
+      Layer newestTranslationLayer =
+          layers.stream()
+              .filter(l -> "translation".equalsIgnoreCase(l.getType()))
+              .max(
+                  Comparator.comparing(
+                      Layer::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+              .orElse(null);
+
+      if (newestTranslationLayer != null) {
+          Layer layer = newestTranslationLayer;
           com.fasterxml.jackson.databind.node.ObjectNode metadata = layer.getMetadataJson() != null
               && layer.getMetadataJson().isObject()
                   ? (com.fasterxml.jackson.databind.node.ObjectNode) layer.getMetadataJson()
@@ -1674,7 +1711,9 @@ public class JobCoordinatorService {
           com.fasterxml.jackson.databind.node.ObjectNode qaNode = objectMapper.createObjectNode();
 
           String status = "passed";
-          if (needsManualIntervention || stats[4] > 0) {
+          if (qaUnusable) {
+            status = "error";
+          } else if (needsManualIntervention || stats[4] > 0) {
             status = "manual_review";
           } else if (stats[2] > 0) {
             status = needsRetry ? "partial_pass" : "failed";
@@ -1683,6 +1722,9 @@ public class JobCoordinatorService {
           }
 
           qaNode.put("status", status);
+          if (discardedResults > 0) {
+            qaNode.put("discarded_results", discardedResults);
+          }
           qaNode.put("total_regions", stats[0]);
           qaNode.put("passed", stats[1]);
           qaNode.put("failed", stats[2]);
@@ -1715,7 +1757,6 @@ public class JobCoordinatorService {
 
           layer.setMetadataJson(metadata);
           layerRepository.save(Objects.requireNonNull(layer));
-        }
       }
     } catch (Exception e) {
       log.error("Failed to update layer metadata with QA results", e);
@@ -1757,12 +1798,16 @@ public class JobCoordinatorService {
     } else {
       if (needsRetry) {
         log.warn("QA failed for image {} but reached max retries. Completing pipeline.", imageId);
+      } else if (qaUnusable) {
+        log.warn(
+            "QA returned no usable results for image {}. Completing pipeline without a QA verdict.",
+            imageId);
       } else {
         log.info("QA passed for image {}. Pipeline complete!", imageId);
       }
       redisTemplate.delete(Objects.requireNonNull(retryKey));
       redisTemplate.delete("pipeline:trace:" + imageId);
-      return "COMPLETED";
+      return qaUnusable ? "COMPLETED_NO_QA" : "COMPLETED";
     }
   }
 
