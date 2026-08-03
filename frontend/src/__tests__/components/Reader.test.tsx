@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Reader from "../../components/Reader";
+import { clearAuthImageCache } from "../../utils/authImage";
 
 // Mock external modules
 export const mockNavigate = vi.fn();
@@ -27,8 +28,18 @@ const mockSafeFetch = vi.fn<
   (
     url: string,
     init?: RequestInit,
-  ) => Promise<{ ok: boolean; json: () => Promise<unknown> }>
->(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }));
+  ) => Promise<{
+    ok: boolean;
+    json: () => Promise<unknown>;
+    blob?: () => Promise<Blob>;
+  }>
+>(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve([]),
+    blob: () => Promise.resolve(new Blob(["img"])),
+  }),
+);
 vi.mock("../../utils", () => ({
   safeFetch: (url: string, init?: RequestInit) => mockSafeFetch(url, init),
   toSlug: (s: string) => s.toLowerCase(),
@@ -76,12 +87,17 @@ describe("Reader Component", () => {
 
   beforeEach(async () => {
     localStorage.clear();
+    // The blob cache is module-level; without this a page cached by an earlier
+    // test is served without a fetch and the next test sees no image request.
+    clearAuthImageCache();
     mockSafeFetch.mockReset();
     mockSubscribe.mockClear();
     mockShowToast.mockClear();
     mockSafeFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve([]),
+      // The page image is fetched as a blob, not JSON (see utils/authImage).
+      blob: () => Promise.resolve(new Blob(["img"])),
     });
     mockNavigate.mockClear();
     // Tests below override useParams with mockReturnValue, which persists for
@@ -103,6 +119,38 @@ describe("Reader Component", () => {
     );
     // Use findByText to wait for asynchronous state updates
     expect(await screen.findByText(/Test Series/)).toBeInTheDocument();
+  });
+
+  it("loads the page image with an auth header, not a ?token= URL", async () => {
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />,
+    );
+
+    const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
+    // `<img>` cannot send a header, so the bytes arrive as a blob URL. A plain
+    // `src={url}?token=` regressed to 401 once AUDIT-S4 removed the query-param
+    // credential path from JwtAuthFilter.
+    await waitFor(() =>
+      expect(img.getAttribute("src")).toMatch(/^blob:/),
+    );
+
+    const imageCall = mockSafeFetch.mock.calls.find(
+      ([url]) => url === mockPage.url,
+    );
+    expect(imageCall).toBeDefined();
+    expect(imageCall![1]?.headers).toEqual({
+      Authorization: `Bearer ${mockUser.token}`,
+    });
+    for (const [url] of mockSafeFetch.mock.calls) {
+      expect(url).not.toContain("token=");
+    }
   });
 
   it("handles sidebar toggles and page navigation clicks", async () => {
