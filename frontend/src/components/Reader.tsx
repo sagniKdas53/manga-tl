@@ -13,6 +13,7 @@ import type {
 } from "../types";
 import { safeFetch, toSlug, formatCost } from "../utils";
 import { fitTextInBox } from "../utils/fitText";
+import { prefetchAuthImage, useAuthImage } from "../utils/authImage";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
@@ -173,6 +174,13 @@ export const Reader: React.FC<ReaderProps> = ({
   const curPageNum = parseInt(pageNumber || "1");
   const selectedPage = pages.find((p) => p.pageNumber === curPageNum);
 
+  // `<img>` cannot send an Authorization header, and the image endpoint no longer accepts a
+  // `?token=` query parameter (AUDIT-S4), so the bytes come through fetch as a blob URL.
+  const { src: pageImageSrc, error: pageImageError } = useAuthImage(
+    selectedPage?.url,
+    user.token,
+  );
+
   // Reader States
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
@@ -205,7 +213,6 @@ export const Reader: React.FC<ReaderProps> = ({
     >
   >({});
   const prefetchQueue = useRef<Set<string>>(new Set());
-  const prefetchedImageUrls = useRef<Set<string>>(new Set());
   // Bumped whenever the details cache is invalidated (e.g. a job completed for
   // the open page). Requests started before the bump are stale: they must not
   // repopulate the cache nor mark the page as loaded, otherwise an invalidation
@@ -704,13 +711,8 @@ export const Reader: React.FC<ReaderProps> = ({
         const pagesToPrefetch = nearbyPages.filter((p) => p.id !== currentPageId);
 
         pagesToPrefetch.forEach((p) => {
-          const imageUrl = `${p.url}?token=${user.token}`;
-          if (!prefetchedImageUrls.current.has(imageUrl)) {
-            prefetchedImageUrls.current.add(imageUrl);
-            const image = new Image();
-            image.decoding = "async";
-            image.src = imageUrl;
-          }
+          // The blob cache dedupes in-flight and completed loads on its own.
+          prefetchAuthImage(p.url, user.token);
 
           if (
             !pageDetailsCache.current[p.id] &&
@@ -3096,7 +3098,7 @@ export const Reader: React.FC<ReaderProps> = ({
             >
               <img
                 ref={imgRef}
-                src={`${selectedPage.url}?token=${user.token}`}
+                src={pageImageSrc ?? undefined}
                 alt={`Page ${selectedPage.pageNumber}`}
                 className="reader-image"
                 onLoad={handleImgLoad}
@@ -3109,6 +3111,27 @@ export const Reader: React.FC<ReaderProps> = ({
                 }}
                 draggable={false}
               />
+              {pageImageError && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "rgba(20,20,22,0.75)",
+                    color: "white",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    textAlign: "center",
+                    padding: "16px",
+                    zIndex: 2,
+                  }}
+                >
+                  Could not load this page image. Check your connection, then
+                  reload.
+                </div>
+              )}
               <svg
                 className="svg-overlay"
                 viewBox={`0 0 ${imageDims.w} ${imageDims.h}`}

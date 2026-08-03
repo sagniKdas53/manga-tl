@@ -44,6 +44,20 @@ Object.defineProperty(window, "ResizeObserver", {
   writable: true,
 });
 
+// jsdom implements neither. The reader loads page images through fetch + blob URLs (AUDIT-S4
+// removed the `?token=` path `<img>` relied on), so without these every reader test silently
+// renders the image-error state. Individual tests still override with spies where they assert.
+let objectUrlSeq = 0;
+Object.defineProperty(URL, "createObjectURL", {
+  value: () => `blob:http://localhost/${++objectUrlSeq}`,
+  writable: true,
+});
+
+Object.defineProperty(URL, "revokeObjectURL", {
+  value: () => {},
+  writable: true,
+});
+
 class MockEventSource {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   constructor(_url: string) {}
