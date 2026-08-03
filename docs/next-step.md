@@ -1,170 +1,199 @@
-# Handoff — analysing the post-W10 benchmark run
+# Handoff — state at end of 2026-08-03
 
-> **SUPERSEDED IN PART, 2026-08-03 — read
-> [immediate-next-steps.md](./immediate-next-steps.md) first.** This analysis was carried out. Of
-> the six predictions below: **#1 failed** (the slot change was never in force — `.env` overrode the
-> compose default), **#5's metric is invalid** (`duplicate_jobs.csv` counts QA retry cycles, and the
-> run had zero re-dispatches so AUDIT-P4's path never ran), and **#6 passed** (translation failures
-> 11/50 → 0/9). **#2 was later confirmed** on `20260803-103311` — `layout` p50 150.64 s → 2.65 s.
-> **#3 and #4 remain untested** and need one clean drained run at the now-correct `4/1/3`.
-> The baseline numbers and working constraints below are still accurate and still worth reading.
+> Consolidates the former `immediate-next-steps.md`, which is now deleted. Everything still live
+> is below; everything settled is recorded as settled so it does not get re-litigated.
 >
-> ---
->
-> Written 2026-08-03. **Purpose: a single comparison.** The 2026-08-02 batch changed the slot
-> configuration and three correctness paths; none of it is measured yet. This file exists so the
-> next session can walk into the numbers without re-deriving the codebase or the baseline.
->
-> **Read first:** [issues.md § Status of the fix order](./issues.md#status-of-the-fix-order--2026-08-02),
-> [perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md),
-> [perf_run_playbook.md](./perf_run_playbook.md) § "Re-running for comparison".
->
-> **Do not re-audit the codebase.** The ~50 `AUDIT-*` findings in
-> [issues.md](./issues.md#full-stack-audit--2026-08-01) already carry `file:line` anchors.
+> **Resume at:** [§ What to do next](#what-to-do-next) — AUDIT-W5, then a clean drained run.
 
-## What changed since the baseline
+## Where the work stands
 
-| | |
+**The 7-item reader plan is complete except item 7.** Items 1–6 shipped and are deployed:
+
+| item | outcome |
 | --- | --- |
-| **W10 / W6** | `CONCURRENT_JOBS=5 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=4` (was `2 / 1 / 1`). `resolve_slot_config` clamps degenerate combinations and logs each adjustment. **This is the change under test.** |
-| **P4** | `jobs.callback_applied_at` + `JobRepository.claimCallback` — a conditional UPDATE making check-and-set atomic, so a duplicate run is dropped at the callback instead of writing a second region set, layer and cost. |
-| **P1 / W1** | `resolveConfigForChapter` passes `tl` / `qaLLM` / `qaVLM`; QA's four hardcoded provider chains replaced by `_qa_cloud_llm` / `_qa_cloud_vlm`. |
-| **S1–S4** | No secret fallbacks, startup validation, SSE tickets instead of `?token=`. Not perf-relevant, but it is new surface in the same deploy — see "Regression watch". |
-| **`neurometric` key** | Replaced 2026-08-03. The baseline's 22% translation failure was 401 × 323 from one dead credential. |
-| **Reader race** | A `job_update` landing while page details were in flight no longer swallows the refresh (`c4d092d`). |
+| 1. Reader-sized variant | **Done.** Stored WebP at q90, native resolution. 1.142 GB → 0.266 GB. See [comparison.md](./comparison.md). |
+| 2. Cacheable images | **Done.** `max-age=31536000, public, immutable` + `ETag` + real `Content-Length` on `/reader`, `/file`, `/thumbnail`. |
+| 3. Overlay gate | **Done.** Geometry in `4f40d39`; visibility now gates on the image having loaded. |
+| 4. Native `<img>` | **Done.** Blob path deleted; `utils/authImage.ts` replaced by `utils/readerImage.ts`. |
+| 5. Deprioritise prefetch | **Done.** Forward-biased, `fetchPriority="low"`, waits for the current image, persisted slider (default 3, 0 disables). |
+| 6. Widen details cache | **Done.** 15-entry LRU over a `Map`, replacing the hard ±2 eviction. |
+| 7. Lend the idle heavy slot | **NOT STARTED** — see [§ AUDIT-W5](#audit-w5--corrected). |
 
-## The baseline, so you don't re-derive it
+Also shipped 2026-08-03: **AUDIT-B6** (`WEBP_LOCK` scoped to WebP only, so the 4-thread
+`thumbnailExecutor` no longer serialises every decode), and both image backfills deleted after
+running to completion.
 
-Run `20260802-163445` — 42 pages, 255 jobs, 7,924 s, 100% dispatch-log coverage.
+## What to do next
 
-- **90.8% of total job lifetime was queue wait** — 49,073 s waiting vs 4,959 s working.
-- `layout`: **p50 wait 591 s** around **0.2 s** of work. Little's law reconciled to within 4%
-  (depth 4.49 × 7,924 s ÷ 42 jobs = 847 s predicted, 879 s measured).
-- Light tier **94.7 s/page** (0.63 pages/min) vs heavy **23.4 s/page** (2.57 pages/min) — the light
-  tier was **4× slower** and the heavy slot idle **95.9%** of the time.
-- Light stage totals: `qa` 2,083 s (p50 53.8 s) · `translation` 1,774 s (p50 30.5 s) ·
-  `render` 96 s (p50 1.0 s) · `layout` 24 s (p50 0.2 s).
-- `active_light` **never exceeded 1** across 3,253 samples.
-- **277 dispatches for 255 jobs** (22 re-dispatches); 12 duplicate `(subject, type)` rows across
-  4 subjects; `e185e276` ran `translation`, `qa` **and** `render` 3× each.
-- `translation` failed **11 of 50 (22%)**; 323 × HTTP 401 from `neurometric`.
-- Starvation (slot idle with work queued in its own class): **3.2% light / 1.3% heavy**.
-- Worker CPU mean **22.5%** (p95 191% of its 200% cap); backend CPU **3.8%**.
-- Rate limiting: **0.0 s of sleep across 1 sleep** in 7,924 s (AUDIT-W2 is inert).
+**1. AUDIT-W5 — lend the idle heavy slot.** Backend-only, one performance variable, wants its own
+run. Measured payoff: **13.0%** of 391 samples in `20260803-103311` had light at its cap of 3,
+heavy idle, light work queued, and no heavy work at all.
 
-## Predictions, in the order they should be checked
+**2. Then one clean drained run at 4/1/3** to settle predictions 2–4 below, following the prompt at
+the bottom. The reader work is done, so reader traffic no longer contends with queue traffic — the
+thing that made `20260803-103311` noisy.
 
-Each is falsifiable. **If #1 fails, nothing below it means anything** — stop and fix the config.
+### AUDIT-W5 — corrected
 
-1. **`active_light` must exceed 1** in `queues.csv`. The baseline never did. If it still doesn't,
-   the slot change did not take effect: check `environment.md` for the values actually in force and
-   the worker startup log for AUDIT-W6 clamp messages. Everything else is downstream of this.
-2. **`layout` p50 wait collapses** from 591 s. It does 0.2 s of work; it was queued behind 30–110 s
-   LLM calls purely because they shared one slot.
-3. **Queue wait falls well below 90.8%** of job lifetime.
-4. **The tiers converge.** Four light slots put the light ceiling near 23.7 s/page against heavy's
-   23.4 s/page, so **the floor should move back to the heavy tier** — the state every throughput
-   argument in `docs/` assumed before the baseline falsified it. If light is *still* the floor, the
-   slots are not the whole story and the next question is AUDIT-W3 (a light job blocking on a
-   cooldown or lock holds a slot, which matters more with four of them, not less).
-5. **`duplicate_jobs.csv` is empty** — and note this is *not* the same as re-dispatches going away.
-   `claimCallback` works at the callback layer, so **22-ish re-dispatches with zero duplicate rows
-   is the expected shape and is the proof the fix works.** Cross-check the row deltas in
-   `db_counts_before/after.csv`. If duplicates persist, the claim is not covering every callback
-   path.
-6. **`translation` failures drop to ~0.** If they don't, the 22% was never only the key — pull the
-   new tracebacks before assuming anything.
+**The description carried in the old handoff was wrong and cost time. Corrected 2026-08-03 by
+reading the code:**
 
-## What the extra concurrency might break
+- The old note said *"`REUSE_IDLE_SLOTS` is never read"*. **It is read** — `worker/src/worker/main.py:206`.
+  The worker's admission control already accepts a light job beyond `MAX_LIGHT_SLOTS` when
+  `REUSE_IDLE_SLOTS` is set (default `true`) and `ACTIVE_JOBS < MAX_CONCURRENT_JOBS`.
+- The method is `WorkerCapacity.hasLightSlot()`, not `hasLightCapacity()`
+  (`WorkerDispatcherService.java:334`).
 
-Two effects the baseline could not show, because nothing ran concurrently:
+So the worker would accept a lent slot today. **The blocker is entirely on the backend dispatcher**,
+which never offers one:
 
-- **Provider rate limits may start to engage.** Four concurrent light jobs means up to four
-  concurrent LLM calls per provider. `providers.json` carries `rate_limits` (openrouter 40,
-  cloudflare 40, nvidia 40, neurometric 60) and the baseline measured **0.0 s of sleep**. If
-  `log_signals.md` now shows real sleep seconds, the win is partly being handed back — and per
-  AUDIT-W3 that sleep happens *while holding a job slot*.
-- **UI contention gets worse.** 71% of the browser's LongTask wall was already the main thread
-  descheduled on this 4-core box, with containers at p95 204% of 400%. Worker CPU was 22.5% mean
-  with headroom, so the cost should be modest — but if the UI degrades, **cap the worker's CPU
-  rather than reverting the slot change.** That is the documented decision, not a fresh judgement
-  call.
+```java
+boolean hasLightSlot() {
+  return activeLight < maxLight && activeTotal < maxTotal;   // :334-336
+}
+```
 
-## Regression watch (same deploy, not the variable under test)
+Gated at `WorkerDispatcherService.java:180` (`if (!isHeavy && !cap.hasLightSlot()) continue;`). With
+`maxLight = 3`, a fourth light job is never dispatched even when the heavy slot is idle and
+`activeTotal < maxTotal`. **This is a one-condition change on the backend side, and the worker
+already supports the other half** — which is a materially smaller job than the old note implied.
 
-- **SSE**: tickets replaced `?token=`. Notifications and the queue feed should behave exactly as
-  before; a silent SSE failure would look like "the queue stopped updating".
-- **Reader refresh**: the "New layers available — refreshed" toast now actually refreshes, including
-  when a job completes while the page is still loading. Worth one manual check during the run.
-- **AUDIT-W5**: `REUSE_IDLE_SLOTS` should still never fire — the dispatcher gates on `maxLight`.
-  `active_light > 4` would mean it did.
+## Settled — do not re-litigate
 
-## Explicitly out of scope for this session
+The six predictions from the original post-W10 analysis:
 
-- **AUDIT-F6/F7/F8** (deferred by decision 2026-08-03, not yet written into `issues.md`): the
-  QueueManager stale-poll revert (`QueueManager.tsx:374-386`, `>=` on `createdAt` lets an in-flight
-  poll overwrite a newer SSE status), the ChapterGallery cross-chapter `setPages` write
-  (`ChapterGallery.tsx:194-199`), and the negative-assertion-inside-`waitFor` in
-  `Reader.test.tsx:386` that cannot fail.
+| prediction | outcome |
+| --- | --- |
+| 1. `active_light > 1` | **FAILED then fixed.** `.env` pinned `CONCURRENT_JOBS=2`, overriding the compose default, so that run measured baseline 2/1/1. Now `4/1/3` and confirmed in force. |
+| 2. `layout` p50 wait collapses | **CONFIRMED** on `20260803-103311`: 150.64 s → 2.65 s. |
+| 3. Queue wait ≪ 90.8% | **Superseded** by the 80%-utilisation finding below. Still worth one clean number. |
+| 4. Tiers converge | **STILL UNTESTED.** Needs the clean run. |
+| 5. `duplicate_jobs.csv` empty | **METRIC INVALID.** Its rows are QA retry cycles (sequential, same `trace_id`, `attempt=1`, all 42 callbacks claimed), and the run had zero re-dispatches, so AUDIT-P4's path never ran. Neither confirmed nor refuted. |
+| 6. Translation failures → 0 | **PASSED.** 11/50 → 0/9. The dead `neurometric` key was the whole 22%. |
+
+### Measurements worth not re-deriving
+
+- **Utilisation is 80%**, not 10%: work 1150.9 s against 1444 s wall. Perfect scheduling recovers at
+  most ~20% of wall — **reducing work beats reordering it**, and 450 s (39%) of that work was QA
+  re-translation cycles that fixed nothing.
+- **Reader, pre-WebP**: 20 distinct images, 20 fetches (1.00×) — the blob cache was never the
+  problem. Image p50 **706 ms**, p95 **2482 ms** (the 5 slowest were the startup prefetch storm,
+  5 images within 25 ms). 27.3 MB for 20 pages at **0.2–1.9 MB/s** over Tailscale. Details refetch
+  **1.75×**. *Items 1/5/6 all target numbers on this line — it is the before-picture for the next
+  reader profile.*
+- **Image corpus**: 743 images, **550 JPEG / 162 PNG / 31 WebP by decoded format** (the old
+  extension-based 522+27/163/31 mislabels at least one file). 1.14 GB, width p50 1806.
+- **Baseline run `20260802-163445`** — 42 pages, 255 jobs, 7,924 s: 90.8% of job lifetime was queue
+  wait; `layout` p50 wait 591 s around 0.2 s of work; light tier 94.7 s/page vs heavy 23.4 s/page;
+  `active_light` never exceeded 1 across 3,253 samples; 277 dispatches for 255 jobs; worker CPU mean
+  22.5%; **0.0 s of rate-limit sleep** across 7,924 s (AUDIT-W2 inert).
+
+## Still open, verified present 2026-08-03
+
+- **AUDIT-W12 [H]** (`issues.md`) — confirm QA actually emits `escalation` / `directFix`. Committed
+  but never verified against a live provider. Until `escalation.needsReOcr` arrives, every QA
+  failure routes to a blind re-translation of unreadable OCR: **450 s across 4 wasted cycles on 5
+  pages, 39% of all work**. Three greps on the next run settle it. The `qa-re-ocr` dispatch path
+  exists and is correct — it has simply never fired.
+- **AUDIT-F6** — `QueueManager.tsx:378` still uses `>=` on `createdAt`, so an in-flight poll can
+  overwrite a newer SSE status.
+- **AUDIT-F7** — `ChapterGallery.tsx:194-199` still calls `setPages` after upload with no guard that
+  `selectedChapter` hasn't changed meanwhile.
+- **AUDIT-F8** — the negative assertion inside `waitFor` is still there, now at
+  `Reader.test.tsx:501-505` (was 386). `waitFor` retries until the callback passes, and
+  `not.toBeInTheDocument()` passes on the first tick, so the test cannot fail.
 - **AUDIT-W11** — a chapter pinned to a dead provider gets no cross-provider fallback.
+- **Unmatched `/api/**` paths return 200**, not 404: `ForwardController` catches them and forwards
+  to `/error`.
+- **The ZIP export is unverified.** `handleExportPng` / `handleExportZip` were repointed at `/file`
+  so `original.png` stays the original, and `/file` was confirmed to still serve untouched bytes —
+  but nobody has opened an exported ZIP and checked. Silent failure mode; worth one click.
+- **No automated test for the prefetch gate.** The invariant "nothing prefetches before the current
+  image loads" is exactly the kind that regresses quietly.
+
+### Correction to the old Step B note
+
+The old handoff said `handleExportRenderedPng` draws from `imgRef.current`. **It does not** — it
+fetches `/api/pages/{id}/rendered` from the server and was never at risk. The two that did draw from
+the displayed element are `handleExportPng` and `handleExportZip`.
+
+## Out of scope unless deliberately reopened
+
 - **The worker pull model.** Measured at 408 s of 49,058 s of queue wait (0.83%). Build it for
-  latency and multi-worker scaling, never for throughput, and not before this run is read.
+  latency and multi-worker scaling, never for throughput.
 - **AUDIT-S\*** — security is tracked separately, don't fold it in.
+- **A reader downscale cap.** Measured: a 3000 px long-edge cap hits 124 images and saves a further
+  46 MB (0.241× → 0.200×). Real but secondary, and a second performance variable.
 
 ## Working constraints
 
 - **`CLAUDE.md` is binding.** `impact({target, direction:"upstream", repo:"manga-library"})` before
-  editing any symbol, report HIGH/CRITICAL, `detect_changes()` before committing. Note that
-  `detect_changes` attributes by line offset, so a large insertion will flag untouched symbols
-  below it — check hunk ranges before believing the blast radius.
+  editing any symbol, report HIGH/CRITICAL, `detect_changes()` before committing.
+  **`detect_changes` attributes by line offset**, so a large insertion flags untouched symbols below
+  it — check hunk ranges before believing the blast radius, and **reindex first**
+  (`node .gitnexus/run.cjs analyze`); a stale index is the main source of false HIGH/CRITICAL.
 - **One performance variable per change.** The delta has to be attributable.
-- **Backend API changes** require `npm run generate-api` from `frontend/` with the backend container
-  up. The frontend compiles *into* the backend image (`backend/Dockerfile:26`), so any frontend
-  change needs `docker compose build backend && docker compose up -d backend`.
-- **`worker/` is a git submodule** (`manga-tl-worker`). Changes there need their own commit plus a
-  pointer bump in the parent.
-- **Never upload Firefox profiles.** Use the profiler's save-to-file button — uploading publishes to
-  a public Mozilla URL, and these profiles carry series names and URLs.
-- Backend build is Maven (`mvn -o compile`, no wrapper). `PipelineFlowIntegrationTest` is the guard
-  for pipeline/config changes; ~80–180 s.
+- **Commit straight to `main`** — no feature branches for this project.
+- **`.env` is gitignored and overrides `docker-compose.yml` defaults.** This is how the W10 change
+  was missed for a day. Verify with
+  `docker compose config | grep -E 'CONCURRENT_JOBS|MAX_(HEAVY|LIGHT)_SLOTS'` before trusting a run.
+  Current: `CONCURRENT_JOBS=4 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=3`.
+- The frontend compiles **into** the backend image, so any frontend change needs
+  `docker compose build backend && docker compose up -d backend` (~10 min).
+- Backend API changes require `npm run generate-api` from `frontend/` with the backend container up.
+- **`worker/` is a git submodule.** Changes need their own commit plus a pointer bump in the parent.
+- Backend build is Maven (`mvn -o compile`, no wrapper).
+- **Testcontainers is currently broken on this box** — `SecurityConfigTest`,
+  `PipelineFlowIntegrationTest`, `SchemaValidationTest` and the repository tests all fail on Ryuk /
+  Redis connection errors. Confirmed environmental: reproduced on a clean tree with all changes
+  stashed, and persists both outside the sandbox and with `TESTCONTAINERS_RYUK_DISABLED=true`.
+  Unit tests are unaffected. **Fix this before trusting a green backend suite.**
+- **MinIO objects are readable straight off disk** — no container, no port 9000. Single-drive MinIO
+  prefixes a 32-byte bitrot checksum to each 1 MiB block; strip those and the bytes come back
+  verbatim. Handle three layouts: single-part, multi-part (`part.1..N`, numeric order), and small
+  objects inlined into `xl.meta` as a trailing msgpack `bin32`. Verified against all 743 ETags.
+- **Never upload Firefox profiles** — use save-to-file; they carry series names and URLs.
 
 ## Prompt for the next chat
 
 <!-- markdownlint-disable MD031 MD040 -->
 
 ```
-Comparison analysis of a pipeline run recorded after the AUDIT-W10 slot change.
-
-Read docs/next-step.md first — it has the baseline numbers, the six predictions to
-test in order, and what is out of scope. Do not re-audit the codebase; the findings
-are in docs/issues.md under "Full-Stack Audit — 2026-08-01".
-
-New run:      logs/runs/<TIMESTAMP>/
-Baseline run: logs/runs/20260802-163445/
+Continuing manga-library performance work. Read docs/next-step.md first — it has
+what shipped, what is settled, and what is still open. Do not re-audit the codebase
+and do not re-derive the run numbers; both are written down. The ~50 AUDIT-* findings
+in docs/issues.md carry file:line anchors.
 
 WHAT I WANT
 
-1. Walk the six predictions in docs/next-step.md in order, with the number that
-   settles each. Start with active_light > 1 — if that failed, stop and tell me the
-   config did not take effect.
+1. AUDIT-W5 first: lend the idle heavy slot. Read the corrected description in
+   next-step.md — the worker already honours REUSE_IDLE_SLOTS, so the change is on
+   the backend dispatcher's hasLightSlot() alone. One variable, its own commit.
 
-2. stage_summary.csv new vs baseline, per stage: n / p50 / p95 / total. Then the
-   queue-wait split — is it still ~90% of job lifetime, and which tier is the floor
-   now?
+2. Then a clean drained run at 4/1/3 and walk predictions 2-4:
+   - stage_summary.csv new vs baseline 20260802-163445, per stage: n / p50 / p95 / total
+   - the queue-wait split — still ~90% of job lifetime, and which tier is the floor now?
+   - if the light tier is STILL the floor with slots lent, say so and say what the
+     next measurement is. AUDIT-W3 is the next suspect.
 
-3. Tell me plainly if any prediction is falsified. I would rather delete a wrong
-   model of the system than fix the wrong thing. In particular: if the light tier is
-   still the floor with four slots, say so and say what the next measurement is.
-
-4. Check the two second-order effects: rate-limit sleep seconds in log_signals.md
+3. Check two second-order effects: rate-limit sleep seconds in log_signals.md
    (baseline 0.0s), and worker/container CPU in resources.csv against the 4-core box.
+   If the UI degrades, cap the worker's CPU rather than reverting the slot change —
+   that is the documented decision, not a fresh judgement call.
+
+4. Settle AUDIT-W12 with the three greps listed in issues.md — does QA actually emit
+   escalation/directFix now?
 
 5. Rank whatever remains by measured payoff — "N seconds per page, M lines to fix" —
    not by severity label.
 
+Tell me plainly if any of this is falsified once measured. I would rather delete a
+wrong model of the system than fix the wrong thing.
+
 CONSTRAINTS
+- CLAUDE.md is binding: reindex, impact() before edits, detect_changes() before commits.
+- Commit to main directly.
 - One performance variable per change.
-- CLAUDE.md is binding: impact() before edits, detect_changes() before commits.
 - Security findings (AUDIT-S*) are tracked separately; don't fold them in.
 ```
 

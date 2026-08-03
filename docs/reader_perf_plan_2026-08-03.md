@@ -4,11 +4,12 @@
 > and its consequences are in [§ How other readers do it](#how-other-readers-do-it); the plan at the
 > bottom is the revised one.
 >
-> **For current status and where to resume, see
-> [immediate-next-steps.md](./immediate-next-steps.md).** Items 0, 3 (positioning) and 4 (the auth
-> decision) are done; item 1's framing has since changed — a ~1600 px downscale is the wrong lever
-> because 77% of images are already ≤2000 px, so the win is the WebP re-encode, not the resize.
-> This file is kept for the measurements and the reader-design research.
+> **The plan below is fully implemented as of 2026-08-03 — items 1–6 all shipped.** For current
+> status see [next-step.md](./next-step.md); for what WebP actually bought and why q90, see
+> [comparison.md](./comparison.md). Item 1's framing changed along the way: a ~1600 px downscale was
+> the wrong lever, because 77% of images are already ≤2000 px, so the win is the WebP re-encode and
+> not the resize. **This file is kept for the measurements and the reader-design research**, which
+> are what the implementation was built from.
 >
 > Runs: [`20260803-101946`](../logs/runs/20260803-101946) (reader only, 800 s) and
 > [`20260803-103311`](../logs/runs/20260803-103311) (reader + queue processing, 1064 s).
