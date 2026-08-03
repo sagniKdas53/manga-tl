@@ -153,6 +153,77 @@ describe("Reader Component", () => {
     }
   });
 
+  /**
+   * Overlay coordinates are stored in the original image's pixel space, so the SVG viewBox must
+   * match it. Deriving that from the rendered <img> is only correct while the displayed bytes are
+   * the original — the moment a downscaled reading variant is served, every overlay shifts and
+   * anything drawn or dragged is clamped to, and persisted in, the wrong space.
+   */
+  it("takes overlay geometry from the API, not from the displayed image", async () => {
+    mockSafeFetch.mockImplementation((url: string) => {
+      if (url === `/api/pages/${mockPage.id}`) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              // The rendered element is 800x1200 in jsdom; the original is not.
+              image: { width: 1809, height: 2551 },
+              panels: [],
+              ocrRegions: [],
+              conversations: [],
+              layers: [],
+            }),
+          blob: () => Promise.resolve(new Blob(["img"])),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([]),
+        blob: () => Promise.resolve(new Blob(["img"])),
+      });
+    });
+
+    const { container } = render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />,
+    );
+
+    await waitFor(() => {
+      const svg = container.querySelector("svg.svg-overlay");
+      expect(svg?.getAttribute("viewBox")).toBe("0 0 1809 2551");
+    });
+  });
+
+  it("falls back to the rendered image when the API reports no dimensions", async () => {
+    // Rows predating the dimension backfill still have null width/height.
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={[mockPage]}
+        theme="dark"
+      />,
+    );
+
+    const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
+    Object.defineProperty(img, "naturalWidth", { value: 1234, configurable: true });
+    Object.defineProperty(img, "naturalHeight", { value: 5678, configurable: true });
+    fireEvent.load(img);
+
+    await waitFor(() => {
+      const svg = document.querySelector("svg.svg-overlay");
+      expect(svg?.getAttribute("viewBox")).toBe("0 0 1234 5678");
+    });
+  });
+
   it("handles sidebar toggles and page navigation clicks", async () => {
     const mockPages = [mockPage, { ...mockPage, id: "p2", pageNumber: 2 }];
     render(
