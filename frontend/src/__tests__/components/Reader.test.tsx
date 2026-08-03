@@ -498,25 +498,30 @@ describe("Reader Component", () => {
       />,
     );
 
-    await waitFor(() => {
-      // It should NOT show the spinner because the cache hit is synchronous
-      expect(
-        screen.queryByText(/Loading page details/),
-      ).not.toBeInTheDocument();
+    // The cache hit is synchronous, so the spinner must never render — not for one tick.
+    // This has to be asserted here rather than inside the waitFor below. waitFor retries
+    // until the whole callback passes, so a spinner that flashes and then goes is
+    // indistinguishable from one that never rendered: the assertion would simply pass on
+    // a later attempt. Checked synchronously after the rerender, it fails if the spinner
+    // was ever committed.
+    expect(screen.queryByText(/Loading page details/)).not.toBeInTheDocument();
 
+    await waitFor(() => {
       const fetchCalls = mockSafeFetch.mock.calls as unknown as [
         string,
         RequestInit?,
       ][];
       const fetchUrls = fetchCalls.map((call) => call[0] || "");
+      // It SHOULD prefetch p4/img4 now since it's the new N+2. This is the positive that
+      // gives waitFor something to wait for; the negative below is only meaningful once
+      // it holds.
+      expect(
+        fetchUrls.some((url) => url.includes("p4") || url.includes("img4")),
+      ).toBe(true);
       // Should not refetch p2/img2 because it's cached
       expect(
         fetchUrls.some((url) => url.includes("p2") || url.includes("img2")),
       ).toBe(false);
-      // It SHOULD prefetch p4/img4 now since it's the new N+2
-      expect(
-        fetchUrls.some((url) => url.includes("p4") || url.includes("img4")),
-      ).toBe(true);
     });
   });
 
