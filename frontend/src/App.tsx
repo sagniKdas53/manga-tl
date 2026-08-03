@@ -25,7 +25,6 @@ import type { User, Series, Chapter, Page } from "./types";
 
 // Utils & overrides
 import { safeFetch, getContextPath } from "./utils";
-import { clearAuthImageCache } from "./utils/authImage";
 
 // Providers
 import { NotificationProvider } from "./components/NotificationContext";
@@ -344,9 +343,6 @@ function AppContent() {
   // Handle Logout
   const handleLogout = () => {
     localStorage.removeItem("manga_user");
-    // Decoded page images are held as blob URLs; drop them so they do not
-    // outlive the session for the next user of the browser.
-    clearAuthImageCache();
     setUser(null);
     navigate("/login");
   };

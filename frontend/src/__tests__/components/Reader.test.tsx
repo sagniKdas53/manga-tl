@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Reader from "../../components/Reader";
-import { clearAuthImageCache } from "../../utils/authImage";
+import { toReaderUrl } from "../../utils/readerImage";
 
 // Mock external modules
 export const mockNavigate = vi.fn();
@@ -87,16 +87,13 @@ describe("Reader Component", () => {
 
   beforeEach(async () => {
     localStorage.clear();
-    // The blob cache is module-level; without this a page cached by an earlier
-    // test is served without a fetch and the next test sees no image request.
-    clearAuthImageCache();
     mockSafeFetch.mockReset();
     mockSubscribe.mockClear();
     mockShowToast.mockClear();
     mockSafeFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve([]),
-      // The page image is fetched as a blob, not JSON (see utils/authImage).
+      // Only export reads image bytes now; the page itself is a plain <img src>.
       blob: () => Promise.resolve(new Blob(["img"])),
     });
     mockNavigate.mockClear();
@@ -134,23 +131,26 @@ describe("Reader Component", () => {
     );
 
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
-    // `<img>` cannot send a header, so the bytes arrive as a blob URL. A plain
-    // `src={url}?token=` regressed to 401 once AUDIT-S4 removed the query-param
-    // credential path from JwtAuthFilter.
+    // The reading variant is public and cacheable, so the page is a plain `src` again -- no
+    // blob URL, and no fetch for the image at all. `?token=` must still never appear: AUDIT-S4
+    // removed that credential path from JwtAuthFilter and it must not creep back.
     await waitFor(() =>
-      expect(img.getAttribute("src")).toMatch(/^blob:/),
+      expect(img.getAttribute("src")).toBe(toReaderUrl(mockPage.url)),
     );
 
-    const imageCall = mockSafeFetch.mock.calls.find(
-      ([url]) => url === mockPage.url,
-    );
-    expect(imageCall).toBeDefined();
-    expect(imageCall![1]?.headers).toEqual({
-      Authorization: `Bearer ${mockUser.token}`,
-    });
+    expect(
+      mockSafeFetch.mock.calls.find(([url]) => url === mockPage.url),
+    ).toBeUndefined();
     for (const [url] of mockSafeFetch.mock.calls) {
       expect(url).not.toContain("token=");
     }
+  });
+
+  it("points the reader at the derived variant, not the original", () => {
+    expect(toReaderUrl("/api/images/abc/file")).toBe("/api/images/abc/reader");
+    // Only a trailing /file is rewritten, so an unrelated path is passed through untouched.
+    expect(toReaderUrl("/path/to/img1.jpg")).toBe("/path/to/img1.jpg");
+    expect(toReaderUrl(undefined)).toBeUndefined();
   });
 
   /**
