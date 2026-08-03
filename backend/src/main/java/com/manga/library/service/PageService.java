@@ -21,9 +21,13 @@ public class PageService {
   private static final Logger log = LoggerFactory.getLogger(PageService.class);
 
   // Serializes access to the WebP native codec (webp-imageio). The JNI library is not safe to
-  // call concurrently from multiple threads; a racing call can SIGSEGV the whole JVM. The lock is
-  // scoped to WebP work only so the thread-safe built-in PNG/JPEG/BMP codecs can still run in
-  // parallel.
+  // call concurrently from multiple threads; a racing call can SIGSEGV the whole JVM.
+  //
+  // The lock is now genuinely scoped to WebP work only -- every WebP *write*, and a *read* just
+  // when the chosen ImageReader is the native WebP one. Until AUDIT-B6 the comment claimed this
+  // while the code held the lock across the decode of every format, serialising the whole
+  // four-thread thumbnailExecutor. The built-in JPEG/PNG/BMP codecs are thread-safe and run in
+  // parallel again.
   private static final Object WEBP_LOCK = new Object();
   private final ImageRepository imageRepository;
   private final PageRepository pageRepository;
@@ -228,48 +232,106 @@ public class PageService {
             });
   }
 
+  /** Result of the thumbnail source decode. Null image is never returned; see the helper. */
+  private record Decoded(
+      java.awt.image.BufferedImage image, int width, int height, int targetHeight) {}
+
+  /**
+   * True when this reader is the native libwebp-backed one, which is the only codec here that is
+   * unsafe to call concurrently.
+   *
+   * <p>Detected via the originating provider rather than {@link
+   * javax.imageio.ImageReader#getFormatName()}, which can itself touch the native library.
+   */
+  private static boolean isNativeWebpReader(javax.imageio.ImageReader reader) {
+    javax.imageio.spi.ImageReaderSpi spi = reader.getOriginatingProvider();
+    if (spi == null) {
+      return true; // unknown provenance: assume unsafe rather than risk a SIGSEGV
+    }
+    String[] names = spi.getFormatNames();
+    if (names == null) {
+      return true;
+    }
+    for (String name : names) {
+      if (name != null && name.toLowerCase(java.util.Locale.ROOT).contains("webp")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Decodes the thumbnail source, holding {@code WEBP_LOCK} only for a genuinely WebP source.
+   *
+   * <p>AUDIT-B6: this decode used to sit wholly inside {@code synchronized (WEBP_LOCK)} despite
+   * the lock's comment claiming it was WebP-only, which serialised the entire four-thread
+   * {@code thumbnailExecutor} — the known slowdown on 100+ image uploads. JPEG and PNG are 96% of
+   * this corpus and their ImageIO codecs are thread-safe, so they no longer wait on each other.
+   *
+   * <p>Returns null when no reader can handle the bytes.
+   */
+  private Decoded decodeForThumbnail(UUID imageId, java.io.InputStream in, int targetWidth)
+      throws IOException {
+    javax.imageio.stream.ImageInputStream iis = javax.imageio.ImageIO.createImageInputStream(in);
+    try {
+      java.util.Iterator<javax.imageio.ImageReader> readers =
+          javax.imageio.ImageIO.getImageReaders(iis);
+      if (!readers.hasNext()) {
+        log.warn("No image reader found for image {}", imageId);
+        return null;
+      }
+      javax.imageio.ImageReader reader = readers.next();
+      try {
+        // Chosen before any decoding call, so the branch below cannot itself race the codec.
+        if (isNativeWebpReader(reader)) {
+          synchronized (WEBP_LOCK) {
+            return readSubsampled(reader, iis, targetWidth);
+          }
+        }
+        return readSubsampled(reader, iis, targetWidth);
+      } finally {
+        reader.dispose();
+      }
+    } finally {
+      iis.close();
+    }
+  }
+
+  private static Decoded readSubsampled(
+      javax.imageio.ImageReader reader, javax.imageio.stream.ImageInputStream iis, int targetWidth)
+      throws IOException {
+    reader.setInput(iis, true, true);
+    int originalWidth = reader.getWidth(0);
+    int originalHeight = reader.getHeight(0);
+
+    double ratio = (double) originalHeight / originalWidth;
+    int targetHeight = (int) (targetWidth * ratio);
+    if (targetHeight <= 0) targetHeight = 1;
+
+    // Subsampling: only subsample if the image is extremely large to save memory,
+    // but keep it at least 3x the target width for high-quality downscaling
+    javax.imageio.ImageReadParam param = reader.getDefaultReadParam();
+    int scale = originalWidth / (targetWidth * 3);
+    if (scale > 1) {
+      param.setSourceSubsampling(scale, scale, 0, 0);
+    }
+    return new Decoded(reader.read(0, param), originalWidth, originalHeight, targetHeight);
+  }
+
   @org.springframework.scheduling.annotation.Async("thumbnailExecutor")
   public void generateAndSaveThumbnailAsync(UUID imageId, String uuid, byte[] originalBytes) {
     try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(originalBytes)) {
-      in.mark(Integer.MAX_VALUE);
-      java.awt.image.BufferedImage subsampledImage;
       int targetWidth = 512;
-      int targetHeight;
-      // Hoisted out of the lock so they survive to the persist below. The reader has always
-      // computed these and thrown them away, which left images.width/height null for every row.
-      int originalWidth;
-      int originalHeight;
-      synchronized (WEBP_LOCK) {
-        javax.imageio.stream.ImageInputStream iis = javax.imageio.ImageIO.createImageInputStream(in);
-        java.util.Iterator<javax.imageio.ImageReader> readers =
-            javax.imageio.ImageIO.getImageReaders(iis);
-        if (!readers.hasNext()) {
-          log.warn("No image reader found for image {}", imageId);
-          iis.close();
-          return;
-        }
-        javax.imageio.ImageReader reader = readers.next();
-        reader.setInput(iis, true, true);
-
-        originalWidth = reader.getWidth(0);
-        originalHeight = reader.getHeight(0);
-
-        double ratio = (double) originalHeight / originalWidth;
-        targetHeight = (int) (targetWidth * ratio);
-        if (targetHeight <= 0) targetHeight = 1;
-
-        // Subsampling: only subsample if the image is extremely large to save memory,
-        // but keep it at least 3x the target width for high-quality downscaling
-        javax.imageio.ImageReadParam param = reader.getDefaultReadParam();
-        int scale = originalWidth / (targetWidth * 3);
-        if (scale > 1) {
-          param.setSourceSubsampling(scale, scale, 0, 0);
-        }
-
-        subsampledImage = reader.read(0, param);
-        reader.dispose();
-        iis.close();
+      Decoded decoded = decodeForThumbnail(imageId, in, targetWidth);
+      if (decoded == null) {
+        return;
       }
+      java.awt.image.BufferedImage subsampledImage = decoded.image();
+      // Used below for the persist: the reader has always computed these and thrown them away,
+      // which left images.width/height null for every row.
+      int originalWidth = decoded.width();
+      int originalHeight = decoded.height();
+      int targetHeight = decoded.targetHeight();
 
       // Persisted here rather than alongside the thumbnail path below, and outside the lock: the
       // reader's overlay geometry depends on these, so they must survive an encode failure (a
@@ -332,10 +394,12 @@ public class PageService {
                 imageRepository.save(Objects.requireNonNull(img));
               });
       log.info("Successfully generated and uploaded WebP thumbnail to {}", thumbnailStoragePath);
-    } catch (IOException | RuntimeException | Error | MinioException e) {
-      // Error is caught so JNI/native failures (e.g. UnsatisfiedLinkError from a missing
-      // musl libwebp-imageio) are logged with context instead of escaping to the async
-      // uncaught handler. Thumbnail generation is best-effort; the gallery retries lazily.
+    } catch (IOException | RuntimeException | LinkageError | MinioException e) {
+      // LinkageError, not Error: the intent was to log JNI/native load failures (e.g.
+      // UnsatisfiedLinkError from a missing musl libwebp-imageio) with context instead of
+      // letting them escape to the async uncaught handler. Catching Error also swallowed
+      // OutOfMemoryError, which is not recoverable and must not be treated as a failed
+      // thumbnail. Thumbnail generation is best-effort; the gallery retries lazily.
       log.error("Failed to generate async thumbnail for image {}", imageId, e);
     }
 
@@ -420,7 +484,9 @@ public class PageService {
           originalBytes.length,
           variant.length,
           String.format("%.2f", (double) variant.length / originalBytes.length));
-    } catch (IOException | RuntimeException | Error | MinioException e) {
+    } catch (IOException | RuntimeException | LinkageError | MinioException e) {
+      // See the thumbnail path: LinkageError only, so an OutOfMemoryError from decoding a very
+      // large page propagates instead of being logged as a routine variant failure.
       log.error("Failed to generate reader variant for image {}", imageId, e);
     }
   }
