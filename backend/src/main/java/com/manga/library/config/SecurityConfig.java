@@ -31,6 +31,42 @@ public class SecurityConfig {
     this.sseTicketAuthFilter = sseTicketAuthFilter;
   }
 
+  /**
+   * Image bytes are deliberately public; everything that decides, changes or reveals state is not.
+   *
+   * <p><b>Do not "fix" this by adding authentication.</b> Two image routes are open on purpose:
+   *
+   * <ul>
+   *   <li>{@code /api/images/*&#47;thumbnail} — 512px WebP, long-standing.
+   *   <li>{@code /api/images/*&#47;reader} — the downscaled WebP reading variant.
+   * </ul>
+   *
+   * <p>Three reasons, in order of weight:
+   *
+   * <ol>
+   *   <li><b>An {@code <img>} cannot send an {@code Authorization} header.</b> Requiring one forces
+   *       the frontend to fetch bytes through JavaScript and hand them to the element as a blob URL,
+   *       which costs progressive decoding, the browser's own request prioritisation, and the HTTP
+   *       cache. That was tried (commit {@code 02d9185}, to repair the reader after AUDIT-S4 removed
+   *       {@code ?token=}) and measurably regressed the reader — see
+   *       {@code docs/reader_perf_plan_2026-08-03.md}.
+   *   <li><b>Authenticated responses cannot be cached usefully.</b> A public, immutable image is
+   *       cacheable by the browser and any intermediary; a per-user one is not.
+   *   <li><b>It matches how comparable readers work.</b> MangaDex's API documentation instructs
+   *       clients <i>not</i> to send authentication headers when fetching page images, and serves
+   *       them from an unauthenticated CDN.
+   * </ol>
+   *
+   * <p><b>What this does not open.</b> Listing, searching and metadata stay authenticated, so the
+   * catalogue is not enumerable: reaching an image requires already knowing its UUID. Originals
+   * ({@code /file}) stay authenticated — only the derived, downscaled, lossy variants are public.
+   * Nothing here is a write path.
+   *
+   * <p>If the deployment ever needs the images closed too, do not simply move the matchers: replace
+   * them with a short-TTL signed URL (the model {@link SseTicketAuthFilter} already uses for SSE),
+   * which preserves native {@code <img>} loading. Reverting to header auth reintroduces the
+   * regression above.
+   */
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -45,7 +81,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/internal/**")
                     .permitAll()
-                    .requestMatchers("/api/images/*/thumbnail")
+                    // Public on purpose — read the javadoc on this method before changing.
+                    .requestMatchers("/api/images/*/thumbnail", "/api/images/*/reader")
                     .permitAll()
                     .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/layers/**")
                     .hasAnyRole("ADMIN", "TRANSLATOR")
