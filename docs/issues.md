@@ -82,21 +82,6 @@ The two remaining complaints are measured, and neither is fixable in frontend co
 
 ---
 
-## Add Free Provider for Testing
-
-[uncloseai](https://uncloseai.com/python-examples.html)
-also [free-ollama](https://github.com/mfoud444/ollamafreeapi/tree/main)
-
-### Available Endpoints
-
-> Note: These seem shady proceed with caution.
-
-+ Hermes: <https://hermes.ai.unturf.com/v1> - General purpose conversational AI
-+ Qwen 3 Coder: <https://qwen.ai.unturf.com/v1> - Specialized coding model
-
-Not yet added to `config/providers.json` — current entries are only `openrouter`, `cloudflare`,
-`nvidia`, `neurometric`.
-
 ## `try_local_ai` ignores its `prompt` argument — local/Ollama QA silently returns nothing
 
 Found while designing [mock_router.md](./mock_router.md).
@@ -395,6 +380,18 @@ The failure is invisible because `None` falls through to the local-LLM branch (`
 is itself broken (the `try_local_ai` prompt bug already tracked above), which returns something
 unparsable, which yields `results = []`, which completes QA with zero findings and no error.
 
+**Correction 2026-08-04 — the dispatch half of this is stale.** Found while researching a Mistral
+provider entry (archived under F.2 in [archive.md](./archive.md)). The four hardcoded `if/elif`
+chains no longer exist: `_qa_cloud_llm` (`handlers/qa.py:200`) and `_qa_cloud_vlm` (`:219`) are
+provider-generic and route through `LLMClient` for any provider in `config/providers.json` — their
+docstrings say so explicitly. What remains is narrower: `QA_DEFAULT_LLM_MODELS` /
+`QA_DEFAULT_VLM_MODELS` (`:38-46`) still list only `openrouter`, `gemini`, `nvidia`, so a provider
+absent from those maps has no built-in default and `_resolve_qa_model` returns `None` **when no
+model is configured at any level**. Since `providers.json` carries per-provider `defaultQALLMModel`
+/ `defaultQAVLMModel`, that path is reachable but no longer silent — `_resolve_qa_model` logs the
+reason. Re-rank as **[L]**: delete the two default maps in favour of the config, rather than
+extending them.
+
 #### AUDIT-W2 **[H]** — `RATE_LIMIT` is a single global throttle across all providers and tasks
 
 `utils/rate_limit.py:20-31` — when a provider does not carry its own `rate_limits`, it falls back
@@ -411,6 +408,10 @@ This item was previously ranked "likely the single largest throughput win availa
 The hardening is still worth doing — the global fallback should default to unlimited so that adding
 a provider without `rate_limits` does not silently throttle everything — but it buys no throughput
 today.
+
+**Second data point, 2026-08-04** (`20260803-211221`, 30 pages): **16.9 s across 13 sleeps in
+1,457 s of wall — 1.2%.** Non-zero this time but still noise. Consistent with the 0.0 s baseline;
+the reading stands. Only the unlimited-default hardening remains.
 
 #### AUDIT-W3 **[M]** — cooldowns and lock waits burn a job slot doing nothing
 
@@ -435,6 +436,13 @@ lock a *different* holder has since acquired. Needs a random token value plus a 
 Lua script.
 
 #### AUDIT-W5 **[M]** — `REUSE_IDLE_SLOTS` is dead code in the push model
+
+> **WON'T DO — closed 2026-08-04.** Re-measured payoff is **1.8%**, down from the 13.0% that put
+> this at the top of the list, and at that size lending the slot is probably not even the right fix.
+> Two corrections to the text below, both made by reading the code on 2026-08-03: `REUSE_IDLE_SLOTS`
+> **is** read (`worker/src/worker/main.py:206`), and the method is `hasLightSlot()` at
+> `WorkerDispatcherService.java:334`, not `:318`. Kept rather than deleted so this does not get
+> re-derived. See `docs/archive.md`.
 
 The worker will accept a light job into a spare global slot (`main.py:171-175`) and reports
 `overflow_light_jobs` in `/capabilities`. But the backend gates dispatch on
@@ -542,6 +550,10 @@ Also `:459` defaults `LOCAL_LLM_MODEL` to `gemma3:4b`, while `docker-compose.yml
 
 #### AUDIT-W12 **[H]** — confirm QA actually emits `escalation` and `directFix` now
 
+> **CONFIRMED 2026-08-04.** QA does emit `escalation` / `directFix` against a live provider. The
+> contingency below — flattening the nested objects onto the result — is **not needed** and should
+> not be built. The 90 s/page of blind re-translation this was costing is recovered.
+
 Split out 2026-08-03. The schema change that makes both objects `required`, and the prompt rewrite
 that tells the model prose has no routing effect, are **committed but unconfirmed against a live
 provider** — the only evidence they were missing is observational (run `20260803-084755`: 10
@@ -566,6 +578,11 @@ flatten the fields onto the result object rather than nesting them — models em
 objects far less reliably than flat scalars, and that is the pattern all four QA prompts share.
 
 #### AUDIT-W11 **[M]** — a chapter pinned to a dead provider has no escape hatch
+
+> **FIXED 2026-08-04** (worker `2f0abfa`). Fallback now crosses provider boundaries when — and
+> only when — the pinned provider is parked in `PROVIDER_AUTH_FAILURES`. Both translation paths
+> share `resolve_fallback_target()`. `ocr.py` and `qa.py` still carry the old rule; the failure was
+> only measured on translation, so they were left for their own commit.
 
 *Added 2026-08-03, split out of the translation-failure triage at the bottom of this file.*
 
@@ -731,10 +748,16 @@ overlay and the page navigation are three independent modules sharing one compon
 
 #### AUDIT-F3 **[M]** — SSE reconnects forever with no backoff
 
-`useSSE.ts:66-71` — on error, wait a flat 5s and bump `retryCount`, which is in the effect's
-dependency array, triggering a reconnect. No exponential backoff and no attempt cap, so a backend
-outage turns every open tab into a 12 req/min heartbeat against a service that is already down. The
-`EventSource` built-in reconnect is also still active until `close()` lands.
+`useSSE.ts:52-62` — on error, wait a flat `RETRY_DELAY_MS = 5000` and bump `retryCount`, which is in
+the effect's dependency array, triggering a reconnect. No exponential backoff and no attempt cap, so
+a backend outage turns every open tab into a 12 req/min heartbeat against a service that is already
+down.
+
+**Re-checked 2026-08-04, partially addressed.** The `eventSource.close()` before `fail()` now lands
+first (`:123`), so the `EventSource` built-in reconnect no longer runs alongside the manual one —
+that half of the finding is closed. The flat 5 s retry with no cap is unchanged. Reduced from **[M]**
+to **[L]**: 12 req/min per tab against a downed backend is untidy, not harmful, and the ticket
+exchange means each attempt is one cheap POST.
 
 #### AUDIT-F4 **[M]** — light-mode secondary text fails WCAG AA by a wide margin
 
@@ -857,6 +880,16 @@ handlers can only be tested meaningfully against something that speaks the wire 
 
 #### AUDIT-T2 — the error branches, which is where the bugs are, have no coverage
 
+> **Worker half DONE** (`ffab71d`). `test_llm_client.py` is now 16 tests and **all five branches
+> listed below are covered**: 429 + cooldown escalation (×3, including `Retry-After`),
+> `json_schema` → `json_object` degradation, `5xx` → Tenacity retry (×2), `4xx` →
+> `PermanentAPIError` (×2, including that a non-401 4xx does *not* park the provider), and
+> timeout/connection errors. Auth-failure parking gained two more in the same pass.
+>
+> **Backend half still open, and it is the part that matters now**: none of the dispatcher's failure
+> paths are exercised, so AUDIT-P2 and AUDIT-P3 have no test to fail. Re-scope this entry to that
+> before picking it up — the "five cheap tests against existing mocks" framing below is spent.
+
 `test_llm_client.py` has five tests. All five stub a `200` response. There is **no test** for:
 
 + the `429` path and its exponential cooldown (`llm_client.py:260-270`)
@@ -962,6 +995,21 @@ id; doing it there removes the residual ambiguity noted in `claimCallback`'s jav
 
 #### Still outstanding from that batch — 2026-08-03
 
+> **Closed out 2026-08-04.** Item 1 (the re-run) happened — `20260803-204638` (2 jobs) and
+> `20260803-211221` (30 jobs, 204 jobs total, all COMPLETED, 24 min wall, $0.19), both profiled
+> remotely so local profiling did not contend. Item 3 (`schema.d.ts`) is done — the file carries
+> `notifications/ticket`. Item 2 (the `neurometric` key) is still dead, but **AUDIT-W11 changed what
+> that costs**: a chapter pinned to a provider whose key is rejected now falls back across the
+> provider boundary instead of failing 100% of its translations. Replacing the key is housekeeping
+> now, not an outage.
+>
+> The re-run's own conclusions live in `docs/archive.md` under the 2026-08-04 handoff: AUDIT-W5 fell
+> to 1.8%, AUDIT-W12 confirmed, AUDIT-W2 at 1.2%, and the large `layout` / `panel-detection` stage
+> times turned out to be an **attribution artefact rather than a stall** — those stages sit
+> immediately before the expensive ones, so a job accrues its whole wait under the stage it last
+> completed. Do not re-derive "queue wait is 90% of job lifetime" as a finding; it is the same
+> artefact seen from the other side.
+
 Carried over from `docs/Next Steps.md`, which was retired once items 1–5 landed. These three need a
 human and are not code work:
 
@@ -1003,6 +1051,18 @@ human and are not code work:
    generated client.
 
 ### Suggested fix order
+
+> **Superseded 2026-08-04.** Everything this list ranked is now either done, measured away, or
+> reduced to housekeeping — see the current ordering in [next-step.md](./next-step.md). Kept below
+> because the *reasoning* about what was demoted and why is still the record.
+>
+> | was | now |
+> | --- | --- |
+> | #3 AUDIT-W10 "top of the list until measured" | **Measured.** 30-page run, 204 jobs, zero failures. The scheduling thread is closed. |
+> | #6 AUDIT-W12 "90 s/page if it holds" | **CONFIRMED 2026-08-04.** It held. |
+> | #7 AUDIT-T2 "top of the un-started work" | Partly overtaken — the 2026-08-04 sweep added red-green regression tests across queue merge, chapter refresh, prefetch gate, ZIP export and the W11 fallback. The *original* error-branch gap in `llm_client` was closed by `ffab71d`. Re-scope before picking it up. |
+> | #8 AUDIT-P2 / P3 / B1 | **B1 is now the single best payoff-per-line item on the board** — one config line against a 30 s stall of stale-job recovery. P2/P3 stay latent-correctness. |
+> | #9 AUDIT-W2 | Second data point: 1.2%. Reading unchanged. |
 
 **Revised 2026-08-02** against measured data from the first drained run
 ([perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md)). The previous
