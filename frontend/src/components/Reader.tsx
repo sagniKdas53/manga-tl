@@ -48,6 +48,22 @@ interface ReaderProps {
 }
 
 /** A single renderable item in the reader — either a conversation group or a standalone region. */
+/**
+ * Cached page details. Sized so ordinary back-and-forth reading stays a cache hit while a long
+ * chapter cannot accumulate every page's overlays; the payloads are small JSON.
+ */
+const MAX_CACHED_PAGE_DETAILS = 15;
+
+interface PageDetails {
+  panels: Panel[];
+  ocrRegions: OcrRegion[];
+  conversations: Conversation[];
+  layers: { layer: Layer; elements: LayerElement[] }[];
+  /** Original pixel dimensions; null on rows written before these were captured. */
+  imageWidth: number | null;
+  imageHeight: number | null;
+}
+
 interface RenderItem {
   id: string;
   isConversation: boolean;
@@ -282,18 +298,46 @@ export const Reader: React.FC<ReaderProps> = ({
   );
   const [isLoadingPageDetails, setIsLoadingPageDetails] = useState(false);
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
-  const pageDetailsCache = useRef<
-    Record<
-      string,
-      {
-        panels: Panel[];
-        ocrRegions: OcrRegion[];
-        conversations: Conversation[];
-        layers: { layer: Layer; elements: LayerElement[] }[];
-      }
-    >
-  >({});
+  /**
+   * Details cache, LRU by Map insertion order.
+   *
+   * Was a hard "evict anything outside the current +/-2 window", which meant stepping four pages
+   * forward and back re-fetched everything -- the measured 1.75x refetch rate on page details.
+   * A modest LRU covers ordinary back-and-forth reading instead. Entries are small JSON; the
+   * images they describe are cached by the browser, not here.
+   *
+   * Keyed by page id, and also read by image id at the call site, so both are looked up.
+   */
+  const pageDetailsCache = useRef<Map<string, PageDetails>>(new Map());
   const prefetchQueue = useRef<Set<string>>(new Set());
+
+  /** Re-inserting moves a key to the end of Map insertion order, which is what makes it an LRU. */
+  const touchDetailsCache = useCallback((key: string) => {
+    const entry = pageDetailsCache.current.get(key);
+    if (entry) {
+      pageDetailsCache.current.delete(key);
+      pageDetailsCache.current.set(key, entry);
+    }
+  }, []);
+
+  const readDetailsCache = useCallback(
+    (key: string): PageDetails | undefined => {
+      touchDetailsCache(key);
+      return pageDetailsCache.current.get(key);
+    },
+    [touchDetailsCache],
+  );
+
+  const writeDetailsCache = useCallback((key: string, value: PageDetails) => {
+    pageDetailsCache.current.delete(key);
+    pageDetailsCache.current.set(key, value);
+    while (pageDetailsCache.current.size > MAX_CACHED_PAGE_DETAILS) {
+      // Map iteration is insertion order, so the first key is the least recently used.
+      const oldest = pageDetailsCache.current.keys().next();
+      if (oldest.done) break;
+      pageDetailsCache.current.delete(oldest.value);
+    }
+  }, []);
   // Bumped whenever the details cache is invalidated (e.g. a job completed for
   // the open page). Requests started before the bump are stale: they must not
   // repopulate the cache nor mark the page as loaded, otherwise an invalidation
@@ -442,8 +486,8 @@ export const Reader: React.FC<ReaderProps> = ({
               // Bust cache for this page & image so fresh data is fetched.
               // Bumping the epoch also invalidates any request already in
               // flight, which would otherwise refill the cache we just cleared.
-              delete pageDetailsCache.current[selectedPage.id];
-              delete pageDetailsCache.current[selectedPage.imageId];
+              pageDetailsCache.current.delete(selectedPage.id);
+              pageDetailsCache.current.delete(selectedPage.imageId);
               prefetchQueue.current.delete(selectedPage.id);
               cacheEpochRef.current += 1;
 
@@ -682,8 +726,9 @@ export const Reader: React.FC<ReaderProps> = ({
   const fetchPageDetails = useCallback(
     async (pageId: string) => {
       const cacheKey = pageId;
-      if (pageDetailsCache.current[cacheKey]) {
-        return pageDetailsCache.current[cacheKey];
+      const hit = readDetailsCache(cacheKey);
+      if (hit) {
+        return hit;
       }
 
       const epoch = cacheEpochRef.current;
@@ -710,11 +755,11 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // Only cache if no invalidation happened while we were awaiting.
       if (cacheEpochRef.current === epoch) {
-        pageDetailsCache.current[cacheKey] = cachedData;
+        writeDetailsCache(cacheKey, cachedData);
       }
       return cachedData;
     },
-    [user.token],
+    [user.token, readDetailsCache, writeDetailsCache],
   );
 
   // Fetch page details (panels, OCR regions, conversations) when page selection updates
@@ -725,9 +770,11 @@ export const Reader: React.FC<ReaderProps> = ({
       const currentPageIndex = pages.findIndex((p) => p.id === currentPageId);
 
       // --- SYNCHRONOUS CACHE HIT ---
+      // Plain reads here. The LRU touch happens below, after the state is applied, so this
+      // stays a lookup rather than a mutation feeding straight into setState.
       const cached =
-        pageDetailsCache.current[currentPageId] ||
-        pageDetailsCache.current[currentImageId];
+        pageDetailsCache.current.get(currentPageId) ??
+        pageDetailsCache.current.get(currentImageId);
       if (cached) {
         setPanels(cached.panels);
         setOcrRegions(cached.ocrRegions);
@@ -742,6 +789,9 @@ export const Reader: React.FC<ReaderProps> = ({
         setSelectedItem(null);
         setLoadedImageId(currentPageId);
         setIsLoadingPageDetails(false);
+        // Mark most-recently-used now that the page is actually on screen.
+        touchDetailsCache(currentPageId);
+        touchDetailsCache(currentImageId);
       } else {
         // Clear stale data immediately so old chapter's overlays don't flash
         // on the new image while the fetch is in-flight.
@@ -798,37 +848,29 @@ export const Reader: React.FC<ReaderProps> = ({
 
         pagesToPrefetch.forEach((p) => {
           if (
-            !pageDetailsCache.current[p.id] &&
+            !pageDetailsCache.current.has(p.id) &&
             !prefetchQueue.current.has(p.id)
           ) {
             prefetchQueue.current.add(p.id);
 
-            // Prefetch details (must use the PAGE id, not the image id)
-            fetchPageDetails(p.id).catch((e) => {
-              // Allow retry on next navigation instead of staying queued forever
-              prefetchQueue.current.delete(p.id);
-              console.error("Prefetch error", e);
-            });
+            // Prefetch details (must use the PAGE id, not the image id).
+            // The queue tracks in-flight requests only -- it is cleared either way once the
+            // request settles, and the cache lookup above is what suppresses a redundant
+            // refetch. Leaving successful ids queued would permanently block re-prefetching a
+            // page after the LRU evicts it.
+            fetchPageDetails(p.id)
+              .catch((e) => {
+                console.error("Prefetch error", e);
+              })
+              .finally(() => {
+                prefetchQueue.current.delete(p.id);
+              });
           }
         });
 
-        // Keep details only for the small nearby window. Image memory is a
-        // browser-managed soft cap rather than a home-grown hard limit.
-        const activeWindowIds = new Set(nearbyPages.map((p) => p.id));
-
-        // Evict from cache
-        Object.keys(pageDetailsCache.current).forEach((cachedId) => {
-          if (!activeWindowIds.has(cachedId)) {
-            delete pageDetailsCache.current[cachedId];
-          }
-        });
-
-        // Evict from prefetchQueue tracking
-        prefetchQueue.current.forEach((queuedId) => {
-          if (!activeWindowIds.has(queuedId)) {
-            prefetchQueue.current.delete(queuedId);
-          }
-        });
+        // No window eviction here any more: writeDetailsCache bounds the cache by LRU.
+        // Evicting by window was what made a four-page round trip re-fetch everything it
+        // had just loaded.
       }
     }
     // cacheEpoch is a dependency so an invalidation re-runs this effect even
@@ -839,6 +881,7 @@ export const Reader: React.FC<ReaderProps> = ({
     pages,
     fetchPageDetails,
     setImageDimsFromSource,
+    touchDetailsCache,
     user.token,
     cacheEpoch,
   ]);
