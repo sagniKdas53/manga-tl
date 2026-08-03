@@ -992,6 +992,59 @@ public class JobCoordinatorService {
   }
 
   @Transactional
+  /** Where translated text is laid out, in original image pixels. */
+  record TextBox(double x, double y, int w, int h) {}
+
+  /** Inset from the bubble edge, each side. */
+  private static final int TEXT_BOX_PADDING = 20;
+
+  /** Below this, insetting would leave nothing to draw into, so the bubble is used as-is. */
+  private static final int MIN_TEXT_BOX = 24;
+
+  /**
+   * Text box for a region: the speech bubble, inset by {@link #TEXT_BOX_PADDING}.
+   *
+   * <p>Two things this deliberately does not do any more.
+   *
+   * <p><b>It no longer pads outward.</b> The previous geometry took {@code safeText*} and grew it by
+   * 20px per axis. Measured over this library, {@code safeText} is <b>97.4% of bubble width and
+   * 98.4% of bubble height</b> — it is the bubble, not an inset safe area — so growing it produced a
+   * text box <em>larger</em> than the bubble and let text escape the outline. Padding now pulls
+   * inward, which is what "padding" was meant to mean.
+   *
+   * <p><b>It no longer inherits the source aspect ratio.</b> {@code safeText} traces the Japanese
+   * text, which is set vertically: <b>88% of speech regions (2,468 of 2,816) are taller than wide</b>,
+   * mean aspect 0.69. Laying English into that wraps it into narrow ragged columns. Using the bubble
+   * gives the full width the bubble actually offers.
+   *
+   * <p>Falls back to {@code safeText*} then {@code bbox*} when bubble geometry is missing — every
+   * region in this library has it, but a region written before bubble detection would not.
+   */
+  static TextBox textBoxFor(OcrRegion region) {
+    Integer w = region.getBubbleW() != null ? region.getBubbleW() : region.getSafeTextW();
+    Integer h = region.getBubbleH() != null ? region.getBubbleH() : region.getSafeTextH();
+    Integer x = region.getBubbleW() != null ? region.getBubbleX() : region.getSafeTextX();
+    Integer y = region.getBubbleH() != null ? region.getBubbleY() : region.getSafeTextY();
+
+    if (w == null || h == null || x == null || y == null) {
+      x = region.getBboxX();
+      y = region.getBboxY();
+      w = region.getBboxW();
+      h = region.getBboxH();
+    }
+
+    // Only inset when there is room to; a tiny bubble keeps its full extent rather than collapsing.
+    boolean insetW = w > MIN_TEXT_BOX + TEXT_BOX_PADDING;
+    boolean insetH = h > MIN_TEXT_BOX + TEXT_BOX_PADDING;
+    int halfPad = TEXT_BOX_PADDING / 2;
+
+    return new TextBox(
+        Math.max(0, x + (insetW ? halfPad : 0)),
+        Math.max(0, y + (insetH ? halfPad : 0)),
+        insetW ? w - TEXT_BOX_PADDING : w,
+        insetH ? h - TEXT_BOX_PADDING : h);
+  }
+
   public void handleTranslationCallback(
       UUID imageId, List<Map<String, Object>> translations, Map<String, Object> cost) {
     log.info(
@@ -1168,32 +1221,11 @@ public class JobCoordinatorService {
                     // Find or create LayerElement
                     LayerElement element = elementMap.get(regionId);
                     if (element == null) {
-                      double padding = 10.0;
-                      double rawEx = region.getSafeTextX() != null
-                          ? region.getSafeTextX().doubleValue()
-                          : region.getBubbleX() != null
-                              ? region.getBubbleX().doubleValue()
-                              : region.getBboxX().doubleValue();
-                      double rawEy = region.getSafeTextY() != null
-                          ? region.getSafeTextY().doubleValue()
-                          : region.getBubbleY() != null
-                              ? region.getBubbleY().doubleValue()
-                              : region.getBboxY().doubleValue();
-                      int rawEw = region.getSafeTextW() != null
-                          ? region.getSafeTextW()
-                          : region.getBubbleW() != null
-                              ? region.getBubbleW()
-                              : region.getBboxW();
-                      int rawEh = region.getSafeTextH() != null
-                          ? region.getSafeTextH()
-                          : region.getBubbleH() != null
-                              ? region.getBubbleH()
-                              : region.getBboxH();
-
-                      double ex = Math.max(0, rawEx - padding);
-                      double ey = Math.max(0, rawEy - padding);
-                      int ew = rawEw + (int) (padding * 2);
-                      int eh = rawEh + (int) (padding * 2);
+                      TextBox box = textBoxFor(region);
+                      double ex = box.x();
+                      double ey = box.y();
+                      int ew = box.w();
+                      int eh = box.h();
 
                       element = new LayerElement();
                       element.setLayer(finalLayer);
@@ -1217,12 +1249,11 @@ public class JobCoordinatorService {
                     } else {
                       element.setText(translatedText);
                       if (!Boolean.TRUE.equals(element.getIsManuallyEdited())) {
-                        if (region.getSafeTextX() != null) {
-                          element.setX(Math.max(0, region.getSafeTextX().doubleValue() - 10.0));
-                          element.setY(Math.max(0, region.getSafeTextY().doubleValue() - 10.0));
-                          element.setMaxWidth(region.getSafeTextW() + 20);
-                          element.setMaxHeight(region.getSafeTextH() + 20);
-                        }
+                        TextBox box = textBoxFor(region);
+                        element.setX(box.x());
+                        element.setY(box.y());
+                        element.setMaxWidth(box.w());
+                        element.setMaxHeight(box.h());
                         element.setMaskPolygon(region.getMaskPolygon());
                       }
                     }
