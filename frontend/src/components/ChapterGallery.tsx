@@ -125,6 +125,17 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [editCounter, setEditCounter] = useState(0);
 
+  // Every page-list refresh below is chapter-scoped and awaited, and the chapter id it
+  // was issued for is fixed in the callback's closure. Navigating to another chapter
+  // mid-flight would otherwise let the previous chapter's response land in the new
+  // chapter's view — an upload of 30 files takes long enough for that to be ordinary
+  // rather than exotic. The ref tracks what is selected *now*, so a late response can
+  // tell whether it is still wanted.
+  const selectedChapterIdRef = useRef(selectedChapter?.id);
+  useEffect(() => {
+    selectedChapterIdRef.current = selectedChapter?.id;
+  }, [selectedChapter?.id]);
+
   const processUploadedFiles = React.useCallback(
     async (files: FileList) => {
       if (!selectedChapter) return;
@@ -196,6 +207,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         });
         if (r.ok) {
           const data: Page[] = await r.json();
+          if (selectedChapterIdRef.current !== selectedChapter.id) return;
           setPages(data);
           if (successCount > 0) {
             showToast(
@@ -313,7 +325,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         );
         if (pagesRes.ok) {
           const data: Page[] = await pagesRes.json();
-          setPages(data);
+          if (selectedChapterIdRef.current === selectedChapter.id) {
+            setPages(data);
+          }
         }
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -523,15 +537,15 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             showToast("Page deleted successfully", "success");
             // Re-fetch pages list to verify orders
             if (selectedChapter) {
-              const r = await safeFetch(
-                `/api/chapters/${selectedChapter.id}/pages`,
-                {
-                  headers: { Authorization: `Bearer ${user.token}` },
-                },
-              );
+              const chapterId = selectedChapter.id;
+              const r = await safeFetch(`/api/chapters/${chapterId}/pages`, {
+                headers: { Authorization: `Bearer ${user.token}` },
+              });
               if (r.ok) {
                 const data: Page[] = await r.json();
-                setPages(data);
+                if (selectedChapterIdRef.current === chapterId) {
+                  setPages(data);
+                }
               }
             }
           } else if (res.status === 403) {
@@ -586,11 +600,14 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       console.error("Error saving page order:", err);
       // Revert if error
       if (selectedChapter) {
-        safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
+        const chapterId = selectedChapter.id;
+        safeFetch(`/api/chapters/${chapterId}/pages`, {
           headers: { Authorization: `Bearer ${user.token}` },
         })
           .then((r) => r.json())
-          .then((data) => setPages(data))
+          .then((data) => {
+            if (selectedChapterIdRef.current === chapterId) setPages(data);
+          })
           .catch((fetchErr) =>
             console.error("Error reverting page order:", fetchErr),
           );

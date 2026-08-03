@@ -448,6 +448,93 @@ describe("ChapterGallery Component", () => {
     });
   });
 
+  it("drops a page refresh for a chapter the user has navigated away from", async () => {
+    interface MockXHR {
+      open: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
+      setRequestHeader: ReturnType<typeof vi.fn>;
+      status: number;
+      onload: (() => void) | null;
+      upload: { onprogress: ((e: ProgressEvent) => void) | null };
+    }
+
+    const sendMock = vi.fn(function (this: MockXHR) {
+      this.status = 200;
+      if (this.onload) this.onload();
+    });
+    const XHRMock = vi.fn().mockImplementation(function (this: MockXHR) {
+      this.open = vi.fn();
+      this.send = sendMock;
+      this.setRequestHeader = vi.fn();
+      Object.defineProperty(this, "upload", {
+        value: { onprogress: null },
+        writable: true,
+      });
+      this.status = 200;
+      this.onload = null;
+    });
+    vi.stubGlobal("XMLHttpRequest", XHRMock);
+
+    // Hold the c1 page refresh open so the chapter can change while it is in flight.
+    let landRefresh: () => void = () => {};
+    const refreshInFlight = new Promise<void>((r) => {
+      landRefresh = r;
+    });
+    const c1Pages = [{ ...mockPages[0], id: "c1-page" }];
+    mockSafeFetch.mockImplementationOnce(() =>
+      refreshInFlight.then(() => ({
+        ok: true,
+        json: () => Promise.resolve(c1Pages),
+      })),
+    );
+
+    const props = {
+      mode: "dark" as const,
+      user: mockUser,
+      selectedSeries: mockSeries,
+      setSelectedChapter: mockSetSelectedChapter,
+      pages: mockPages,
+      setPages: mockSetPages,
+      onSelectPage: mockOnSelectPage,
+      isLoadingDetails: false,
+    };
+
+    const { rerender } = render(
+      <ChapterGallery {...props} selectedChapter={mockChapter} />,
+    );
+
+    const fileInput = document.querySelector(
+      "#file-upload",
+    ) as HTMLInputElement;
+    const files = [
+      new File(["1"], "page1.jpg", { type: "image/jpeg" }),
+    ] as unknown as FileList;
+    files.item = (i: number) => files[i];
+    fireEvent.change(fileInput, { target: { files } });
+
+    await waitFor(() => {
+      expect(sendMock).toHaveBeenCalled();
+    });
+
+    // User moves to another chapter while the refresh is still outstanding.
+    const otherChapter = { ...mockChapter, id: "c2", chapterNumber: 2 };
+    rerender(<ChapterGallery {...props} selectedChapter={otherChapter} />);
+
+    mockSetPages.mockClear();
+    landRefresh();
+    await refreshInFlight;
+    rerender(<ChapterGallery {...props} selectedChapter={otherChapter} />);
+
+    await waitFor(() => {
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/chapters/c1/pages",
+        expect.any(Object),
+      );
+    });
+    // c1's pages must not be written into c2's view.
+    expect(mockSetPages).not.toHaveBeenCalledWith(c1Pages);
+  });
+
   it("handles edit chapter failure", async () => {
     mockSafeFetch.mockResolvedValueOnce({
       ok: false,
