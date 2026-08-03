@@ -32,6 +32,8 @@ interface ReaderLeftSidebarProps {
   setZoom: (val: number) => void;
   fitMode: "page" | "width" | "height";
   setFitMode: (val: "page" | "width" | "height") => void;
+  prefetchAhead: number;
+  setPrefetchAhead: (val: number) => void;
 
   curPageNum: number;
   totalPages: number;
@@ -264,6 +266,46 @@ const ReaderLeftSidebar: React.FC<ReaderLeftSidebarProps> = React.memo(
                 </Box>
               );
             })}
+          </Box>
+
+          {/* Prefetch depth. Warming costs bandwidth on a slow link, so it is the reader's
+              call how far ahead to spend it; 0 turns prefetching off entirely. */}
+          <Box sx={{ mb: 1.5 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 0.5,
+              }}
+            >
+              <Box
+                component="label"
+                htmlFor="prefetch-ahead"
+                sx={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "var(--text-muted)",
+                }}
+              >
+                Prefetch ahead
+              </Box>
+              <Box sx={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                {props.prefetchAhead === 0
+                  ? "off"
+                  : `${props.prefetchAhead} page${props.prefetchAhead === 1 ? "" : "s"}`}
+              </Box>
+            </Box>
+            <input
+              id="prefetch-ahead"
+              type="range"
+              min={0}
+              max={6}
+              step={1}
+              value={props.prefetchAhead}
+              onChange={(e) => props.setPrefetchAhead(Number(e.target.value))}
+              style={{ width: "100%", accentColor: "var(--primary)" }}
+            />
           </Box>
 
           <Button

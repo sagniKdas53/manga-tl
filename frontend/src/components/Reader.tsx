@@ -182,6 +182,51 @@ export const Reader: React.FC<ReaderProps> = ({
   const [pageImageError, setPageImageError] = useState(false);
   // Gates the overlay: coordinates are meaningless until the page they annotate is on screen.
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  /** How many pages ahead to warm. 0 disables prefetching entirely. */
+  const [prefetchAhead, setPrefetchAhead] = usePersistedState<number>(
+    "manga_prefetch_ahead",
+    3,
+    {
+      deserialize: (saved) => {
+        const parsed = parseInt(saved, 10);
+        return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 10) : 3;
+      },
+    },
+  );
+
+  /**
+   * Warms the HTTP cache for pages the reader is about to want.
+   *
+   * Three rules, all of them things the previous bidirectional ±2 window got wrong:
+   *
+   * 1. **Wait for the current page.** Prefetching starts only once the displayed image has
+   *    loaded. The old window fired immediately on navigation, which is what produced the
+   *    measured startup storm — five images issued within 25 ms, and an image p95 of 2482 ms
+   *    against a p50 of 706 ms. Those five requests were competing with the one the reader was
+   *    actually waiting for.
+   * 2. **Forward-biased.** Reading is overwhelmingly one-directional, so spend the budget ahead
+   *    and keep just one page behind for a quick back-step.
+   * 3. **Low priority.** `fetchPriority="low"` tells the browser these lose to anything the user
+   *    is waiting on, which the blob-fetch path could never express.
+   *
+   * No bookkeeping: the reader endpoint is public and `immutable`-cached for a year, so a page
+   * already fetched costs nothing to "prefetch" again and the browser dedupes in-flight requests
+   * to the same URL on its own.
+   */
+  useEffect(() => {
+    if (!isImageLoaded || prefetchAhead <= 0 || !selectedPage) return;
+    const idx = pages.findIndex((p) => p.id === selectedPage.id);
+    if (idx === -1) return;
+
+    const ahead = pages.slice(idx + 1, idx + 1 + prefetchAhead);
+    const behind = idx > 0 ? [pages[idx - 1]] : [];
+
+    for (const p of [...ahead, ...behind]) {
+      const img = new Image();
+      img.fetchPriority = "low";
+      img.src = toReaderUrl(p.url) ?? p.url;
+    }
+  }, [isImageLoaded, selectedPage, pages, prefetchAhead]);
 
   // Reset on page change during render rather than in an effect: an effect would let one frame
   // paint with the previous page's loaded/error state, which is exactly the stale overlay the
@@ -742,22 +787,16 @@ export const Reader: React.FC<ReaderProps> = ({
           });
       }
 
-      // --- SMALL BI-DIRECTIONAL PREFETCH WINDOW ---
+      // --- DETAILS PREFETCH WINDOW ---
+      // Image prefetching deliberately does NOT happen here — see the effect below, which waits
+      // for the current page to finish loading first. Details are small JSON and can go now.
       if (currentPageIndex !== -1) {
-        // Warm the browser cache for two pages in either direction.  We do not
-        // retain Image objects or estimate decoded bitmap size: that manual
-        // bookkeeping was expensive and prevented normal browser eviction.
         const windowStart = Math.max(0, currentPageIndex - 2);
         const windowEnd = Math.min(pages.length, currentPageIndex + 3);
         const nearbyPages = pages.slice(windowStart, windowEnd);
         const pagesToPrefetch = nearbyPages.filter((p) => p.id !== currentPageId);
 
         pagesToPrefetch.forEach((p) => {
-          // Straight into the HTTP cache now that the reader endpoint is public and cacheable —
-          // no blob bookkeeping, and a page already cached costs nothing to "prefetch" again.
-          const prefetch = new Image();
-          prefetch.src = toReaderUrl(p.url) ?? p.url;
-
           if (
             !pageDetailsCache.current[p.id] &&
             !prefetchQueue.current.has(p.id)
@@ -3084,6 +3123,8 @@ export const Reader: React.FC<ReaderProps> = ({
             zoom={zoom}
             setZoom={setZoom}
             fitMode={fitMode}
+            prefetchAhead={prefetchAhead}
+            setPrefetchAhead={setPrefetchAhead}
             setFitMode={setFitMode}
             curPageNum={selectedPage?.pageNumber || 0}
             totalPages={pages.length}
