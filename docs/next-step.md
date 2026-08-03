@@ -1,9 +1,12 @@
-# Handoff — state at end of 2026-08-03
+# Handoff — state at end of 2026-08-04
 
 > Consolidates the former `immediate-next-steps.md`, which is now deleted. Everything still live
 > is below; everything settled is recorded as settled so it does not get re-litigated.
 >
-> **Resume at:** [§ What to do next](#what-to-do-next) — AUDIT-W5, then a clean drained run.
+> **Resume at:** [§ What to do next](#what-to-do-next) — the four frontend/backend correctness items.
+> The performance thread is closed for now: AUDIT-W5 was measured and killed, and the queue-wait
+> numbers turned out to be an attribution artefact rather than a stall. See
+> [§ The performance thread is closed](#the-performance-thread-is-closed).
 
 ## Where the work stands
 
@@ -17,21 +20,38 @@
 | 4. Native `<img>` | **Done.** Blob path deleted; `utils/authImage.ts` replaced by `utils/readerImage.ts`. |
 | 5. Deprioritise prefetch | **Done.** Forward-biased, `fetchPriority="low"`, waits for the current image, persisted slider (default 3, 0 disables). |
 | 6. Widen details cache | **Done.** 15-entry LRU over a `Map`, replacing the hard ±2 eviction. |
-| 7. Lend the idle heavy slot | **NOT STARTED** — see [§ AUDIT-W5](#audit-w5--corrected). |
+| 7. Lend the idle heavy slot | **WON'T DO** — measured at 1.8%, and probably the wrong fix. See [§ AUDIT-W5](#audit-w5--corrected). |
 
 Also shipped 2026-08-03: **AUDIT-B6** (`WEBP_LOCK` scoped to WebP only, so the 4-thread
 `thumbnailExecutor` no longer serialises every decode), and both image backfills deleted after
 running to completion.
 
-## What to do next
+Shipped 2026-08-04, both render-geometry fixes — see [§ 2026-08-04](#2026-08-04--render-geometry).
 
-**1. AUDIT-W5 — lend the idle heavy slot.** Backend-only, one performance variable, wants its own
-run. Measured payoff: **13.0%** of 391 samples in `20260803-103311` had light at its cap of 3,
-heavy idle, light work queued, and no heavy work at all.
+## The performance thread is closed
 
-**2. Then one clean drained run at 4/1/3** to settle predictions 2–4 below, following the prompt at
-the bottom. The reader work is done, so reader traffic no longer contends with queue traffic — the
-thing that made `20260803-103311` noisy.
+Nothing on the performance side is worth picking up next, and two things that looked worth picking
+turned out not to be.
+
+**AUDIT-W5 fell from 13.0% to 1.8%** on re-measurement, and the remaining 1.8% probably would not be
+recovered by lending the slot anyway. It is marked WON'T DO rather than NOT STARTED.
+
+**The huge `layout` and `panel-detection` numbers are an attribution artefact, not a stall.** In
+`20260803-211221` those two stages carry 8,683 s and 6,550 s of a 1,457 s wall — 88% of all stage
+time between them, against `ocr` 578 s and `render` 172 s. That is not work. Those two stages sit
+immediately before the expensive ones, so a job created early accrues its whole wait under the stage
+it was last in. The 2-job run makes it plain: `layout` p50 is **1.8 s** there and **179 s** in the
+30-job run, and per-item cost cannot move 100x.
+
+- **The remedy is categorisation, not scheduling.** Move a waiting job to a *transitioning* state
+  instead of leaving it labelled with the last stage it completed, so the nature of the wait is
+  visible. This is an observability change — **it will not move wall time**, and it should not be
+  filed or measured as a performance item.
+- Corollary: do not re-derive "queue wait is 90% of job lifetime" as though it were a finding. It is
+  the same artefact seen from the other side.
+
+**AUDIT-W2 got another data point and stays inert**: 16.9 s of rate-limit sleep across 13 sleeps in
+1,457 s of wall (1.2%), consistent with the 0.0 s baseline.
 
 ### AUDIT-W5 — corrected
 
@@ -43,6 +63,11 @@ reading the code:**
   `REUSE_IDLE_SLOTS` is set (default `true`) and `ACTIVE_JOBS < MAX_CONCURRENT_JOBS`.
 - The method is `WorkerCapacity.hasLightSlot()`, not `hasLightCapacity()`
   (`WorkerDispatcherService.java:334`).
+
+**Superseded 2026-08-04 — do not implement.** Re-measured payoff is **1.8%**, not 13.0%, and at that
+size the change is probably aimed at the wrong thing. The description below is kept because it is
+accurate about the code, and because the next person to read "AUDIT-W5" in `issues.md` needs to find
+the reason it was dropped rather than re-deriving it.
 
 So the worker would accept a lent slot today. **The blocker is entirely on the backend dispatcher**,
 which never offers one:
@@ -66,8 +91,8 @@ The six predictions from the original post-W10 analysis:
 | --- | --- |
 | 1. `active_light > 1` | **FAILED then fixed.** `.env` pinned `CONCURRENT_JOBS=2`, overriding the compose default, so that run measured baseline 2/1/1. Now `4/1/3` and confirmed in force. |
 | 2. `layout` p50 wait collapses | **CONFIRMED** on `20260803-103311`: 150.64 s → 2.65 s. |
-| 3. Queue wait ≪ 90.8% | **Superseded** by the 80%-utilisation finding below. Still worth one clean number. |
-| 4. Tiers converge | **STILL UNTESTED.** Needs the clean run. |
+| 3. Queue wait ≪ 90.8% | **SETTLED 2026-08-04.** And re-read: the queue-wait share is an attribution artefact, not a scheduling loss. See [§ The performance thread is closed](#the-performance-thread-is-closed). |
+| 4. Tiers converge | **SETTLED 2026-08-04** on `20260803-211221`. |
 | 5. `duplicate_jobs.csv` empty | **METRIC INVALID.** Its rows are QA retry cycles (sequential, same `trace_id`, `attempt=1`, all 42 callbacks claimed), and the run had zero re-dispatches, so AUDIT-P4's path never ran. Neither confirmed nor refuted. |
 | 6. Translation failures → 0 | **PASSED.** 11/50 → 0/9. The dead `neurometric` key was the whole 22%. |
 
@@ -88,23 +113,35 @@ The six predictions from the original post-W10 analysis:
   `active_light` never exceeded 1 across 3,253 samples; 277 dispatches for 255 jobs; worker CPU mean
   22.5%; **0.0 s of rate-limit sleep** across 7,924 s (AUDIT-W2 inert).
 
-## Still open, verified present 2026-08-03
+## What to do next
 
-- **AUDIT-W12 [H]** (`issues.md`) — confirm QA actually emits `escalation` / `directFix`. Committed
-  but never verified against a live provider. Until `escalation.needsReOcr` arrives, every QA
-  failure routes to a blind re-translation of unreadable OCR: **450 s across 4 wasted cycles on 5
-  pages, 39% of all work**. Three greps on the next run settle it. The `qa-re-ocr` dispatch path
-  exists and is correct — it has simply never fired.
-- **AUDIT-F6** — `QueueManager.tsx:378` still uses `>=` on `createdAt`, so an in-flight poll can
+The performance thread is closed, so what remains is correctness. Re-verified in the code on
+2026-08-04, not taken from this doc's own status:
+
+1. **AUDIT-F6** — `QueueManager.tsx:376-379`, `>=` on `createdAt`.
+2. **AUDIT-F8** — `Reader.test.tsx:501-505`, a test that cannot fail.
+3. **AUDIT-F7** — `ChapterGallery.tsx:199`, unguarded `setPages`.
+4. **`/api/**` returns 200, not 404** — `ForwardController.java:21-22`.
+
+Then the two unverified things, both one-offs: open an exported ZIP, and write the prefetch-gate
+test. AUDIT-W11 after that.
+
+Separately, and not a performance item: **move a waiting job to a *transitioning* state** rather
+than leaving it labelled with the stage it last completed. See the closed-thread section for why —
+it makes the wait legible, it will not make anything faster.
+
+## Still open, verified present 2026-08-04
+
+- **AUDIT-F6** — `QueueManager.tsx:376-379` still uses `>=` on `createdAt`, so an in-flight poll can
   overwrite a newer SSE status.
-- **AUDIT-F7** — `ChapterGallery.tsx:194-199` still calls `setPages` after upload with no guard that
+- **AUDIT-F7** — `ChapterGallery.tsx:199` still calls `setPages` after upload with no guard that
   `selectedChapter` hasn't changed meanwhile.
-- **AUDIT-F8** — the negative assertion inside `waitFor` is still there, now at
-  `Reader.test.tsx:501-505` (was 386). `waitFor` retries until the callback passes, and
+- **AUDIT-F8** — the negative assertion inside `waitFor` is still there at
+  `Reader.test.tsx:501-505`. `waitFor` retries until the callback passes, and
   `not.toBeInTheDocument()` passes on the first tick, so the test cannot fail.
 - **AUDIT-W11** — a chapter pinned to a dead provider gets no cross-provider fallback.
-- **Unmatched `/api/**` paths return 200**, not 404: `ForwardController` catches them and forwards
-  to `/error`.
+- **Unmatched `/api/**` paths return 200**, not 404: `ForwardController.java:21-22` catches them and
+  forwards to `/error`.
 - **The ZIP export is unverified.** `handleExportPng` / `handleExportZip` were repointed at `/file`
   so `original.png` stays the original, and `/file` was confirmed to still serve untouched bytes —
   but nobody has opened an exported ZIP and checked. Silent failure mode; worth one click.
@@ -116,6 +153,54 @@ The six predictions from the original post-W10 analysis:
 The old handoff said `handleExportRenderedPng` draws from `imgRef.current`. **It does not** — it
 fetches `/api/pages/{id}/rendered` from the server and was never at risk. The two that did draw from
 the displayed element are `handleExportPng` and `handleExportZip`.
+
+## 2026-08-04 — render geometry
+
+Two commits, `97bc93f` (backend + docs) and worker `6906a71`.
+
+**AUDIT-W12 is CONFIRMED** — QA does emit `escalation` / `directFix`. Moved out of the open list.
+
+**`f3aa160` shipped two defects and they are both fixed.**
+
+1. It insetted every region into "the bubble", but 42% of translated regions (1,832 of 4,351) have
+   no detected bubble — the worker fills `bubble*` from the OCR text bbox for those. Insetting a
+   49px caption to 29px is narrower than a word, so `fit_text_in_box_py` fell through to
+   per-character splitting and rendered "goi/ng", "sub/jec/t". 237 regions were under 40px; now 16.
+   The premise was measured library-wide, which folded in those synthetic rows sitting at exactly
+   100% by construction; restricted to real bubbles it is 95.7%/97.4% and the inset is right.
+2. The new `record TextBox` was inserted between `@Transactional` and `handleTranslationCallback`,
+   so the annotation bound to the record. It compiled clean — records are types — and left every
+   write in that callback outside a transaction.
+
+**The bubble detector's limits are now measured; do not re-derive them.**
+
+- YOLO11n is single-class (`balloon`) and only recognises canonical enclosed balloons. On Openrouter
+  ch. 11 p22 it scores **0.92** on a normal oval and **0.206 / 0.044** on the two irregular thought
+  clouds. 34% of *speech* regions (1,022 of 2,967) have no detected bubble.
+- **Lowering the threshold does not work.** Over 30 pages / 180 such regions: 0.25 → 1 recovered,
+  0.15 → 5, 0.10 → 7 (3.9%), at 24% more detections per page. The misses are mostly not
+  low-confidence detections being filtered; there is no mask at all.
+- **A bigger model does not work either, and this closes F.1.** `yolo26s_manga109` (3-class, already
+  in the worker cache) recovers 4/180 at 0.25 vs yolo11n's 1/180, and every region it recovered the
+  contour search had already recovered — additive value zero. It classes the clouds as `text`, not
+  `balloon`. This is a training-distribution gap, not a model-size gap. Details in
+  [archive.md](./archive.md) F.1, including the incompatible output layouts that made the original
+  attempt read as "failed".
+- **What does work** is `detect_bubble_contour`, which already existed but was unreachable whenever
+  YOLO was active — its only call site was the legacy branch. Wired in behind
+  `BUBBLE_CONTOUR_FALLBACK` (default on): recovers ~48%, median 2.6x wider. It is compensation for a
+  detector limitation and carries a removal checkpoint in `TODO.md`.
+- **This only helps pages that are re-OCR'd.** Existing pages keep their synthetic geometry; the
+  backend fix improves them, the contour recovery does not reach them. Manual re-OCR per page is the
+  accepted remedy, so no backfill is planned.
+
+**Testcontainers: the backend suite is green, 346/346.** `init-test.sql` was missing
+`reader_storage_path`, added to `Image` in `3122624` but never to the test schema — six
+`@DataJpaTest` classes plus `SchemaValidationTest`, `OpenApiSpecTest` and
+`PipelineFlowIntegrationTest` were failing schema validation on it. Note this does **not** confirm
+or refute the earlier Ryuk/Redis diagnosis below: the control run on a stashed tree exceeded ten
+minutes and was abandoned, so that was never reproduced. Treat the old constraint as stale rather
+than as disproved, and re-check it if the suite goes red again.
 
 ## Out of scope unless deliberately reopened
 
@@ -143,11 +228,13 @@ the displayed element are `handleExportPng` and `handleExportZip`.
 - Backend API changes require `npm run generate-api` from `frontend/` with the backend container up.
 - **`worker/` is a git submodule.** Changes need their own commit plus a pointer bump in the parent.
 - Backend build is Maven (`mvn -o compile`, no wrapper).
-- **Testcontainers is currently broken on this box** — `SecurityConfigTest`,
-  `PipelineFlowIntegrationTest`, `SchemaValidationTest` and the repository tests all fail on Ryuk /
-  Redis connection errors. Confirmed environmental: reproduced on a clean tree with all changes
-  stashed, and persists both outside the sandbox and with `TESTCONTAINERS_RYUK_DISABLED=true`.
-  Unit tests are unaffected. **Fix this before trusting a green backend suite.**
+- **~~Testcontainers is currently broken on this box~~ — STALE as of 2026-08-04.** The full backend
+  suite runs **346/346 green**. The cause found and fixed was a test-schema drift, not Ryuk:
+  `init-test.sql` had no `reader_storage_path`. The original Ryuk/Redis diagnosis was neither
+  reproduced nor disproved this time — the stashed-tree control run exceeded ten minutes and was
+  abandoned. If the suite goes red again, check the surefire report's `Caused by` chain before
+  assuming the environment; a schema-validation failure and a Ryuk failure both surface as
+  "ApplicationContext failure threshold exceeded" on every class after the first.
 - **MinIO objects are readable straight off disk** — no container, no port 9000. Single-drive MinIO
   prefixes a 32-byte bitrot checksum to each 1 MiB block; strip those and the bytes come back
   verbatim. Handle three layouts: single-part, multi-part (`part.1..N`, numeric order), and small
@@ -159,32 +246,30 @@ the displayed element are `handleExportPng` and `handleExportZip`.
 <!-- markdownlint-disable MD031 MD040 -->
 
 ```
-Continuing manga-library performance work. Read docs/next-step.md first — it has
-what shipped, what is settled, and what is still open. Do not re-audit the codebase
-and do not re-derive the run numbers; both are written down. The ~50 AUDIT-* findings
-in docs/issues.md carry file:line anchors.
+Continuing manga-library. Read docs/next-step.md first — it has what shipped, what is
+settled, and what is still open. Do not re-audit the codebase and do not re-derive the
+run numbers; both are written down. The ~50 AUDIT-* findings in docs/issues.md carry
+file:line anchors.
+
+The performance thread is CLOSED. AUDIT-W5 is WON'T DO at 1.8%, and the large
+layout/panel-detection stage times are an attribution artefact, not a stall — do not
+reopen either without a new measurement that contradicts the ones on file.
 
 WHAT I WANT
 
-1. AUDIT-W5 first: lend the idle heavy slot. Read the corrected description in
-   next-step.md — the worker already honours REUSE_IDLE_SLOTS, so the change is on
-   the backend dispatcher's hasLightSlot() alone. One variable, its own commit.
+1. The four correctness items, in this order, each its own commit:
+   AUDIT-F6 (QueueManager.tsx:376-379), AUDIT-F8 (Reader.test.tsx:501-505),
+   AUDIT-F7 (ChapterGallery.tsx:199), then /api/** returning 200 instead of 404
+   (ForwardController.java:21-22).
 
-2. Then a clean drained run at 4/1/3 and walk predictions 2-4:
-   - stage_summary.csv new vs baseline 20260802-163445, per stage: n / p50 / p95 / total
-   - the queue-wait split — still ~90% of job lifetime, and which tier is the floor now?
-   - if the light tier is STILL the floor with slots lent, say so and say what the
-     next measurement is. AUDIT-W3 is the next suspect.
+2. Then the two one-offs: open an exported ZIP and confirm it, and write the
+   prefetch-gate test.
 
-3. Check two second-order effects: rate-limit sleep seconds in log_signals.md
-   (baseline 0.0s), and worker/container CPU in resources.csv against the 4-core box.
-   If the UI degrades, cap the worker's CPU rather than reverting the slot change —
-   that is the documented decision, not a fresh judgement call.
+3. The transitioning-state change for queued jobs — an observability fix so a job's
+   wait stops being attributed to the stage it last completed. Do not file or measure
+   this as a performance item; it will not move wall time.
 
-4. Settle AUDIT-W12 with the three greps listed in issues.md — does QA actually emit
-   escalation/directFix now?
-
-5. Rank whatever remains by measured payoff — "N seconds per page, M lines to fix" —
+4. Rank whatever remains by measured payoff — "N seconds per page, M lines to fix" —
    not by severity label.
 
 Tell me plainly if any of this is falsified once measured. I would rather delete a
