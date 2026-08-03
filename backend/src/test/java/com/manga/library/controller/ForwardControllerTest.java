@@ -30,15 +30,27 @@ public class ForwardControllerTest {
         .andExpect(forwardedUrl("/index.html"));
   }
 
+  /**
+   * An unmatched API path must 404. The previous {@code forward:/error} reached the error
+   * controller but left the status at 200, so this test asserted {@code isOk()} — it was pinning
+   * the bug rather than the behaviour.
+   */
   @Test
-  public void testForwardApiPath() throws Exception {
+  public void testUnmatchedApiPathIsNotFound() throws Exception {
+    mockMvc.perform(get("/api/some-api-route")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  public void testUnmatchedApiPathIsNotFoundUnderContextPath() throws Exception {
     mockMvc
-        .perform(get("/api/some-api-route"))
-        .andExpect(
-            status()
-                .isOk()) // Since it's a forward, the status returned by perform might be OK, but
-        // forwardedUrl is /error
-        .andExpect(forwardedUrl("/error"));
+        .perform(get("/myapp/api/some-api-route").contextPath("/myapp"))
+        .andExpect(status().isNotFound());
+  }
+
+  /** A 404 for /api must not come back as the SPA shell, or the client cannot tell them apart. */
+  @Test
+  public void testUnmatchedApiPathIsNotForwardedToIndex() throws Exception {
+    mockMvc.perform(get("/api/some-api-route")).andExpect(forwardedUrl(null));
   }
 
   @Test
