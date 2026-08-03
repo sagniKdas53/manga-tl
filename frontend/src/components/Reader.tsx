@@ -185,6 +185,30 @@ export const Reader: React.FC<ReaderProps> = ({
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
+  // True once the server has told us the original size, which makes the displayed image's
+  // naturalWidth irrelevant. Kept in a ref because handleImgLoad reads it outside React's flow.
+  const hasAuthoritativeDims = useRef(false);
+
+  /**
+   * Overlay coordinates — OCR boxes, panels, mask polygons — are stored in the *original* image's
+   * pixel space, and the SVG viewBox has to match. Deriving that from the rendered `<img>` is only
+   * correct while the bytes on screen are the original: serve a downscaled reading variant and
+   * every overlay shifts by the scale factor, while anything drawn or dragged is clamped to, and
+   * persisted in, the wrong space. So prefer the dimensions the API reports.
+   */
+  const setImageDimsFromSource = useCallback(
+    (w?: number | null, h?: number | null) => {
+      if (typeof w === "number" && typeof h === "number" && w > 0 && h > 0) {
+        hasAuthoritativeDims.current = true;
+        setImageDims({ w, h });
+      } else {
+        // Older rows have no recorded size until the backfill reaches them; fall back to the
+        // rendered image, which is what this component did unconditionally before.
+        hasAuthoritativeDims.current = false;
+      }
+    },
+    [],
+  );
   const [showPanels, setShowPanels] = usePersistedState(
     "manga_show_panels",
     true,
@@ -621,6 +645,10 @@ export const Reader: React.FC<ReaderProps> = ({
         ocrRegions: detailsData.ocrRegions || [],
         conversations: detailsData.conversations || [],
         layers: detailsData.layers || [],
+        // Original pixel dimensions. Overlay coordinates are stored in this space, so the reader
+        // must not infer it from the displayed image — see setImageDimsFromSource.
+        imageWidth: detailsData.image?.width ?? null,
+        imageHeight: detailsData.image?.height ?? null,
       };
 
       // Only cache if no invalidation happened while we were awaiting.
@@ -648,6 +676,7 @@ export const Reader: React.FC<ReaderProps> = ({
         setOcrRegions(cached.ocrRegions);
         setConversations(cached.conversations);
         setLayers(cached.layers);
+        setImageDimsFromSource(cached.imageWidth, cached.imageHeight);
         if (cached.layers.length > 0) {
           setActiveLayerId(cached.layers[0].layer.id);
         } else {
@@ -682,6 +711,7 @@ export const Reader: React.FC<ReaderProps> = ({
               setOcrRegions(data.ocrRegions);
               setConversations(data.conversations);
               setLayers(data.layers);
+              setImageDimsFromSource(data.imageWidth, data.imageHeight);
               if (data.layers.length > 0) {
                 setActiveLayerId(data.layers[0].layer.id);
               } else {
@@ -755,6 +785,7 @@ export const Reader: React.FC<ReaderProps> = ({
     loadedImageId,
     pages,
     fetchPageDetails,
+    setImageDimsFromSource,
     user.token,
     cacheEpoch,
   ]);
@@ -2932,6 +2963,9 @@ export const Reader: React.FC<ReaderProps> = ({
   }, [pages, pageNumber, selectedChapter, navigate]);
 
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    // Only a fallback now. If the API reported the original size, that wins — the element may be
+    // showing a downscaled variant, whose naturalWidth would silently rescale every overlay.
+    if (hasAuthoritativeDims.current) return;
     setImageDims({
       w: e.currentTarget.naturalWidth,
       h: e.currentTarget.naturalHeight,

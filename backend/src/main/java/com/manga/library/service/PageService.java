@@ -205,6 +205,29 @@ public class PageService {
     return pathsToDelete;
   }
 
+  /**
+   * Records the original pixel dimensions of an image.
+   *
+   * <p>The reader draws its OCR/panel overlays in original-image coordinates, and until these are
+   * known it has to infer them from the {@code naturalWidth} of whatever it happens to have
+   * displayed. That is only correct while the displayed bytes are the original — the moment a
+   * downscaled reading variant is served, every overlay shifts by the scale factor and any region
+   * edited in that state is persisted at the wrong scale.
+   */
+  void persistImageDimensions(UUID imageId, int width, int height) {
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    imageRepository
+        .findById(Objects.requireNonNull(imageId))
+        .ifPresent(
+            img -> {
+              img.setWidth(width);
+              img.setHeight(height);
+              imageRepository.save(Objects.requireNonNull(img));
+            });
+  }
+
   @org.springframework.scheduling.annotation.Async("thumbnailExecutor")
   public void generateAndSaveThumbnailAsync(UUID imageId, String uuid, byte[] originalBytes) {
     try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(originalBytes)) {
@@ -212,6 +235,10 @@ public class PageService {
       java.awt.image.BufferedImage subsampledImage;
       int targetWidth = 512;
       int targetHeight;
+      // Hoisted out of the lock so they survive to the persist below. The reader has always
+      // computed these and thrown them away, which left images.width/height null for every row.
+      int originalWidth;
+      int originalHeight;
       synchronized (WEBP_LOCK) {
         javax.imageio.stream.ImageInputStream iis = javax.imageio.ImageIO.createImageInputStream(in);
         java.util.Iterator<javax.imageio.ImageReader> readers =
@@ -224,8 +251,8 @@ public class PageService {
         javax.imageio.ImageReader reader = readers.next();
         reader.setInput(iis, true, true);
 
-        int originalWidth = reader.getWidth(0);
-        int originalHeight = reader.getHeight(0);
+        originalWidth = reader.getWidth(0);
+        originalHeight = reader.getHeight(0);
 
         double ratio = (double) originalHeight / originalWidth;
         targetHeight = (int) (targetWidth * ratio);
@@ -242,6 +269,16 @@ public class PageService {
         subsampledImage = reader.read(0, param);
         reader.dispose();
         iis.close();
+      }
+
+      // Persisted here rather than alongside the thumbnail path below, and outside the lock: the
+      // reader's overlay geometry depends on these, so they must survive an encode failure (a
+      // missing libwebp-imageio takes out the thumbnail, not the dimensions). Best-effort — a
+      // failure here must not abort the thumbnail that is already decoded.
+      try {
+        persistImageDimensions(imageId, originalWidth, originalHeight);
+      } catch (RuntimeException e) {
+        log.warn("Could not persist dimensions for image {}", imageId, e);
       }
 
       // High-quality area-averaging scaling
