@@ -13,7 +13,7 @@ import type {
 } from "../types";
 import { safeFetch, toSlug, formatCost } from "../utils";
 import { fitTextInBox } from "../utils/fitText";
-import { prefetchAuthImage, useAuthImage } from "../utils/authImage";
+import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
@@ -174,12 +174,24 @@ export const Reader: React.FC<ReaderProps> = ({
   const curPageNum = parseInt(pageNumber || "1");
   const selectedPage = pages.find((p) => p.pageNumber === curPageNum);
 
-  // `<img>` cannot send an Authorization header, and the image endpoint no longer accepts a
-  // `?token=` query parameter (AUDIT-S4), so the bytes come through fetch as a blob URL.
-  const { src: pageImageSrc, error: pageImageError } = useAuthImage(
-    selectedPage?.url,
-    user.token,
-  );
+  // The reader serves a stored WebP variant from a public, long-cached endpoint, so a plain
+  // `<img src>` works again. That matters beyond the bytes: the fetch-to-blob path this replaces
+  // (02d9185, needed while the endpoint was authenticated) gave up progressive decoding and the
+  // browser's own request prioritisation, and could not be cached by the HTTP cache at all.
+  const pageImageSrc = selectedPage ? toReaderUrl(selectedPage.url) : undefined;
+  const [pageImageError, setPageImageError] = useState(false);
+  // Gates the overlay: coordinates are meaningless until the page they annotate is on screen.
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+
+  // Reset on page change during render rather than in an effect: an effect would let one frame
+  // paint with the previous page's loaded/error state, which is exactly the stale overlay the
+  // visibility gate below exists to prevent.
+  const [renderedSrc, setRenderedSrc] = useState(pageImageSrc);
+  if (renderedSrc !== pageImageSrc) {
+    setRenderedSrc(pageImageSrc);
+    setPageImageError(false);
+    setIsImageLoaded(false);
+  }
 
   // Reader States
   const [panels, setPanels] = useState<Panel[]>([]);
@@ -741,8 +753,10 @@ export const Reader: React.FC<ReaderProps> = ({
         const pagesToPrefetch = nearbyPages.filter((p) => p.id !== currentPageId);
 
         pagesToPrefetch.forEach((p) => {
-          // The blob cache dedupes in-flight and completed loads on its own.
-          prefetchAuthImage(p.url, user.token);
+          // Straight into the HTTP cache now that the reader endpoint is public and cacheable —
+          // no blob bookkeeping, and a page already cached costs nothing to "prefetch" again.
+          const prefetch = new Image();
+          prefetch.src = toReaderUrl(p.url) ?? p.url;
 
           if (
             !pageDetailsCache.current[p.id] &&
@@ -2130,8 +2144,10 @@ export const Reader: React.FC<ReaderProps> = ({
   const handleExportPng = useCallback(() => {
     if (!selectedPage || !imgRef.current) return;
 
-    const doExport = () => {
-      const img = imgRef.current!;
+    const doExport = async () => {
+      // Never `imgRef.current`: that element shows the lossy reading variant, so exporting from
+      // it would silently bake a re-encode into the output. Export always starts from /file.
+      const img = await loadOriginalImage(selectedPage.url, user.token);
       const W = imageDims.w;
       const H = imageDims.h;
 
@@ -2263,6 +2279,15 @@ export const Reader: React.FC<ReaderProps> = ({
       }, "image/png");
     };
 
+    // doExport is async now that it fetches the original, and the call sites below are not
+    // awaited — without this a failed fetch would surface as an unhandled rejection.
+    const runExport = () => {
+      doExport().catch((err) => {
+        console.error("Export failed:", err);
+        alert("Could not export this page. Check your connection, then retry.");
+      });
+    };
+
     if (dirtyElements.size > 0) {
       setConfirmModal({
         isOpen: true,
@@ -2276,21 +2301,22 @@ export const Reader: React.FC<ReaderProps> = ({
           closeConfirm();
           try {
             await saveAllPendingChanges();
-            doExport();
+            runExport();
           } catch (err) {
             console.error("Failed to save changes before export:", err);
           }
         },
         onCancel: () => {
           closeConfirm();
-          doExport();
+          runExport();
         },
       });
     } else {
-      doExport();
+      runExport();
     }
   }, [
     selectedPage,
+    user,
     imageDims,
     layers,
     sortedLayers,
@@ -2326,7 +2352,8 @@ export const Reader: React.FC<ReaderProps> = ({
     if (!selectedPage || !imgRef.current) return;
 
     const doExport = async () => {
-      const img = imgRef.current!;
+      // See handleExportPng: `original.png` has to be the original, not the reading variant.
+      const img = await loadOriginalImage(selectedPage.url, user.token);
       const W = imageDims.w;
       const H = imageDims.h;
 
@@ -2552,6 +2579,14 @@ export const Reader: React.FC<ReaderProps> = ({
       URL.revokeObjectURL(url);
     };
 
+    // Mirrors handleExportPng: fetching the original can fail, and not every call site below
+    // is inside a try.
+    const runExport = () =>
+      doExport().catch((err) => {
+        console.error("Export failed:", err);
+        alert("Could not export this page. Check your connection, then retry.");
+      });
+
     if (dirtyElements.size > 0) {
       setConfirmModal({
         isOpen: true,
@@ -2565,20 +2600,27 @@ export const Reader: React.FC<ReaderProps> = ({
           closeConfirm();
           try {
             await saveAllPendingChanges();
-            await doExport();
+            await runExport();
           } catch (err) {
             console.error("Failed to save changes before export:", err);
           }
         },
         onCancel: async () => {
           closeConfirm();
-          await doExport();
+          await runExport();
         },
       });
     } else {
-      await doExport();
+      await runExport();
     }
-  }, [selectedPage, imageDims, layers, dirtyElements, saveAllPendingChanges]);
+  }, [
+    selectedPage,
+    user,
+    imageDims,
+    layers,
+    dirtyElements,
+    saveAllPendingChanges,
+  ]);
 
   // --- STABLE NAVIGATOR CALLBACK ---
   const navigateToPage = useCallback(
@@ -3135,7 +3177,11 @@ export const Reader: React.FC<ReaderProps> = ({
                 src={pageImageSrc ?? undefined}
                 alt={`Page ${selectedPage.pageNumber}`}
                 className="reader-image"
-                onLoad={handleImgLoad}
+                onLoad={(e) => {
+                  setIsImageLoaded(true);
+                  handleImgLoad(e);
+                }}
+                onError={() => setPageImageError(true)}
                 style={{
                   width: fitMode === "width" ? "100%" : "auto",
                   height: fitMode === "height" ? "85vh" : "auto",
@@ -3171,10 +3217,13 @@ export const Reader: React.FC<ReaderProps> = ({
                 viewBox={`0 0 ${imageDims.w} ${imageDims.h}`}
                 style={{
                   pointerEvents: "auto",
-                  // Hide stale overlays while new page data is loading.
-                  // The loading spinner covers the image anyway; this
-                  // eliminates any residual flicker of old annotations.
-                  visibility: isLoadingPageDetails ? "hidden" : "visible",
+                  // Gated on the image itself, not just on page details. Details can arrive
+                  // before the bytes do, which used to paint annotations over a blank page;
+                  // this also still hides stale overlays while new page data loads.
+                  visibility:
+                    isLoadingPageDetails || !isImageLoaded
+                      ? "hidden"
+                      : "visible",
                 }}
               >
                 {showPanels &&

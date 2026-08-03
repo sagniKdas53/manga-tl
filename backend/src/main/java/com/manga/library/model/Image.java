@@ -24,6 +24,20 @@ public class Image {
   @Column(name = "thumbnail_storage_path")
   private String thumbnailStoragePath;
 
+  /**
+   * The object {@code /api/images/{id}/reader} should serve — <em>not</em> necessarily a WebP.
+   *
+   * <p>Usually a stored WebP variant at native resolution. When re-encoding is not worth it
+   * (already-WebP sources, or dense screentone pages where q90 comes out no smaller) this is set
+   * to the original {@code storagePath} instead.
+   *
+   * <p>That distinction matters: null means "generation has not run yet", so the backfill can
+   * select on it and still retire itself. Encoding a "no variant" outcome as null would make the
+   * backfill retry those images on every boot, forever.
+   */
+  @Column(name = "reader_storage_path")
+  private String readerStoragePath;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by")
   @com.fasterxml.jackson.annotation.JsonIgnore
@@ -99,6 +113,14 @@ public class Image {
 
   public void setThumbnailStoragePath(String thumbnailStoragePath) {
     this.thumbnailStoragePath = thumbnailStoragePath;
+  }
+
+  public String getReaderStoragePath() {
+    return this.readerStoragePath;
+  }
+
+  public void setReaderStoragePath(String readerStoragePath) {
+    this.readerStoragePath = readerStoragePath;
   }
 
   public User getCreatedBy() {

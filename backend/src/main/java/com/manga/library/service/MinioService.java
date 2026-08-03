@@ -104,6 +104,22 @@ public class MinioService {
     }
   }
 
+  /**
+   * Object metadata, or null when the object is missing.
+   *
+   * <p>Used by the image endpoints for a real {@code Content-Length} and {@code ETag}:
+   * {@code StreamingResponseBody} sends neither, which leaves browsers unable to show progress
+   * or revalidate a cached page.
+   */
+  public io.minio.StatObjectResponse statFile(String objectPath) {
+    try {
+      return minioClient.statObject(
+          StatObjectArgs.builder().bucket(bucketName).object(objectPath).build());
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
   public boolean fileExists(String objectPath) {
     try {
       minioClient.statObject(

@@ -922,20 +922,76 @@ public class PageController {
               .findById(Objects.requireNonNull(imageId))
               .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
-      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
-          outputStream -> {
-            try (java.io.InputStream is = minioService.getFileStream(image.getStoragePath())) {
-              is.transferTo(outputStream);
-            } catch (Exception e) {
-              log.error("Error streaming image file", e);
-            }
-          };
-
-      return ResponseEntity.ok()
-          .contentType(resolveImageContentType(image.getStoragePath()))
-          .body(responseBody);
+      return streamCachedImage(image.getStoragePath(), "orig");
     } catch (Exception e) {
       log.error("Failed to retrieve image file for {}", imageId, e);
+      return ResponseEntity.notFound().build();
+    }
+  }
+
+  /**
+   * Streams a cached, immutable image object with a real {@code Content-Length} and {@code ETag}.
+   *
+   * <p>Spring Security applies a blanket {@code Cache-Control: no-cache, no-store,
+   * must-revalidate} to every response, and {@code permitAll} does <em>not</em> lift it — verified
+   * against the already-public {@code /thumbnail}. Without the explicit override below the reader
+   * re-downloads every page on every visit. These objects are content-addressed by image id and
+   * never rewritten in place, so {@code immutable} is honest.
+   */
+  private ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
+      streamCachedImage(String path, String etagSuffix) {
+    io.minio.StatObjectResponse stat = minioService.statFile(path);
+
+    org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
+        outputStream -> {
+          try (java.io.InputStream is = minioService.getFileStream(path)) {
+            is.transferTo(outputStream);
+          } catch (Exception e) {
+            log.error("Error streaming image {}", path, e);
+          }
+        };
+
+    ResponseEntity.BodyBuilder builder =
+        ResponseEntity.ok()
+            .contentType(resolveImageContentType(path))
+            .cacheControl(
+                org.springframework.http.CacheControl.maxAge(java.time.Duration.ofDays(365))
+                    .cachePublic()
+                    .immutable());
+    if (stat != null) {
+      builder.contentLength(stat.size());
+      if (stat.etag() != null) {
+        // Suffixed so the original and its derived variants never collide on one ETag.
+        builder.eTag("\"" + stat.etag().replace("\"", "") + "-" + etagSuffix + "\"");
+      }
+    }
+    return builder.body(responseBody);
+  }
+
+  @Operation(
+      summary = "Get the reader image variant",
+      description =
+          "WebP reading variant at native resolution. Falls back to the original when no variant "
+              + "was stored (already-WebP sources, or encodes that came out no smaller).")
+  @GetMapping("/images/{imageId}/reader")
+  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody>
+      getImageReader(@PathVariable UUID imageId) {
+    try {
+      Objects.requireNonNull(imageId, "imageId cannot be null");
+      Image image =
+          imageRepository
+              .findById(Objects.requireNonNull(imageId))
+              .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
+
+      String path = image.getReaderStoragePath();
+      if (path != null) {
+        return streamCachedImage(path, "reader");
+      }
+      // Deliberately serves the original rather than 404ing: a null variant is a normal outcome,
+      // not an error, so the reader must not need a second request to discover that.
+      return streamCachedImage(image.getStoragePath(), "orig");
+    } catch (Exception e) {
+      log.error("Failed to retrieve reader image for {}", imageId, e);
       return ResponseEntity.notFound().build();
     }
   }
@@ -957,18 +1013,7 @@ public class PageController {
         // reader images continue to use the explicit /file endpoint.
         return ResponseEntity.notFound().build();
       }
-      org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody =
-          outputStream -> {
-            try (java.io.InputStream is = minioService.getFileStream(path)) {
-              is.transferTo(outputStream);
-            } catch (Exception e) {
-              log.error("Error streaming image thumbnail", e);
-            }
-          };
-
-      return ResponseEntity.ok()
-          .contentType(resolveImageContentType(path))
-          .body(responseBody);
+      return streamCachedImage(path, "thumb");
     } catch (Exception e) {
       log.error("Failed to retrieve image thumbnail for {}", imageId, e);
       return ResponseEntity.notFound().build();

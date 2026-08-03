@@ -11,4 +11,6 @@ public interface ImageRepository extends JpaRepository<Image, UUID> {
 
   /** Rows predating the dimension capture in {@code PageService.persistImageDimensions}. */
   List<Image> findByWidthIsNullOrHeightIsNull();
+
+  List<Image> findByReaderStoragePathIsNull();
 }
