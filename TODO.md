@@ -1,6 +1,6 @@
 # TODO — Manga Library (Master Checklist)
 
-> **Last updated**: 2026-08-03  
+> **Last updated**: 2026-08-04  
 > Audited via Git history & GitNexus analysis, cross-checked against `docs/issues.md` and `docs/archive.md`  
 > Status legend: `[ ]` = not started, `[/]` = in progress, `[x]` = done, `[P]` = planned (in a plan doc), `[D]` = deferred
 
@@ -8,32 +8,31 @@
 
 ## 🟢 Current Goals
 
-### Do these next (2026-08-03)
+### Do these next (2026-08-04)
 
-Carried over from the retired `docs/Next Steps.md`. The first three are the tail of the 2026-08-02
-audit batch and need a human, not code.
+> The ordered list with file:line anchors and effort estimates lives in
+> **[next-step.md](./docs/next-step.md)**. What was settled and why — including several things
+> dropped *because they were measured* — is in [archive.md](./docs/archive.md) under
+> *The 2026-08-04 handoff*. Read that before reopening anything performance-related.
 
-> Analysing the run afterwards has its own handoff: **[next-step.md](./docs/next-step.md)** — baseline
-> numbers, six falsifiable predictions in the order to check them, and a prompt for that chat.
-
-- [ ] **Re-run the drained capture to confirm the AUDIT-W10 win.** `./scripts/capture-run.sh start`
-  → ~20 pages end to end → drain fully → `stop`, then compare against the `20260802-163445`
-  baseline. The slots went `1` → `4` light but the win is **unmeasured**; the headline number is
-  `layout`'s 591 s p50 queue wait. Check the worker's startup log for AUDIT-W6's clamp messages, and
-  watch whether the UI degrades under the extra concurrency (if it does, cap worker CPU rather than
-  reverting the slots).
-- [ ] **Replace the `neurometric` API key** in `secrets/api_keys.json` — 401 × 323 on the baseline
-  run, 100% translation failure on every chapter pinned to it. No code change fixes a dead
-  credential.
-- [ ] **Regenerate `frontend/src/api/schema.d.ts`** — the S4 batch added
-  `POST /api/notifications/ticket`. Per [CLAUDE.md](./CLAUDE.md), `npm run generate-api` from
-  `frontend/` **after** the next `docker compose build backend && docker compose up -d backend`.
-  Nothing is broken meanwhile (`useSSE.ts` uses a plain `fetch`).
-- [ ] **AUDIT-T2 — error-branch tests for `LLMClient`.** Now the top of the un-started audit work,
-  and cheap: five tests against the existing mocks covering `429` + cooldown escalation,
-  `json_schema` → `json_object` degradation, `5xx` → Tenacity retry, `4xx` → `PermanentAPIError`,
-  and timeout/connection error. Every AUDIT-W8 defect lives in one of these untested branches. Do it
-  before the mock-router build, not after.
+- [x] ~~**Re-run the drained capture to confirm the AUDIT-W10 win.**~~ **Done 2026-08-04** —
+  `20260803-204638` (2 jobs) and `20260803-211221` (30 pages, 204 jobs, all COMPLETED, 24 min,
+  $0.19), both profiled remotely. The headline turned out to be that `layout`'s huge queue wait is
+  an **attribution artefact**, not a stall: those stages sit before the expensive ones and a job
+  accrues its whole wait under the stage it last completed. Scheduling thread closed.
+- [x] ~~**Regenerate `frontend/src/api/schema.d.ts`**~~ — done; the file carries
+  `notifications/ticket`.
+- [x] ~~**AUDIT-T2 — error-branch tests for `LLMClient`.**~~ **Done** (`ffab71d`) — 16 tests, all
+  five named branches covered. The **backend** half of T2 is still open and is now the part that
+  matters: the dispatcher's failure paths (AUDIT-P2, P3) still have no test.
+- [ ] **Replace the `neurometric` API key** in `secrets/api_keys.json`. Still dead, but **AUDIT-W11
+  changed what it costs**: a chapter pinned to a provider whose key is rejected now falls back
+  across the provider boundary instead of failing 100% of its translations. Housekeeping, not an
+  outage.
+- [ ] **AUDIT-B1 — scheduler pool size.** One line in `application.yml`; five `@Scheduled` tasks
+  currently share Spring's default single thread, so one unresponsive worker stalls stale-job
+  recovery, debounced renders and export cleanup for up to 30 s per dispatch. Best payoff-per-line
+  on the board — see next-step.md item 1.
 
 ### Fix recent issues
 
@@ -43,10 +42,13 @@ audit batch and need a human, not code.
   `file:line` anchors and a suggested fix order. **Items 1–5 of that order landed 2026-08-02**
   (S1/S2/S3/S4 fail-open secrets, D1 backups, W10/W6 slots, P4 duplicate work, P1/W1 provider-key
   mismatches) — see [§ Status of the fix order](./docs/issues.md#status-of-the-fix-order--2026-08-02).
-  Remaining, in order: **T2** (error-branch tests), **P2/P3/B1** (dispatcher defects, latent
-  correctness rather than throughput), **W2** hardening, then everything else as it is touched.
-  New since the batch: **AUDIT-W11** — a chapter pinned to a dead provider gets no cross-provider
-  fallback.
+  **Re-ordered 2026-08-04** by payoff-per-line, and the ordering now lives in
+  [next-step.md](./docs/next-step.md): **B1** (one config line), `try_local_ai` ignoring its prompt,
+  **B4** (a second browser tab kills the first tab's SSE), **B2** (`@Transactional` bypassed by
+  self-invocation), **B3** (a genuine NPE returns 400 and is never logged), then D3/D4/D2.
+  Closed since the batch: **W11** (cross-provider fallback when the pinned provider is parked),
+  **W12** (confirmed), **W5** (WON'T DO at 1.8%), **W2** (1.2%, inert — only the unlimited-default
+  hardening left), **T2**'s worker half, and the F6/F7/F8 + `/api` 404 correctness sweep.
 
 ### Output & Rendering Quality
 

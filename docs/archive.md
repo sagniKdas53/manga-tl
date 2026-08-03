@@ -20,7 +20,146 @@
     `detect_bubbles_yolo` postprocess only understands the former, which is the likely reason the
     original attempt read as "failed".
 
+- [D] **F.2 Add a free provider for testing** (closed 2026-08-04, no code written) — the ask was to
+  add a no-cost provider to `config/providers.json` alongside `openrouter`, `cloudflare`, `nvidia`,
+  `neurometric`. Two candidates were researched; neither is worth integrating. **Closed as won't-do.**
+  - **uncloseai / unturf — the endpoints are dead, not shady.** Probed 2026-08-04:
+    `hermes.ai.unturf.com/v1/models` → `502` (and `POST /v1/chat/completions` likewise),
+    `qwen.ai.unturf.com/v1/models` → `403 "Access denied - This endpoint is closed"`,
+    `ai.unturf.com` → connection failed. Only the `uncloseai.com` marketing site answers (`200`).
+    It is a public-domain hobby project, not malicious — but there is no key, no rate-limit
+    contract, no SLA. Independently of uptime it is the **wrong shape**: no vision models at all,
+    which rules out `ocr` and `qaVLM` outright, and Hermes-3-Llama-3.1-8B is below the floor for
+    JP→EN manga translation. The `free-ollama` link in the original issue was a model-aggregator
+    wrapper over the same class of endpoint and was not pursued further.
+  - **Mistral — technically viable, deliberately declined.** Wire-compatible with the existing
+    `"type": "openai-compatible"` entry (`https://api.mistral.ai/v1/chat/completions`, Bearer
+    auth), and `LLMClient._build_payload`'s generic branch already emits exactly the
+    `response_format: {type: json_schema, json_schema: {name, schema, strict: true}}` Mistral
+    wants. Free "Experiment" tier is ~1B tokens/month, no card. It was still declined:
+    - **One RPM bucket vs. per-model limits.** `enforce_rate_limit` (`utils/rate_limit.py:37`)
+      keys its bucket on *provider name* and `rateLimits` is a single integer, but Mistral's
+      limits are per-model and span 180× (`mistral-large-2512` at 0.07 RPS → `ministral-3b-2512`
+      at 12.50 RPS). The provider number must be pinned to the slowest model routed to; including
+      `mistral-large-2512` anywhere pins the whole provider to ~4 RPM, i.e. a 14.3 s `time.sleep`
+      before every call — taken while holding a light slot (AUDIT-W3) with `MAX_LIGHT_SLOTS=1`
+      (AUDIT-W10). Worse than the 591 s p50 layout wait already measured.
+    - **The 8-image cap.** `handlers/ocr.py` batches crops via `chunk_list(crops_payload, 10)`;
+      Mistral's ceiling is 8 images / 10 MB per request, so batch OCR would `400` on every call.
+      The chunk size is a hardcoded literal, not provider-aware.
+    - **Not frontier, and weakest where it matters.** Mistral's multilingual strength is European
+      languages; JP/KO/ZH is not what these models are tuned for, which is precisely the axis this
+      pipeline is judged on.
+    - **Free tier trains on your data by default** (input *and* output); opt-out is manual in
+      Admin Console → Privacy.
+    - `mistral-ocr` is **not** a chat-completions model — it is a separate Document AI product on
+      `/v1/ocr` returning `pages[]/markdown/blocks`. It cannot go through `LLMClient` and would be
+      its own integration. It also did not appear in the account's Limits page at all.
+  - Account limits captured at research time are in `logs/mistral/` (three Limits-page
+    screenshots). If this is ever revived, read model IDs from `GET /v1/models` — the published
+    docs gave three mutually inconsistent ID formats for the same models.
+  - Integration notes for whoever tries next, since they were verified and are cheap to lose: a new
+    openai-compatible provider needs only a `providers.json` entry plus its key in
+    `secrets/api_keys.json` (mounted as `DOCKER_SECRETS_JSON`, `docker-compose.yml:191`) and
+    `scripts/seed_secrets.py`; `ProviderConfig.resolve_key` (`config.py:190`) consults the
+    providers.json loader before the hardcoded `env_var_map` at `:201`, so that map is a fallback
+    only. Backend and frontend need no changes — the `"openrouter"` literals there are
+    is-openrouter special-casing for the routing-strategy UI, not allowlists.
+  - **Side finding, folded back into `issues.md`:** AUDIT-W1's claim that QA dispatches on a
+    hardcoded `openrouter`/`gemini`/`nvidia` if/elif chain is **stale**. Those chains are gone;
+    `_qa_cloud_llm` / `_qa_cloud_vlm` (`handlers/qa.py:200`, `:219`) are provider-generic. Only the
+    `QA_DEFAULT_*_MODELS` fallback maps at `:38-46` still name three providers, and only when no
+    model resolves.
+
 ## ✅ Completed (Archive)
+
+### The 2026-08-04 handoff — performance thread closed, correctness list emptied
+
+*Retired from `next-step.md` on 2026-08-04 once everything in it was done. The measurements below
+are the reason several things were dropped; keep them so they do not get re-derived.*
+
+**The performance thread is closed. Do not reopen without a measurement that contradicts these.**
+
+- **AUDIT-W5 fell from 13.0% to 1.8%** on re-measurement, and at that size lending the idle heavy
+  slot is probably not even the right fix. Marked WON'T DO, not NOT STARTED. Two corrections made by
+  reading the code first: `REUSE_IDLE_SLOTS` **is** read (`worker/src/worker/main.py:206`), and the
+  method is `WorkerCapacity.hasLightSlot()` at `WorkerDispatcherService.java:334`. The old handoff
+  was wrong on both and it cost time.
+- **The huge `layout` and `panel-detection` stage times are an attribution artefact, not a stall.**
+  In `20260803-211221` they carry 8,683 s and 6,550 s against a 1,457 s wall — 88% of all stage time
+  between them, versus `ocr` 578 s and `render` 172 s. That is not work. Both stages sit immediately
+  before the expensive ones, so a job accrues its whole wait under the stage it last completed. The
+  2-job run settles it: `layout` p50 is **1.8 s** there and **179 s** in the 30-job run, and
+  per-item cost cannot move 100×. The remedy is categorisation — a *transitioning* state — which is
+  observability and **will not move wall time**.
+  - Corollary: "queue wait is 90% of job lifetime" is the same artefact seen from the other side.
+    It is not a finding.
+- **AUDIT-W2 stays inert**: 16.9 s across 13 sleeps in 1,457 s (1.2%), consistent with the 0.0 s
+  baseline.
+- **AUDIT-W12 CONFIRMED** — QA does emit `escalation` / `directFix`. The contingency plan (flatten
+  the nested objects onto the result) is not needed.
+- **Utilisation is 80%**, not 10%: 1,150.9 s of work against 1,444 s of wall. Perfect scheduling
+  recovers at most ~20% — **reducing work beats reordering it**, and 450 s (39%) of that work was QA
+  re-translation cycles that fixed nothing.
+- Run shape for reference: `20260803-211221`, 30 pages, 204 jobs, **all COMPLETED**, 24 min wall,
+  $0.19. Costs $0.006/page at `openai/gpt-5.6-luna`.
+
+**Render geometry** (`97bc93f`, worker `6906a71`). `f3aa160` shipped two defects, both fixed:
+
+1. It insetted every region into "the bubble", but **42% of translated regions (1,832 of 4,351) have
+   no detected bubble** — the worker fills `bubble*` from the OCR text bbox for those. Insetting a
+   49 px caption to 29 px is narrower than a word, so `fit_text_in_box_py` fell through to
+   per-character splitting and rendered "goi/ng", "sub/jec/t". 237 regions were under 40 px; now 16.
+   The premise was measured library-wide, which folded in those synthetic rows sitting at exactly
+   100% by construction; restricted to real bubbles it is 95.7%/97.4% and the inset is right.
+2. A `record TextBox` was inserted between `@Transactional` and `handleTranslationCallback`, so the
+   annotation bound to the record. It compiled clean — records are types — and left every write in
+   that callback outside a transaction.
+
+**The bubble detector's limits are measured. Do not re-derive them.** See also F.1 above.
+
+- YOLO11n is single-class (`balloon`) and only recognises canonical enclosed balloons. On Openrouter
+  ch. 11 p22 it scores **0.92** on a normal oval and **0.206 / 0.044** on the two irregular thought
+  clouds. **34% of *speech* regions (1,022 of 2,967) have no detected bubble.**
+- **Lowering the threshold does not work.** Over 30 pages / 180 such regions: 0.25 → 1 recovered,
+  0.15 → 5, 0.10 → 7 (3.9%), at 24% more detections per page. The misses are mostly not
+  low-confidence detections being filtered — there is no mask at all.
+- **A bigger model does not work either.** `yolo26s_manga109` recovers 4/180, and every region it
+  recovered the contour search had already recovered. Additive value zero.
+- **What works** is `detect_bubble_contour`, which already existed but was unreachable while YOLO was
+  active — its only call site was the legacy branch. Behind `BUBBLE_CONTOUR_FALLBACK` (default on):
+  recovers ~48%, median 2.6× wider.
+- **Only helps pages that are re-OCR'd.** Manual per-page re-OCR is the accepted remedy; no backfill.
+
+**Correctness sweep** — seven items, one commit each, all with red-green regression tests.
+
+| item | commit | what it actually was |
+| --- | --- | --- |
+| AUDIT-F6 | `18ffee8` | The poll merge compared `createdAt >=`, but `createdAt` is fixed for a job's lifetime, so for the same job it was always an equality and always passed — it could not distinguish "fresher" from "staler". Now uses the rule the SSE handler already had. |
+| AUDIT-F8 | `4cbf925` | Moved the no-spinner assertion out of `waitFor`, where it could never fail. |
+| AUDIT-F7 | `0b18b8d` | Ref-guarded against a chapter change mid-flight. Applied to **all four** chapter-scoped refreshes, not just the one named. |
+| `/api/**` 200 | `9236787` | `forward:/error` sets no status, so it stayed 200. `safeFetch` is a bare `window.fetch`, so every `if (res.ok)` read a missing endpoint as success. |
+| prefetch gate | `64cef93` | Pinned the "nothing warms before the current image loads" invariant, including that warming *does* happen after. |
+| ZIP export | `1ae993e` | Archive generated through the real UI, captured and reopened with `JSZip.loadAsync`. Structure only — jsdom has no canvas. |
+| AUDIT-W11 | worker `2f0abfa` | Fallback crosses providers **only** when the pinned one is parked in `PROVIDER_AUTH_FAILURES`. |
+
+**Two process notes that cost time here:**
+
+- Every behavioural fix was checked **red-green** — guard removed, test observed to fail, guard
+  restored. A regression test that has never been seen to fail is not evidence.
+- `ForwardControllerTest` and `TextBoxForTest`'s helper were both *pinning bugs* rather than
+  behaviour. When a fix makes a test fail, work out which of the two is wrong before editing the test.
+
+**Testcontainers was not broken.** The backend suite runs green. `init-test.sql` was missing
+`reader_storage_path`, added to `Image` in `3122624` but never to the test schema. This neither
+confirms nor refutes the older Ryuk/Redis diagnosis — that control run was abandoned after ten
+minutes and never reproduced. Both failure modes surface as the same "ApplicationContext failure
+threshold exceeded" cascade on every class after the first, so read the `Caused by` chain before
+blaming the environment.
+
+**Correction carried forward:** `handleExportRenderedPng` does **not** draw from `imgRef.current` —
+it fetches `/api/pages/{id}/rendered` from the server and was never at risk. The two that did draw
+from the displayed element are `handleExportPng` and `handleExportZip`.
 
 ### Issues Board Audit (`issues.md` → archived 2026-08-01)
 
