@@ -840,6 +840,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/images/{imageId}/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the reader image variant
+         * @description WebP reading variant at native resolution. Falls back to the original when no variant was stored (already-WebP sources, or encodes that came out no smaller).
+         */
+        get: operations["getImageReader"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/images/{imageId}/file": {
         parameters: {
             query?: never;
@@ -2798,6 +2818,28 @@ export interface operations {
         };
     };
     getImageThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StreamingResponseBody"];
+                };
+            };
+        };
+    };
+    getImageReader: {
         parameters: {
             query?: never;
             header?: never;
