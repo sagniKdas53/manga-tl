@@ -56,6 +56,31 @@ audit batch and need a human, not code.
     - mangatranslator.ai: <br/><img src="examples/sample2/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>
     - Ours: <br/><img src="examples/sample2/en-local.png" alt="ours" width="600"/>
 - [ ] **Multimodal VLM Quality Benchmarks & Render Tuning** — use VLMs (Kimi K3 or 5.6-Sol) to analyze translation and typesetting output against competitor benchmarks and refine `render.py` text fitting and inpainting algorithms.
+- [ ] **CHECKPOINT — remove the contour fallback once the detector can stand on its own.**
+  `BUBBLE_CONTOUR_FALLBACK` (default on) runs the OpenCV contour search on text fragments YOLO
+  matched to no bubble. It is compensation for a detector limitation, not a thing worth keeping: it
+  is slower, it is a heuristic with three tuned guards, and it recovers ~48% rather than all. Delete
+  it — the flag, `contour_bubble_for_unmatched`, and its tests — as soon as a detector lands that
+  finds irregular bubbles directly. Re-measure before deciding: the numbers below are the baseline.
+  - A larger model is **not** that detector. `yolo26s_manga109` (3-class, already in the worker
+    cache from the reverted F.1 attempt) recovers 4/180 at conf 0.25 against yolo11n's 1/180, and
+    every region it recovered was already recovered by the contour search — additive value zero.
+    Both models are trained to find *balloons*; yolo26s classes the irregular clouds as `text`, not
+    `balloon`. This is a training-distribution gap, not a model-size gap.
+- [ ] **Free-floating text is laid out in the source's vertical column.** 42% of translated regions
+  (1,832 of 4,351) have no detected bubble — irregular thought clouds, captions, SFX. The worker
+  synthesizes `bubble*` from the OCR bbox for these, so their text box is the tight vertical Japanese
+  column: a 49px-wide caption stays 49px wide, and English gets one word per line. `textBoxFor` now
+  grows these outward by 20px instead of insetting them (which had made it 29px and triggered
+  per-character splitting in `fit_text_in_box_py`), but that only stops the bleeding.
+  - Compare page 22 of Openrouter ch. 11 in `logs/comparison/`: mangatranslator.ai reflows
+    "I'M... I'M BEING CONFISCATED...?!" across roughly 200px of the cloud; ours renders the same
+    line in a 69px column.
+  - The real fix is to widen toward a readable aspect ratio around the region's centre, bounded by
+    neighbouring regions and panel edges — which needs collision handling this code does not have.
+  - Alternative worth costing first: detect the irregular bubble properly. These clouds are visible
+    to a human; the detector just does not return them. That would remove the whole class of
+    synthetic-geometry regions rather than compensating for it downstream.
 
 ## 🟡 Medium Priority
 

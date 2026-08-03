@@ -73,6 +73,7 @@ CREATE TABLE public.images (
     last_rendered_at timestamp(6) with time zone,
     storage_path character varying(255) NOT NULL,
     thumbnail_storage_path character varying(255),
+    reader_storage_path character varying(255),
     width integer,
     created_by uuid,
     CONSTRAINT images_pkey PRIMARY KEY (id),

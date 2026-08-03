@@ -7,6 +7,18 @@
 ### ML Models & Providers
 
 - [D] **F.1 YOLO model upgrade** (Failed & Reverted) — current `juithealien/manga109-segmentation-bubble` (yolo11n) appears abandoned, only detects text bubbles. Upgrade to multi-class model (e.g. `ShadowB/Manga109-panel-balloon-text-yolov26-segmentation`) with size filtering fix.
+  - **Re-evaluated 2026-08-03; do not retry as specified.** The exported artifact
+    (`yolo26s_manga109.onnx`) is still in the worker model cache and was measured directly against
+    yolo11n on 180 speech regions yolo11n missed. It recovers **4/180 (2.2%) at conf 0.25** vs
+    yolo11n's 1/180, and **every region it recovered the contour search already recovered** — no
+    additive value. It is not a size-filtering problem: yolo26s classes the irregular thought clouds
+    as `text` (class 1), not `balloon` (class 2), so both models simply have not been trained on
+    this shape. A future attempt needs a differently-*trained* detector, not a bigger one.
+  - Integration note for whoever tries next: the two models have incompatible output layouts.
+    yolo11n is `[1, 37, 33600]` (anchors last, single class, needs NMS); yolo26s is
+    `[1, 300, 38]` end-to-end — `xyxy, score, class_id, 32 mask coeffs`, already NMS'd. The current
+    `detect_bubbles_yolo` postprocess only understands the former, which is the likely reason the
+    original attempt read as "failed".
 
 ## ✅ Completed (Archive)
 
