@@ -51,6 +51,83 @@ Each item below was re-verified against current code/docs (not just taken on the
   being set with `mockReturnValue` inside individual tests, which persists file-wide and made the
   suite order-dependent.
 
+### Reader page images broke on the AUDIT-S4 deploy (2026-08-03)
+
+- [x] **Every full-size reader image returned 403 after `?token=` was removed.** S4 correctly took
+  the query-string credential path out of `JwtAuthFilter` (it is header-only now,
+  `JwtAuthFilter.java:75-81`), but `Reader.tsx` still built image URLs as
+  `` `${page.url}?token=${jwt}` `` in two places — the displayed `<img>` and the prefetch warm-up.
+  An `<img>` cannot set an `Authorization` header, so the credential was simply ignored.
+
+  Confirmed against the running backend rather than inferred: `/api/images/{id}/file?token=…` and
+  the same URL with no credential at all both return **403**, while `/api/images/{id}/thumbnail`
+  returns **200** because it is the one image route left `permitAll` in `SecurityConfig.java:48`.
+  That asymmetry is exactly what the bug looked like — galleries kept working, the reader did not.
+
+  Fixed in `frontend/src/utils/authImage.ts`: the bytes are fetched with the header and handed to
+  `<img>` as a blob URL, so no credential reaches the URL, the access log or the referrer — the
+  property S4 was protecting. The cache pins the image currently on screen so a neighbouring
+  prefetch cannot evict it, dedupes in-flight loads, and revokes on eviction and on logout.
+  `prefetchAuthImage` replaces the `new Image()` warm-up, which had depended on an unauthenticated
+  `<img>` reaching the browser HTTP cache.
+
+  **The Reader tests could not have caught this**: they mocked `safeFetch` without a `blob()`, so
+  the component silently rendered its error state and no assertion touched the image. They now
+  return blobs, and a regression test asserts the image loads via header with no `token=` in any
+  request URL (commit `02d9185`).
+
+### The QA silent-pass chain (2026-08-03)
+
+Found while investigating a `NullPointerException` in run `20260803-084755`. One truncated model
+response produced four independent silent failures, each of which on its own turned a broken QA pass
+into a clean one.
+
+- [x] **A QA result with no `regionId` NPE'd, and the swallowed exception scored as a pass.**
+  `UUID.fromString(null)` at `JobCoordinatorService.handleQaCallback` threw inside the per-result
+  `catch`, which logged and continued — leaving every counter at zero. Zero counters then computed
+  `status = "passed"`, so the backend logged *"QA passed for image e3e52903. Pipeline complete!"*
+  off a single unusable result and completed the pipeline with QA never applied.
+
+  Results without a `regionId` are now discarded explicitly and counted. A callback that scores
+  nothing reports `status: "error"` with `discarded_results`, returns `COMPLETED_NO_QA`, and raises
+  a **WARNING** notification instead of a success one (commit `14bed1e`).
+
+- [x] **QA metadata was written to every translation layer on the page.** With a QA retry cycle
+  leaving several translation layers behind, the final callback stamped its verdict over the results
+  already recorded for the earlier cycles. Verified on an image whose QA *did* parse: all three of
+  `1f546be9`'s layers carry the same `last_qa_at` to the microsecond. On `e3e52903` the last, broken
+  callback left all three layers reading `passed / total_regions: 0`. It now writes only to the
+  newest translation layer.
+
+- [x] **The truncation was invisible to the worker.** The model hit its output cap mid-word
+  (`out=3408`); OpenRouter's `response-healing` plugin (`llm_client.py`) closed the JSON, so
+  `json.loads` succeeded and returned `[{"qaFeedback": "…"}]`. `LLMResponse` did not carry
+  `finish_reason`, so nothing downstream could tell a complete answer from a guillotined one. It is
+  captured now, with a `truncated` helper and a warning log. Separately, `max_tokens` was only ever
+  sent for Anthropic — every other provider inherited whatever the routed model defaulted to; all
+  providers now get an explicit `DEFAULT_MAX_OUTPUT_TOKENS = 8192`.
+
+- [x] **The worker auto-passed every region when QA produced nothing.** Three identical
+  `"[QA] Falling back to default PASS for all regions."` blocks in `handlers/qa.py` fabricated a
+  `passed` verdict for each region whenever parsing failed or the provider was dead — making a
+  broken QA provider indistinguishable from a clean page. Replaced by `_sanitize_qa_results`, which
+  drops entries that are malformed, unidentified or reference an unknown region, and reports an
+  empty verdict instead of a fabricated one. This composes with the backend change above: empty now
+  means "QA did not run" and is recorded as such. One existing test
+  (`test_process_qa_vlm_local_fallback`) was asserting the old fabricated pass and was updated.
+
+- [x] **`directFix` and `escalation` were optional and the model never emitted them.** The run
+  produced `qaStatus: "direct_fix"` **10 times with zero `directFix` payloads** and
+  `qaStatus: "failed"` **10 times with zero `escalation` blocks**. Both consuming branches in
+  `JobCoordinatorService` are keyed on the object being present, so direct fixes were never applied
+  and `needsReOcr` never routed — which is why every failure fell through to a blind re-translation
+  of the same bad OCR. QA's own prose said *"Please re-OCR and then re-translate"*; with no flag set,
+  the pipeline re-translated. Both objects are now `required` at the item level with fully-specified
+  inner fields (also what OpenAI-style `strict` structured output demands), and all four QA prompts
+  state explicitly that the objects are always present and that prose has no routing effect. If a
+  provider rejects the schema, `LLMClient` already degrades to `json_object` and retries.
+  **Emission is not yet confirmed against a live provider** — see the open item in `issues.md`.
+
 ### Audited & Verified Completed Items (Git History & Code Base Audit)
 
 - [x] **Cloudflare Workers AI Integration** — added Cloudflare Workers AI provider to worker (`providers.json` & `llm_client.py`) with schema validation and session affinity support (commits `14532cf`, `f90902f`).
