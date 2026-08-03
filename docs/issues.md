@@ -187,6 +187,11 @@ Conventions: **[C]** critical · **[H]** high · **[M]** medium · **[L]** low/c
 
 ### Security
 
+> **Before filing or fixing anything that "closes an open endpoint": read
+> [security_boundary.md](./security_boundary.md).** The derived image variants
+> (`/api/images/*/thumbnail`, `/api/images/*/reader`) are public **on purpose** and are not a
+> finding. Everything that decides, changes or reveals state stays authenticated.
+
 #### AUDIT-S1 **[C]** — every secret has a hardcoded fallback, and a missing secret file fails open
 
 `backend/src/main/resources/application.yml:44-51` ships working defaults for all four secrets:
