@@ -89,9 +89,10 @@ also [free-ollama](https://github.com/mfoud444/ollamafreeapi/tree/main)
 
 ### Available Endpoints
 
+> Note: These seem shady proceed with caution.
+
 + Hermes: <https://hermes.ai.unturf.com/v1> - General purpose conversational AI
 + Qwen 3 Coder: <https://qwen.ai.unturf.com/v1> - Specialized coding model
-+ TTS: <https://speech.ai.unturf.com/v1> - Text-to-speech generation
 
 Not yet added to `config/providers.json` — current entries are only `openrouter`, `cloudflare`,
 `nvidia`, `neurometric`.
@@ -387,7 +388,7 @@ falling off the end to `return None`.
 
 The failure is invisible because `None` falls through to the local-LLM branch (`:277-284`), which
 is itself broken (the `try_local_ai` prompt bug already tracked above), which returns something
-unparseable, which yields `results = []`, which completes QA with zero findings and no error.
+unparsable, which yields `results = []`, which completes QA with zero findings and no error.
 
 #### AUDIT-W2 **[H]** — `RATE_LIMIT` is a single global throttle across all providers and tasks
 
@@ -447,7 +448,7 @@ codebase and it is a config change, not code.*
 
 `environment.md` for run `20260802-163445`:
 
-```
+```txt
 max_concurrent_jobs=2, max_heavy_slots=1, max_light_slots=1, reuse_idle_slots=true
 ```
 
@@ -533,6 +534,31 @@ Also `:459` defaults `LOCAL_LLM_MODEL` to `gemma3:4b`, while `docker-compose.yml
 `.env.example:81` default it to `gemma4:e4b` — a tag that does not exist (probably meant
 `gemma3n:e4b`). And `:456` defaults `LOCAL_LLM_PROVIDER` to `lmstudio` where compose defaults to
 `ollama`. Three different defaults for the same two settings.
+
+#### AUDIT-W12 **[H]** — confirm QA actually emits `escalation` and `directFix` now
+
+Split out 2026-08-03. The schema change that makes both objects `required`, and the prompt rewrite
+that tells the model prose has no routing effect, are **committed but unconfirmed against a live
+provider** — the only evidence they were missing is observational (run `20260803-084755`: 10
+`direct_fix` verdicts with zero `directFix` payloads, 10 `failed` verdicts with zero `escalation`
+blocks), and nothing short of a real call proves the fix took.
+
+This matters more than its size suggests. Until `escalation.needsReOcr` arrives, every QA failure
+routes to a blind re-translation of the same unreadable OCR: measured at **450 s across 4 wasted
+cycles on 5 pages — 90 s/page, 39% of all work in the run** — and it never fixes the defect, because
+re-translating garbled OCR cannot recover the source text. The `qa-re-ocr` dispatch path already
+exists and is correct (`JobCoordinatorService`, "Re-OCR request" branch); it has simply never fired,
+because `regionsToReOcr` is only populated from a flag the model never set.
+
+**How to check on the next run** — all three are already logged, no new instrumentation needed:
+
++ `zcat worker.log.gz | grep -c escalation` should be non-zero.
++ `grep "carry no escalation block"` should be absent (the new warning in `_sanitize_qa_results`).
++ `grep "Enqueuing qa-re-ocr job"` in the backend log should appear for garbled-OCR pages.
+
+If `escalation` is still absent, the provider is dropping the required keys and the next step is to
+flatten the fields onto the result object rather than nesting them — models emit optional nested
+objects far less reliably than flat scalars, and that is the pattern all four QA prompts share.
 
 #### AUDIT-W11 **[M]** — a chapter pinned to a dead provider has no escape hatch
 
@@ -904,6 +930,7 @@ Both are an assistant reasoning with itself, left in the source. Worth a grep fo
 ### Status of the fix order — 2026-08-02
 
 Items 1–5 of the list below are **implemented and the full quality gate passes** (backend 330 tests
+
 + PMD + SpotBugs + JaCoCo, frontend 253 tests + lint + build, worker 241 tests + ruff + pyright,
 85.4% coverage). What landed:
 
@@ -911,7 +938,7 @@ Items 1–5 of the list below are **implemented and the full quality gate passes
 | --- | --- |
 | **S1/S2/S3** | `application.yml` ships no secret fallbacks; `SecretsStartupValidator` fails startup on a missing, too-short or known-public secret; dev values moved to `application-local.yml`; `DockerSecretsEnvironmentPostProcessor` warns on every missing/empty secret file instead of continuing silently; `InternalAuthFilter` uses `MessageDigest.isEqual`; the worker refuses to start without `WORKER_API_SECRET` and `verify_auth` denies when it is unset. |
 | **S4** | `SseTicketService` issues single-use 60s tickets; `SseTicketAuthFilter` redeems them; `JwtAuthFilter` no longer accepts `?token=` at all; access-log pattern `%r` → `%m %U %H`; `useSSE.ts` exchanges the JWT for a ticket over a header-authenticated POST. |
-| **W10/W6** | Defaults raised to `CONCURRENT_JOBS=5 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=4`; `resolve_slot_config` clamps any combination that computes to zero or negative slots and logs each adjustment. |
+| **W10/W6** | Defaults raised to `CONCURRENT_JOBS=5 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=4`; `resolve_slot_config` clamps any combination that computes to zero or negative slots and logs each adjustment. **Correction 2026-08-03: this never took effect at runtime.** The change landed in `docker-compose.yml` (`${CONCURRENT_JOBS:-5}`) and `.env.example`, but the real `.env` — which is gitignored and untracked — still pinned `CONCURRENT_JOBS=2`, and an `.env` value overrides a compose default. Run `20260803-084755` therefore measured the *baseline* 2/1/1 config. Now set to `4/1/3` in `.env`. |
 | **P4** | New `jobs.callback_applied_at` column plus `JobRepository.claimCallback`, a conditional UPDATE that makes the check-and-set atomic. Every result callback claims before writing, so a duplicate run is dropped instead of writing a second region set, layer and cost. A genuinely failed job never claimed, so its retry still applies. |
 | **P1 / W1** | `resolveConfigForChapter` now passes `tl` / `qaLLM` / `qaVLM`, matching `providers.json`. `handlers/qa.py`'s four hardcoded `if/elif` provider chains are replaced by `_qa_cloud_llm` / `_qa_cloud_vlm`, so `cloudflare` and `neurometric` work and an unresolvable model logs why. |
 
@@ -933,12 +960,34 @@ id; doing it there removes the residual ambiguity noted in `claimCallback`'s jav
 Carried over from `docs/Next Steps.md`, which was retired once items 1–5 landed. These three need a
 human and are not code work:
 
-1. **Re-run the drained capture.** W10 raised the slots but the win is unmeasured. Run
-   `./scripts/capture-run.sh start` → ~20 pages end to end → drain fully → `stop`, and compare
-   against the `20260802-163445` baseline. Expect the light-tier p50 wait (591 s for `layout`) to be
-   the headline number. Watch two things while it runs: AUDIT-W6's clamped slot arithmetic in the
-   worker startup log, and whether the UI degrades — 71% of the browser's LongTask wall was already
-   descheduling on this 4-core box, so if it worsens, cap worker CPU rather than reverting the slots.
+1. **Re-run the drained capture.** ~~W10 raised the slots but the win is unmeasured.~~
+   **Attempted 2026-08-03 (`20260803-084755`) and invalid — the slot change was never in force.**
+   `environment.md` recorded `max_concurrent_jobs:2 / max_heavy_slots:1 / max_light_slots:1` and
+   `active_light` never exceeded 1 across 634 samples, because the untracked `.env` overrode the
+   compose default (see the W10/W6 row above). `.env` is now `CONCURRENT_JOBS=4 /
+   MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=3` — heavy deliberately stays at 1, since that tier is local
+   PaddleOCR on CPU and is where the worker already hits its full 200% cap; the light tier is LLM
+   API wait and costs almost no CPU to widen. **The re-run still needs to happen.**
+
+   **Verify the config is actually in force before trusting a run**: `docker compose config | grep
+   -E 'CONCURRENT_JOBS|MAX_(HEAVY|LIGHT)_SLOTS'`, and check the worker capabilities line in the
+   captured `environment.md`. Nothing in the repository can catch this class of mistake, because the
+   file that wins is not in the repository.
+
+   Watch two things while it runs: AUDIT-W6's clamped slot arithmetic in the worker startup log, and
+   whether the UI degrades — 71% of the browser's LongTask wall was already descheduling on this
+   4-core box, so if it worsens, cap worker CPU rather than reverting the slots.
+
+   **What `20260803-084755` was still good for**, since these are independent of slot count:
+   translation failures went 11/50 → **0/9** (the dead `neurometric` key was the whole 22%);
+   rate-limit sleep stayed at **0.0 s**, confirming AUDIT-W2 is inert; and `layout` still waits
+   **255.5 s per job for 1.9 s of work** (99.2%), with `panel-detection` at 50.1 s for 0.2 s —
+   together 97% of all queue wait. It also surfaced the QA silent-pass chain (now fixed, see
+   [archive.md](./archive.md)) and one measurement that reframes the whole exercise: **work totalled
+   1150.9 s against 1444 s of wall clock, so utilisation was 80% and even perfect scheduling recovers
+   at most ~20% of wall.** The baseline's "90.8% queue wait" overstates the recoverable time, because
+   most of that wait overlaps other jobs' work. Reducing *work* is the larger lever — and 450 s of
+   that 1150.9 s (**39%**) was QA re-translation cycles that fixed nothing.
 2. **Replace the `neurometric` API key** in `secrets/api_keys.json`. It returned 401 × 323 on the
    baseline run and caused 100% translation failure on every chapter pinned to it. The
    retry-amplification defect around it is fixed; the dead credential is not.
@@ -959,22 +1008,38 @@ had ever drained.
 1. ~~**AUDIT-S1 / S2 / S3** — the fail-open secrets.~~ **Done 2026-08-02** (with S4).
 2. ~~**AUDIT-D1** — confirm whether backups are actually running.~~ **Done** — container healthy,
    `restart: unless-stopped`, backups current.
-3. **AUDIT-W10** — ~~raise `MAX_LIGHT_SLOTS`~~ **code done 2026-08-02**
-   (`CONCURRENT_JOBS=5 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=4`, W6 clamping alongside), **but the
-   re-run that confirms the win has not happened** — see "Still outstanding from that batch" above.
-   This is the top of the list until it is measured.
+3. **AUDIT-W10** — ~~raise `MAX_LIGHT_SLOTS`~~ **code done 2026-08-02**, **config only actually in
+   force from 2026-08-03** (`CONCURRENT_JOBS=4 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=3` in `.env`;
+   the 2026-08-02 change sat in `docker-compose.yml` while the untracked `.env` overrode it, so run
+   `20260803-084755` measured the old 2/1/1). **Still unmeasured** — see "Still outstanding from
+   that batch" above. This is the top of the list until it is measured.
+
+   Temper the expectation: at 80% utilisation the *scheduling* win is capped near 20% of wall clock.
+   That is worth having, but **AUDIT-W12 below removes 39% of the work outright**, and removing work
+   beats reordering it.
 4. ~~**AUDIT-P4** — duplicate work.~~ **Done 2026-08-02** via `jobs.callback_applied_at` +
    `claimCallback`. The residual `jobId`-on-the-callback-body work stays under **AUDIT-P5**.
+
+   **Still unexercised as of 2026-08-03, and `duplicate_jobs.csv` cannot test it.** Run
+   `20260803-084755` had 42 dispatches for 42 jobs and **zero** re-dispatches, so the duplicate path
+   never ran. The CSV was non-empty anyway (2 images × `translation`/`render`/`qa` × 3), but those
+   rows are QA retry cycles, not duplicates: sequential, same `trace_id`, `attempt=1`, each job
+   created the instant its predecessor completed, and **all 42 jobs have `callback_applied_at` set**
+   — nothing was ever dropped. The baseline's `e185e276` "ran translation, qa and render 3× each"
+   has the identical shape and was very likely also a QA loop. Any future check needs to exclude
+   QA-driven repeats before reading that file as evidence of duplication.
 5. ~~**AUDIT-P1 / W1** — the provider/task-key mismatches.~~ **Done 2026-08-02.**
-6. **AUDIT-T2** — the error-branch tests, before the mock-router build rather than after. **Now the
+6. **AUDIT-W12** — confirm QA emits `escalation` / `directFix`. Costs one grep over the next run's
+   worker log; the payoff if it holds is 90 s/page of re-translation that currently fixes nothing.
+7. **AUDIT-T2** — the error-branch tests, before the mock-router build rather than after. **Now the
    top of the un-started work.**
-7. **AUDIT-P2 / P3 / B1** — the dispatcher defects. Demoted from #3: all three are real, but the
+8. **AUDIT-P2 / P3 / B1** — the dispatcher defects. Demoted from #3: all three are real, but the
    drained run shows they are costing ~nothing right now (3.2% / 1.3% starvation, 0 stranded jobs).
    Fix as latent correctness, not as a throughput measure.
-8. **AUDIT-W2** — demoted from #4. Falsified in practice; keep only the "global fallback should be
+9. **AUDIT-W2** — demoted from #4. Falsified in practice; keep only the "global fallback should be
    unlimited" hardening so a future provider without `rate_limits` cannot silently throttle
    everything.
-9. Everything else as it is touched.
+10. Everything else as it is touched.
 
 **Not on this list on purpose:** the [worker pull model](./worker_pull_model.md). Measured, it would
 remove **408 s of 49,058 s of queue wait (0.83%)**. Worth building for latency, resilience and

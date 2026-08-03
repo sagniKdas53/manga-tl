@@ -150,7 +150,7 @@ running at all.**
 Queue-manager LongTasks: **14.17 s wall, 4.77 s CPU**. The main thread was descheduled for ~9.4 s.
 From the same run's `resources.csv`:
 
-```
+```txt
 peak container CPU 278.84%  of 400% (4-core box)
 sustained 172–202% through 18:02–18:06
 ```
@@ -229,7 +229,7 @@ it.
 
 **Fixed 2026-08-02** (`WorkerDispatcherService.java:215`): the dispatch line now logs the job id.
 
-```
+```txt
 Dispatched job <jobId> from queue:ocr to worker ... (activeHeavy=…, activeLight=…, activeTotal=…)
 ```
 
@@ -244,7 +244,7 @@ path and cannot confound a throughput comparison.
 
 ---
 
-# Verification run `20260802-210118` — after the fixes
+## Verification run `20260802-210118` — after the fixes
 
 Three profiles taken against the rebuilt image (animation removal + sourcemaps + the chapter-card
 model fix), batched by interaction. App process is `Isolated Web Content` pid 1539590 in all three —
@@ -258,7 +258,7 @@ Picking by CPU alone gives you Firefox's extension machinery, not the app.
 | B — resume jobs (background load) | 150.0 s | 7.41 s | 4.9% | 62 | 10.87 s | 3.21 s | 71% |
 | C — reader interaction | 82.6 s | 15.63 s | 18.9% | 107 | 16.14 s | 9.52 s | 41% |
 
-## 1. The animation removal is confirmed
+### 1. The animation removal is confirmed
 
 | | before (queue mgr, 2026-08-01) | after (profile A) |
 | --- | ---: | ---: |
@@ -268,14 +268,14 @@ Picking by CPU alone gives you Firefox's extension machinery, not the app.
 
 > **27.8% of a core → 1.0%.** `animationiteration` no longer appears in the top DOM events at all.
 
-## 2. The one remaining animation is deliberate
+### 2. The one remaining animation is deliberate
 
 Profile B contains 6 `CSS animation iteration` markers, each **exactly 1400 ms**. That is MUI
 `CircularProgress`'s indeterminate cycle (1.4 s), not the removed 1.3 s `queuePulse`. It only ticks
 while a spinner is on screen, and the `<CircularProgress>` sites were kept on purpose. 8.4 s of
 animation in a 150 s window — leave it.
 
-## 3. "Lag when background jobs run" is host CPU contention, not frontend code
+### 3. "Lag when background jobs run" is host CPU contention, not frontend code
 
 Profile B, taken deliberately under load:
 
@@ -294,7 +294,7 @@ competing with the pipeline for four cores.
 > be modest, but if the UI gets worse under load after that change, this is why — cap the worker's
 > CPU rather than reverting the slot change.
 
-## 4. AUDIT-F2 item #3 — resolved, after being blocked since 2026-08-01
+### 4. AUDIT-F2 item #3 — resolved, after being blocked since 2026-08-01
 
 Sourcemaps now ship (`map=YES` on every app bundle). The profiler records `sourceMapURL` but does
 **not** embed sourcemap content, so the saved JSON still shows minified names — resolution has to be
@@ -334,9 +334,9 @@ doing; it is just worth ~10%, not the headline.
 every `Button` / `IconButton` / `MenuItem` / `Tab` in the reader chrome. Worth checking how many
 button instances re-render per interaction, and whether ripples can be disabled on the hot ones.
 
-## 5. Method note for the next run
+### 5. Method note for the next run
 
 `funcTable.source` **cannot be trusted** to identify which bundle a frame came from — it
-mis-attributed both React frames above to the Reader chunk. Resolve by geometry instead: try every
+misattributed both React frames above to the Reader chunk. Resolve by geometry instead: try every
 `.map`, keep the candidate with a mapping segment at or just before the target column on that
 generated line. That is what produced the table in §4.
