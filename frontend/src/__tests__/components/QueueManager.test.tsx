@@ -295,6 +295,121 @@ describe("QueueManager", () => {
     });
   });
 
+  it("does not let a stale poll response overwrite a newer SSE status", async () => {
+    // The poll is in flight; its payload predates the SSE event. `createdAt` is fixed for
+    // a job's lifetime so it is identical in both — only `updatedAt` separates them, and
+    // the poll's is older. Comparing createdAt alone accepted the stale one, and it won
+    // simply by arriving last.
+    const staleSnapshot = {
+      ...mockJobs[0],
+      status: "PENDING",
+      updatedAt: new Date(Date.now() - 5000).toISOString(),
+    };
+    let landPoll: () => void = () => {};
+    const pollInFlight = new Promise<void>((r) => {
+      landPoll = r;
+    });
+
+    (safeFetch as Mock).mockImplementation((url: string) => {
+      if (url === "/api/jobs") {
+        return pollInFlight.then(() => ({
+          ok: true,
+          json: async () => ({ isPaused: false, jobs: [staleSnapshot] }),
+        }));
+      }
+      return Promise.reject(new Error("Unknown URL"));
+    });
+
+    const { rerender } = render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+
+    const subscribeMock = (useNotifications as Mock).mock.results[0].value
+      .subscribe;
+    const callback = subscribeMock.mock.calls[0][0];
+
+    // SSE arrives first with a fresher snapshot of the same job.
+    callback({
+      type: "job_update",
+      data: JSON.stringify({
+        ...mockJobs[0],
+        jobId: "job-1",
+        status: "PROCESSING",
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+    rerender(<QueueManagerWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByText("PROCESSING")).toBeInTheDocument();
+    });
+
+    landPoll();
+    await pollInFlight;
+    rerender(<QueueManagerWrapper />);
+
+    // Must not roll back. Asserting the positive rather than only the absence — a bare
+    // queryByText(...).toBeNull() inside waitFor passes on the first tick and can never
+    // fail, which is AUDIT-F8 in the Reader tests.
+    await waitFor(() => {
+      expect(screen.getByText("PROCESSING")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("PENDING")).toBeNull();
+  });
+
+  it("still applies a poll response that is fresher than what is held", async () => {
+    // The guard must not wedge the 30s poll shut: same job, newer updatedAt, applies.
+    const fresherSnapshot = {
+      ...mockJobs[0],
+      status: "FAILED",
+      error: "API Limit Reached",
+      updatedAt: new Date(Date.now() + 5000).toISOString(),
+    };
+    let landPoll: () => void = () => {};
+    const pollInFlight = new Promise<void>((r) => {
+      landPoll = r;
+    });
+
+    (safeFetch as Mock).mockImplementation((url: string) => {
+      if (url === "/api/jobs") {
+        return pollInFlight.then(() => ({
+          ok: true,
+          json: async () => ({ isPaused: false, jobs: [fresherSnapshot] }),
+        }));
+      }
+      return Promise.reject(new Error("Unknown URL"));
+    });
+
+    const { rerender } = render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+
+    const subscribeMock = (useNotifications as Mock).mock.results[0].value
+      .subscribe;
+    const callback = subscribeMock.mock.calls[0][0];
+
+    callback({
+      type: "job_update",
+      data: JSON.stringify({
+        ...mockJobs[0],
+        jobId: "job-1",
+        status: "PROCESSING",
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+    rerender(<QueueManagerWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByText("PROCESSING")).toBeInTheDocument();
+    });
+
+    landPoll();
+    await pollInFlight;
+    rerender(<QueueManagerWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByText("FAILED")).toBeInTheDocument();
+    });
+  });
+
   it("handles retrying a failed job", async () => {
     (safeFetch as Mock).mockImplementation(
       (url: string, init?: RequestInit) => {
