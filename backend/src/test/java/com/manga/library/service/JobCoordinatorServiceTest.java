@@ -3,9 +3,11 @@ package com.manga.library.service;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.manga.library.RedisTestcontainersConfig;
 import com.manga.library.model.*;
 import com.manga.library.repository.*;
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -466,6 +468,125 @@ public class JobCoordinatorServiceTest {
 
     // Clean up
     ocrRegionRepository.delete(updatedRegion);
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
+  /**
+   * A QA model that hits its output token cap returns JSON truncated mid-value, which gets repaired
+   * into an object that has lost its {@code regionId}. That used to throw inside the per-result
+   * catch, leave every counter at zero, and score as a clean "passed" — completing the pipeline with
+   * QA never applied.
+   */
+  @Test
+  public void testHandleQaCallback_TruncatedResultIsNotReportedAsPassed() {
+    Image image = new Image();
+    image.setFilename("truncated.png");
+    image.setStoragePath("test/truncated.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    Layer layer = new Layer();
+    layer.setPage(page);
+    layer.setType("translation");
+    layer.setTargetLanguage("en");
+    layer.setVisible(true);
+    layer.setZOrder(2);
+    layer = layerRepository.save(layer);
+
+    // Exactly the shape the repaired response arrives in: feedback only, no regionId.
+    Map<String, Object> truncated = new HashMap<>();
+    truncated.put("qaFeedback", "The translation accurately conveys the meaning of the original");
+
+    String state = jobCoordinatorService.handleQaCallback(image.getId(), List.of(truncated), null);
+
+    assertEquals("COMPLETED_NO_QA", state);
+
+    Layer reloaded = layerRepository.findById(layer.getId()).orElseThrow();
+    JsonNode qa = reloaded.getMetadataJson().get("qa");
+    assertEquals("error", qa.get("status").asText());
+    assertEquals(0, qa.get("total_regions").asInt());
+    assertEquals(1, qa.get("discarded_results").asInt());
+
+    // Clean up
+    layerRepository.delete(reloaded);
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
+  /**
+   * A QA retry cycle leaves several translation layers on the page. The metadata write used to loop
+   * over all of them, so the last callback stamped its verdict over the results recorded for the
+   * earlier cycles.
+   */
+  @Test
+  public void testHandleQaCallback_WritesMetadataOnlyToNewestTranslationLayer() {
+    Image image = new Image();
+    image.setFilename("cycles.png");
+    image.setStoragePath("test/cycles.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    Layer older = new Layer();
+    older.setPage(page);
+    older.setType("translation");
+    older.setTargetLanguage("en");
+    older.setVisible(true);
+    older.setZOrder(2);
+    older.setCreatedAt(OffsetDateTime.now().minusMinutes(5));
+    older = layerRepository.save(older);
+
+    Layer newer = new Layer();
+    newer.setPage(page);
+    newer.setType("translation");
+    newer.setTargetLanguage("en");
+    newer.setVisible(true);
+    newer.setZOrder(3);
+    newer.setCreatedAt(OffsetDateTime.now());
+    newer = layerRepository.save(newer);
+
+    OcrRegion region = new OcrRegion();
+    region.setPage(page);
+    region.setBboxX(10);
+    region.setBboxY(20);
+    region.setBboxW(100);
+    region.setBboxH(50);
+    region.setText("こんにちは");
+    region.setDetectedLanguage("ja");
+    region.setConfidence(0.9);
+    region.setQaStatus("pending");
+    region = ocrRegionRepository.save(region);
+
+    Map<String, Object> qaResult = new HashMap<>();
+    qaResult.put("regionId", region.getId().toString());
+    qaResult.put("qaStatus", "passed");
+    qaResult.put("qaScore", 0.95);
+    qaResult.put("qaFeedback", "All good");
+
+    jobCoordinatorService.handleQaCallback(image.getId(), List.of(qaResult), null);
+
+    Layer reloadedNewer = layerRepository.findById(newer.getId()).orElseThrow();
+    assertEquals("passed", reloadedNewer.getMetadataJson().get("qa").get("status").asText());
+
+    Layer reloadedOlder = layerRepository.findById(older.getId()).orElseThrow();
+    assertTrue(
+        reloadedOlder.getMetadataJson() == null || !reloadedOlder.getMetadataJson().has("qa"),
+        "The previous cycle's layer must not be overwritten by this QA pass");
+
+    // Clean up
+    ocrRegionRepository.delete(region);
+    layerRepository.delete(reloadedNewer);
+    layerRepository.delete(reloadedOlder);
     pageRepository.delete(page);
     imageRepository.delete(image);
   }

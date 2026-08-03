@@ -597,6 +597,14 @@ public class InternalJobController {
             "Page Processing Complete",
             formatMessage("All processing steps finished successfully.", ctx),
             ctx);
+      } else if ("COMPLETED_NO_QA".equals(qaResultState)) {
+        sseService.emitNotificationForImage(
+            imageId,
+            "WARNING",
+            "Processing Complete, QA Skipped",
+            formatMessage(
+                "Processing finished, but QA returned no usable results and was not applied.", ctx),
+            ctx);
       } else if ("MANUAL_REVIEW".equals(qaResultState)) {
         sseService.emitNotificationForImage(
             imageId,
