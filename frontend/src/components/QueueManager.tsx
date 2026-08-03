@@ -373,10 +373,24 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
           const newJobsList: Array<Omit<Job, "jobCreatedAt">> = data.jobs;
           newJobsList.forEach((job) => {
             const existing = pipelinesMap.get(job.imageId);
-            if (
-              !existing ||
-              new Date(job.createdAt) >= new Date(existing.jobCreatedAt)
-            ) {
+
+            // A poll response can land after an SSE job_update that already carried a
+            // newer status for the same job. `createdAt` is fixed for the lifetime of a
+            // job, so comparing it alone cannot tell "same job, fresher" from "same job,
+            // staler" — it accepted both, and the stale poll won by arriving last. Use
+            // the same rule the SSE handler uses: a strictly newer job replaces, and the
+            // same job only replaces when its snapshot is at least as fresh.
+            const isNewerJob =
+              !!job.createdAt &&
+              new Date(job.createdAt) > new Date(existing?.jobCreatedAt ?? 0);
+            const isSameJobButNewer =
+              !!existing &&
+              job.id === existing.id &&
+              (!existing.updatedAt ||
+                !job.updatedAt ||
+                new Date(job.updatedAt) >= new Date(existing.updatedAt));
+
+            if (!existing || isNewerJob || isSameJobButNewer) {
               pipelinesMap.set(job.imageId, {
                 ...job,
                 jobCreatedAt: job.createdAt,
