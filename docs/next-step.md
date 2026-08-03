@@ -3,10 +3,9 @@
 > Consolidates the former `immediate-next-steps.md`, which is now deleted. Everything still live
 > is below; everything settled is recorded as settled so it does not get re-litigated.
 >
-> **Resume at:** [§ What to do next](#what-to-do-next) — the four frontend/backend correctness items.
-> The performance thread is closed for now: AUDIT-W5 was measured and killed, and the queue-wait
-> numbers turned out to be an attribution artefact rather than a stall. See
-> [§ The performance thread is closed](#the-performance-thread-is-closed).
+> **Resume at:** [§ What to do next](#what-to-do-next). Both the performance thread and the
+> correctness list are closed; what remains is the transitioning-state change and one deferred
+> cleanup.
 
 ## Where the work stands
 
@@ -115,44 +114,53 @@ The six predictions from the original post-W10 analysis:
 
 ## What to do next
 
-The performance thread is closed, so what remains is correctness. Re-verified in the code on
-2026-08-04, not taken from this doc's own status:
+**The correctness list is empty.** Everything that was open on the morning of 2026-08-04 is
+closed — see [§ 2026-08-04 — correctness sweep](#2026-08-04--correctness-sweep). What is left is
+one deliberate piece of work and one deferred cleanup:
 
-1. **AUDIT-F6** — `QueueManager.tsx:376-379`, `>=` on `createdAt`.
-2. **AUDIT-F8** — `Reader.test.tsx:501-505`, a test that cannot fail.
-3. **AUDIT-F7** — `ChapterGallery.tsx:199`, unguarded `setPages`.
-4. **`/api/**` returns 200, not 404** — `ForwardController.java:21-22`.
+1. **Move a waiting job to a *transitioning* state** rather than leaving it labelled with the stage
+   it last completed. Observability, **not** performance — see the closed-thread section. It makes
+   the wait legible; it will not make anything faster. Note `getDisplayStatus` already renders
+   `COMPLETED` as `TRANSITIONING...` (`QueueManager.tsx:681`), so part of the vocabulary exists.
+2. **The `BUBBLE_CONTOUR_FALLBACK` removal checkpoint** in `TODO.md`, once a detector lands that
+   finds irregular bubbles directly.
 
-Then the two unverified things, both one-offs: open an exported ZIP, and write the prefetch-gate
-test. AUDIT-W11 after that.
+Two things carried forward that are not tasks:
 
-Separately, and not a performance item: **move a waiting job to a *transitioning* state** rather
-than leaving it labelled with the stage it last completed. See the closed-thread section for why —
-it makes the wait legible, it will not make anything faster.
-
-## Still open, verified present 2026-08-04
-
-- **AUDIT-F6** — `QueueManager.tsx:376-379` still uses `>=` on `createdAt`, so an in-flight poll can
-  overwrite a newer SSE status.
-- **AUDIT-F7** — `ChapterGallery.tsx:199` still calls `setPages` after upload with no guard that
-  `selectedChapter` hasn't changed meanwhile.
-- **AUDIT-F8** — the negative assertion inside `waitFor` is still there at
-  `Reader.test.tsx:501-505`. `waitFor` retries until the callback passes, and
-  `not.toBeInTheDocument()` passes on the first tick, so the test cannot fail.
-- **AUDIT-W11** — a chapter pinned to a dead provider gets no cross-provider fallback.
-- **Unmatched `/api/**` paths return 200**, not 404: `ForwardController.java:21-22` catches them and
-  forwards to `/error`.
-- **The ZIP export is unverified.** `handleExportPng` / `handleExportZip` were repointed at `/file`
-  so `original.png` stays the original, and `/file` was confirmed to still serve untouched bytes —
-  but nobody has opened an exported ZIP and checked. Silent failure mode; worth one click.
-- **No automated test for the prefetch gate.** The invariant "nothing prefetches before the current
-  image loads" is exactly the kind that regresses quietly.
+- The same cross-provider fallback rule AUDIT-W11 established for translation still has to be
+  adopted by `ocr.py` and `qa.py`. `is_provider_auth_parked()` is in place for it. Left undone
+  deliberately: the failure was only ever measured on translation, and each deserves its own commit
+  rather than a speculative sweep.
+- **Pixel content of the exported ZIP is still unverified.** The archive now opens under test, but
+  jsdom has no canvas, so the PNG bytes in that test are placeholders. How an exported page actually
+  *looks* needs a real browser and has never been checked.
 
 ### Correction to the old Step B note
 
 The old handoff said `handleExportRenderedPng` draws from `imgRef.current`. **It does not** — it
 fetches `/api/pages/{id}/rendered` from the server and was never at risk. The two that did draw from
 the displayed element are `handleExportPng` and `handleExportZip`.
+
+## 2026-08-04 — correctness sweep
+
+Seven items, one commit each. Frontend 264 passing, backend 349, worker 275.
+
+| item | commit | what it actually was |
+| --- | --- | --- |
+| AUDIT-F6 | `18ffee8` | The poll merge compared `createdAt >=`, but `createdAt` is fixed for a job's lifetime, so for the same job it was always an equality and always passed. It could not distinguish "same job, fresher" from "same job, staler". Now uses the rule the SSE handler already had. |
+| AUDIT-F8 | `4cbf925` | Moved the no-spinner assertion out of `waitFor`. Verified by inversion — flipping it now fails the test, which it could not before. |
+| AUDIT-F7 | `0b18b8d` | Guarded with a ref holding the current chapter id. Applied to **all four** chapter-scoped refreshes (upload, import, delete, reorder-revert), not just the one the audit named. |
+| `/api/**` 200 | `9236787` | `forward:/error` reaches the error controller but sets no status, so it stayed 200. `safeFetch` is a bare `window.fetch`, so every `if (res.ok)` read a missing endpoint as success. Now throws `ResponseStatusException(NOT_FOUND)`. The old test asserted `isOk()` — it was pinning the bug. |
+| prefetch gate | `64cef93` | Stubs `Image`, asserts nothing warms before load and that warming *does* happen after, so the test cannot pass with prefetching deleted. Verified by removing `!isImageLoaded`. |
+| ZIP export | `1ae993e` | Archive is generated through the real UI path, captured off `URL.createObjectURL` and reopened with `JSZip.loadAsync`. Entries and `project.json` round-trip. Cost is asserted specifically because it is summed from `metadataJson` rather than stored, so a shape change would silently zero it. |
+| AUDIT-W11 | worker `2f0abfa` | Fallback now crosses providers **only** when the pinned one is parked in `PROVIDER_AUTH_FAILURES`. Both translation paths share one `resolve_fallback_target()`; they had duplicated the condition. |
+
+Two process notes worth keeping:
+
+- Every behavioural fix above was checked **red-green** — the guard removed, the test observed to
+  fail, the guard restored. A regression test that has never been seen to fail is not evidence.
+- `ForwardController`'s old test and `TextBoxForTest`'s helper were both *pinning bugs* rather than
+  behaviour. When a fix makes a test fail, check which of the two is wrong before editing the test.
 
 ## 2026-08-04 — render geometry
 
@@ -257,20 +265,17 @@ reopen either without a new measurement that contradicts the ones on file.
 
 WHAT I WANT
 
-1. The four correctness items, in this order, each its own commit:
-   AUDIT-F6 (QueueManager.tsx:376-379), AUDIT-F8 (Reader.test.tsx:501-505),
-   AUDIT-F7 (ChapterGallery.tsx:199), then /api/** returning 200 instead of 404
-   (ForwardController.java:21-22).
-
-2. Then the two one-offs: open an exported ZIP and confirm it, and write the
-   prefetch-gate test.
-
-3. The transitioning-state change for queued jobs — an observability fix so a job's
+1. The transitioning-state change for queued jobs — an observability fix so a job's
    wait stops being attributed to the stage it last completed. Do not file or measure
-   this as a performance item; it will not move wall time.
+   this as a performance item; it will not move wall time. getDisplayStatus already
+   renders COMPLETED as "TRANSITIONING..." so some of the vocabulary exists.
 
-4. Rank whatever remains by measured payoff — "N seconds per page, M lines to fix" —
-   not by severity label.
+2. Rank whatever remains in issues.md by measured payoff — "N seconds per page, M
+   lines to fix" — not by severity label.
+
+The correctness list from 2026-08-04 is closed; do not reopen those without a new
+reproduction. Each fix has a red-green regression test, so start by running the
+suites rather than re-reading the diffs.
 
 Tell me plainly if any of this is falsified once measured. I would rather delete a
 wrong model of the system than fix the wrong thing.
