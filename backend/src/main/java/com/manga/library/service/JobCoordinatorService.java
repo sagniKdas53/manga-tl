@@ -991,7 +991,6 @@ public class JobCoordinatorService {
     enqueueJobForPage("translation", imageId, layoutPage != null ? layoutPage.getId() : null);
   }
 
-  @Transactional
   /** Where translated text is laid out, in original image pixels. */
   record TextBox(double x, double y, int w, int h) {}
 
@@ -1001,26 +1000,59 @@ public class JobCoordinatorService {
   /** Below this, insetting would leave nothing to draw into, so the bubble is used as-is. */
   private static final int MIN_TEXT_BOX = 24;
 
+  /** Outward growth per axis for free-floating text, which has no outline to stay inside. */
+  private static final int FREE_TEXT_PADDING = 20;
+
   /**
-   * Text box for a region: the speech bubble, inset by {@link #TEXT_BOX_PADDING}.
+   * True when {@code bubble*} describes a container the text sits inside, rather than the text.
    *
-   * <p>Two things this deliberately does not do any more.
+   * <p>The worker populates bubble geometry on every region, but when nothing was matched to a text
+   * fragment it fills {@code bubble*} from the OCR bbox itself (see {@code
+   * worker/src/worker/handlers/ocr.py}). Over this library that was <b>1,832 of 4,351 translated
+   * regions (42%)</b> — free-floating dialogue, captions, SFX — and on every one of them {@code
+   * bubble == bbox == safeText} exactly.
    *
-   * <p><b>It no longer pads outward.</b> The previous geometry took {@code safeText*} and grew it by
-   * 20px per axis. Measured over this library, {@code safeText} is <b>97.4% of bubble width and
-   * 98.4% of bubble height</b> — it is the bubble, not an inset safe area — so growing it produced a
-   * text box <em>larger</em> than the bubble and let text escape the outline. Padding now pulls
-   * inward, which is what "padding" was meant to mean.
+   * <p>The test is deliberately on the geometry rather than on {@code bubbleId}. Those regions are
+   * tagged {@code direct_text_*}, but the tag means "YOLO matched no bubble", which is no longer the
+   * same thing as "has no bubble": the worker's contour fallback can supply a real container for a
+   * {@code direct_text_*} region, and that geometry must be inset like any other bubble. Geometry
+   * strictly larger than the bbox is the property that actually matters, and it also catches rows
+   * written before {@code bubbleId} existed.
+   */
+  private static boolean hasDetectedBubble(OcrRegion region) {
+    if (region.getBubbleW() == null || region.getBubbleH() == null) {
+      return false;
+    }
+    return !(region.getBubbleW().equals(region.getBboxW())
+        && region.getBubbleH().equals(region.getBboxH()));
+  }
+
+  /**
+   * Text box for a region. Inset into the bubble when there is one, grown outward when there is not.
    *
-   * <p><b>It no longer inherits the source aspect ratio.</b> {@code safeText} traces the Japanese
-   * text, which is set vertically: <b>88% of speech regions (2,468 of 2,816) are taller than wide</b>,
-   * mean aspect 0.69. Laying English into that wraps it into narrow ragged columns. Using the bubble
-   * gives the full width the bubble actually offers.
+   * <p><b>With a detected bubble the box is inset.</b> The geometry before f3aa160 took {@code
+   * safeText*} and grew it by 20px per axis. Measured over regions that have a real bubble, {@code
+   * safeText} is <b>95.7% of bubble width and 97.4% of bubble height</b> — it is the bubble, not an
+   * inset safe area — so growing it produced a text box <em>larger</em> than the bubble and let text
+   * escape the outline. The box also takes the bubble's own extent rather than {@code safeText}'s,
+   * because {@code safeText} traces vertically-set Japanese and laying English into that shape wraps
+   * it into narrow ragged columns.
    *
-   * <p>Falls back to {@code safeText*} then {@code bbox*} when bubble geometry is missing — every
-   * region in this library has it, but a region written before bubble detection would not.
+   * <p><b>Without one the box is grown, as it was before f3aa160.</b> f3aa160 applied the inset
+   * unconditionally, but these regions have no outline to stay inside and their geometry is already
+   * the tight text column — insetting a 49px-wide caption to 29px is narrower than a single word at
+   * any legible size, so the renderer falls through to per-character splitting ({@code
+   * fit_text_in_box_py} in {@code render.py}) and emits "goi/ng", "sub/jec/t". 237 regions landed
+   * under 40px that way.
+   *
+   * <p>Note that growing outward is the right shape of fix but not a sufficient one: 69px still
+   * forces a one-word-per-line column where a human typesetter reflows the sentence across the
+   * cloud. Widening free-floating text toward a readable aspect ratio needs collision handling
+   * against neighbouring regions and panel edges, and is tracked separately in TODO.md.
    */
   static TextBox textBoxFor(OcrRegion region) {
+    boolean detectedBubble = hasDetectedBubble(region);
+
     Integer w = region.getBubbleW() != null ? region.getBubbleW() : region.getSafeTextW();
     Integer h = region.getBubbleH() != null ? region.getBubbleH() : region.getSafeTextH();
     Integer x = region.getBubbleW() != null ? region.getBubbleX() : region.getSafeTextX();
@@ -1031,6 +1063,15 @@ public class JobCoordinatorService {
       y = region.getBboxY();
       w = region.getBboxW();
       h = region.getBboxH();
+    }
+
+    if (!detectedBubble) {
+      int halfPad = FREE_TEXT_PADDING / 2;
+      return new TextBox(
+          Math.max(0, x - halfPad),
+          Math.max(0, y - halfPad),
+          w + FREE_TEXT_PADDING,
+          h + FREE_TEXT_PADDING);
     }
 
     // Only inset when there is room to; a tiny bubble keeps its full extent rather than collapsing.
@@ -1045,6 +1086,7 @@ public class JobCoordinatorService {
         insetH ? h - TEXT_BOX_PADDING : h);
   }
 
+  @Transactional
   public void handleTranslationCallback(
       UUID imageId, List<Map<String, Object>> translations, Map<String, Object> cost) {
     log.info(
