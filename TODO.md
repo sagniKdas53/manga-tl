@@ -58,31 +58,33 @@
     - mangatranslator.ai: <br/><img src="examples/sample2/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>
     - Ours: <br/><img src="examples/sample2/en-local.png" alt="ours" width="600"/>
 - [ ] **Multimodal VLM Quality Benchmarks & Render Tuning** — use VLMs (Kimi K3 or 5.6-Sol) to analyze translation and typesetting output against competitor benchmarks and refine `render.py` text fitting and inpainting algorithms.
-- [ ] **CHECKPOINT — remove the contour fallback once the detector can stand on its own.**
-  `BUBBLE_CONTOUR_FALLBACK` (default on) runs the OpenCV contour search on text fragments YOLO
-  matched to no bubble. It is compensation for a detector limitation, not a thing worth keeping: it
-  is slower, it is a heuristic with three tuned guards, and it recovers ~48% rather than all. Delete
-  it — the flag, `contour_bubble_for_unmatched`, and its tests — as soon as a detector lands that
-  finds irregular bubbles directly. Re-measure before deciding: the numbers below are the baseline.
+- [ ] **CHECKPOINT — delete the contour fallback.** `BUBBLE_CONTOUR_FALLBACK` is now **default off**,
+  because the ~48% recovery it was built on was not real: 171 of the 172 results it accepted over a
+  300-region sample were the contour search's own crop window. Free-floating text sits on the page
+  background, the threshold finds the background, and a blob with no boundary inside the crop has
+  `boundingRect` = the crop — which passed every guard, since a window contains its text, sits within
+  `2 * pad` of it, and is a small part of the page. Those windows became "bubbles" (a 49x489 caption
+  read as 129x1271) *and* the region's mask polygon, so a white rectangle got painted over the
+  artwork and over neighbouring bubbles' text. `contour_bubble_for_unmatched` now rejects a blob
+  clipped by its own window, which drops acceptance to 1 in 300. Delete the flag, the function and
+  its tests once a detector lands that finds irregular bubbles directly — there is nothing to lose.
   - A larger model is **not** that detector. `yolo26s_manga109` (3-class, already in the worker
     cache from the reverted F.1 attempt) recovers 4/180 at conf 0.25 against yolo11n's 1/180, and
     every region it recovered was already recovered by the contour search — additive value zero.
     Both models are trained to find *balloons*; yolo26s classes the irregular clouds as `text`, not
     `balloon`. This is a training-distribution gap, not a model-size gap.
-- [ ] **Free-floating text is laid out in the source's vertical column.** 42% of translated regions
-  (1,832 of 4,351) have no detected bubble — irregular thought clouds, captions, SFX. The worker
-  synthesizes `bubble*` from the OCR bbox for these, so their text box is the tight vertical Japanese
-  column: a 49px-wide caption stays 49px wide, and English gets one word per line. `textBoxFor` now
-  grows these outward by 20px instead of insetting them (which had made it 29px and triggered
-  per-character splitting in `fit_text_in_box_py`), but that only stops the bleeding.
-  - Compare page 22 of Openrouter ch. 11 in `logs/comparison/`: mangatranslator.ai reflows
-    "I'M... I'M BEING CONFISCATED...?!" across roughly 200px of the cloud; ours renders the same
-    line in a 69px column.
-  - The real fix is to widen toward a readable aspect ratio around the region's centre, bounded by
-    neighbouring regions and panel edges — which needs collision handling this code does not have.
-  - Alternative worth costing first: detect the irregular bubble properly. These clouds are visible
-    to a human; the detector just does not return them. That would remove the whole class of
-    synthetic-geometry regions rather than compensating for it downstream.
+- [x] **Free-floating text is laid out in the source's vertical column.** 42% of translated regions
+  have no detected bubble — irregular thought clouds, captions, SFX — and the worker synthesizes
+  `bubble*` from the OCR bbox for these, so their box was the tight vertical Japanese column.
+  `freeTextBox` now squares such a column up: same area, same centre, clamped to the page. Page 22 of
+  Openrouter ch. 11 goes from a 69px ribbon to a 173x203 block, which is roughly what
+  mangatranslator.ai gives that cloud.
+  - Bounded by the page only. It does not know where the artwork or the neighbouring regions are, so
+    a block can still land partly over line art; area preservation and the 2.5x widening ceiling are
+    what keep that small. Collision handling against neighbouring regions is the next increment.
+  - Still worth costing: detect the irregular bubble properly. These clouds are visible to a human
+    and the detector just does not return them (see the checkpoint above — the contour search is not
+    that detector). Real geometry would remove the whole class rather than compensate for it.
 
 ## 🟡 Medium Priority
 

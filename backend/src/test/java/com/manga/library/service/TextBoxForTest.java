@@ -55,6 +55,16 @@ class TextBoxForTest {
     return r;
   }
 
+  /** A page of a known size, so a reshaped box has something to be clamped against. */
+  private static com.manga.library.model.Page pageOf(int width, int height) {
+    com.manga.library.model.Image image = new com.manga.library.model.Image();
+    image.setWidth(width);
+    image.setHeight(height);
+    com.manga.library.model.Page page = new com.manga.library.model.Page();
+    page.setImage(image);
+    return page;
+  }
+
   @Test
   void insetsInsideTheBubbleRatherThanGrowingPastIt() {
     JobCoordinatorService.TextBox box =
@@ -96,19 +106,25 @@ class TextBoxForTest {
   }
 
   /**
-   * The f3aa160 regression. Page 22 of Openrouter ch. 11: a 49x489 caption in an irregular thought
-   * cloud the detector never matched. Insetting took it to 29px — narrower than "going" at any
-   * legible size — and the renderer fell through to per-character splitting.
+   * The f3aa160 regression, and what replaced the fix for it. Page 22 of Openrouter ch. 11: a 49x489
+   * caption in an irregular thought cloud the detector never matched. Insetting took it to 29px —
+   * narrower than "going" at any legible size. Growing it to 69px stopped the per-character
+   * splitting but still set the sentence one word per line down a ribbon, so the box now squares up
+   * instead: same area, same centre, a shape a sentence reflows across.
    */
   @Test
-  void growsFreeFloatingTextOutwardInsteadOfInsettingItIntoNothing() {
+  void squaresUpTheSourceColumnInsteadOfSettingEnglishDownIt() {
     JobCoordinatorService.TextBox box =
         JobCoordinatorService.textBoxFor(directTextRegion(71, 675, 49, 489));
 
-    assertEquals(69, box.w(), "must grow past the 49px source column, not shrink below it");
-    assertEquals(509, box.h());
-    assertEquals(61.0, box.x());
-    assertEquals(665.0, box.y());
+    assertEquals(173, box.w(), "2.5x the padded 69px column, the ceiling on widening");
+    assertEquals(203, box.h());
+    assertTrue(box.w() > 3 * 49, "must be several words wide, not one");
+    // Same centre as the source text, so the block lands where the Japanese was.
+    assertEquals(95.5, box.x() + box.w() / 2.0, 1.0);
+    assertEquals(919.5, box.y() + box.h() / 2.0, 1.0);
+    // Same room to set into, give or take integer rounding.
+    assertEquals(69 * 509, box.w() * box.h(), 0.02 * 69 * 509);
   }
 
   /** Rows written before bubbleId existed are caught by the geometry, not the tag. */
@@ -117,7 +133,32 @@ class TextBoxForTest {
     OcrRegion untagged = directTextRegion(1050, 631, 57, 428);
     untagged.setBubbleId(null);
 
-    assertEquals(77, JobCoordinatorService.textBoxFor(untagged).w());
+    assertEquals(186, JobCoordinatorService.textBoxFor(untagged).w());
+  }
+
+  /** Horizontal text is already a shape English fits; reshaping it would only move it around. */
+  @Test
+  void leavesTextThatIsNotAVerticalColumnAlone() {
+    JobCoordinatorService.TextBox box =
+        JobCoordinatorService.textBoxFor(directTextRegion(100, 100, 540, 120));
+
+    assertEquals(560, box.w());
+    assertEquals(140, box.h());
+    assertEquals(90.0, box.x());
+  }
+
+  /** A column near the edge of the page reshapes onto the paper, not off it. */
+  @Test
+  void keepsAReshapedBoxOnThePage() {
+    OcrRegion atLeftEdge = directTextRegion(5, 700, 40, 400);
+    atLeftEdge.setPage(pageOf(1200, 1600));
+
+    JobCoordinatorService.TextBox box = JobCoordinatorService.textBoxFor(atLeftEdge);
+
+    assertTrue(box.x() >= 0, "left edge on the page");
+    assertTrue(box.x() + box.w() <= 1200, "right edge on the page");
+    assertTrue(box.y() >= 0 && box.y() + box.h() <= 1600, "vertically on the page");
+    assertTrue(box.w() > 60, "still widened");
   }
 
   /**
