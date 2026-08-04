@@ -66,6 +66,33 @@ public class SecurityConfigTest {
    * searches or mutates. Reaching an image requires already knowing its UUID, which is only true
    * while the catalogue stays authenticated.
    */
+  /**
+   * AUDIT-B3: a denied {@code @PreAuthorize} used to come back as 500.
+   *
+   * <p>This advice sits inside the dispatcher, so it saw {@code AccessDeniedException} before
+   * Spring Security's {@code ExceptionTranslationFilter} could, and the catch-all turned it into
+   * "Something went wrong: Access Denied". A viewer opening any of {@code LayerController}'s eight
+   * editor-only endpoints was told the server had broken.
+   */
+  @Test
+  @org.springframework.security.test.context.support.WithMockUser(roles = "VIEWER")
+  public void testInsufficientRoleIsForbidden_notAServerError() throws Exception {
+    mockMvc
+        .perform(get("/api/layer-elements/" + UUID.randomUUID() + "/history"))
+        .andExpect(status().isForbidden());
+  }
+
+  /** The same endpoint with a role that does hold the permission gets past the check. */
+  @Test
+  @org.springframework.security.test.context.support.WithMockUser(roles = "TRANSLATOR")
+  public void testSufficientRoleIsNotForbidden() throws Exception {
+    // Asserting "not 403" rather than 200: the point is the authorization decision, and an empty
+    // history for a random id is a perfectly good 200 either way.
+    mockMvc
+        .perform(get("/api/layer-elements/" + UUID.randomUUID() + "/history"))
+        .andExpect(status().isOk());
+  }
+
   @Test
   public void testBusinessEndpointsStayAuthenticated() throws Exception {
     UUID id = UUID.randomUUID();

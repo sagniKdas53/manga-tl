@@ -38,7 +38,7 @@ public class NotificationControllerTest {
         .andExpect(status().isInternalServerError())
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.detail")
-                .value("Something went wrong: Unauthorized"));
+                .value("An unexpected internal error occurred"));
   }
 
   @Test
@@ -82,7 +82,7 @@ public class NotificationControllerTest {
           .andExpect(status().isInternalServerError())
           .andExpect(
               org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.detail")
-                  .value("Something went wrong: User not found"));
+                  .value("An unexpected internal error occurred"));
     } finally {
       org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
