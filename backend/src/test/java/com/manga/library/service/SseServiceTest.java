@@ -92,17 +92,116 @@ public class SseServiceTest {
     verify(listOps, times(1)).rightPush(eq("notifications:user:" + userId), anyString());
   }
 
+  /**
+   * Stubs a pending queue and returns the scratch key the drain renamed it to (AUDIT-B4). Anything
+   * still sitting on the live key after this has survived the drain.
+   */
+  private String stubPendingDrain(UUID userId, java.util.List<String> pending) {
+    String key = "notifications:user:" + userId;
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(key)).thenReturn((long) pending.size());
+    org.mockito.ArgumentCaptor<String> scratch = org.mockito.ArgumentCaptor.forClass(String.class);
+    doAnswer(
+            invocation -> {
+              when(listOps.range(invocation.getArgument(1), 0, -1)).thenReturn(pending);
+              return null;
+            })
+        .when(redisTemplate)
+        .rename(eq(key), scratch.capture());
+    return key;
+  }
+
   @Test
   public void testSubscribe_WithPendingNotifications() {
     UUID userId = UUID.randomUUID();
-    when(redisTemplate.opsForList()).thenReturn(listOps);
-    when(listOps.size("notifications:user:" + userId)).thenReturn(2L);
-    when(listOps.range("notifications:user:" + userId, 0, -1))
-        .thenReturn(java.util.Arrays.asList("{\"msg\":\"1\"}", "{\"msg\":\"2\"}"));
+    String key = stubPendingDrain(userId, java.util.List.of("{\"msg\":\"1\"}", "{\"msg\":\"2\"}"));
 
     SseEmitter emitter = sseService.subscribe(userId);
+
     assertNotNull(emitter);
-    verify(redisTemplate).delete("notifications:user:" + userId);
+    org.mockito.ArgumentCaptor<String> scratch = org.mockito.ArgumentCaptor.forClass(String.class);
+    verify(redisTemplate).rename(eq(key), scratch.capture());
+    verify(redisTemplate).delete(scratch.getValue());
+  }
+
+  @Test
+  public void testSubscribe_DrainMovesTheQueueInsteadOfDeletingIt() {
+    UUID userId = UUID.randomUUID();
+    String key = stubPendingDrain(userId, java.util.List.of("{\"msg\":\"1\"}"));
+
+    sseService.subscribe(userId);
+
+    // The bug this replaces: range-then-delete were two calls, so a notification pushed in the
+    // gap was deleted having never been sent. The live key is now never deleted at all -- a
+    // concurrent push lands on a key this drain has no handle on.
+    verify(redisTemplate, never()).delete(key);
+    org.mockito.ArgumentCaptor<String> scratch = org.mockito.ArgumentCaptor.forClass(String.class);
+    verify(redisTemplate).rename(eq(key), scratch.capture());
+    assertTrue(
+        scratch.getValue().startsWith(key + ":draining:"),
+        "drained through a scratch key: " + scratch.getValue());
+    verify(redisTemplate).delete(scratch.getValue());
+  }
+
+  @Test
+  public void testSubscribe_NothingPendingSkipsTheRename() {
+    UUID userId = UUID.randomUUID();
+    expectNoPendingNotifications();
+
+    sseService.subscribe(userId);
+
+    // An empty queue is the overwhelmingly common case; it must not cost a RENAME that can only
+    // fail, nor the exception that failure would raise.
+    verify(redisTemplate, never()).rename(anyString(), anyString());
+  }
+
+  @Test
+  public void testSubscribe_QueueDrainedByAnotherTabIsNotAnError() {
+    UUID userId = UUID.randomUUID();
+    String key = "notifications:user:" + userId;
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(key)).thenReturn(1L);
+    // A second tab won the race between the size check and the RENAME, so the source is gone.
+    doThrow(new org.springframework.data.redis.RedisSystemException("no such key", new RuntimeException()))
+        .when(redisTemplate)
+        .rename(eq(key), anyString());
+
+    SseEmitter emitter = sseService.subscribe(userId);
+
+    assertNotNull(emitter);
+    verify(listOps, never()).range(anyString(), anyLong(), anyLong());
+  }
+
+  @Test
+  public void testSubscribe_FailedSendRequeuesOnlyWhatWasMissed() throws Exception {
+    UUID userId = UUID.randomUUID();
+    String key =
+        stubPendingDrain(
+            userId, java.util.List.of("{\"msg\":\"1\"}", "{\"msg\":\"2\"}", "{\"msg\":\"3\"}"));
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) ->
+                doNothing() // the "connected" event
+                    .doNothing() // msg 1
+                    .doThrow(new java.io.IOException("Pending send failed"))
+                    .when(mock)
+                    .send(any(SseEmitter.SseEventBuilder.class)))) {
+      sseService.subscribe(userId);
+    }
+
+    @SuppressWarnings("unchecked")
+    org.mockito.ArgumentCaptor<java.util.Collection<String>> requeued =
+        org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(listOps).leftPushAll(eq(key), requeued.capture());
+
+    // Msg 1 was delivered and must not come back -- the old code kept the whole batch on a failed
+    // send and showed the delivered ones again. LPUSH prepends one at a time, so the tail goes in
+    // backwards to come out in order.
+    assertEquals(
+        java.util.List.of("{\"msg\":\"3\"}", "{\"msg\":\"2\"}"),
+        new java.util.ArrayList<>(requeued.getValue()));
   }
 
   @Test
@@ -206,10 +305,7 @@ public class SseServiceTest {
   @Test
   public void testSubscribe_SendPendingNotificationException() {
     UUID userId = UUID.randomUUID();
-    when(redisTemplate.opsForList()).thenReturn(listOps);
-    when(listOps.size("notifications:user:" + userId)).thenReturn(1L);
-    when(listOps.range("notifications:user:" + userId, 0, -1))
-        .thenReturn(java.util.Collections.singletonList("{\"msg\":\"1\"}"));
+    String key = stubPendingDrain(userId, java.util.List.of("{\"msg\":\"1\"}"));
 
     try (org.mockito.MockedConstruction<SseEmitter> mocked =
         mockConstruction(
@@ -222,7 +318,8 @@ public class SseServiceTest {
             })) {
       SseEmitter emitter = sseService.subscribe(userId);
       assertNotNull(emitter);
-      verify(redisTemplate, never()).delete("notifications:user:" + userId);
+      // Undelivered, so it goes back rather than being dropped.
+      verify(listOps).leftPushAll(eq(key), anyCollection());
     }
   }
 
