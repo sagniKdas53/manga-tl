@@ -10,7 +10,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
-import java.util.UUID;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -33,6 +32,9 @@ public class SseTicketAuthFilter extends OncePerRequestFilter {
 
   static final String SSE_STREAM_PATH = "/api/notifications/stream";
   static final String TICKET_PARAM = "ticket";
+
+  /** Request attribute carrying the redeemed ticket's session expiry, as an {@link java.time.Instant}. */
+  public static final String SESSION_EXPIRES_AT_ATTRIBUTE = "sse.sessionExpiresAt";
 
   private final SseTicketService sseTicketService;
   private final UserRepository userRepository;
@@ -72,13 +74,18 @@ public class SseTicketAuthFilter extends OncePerRequestFilter {
 
   private void authenticateFromTicket(HttpServletRequest request, String ticket) {
     try {
-      Optional<UUID> userId = sseTicketService.redeem(ticket);
-      if (userId.isEmpty()) {
+      Optional<SseTicketService.Ticket> redeemed = sseTicketService.redeem(ticket);
+      if (redeemed.isEmpty()) {
         return;
       }
-      User user = userRepository.findById(userId.get()).orElse(null);
+      User user = userRepository.findById(redeemed.get().userId()).orElse(null);
       if (user == null) {
         return;
+      }
+      // Handed to the controller rather than acted on here: this filter's job is authentication,
+      // and the emitter that the push has to be armed against does not exist yet.
+      if (redeemed.get().sessionExpiresAt() != null) {
+        request.setAttribute(SESSION_EXPIRES_AT_ATTRIBUTE, redeemed.get().sessionExpiresAt());
       }
       String roleStr = user.getRole() != null ? user.getRole().toUpperCase() : "VIEWER";
       UsernamePasswordAuthenticationToken authentication =

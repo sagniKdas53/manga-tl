@@ -27,13 +27,14 @@ public class SseServiceTest {
   @Mock private ListOperations<String, String> listOps;
   @Mock private ValueOperations<String, String> valOps;
   @Mock private ImageRepository imageRepository;
+  @Mock private org.springframework.scheduling.TaskScheduler taskScheduler;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
   private SseService sseService;
 
   @BeforeEach
   public void setUp() {
-    sseService = new SseService(redisTemplate, objectMapper, imageRepository);
+    sseService = new SseService(redisTemplate, objectMapper, imageRepository, taskScheduler);
   }
 
   @Test
@@ -454,6 +455,107 @@ public class SseServiceTest {
       verify(mocked.constructed().get(0), times(2)).send(any(SseEmitter.SseEventBuilder.class));
     } catch (Exception e) {
       fail("Exception not expected");
+    }
+  }
+
+  /** Everything an emitter was asked to send, flattened, so an event name can be asserted on. */
+  private static String sentBy(SseEmitter emitter) throws Exception {
+    org.mockito.ArgumentCaptor<SseEmitter.SseEventBuilder> captor =
+        org.mockito.ArgumentCaptor.forClass(SseEmitter.SseEventBuilder.class);
+    verify(emitter, atLeastOnce()).send(captor.capture());
+    StringBuilder sent = new StringBuilder();
+    for (SseEmitter.SseEventBuilder builder : captor.getAllValues()) {
+      builder.build().forEach(part -> sent.append(part.getData()));
+    }
+    return sent.toString();
+  }
+
+  private void expectNoPendingNotifications() {
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(anyString())).thenReturn(0L);
+  }
+
+  @Test
+  public void testSubscribe_ArmsTheSessionExpiredPushAtTheSessionsExpiry() {
+    UUID userId = UUID.randomUUID();
+    expectNoPendingNotifications();
+    java.time.Instant expiry = java.time.Instant.now().plusSeconds(3600);
+
+    sseService.subscribe(userId, expiry);
+
+    // Against the token's own exp, not a poll and not a fixed delay -- a renewed session opens a
+    // new connection, which arms a new one.
+    verify(taskScheduler, times(1)).schedule(any(Runnable.class), eq(expiry));
+  }
+
+  @Test
+  public void testSubscribe_WithoutAnExpiryArmsNothing() {
+    UUID userId = UUID.randomUUID();
+    expectNoPendingNotifications();
+
+    sseService.subscribe(userId, null);
+
+    // A ticket minted before this feature shipped carries no expiry; it must still connect.
+    verifyNoInteractions(taskScheduler);
+  }
+
+  @Test
+  public void testSubscribe_ArmedPushTellsTheConnectionThenClosesIt() throws Exception {
+    UUID userId = UUID.randomUUID();
+    expectNoPendingNotifications();
+
+    org.mockito.ArgumentCaptor<Runnable> armed =
+        org.mockito.ArgumentCaptor.forClass(Runnable.class);
+    when(taskScheduler.schedule(any(Runnable.class), any(java.time.Instant.class)))
+        .thenReturn(mock(java.util.concurrent.ScheduledFuture.class));
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) -> doNothing().when(mock).send(any(SseEmitter.SseEventBuilder.class)))) {
+      sseService.subscribe(userId, java.time.Instant.now().plusSeconds(60));
+      verify(taskScheduler).schedule(armed.capture(), any(java.time.Instant.class));
+
+      SseEmitter emitter = mocked.constructed().get(0);
+      armed.getValue().run();
+
+      // The name is the contract: useSSE listens for exactly this and clears the stored session.
+      assertTrue(sentBy(emitter).contains("session-expired"), "expected a session-expired event");
+      // Closed too -- the client drops its token on this event, so a stream left open would only
+      // invite a reconnect carrying a JWT that can no longer buy a ticket.
+      verify(emitter, times(1)).complete();
+      assertEquals(0, sseService.connectionCount(userId));
+    }
+  }
+
+  @Test
+  public void testSubscribe_DisconnectCancelsTheArmedPush() {
+    UUID userId = UUID.randomUUID();
+    expectNoPendingNotifications();
+
+    java.util.concurrent.ScheduledFuture<?> future = mock(java.util.concurrent.ScheduledFuture.class);
+    org.mockito.Mockito.<java.util.concurrent.ScheduledFuture<?>>when(
+            taskScheduler.schedule(any(Runnable.class), any(java.time.Instant.class)))
+        .thenReturn(future);
+
+    org.mockito.ArgumentCaptor<Runnable> onCompletion =
+        org.mockito.ArgumentCaptor.forClass(Runnable.class);
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) -> doNothing().when(mock).send(any(SseEmitter.SseEventBuilder.class)))) {
+      sseService.subscribe(userId, java.time.Instant.now().plusSeconds(60));
+      SseEmitter emitter = mocked.constructed().get(0);
+      verify(emitter).onCompletion(onCompletion.capture());
+
+      onCompletion.getValue().run();
+
+      // A tab closed at noon must not leave a task holding its emitter until the token expires.
+      // With a 24-hour token and a session's worth of reconnects those would outnumber the live
+      // connections.
+      verify(future, times(1)).cancel(false);
+      assertEquals(0, sseService.connectionCount(userId));
     }
   }
 }

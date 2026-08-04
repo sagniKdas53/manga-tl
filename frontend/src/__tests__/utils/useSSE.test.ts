@@ -314,4 +314,46 @@ describe("useSSE", () => {
       expect(global.EventSource).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("session expiry pushed by the server (AUDIT-F7)", () => {
+    it("ends the session when the stream reports it expired", async () => {
+      localStorage.setItem(
+        "manga_user",
+        JSON.stringify({ token: "token123", email: "reader@manga.local" }),
+      );
+      // Claiming the event is what App.tsx's SessionWatcher does, so `utils` skips its
+      // hard-redirect fallback -- the router handles the sign-out.
+      const expired = vi.fn((e: Event) => e.preventDefault());
+      window.addEventListener("session-expired", expired);
+
+      renderHook(() => useSSE(STREAM_URL, "token123"));
+      await flushTicketRequest();
+
+      act(() => {
+        mockEventSourceInstances[0].trigger(
+          "session-expired",
+          '{"reason":"expired"}',
+        );
+      });
+
+      // Without this listener the backend push lands on an EventSource that has no handler for
+      // it and is dropped silently -- the whole point of AUDIT-F7 is that an idle tab with a live
+      // connection finds out now rather than on its next request.
+      expect(localStorage.getItem("manga_user")).toBeNull();
+      expect(expired).toHaveBeenCalledTimes(1);
+
+      window.removeEventListener("session-expired", expired);
+    });
+
+    it("leaves an ordinary event alone", async () => {
+      localStorage.setItem("manga_user", JSON.stringify({ token: "token123" }));
+      renderHook(() => useSSE(STREAM_URL, "token123"));
+      await flushTicketRequest();
+
+      act(() => mockEventSourceInstances[0].trigger("notification", "{}"));
+
+      expect(localStorage.getItem("manga_user")).not.toBeNull();
+      localStorage.removeItem("manga_user");
+    });
+  });
 });
