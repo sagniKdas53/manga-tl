@@ -67,6 +67,18 @@ class LayerElementSerializationTest {
   }
 
   @Test
+  void layerWithNoRecordedVisibilityFailsClosed() throws Exception {
+    LayerElement element = elementOn("translation", true);
+    element.getLayer().setVisible(null);
+
+    JsonNode json = MAPPER.readTree(MAPPER.writeValueAsString(element));
+
+    // `visible` is a nullable column, so a row written before it had a default can read back null.
+    // Not drawing is recoverable; burning an element from a layer of unknown state is not.
+    assertFalse(json.path("layerVisible").asBoolean());
+  }
+
+  @Test
   void regionTypeIsExposedForCasingDecisions() throws Exception {
     LayerElement element = elementOn("translation", true);
     OcrRegion region = new OcrRegion();
@@ -86,8 +98,11 @@ class LayerElementSerializationTest {
 
     JsonNode json = MAPPER.readTree(MAPPER.writeValueAsString(orphan));
 
-    // Null rather than an exception, and the renderer fails closed on it.
+    // No exception, and the renderer fails closed on what it does get: an unknown layerType is not
+    // in ("translation", "sfx"), and layerVisible is false rather than null so nothing downstream
+    // has to treat a missing layer as visible.
     assertTrue(json.path("layerType").isNull());
-    assertTrue(json.path("layerVisible").isNull());
+    assertTrue(json.has("layerVisible"));
+    assertFalse(json.path("layerVisible").asBoolean());
   }
 }
