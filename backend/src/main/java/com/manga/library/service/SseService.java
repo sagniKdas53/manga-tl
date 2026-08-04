@@ -3,11 +3,13 @@ package com.manga.library.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.repository.ImageRepository;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -29,7 +31,13 @@ public class SseService {
     this.imageRepository = imageRepository;
   }
 
-  private final ConcurrentHashMap<UUID, SseEmitter> emitters = new ConcurrentHashMap<>();
+  /**
+   * One user may have several live connections — a second browser tab, a phone alongside a laptop.
+   * AUDIT-B4: this used to be a {@code Map<UUID, SseEmitter>} written with a plain {@code put}, so
+   * opening a second tab silently evicted the first tab's emitter and that tab stopped receiving
+   * {@code job_update} events, looking frozen until reload.
+   */
+  private final ConcurrentHashMap<UUID, Collection<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
   private static final String NOTIFICATION_PREFIX = "notifications:user:";
   private static final String IMAGE_USER_MAPPING_PREFIX = "job:owner:image:";
@@ -37,18 +45,18 @@ public class SseService {
 
   public SseEmitter subscribe(UUID userId) {
     SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT);
-    emitters.put(userId, emitter);
+    emitters.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>()).add(emitter);
 
-    emitter.onCompletion(() -> emitters.remove(userId));
+    emitter.onCompletion(() -> removeEmitter(userId, emitter));
     emitter.onTimeout(
         () -> {
           emitter.complete();
-          emitters.remove(userId);
+          removeEmitter(userId, emitter);
         });
     emitter.onError(
         (e) -> {
           emitter.completeWithError(Objects.requireNonNull(e));
-          emitters.remove(userId);
+          removeEmitter(userId, emitter);
         });
 
     try {
@@ -61,6 +69,51 @@ public class SseService {
     sendPendingNotifications(userId, emitter);
 
     return emitter;
+  }
+
+  /**
+   * Drops one emitter, and drops the user's entry entirely once its last connection goes. Done under
+   * {@code compute} so a disconnect racing a subscribe cannot strand a live emitter in a collection
+   * that has already been detached from the map.
+   */
+  private void removeEmitter(UUID userId, SseEmitter emitter) {
+    emitters.computeIfPresent(
+        userId,
+        (k, connections) -> {
+          connections.remove(emitter);
+          return connections.isEmpty() ? null : connections;
+        });
+  }
+
+  /**
+   * Sends to every live connection this user has, dropping the ones that fail.
+   *
+   * @return true if at least one connection took the event — the caller uses this to decide whether
+   *     the payload still needs queueing to Redis for later delivery.
+   */
+  private boolean sendToUser(UUID userId, String eventName, String jsonPayload) {
+    Collection<SseEmitter> connections = emitters.get(userId);
+    if (connections == null || connections.isEmpty()) {
+      return false;
+    }
+    boolean delivered = false;
+    for (SseEmitter emitter : connections) {
+      try {
+        emitter.send(
+            SseEmitter.event()
+                .name(Objects.requireNonNull(eventName))
+                .data(Objects.requireNonNull(jsonPayload)));
+        delivered = true;
+      } catch (IOException | IllegalStateException e) {
+        log.warn(
+            "Failed to send live '{}' to a connection of user {}, removing that emitter: {}",
+            eventName,
+            userId,
+            e.getMessage());
+        removeEmitter(userId, emitter);
+      }
+    }
+    return delivered;
   }
 
   private void sendPendingNotifications(UUID userId, SseEmitter emitter) {
@@ -156,16 +209,10 @@ public class SseService {
       return;
     }
 
-    SseEmitter emitter = emitters.get(userId);
-    if (emitter != null) {
-      try {
-        emitter.send(
-            SseEmitter.event().name("notification").data(Objects.requireNonNull(jsonPayload)));
-        return;
-      } catch (IOException e) {
-        log.error("Failed to send live notification to user {}, removing emitter", userId, e);
-        emitters.remove(userId);
-      }
+    // Only queue for later if no open tab took it. If any connection accepted the notification the
+    // user has seen it, and pushing to Redis as well would show it again on the next subscribe.
+    if (sendToUser(userId, "notification", jsonPayload)) {
+      return;
     }
 
     String key = NOTIFICATION_PREFIX + userId;
@@ -185,18 +232,9 @@ public class SseService {
       return;
     }
 
-    emitters.forEach(
-        (uId, emitter) -> {
-          try {
-            emitter.send(
-                SseEmitter.event()
-                    .name(Objects.requireNonNull(eventName))
-                    .data(Objects.requireNonNull(jsonPayload)));
-          } catch (IOException e) {
-            log.error("Failed to send event to user {}, removing emitter", uId, e);
-            emitters.remove(uId);
-          }
-        });
+    for (UUID uId : emitters.keySet()) {
+      sendToUser(uId, eventName, jsonPayload);
+    }
   }
 
   public void emitEventForImage(UUID imageId, String eventName, Object data) {
@@ -230,18 +268,12 @@ public class SseService {
       return;
     }
 
-    SseEmitter emitter = emitters.get(userId);
-    if (emitter != null) {
-      try {
-        emitter.send(
-            SseEmitter.event()
-                .name(Objects.requireNonNull(eventName))
-                .data(Objects.requireNonNull(jsonPayload)));
-      } catch (IOException e) {
-        log.warn(
-            "Failed to send live event to user {}, removing emitter: {}", userId, e.getMessage());
-        emitters.remove(userId);
-      }
-    }
+    sendToUser(userId, eventName, jsonPayload);
+  }
+
+  /** Visible for testing: how many live connections a user currently holds. */
+  int connectionCount(UUID userId) {
+    Collection<SseEmitter> connections = emitters.get(userId);
+    return connections == null ? 0 : connections.size();
   }
 }
