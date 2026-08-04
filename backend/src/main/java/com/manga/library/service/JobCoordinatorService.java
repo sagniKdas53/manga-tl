@@ -76,11 +76,24 @@ public class JobCoordinatorService {
     this.providerConfigCache = providerConfigCache;
   }
 
+  /**
+   * This bean as Spring exposes it, rather than {@code this} (AUDIT-B2).
+   *
+   * <p>{@code @Transactional} is applied by a proxy that wraps the bean. A plain {@code this.foo()}
+   * call never leaves the object, so it never crosses that proxy and the annotation does nothing —
+   * silently, with nothing at the call site to suggest it. {@code @Lazy} breaks the self-reference
+   * cycle at construction time.
+   */
+  @org.springframework.beans.factory.annotation.Autowired
+  @org.springframework.context.annotation.Lazy
+  private JobCoordinatorService self;
+
   @EventListener(ApplicationReadyEvent.class)
   public void onStartup() {
     log.info("Application started. Resetting orphaned processing jobs and requeuing...");
     try {
-      resetProcessingJobsToPending();
+      // Through the proxy, so the @Transactional on the target method actually applies.
+      self.resetProcessingJobsToPending();
       String paused = null;
       if (redisTemplate != null && redisTemplate.opsForValue() != null) {
         paused = redisTemplate.opsForValue().get("system:queue:paused");
@@ -95,11 +108,18 @@ public class JobCoordinatorService {
     }
   }
 
+  /**
+   * Migrates orphaned PROCESSING jobs back to PENDING at boot, as one transaction.
+   *
+   * <p>Exceptions deliberately propagate. Catching them here would leave the transaction to commit
+   * whatever the loop managed before the failure — which is the half-migrated job table the
+   * transaction exists to prevent. {@link #onStartup()} logs and carries on, so a failure here
+   * still does not stop the application from starting.
+   */
   @Transactional
   public void resetProcessingJobsToPending() {
-    try {
-      List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
-      for (Job job : processingJobs) {
+    List<Job> processingJobs = jobRepository.findByStatusOrderByCreatedAtAsc("PROCESSING");
+    for (Job job : processingJobs) {
         int attempt = job.getAttempt() != null ? job.getAttempt() + 1 : 1;
         int maxAttempts = job.getMaxAttempts() != null ? job.getMaxAttempts() : 3;
         if (attempt > maxAttempts) {
@@ -117,9 +137,6 @@ public class JobCoordinatorService {
           job.setPayload(updatePayloadAttempt(job.getPayload(), attempt));
         }
         jobRepository.save(Objects.requireNonNull(job));
-      }
-    } catch (Exception e) {
-      log.error("Failed to reset processing jobs to pending: {}", e.getMessage());
     }
   }
 
