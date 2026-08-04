@@ -49,6 +49,9 @@ public class SseService {
   private static final String IMAGE_USER_MAPPING_PREFIX = "job:owner:image:";
   private static final long EMITTER_TIMEOUT = 3600000L; // 1 hour
 
+  /** How long an undelivered notification waits for the user to open a connection. */
+  private static final java.time.Duration PENDING_TTL = java.time.Duration.ofDays(7);
+
   /** Subscribes without arming the expiry push — the session's expiry is not known. */
   public SseEmitter subscribe(UUID userId) {
     return subscribe(userId, null);
@@ -190,24 +193,61 @@ public class SseService {
     return delivered;
   }
 
+  /**
+   * Delivers everything queued for a user while they had no open connection.
+   *
+   * <p>AUDIT-B4's other half. This used to {@code range} the list and then {@code delete} it as two
+   * separate calls, so a notification pushed in the gap between them was deleted having never been
+   * sent, and nothing recorded that it had happened. {@code RENAME} moves the whole list in one
+   * operation instead: anything queued a microsecond later lands on a fresh {@code key} that this
+   * drain has no handle on.
+   */
   private void sendPendingNotifications(UUID userId, SseEmitter emitter) {
     String key = NOTIFICATION_PREFIX + userId;
     Long size = redisTemplate.opsForList().size(key);
-    if (size != null && size > 0) {
-      List<String> pending = redisTemplate.opsForList().range(key, 0, -1);
-      if (pending != null) {
-        for (String notifJson : pending) {
-          try {
-            emitter.send(
-                SseEmitter.event().name("notification").data(Objects.requireNonNull(notifJson)));
-          } catch (IOException e) {
-            log.error("Failed to send pending notification to user {}", userId, e);
-            return; // If it fails, keep remaining in Redis
-          }
-        }
-      }
-      redisTemplate.delete(Objects.requireNonNull(key));
+    if (size == null || size == 0) {
+      return; // The overwhelmingly common case; not worth a RENAME that would only fail.
     }
+
+    String draining = key + ":draining:" + UUID.randomUUID();
+    try {
+      redisTemplate.rename(key, draining);
+    } catch (org.springframework.dao.DataAccessException e) {
+      // RENAME errors when the source is gone: a second tab drained it, or it expired, between
+      // the size check and here. Either way there is nothing left to deliver.
+      return;
+    }
+
+    List<String> pending = redisTemplate.opsForList().range(draining, 0, -1);
+    redisTemplate.delete(Objects.requireNonNull(draining));
+    if (pending == null) {
+      return;
+    }
+
+    for (int i = 0; i < pending.size(); i++) {
+      try {
+        emitter.send(
+            SseEmitter.event().name("notification").data(Objects.requireNonNull(pending.get(i))));
+      } catch (IOException e) {
+        log.error("Failed to send pending notification to user {}", userId, e);
+        requeue(key, pending.subList(i, pending.size()));
+        return;
+      }
+    }
+  }
+
+  /**
+   * Puts an undelivered tail back at the head of the queue, so the next connection gets it.
+   *
+   * <p>The old code kept the whole batch on a failed send, including the ones already delivered,
+   * which showed those again on the next subscribe. Only what was actually missed goes back.
+   */
+  private void requeue(String key, List<String> unsent) {
+    // LPUSH prepends argument by argument, so the list has to go in backwards to come out in order.
+    List<String> reversed = new java.util.ArrayList<>(unsent);
+    java.util.Collections.reverse(reversed);
+    redisTemplate.opsForList().leftPushAll(Objects.requireNonNull(key), reversed);
+    redisTemplate.expire(Objects.requireNonNull(key), PENDING_TTL);
   }
 
   public void mapImageToUser(UUID imageId, UUID userId) {
@@ -293,8 +333,7 @@ public class SseService {
     redisTemplate
         .opsForList()
         .rightPush(Objects.requireNonNull(key), Objects.requireNonNull(jsonPayload));
-    redisTemplate.expire(
-        Objects.requireNonNull(key), Objects.requireNonNull(java.time.Duration.ofDays(7)));
+    redisTemplate.expire(Objects.requireNonNull(key), PENDING_TTL);
   }
 
   public void emitEventToAllUsers(String eventName, Object data) {
