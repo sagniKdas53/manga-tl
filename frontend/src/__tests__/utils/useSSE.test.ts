@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useSSE } from "../../utils/useSSE";
+import { useSSE, sseRetryDelayMs } from "../../utils/useSSE";
 
 interface MockEventSource {
   url: string;
@@ -186,5 +186,132 @@ describe("useSSE", () => {
     });
     await flushTicketRequest();
     expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  describe("AUDIT-F3 — retry backoff, jitter and the visibility gate", () => {
+    /** Forces the jitter to its maximum so delays are the deterministic nominal value. */
+    const pinJitterHigh = () => vi.spyOn(Math, "random").mockReturnValue(1);
+
+    const setVisibility = (state: "visible" | "hidden") => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => state,
+      });
+    };
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      setVisibility("visible");
+    });
+
+    it("grows the delay exponentially and caps it at 60s", () => {
+      pinJitterHigh();
+      // With jitter pinned high the value is the full nominal delay: 5s, 10s, 20s, 40s, then the cap.
+      expect(sseRetryDelayMs(0)).toBe(5000);
+      expect(sseRetryDelayMs(1)).toBe(10000);
+      expect(sseRetryDelayMs(2)).toBe(20000);
+      expect(sseRetryDelayMs(3)).toBe(40000);
+      expect(sseRetryDelayMs(4)).toBe(60000);
+      expect(sseRetryDelayMs(50)).toBe(60000);
+    });
+
+    it("keeps a floor of half the nominal delay, so retries still make progress", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+      expect(sseRetryDelayMs(0)).toBe(2500);
+      expect(sseRetryDelayMs(99)).toBe(30000);
+    });
+
+    it("backs off across consecutive failures instead of retrying flat every 5s", async () => {
+      pinJitterHigh();
+      renderHook(() => useSSE(STREAM_URL, "token123"));
+      await flushTicketRequest();
+
+      act(() => mockEventSourceInstances[0].triggerError(new Error("down")));
+
+      // First retry is due at 5s, not before.
+      act(() => void vi.advanceTimersByTime(4999));
+      expect(global.EventSource).toHaveBeenCalledTimes(1);
+      act(() => void vi.advanceTimersByTime(1));
+      await flushTicketRequest();
+      expect(global.EventSource).toHaveBeenCalledTimes(2);
+
+      // Second failure must wait 10s — under the old flat 5s it would already have reconnected.
+      act(() => mockEventSourceInstances[1].triggerError(new Error("still down")));
+      act(() => void vi.advanceTimersByTime(5000));
+      await flushTicketRequest();
+      expect(global.EventSource).toHaveBeenCalledTimes(2);
+
+      act(() => void vi.advanceTimersByTime(5000));
+      await flushTicketRequest();
+      expect(global.EventSource).toHaveBeenCalledTimes(3);
+    });
+
+    it("resets the backoff once a connection actually opens", async () => {
+      pinJitterHigh();
+      renderHook(() => useSSE(STREAM_URL, "token123"));
+      await flushTicketRequest();
+
+      // Fail once to advance the curve, then reconnect successfully.
+      act(() => mockEventSourceInstances[0].triggerError(new Error("blip")));
+      act(() => void vi.advanceTimersByTime(5000));
+      await flushTicketRequest();
+      act(() => mockEventSourceInstances[1].triggerOpen());
+
+      // A later failure starts from 5s again rather than inheriting the old streak.
+      act(() => mockEventSourceInstances[1].triggerError(new Error("blip again")));
+      act(() => void vi.advanceTimersByTime(5000));
+      await flushTicketRequest();
+      expect(global.EventSource).toHaveBeenCalledTimes(3);
+    });
+
+    it("stops retrying while the tab is hidden, and reconnects the moment it wakes", async () => {
+      pinJitterHigh();
+      renderHook(() => useSSE(STREAM_URL, "token123"));
+      await flushTicketRequest();
+
+      setVisibility("hidden");
+      act(() => mockEventSourceInstances[0].triggerError(new Error("down")));
+
+      // No timer is armed at all — a background tab must not reconnect on a schedule.
+      act(() => void vi.advanceTimersByTime(120000));
+      await flushTicketRequest();
+      expect(global.EventSource).toHaveBeenCalledTimes(1);
+
+      setVisibility("visible");
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+      await flushTicketRequest();
+
+      // Immediate, with no backoff window the user never saw start.
+      expect(global.EventSource).toHaveBeenCalledTimes(2);
+    });
+
+    it("defers a retry that comes due while the tab is hidden", async () => {
+      pinJitterHigh();
+      renderHook(() => useSSE(STREAM_URL, "token123"));
+      await flushTicketRequest();
+
+      // Tab is visible when the failure happens, so the 5s timer is armed...
+      act(() => mockEventSourceInstances[0].triggerError(new Error("down")));
+      // ...but is hidden by the time it fires.
+      setVisibility("hidden");
+      act(() => void vi.advanceTimersByTime(5000));
+      await flushTicketRequest();
+      expect(global.EventSource).toHaveBeenCalledTimes(1);
+
+      setVisibility("visible");
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+      await flushTicketRequest();
+      expect(global.EventSource).toHaveBeenCalledTimes(2);
+    });
+
+    it("ignores a wake-up when no retry is pending", async () => {
+      renderHook(() => useSSE(STREAM_URL, "token123"));
+      await flushTicketRequest();
+      act(() => mockEventSourceInstances[0].triggerOpen());
+
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+      await flushTicketRequest();
+      expect(global.EventSource).toHaveBeenCalledTimes(1);
+    });
   });
 });
