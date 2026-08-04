@@ -759,6 +759,16 @@ that half of the finding is closed. The flat 5 s retry with no cap is unchanged.
 to **[L]**: 12 req/min per tab against a downed backend is untidy, not harmful, and the ticket
 exchange means each attempt is one cheap POST.
 
+**Second look, 2026-08-04 (yt-diff comparison).** Two gaps beyond the missing backoff: no jitter,
+so every tab retries in lockstep, and **no visibility gating** — a backgrounded mobile tab resumes
+retrying the moment it thaws whether or not anyone is looking at it. socket.io hands yt-diff
+backoff + jitter for free, which is why the finding has no counterpart there. The wake events
+needed to gate it (`visibilitychange` / `focus` / `pageshow`) are already wired up in
+`SessionWatcher` as of commit `04a29ac`, so the remaining work is small. Worth doing **with**
+AUDIT-B4 rather than separately: same subsystem, same test surface, same rebuild. Also unblocks
+deleting the `QueueManager.tsx:427` poll listed under AUDIT-F5, which exists because SSE is not
+currently trusted to stay up.
+
 #### AUDIT-F4 **[M]** — light-mode secondary text fails WCAG AA by a wide margin
 
 `theme.ts:19` sets `text.secondary` to `#b0b0b0`. Against `background.paper: #ffffff` that is a
@@ -781,6 +791,78 @@ text in light mode, inverting the visual hierarchy. Dark mode is fine (`#afafaf`
 + `package.json:20` — `esbuild` is a direct dependency; it belongs in `devDependencies`.
 + `package.json:14` — `generate-api` hardcodes `http://localhost:8080/tlhub/...`, which breaks for
   any non-default `CONTEXT_PATH`.
+
+**Re-checked 2026-08-04.** All six still open; line numbers have drifted —
+`App.tsx:287` is the duplicate `manga_theme` writer, `QueueManager.tsx:427` the poll,
+`package.json:21` the `esbuild` dependency. Three more of the same size, from the yt-diff
+comparison (see [frontend_improvements.md](./frontend_improvements.md)):
+
++ **No precompressed assets.** `vite.config.ts` has no compression plugin and the MUI vendor chunk
+  ships at 380 kB (119 kB gzip). yt-diff emits `.gz` + `.br` at build time via
+  `vite-plugin-compression2`. Brotli is worth ~20–25% over gzip on that chunk, on a tablet.
++ **`"lint": "eslint ."` does not fail on warnings.** yt-diff runs
+  `eslint src --report-unused-disable-directives --max-warnings 0`. Adopt the flags; it stops
+  warning drift for free.
++ **Spinner-only loading states.** No `Skeleton` anywhere. The dashboard, chapter gallery and page
+  grid all have known cell shapes, so skeletons map onto them directly and remove the layout jump
+  a centred spinner causes.
+
+#### AUDIT-F6 **[M]** — icon-only controls carry no accessible name
+
+The whole frontend has **5** `aria-label`s across 40 components. `Reader.tsx` — 3,954 lines, the
+primary surface, almost entirely icon-only `IconButton`s — has **zero**, as do `ReaderTopNav`,
+`ReaderLeftSidebar`, `ReaderRightSidebar` and `NavBar`.
+
+For scale, `yt-diff/frontend` has 56 across 11 components and labels every icon button
+(`Pagination.jsx` 5, `Nav.jsx` 13, `VideoPlayer.jsx` 15) — an independently built app of the same
+shape that got this right without a policy. Unlabelled icon buttons are unusable with a screen
+reader and give tests nothing stable to query, which is part of why the component suites here lean
+on text matching.
+
+Pairs with **AUDIT-F4**: between them they are the whole accessibility story, and F4 is a one-line
+fix. Do them as one pass.
+
+#### AUDIT-F7 **[M]** — nothing tells the client its session died
+
+Expiry is only ever discovered client-side, from the token's own `exp` (`utils.ts`, 2026-08-04) or
+from a 401 on the next request. A tab that is open but idle has no idea.
+
+yt-diff's backend arms a `setTimeout` at socket-connect for the token's exact `exp` and pushes
+`token-expired` before disconnecting (`yt-diff/src/socket/index.ts:75-100`), re-verifying
+periodically so a password change also kills live sessions. The client half of that already exists
+here: `SESSION_EXPIRED_EVENT` in `utils.ts` and the `SessionWatcher` listener in `App.tsx` would
+consume such an event with no change.
+
+Wants `SseTicketAuthFilter` to emit `session-expired` at the token's `exp`. **Complements rather
+than replaces the client timer** — a frozen mobile tab has no live SSE connection to receive a
+push, which is the exact case that produced the original blank-screen report.
+
+#### AUDIT-F8 **[L]** — lists are fetched whole; no pagination, search or debounce
+
+`App.tsx:216` fetches `/api/series` in full; the series route fetches every chapter. There is **no
+search UI anywhere** in the app and **zero** uses of debounce or throttle.
+
+yt-diff paginates server-side (`rowsPerPage` 10/25/50 with start/stop offsets,
+`PlayList.jsx:380`) and debounces its search at 1000 ms — because it was built against libraries
+large enough to force the issue.
+
+Not a problem at the current library size. Recorded because the fetch-everything assumption is
+baked into the routing layer, where it is most expensive to change later. **Decide the ceiling
+rather than the fix:** if a few hundred series is the realistic cap, write that down and close
+this. Debounced search is a cheap independent win either way.
+
+#### AUDIT-F9 **[L]** — responsive behaviour is never verified
+
+**Zero** uses of `useMediaQuery` or `theme.breakpoints` — all responsiveness is `sx`/CSS.
+`vitest.setup.ts` mocks `localStorage`, `ResizeObserver` and `URL.createObjectURL` but not
+`matchMedia`, and all 43 test files run at one implicit viewport.
+
+yt-diff runs its whole suite twice, at 375×667 and 1280×720, via vitest `projects` with
+per-viewport `matchMedia` shims. **Do not copy that here** — it is load-bearing there because
+yt-diff branches on `useMediaQuery` in 9 places, and there are no such branches here for it to
+exercise. jsdom does not lay out CSS, so the only thing that can actually check this is a real
+browser: a Playwright viewport smoke test over the reader and dashboard. Given the primary device
+is an Android tablet, nothing checks it today.
 
 ### Docker & Compose
 
