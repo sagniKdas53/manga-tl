@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { endSession } from "../utils";
 
 type SSEEvent = {
   type: string;
@@ -175,6 +176,15 @@ export function useSSE(
         eventSource?.addEventListener(evtType, (event) => {
           updateEvent(evtType, (event as MessageEvent).data);
         });
+      });
+
+      // The server reached this session's `exp` while the tab sat idle with the connection open
+      // (AUDIT-F7). `endSession` clears the stored token, which drops `token` to null and tears
+      // this effect down — so there is no reconnect attempt carrying a JWT that can no longer buy
+      // a ticket. The client-side renewal timer still covers the frozen-tab case, which by
+      // definition never receives this.
+      eventSource.addEventListener("session-expired", () => {
+        endSession("expired");
       });
 
       eventSource.onerror = (error) => {

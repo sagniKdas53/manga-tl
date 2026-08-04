@@ -27,6 +27,7 @@ public class NotificationControllerTest {
   @MockitoBean private com.manga.library.service.SseTicketService sseTicketService;
   @MockitoBean private UserRepository userRepository;
   @MockitoBean private JwtAuthFilter jwtAuthFilter;
+  @MockitoBean private com.manga.library.config.JwtUtils jwtUtils;
   @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
 
   @Test
@@ -49,7 +50,8 @@ public class NotificationControllerTest {
             setEmail("test@test.com");
           }
         };
-    when(sseService.subscribe(user.getId())).thenReturn(new SseEmitter());
+    // No ticket was redeemed on this request, so no expiry rides along with it.
+    when(sseService.subscribe(eq(user.getId()), isNull())).thenReturn(new SseEmitter());
 
     org.springframework.security.core.Authentication auth =
         mock(org.springframework.security.core.Authentication.class);

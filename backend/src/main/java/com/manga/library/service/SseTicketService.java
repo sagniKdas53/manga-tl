@@ -36,33 +36,73 @@ public class SseTicketService {
     this.redisTemplate = redisTemplate;
   }
 
-  /** Mints a ticket for {@code userId}, valid for {@link #TICKET_TTL} and for one connection. */
-  public String issue(UUID userId) {
+  /**
+   * What a redeemed ticket was issued against.
+   *
+   * @param userId the user the ticket authenticates
+   * @param sessionExpiresAt when the JWT that bought the ticket expires, or null when the token
+   *     carried no readable {@code exp}. The stream arms its {@code session-expired} push against
+   *     this (AUDIT-F7); a null simply means no push is armed.
+   */
+  public record Ticket(UUID userId, java.time.Instant sessionExpiresAt) {}
+
+  /**
+   * Mints a ticket for {@code userId}, valid for {@link #TICKET_TTL} and for one connection.
+   *
+   * <p>{@code sessionExpiresAt} rides along because the stream request cannot recover it: the JWT
+   * is presented on this POST and never again, and the {@code EventSource} that follows carries
+   * nothing but the ticket.
+   */
+  public String issue(UUID userId, java.time.Instant sessionExpiresAt) {
     byte[] bytes = new byte[TICKET_BYTES];
     random.nextBytes(bytes);
     String ticket = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    redisTemplate.opsForValue().set(TICKET_PREFIX + ticket, userId.toString(), TICKET_TTL);
+    String value =
+        sessionExpiresAt == null
+            ? userId.toString()
+            : userId + FIELD_SEPARATOR + sessionExpiresAt.toEpochMilli();
+    redisTemplate.opsForValue().set(TICKET_PREFIX + ticket, value, TICKET_TTL);
     return ticket;
   }
 
+  /** Separates the user id from the session expiry in the stored value. */
+  private static final String FIELD_SEPARATOR = "|";
+
   /**
-   * Redeems a ticket, returning the user it was issued to.
+   * Redeems a ticket, returning the user it was issued to and that session's expiry.
    *
    * <p>The delete is what makes the ticket single-use: a ticket captured from a log or a referrer
    * header after the connection opened is already spent.
+   *
+   * <p>A value with no separator is read as a user id with no expiry. That is the shape this key
+   * had before AUDIT-F7, and tickets minted by the outgoing instance are still redeemable for a
+   * minute after a deploy — they should connect, just without the push.
    */
-  public Optional<UUID> redeem(String ticket) {
+  public Optional<Ticket> redeem(String ticket) {
     if (ticket == null || ticket.isBlank()) {
       return Optional.empty();
     }
-    String userId = redisTemplate.opsForValue().getAndDelete(TICKET_PREFIX + ticket);
-    if (userId == null) {
+    String stored = redisTemplate.opsForValue().getAndDelete(TICKET_PREFIX + ticket);
+    if (stored == null) {
       return Optional.empty();
     }
+    int separator = stored.indexOf(FIELD_SEPARATOR);
+    String userId = separator < 0 ? stored : stored.substring(0, separator);
     try {
-      return Optional.of(UUID.fromString(userId));
+      return Optional.of(new Ticket(UUID.fromString(userId), parseExpiry(stored, separator)));
     } catch (IllegalArgumentException e) {
       return Optional.empty();
+    }
+  }
+
+  private static java.time.Instant parseExpiry(String stored, int separator) {
+    if (separator < 0) {
+      return null;
+    }
+    try {
+      return java.time.Instant.ofEpochMilli(Long.parseLong(stored.substring(separator + 1)));
+    } catch (NumberFormatException e) {
+      return null; // A malformed expiry costs the push, not the connection.
     }
   }
 }

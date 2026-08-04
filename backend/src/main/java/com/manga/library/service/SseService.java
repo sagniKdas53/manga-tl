@@ -18,17 +18,23 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class SseService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SseService.class);
 
+  /** The event name the browser listens for; it clears the stored session on receipt. */
+  static final String SESSION_EXPIRED_EVENT = "session-expired";
+
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
   private final ImageRepository imageRepository;
+  private final org.springframework.scheduling.TaskScheduler taskScheduler;
 
   public SseService(
       StringRedisTemplate redisTemplate,
       ObjectMapper objectMapper,
-      ImageRepository imageRepository) {
+      ImageRepository imageRepository,
+      org.springframework.scheduling.TaskScheduler taskScheduler) {
     this.redisTemplate = redisTemplate;
     this.objectMapper = objectMapper;
     this.imageRepository = imageRepository;
+    this.taskScheduler = taskScheduler;
   }
 
   /**
@@ -43,21 +49,61 @@ public class SseService {
   private static final String IMAGE_USER_MAPPING_PREFIX = "job:owner:image:";
   private static final long EMITTER_TIMEOUT = 3600000L; // 1 hour
 
+  /** Subscribes without arming the expiry push — the session's expiry is not known. */
   public SseEmitter subscribe(UUID userId) {
+    return subscribe(userId, null);
+  }
+
+  /**
+   * Opens a stream and, when {@code sessionExpiresAt} is known, arms a single push of {@link
+   * #SESSION_EXPIRED_EVENT} for that moment (AUDIT-F7).
+   *
+   * <p>This does <em>not</em> replace the client's own expiry timer, and is not a security control
+   * — nothing here decides whether a request is authorised. A frozen mobile tab has no live
+   * connection to receive a push, which is the case that produced the original blank-screen report.
+   * What it closes is the other one: an idle tab with an open connection learning at the moment it
+   * happens instead of on its next request.
+   *
+   * <p>Per-connection timers are only reasonable because AUDIT-B1 gave the scheduler a pool of 4;
+   * against Spring's default of 1 these would have queued behind {@code dispatchJobs}.
+   */
+  public SseEmitter subscribe(UUID userId, java.time.Instant sessionExpiresAt) {
     SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT);
     emitters.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>()).add(emitter);
 
-    emitter.onCompletion(() -> removeEmitter(userId, emitter));
+    // Cancelled on every terminal path. A tab that closes at noon must not leave a task holding
+    // its emitter until midnight -- with a 24-hour token and a browser session's worth of
+    // reconnects, that leak would outnumber the live connections.
+    java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ScheduledFuture<?>>
+        expiryPush = new java.util.concurrent.atomic.AtomicReference<>();
+
+    emitter.onCompletion(
+        () -> {
+          cancel(expiryPush);
+          removeEmitter(userId, emitter);
+        });
     emitter.onTimeout(
         () -> {
+          cancel(expiryPush);
           emitter.complete();
           removeEmitter(userId, emitter);
         });
     emitter.onError(
         (e) -> {
+          cancel(expiryPush);
           emitter.completeWithError(Objects.requireNonNull(e));
           removeEmitter(userId, emitter);
         });
+
+    if (sessionExpiresAt != null) {
+      try {
+        expiryPush.set(
+            taskScheduler.schedule(() -> pushSessionExpired(userId, emitter), sessionExpiresAt));
+      } catch (org.springframework.core.task.TaskRejectedException e) {
+        // Worth a line, not a failed connection: the stream itself is fine without the push.
+        log.warn("Could not arm the session-expired push for user {}: {}", userId, e.getMessage());
+      }
+    }
 
     try {
       emitter.send(SseEmitter.event().name("connected").data("SSE Connection Established"));
@@ -69,6 +115,34 @@ public class SseService {
     sendPendingNotifications(userId, emitter);
 
     return emitter;
+  }
+
+  private static void cancel(
+      java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ScheduledFuture<?>> ref) {
+    java.util.concurrent.ScheduledFuture<?> scheduled = ref.getAndSet(null);
+    if (scheduled != null) {
+      scheduled.cancel(false);
+    }
+  }
+
+  /**
+   * Tells one connection its session has just expired, then closes it.
+   *
+   * <p>Closing is the point of the exercise: the client clears its stored token on this event, so
+   * leaving the stream open would only invite a reconnect carrying a token that can no longer buy
+   * a ticket.
+   */
+  private void pushSessionExpired(UUID userId, SseEmitter emitter) {
+    try {
+      emitter.send(
+          SseEmitter.event().name(SESSION_EXPIRED_EVENT).data("{\"reason\":\"expired\"}"));
+    } catch (IOException | IllegalStateException e) {
+      // The tab was already gone. Nothing to tell, and nothing to fix.
+      log.debug("Session-expired push found a dead connection for user {}", userId);
+    } finally {
+      emitter.complete();
+      removeEmitter(userId, emitter);
+    }
   }
 
   /**

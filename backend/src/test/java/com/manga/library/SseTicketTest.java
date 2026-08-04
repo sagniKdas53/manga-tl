@@ -12,6 +12,8 @@ import com.manga.library.config.JwtUtils;
 import com.manga.library.model.User;
 import com.manga.library.repository.UserRepository;
 import com.manga.library.service.SseTicketService;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +40,7 @@ public class SseTicketTest {
   @Autowired private JwtUtils jwtUtils;
   @Autowired private UserRepository userRepository;
   @Autowired private SseTicketService sseTicketService;
+  @Autowired private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
   private UUID userId;
 
@@ -86,11 +89,60 @@ public class SseTicketTest {
 
   @Test
   void ticketRedeemsToTheIssuingUserExactlyOnce() {
-    String ticket = sseTicketService.issue(userId);
+    String ticket = sseTicketService.issue(userId, null);
 
-    assertEquals(Optional.of(userId), sseTicketService.redeem(ticket));
+    assertEquals(
+        Optional.of(userId),
+        sseTicketService.redeem(ticket).map(SseTicketService.Ticket::userId));
     // Single use: a ticket recovered from a log after the connection opened is already spent.
     assertEquals(Optional.empty(), sseTicketService.redeem(ticket));
+  }
+
+  @Test
+  void ticketCarriesTheSessionExpiryToTheStream() {
+    // Millisecond precision is all the stored form keeps, and all the push needs.
+    java.time.Instant expiry = java.time.Instant.now().plusSeconds(3600).truncatedTo(ChronoUnit.MILLIS);
+
+    Optional<SseTicketService.Ticket> redeemed =
+        sseTicketService.redeem(sseTicketService.issue(userId, expiry));
+
+    // The stream request carries nothing but the ticket, so if the expiry does not survive this
+    // round trip there is nothing left to arm the session-expired push against (AUDIT-F7).
+    assertEquals(Optional.of(userId), redeemed.map(SseTicketService.Ticket::userId));
+    assertEquals(Optional.of(expiry), redeemed.map(SseTicketService.Ticket::sessionExpiresAt));
+  }
+
+  @Test
+  void issuedTicketCarriesTheExpiryOfThePresentedJwt() throws Exception {
+    String token = jwtUtils.generateToken(EMAIL);
+    MvcResult result =
+        mockMvc
+            .perform(post("/api/notifications/ticket").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn();
+    String ticket =
+        objectMapper.readTree(result.getResponse().getContentAsString()).get("ticket").asText();
+
+    Optional<SseTicketService.Ticket> redeemed = sseTicketService.redeem(ticket);
+
+    // The POST is the only point in the handshake where the JWT is visible. If the controller
+    // stops reading exp off it, the push silently never arms and nothing else fails.
+    assertEquals(
+        Optional.of(jwtUtils.getExpiryFromToken(token).truncatedTo(ChronoUnit.MILLIS)),
+        redeemed.map(SseTicketService.Ticket::sessionExpiresAt));
+  }
+
+  @Test
+  void ticketStoredWithoutAnExpiryStillRedeems() {
+    // The shape this key had before AUDIT-F7. Tickets minted by the outgoing instance stay
+    // redeemable for a minute after a deploy, and they must connect -- just without the push.
+    String ticket = "legacy-shaped-ticket";
+    redisTemplate.opsForValue().set("sse:ticket:" + ticket, userId.toString(), Duration.ofSeconds(60));
+
+    Optional<SseTicketService.Ticket> redeemed = sseTicketService.redeem(ticket);
+
+    assertEquals(Optional.of(userId), redeemed.map(SseTicketService.Ticket::userId));
+    assertTrue(redeemed.isPresent() && redeemed.get().sessionExpiresAt() == null);
   }
 
   @Test
