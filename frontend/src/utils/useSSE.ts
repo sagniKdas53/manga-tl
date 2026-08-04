@@ -5,7 +5,27 @@ type SSEEvent = {
   data: string;
 };
 
-const RETRY_DELAY_MS = 5000;
+const INITIAL_RETRY_DELAY_MS = 5000;
+const MAX_RETRY_DELAY_MS = 60000;
+
+/**
+ * Exponential backoff with equal jitter (AUDIT-F3).
+ *
+ * The retry used to be a flat 5s, forever. A backend that is down or restarting therefore took one
+ * reconnect attempt every 5 seconds from every open tab for as long as it stayed down, and all of
+ * them retried in lockstep — so the first thing the backend saw on coming back was a synchronised
+ * thundering herd.
+ *
+ * Equal jitter keeps a floor of half the nominal delay, so retries still make steady progress,
+ * while spreading a fleet of reconnecting tabs across the window instead of aligning them.
+ */
+export const sseRetryDelayMs = (attempt: number) => {
+  const exponential = Math.min(
+    MAX_RETRY_DELAY_MS,
+    INITIAL_RETRY_DELAY_MS * 2 ** attempt,
+  );
+  return exponential / 2 + Math.random() * (exponential / 2);
+};
 
 /**
  * Derives the ticket endpoint from the stream endpoint.
@@ -28,6 +48,12 @@ export function useSSE(
   const [retryCount, setRetryCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  // Consecutive failures, for the backoff curve. Lives in a ref because `retryCount` re-runs the
+  // effect, and the streak has to survive that; reset the moment a connection actually opens.
+  const attemptRef = useRef(0);
+  // Set when a retry came due while the tab was hidden, so the wake handler knows to fire at once.
+  const retryWhenVisibleRef = useRef(false);
+
   const onMessageRef = useRef(onMessage);
   useEffect(() => {
     onMessageRef.current = onMessage;
@@ -49,12 +75,43 @@ export function useSSE(
       }
     };
 
+    const triggerRetry = () => {
+      if (cancelled) return;
+      setRetryCount((prev) => prev + 1);
+    };
+
     const scheduleRetry = () => {
       if (cancelled || timeoutId) return;
+
+      const delay = sseRetryDelayMs(attemptRef.current);
+      attemptRef.current += 1;
+
+      // Nobody is looking at a hidden tab, and mobile browsers throttle or freeze its timers
+      // anyway. Stop retrying until it comes back, then reconnect immediately rather than
+      // making the user wait out a backoff window they never saw start.
+      if (document.visibilityState !== "visible") {
+        retryWhenVisibleRef.current = true;
+        return;
+      }
+
       timeoutId = setTimeout(() => {
-        setRetryCount((prev) => prev + 1);
-      }, RETRY_DELAY_MS);
+        timeoutId = null;
+        if (document.visibilityState !== "visible") {
+          retryWhenVisibleRef.current = true;
+          return;
+        }
+        triggerRetry();
+      }, delay);
     };
+
+    const onVisibilityChange = () => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      if (!retryWhenVisibleRef.current) return;
+      retryWhenVisibleRef.current = false;
+      triggerRetry();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     const fail = () => {
       setIsConnected(false);
@@ -95,6 +152,10 @@ export function useSSE(
       eventSourceRef.current = eventSource;
 
       eventSource.onopen = () => {
+        // A real connection resets the backoff curve, so an unrelated blip weeks later starts
+        // from 5s again rather than inheriting an old streak's 60s.
+        attemptRef.current = 0;
+        retryWhenVisibleRef.current = false;
         setIsConnected(true);
         if (import.meta.env.DEV) {
           console.log("SSE connection opened");
@@ -130,6 +191,7 @@ export function useSSE(
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       eventSource?.close();
       setIsConnected(false);
       eventSourceRef.current = null;
