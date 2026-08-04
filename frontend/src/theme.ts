@@ -16,7 +16,10 @@ export function themeObj(mode: "light" | "dark") {
       },
       text: {
         primary: mode === "dark" ? "#fefefe" : "#343333",
-        secondary: mode === "dark" ? "#afafaf" : "#b0b0b0",
+        // AUDIT-F4: light secondary was #b0b0b0 — 2.2:1 on white paper, against a 4.5:1 WCAG AA
+        // threshold, which put it below the *disabled* colour's ~5:1. Secondary text was the least
+        // legible text in the light theme.
+        secondary: mode === "dark" ? "#afafaf" : "#5f5f5f",
         disabled: mode === "dark" ? "#6c6c6c" : "#786e6a",
       },
       divider:
