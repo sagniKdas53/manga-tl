@@ -73,6 +73,65 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-05 sitting — list items 1–5 and the AUDIT-F4 half of 6
+
+*Retired from `next-step.md` on 2026-08-05. Seven code commits (`0e5bbd5` … `f131e42`), each
+verified red-green: break it, watch the named test fail, restore it. Deployed and confirmed
+running.*
+
+Suites: **backend 349 → 366**, **frontend 283 → 297 + 1 skipped**, **worker 275 → 284.** All green.
+
+| item | commit | what changed |
+| --- | --- | --- |
+| AUDIT-B1 | `0e5bbd5` | `spring.task.scheduling.pool.size` 1 → 4, via `SCHEDULING_POOL_SIZE`. |
+| `try_local_ai` | `2b37cdd` (worker), `e8ccb49` (bump) | Caller's prompt becomes the system message. |
+| AUDIT-B4 | `c123cba` | `Map<UUID, Collection<SseEmitter>>` over `CopyOnWriteArrayList`. |
+| AUDIT-F3 | `14f0c07` | 5 s → 60 s backoff, equal jitter, visibility gate. |
+| AUDIT-B2 | `61d856c` | `@Lazy` self-reference, plus the swallowed exception. |
+| AUDIT-B3 **(part)** | `f131e42` | NPE → 500 and logged; `IllegalArgumentException` keeps 400. |
+| AUDIT-B4 **(part)** | `c123cba` | See the leftovers below — both entries had more in them. |
+| AUDIT-F4 | `a39374c` | Light `text.secondary` `#b0b0b0` → `#5f5f5f`. |
+
+**AUDIT-B3 and AUDIT-B4 are only partly closed.** Each `issues.md` entry bundled more than its
+headline, and the rest is still open — it stayed in `issues.md` rather than coming here:
+
+- **AUDIT-B3** — `handleInternalError` still returns `"Something went wrong: " + ex.getMessage()`
+  to the client, leaking SQL fragments and file paths, and there is still no
+  `AccessDeniedException` handler, so a `@PreAuthorize` denial returns **500 instead of 403**.
+- **AUDIT-B4** — `sendPendingNotifications` still does `range(0,-1)` then `delete(key)`
+  non-atomically, so a notification pushed between the two calls is lost. Untouched by the
+  multi-emitter change, and a different kind of bug (a Redis race, not a map-keying mistake).
+
+**AUDIT-B1 is confirmed in production, not just in test.** The deployed container's startup logs
+show `scheduling-1`, `scheduling-3` and `scheduling-4` running concurrently; before the change there
+was only ever `scheduling-1`. Container reached `healthy` with zero error lines.
+
+**Four corrections made by reading the code.** This board has a track record of findings that were
+wrong until someone checked; these are the ones from this sitting.
+
+- **AUDIT-B2 was half a fix as written.** Routing through the proxy was necessary but not
+  sufficient: `resetProcessingJobsToPending` also caught and logged every exception internally, so
+  the transaction would never see a failure and would commit whatever the loop managed first —
+  precisely the half-migrated job table the transaction exists to prevent. Exceptions now propagate;
+  `onStartup`'s own catch still logs and lets the app start.
+- **AUDIT-B2's second call site was never a defect.** `issues.md` named both
+  `this.resetProcessingJobsToPending()` and `this.requeuePendingJobs()`. `requeuePendingJobs` carries
+  **no `@Transactional` at all**, so self-invocation loses nothing there. Only one of the two was
+  real.
+- **AUDIT-F4's `text.disabled` is ≈4.96:1, not ≈4.6:1** — the new test computes WCAG relative
+  luminance directly. The inversion the finding describes was real and slightly worse than stated:
+  secondary sat at **2.17:1**, well below disabled.
+- **AUDIT-B3 is a behaviour change, not a logging fix.** Any `Objects.requireNonNull` doing input
+  validation now surfaces as 500 rather than 400. That is the correct signal — a null check that is
+  really validation belongs in `IllegalArgumentException` — and no test depended on the old mapping,
+  but it is live and worth knowing when triaging a new 500.
+
+**One process note worth keeping.** `detect_changes` returned CRITICAL on the SSE work. It was the
+line-offset artefact the working constraints already warn about: a 45-line insertion shifted every
+method below it, flagging `mapImageToUser`, `emitNotificationForImage`, `emitEventForImage` and
+`sendPendingNotifications` as touched when all four are byte-identical. Checking `git diff -U0`
+hunk ranges settled it in one command. The warning in the constraints is load-bearing — use it.
+
 ### The 2026-08-04 handoff — performance thread closed, correctness list emptied
 
 *Retired from `next-step.md` on 2026-08-04 once everything in it was done. The measurements below

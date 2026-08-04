@@ -82,28 +82,12 @@ The two remaining complaints are measured, and neither is fixable in frontend co
 
 ---
 
-## `try_local_ai` ignores its `prompt` argument — local/Ollama QA silently returns nothing
+## `try_local_ai` ignores its `prompt` argument — **RESOLVED 2026-08-05**
 
-Found while designing [mock_router.md](./mock_router.md).
-
-`try_local_ai(prompt, text, response_schema, request_id)`
-(`worker/src/worker/services/translation.py:455`) never references `prompt`. It hardcodes the
-system prompt instead:
-
-```python
-system_pr = MANGA_TRANSLATION_JSON_SYSTEM_PROMPT if response_schema else MANGA_TRANSLATION_SYSTEM_PROMPT
-```
-
-For translation this is only redundant — the hardcoded prompt is the right one. For **QA it is a
-functional bug**: `handlers/qa.py:281` and `:788` call
-`try_local_ai(prompt, json.dumps(regions_metadata), QA_JSON_SCHEMA)`, so the QA prompt is discarded
-and the model receives the *manga translation* system prompt with QA region metadata as its user
-content. It answers with `{"translations": [...]}`, `parsed.get("results")` yields `[]`, and QA
-completes having produced no results at all — no error, no log line saying anything is wrong.
-
-Affects anyone running `QA_MODEL_PROVIDER=ollama`/`lmstudio`, and any QA job that falls through to
-the local fallback after cloud providers fail. Also blocks Phase 1 of the mock-router work, which
-routes QA through a mocked Ollama endpoint.
+Fixed in worker `2b37cdd` (pointer bump `e8ccb49`). The caller's prompt now becomes the system
+message; the hardcoded translation prompts remain the default for a caller that supplies none.
+Regression tests assert on the outgoing payload, since the failure mode was silence. Detail in
+[archive.md](./archive.md) under *The 2026-08-05 sitting*.
 
 ## Plan a better backend one that doesn't use java
 
@@ -599,64 +583,52 @@ the pinned one is parked, and say so in the log.
 
 ### Backend (Spring)
 
-#### AUDIT-B1 **[H]** — one scheduler thread runs the dispatcher, the sweeper and cleanup
+#### AUDIT-B1 **[H]** — one scheduler thread runs everything — **RESOLVED 2026-08-05**
 
-Spring's default `TaskScheduler` pool size is **1**, and nothing in `application.yml` overrides
-`spring.task.scheduling.pool.size`. Sharing that single thread:
+Fixed in `0e5bbd5`. `spring.task.scheduling.pool.size` is now 4 (override with
+`SCHEDULING_POOL_SIZE`). Confirmed in the deployed container: `scheduling-1`, `scheduling-3` and
+`scheduling-4` run concurrently where before there was only ever `scheduling-1`.
 
-| task | cadence |
-| --- | --- |
-| `WorkerDispatcherService.dispatchJobs` | every 2s, up to **30s HTTP timeout per worker** (`:193`) |
-| `JobCoordinatorService.recoverStaleProcessingJobs` | every 5 min |
-| `ExportCleanupService` / `DebouncedRenderService` | scheduled |
+#### AUDIT-B2 **[H]** — `@Transactional` bypassed on the startup path — **RESOLVED 2026-08-05**
 
-One unresponsive worker therefore stalls stale-job recovery and export cleanup for up to 30s per
-dispatch attempt. Set the pool size to ≥4.
+Fixed in `61d856c` via a `@Lazy` self-reference. Two corrections to this entry as written:
 
-#### AUDIT-B2 **[H]** — `@Transactional` is bypassed on the startup recovery path
++ The proxy fix alone was **not** sufficient. `resetProcessingJobsToPending` also caught every
+  exception internally, so the transaction never saw a failure and would commit the partial batch.
+  Exceptions now propagate; `onStartup` still logs and lets the app start.
++ **`requeuePendingJobs` was never a defect.** This entry named it alongside
+  `resetProcessingJobsToPending`, but it carries no `@Transactional` at all — self-invocation loses
+  nothing there.
 
-`JobCoordinatorService.onStartup:83,89` calls `this.resetProcessingJobsToPending()` and
-`this.requeuePendingJobs()` directly. Self-invocation does not pass through the Spring proxy, so
-the `@Transactional` on `resetProcessingJobsToPending:98` **does not apply** — the batch of
-PROCESSING→PENDING writes runs unwrapped, and a mid-loop failure leaves the job table half-migrated.
-Split into a separate bean or self-inject the proxy.
+#### AUDIT-B3 **[M]** — the NPE half is **RESOLVED 2026-08-05**; two sub-findings remain open
 
-#### AUDIT-B3 **[M]** — `NullPointerException` is mapped to `400 Bad Request` and never logged
+`f131e42` split the handler: `IllegalArgumentException` → 400 with its message,
+`NullPointerException` → 500, logged with the request description and full stack trace. The detail
+sent to the client is generic, since an NPE message describes our internals.
 
-`GlobalExceptionHandler:41-49`:
+*Live behaviour change:* any `Objects.requireNonNull` doing input validation now returns 500 rather
+than 400 (see AUDIT-Q1's 247 calls). That is the correct signal, and no test depended on the old
+mapping — but it is worth knowing when triaging a new 500.
 
-```java
-@ExceptionHandler({IllegalArgumentException.class, NullPointerException.class})
-public ProblemDetail handleBadRequest(RuntimeException ex, WebRequest request) {
-```
+**Still open in this entry:**
 
-An NPE is a bug in our code, not a malformed client request. Mapping it to `400` means genuine
-defects are reported to the caller as their fault, produce **no log line at all** (unlike
-`handleInternalError:88`, which at least logs), and never show up in error-rate monitoring. This is
-almost certainly a workaround for the 247 `Objects.requireNonNull` calls (AUDIT-Q1) rather than a
-deliberate contract.
-
-Two more in the same class:
-
-+ `:92` returns `"Something went wrong: " + ex.getMessage()` to the client — leaks SQL fragments,
-  file paths and internal identifiers.
++ `handleInternalError` returns `"Something went wrong: " + ex.getMessage()` to the client — leaks
+  SQL fragments, file paths and internal identifiers.
 + There is no `AccessDeniedException` handler, so a `@PreAuthorize` denial thrown at method level is
   caught by the catch-all `Exception` handler and returned as **500 instead of 403**.
 
-#### AUDIT-B4 **[M]** — SSE breaks with more than one browser tab
+#### AUDIT-B4 **[M]** — the multi-tab half is **RESOLVED 2026-08-05**; the Redis race remains
 
-`SseService:32` stores `ConcurrentHashMap<UUID, SseEmitter>` — **one emitter per user**. Opening a
-second tab calls `subscribe:38` which `put`s over the first emitter without completing it: tab 1's
-connection leaks (server-side async request held until the 1-hour timeout at `:35`) and receives
-nothing further.
+`c123cba` replaced the one-emitter-per-user map with
+`ConcurrentHashMap<UUID, Collection<SseEmitter>>` over `CopyOnWriteArrayList`, with removal **by
+identity** under `compute` — so an orphaned tab's completion callback can no longer evict the live
+tab's emitter, and the user's entry is dropped once its last connection goes rather than leaking an
+empty collection. The three send paths share one fan-out helper that reports whether anything took
+the event, which `emitNotificationToUser` uses to decide on queueing to Redis.
 
-Worse, `:41` registers `emitter.onCompletion(() -> emitters.remove(userId))` keyed by user, not by
-emitter. When the orphaned tab-1 emitter eventually times out, its callback **removes tab 2's live
-emitter from the map**, silently killing notifications for the tab that is actually in use. Needs
-`Map<UUID, Set<SseEmitter>>` and removal by identity.
-
-Also `sendPendingNotifications:67-81` does `range(0,-1)` then `delete(key)` non-atomically — a
-notification pushed between the two calls is lost.
+**Still open in this entry:** `sendPendingNotifications` does `range(0,-1)` then `delete(key)`
+non-atomically, so a notification pushed between the two calls is lost. Untouched by the above, and
+a different kind of bug — a Redis race, not a map-keying mistake.
 
 #### AUDIT-B5 **[M]** — schema is managed by `ddl-auto: update` with a competing `init.sql`
 
@@ -746,36 +718,34 @@ assuming the backend is at fault. Hoist static `sx` objects to module constants 
 entire reader. This is the natural first target for a deepening refactor — the sidebar, the canvas
 overlay and the page navigation are three independent modules sharing one component.
 
-#### AUDIT-F3 **[M]** — SSE reconnects forever with no backoff
+#### AUDIT-F3 **[M]** — SSE reconnects forever with no backoff — **RESOLVED 2026-08-05**
 
-`useSSE.ts:52-62` — on error, wait a flat `RETRY_DELAY_MS = 5000` and bump `retryCount`, which is in
-the effect's dependency array, triggering a reconnect. No exponential backoff and no attempt cap, so
-a backend outage turns every open tab into a 12 req/min heartbeat against a service that is already
-down.
+Fixed in `14f0c07`, closing all three gaps this entry accumulated. Exponential backoff from 5 s to a
+60 s cap with **equal jitter** — which keeps a floor of half the nominal delay, so retries still make
+steady progress while spreading a fleet of reconnecting tabs across the window instead of aligning
+them. The streak resets when a connection actually opens, so an unrelated blip weeks later starts
+from 5 s rather than inheriting an old 60 s.
 
-**Re-checked 2026-08-04, partially addressed.** The `eventSource.close()` before `fail()` now lands
-first (`:123`), so the `EventSource` built-in reconnect no longer runs alongside the manual one —
-that half of the finding is closed. The flat 5 s retry with no cap is unchanged. Reduced from **[M]**
-to **[L]**: 12 req/min per tab against a downed backend is untidy, not harmful, and the ticket
-exchange means each attempt is one cheap POST.
+Retries also stop entirely while `document.visibilityState !== "visible"` and resume immediately on
+wake, rather than making the user wait out a backoff window they never saw start. Both hidden-tab
+cases are covered and tested: hidden when the failure happened, and hidden by the time the armed
+timer fired.
 
-**Second look, 2026-08-04 (yt-diff comparison).** Two gaps beyond the missing backoff: no jitter,
-so every tab retries in lockstep, and **no visibility gating** — a backgrounded mobile tab resumes
-retrying the moment it thaws whether or not anyone is looking at it. socket.io hands yt-diff
-backoff + jitter for free, which is why the finding has no counterpart there. The wake events
-needed to gate it (`visibilitychange` / `focus` / `pageshow`) are already wired up in
-`SessionWatcher` as of commit `04a29ac`, so the remaining work is small. Worth doing **with**
-AUDIT-B4 rather than separately: same subsystem, same test surface, same rebuild. Also unblocks
-deleting the `QueueManager.tsx:427` poll listed under AUDIT-F5, which exists because SSE is not
-currently trusted to stay up.
+*This is the precondition for deleting the `QueueManager.tsx:427` poll under AUDIT-F5 — that poll
+exists because SSE was not trusted to stay up. It is now safe to remove, and has not been yet.*
 
-#### AUDIT-F4 **[M]** — light-mode secondary text fails WCAG AA by a wide margin
+#### AUDIT-F4 **[M]** — light-mode secondary text fails WCAG AA — **RESOLVED 2026-08-05**
 
-`theme.ts:19` sets `text.secondary` to `#b0b0b0`. Against `background.paper: #ffffff` that is a
-contrast ratio of **≈2.2:1**, well under the 4.5:1 AA threshold for body text. Meanwhile
-`text.disabled` (`#786e6a`) sits at ≈4.6:1 — so *disabled* text is more legible than *secondary*
-text in light mode, inverting the visual hierarchy. Dark mode is fine (`#afafaf` on `#1e1e1e`
-≈7.4:1). Something in the region of `#5f5f5f` restores AA.
+Fixed in `a39374c`: `text.secondary` `#b0b0b0` → `#5f5f5f`, giving 6.4:1 on paper and 5.9:1 on the
+default background.
+
+*Correction to this entry:* `text.disabled` (`#786e6a`) is **≈4.96:1**, not ≈4.6:1 — the new test
+computes WCAG relative luminance directly rather than eyeballing it. The inversion described was
+real and slightly worse than stated: secondary sat at **2.17:1**, well below disabled.
+
+The test checks both text colours against both background surfaces in both modes, so a future
+palette nudge cannot regress this quietly. It also pins the specific inversion: secondary must never
+be less legible than disabled.
 
 #### AUDIT-F5 **[L]** — smaller frontend items
 
@@ -1143,7 +1113,7 @@ human and are not code work:
 > | #3 AUDIT-W10 "top of the list until measured" | **Measured.** 30-page run, 204 jobs, zero failures. The scheduling thread is closed. |
 > | #6 AUDIT-W12 "90 s/page if it holds" | **CONFIRMED 2026-08-04.** It held. |
 > | #7 AUDIT-T2 "top of the un-started work" | Partly overtaken — the 2026-08-04 sweep added red-green regression tests across queue merge, chapter refresh, prefetch gate, ZIP export and the W11 fallback. The *original* error-branch gap in `llm_client` was closed by `ffab71d`. Re-scope before picking it up. |
-> | #8 AUDIT-P2 / P3 / B1 | **B1 is now the single best payoff-per-line item on the board** — one config line against a 30 s stall of stale-job recovery. P2/P3 stay latent-correctness. |
+> | #8 AUDIT-P2 / P3 / B1 | **B1 done 2026-08-05** (`0e5bbd5`) — it was indeed one config line. P2/P3 stay latent-correctness. |
 > | #9 AUDIT-W2 | Second data point: 1.2%. Reading unchanged. |
 
 **Revised 2026-08-02** against measured data from the first drained run
