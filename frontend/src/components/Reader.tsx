@@ -12,7 +12,7 @@ import type {
   Series,
 } from "../types";
 import { safeFetch, toSlug, formatCost } from "../utils";
-import { fitTextInBox } from "../utils/fitText";
+import { fitTextInBox, clampLineCenter } from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
@@ -844,7 +844,9 @@ export const Reader: React.FC<ReaderProps> = ({
         const windowStart = Math.max(0, currentPageIndex - 2);
         const windowEnd = Math.min(pages.length, currentPageIndex + 3);
         const nearbyPages = pages.slice(windowStart, windowEnd);
-        const pagesToPrefetch = nearbyPages.filter((p) => p.id !== currentPageId);
+        const pagesToPrefetch = nearbyPages.filter(
+          (p) => p.id !== currentPageId,
+        );
 
         pagesToPrefetch.forEach((p) => {
           if (
@@ -2342,7 +2344,16 @@ export const Reader: React.FC<ReaderProps> = ({
               fit.lineCenters && fit.lineCenters.at(i) !== undefined
                 ? (fit.lineCenters.at(i) ?? el.x + width / 2)
                 : el.x + width / 2;
-            ctx.fillText(line, lineCenterX, startY + i * lineH);
+            ctx.fillText(
+              line,
+              clampLineCenter(
+                lineCenterX,
+                ctx.measureText(line).width,
+                el.x,
+                width,
+              ),
+              startY + i * lineH,
+            );
           });
 
           ctx.restore();
@@ -2412,7 +2423,7 @@ export const Reader: React.FC<ReaderProps> = ({
     if (!selectedPage || !user?.token) return;
     try {
       const res = await safeFetch(`/api/pages/${selectedPage.id}/rendered`, {
-        headers: { Authorization: `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${user.token}` },
       });
       if (!res.ok) throw new Error("Failed to export rendered PNG");
       const blob = await res.blob();
@@ -2575,7 +2586,16 @@ export const Reader: React.FC<ReaderProps> = ({
               fit.lineCenters && fit.lineCenters.at(j) !== undefined
                 ? (fit.lineCenters.at(j) ?? el.x + width / 2)
                 : el.x + width / 2;
-            textCtx.fillText(line, lineCenterX, startY + j * lineH);
+            textCtx.fillText(
+              line,
+              clampLineCenter(
+                lineCenterX,
+                textCtx.measureText(line).width,
+                el.x,
+                width,
+              ),
+              startY + j * lineH,
+            );
           });
           textCtx.restore();
         });
@@ -3081,7 +3101,7 @@ export const Reader: React.FC<ReaderProps> = ({
         : "";
       navigate(
         `/chapters/${selectedChapter.id}/${slugPart}reader/${firstValidPage}`,
-        { replace: true }
+        { replace: true },
       );
     }
   }, [pages, pageNumber, selectedChapter, navigate]);

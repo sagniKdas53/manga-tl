@@ -5,6 +5,24 @@ export interface FitResult {
   lineCenters?: number[];
 }
 
+/**
+ * Keep a drawn line inside the box it belongs to.
+ *
+ * A line's centre comes from the shape it was wrapped to and its width from the glyphs, so an
+ * off-centre line can start left of the box or end right of it — and walk into the next panel. A
+ * line too wide for the box at all has nowhere to go, so it stays centred.
+ */
+export const clampLineCenter = (
+  center: number,
+  lineWidth: number,
+  boxX: number,
+  boxWidth: number,
+): number => {
+  if (lineWidth > boxWidth) return boxX + boxWidth / 2;
+  const half = lineWidth / 2;
+  return Math.min(Math.max(center, boxX + half), boxX + boxWidth - half);
+};
+
 export const fitTextInBox = (
   text: string,
   maxWidth: number,
@@ -43,6 +61,21 @@ export const fitTextInBox = (
       }
     } catch (e) {
       console.error("Failed to parse maskPolygon", e);
+    }
+  }
+
+  // The mask is a flow constraint only when it is wider than the box it is being flowed into.
+  //
+  // It serves two purposes at once: it is the shape painted over the source text, and — below — the
+  // shape the lines are wrapped to. Those agree for a balloon, where the mask is the outline and the
+  // box is an inset of it. They disagree for free-floating text, where the mask is the tight
+  // rectangle round the vertical Japanese column: wrapping to it would set English back down that
+  // column and undo the box the caller asked for. When the mask does not span the box, the box is
+  // the deliberate one of the two, so the mask keeps its erasing job and loses its typesetting one.
+  if (polygonPoints) {
+    const xs = polygonPoints.map((p) => p[0]);
+    if (Math.min(...xs) > boxX + 2 || Math.max(...xs) < boxX + maxWidth - 2) {
+      polygonPoints = null;
     }
   }
 
@@ -408,24 +441,74 @@ export const fitTextInBox = (
   );
   const startSize = Math.max(maxStartSize, defaultFontSize);
 
-  let low = 6;
-  let high = startSize;
-  let bestFs = 6;
-  let bestRes = wrapText(cleanText, 6);
+  const minFontSize = 6;
   const lineHeightMultiplier = 1.2;
 
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const wrapResult = wrapText(cleanText, mid);
-    const totalHeight = wrapResult.lines.length * mid * lineHeightMultiplier;
-    if (totalHeight <= maxHeight && !wrapResult.failed) {
-      bestFs = mid;
-      bestRes = wrapResult;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
+  type Wrap = { lines: string[]; lineCenters: number[]; failed: boolean };
+  const evaluated = new Map<
+    number,
+    { res: Wrap; fitsHeight: boolean; fitsClean: boolean }
+  >();
+
+  /** True when the wrap cut a word apart to make it fit — "collection" as "collect" / "ion". */
+  const brokeAWord = (res: Wrap) =>
+    res.lines.join(" ").split(/\s+/).filter(Boolean).join(" ") !==
+    cleanText.split(/\s+/).filter(Boolean).join(" ");
+
+  const widestLine = (res: Wrap, fSize: number) => {
+    ctx.font = `${fontWeight} ${fontStyle === "italic" ? "italic " : ""}${fSize}px "${fontFamily}", sans-serif`;
+    return res.lines.reduce(
+      (widest, line) => Math.max(widest, ctx.measureText(line).width),
+      0,
+    );
+  };
+
+  const evaluate = (fSize: number) => {
+    const cached = evaluated.get(fSize);
+    if (cached) return cached;
+    const res = wrapText(cleanText, fSize);
+    const fitsHeight =
+      res.lines.length * fSize * lineHeightMultiplier <= maxHeight;
+    const fitsClean =
+      fitsHeight &&
+      !res.failed &&
+      !brokeAWord(res) &&
+      widestLine(res, fSize) <= maxWidth;
+    const out = { res, fitsHeight, fitsClean };
+    evaluated.set(fSize, out);
+    return out;
+  };
+
+  const largestSizeWhere = (clean: boolean) => {
+    let low = minFontSize;
+    let high = startSize;
+    let best: { fs: number; res: Wrap } | null = null;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const { res, fitsHeight, fitsClean } = evaluate(mid);
+      if (clean ? fitsClean : fitsHeight) {
+        best = { fs: mid, res };
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
     }
-  }
+    return best;
+  };
+
+  // Largest size that lays the text out whole: every word intact and every line inside the box.
+  //
+  // Height was the only real test before. `failed` covers the explicit fallback wrap, but a word
+  // wider than the line it lands on gets split per character *inside* a successful wrap, and that
+  // split is invisible here — so the search kept growing the font until the height ran out and
+  // returned the largest size that mangles the text rather than the largest size that sets it.
+  // The exported page showed it as "CLOTHE/S", "IMMEDI/ATELY", "colle/cted".
+  //
+  // When nothing sets cleanly — a single word wider than the box even at 6px — fall back to the old
+  // height-only rule, so such a region still gets the largest legible size rather than the minimum.
+  const best = largestSizeWhere(true) ?? largestSizeWhere(false);
+  const bestFs = best?.fs ?? minFontSize;
+  const bestRes = best?.res ?? wrapText(cleanText, minFontSize);
 
   const totalHeight = bestRes.lines.length * bestFs * lineHeightMultiplier;
   return {
