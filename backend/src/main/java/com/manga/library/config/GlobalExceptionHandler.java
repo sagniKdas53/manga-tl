@@ -35,13 +35,36 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return pd;
   }
 
-  /** Validation failures (incl. Objects.requireNonNull NPEs) → 400. */
-  @ExceptionHandler({IllegalArgumentException.class, NullPointerException.class})
-  public ProblemDetail handleBadRequest(RuntimeException ex, WebRequest request) {
+  /** Validation failures → 400. */
+  @ExceptionHandler(IllegalArgumentException.class)
+  public ProblemDetail handleBadRequest(IllegalArgumentException ex, WebRequest request) {
     ProblemDetail pd =
         ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST, ex.getMessage() != null ? ex.getMessage() : "Bad Request");
     pd.setTitle("Bad Request");
+    pd.setProperty("timestamp", Instant.now().toString());
+    return pd;
+  }
+
+  /**
+   * A NullPointerException is a server bug → 500, and logged (AUDIT-B3).
+   *
+   * <p>This used to share the 400 handler above, on the reasoning that {@code
+   * Objects.requireNonNull} throws NPE and is used for argument validation. The cost was that every
+   * genuine NPE anywhere in a controller path was reported to the client as their bad request, with
+   * no stack trace written anywhere — the most common kind of server bug became the one least likely
+   * to be noticed.
+   *
+   * <p>A null check that is really input validation belongs in {@code IllegalArgumentException}. The
+   * detail sent to the client is deliberately generic: an NPE message describes our internals.
+   */
+  @ExceptionHandler(NullPointerException.class)
+  public ProblemDetail handleNullPointer(NullPointerException ex, WebRequest request) {
+    log.error("Unhandled NullPointerException while handling {}", request.getDescription(false), ex);
+    ProblemDetail pd =
+        ProblemDetail.forStatusAndDetail(
+            HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected internal error occurred");
+    pd.setTitle("Internal Server Error");
     pd.setProperty("timestamp", Instant.now().toString());
     return pd;
   }
