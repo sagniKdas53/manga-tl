@@ -322,6 +322,117 @@ public class SseServiceTest {
     }
   }
 
+  /**
+   * AUDIT-B4. Emitters were held one-per-user in a map written with a plain {@code put}, so opening
+   * a second tab evicted the first tab's emitter and that tab stopped receiving {@code job_update}
+   * events entirely — it looked frozen until reload. Both tabs must now be served.
+   */
+  @Test
+  public void testSecondTabDoesNotEvictTheFirst() {
+    UUID userId = UUID.randomUUID();
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(anyString())).thenReturn(0L);
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) -> doNothing().when(mock).send(any(SseEmitter.SseEventBuilder.class)))) {
+      sseService.subscribe(userId);
+      sseService.subscribe(userId);
+
+      assertEquals(2, mocked.constructed().size(), "expected two distinct emitters");
+      assertEquals(2, sseService.connectionCount(userId));
+
+      sseService.emitEventToUser(userId, "job_update", "payload");
+
+      // One "connected" event each at subscribe, then the job_update both must receive.
+      verify(mocked.constructed().get(0), times(2)).send(any(SseEmitter.SseEventBuilder.class));
+      verify(mocked.constructed().get(1), times(2)).send(any(SseEmitter.SseEventBuilder.class));
+    } catch (Exception e) {
+      fail("Exception not expected: " + e);
+    }
+  }
+
+  /** Closing one tab must not take the other tab's stream down with it. */
+  @Test
+  public void testClosingOneTabLeavesTheOtherConnected() {
+    UUID userId = UUID.randomUUID();
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(anyString())).thenReturn(0L);
+
+    final java.util.List<Runnable> completionCallbacks = new java.util.ArrayList<>();
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) -> {
+              doNothing().when(mock).send(any(SseEmitter.SseEventBuilder.class));
+              doAnswer(
+                      invocation -> {
+                        completionCallbacks.add(invocation.getArgument(0));
+                        return null;
+                      })
+                  .when(mock)
+                  .onCompletion(any());
+            })) {
+      sseService.subscribe(userId);
+      sseService.subscribe(userId);
+      assertEquals(2, sseService.connectionCount(userId));
+
+      // First tab closes.
+      completionCallbacks.get(0).run();
+      assertEquals(1, sseService.connectionCount(userId), "second tab should still be registered");
+
+      sseService.emitEventToUser(userId, "job_update", "payload");
+
+      verify(mocked.constructed().get(0), times(1)).send(any(SseEmitter.SseEventBuilder.class));
+      verify(mocked.constructed().get(1), times(2)).send(any(SseEmitter.SseEventBuilder.class));
+
+      // Last tab closes — the user's entry goes, rather than leaking an empty collection.
+      completionCallbacks.get(1).run();
+      assertEquals(0, sseService.connectionCount(userId));
+    } catch (Exception e) {
+      fail("Exception not expected: " + e);
+    }
+  }
+
+  /**
+   * A notification is queued to Redis only when no tab took it. With one live tab and one dead one,
+   * the user has still seen it — queueing as well would replay it on the next subscribe.
+   */
+  @Test
+  public void testNotificationIsNotQueuedWhenOneOfTwoTabsAcceptsIt() {
+    UUID userId = UUID.randomUUID();
+    when(redisTemplate.opsForList()).thenReturn(listOps);
+    when(listOps.size(anyString())).thenReturn(0L);
+
+    try (org.mockito.MockedConstruction<SseEmitter> mocked =
+        mockConstruction(
+            SseEmitter.class,
+            (mock, context) -> {
+              if (context.getCount() == 1) {
+                // First tab is dead: accepts the "connected" event, then fails.
+                doNothing()
+                    .doThrow(new java.io.IOException("broken pipe"))
+                    .when(mock)
+                    .send(any(SseEmitter.SseEventBuilder.class));
+              } else {
+                doNothing().when(mock).send(any(SseEmitter.SseEventBuilder.class));
+              }
+            })) {
+      sseService.subscribe(userId);
+      sseService.subscribe(userId);
+
+      sseService.emitNotificationToUser(userId, "type", "title", "msg");
+
+      verify(listOps, never()).rightPush(eq("notifications:user:" + userId), anyString());
+      // The failed emitter is dropped; the healthy one stays.
+      assertEquals(1, sseService.connectionCount(userId));
+    } catch (Exception e) {
+      fail("Exception not expected: " + e);
+    }
+  }
+
   @Test
   public void testEmitEventForImage() {
     UUID imageId = UUID.randomUUID();
