@@ -2,7 +2,9 @@ package com.manga.library.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.manga.library.model.Image;
 import com.manga.library.model.OcrRegion;
+import com.manga.library.model.Page;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -56,11 +58,11 @@ class TextBoxForTest {
   }
 
   /** A page of a known size, so a reshaped box has something to be clamped against. */
-  private static com.manga.library.model.Page pageOf(int width, int height) {
-    com.manga.library.model.Image image = new com.manga.library.model.Image();
+  private static Page pageOf(int width, int height) {
+    Image image = new Image();
     image.setWidth(width);
     image.setHeight(height);
-    com.manga.library.model.Page page = new com.manga.library.model.Page();
+    Page page = new Page();
     page.setImage(image);
     return page;
   }
