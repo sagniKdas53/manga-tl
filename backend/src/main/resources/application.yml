@@ -33,6 +33,13 @@ spring:
   jackson:
     serialization:
       fail-on-empty-beans: false
+  task:
+    scheduling:
+      pool:
+        # AUDIT-B1: five @Scheduled tasks share this pool, and WorkerDispatcherService.dispatchJobs
+        # blocks up to 30s per worker on a 2s cadence. At Spring's default of 1 an unresponsive
+        # worker stalls stale-job recovery, debounced renders and export cleanup behind it.
+        size: ${SCHEDULING_POOL_SIZE:4}
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
