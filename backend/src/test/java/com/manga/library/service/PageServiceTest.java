@@ -514,4 +514,261 @@ public class PageServiceTest {
     verify(layerRepository, times(1)).save(any(Layer.class));
     verify(layerElementRepository, times(1)).save(any(LayerElement.class));
   }
+
+  private static Layer translationLayer(String targetLanguage, int zOrder, boolean visible) {
+    Layer layer = new Layer();
+    layer.setId(UUID.randomUUID());
+    layer.setType("translation");
+    layer.setTargetLanguage(targetLanguage);
+    layer.setZOrder(zOrder);
+    layer.setVisible(visible);
+    return layer;
+  }
+
+  @Test
+  public void testCloneTranslationData_NoVisibleTranslationLayer_DoesNothing() {
+    Page sourcePage = new Page();
+    sourcePage.setId(UUID.randomUUID());
+    Page targetPage = new Page();
+    targetPage.setId(UUID.randomUUID());
+
+    // An OCR layer and a *hidden* translation layer: neither is a clone source.
+    Layer ocrLayer = new Layer();
+    ocrLayer.setId(UUID.randomUUID());
+    ocrLayer.setType("ocr");
+    ocrLayer.setVisible(true);
+    ocrLayer.setZOrder(0);
+
+    when(layerRepository.findByPageId(sourcePage.getId()))
+        .thenReturn(java.util.List.of(ocrLayer, translationLayer("en", 5, false)));
+
+    pageService.cloneTranslationData(sourcePage, targetPage, Map.of());
+
+    // Bailing out early matters: the regions on the target page were just written by
+    // cloneOcrData, and a partial TL clone would overwrite them with nothing.
+    verify(ocrRegionRepository, never()).save(any(OcrRegion.class));
+    verify(layerRepository, never()).save(any(Layer.class));
+    verify(layerElementRepository, never()).save(any(LayerElement.class));
+  }
+
+  @Test
+  public void testCloneTranslationData_CopiesTranslationAndQaOntoMappedRegions() {
+    Page sourcePage = new Page();
+    sourcePage.setId(UUID.randomUUID());
+    Page targetPage = new Page();
+    targetPage.setId(UUID.randomUUID());
+
+    Layer sourceTlLayer = translationLayer("en", 2, true);
+    when(layerRepository.findByPageId(sourcePage.getId()))
+        .thenReturn(java.util.List.of(sourceTlLayer));
+
+    OcrRegion sourceRegion = new OcrRegion();
+    sourceRegion.setId(UUID.randomUUID());
+    sourceRegion.setText("元のテキスト");
+    sourceRegion.setTranslatedText("Original text");
+    sourceRegion.setApproved(true);
+    sourceRegion.setTranslationFailed(false);
+    sourceRegion.setTranslationScore(0.91);
+    sourceRegion.setQaScore(0.77);
+    sourceRegion.setQaFeedback("reads naturally");
+    sourceRegion.setQaStatus("passed");
+
+    // A region the caller never mapped -- cloneOcrData did not copy it, so there is no target
+    // row to write to and it must be skipped rather than followed to a null.
+    OcrRegion unmappedRegion = new OcrRegion();
+    unmappedRegion.setId(UUID.randomUUID());
+    unmappedRegion.setTranslatedText("should not be copied");
+
+    OcrRegion targetRegion = new OcrRegion();
+    targetRegion.setId(UUID.randomUUID());
+    targetRegion.setText("元のテキスト");
+
+    when(ocrRegionRepository.findByPageId(sourcePage.getId()))
+        .thenReturn(java.util.List.of(sourceRegion, unmappedRegion));
+    when(ocrRegionRepository.findById(targetRegion.getId()))
+        .thenReturn(java.util.Optional.of(targetRegion));
+    when(layerRepository.save(any(Layer.class)))
+        .thenAnswer(
+            i -> {
+              Layer l = i.getArgument(0);
+              l.setId(UUID.randomUUID());
+              return l;
+            });
+
+    LayerElement sourceEl = new LayerElement();
+    sourceEl.setId(UUID.randomUUID());
+    sourceEl.setLayer(sourceTlLayer);
+    sourceEl.setRegion(sourceRegion);
+    sourceEl.setText("Original text");
+    sourceEl.setFont("Comic Neue");
+    sourceEl.setX(10.0);
+    sourceEl.setY(20.0);
+    sourceEl.setBoxShape("elliptical");
+    when(layerElementRepository.findByLayerPageId(sourcePage.getId()))
+        .thenReturn(java.util.List.of(sourceEl));
+
+    pageService.cloneTranslationData(
+        sourcePage, targetPage, Map.of(sourceRegion.getId(), targetRegion.getId()));
+
+    // The translated string alone is not enough: the reader shows approval and QA state next to
+    // it, so a clone that dropped them would look untranslated-but-typeset.
+    assertEquals("Original text", targetRegion.getTranslatedText());
+    assertEquals(Boolean.TRUE, targetRegion.getApproved());
+    assertEquals(Boolean.FALSE, targetRegion.getTranslationFailed());
+    assertEquals(0.91, targetRegion.getTranslationScore());
+    assertEquals(0.77, targetRegion.getQaScore());
+    assertEquals("reads naturally", targetRegion.getQaFeedback());
+    assertEquals("passed", targetRegion.getQaStatus());
+    verify(ocrRegionRepository, times(1)).save(any(OcrRegion.class));
+
+    org.mockito.ArgumentCaptor<Layer> layerCaptor =
+        org.mockito.ArgumentCaptor.forClass(Layer.class);
+    verify(layerRepository, times(1)).save(layerCaptor.capture());
+    Layer clonedLayer = layerCaptor.getValue();
+    assertEquals(targetPage, clonedLayer.getPage());
+    assertEquals("translation", clonedLayer.getType());
+    assertEquals("en", clonedLayer.getTargetLanguage());
+    assertEquals(2, clonedLayer.getZOrder());
+
+    org.mockito.ArgumentCaptor<LayerElement> elementCaptor =
+        org.mockito.ArgumentCaptor.forClass(LayerElement.class);
+    verify(layerElementRepository, times(1)).save(elementCaptor.capture());
+    LayerElement clonedEl = elementCaptor.getValue();
+    assertEquals("Original text", clonedEl.getText());
+    assertEquals("Comic Neue", clonedEl.getFont());
+    assertEquals("elliptical", clonedEl.getBoxShape());
+    // Re-pointed at the target page's region, not left aliasing the source page's.
+    assertEquals(targetRegion, clonedEl.getRegion());
+    assertEquals(clonedLayer, clonedEl.getLayer());
+  }
+
+  @Test
+  public void testCloneTranslationData_PrefersHighestZOrderVisibleLayer() {
+    Page sourcePage = new Page();
+    sourcePage.setId(UUID.randomUUID());
+    Page targetPage = new Page();
+    targetPage.setId(UUID.randomUUID());
+
+    // A retranslation leaves several TL layers on a page; the one on top is what the reader
+    // sees, so it is the one worth carrying over.
+    Layer older = translationLayer("en", 1, true);
+    Layer newest = translationLayer("fr", 7, true);
+    Layer hiddenOnTop = translationLayer("de", 9, false);
+
+    when(layerRepository.findByPageId(sourcePage.getId()))
+        .thenReturn(java.util.List.of(older, hiddenOnTop, newest));
+    when(ocrRegionRepository.findByPageId(sourcePage.getId()))
+        .thenReturn(java.util.Collections.emptyList());
+    when(layerRepository.save(any(Layer.class))).thenAnswer(i -> i.getArgument(0));
+
+    LayerElement onOlderLayer = new LayerElement();
+    onOlderLayer.setId(UUID.randomUUID());
+    onOlderLayer.setLayer(older);
+    onOlderLayer.setText("stale");
+    when(layerElementRepository.findByLayerPageId(sourcePage.getId()))
+        .thenReturn(java.util.List.of(onOlderLayer));
+
+    pageService.cloneTranslationData(sourcePage, targetPage, Map.of());
+
+    org.mockito.ArgumentCaptor<Layer> layerCaptor =
+        org.mockito.ArgumentCaptor.forClass(Layer.class);
+    verify(layerRepository, times(1)).save(layerCaptor.capture());
+    assertEquals("fr", layerCaptor.getValue().getTargetLanguage());
+    // Elements belonging to the layers that lost are not dragged along.
+    verify(layerElementRepository, never()).save(any(LayerElement.class));
+  }
+
+  @Test
+  public void testPersistImageDimensions_RecordsOriginalPixelSize() {
+    Image image = new Image();
+    image.setId(UUID.randomUUID());
+    when(imageRepository.findById(image.getId())).thenReturn(java.util.Optional.of(image));
+
+    pageService.persistImageDimensions(image.getId(), 1654, 2339);
+
+    // The reader draws overlays in original-image coordinates; without these it scales them off
+    // whatever variant it happens to be showing.
+    assertEquals(1654, image.getWidth());
+    assertEquals(2339, image.getHeight());
+    verify(imageRepository, times(1)).save(image);
+  }
+
+  @Test
+  public void testPersistImageDimensions_IgnoresNonPositiveDimensions() {
+    UUID imageId = UUID.randomUUID();
+
+    pageService.persistImageDimensions(imageId, 0, 2339);
+    pageService.persistImageDimensions(imageId, 1654, -1);
+
+    // A zero here would make the reader divide by it when scaling overlays.
+    verify(imageRepository, never()).findById(any(UUID.class));
+    verify(imageRepository, never()).save(any(Image.class));
+  }
+
+  @Test
+  public void testGenerateAndSaveReaderVariant_WebpSourceServesTheOriginal() {
+    Image image = new Image();
+    image.setId(UUID.randomUUID());
+    image.setStoragePath("originals/page.webp");
+    when(imageRepository.findById(image.getId())).thenReturn(java.util.Optional.of(image));
+
+    // RIFF....WEBP container header -- the sniff the code does instead of trusting the extension.
+    byte[] webpBytes = new byte[16];
+    System.arraycopy("RIFF".getBytes(java.nio.charset.StandardCharsets.US_ASCII), 0, webpBytes, 0, 4);
+    System.arraycopy("WEBP".getBytes(java.nio.charset.StandardCharsets.US_ASCII), 0, webpBytes, 8, 4);
+
+    pageService.generateAndSaveReaderVariant(image.getId(), "uuid-1", webpBytes);
+
+    // Recording the original path rather than leaving null is what lets the backfill retire.
+    assertEquals("originals/page.webp", image.getReaderStoragePath());
+    verify(imageRepository, times(1)).save(image);
+    verifyNoInteractions(minioService);
+  }
+
+  @Test
+  public void testGenerateAndSaveReaderVariant_UndecodableBytesChangeNothing() {
+    UUID imageId = UUID.randomUUID();
+
+    pageService.generateAndSaveReaderVariant(imageId, "uuid-2", "not an image".getBytes());
+
+    // No reader claimed the bytes. Leaving readerStoragePath null keeps the image eligible for a
+    // later retry rather than pinning it to an original that may not decode either.
+    verify(imageRepository, never()).save(any(Image.class));
+    verifyNoInteractions(minioService);
+  }
+
+  @Test
+  public void testGenerateAndSaveReaderVariant_SmallerVariantIsUploadedAndRecorded()
+      throws Exception {
+    Image image = new Image();
+    image.setId(UUID.randomUUID());
+    image.setStoragePath("originals/page.png");
+
+    java.awt.image.BufferedImage source =
+        new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB);
+    java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
+    javax.imageio.ImageIO.write(source, "png", png);
+
+    // The native WebP writer is loaded from java.library.path; on a platform without it
+    // encodeWebp returns null by design and there is no variant to assert on.
+    boolean webpWriterRegistered =
+        javax.imageio.ImageIO.getImageWritersByFormatName("webp").hasNext();
+    if (webpWriterRegistered) {
+      when(imageRepository.findById(image.getId())).thenReturn(java.util.Optional.of(image));
+    }
+
+    pageService.generateAndSaveReaderVariant(image.getId(), "uuid-3", png.toByteArray());
+
+    if (webpWriterRegistered) {
+      // Uploaded under the reader/ prefix and recorded, so the reader serves the smaller bytes
+      // while the OCR overlays keep using the original's dimensions.
+      verify(minioService, times(1))
+          .uploadFile(eq("reader/uuid-3.webp"), any(byte[].class), eq("image/webp"));
+      assertEquals("reader/uuid-3.webp", image.getReaderStoragePath());
+      verify(imageRepository, times(1)).save(image);
+    } else {
+      assertNull(image.getReaderStoragePath());
+      verifyNoInteractions(minioService);
+    }
+  }
 }

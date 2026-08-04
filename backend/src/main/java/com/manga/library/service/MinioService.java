@@ -111,7 +111,7 @@ public class MinioService {
    * {@code StreamingResponseBody} sends neither, which leaves browsers unable to show progress
    * or revalidate a cached page.
    */
-  public io.minio.StatObjectResponse statFile(String objectPath) {
+  public StatObjectResponse statFile(String objectPath) {
     try {
       return minioClient.statObject(
           StatObjectArgs.builder().bucket(bucketName).object(objectPath).build());

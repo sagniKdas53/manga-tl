@@ -248,11 +248,7 @@ public class PageService {
     if (spi == null) {
       return true; // unknown provenance: assume unsafe rather than risk a SIGSEGV
     }
-    String[] names = spi.getFormatNames();
-    if (names == null) {
-      return true;
-    }
-    for (String name : names) {
+    for (String name : spi.getFormatNames()) {
       if (name != null && name.toLowerCase(java.util.Locale.ROOT).contains("webp")) {
         return true;
       }

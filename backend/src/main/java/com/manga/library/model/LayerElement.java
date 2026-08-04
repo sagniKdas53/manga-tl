@@ -99,9 +99,17 @@ public class LayerElement {
     return layer != null ? layer.getType() : null;
   }
 
+  /**
+   * Whether the owning layer is visible, flattened onto the element for the renderer's filter.
+   *
+   * <p>Primitive rather than {@code Boolean}: a null here would reach {@code render.py} as JSON
+   * {@code null}, which is falsy in Python and so already meant "do not draw". Saying {@code false}
+   * outright keeps that fail-closed behaviour while giving callers one less null to handle — an
+   * element with no reachable layer, or a layer with no recorded visibility, is not drawn.
+   */
   @com.fasterxml.jackson.annotation.JsonProperty("layerVisible")
-  public Boolean getLayerVisibleSerialized() {
-    return layer != null ? layer.getVisible() : null;
+  public boolean getLayerVisibleSerialized() {
+    return layer != null && Boolean.TRUE.equals(layer.getVisible());
   }
 
   /**
