@@ -24,7 +24,16 @@ import { themeObj } from "./theme";
 import type { User, Series, Chapter, Page } from "./types";
 
 // Utils & overrides
-import { safeFetch, getContextPath } from "./utils";
+import {
+  safeFetch,
+  getContextPath,
+  ensureFreshToken,
+  msUntilRenewal,
+  isTokenExpired,
+  SESSION_EXPIRED_EVENT,
+  TOKEN_REFRESHED_EVENT,
+} from "./utils";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Providers
 import { NotificationProvider } from "./components/NotificationContext";
@@ -112,6 +121,89 @@ function TranslationToastWatcher() {
   return null;
 }
 
+interface SessionWatcherProps {
+  /** The token currently in React state — re-arms the renewal timer when it changes. */
+  token: string | null;
+  onTokenRefreshed: (token: string) => void;
+  onSessionEnd: () => void;
+}
+
+/**
+ * Owns the session's lifetime while the app is open: keeps the token renewed, keeps React's copy
+ * of it in step with storage, and turns an expiry into a visible sign-out instead of a screen
+ * whose every request quietly fails.
+ */
+function SessionWatcher({
+  token,
+  onTokenRefreshed,
+  onSessionEnd,
+}: SessionWatcherProps) {
+  const { showInfo } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleRefreshed = (e: Event) => {
+      onTokenRefreshed((e as CustomEvent).detail.token);
+    };
+
+    const handleExpired = (e: Event) => {
+      // Claims the sign-out: the router handles it, so `utils` skips its hard-redirect fallback.
+      e.preventDefault();
+      onSessionEnd();
+      navigate("/login", { replace: true });
+      showInfo("Your session expired. Please sign in again.", {
+        duration: 8000,
+      });
+    };
+
+    window.addEventListener(TOKEN_REFRESHED_EVENT, handleRefreshed);
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+    return () => {
+      window.removeEventListener(TOKEN_REFRESHED_EVENT, handleRefreshed);
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+    };
+  }, [onTokenRefreshed, onSessionEnd, navigate, showInfo]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    let renewalTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // One timer, aimed at the moment renewal comes due — for a 24-hour token that is a single
+    // wake-up a day, not a poll. A successful renewal changes `token`, which re-runs this effect
+    // and re-arms it; the reschedule below only has to cover the cases that do not, i.e. a
+    // renewal that failed or a delay that had to be clamped.
+    const arm = () => {
+      clearTimeout(renewalTimer);
+      const delay = msUntilRenewal();
+      if (delay === null) return;
+      renewalTimer = setTimeout(() => void ensureFreshToken().then(arm), delay);
+    };
+
+    // A frozen tab runs no timers at all, so the moment the app comes back is the one chance to
+    // renew before anything is fetched with a token that went stale while it was away.
+    const onWake = () => {
+      if (document.visibilityState === "visible")
+        void ensureFreshToken().then(arm);
+    };
+
+    // Unconditional at mount: the timer has to be armed even if the app rendered while hidden.
+    void ensureFreshToken().then(arm);
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    window.addEventListener("pageshow", onWake);
+
+    return () => {
+      clearTimeout(renewalTimer);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+      window.removeEventListener("pageshow", onWake);
+    };
+  }, [token]);
+
+  return null;
+}
+
 function GlobalErrorListener() {
   const { showError } = useToast();
   useEffect(() => {
@@ -157,7 +249,15 @@ function AppContent() {
     const storedUser = localStorage.getItem("manga_user");
     if (storedUser) {
       try {
-        return JSON.parse(storedUser);
+        const parsed: User = JSON.parse(storedUser);
+        // An already-expired token cannot be renewed and every request made with it will 401.
+        // Starting logged out shows the login form; starting "logged in" shows an app whose
+        // panels stay empty with no explanation.
+        if (parsed?.token && isTokenExpired(parsed.token)) {
+          localStorage.removeItem("manga_user");
+          return null;
+        }
+        return parsed;
       } catch {
         localStorage.removeItem("manga_user");
       }
@@ -349,6 +449,14 @@ function AppContent() {
 
   const handleSettingsClose = useCallback(() => setIsSettingsOpen(false), []);
 
+  // A renewed token has to reach the components too — they send it as an explicit header, and
+  // the copy they were rendered with is the one that is about to stop working.
+  const handleTokenRefreshed = useCallback((token: string) => {
+    setUser((prev) => (prev ? { ...prev, token } : prev));
+  }, []);
+
+  const handleSessionEnd = useCallback(() => setUser(null), []);
+
   return (
     <ThemeProvider theme={appliedTheme}>
       <CssBaseline />
@@ -362,6 +470,11 @@ function AppContent() {
           <ToastProvider>
             <UploadProvider>
               <GlobalErrorListener />
+              <SessionWatcher
+                token={user?.token ?? null}
+                onTokenRefreshed={handleTokenRefreshed}
+                onSessionEnd={handleSessionEnd}
+              />
               <TranslationToastWatcher />
               <div className="app-container">
                 {/* Navigation Bar */}
@@ -376,128 +489,130 @@ function AppContent() {
                   />
                 )}
 
-                <Suspense fallback={<LoadingSpinner />}>
-                  <Routes>
-                    <Route
-                      path="/login"
-                      element={<Auth onLoginSuccess={setUser} />}
-                    />
-                    <Route
-                      path="/"
-                      element={
-                        user ? (
-                          <Dashboard
-                            user={user}
-                            seriesList={seriesList}
-                            setSeriesList={setSeriesList}
-                            onSelectSeries={setSelectedSeries}
-                            mode={mode}
-                          />
-                        ) : null
-                      }
-                    />
-                    <Route
-                      path="/series/:seriesId"
-                      element={
-                        user ? (
-                          <SeriesDetails
-                            user={user}
-                            selectedSeries={selectedSeries}
-                            setSelectedSeries={setSelectedSeries}
-                            chapters={chapters}
-                            setChapters={setChapters}
-                            onSelectChapter={setSelectedChapter}
-                            isLoadingDetails={isLoadingDetails}
-                          />
-                        ) : null
-                      }
-                    />
-                    <Route
-                      path="/series/:seriesId/:slug"
-                      element={
-                        user ? (
-                          <SeriesDetails
-                            user={user}
-                            selectedSeries={selectedSeries}
-                            setSelectedSeries={setSelectedSeries}
-                            chapters={chapters}
-                            setChapters={setChapters}
-                            onSelectChapter={setSelectedChapter}
-                            isLoadingDetails={isLoadingDetails}
-                          />
-                        ) : null
-                      }
-                    />
-                    <Route
-                      path="/chapters/:chapterId"
-                      element={
-                        user ? (
-                          <ChapterGallery
-                            user={user}
-                            selectedSeries={selectedSeries}
-                            selectedChapter={selectedChapter}
-                            setSelectedChapter={setSelectedChapter}
-                            pages={pages}
-                            setPages={setPages}
-                            onSelectPage={NOOP}
-                            isLoadingDetails={isLoadingDetails}
-                            mode={mode}
-                          />
-                        ) : null
-                      }
-                    />
-                    <Route
-                      path="/chapters/:chapterId/:slug"
-                      element={
-                        user ? (
-                          <ChapterGallery
-                            user={user}
-                            selectedSeries={selectedSeries}
-                            selectedChapter={selectedChapter}
-                            setSelectedChapter={setSelectedChapter}
-                            pages={pages}
-                            setPages={setPages}
-                            onSelectPage={NOOP}
-                            isLoadingDetails={isLoadingDetails}
-                            mode={mode}
-                          />
-                        ) : null
-                      }
-                    />
-                    <Route
-                      path="/chapters/:chapterId/reader/:pageNumber"
-                      element={
-                        user ? (
-                          <Reader
-                            user={user}
-                            selectedSeries={selectedSeries}
-                            selectedChapter={selectedChapter}
-                            chapters={chapters}
-                            pages={pages}
-                            setPages={setPages}
-                            theme={mode}
-                          />
-                        ) : null
-                      }
-                    />
-                    <Route
-                      path="/chapters/:chapterId/:slug/reader/:pageNumber"
-                      element={
-                        user ? (
-                          <Reader
-                            user={user}
-                            selectedSeries={selectedSeries}
-                            selectedChapter={selectedChapter}
-                            chapters={chapters}
-                            pages={pages}
-                            setPages={setPages}
-                            theme={mode}
-                          />
-                        ) : null
-                      }
-                    />
-                  </Routes>
-                </Suspense>
+                <ErrorBoundary resetKey={location.pathname}>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <Routes>
+                      <Route
+                        path="/login"
+                        element={<Auth onLoginSuccess={setUser} />}
+                      />
+                      <Route
+                        path="/"
+                        element={
+                          user ? (
+                            <Dashboard
+                              user={user}
+                              seriesList={seriesList}
+                              setSeriesList={setSeriesList}
+                              onSelectSeries={setSelectedSeries}
+                              mode={mode}
+                            />
+                          ) : null
+                        }
+                      />
+                      <Route
+                        path="/series/:seriesId"
+                        element={
+                          user ? (
+                            <SeriesDetails
+                              user={user}
+                              selectedSeries={selectedSeries}
+                              setSelectedSeries={setSelectedSeries}
+                              chapters={chapters}
+                              setChapters={setChapters}
+                              onSelectChapter={setSelectedChapter}
+                              isLoadingDetails={isLoadingDetails}
+                            />
+                          ) : null
+                        }
+                      />
+                      <Route
+                        path="/series/:seriesId/:slug"
+                        element={
+                          user ? (
+                            <SeriesDetails
+                              user={user}
+                              selectedSeries={selectedSeries}
+                              setSelectedSeries={setSelectedSeries}
+                              chapters={chapters}
+                              setChapters={setChapters}
+                              onSelectChapter={setSelectedChapter}
+                              isLoadingDetails={isLoadingDetails}
+                            />
+                          ) : null
+                        }
+                      />
+                      <Route
+                        path="/chapters/:chapterId"
+                        element={
+                          user ? (
+                            <ChapterGallery
+                              user={user}
+                              selectedSeries={selectedSeries}
+                              selectedChapter={selectedChapter}
+                              setSelectedChapter={setSelectedChapter}
+                              pages={pages}
+                              setPages={setPages}
+                              onSelectPage={NOOP}
+                              isLoadingDetails={isLoadingDetails}
+                              mode={mode}
+                            />
+                          ) : null
+                        }
+                      />
+                      <Route
+                        path="/chapters/:chapterId/:slug"
+                        element={
+                          user ? (
+                            <ChapterGallery
+                              user={user}
+                              selectedSeries={selectedSeries}
+                              selectedChapter={selectedChapter}
+                              setSelectedChapter={setSelectedChapter}
+                              pages={pages}
+                              setPages={setPages}
+                              onSelectPage={NOOP}
+                              isLoadingDetails={isLoadingDetails}
+                              mode={mode}
+                            />
+                          ) : null
+                        }
+                      />
+                      <Route
+                        path="/chapters/:chapterId/reader/:pageNumber"
+                        element={
+                          user ? (
+                            <Reader
+                              user={user}
+                              selectedSeries={selectedSeries}
+                              selectedChapter={selectedChapter}
+                              chapters={chapters}
+                              pages={pages}
+                              setPages={setPages}
+                              theme={mode}
+                            />
+                          ) : null
+                        }
+                      />
+                      <Route
+                        path="/chapters/:chapterId/:slug/reader/:pageNumber"
+                        element={
+                          user ? (
+                            <Reader
+                              user={user}
+                              selectedSeries={selectedSeries}
+                              selectedChapter={selectedChapter}
+                              chapters={chapters}
+                              pages={pages}
+                              setPages={setPages}
+                              theme={mode}
+                            />
+                          ) : null
+                        }
+                      />
+                    </Routes>
+                  </Suspense>
+                </ErrorBoundary>
 
                 <Suspense fallback={<LoadingSpinner />}>
                   {isSettingsOpen && (

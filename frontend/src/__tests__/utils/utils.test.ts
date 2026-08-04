@@ -8,19 +8,19 @@ describe("safeFetch", () => {
   beforeEach(async () => {
     // We must mock window.fetch BEFORE importing utils so that originalFetch captures the mock
     mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
-    
+    vi.stubGlobal("fetch", mockFetch);
+
     localStorage.clear();
-    
+
     // Safely mock window.location
     originalLocation = window.location;
     delete (window as Record<string, unknown>).location;
-    window.location = { 
-      pathname: '', 
-      href: 'http://localhost/', 
-      origin: 'http://localhost',
-      host: 'localhost',
-      protocol: 'http:'
+    window.location = {
+      pathname: "",
+      href: "http://localhost/",
+      origin: "http://localhost",
+      host: "localhost",
+      protocol: "http:",
     } as unknown as Location;
 
     // Dynamically import utils to ensure it picks up the mocked global.fetch
@@ -40,7 +40,10 @@ describe("safeFetch", () => {
     const mockPayload = btoa(JSON.stringify({ exp: twoMinutesFromNow }));
     const expiringToken = `header.${mockPayload}.signature`;
 
-    localStorage.setItem("manga_user", JSON.stringify({ token: expiringToken }));
+    localStorage.setItem(
+      "manga_user",
+      JSON.stringify({ token: expiringToken }),
+    );
 
     const mockRefreshResponse = {
       ok: true,
@@ -51,7 +54,9 @@ describe("safeFetch", () => {
       status: 200,
     };
 
-    mockFetch.mockResolvedValueOnce(mockRefreshResponse).mockResolvedValueOnce(mockTargetResponse);
+    mockFetch
+      .mockResolvedValueOnce(mockRefreshResponse)
+      .mockResolvedValueOnce(mockTargetResponse);
 
     await safeFetch("http://localhost/api/test");
 
@@ -63,8 +68,132 @@ describe("safeFetch", () => {
     expect(storedUser.token).toBe("new-token");
   });
 
+  it("refreshes once when several requests race the expiry window", async () => {
+    const twoMinutesFromNow = Math.floor(Date.now() / 1000) + 120;
+    const mockPayload = btoa(JSON.stringify({ exp: twoMinutesFromNow }));
+    localStorage.setItem(
+      "manga_user",
+      JSON.stringify({ token: `header.${mockPayload}.sig` }),
+    );
+
+    mockFetch.mockImplementation((url: string) => {
+      if (String(url).includes("/auth/refresh")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ token: "new-token" }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200 });
+    });
+
+    await Promise.all([
+      safeFetch("http://localhost/api/a"),
+      safeFetch("http://localhost/api/b"),
+      safeFetch("http://localhost/api/c"),
+    ]);
+
+    const refreshCalls = mockFetch.mock.calls.filter((c) =>
+      String(c[0]).includes("/auth/refresh"),
+    );
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it("rewrites the outgoing Authorization header with the refreshed token", async () => {
+    const twoMinutesFromNow = Math.floor(Date.now() / 1000) + 120;
+    const mockPayload = btoa(JSON.stringify({ exp: twoMinutesFromNow }));
+    const staleToken = `header.${mockPayload}.sig`;
+    localStorage.setItem("manga_user", JSON.stringify({ token: staleToken }));
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ token: "new-token" }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await safeFetch("http://localhost/api/test", {
+      headers: { Authorization: `Bearer ${staleToken}` },
+    });
+
+    const sentInit = mockFetch.mock.calls[1][1] as RequestInit;
+    expect(new Headers(sentInit.headers).get("Authorization")).toBe(
+      "Bearer new-token",
+    );
+  });
+
+  it("announces the token renewal so React state can follow", async () => {
+    const twoMinutesFromNow = Math.floor(Date.now() / 1000) + 120;
+    const mockPayload = btoa(JSON.stringify({ exp: twoMinutesFromNow }));
+    localStorage.setItem(
+      "manga_user",
+      JSON.stringify({ token: `header.${mockPayload}.sig` }),
+    );
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ token: "new-token" }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const listener = vi.fn();
+    window.addEventListener("session-token-refreshed", listener);
+    await safeFetch("http://localhost/api/test");
+    window.removeEventListener("session-token-refreshed", listener);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0][0] as CustomEvent).detail.token).toBe(
+      "new-token",
+    );
+  });
+
+  it("ends the session instead of sending a request with an expired token", async () => {
+    const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
+    const mockPayload = btoa(JSON.stringify({ exp: oneHourAgo }));
+    localStorage.setItem(
+      "manga_user",
+      JSON.stringify({ token: `header.${mockPayload}.sig` }),
+    );
+
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+
+    const listener = vi.fn();
+    window.addEventListener("session-expired", listener);
+    await safeFetch("http://localhost/api/test");
+    window.removeEventListener("session-expired", listener);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0][0] as CustomEvent).detail.reason).toBe(
+      "expired",
+    );
+    expect(localStorage.getItem("manga_user")).toBeNull();
+    // No doomed refresh attempt: the backend will not renew a token that is already dead.
+    expect(
+      mockFetch.mock.calls.some((c) => String(c[0]).includes("/auth/refresh")),
+    ).toBe(false);
+  });
+
+  it("leaves the redirect to the app when a listener claims the expiry", async () => {
+    localStorage.setItem(
+      "manga_user",
+      JSON.stringify({ token: "invalid-token" }),
+    );
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
+
+    const listener = (e: Event) => e.preventDefault();
+    window.addEventListener("session-expired", listener);
+    await safeFetch("http://localhost/api/test");
+    window.removeEventListener("session-expired", listener);
+
+    expect(localStorage.getItem("manga_user")).toBeNull();
+    expect(window.location.pathname).toBe("");
+  });
+
   it("should clear localStorage and redirect to /login on 401 response", async () => {
-    localStorage.setItem("manga_user", JSON.stringify({ token: "invalid-token" }));
+    localStorage.setItem(
+      "manga_user",
+      JSON.stringify({ token: "invalid-token" }),
+    );
 
     const mockUnauthResponse = {
       ok: false,
@@ -101,6 +230,89 @@ describe("safeFetch", () => {
   });
 });
 
+describe("msUntilRenewal", () => {
+  const tokenExpiringIn = (seconds: number) =>
+    `header.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + seconds }))}.sig`;
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("returns null when there is no session to keep alive", async () => {
+    const { msUntilRenewal } = await import("../../utils");
+    expect(msUntilRenewal()).toBeNull();
+  });
+
+  it("aims at the start of the renewal window", async () => {
+    const { msUntilRenewal } = await import("../../utils");
+    localStorage.setItem(
+      "manga_user",
+      JSON.stringify({ token: tokenExpiringIn(24 * 60 * 60) }),
+    );
+
+    // 24h token, renewed 10 minutes before expiry: one wake-up, ~23h50m out.
+    const delay = msUntilRenewal();
+    expect(delay).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(delay).toBeLessThanOrEqual(23 * 60 * 60 * 1000 + 50 * 60 * 1000);
+  });
+
+  it("floors the delay so a refusing backend is not retried in a tight loop", async () => {
+    const { msUntilRenewal } = await import("../../utils");
+    localStorage.setItem(
+      "manga_user",
+      JSON.stringify({ token: tokenExpiringIn(120) }),
+    );
+
+    // Already inside the window: the ideal delay is zero, which must not be honoured.
+    expect(msUntilRenewal()).toBe(60 * 1000);
+  });
+});
+
+describe("getContextPath", () => {
+  let originalLocation: typeof window.location;
+
+  const withPath = async (pathname: string) => {
+    vi.resetModules();
+    window.location = {
+      pathname,
+      href: `http://localhost${pathname}`,
+    } as unknown as Location;
+    const { getContextPath } = await import("../../utils");
+    return getContextPath();
+  };
+
+  beforeEach(() => {
+    originalLocation = window.location;
+    delete (window as Record<string, unknown>).location;
+  });
+
+  afterEach(() => {
+    window.location = originalLocation;
+  });
+
+  it("strips the app's own route roots", async () => {
+    expect(await withPath("/tlhub/login")).toBe("/tlhub");
+    expect(await withPath("/tlhub/series/7")).toBe("/tlhub");
+    expect(await withPath("/tlhub/chapters/9/reader/3")).toBe("/tlhub");
+    expect(await withPath("/login")).toBe("");
+  });
+
+  it("returns the path itself when no route root is present", async () => {
+    expect(await withPath("/tlhub/")).toBe("/tlhub");
+    expect(await withPath("/my/manga/")).toBe("/my/manga");
+    expect(await withPath("/")).toBe("");
+  });
+
+  it("does not mistake a slug for a route root", async () => {
+    // A series titled "Login Diaries" used to cut the context path at its slug, which left the
+    // router with a basename no URL matched — a blank app.
+    expect(await withPath("/tlhub/series/7/login-diaries")).toBe("/tlhub");
+    expect(await withPath("/tlhub/chapters/9/series-finale/reader/1")).toBe(
+      "/tlhub",
+    );
+  });
+});
+
 describe("utils helpers", () => {
   it("toSlug converts strings correctly", async () => {
     const { toSlug } = await import("../../utils");
@@ -119,10 +331,22 @@ describe("utils helpers", () => {
 
   it("resolveOverride respects fallback precedence", async () => {
     const { resolveOverride } = await import("../../utils");
-    expect(resolveOverride("chap", "ser", "glob")).toEqual({ value: "chap", source: "chapter" });
-    expect(resolveOverride(null, "ser", "glob")).toEqual({ value: "ser", source: "series" });
-    expect(resolveOverride(null, null, "glob")).toEqual({ value: "glob", source: "global" });
-    expect(resolveOverride(null, null, null)).toEqual({ value: "", source: "global" });
+    expect(resolveOverride("chap", "ser", "glob")).toEqual({
+      value: "chap",
+      source: "chapter",
+    });
+    expect(resolveOverride(null, "ser", "glob")).toEqual({
+      value: "ser",
+      source: "series",
+    });
+    expect(resolveOverride(null, null, "glob")).toEqual({
+      value: "glob",
+      source: "global",
+    });
+    expect(resolveOverride(null, null, null)).toEqual({
+      value: "",
+      source: "global",
+    });
   });
 
   it("formatResolverHint formats hint string", async () => {
