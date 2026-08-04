@@ -47,6 +47,34 @@ Also unpushed — the branch is 4 commits ahead of `github/main`.
 
 Suites after the change: **frontend 283 + 1 skipped** (was 264), backend 349, worker 275.
 
+**`0e5bbd5` … `f131e42` — items 1, 2, 3, 3a, 4, 5 and half of 6.** Seven commits, each verified
+red-green (break it, watch the named test fail, restore it). Suites after: **backend 366**
+(was 349), **frontend 297 + 1 skipped** (was 283), **worker 284** (was 275).
+
+| item | commit | what actually changed |
+| --- | --- | --- |
+| 1 · AUDIT-B1 | `0e5bbd5` | `spring.task.scheduling.pool.size` 1 → 4, via `SCHEDULING_POOL_SIZE`. |
+| 2 · `try_local_ai` | `2b37cdd` (worker), `e8ccb49` (bump) | Caller's prompt now becomes the system message. |
+| 3 · AUDIT-B4 | `c123cba` | `Map<UUID, Collection<SseEmitter>>`, per-emitter removal. |
+| 3a · AUDIT-F3 | `14f0c07` | 5s→60s backoff with equal jitter, visibility gate. |
+| 4 · AUDIT-B2 | `61d856c` | `@Lazy` self-reference, and the swallowed exception. |
+| 5 · AUDIT-B3 | `f131e42` | NPE → 500 and logged; `IllegalArgumentException` keeps 400. |
+| 6 · AUDIT-F4 | `a39374c` | Light `text.secondary` `#b0b0b0` → `#5f5f5f`. |
+
+Three findings needed correcting when read in the code:
+
+- **AUDIT-B2 was half a fix.** `resetProcessingJobsToPending` also caught and logged every exception
+  internally, so even through the proxy the transaction would never see a failure and would commit
+  the partial batch — the half-migrated table the transaction exists to prevent. Both halves fixed.
+- **AUDIT-F4's disabled figure was ≈4.96:1, not ≈4.6:1** (the test computes it). The inversion it
+  describes was real and worse than stated: secondary at 2.17:1 sat well below disabled.
+- **AUDIT-B3 has a consequence worth stating.** Any `Objects.requireNonNull` currently doing input
+  validation now returns 500 rather than 400. That is the correct signal, and no test depended on
+  the old mapping — but it is a live behaviour change, not a pure logging fix.
+
+**Still open on this list:** 3b (AUDIT-F7), the AUDIT-F6 half of item 6, 6a, the D3/D4/D2
+infrastructure items, and item 8. See the notes under each below.
+
 ## The list
 
 Ranked by payoff per line changed, which is the ordering this project has asked for. Every item
