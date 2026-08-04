@@ -1,32 +1,190 @@
+const stripTrailingSlash = (path: string): string =>
+  path.endsWith("/") ? path.slice(0, -1) : path;
+
+/**
+ * The app's own route roots, matched on whole path segments.
+ *
+ * A plain `path.includes("/login")` used to do this, which also matched slugs: a series titled
+ * "Login Diaries" lives at `/tlhub/series/7/login-diaries`, and the substring search cut the
+ * context path there, yielding `/tlhub/series/7`. That became the router basename, no route
+ * matched the URL any more, and the whole app rendered blank. Requiring a `/` or the end of the
+ * string after the marker keeps slugs out, and taking the earliest match keeps the answer
+ * independent of the order the markers are listed in.
+ */
+const ROUTE_ROOT = /(?:^|\/)(?:login|series|chapters)(?:\/|$)/;
+
 // Helper to dynamically resolve the context path from the browser address bar
 export const getContextPath = (): string => {
   const path = window.location.pathname;
 
-  // Check known routes to extract context path prefix
-  for (const route of ["/login", "/series", "/chapters"]) {
-    if (path.includes(route)) {
-      let cp = path.substring(0, path.indexOf(route));
-      if (cp.endsWith("/")) cp = cp.slice(0, -1);
-      return cp;
-    }
+  const match = ROUTE_ROOT.exec(path);
+  if (match) {
+    return stripTrailingSlash(path.slice(0, match.index));
   }
 
   // If not on a sub-route, we must be at the base context path root (e.g. "/tlhub/" or "/my/manga/")
-  let cp = path;
-  if (cp.endsWith("/")) cp = cp.slice(0, -1);
-  return cp;
+  return stripTrailingSlash(path);
 };
 
-const parseJwt = (token: string) => {
+const STORAGE_KEY = "manga_user";
+
+/** Renew a token once it is this close to expiring. */
+const REFRESH_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Fired when the stored session can no longer be used. Cancelable: the app calls
+ * `preventDefault()` to say it will handle the sign-out itself (router navigation + a toast).
+ * When nothing handles it — the React tree crashed, or a request fired after unmount — the
+ * fallback below does a hard redirect to the login page so the user is never left staring at
+ * a dead screen.
+ */
+export const SESSION_EXPIRED_EVENT = "session-expired";
+
+/** Fired after a successful renewal, carrying the new token in `detail.token`. */
+export const TOKEN_REFRESHED_EVENT = "session-token-refreshed";
+
+export const parseJwt = (token: string) => {
   try {
-    return JSON.parse(atob(token.split('.')[1]));
+    return JSON.parse(atob(token.split(".")[1]));
   } catch {
     return null;
   }
 };
 
-// Override global fetch to prepend the dynamic context path / subfolder base URL to API requests
+/** Expiry as epoch milliseconds, or null for a token that carries no readable `exp`. */
+export const getTokenExpiry = (token: string): number | null => {
+  const claims = parseJwt(token);
+  return typeof claims?.exp === "number" ? claims.exp * 1000 : null;
+};
+
+export const isTokenExpired = (token: string): boolean => {
+  const expiresAt = getTokenExpiry(token);
+  return expiresAt !== null && expiresAt <= Date.now();
+};
+
+const readStoredToken = (): string | null => {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw)?.token ?? null;
+  } catch {
+    return null;
+  }
+};
+
+/** Drops the stored session and asks the app to show the login screen. */
+export const endSession = (reason: "expired" | "unauthorized"): void => {
+  if (localStorage.getItem(STORAGE_KEY) === null) return;
+  localStorage.removeItem(STORAGE_KEY);
+
+  const handled = !window.dispatchEvent(
+    new CustomEvent(SESSION_EXPIRED_EVENT, {
+      cancelable: true,
+      detail: { reason },
+    }),
+  );
+  if (!handled) {
+    window.location.pathname = getContextPath() + "/login"; // Safely redirects without Open Redirect warning
+  }
+};
+
 const originalFetch = window.fetch;
+
+/**
+ * One renewal at a time. The app fires several requests at once on almost every screen, and each
+ * of them used to run its own expiry check and its own `POST /auth/refresh`. That is a burst of
+ * redundant logins-in-place whose responses race: the slowest one wins the `localStorage` write,
+ * so the session could end up holding an older token than one already handed out.
+ */
+let inFlightRefresh: Promise<string | null> | null = null;
+
+const requestRefresh = async (token: string): Promise<string | null> => {
+  try {
+    const res = await originalFetch(getContextPath() + "/api/auth/refresh", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    if (!data?.token) return null;
+
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const stored = raw ? JSON.parse(raw) : {};
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...stored, token: data.token }),
+    );
+
+    // Components hold the token in React state and send it as an explicit Authorization header,
+    // so the write above is not enough on its own — without this the app keeps sending the token
+    // it was rendered with and gets logged out anyway, minutes after a successful renewal.
+    window.dispatchEvent(
+      new CustomEvent(TOKEN_REFRESHED_EVENT, { detail: { token: data.token } }),
+    );
+    return data.token;
+  } catch (err) {
+    console.error("[Session] Failed to refresh token", err);
+    return null;
+  }
+};
+
+/**
+ * Returns a token that is safe to send, renewing it when it is nearly spent.
+ *
+ * Callable from anywhere — the request path, a timer, or the moment the tab becomes visible.
+ * Renewal used to happen only inside `fetch`, and only if a request happened to be made during
+ * the last five minutes of a 24-hour token. Miss that window and the session was simply gone,
+ * which is what happens to a tab that sits closed overnight.
+ */
+export const ensureFreshToken = async (): Promise<string | null> => {
+  const token = readStoredToken();
+  if (!token) return null;
+
+  const expiresAt = getTokenExpiry(token);
+  if (expiresAt === null) return token; // Unreadable expiry: let the server be the judge.
+
+  if (expiresAt <= Date.now()) {
+    // The backend refuses to renew an expired token, so there is nothing left to salvage.
+    endSession("expired");
+    return null;
+  }
+
+  if (expiresAt - Date.now() > REFRESH_WINDOW_MS) return token;
+
+  if (!inFlightRefresh) {
+    inFlightRefresh = requestRefresh(token).finally(() => {
+      inFlightRefresh = null;
+    });
+  }
+  return inFlightRefresh;
+};
+
+/** `setTimeout` truncates its delay to a signed 32-bit int; anything longer fires immediately. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
+/**
+ * Never re-arm faster than this. Inside the renewal window the ideal delay is zero, so a backend
+ * that is refusing to renew would otherwise be retried in a tight loop.
+ */
+const MIN_RENEWAL_DELAY_MS = 60 * 1000;
+
+/**
+ * Milliseconds until the stored token is due for renewal, or null when there is no session to
+ * keep alive. Lets a caller arm a single timer for the moment it matters instead of polling.
+ */
+export const msUntilRenewal = (): number | null => {
+  const token = readStoredToken();
+  if (!token) return null;
+
+  const expiresAt = getTokenExpiry(token);
+  if (expiresAt === null) return null;
+
+  const untilWindow = expiresAt - Date.now() - REFRESH_WINDOW_MS;
+  return Math.min(Math.max(untilWindow, MIN_RENEWAL_DELAY_MS), MAX_TIMEOUT_MS);
+};
+
+// Override global fetch to prepend the dynamic context path / subfolder base URL to API requests
 window.fetch = async (
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -42,40 +200,15 @@ window.fetch = async (
     }
   }
 
-  // Auto-refresh token if it's about to expire
+  // Keep the session alive, and carry any renewed token into this request's own header — the
+  // caller captured its copy of the token before we got here.
   if (typeof targetUrl === "string" && !targetUrl.includes("/auth/refresh")) {
-    const userStr = localStorage.getItem("manga_user");
-    if (userStr) {
-      try {
-        const mangaUser = JSON.parse(userStr);
-        if (mangaUser?.token) {
-          const claims = parseJwt(mangaUser.token);
-          if (claims && claims.exp) {
-            const timeToExpiry = claims.exp * 1000 - Date.now();
-            // Refresh if expiring in less than 5 minutes
-            if (timeToExpiry > 0 && timeToExpiry < 5 * 60 * 1000) {
-              const refreshRes = await originalFetch(context + "/api/auth/refresh", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${mangaUser.token}` }
-              });
-              if (refreshRes.ok) {
-                const data = await refreshRes.json();
-                mangaUser.token = data.token;
-                localStorage.setItem("manga_user", JSON.stringify(mangaUser));
-                
-                if (init?.headers) {
-                  const headers = new Headers(init.headers);
-                  if (headers.has("Authorization")) {
-                    headers.set("Authorization", `Bearer ${data.token}`);
-                    init.headers = headers;
-                  }
-                }
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("[Fetch Auto-Refresh] Failed to refresh token", err);
+    const freshToken = await ensureFreshToken();
+    if (freshToken && init?.headers) {
+      const headers = new Headers(init.headers);
+      if (headers.has("Authorization")) {
+        headers.set("Authorization", `Bearer ${freshToken}`);
+        init = { ...init, headers };
       }
     }
   }
@@ -87,10 +220,7 @@ window.fetch = async (
     try {
       const response = await originalFetch(targetUrl, init);
       if (response.status === 401) {
-        if (localStorage.getItem("manga_user")) {
-          localStorage.removeItem("manga_user");
-          window.location.pathname = context + "/login"; // Safely redirects without Open Redirect warning
-        }
+        endSession("unauthorized");
       }
 
       if (!response.ok && response.status >= 500 && i < MAX_RETRIES) {
