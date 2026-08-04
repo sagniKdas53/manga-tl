@@ -1003,6 +1003,15 @@ public class JobCoordinatorService {
   /** Outward growth per axis for free-floating text, which has no outline to stay inside. */
   private static final int FREE_TEXT_PADDING = 20;
 
+  /** Only reshape a free-floating box this much taller than wide — a vertical Japanese column. */
+  private static final double FREE_TEXT_COLUMN_ASPECT = 1.5;
+
+  /** Width:height a reshaped free-floating box aims for. */
+  private static final double FREE_TEXT_TARGET_ASPECT = 1.0;
+
+  /** Ceiling on the reshape, as a multiple of the width the source text occupied. */
+  private static final double FREE_TEXT_MAX_WIDEN = 2.5;
+
   /**
    * True when {@code bubble*} describes a container the text sits inside, rather than the text.
    *
@@ -1038,17 +1047,11 @@ public class JobCoordinatorService {
    * because {@code safeText} traces vertically-set Japanese and laying English into that shape wraps
    * it into narrow ragged columns.
    *
-   * <p><b>Without one the box is grown, as it was before f3aa160.</b> f3aa160 applied the inset
-   * unconditionally, but these regions have no outline to stay inside and their geometry is already
-   * the tight text column — insetting a 49px-wide caption to 29px is narrower than a single word at
-   * any legible size, so the renderer falls through to per-character splitting ({@code
-   * fit_text_in_box_py} in {@code render.py}) and emits "goi/ng", "sub/jec/t". 237 regions landed
-   * under 40px that way.
-   *
-   * <p>Note that growing outward is the right shape of fix but not a sufficient one: 69px still
-   * forces a one-word-per-line column where a human typesetter reflows the sentence across the
-   * cloud. Widening free-floating text toward a readable aspect ratio needs collision handling
-   * against neighbouring regions and panel edges, and is tracked separately in TODO.md.
+   * <p><b>Without one the box is reshaped.</b> f3aa160 applied the inset unconditionally, but these
+   * regions have no outline to stay inside and their geometry is already the tight text column —
+   * insetting a 49px-wide caption to 29px is narrower than a single word at any legible size. Such a
+   * box is grown outward and then squared up by {@link #freeTextBox}, because a 69px column still
+   * forces one word per line where a human typesetter reflows the sentence across the cloud.
    */
   static TextBox textBoxFor(OcrRegion region) {
     boolean detectedBubble = hasDetectedBubble(region);
@@ -1067,11 +1070,8 @@ public class JobCoordinatorService {
 
     if (!detectedBubble) {
       int halfPad = FREE_TEXT_PADDING / 2;
-      return new TextBox(
-          Math.max(0, x - halfPad),
-          Math.max(0, y - halfPad),
-          w + FREE_TEXT_PADDING,
-          h + FREE_TEXT_PADDING);
+      return freeTextBox(
+          x - halfPad, y - halfPad, w + FREE_TEXT_PADDING, h + FREE_TEXT_PADDING, pageBounds(region));
     }
 
     // Only inset when there is room to; a tiny bubble keeps its full extent rather than collapsing.
@@ -1084,6 +1084,65 @@ public class JobCoordinatorService {
         Math.max(0, y + (insetH ? halfPad : 0)),
         insetW ? w - TEXT_BOX_PADDING : w,
         insetH ? h - TEXT_BOX_PADDING : h);
+  }
+
+  /**
+   * Reshape a free-floating text box from the column the source text occupied into something English
+   * can be set in.
+   *
+   * <p>Japanese here is set vertically, so a caption's geometry is a ~50px-wide, ~500px-tall ribbon
+   * of ink. It is the shape of the writing, not of anything on the page — the cloud around it is
+   * several times wider — and laying English into it gives one word per line at a size that has to
+   * keep shrinking to fit the longest word. So the box keeps its area and its centre and squares up:
+   * same amount of room, in a shape a sentence can reflow across.
+   *
+   * <p>Area is the conservative choice available without knowing where the artwork is. The rendered
+   * text is centred in the box, so what actually lands on the page is the block of lines, not the
+   * box; keeping the area equal keeps that block about as big as the source text it replaces, and
+   * anchoring on the centre keeps it over the same spot. {@link #FREE_TEXT_MAX_WIDEN} bounds how far
+   * a very thin column can push sideways, and the page bounds stop it running off the paper.
+   *
+   * <p>Boxes that are not columns — {@code narration}, which is set horizontally and measures 0.23
+   * tall per wide — are left alone.
+   *
+   * @param page {@code {width, height}} of the page in pixels, or null when it is not known
+   */
+  private static TextBox freeTextBox(double x, double y, int w, int h, int[] page) {
+    if (w <= 0 || h < w * FREE_TEXT_COLUMN_ASPECT) {
+      return new TextBox(Math.max(0, x), Math.max(0, y), w, h);
+    }
+
+    double area = (double) w * h;
+    int newW = (int) Math.round(Math.min(Math.sqrt(area * FREE_TEXT_TARGET_ASPECT), w * FREE_TEXT_MAX_WIDEN));
+    newW = Math.max(newW, w);
+    int newH = Math.max(MIN_TEXT_BOX, (int) Math.round(area / newW));
+
+    double nx = x + w / 2.0 - newW / 2.0;
+    double ny = y + h / 2.0 - newH / 2.0;
+    if (page != null) {
+      nx = Math.min(Math.max(0, nx), Math.max(0, page[0] - newW));
+      ny = Math.min(Math.max(0, ny), Math.max(0, page[1] - newH));
+    } else {
+      nx = Math.max(0, nx);
+      ny = Math.max(0, ny);
+    }
+    return new TextBox(nx, ny, newW, newH);
+  }
+
+  /** Page dimensions in pixels, or null when the region is detached or the image never recorded them. */
+  private static int[] pageBounds(OcrRegion region) {
+    try {
+      Page page = region.getPage();
+      Image image = page != null ? page.getImage() : null;
+      if (image != null && image.getWidth() != null && image.getHeight() != null) {
+        return new int[] {image.getWidth(), image.getHeight()};
+      }
+    } catch (RuntimeException e) {
+      // A detached region cannot resolve its page. Reshaping without bounds is still better than not
+      // reshaping; the box just is not clamped to the paper.
+      log.debug("No page bounds for region {}: {}", region.getId(), e.toString());
+    }
+    return null;
   }
 
   @Transactional
