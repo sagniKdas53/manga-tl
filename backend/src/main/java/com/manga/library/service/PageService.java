@@ -135,7 +135,7 @@ public class PageService {
     Objects.requireNonNull(page, "page cannot be null");
     page = pageRepository.save(Objects.requireNonNull(page));
 
-    if (pageNumber != null && pageNumber == 1) {
+    if (safePageNumber == 1) {
       pageRepository.flush();
       recalculateChapterCover(chapter.getId());
     }
