@@ -115,9 +115,7 @@ describe("QueueManager", () => {
       expect(
         screen.getByLabelText("Clear Pending/Failed Jobs"),
       ).toBeInTheDocument();
-      expect(
-        screen.getByLabelText("Force Clear Queue"),
-      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Force Clear Queue")).toBeInTheDocument();
       expect(screen.getByText("OCR Processing")).toBeInTheDocument();
       expect(screen.getByText("Translation")).toBeInTheDocument();
     });
@@ -151,9 +149,7 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      expect(
-        screen.getByLabelText("Force Clear Queue"),
-      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Force Clear Queue")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByLabelText("Force Clear Queue"));

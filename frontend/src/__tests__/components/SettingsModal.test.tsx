@@ -35,23 +35,88 @@ describe("SettingsModal", () => {
       "qwen/qwen3-vl-8b-instruct",
     ],
     useFallbackModels: true,
-    activeProviders: ["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"],
-    activeOcrProviders: ["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"],
+    activeProviders: [
+      "openrouter",
+      "gemini",
+      "nvidia",
+      "openai",
+      "anthropic",
+      "ollama",
+      "lmstudio",
+    ],
+    activeOcrProviders: [
+      "local",
+      "openrouter",
+      "gemini",
+      "nvidia",
+      "ollama",
+      "lmstudio",
+    ],
     providerModelsMap: {
       openrouter: {
-        ocr: [{ id: "qwen/qwen3-vl-8b-instruct", name: "qwen/qwen3-vl-8b-instruct" }, { id: "google/gemini-3.1-flash-lite", name: "google/gemini-3.1-flash-lite" }],
-        tl: [{ id: "gemini-1.5-pro", name: "gemini-1.5-pro" }, { id: "meta-llama/llama-3-8b-instruct:free", name: "meta-llama/llama-3-8b-instruct:free" }],
-        qaLLM: [{ id: "gpt-4o-mini", name: "gpt-4o-mini" }, { id: "deepseek/deepseek-v4-flash", name: "deepseek/deepseek-v4-flash" }],
-        qaVLM: [{ id: "google/gemini-3.1-flash-lite", name: "google/gemini-3.1-flash-lite" }, { id: "qwen/qwen3-vl-8b-instruct", name: "qwen/qwen3-vl-8b-instruct" }],
+        ocr: [
+          {
+            id: "qwen/qwen3-vl-8b-instruct",
+            name: "qwen/qwen3-vl-8b-instruct",
+          },
+          {
+            id: "google/gemini-3.1-flash-lite",
+            name: "google/gemini-3.1-flash-lite",
+          },
+        ],
+        tl: [
+          { id: "gemini-1.5-pro", name: "gemini-1.5-pro" },
+          {
+            id: "meta-llama/llama-3-8b-instruct:free",
+            name: "meta-llama/llama-3-8b-instruct:free",
+          },
+        ],
+        qaLLM: [
+          { id: "gpt-4o-mini", name: "gpt-4o-mini" },
+          {
+            id: "deepseek/deepseek-v4-flash",
+            name: "deepseek/deepseek-v4-flash",
+          },
+        ],
+        qaVLM: [
+          {
+            id: "google/gemini-3.1-flash-lite",
+            name: "google/gemini-3.1-flash-lite",
+          },
+          {
+            id: "qwen/qwen3-vl-8b-instruct",
+            name: "qwen/qwen3-vl-8b-instruct",
+          },
+        ],
       },
       gemini: {
-        ocr: [{ id: "google/gemini-3.1-flash-lite", name: "google/gemini-3.1-flash-lite" }],
+        ocr: [
+          {
+            id: "google/gemini-3.1-flash-lite",
+            name: "google/gemini-3.1-flash-lite",
+          },
+        ],
         tl: [{ id: "gemini-1.5-pro", name: "gemini-1.5-pro" }],
-        qaLLM: [{ id: "deepseek/deepseek-v4-flash", name: "deepseek/deepseek-v4-flash" }],
-        qaVLM: [{ id: "qwen/qwen3-vl-8b-instruct", name: "qwen/qwen3-vl-8b-instruct" }],
+        qaLLM: [
+          {
+            id: "deepseek/deepseek-v4-flash",
+            name: "deepseek/deepseek-v4-flash",
+          },
+        ],
+        qaVLM: [
+          {
+            id: "qwen/qwen3-vl-8b-instruct",
+            name: "qwen/qwen3-vl-8b-instruct",
+          },
+        ],
       },
       openai: {
-        tl: [{ id: "meta-llama/llama-3-8b-instruct:free", name: "meta-llama/llama-3-8b-instruct:free" }],
+        tl: [
+          {
+            id: "meta-llama/llama-3-8b-instruct:free",
+            name: "meta-llama/llama-3-8b-instruct:free",
+          },
+        ],
         qaLLM: [{ id: "gpt-4o-mini", name: "gpt-4o-mini" }],
       },
     },

@@ -44,7 +44,7 @@ const isCapabilityMissing = (
   providerMap: SystemSettingsDto["providerModelsMap"],
   provider: string,
   capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
-  legacyList: string[] | undefined
+  legacyList: string[] | undefined,
 ) => {
   if (providerMap) {
     const models = providerMap[provider]?.[capability];
@@ -57,7 +57,7 @@ const renderModelOptions = (
   providerMap: SystemSettingsDto["providerModelsMap"],
   provider: string,
   capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
-  legacyList: string[] | undefined
+  legacyList: string[] | undefined,
 ) => {
   let models: { id: string; name: string; free?: boolean }[] = [];
   if (providerMap) {
@@ -67,27 +67,38 @@ const renderModelOptions = (
   }
 
   if (models.length === 0) {
-    return <MenuItem value="N/A" disabled>N/A (Capability Missing)</MenuItem>;
+    return (
+      <MenuItem
+        value="N/A"
+        disabled
+      >
+        N/A (Capability Missing)
+      </MenuItem>
+    );
   }
 
   return models.map((m) => (
-    <MenuItem key={m.id} value={m.id}>
-      {m.name}{m.free ? " (Free)" : ""}
+    <MenuItem
+      key={m.id}
+      value={m.id}
+    >
+      {m.name}
+      {m.free ? " (Free)" : ""}
     </MenuItem>
   ));
 };
 
 /**
  * SettingsModal component allows users to configure global system defaults.
- * 
+ *
  * Model Resolution Logic:
- * The frontend receives provider capabilities via `providerModelsMap`. 
- * 
+ * The frontend receives provider capabilities via `providerModelsMap`.
+ *
  * - If a provider has a capability array (even if empty `[]`), it is considered the absolute source of truth.
  *   For example, if `neurometric` has `qaVLM: []`, it means VLM is definitively not supported by Neurometric.
- * - If the backend does not provide `providerModelsMap` (legacy) or completely omits a capability array, 
+ * - If the backend does not provide `providerModelsMap` (legacy) or completely omits a capability array,
  *   the UI will safely fall back to legacy global configuration lists (e.g., `qaVlmModelList`).
- * 
+ *
  * This ensures that modern backend configurations take precedence and capabilities missing from
  * a provider are cleanly greyed out in the interface as "Capability Missing".
  */
@@ -229,7 +240,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // -------------------------------------------------------------------------------------
   // MODEL INHERITANCE LOGIC & CAPABILITY CHECKING:
-  // - This modal manages the GLOBAL state. These settings act as the ultimate fallback 
+  // - This modal manages the GLOBAL state. These settings act as the ultimate fallback
   //   for Series and Chapter overrides.
   // - Missing capabilities (e.g. `isCapabilityMissing` for `qaVLM`) will disable the
   //   relevant dropdown and force the value to "N/A (Capability Missing)".
@@ -237,7 +248,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const getFirstValidModel = (
     provider: string,
     capability: "ocr" | "tl" | "qaLLM" | "qaVLM",
-    legacyList: string[] | undefined
+    legacyList: string[] | undefined,
   ) => {
     if (settings?.providerModelsMap) {
       const models = settings.providerModelsMap[provider]?.[capability];
@@ -248,23 +259,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     return null;
   };
 
-  const handleProviderChange = (field: "ocrProvider" | "tlProvider" | "qaProvider", value: string) => {
+  const handleProviderChange = (
+    field: "ocrProvider" | "tlProvider" | "qaProvider",
+    value: string,
+  ) => {
     handleChange(field, value);
 
     if (field === "ocrProvider") {
       if (value === "local") {
         handleChange("ocrModel", "");
       } else {
-        const first = getFirstValidModel(value, "ocr", settings?.ocrVlmModelList);
+        const first = getFirstValidModel(
+          value,
+          "ocr",
+          settings?.ocrVlmModelList,
+        );
         handleChange("ocrModel", first || "");
       }
     } else if (field === "tlProvider") {
       const first = getFirstValidModel(value, "tl", settings?.tlLlmModelList);
       handleChange("tlModel", first || "");
     } else if (field === "qaProvider") {
-      const firstLlm = getFirstValidModel(value, "qaLLM", settings?.qaLlmModelList);
+      const firstLlm = getFirstValidModel(
+        value,
+        "qaLLM",
+        settings?.qaLlmModelList,
+      );
       handleChange("qaLlmModel", firstLlm || "");
-      const firstVlm = getFirstValidModel(value, "qaVLM", settings?.qaVlmModelList);
+      const firstVlm = getFirstValidModel(
+        value,
+        "qaVLM",
+        settings?.qaVlmModelList,
+      );
       handleChange("qaVlmModel", firstVlm || "");
     }
   };
@@ -331,9 +357,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   label="Global OCR Provider"
                   onChange={(e) => {
                     const newProv = e.target.value;
-                    const ocrModels = settings.providerModelsMap?.[newProv]?.ocr || [];
-                    const defaultModel = ocrModels.length > 0 ? ocrModels[0].id : (settings.ocrModel || "");
-                    setSettings((prev) => prev ? { ...prev, ocrProvider: newProv, ocrModel: defaultModel } : null);
+                    const ocrModels =
+                      settings.providerModelsMap?.[newProv]?.ocr || [];
+                    const defaultModel =
+                      ocrModels.length > 0
+                        ? ocrModels[0].id
+                        : settings.ocrModel || "";
+                    setSettings((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            ocrProvider: newProv,
+                            ocrModel: defaultModel,
+                          }
+                        : null,
+                    );
                   }}
                 >
                   {ocrProviders.map((p) => (
@@ -359,7 +397,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   value={
                     settings.ocrProvider === "local"
                       ? settings.localOcrModel || "local"
-                      : isCapabilityMissing(settings.providerModelsMap, settings.ocrProvider, "ocr", settings.ocrVlmModelList)
+                      : isCapabilityMissing(
+                            settings.providerModelsMap,
+                            settings.ocrProvider,
+                            "ocr",
+                            settings.ocrVlmModelList,
+                          )
                         ? "N/A"
                         : settings.ocrModel || ""
                   }
@@ -371,7 +414,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       {settings.localOcrModel || "Local Worker Model"}
                     </MenuItem>
                   ) : (
-                    renderModelOptions(settings.providerModelsMap, settings.ocrProvider, "ocr", settings.ocrVlmModelList)
+                    renderModelOptions(
+                      settings.providerModelsMap,
+                      settings.ocrProvider,
+                      "ocr",
+                      settings.ocrVlmModelList,
+                    )
                   )}
                 </Select>
               </FormControl>
@@ -401,7 +449,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Select
                   value={tlProviderUnavailable ? "" : settings.tlProvider}
                   label="Global Translation Provider"
-                  onChange={(e) => handleProviderChange("tlProvider", e.target.value)}
+                  onChange={(e) =>
+                    handleProviderChange("tlProvider", e.target.value)
+                  }
                 >
                   {tlProviderUnavailable && (
                     <MenuItem
@@ -431,14 +481,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <InputLabel>Global Translation LLM Model</InputLabel>
                 <Select
                   value={
-                    isCapabilityMissing(settings.providerModelsMap, settings.tlProvider, "tl", settings.tlLlmModelList)
+                    isCapabilityMissing(
+                      settings.providerModelsMap,
+                      settings.tlProvider,
+                      "tl",
+                      settings.tlLlmModelList,
+                    )
                       ? "N/A"
                       : settings.tlModel || ""
                   }
                   label="Global Translation LLM Model"
                   onChange={(e) => handleChange("tlModel", e.target.value)}
                 >
-                  {renderModelOptions(settings.providerModelsMap, settings.tlProvider, "tl", settings.tlLlmModelList)}
+                  {renderModelOptions(
+                    settings.providerModelsMap,
+                    settings.tlProvider,
+                    "tl",
+                    settings.tlLlmModelList,
+                  )}
                 </Select>
               </FormControl>
             </Grid>
@@ -467,7 +527,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Select
                   value={qaProviderUnavailable ? "" : settings.qaProvider}
                   label="Global QA Provider"
-                  onChange={(e) => handleProviderChange("qaProvider", e.target.value)}
+                  onChange={(e) =>
+                    handleProviderChange("qaProvider", e.target.value)
+                  }
                 >
                   {qaProviderUnavailable && (
                     <MenuItem
@@ -531,14 +593,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <InputLabel>Global QA LLM Model</InputLabel>
                 <Select
                   value={
-                    isCapabilityMissing(settings.providerModelsMap, settings.qaProvider, "qaLLM", settings.qaLlmModelList)
+                    isCapabilityMissing(
+                      settings.providerModelsMap,
+                      settings.qaProvider,
+                      "qaLLM",
+                      settings.qaLlmModelList,
+                    )
                       ? "N/A"
                       : settings.qaLlmModel || ""
                   }
                   label="Global QA LLM Model"
                   onChange={(e) => handleChange("qaLlmModel", e.target.value)}
                 >
-                  {renderModelOptions(settings.providerModelsMap, settings.qaProvider, "qaLLM", settings.qaLlmModelList)}
+                  {renderModelOptions(
+                    settings.providerModelsMap,
+                    settings.qaProvider,
+                    "qaLLM",
+                    settings.qaLlmModelList,
+                  )}
                 </Select>
               </FormControl>
             </Grid>
@@ -554,14 +626,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <InputLabel>Global QA VLM Model</InputLabel>
                 <Select
                   value={
-                    isCapabilityMissing(settings.providerModelsMap, settings.qaProvider, "qaVLM", settings.qaVlmModelList)
+                    isCapabilityMissing(
+                      settings.providerModelsMap,
+                      settings.qaProvider,
+                      "qaVLM",
+                      settings.qaVlmModelList,
+                    )
                       ? "N/A"
                       : settings.qaVlmModel || ""
                   }
                   label="Global QA VLM Model"
                   onChange={(e) => handleChange("qaVlmModel", e.target.value)}
                 >
-                  {renderModelOptions(settings.providerModelsMap, settings.qaProvider, "qaVLM", settings.qaVlmModelList)}
+                  {renderModelOptions(
+                    settings.providerModelsMap,
+                    settings.qaProvider,
+                    "qaVLM",
+                    settings.qaVlmModelList,
+                  )}
                 </Select>
               </FormControl>
             </Grid>
@@ -585,7 +667,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <FormControl
                 fullWidth
                 size="small"
-                disabled={![settings.ocrProvider, settings.tlProvider, settings.qaProvider].includes("openrouter")}
+                disabled={
+                  ![
+                    settings.ocrProvider,
+                    settings.tlProvider,
+                    settings.qaProvider,
+                  ].includes("openrouter")
+                }
               >
                 <InputLabel>OpenRouter Routing Strategy</InputLabel>
                 <Select

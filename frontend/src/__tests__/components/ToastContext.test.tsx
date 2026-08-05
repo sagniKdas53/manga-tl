@@ -6,10 +6,20 @@ const TestComponent = () => {
   const { showToast, showSuccess, showError, showInfo } = useToast();
   return (
     <div>
-      <button onClick={() => showToast("Success message", "success")}>Show Toast</button>
-      <button onClick={() => showSuccess("Success helper")}>Show Success</button>
+      <button onClick={() => showToast("Success message", "success")}>
+        Show Toast
+      </button>
+      <button onClick={() => showSuccess("Success helper")}>
+        Show Success
+      </button>
       <button onClick={() => showError("Error helper")}>Show Error</button>
-      <button onClick={() => showInfo("Info helper", { action: { label: "Undo", onClick: vi.fn() } })}>
+      <button
+        onClick={() =>
+          showInfo("Info helper", {
+            action: { label: "Undo", onClick: vi.fn() },
+          })
+        }
+      >
         Show Action
       </button>
     </div>

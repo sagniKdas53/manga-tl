@@ -446,7 +446,11 @@ describe("ReaderRightSidebar", () => {
 
     render(
       <ReaderRightSidebar
-        selectedItem={{ type: "ocrRegion", data: mockRegion, regions: [mockRegion] }}
+        selectedItem={{
+          type: "ocrRegion",
+          data: mockRegion,
+          regions: [mockRegion],
+        }}
         setSelectedItem={vi.fn()}
         activeLayerId={null}
         setActiveLayerId={vi.fn()}

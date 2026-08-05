@@ -63,7 +63,7 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
   // MODEL INHERITANCE LOGIC:
   // We use `resolveOverride(fallback, override, base)` to compute the effective values.
   // The backend handles resolving chapters, but for Series, we compute it on the frontend.
-  // We check `settings?.providerModelsMap` to ensure we don't display chips for 
+  // We check `settings?.providerModelsMap` to ensure we don't display chips for
   // models (like qaVLM) if the configured provider does not support them.
   // -------------------------------------------------------------------------------------
 
@@ -270,7 +270,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                         label={resolvedQaRouting.value}
                       />
                     ) : (
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
                         N/A
                       </Typography>
                     )}
@@ -290,7 +293,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                       label={`${resolvedQaMode.value} ${resolvedQaMode.source === "series" ? "(overridden)" : "(inherited)"}`}
                     />
                   ) : (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                    >
                       N/A
                     </Typography>
                   )}
@@ -345,7 +351,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                     <Chip
                       size="small"
                       variant="outlined"
-                      disabled={resolvedQaMode.value === "vlm" || resolvedQaMode.value === "none"}
+                      disabled={
+                        resolvedQaMode.value === "vlm" ||
+                        resolvedQaMode.value === "none"
+                      }
                       label={`QA LLM: ${resolvedQa.value} ${resolvedQa.source === "series" ? "(overridden)" : "(inherited)"}`}
                     />
                   )}
@@ -353,7 +362,10 @@ export const SeriesHeader: React.FC<SeriesHeaderProps> = ({
                     <Chip
                       size="small"
                       variant="outlined"
-                      disabled={resolvedQaMode.value === "llm" || resolvedQaMode.value === "none"}
+                      disabled={
+                        resolvedQaMode.value === "llm" ||
+                        resolvedQaMode.value === "none"
+                      }
                       label={`QA VLM: ${resolvedQaVlm.value} ${resolvedQaVlm.source === "series" ? "(overridden)" : "(inherited)"}`}
                     />
                   )}

@@ -35,20 +35,47 @@ vi.mock("../../utils", () => ({
             qaVlmModelList: ["gpt-4v", "claude-3v"],
             routingStrategy: "lowest-cost",
             useFallbackModels: true,
-            activeProviders: ["openrouter", "gemini", "nvidia", "openai", "anthropic", "ollama", "lmstudio"],
-            activeOcrProviders: ["local", "openrouter", "gemini", "nvidia", "ollama", "lmstudio"],
+            activeProviders: [
+              "openrouter",
+              "gemini",
+              "nvidia",
+              "openai",
+              "anthropic",
+              "ollama",
+              "lmstudio",
+            ],
+            activeOcrProviders: [
+              "local",
+              "openrouter",
+              "gemini",
+              "nvidia",
+              "ollama",
+              "lmstudio",
+            ],
             providerModelsMap: {
               local: {
                 ocr: [{ id: "paddleocr", name: "paddleocr" }],
               },
               gemini: {
-                ocr: [{ id: "vlm-ocr-1", name: "vlm-ocr-1" }, { id: "vlm-ocr-2", name: "vlm-ocr-2" }],
+                ocr: [
+                  { id: "vlm-ocr-1", name: "vlm-ocr-1" },
+                  { id: "vlm-ocr-2", name: "vlm-ocr-2" },
+                ],
               },
               anthropic: {},
               openrouter: {
-                tl: [{ id: "gemini-flash", name: "gemini-flash" }, { id: "claude-3", name: "claude-3" }],
-                qaLLM: [{ id: "gpt-4", name: "gpt-4" }, { id: "claude-3", name: "claude-3" }],
-                qaVLM: [{ id: "gpt-4v", name: "gpt-4v" }, { id: "claude-3v", name: "claude-3v" }],
+                tl: [
+                  { id: "gemini-flash", name: "gemini-flash" },
+                  { id: "claude-3", name: "claude-3" },
+                ],
+                qaLLM: [
+                  { id: "gpt-4", name: "gpt-4" },
+                  { id: "claude-3", name: "claude-3" },
+                ],
+                qaVLM: [
+                  { id: "gpt-4v", name: "gpt-4v" },
+                  { id: "claude-3v", name: "claude-3v" },
+                ],
               },
             },
           }),
@@ -249,8 +276,12 @@ describe("ImportChapterDialog", () => {
 
   it("submits file when uploaded", async () => {
     render(<ImportChapterDialog {...defaultProps} />);
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(["dummy content"], "manga.zip", { type: "application/zip" });
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File(["dummy content"], "manga.zip", {
+      type: "application/zip",
+    });
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     const form = document.querySelector("form")!;

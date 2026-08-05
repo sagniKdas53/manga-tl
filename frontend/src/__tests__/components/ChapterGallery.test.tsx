@@ -500,7 +500,10 @@ describe("ChapterGallery Component", () => {
     };
 
     const { rerender } = render(
-      <ChapterGallery {...props} selectedChapter={mockChapter} />,
+      <ChapterGallery
+        {...props}
+        selectedChapter={mockChapter}
+      />,
     );
 
     const fileInput = document.querySelector(
@@ -518,12 +521,22 @@ describe("ChapterGallery Component", () => {
 
     // User moves to another chapter while the refresh is still outstanding.
     const otherChapter = { ...mockChapter, id: "c2", chapterNumber: 2 };
-    rerender(<ChapterGallery {...props} selectedChapter={otherChapter} />);
+    rerender(
+      <ChapterGallery
+        {...props}
+        selectedChapter={otherChapter}
+      />,
+    );
 
     mockSetPages.mockClear();
     landRefresh();
     await refreshInFlight;
-    rerender(<ChapterGallery {...props} selectedChapter={otherChapter} />);
+    rerender(
+      <ChapterGallery
+        {...props}
+        selectedChapter={otherChapter}
+      />,
+    );
 
     await waitFor(() => {
       expect(mockSafeFetch).toHaveBeenCalledWith(

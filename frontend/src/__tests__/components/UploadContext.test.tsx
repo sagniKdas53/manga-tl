@@ -9,12 +9,16 @@ function TestUploadConsumer() {
       <span data-testid="items-count">{items.length}</span>
       <button
         onClick={() =>
-          addItems([{ id: "u1", name: "page1.jpg", progress: 0, status: "pending" }])
+          addItems([
+            { id: "u1", name: "page1.jpg", progress: 0, status: "pending" },
+          ])
         }
       >
         Add Item
       </button>
-      <button onClick={() => updateItem("u1", { progress: 100, status: "completed" })}>
+      <button
+        onClick={() => updateItem("u1", { progress: 100, status: "completed" })}
+      >
         Complete Item
       </button>
       <button onClick={() => dismiss()}>Dismiss</button>
@@ -55,7 +59,9 @@ describe("UploadProvider & Context", () => {
     );
     fireEvent.click(screen.getByText("Add Item"));
 
-    const collapse = screen.getByRole("button", { name: "Collapse upload list" });
+    const collapse = screen.getByRole("button", {
+      name: "Collapse upload list",
+    });
     expect(collapse).toHaveAttribute("aria-expanded", "true");
     expect(
       screen.getByRole("button", { name: "Dismiss uploads" }),

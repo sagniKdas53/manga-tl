@@ -1,6 +1,8 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import ChapterHeader, { type ChapterHeaderProps } from "../../components/ChapterHeader";
+import ChapterHeader, {
+  type ChapterHeaderProps,
+} from "../../components/ChapterHeader";
 
 vi.mock("../../utils", () => ({
   safeFetch: () =>
@@ -168,8 +170,6 @@ describe("ChapterHeader", () => {
     fireEvent.click(screen.getByLabelText("more actions"));
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
   });
-
-
 
   it("renders cover image when coverImageUrl present", () => {
     render(

@@ -29,7 +29,10 @@ npm run lint
 npx eslint . --fix
 
 # Run Prettier to format the codebase
-npm run fmt
+npm run format
+
+# Check formatting without writing — this is what CI gates on
+npm run format:check
 
 # Run TypeScript compiler type check without emitting files
 npx tsc --noEmit

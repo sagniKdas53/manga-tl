@@ -69,7 +69,9 @@ describe("CreateChapterDialog", () => {
   it("renders when open with next chapter number prefilled", () => {
     render(<CreateChapterDialog {...defaultProps} />);
     expect(screen.getByText("Add Chapter")).toBeInTheDocument();
-    const numInput = screen.getByLabelText(/Chapter Number/) as HTMLInputElement;
+    const numInput = screen.getByLabelText(
+      /Chapter Number/,
+    ) as HTMLInputElement;
     expect(numInput.value).toBe("2");
   });
 
@@ -78,7 +80,9 @@ describe("CreateChapterDialog", () => {
     const accordionBtn = screen.getByText("Model Overrides (Optional)");
     fireEvent.click(accordionBtn);
     await waitFor(() => {
-      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("OCR Provider").length).toBeGreaterThanOrEqual(
+        1,
+      );
     });
   });
 

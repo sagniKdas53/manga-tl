@@ -3,10 +3,15 @@ import { describe, it, expect, vi } from "vitest";
 import { NotificationProvider } from "../../components/NotificationContext";
 import { useNotifications } from "../../components/useNotifications";
 
-let sseCallback: ((event: { type: string; data: string }) => void) | null = null;
+let sseCallback: ((event: { type: string; data: string }) => void) | null =
+  null;
 
 vi.mock("../../utils/useSSE", () => ({
-  useSSE: (_url: string, _token: string | null, onMessage: (event: { type: string; data: string }) => void) => {
+  useSSE: (
+    _url: string,
+    _token: string | null,
+    onMessage: (event: { type: string; data: string }) => void,
+  ) => {
     sseCallback = onMessage;
   },
 }));

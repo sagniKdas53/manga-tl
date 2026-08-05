@@ -57,7 +57,10 @@ describe("UserManagementModal", () => {
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith("/api/auth/me", expect.objectContaining({ method: "PUT" }));
+      expect(mockSafeFetch).toHaveBeenCalledWith(
+        "/api/auth/me",
+        expect.objectContaining({ method: "PUT" }),
+      );
       expect(defaultProps.onUserUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ displayName: "Jane Updated" }),
       );
@@ -99,10 +102,14 @@ describe("UserManagementModal", () => {
     const deleteBtn = screen.getByRole("button", { name: "Delete Account" });
     fireEvent.click(deleteBtn);
 
-    const confirmInput = screen.getByPlaceholderText('Type "DELETE" to confirm');
+    const confirmInput = screen.getByPlaceholderText(
+      'Type "DELETE" to confirm',
+    );
     fireEvent.change(confirmInput, { target: { value: "DELETE" } });
 
-    const permDeleteBtn = screen.getByRole("button", { name: "Permanently Delete" });
+    const permDeleteBtn = screen.getByRole("button", {
+      name: "Permanently Delete",
+    });
     fireEvent.click(permDeleteBtn);
 
     await waitFor(() => {

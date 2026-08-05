@@ -112,7 +112,10 @@ describe("ChapterCardGrid", () => {
 
     const editBtns = screen.getAllByTitle("Edit Chapter");
     fireEvent.click(editBtns[0]);
-    expect(mockOnEditChapter).toHaveBeenCalledWith(mockChapters[0], expect.anything());
+    expect(mockOnEditChapter).toHaveBeenCalledWith(
+      mockChapters[0],
+      expect.anything(),
+    );
 
     const deleteBtns = screen.getAllByTitle("Delete Chapter");
     fireEvent.click(deleteBtns[0]);
