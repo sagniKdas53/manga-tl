@@ -48,6 +48,7 @@ export const NavBar: React.FC<NavBarProps> = ({
 
   return (
     <AppBar
+      component="nav"
       position="sticky"
       color="inherit"
       sx={{ bgcolor: "background.paper", color: "text.primary" }}

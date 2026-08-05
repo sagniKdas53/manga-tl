@@ -495,6 +495,30 @@ function AppContent() {
               />
               <TranslationToastWatcher />
               <div className="app-container">
+                {/*
+                  The first focusable thing on the page: off-screen until focused, then
+                  pinned to the top-left. Gives keyboard users a way past the nav that
+                  does not depend on tabbing through every control in it.
+                */}
+                <Box
+                  component="a"
+                  href="#main-content"
+                  sx={{
+                    position: "absolute",
+                    left: -9999,
+                    top: 0,
+                    zIndex: (t) => t.zIndex.tooltip + 1,
+                    px: 2,
+                    py: 1,
+                    bgcolor: "background.paper",
+                    color: "text.primary",
+                    borderRadius: 1,
+                    textDecoration: "none",
+                    "&:focus": { left: 8, top: 8 },
+                  }}
+                >
+                  Skip to main content
+                </Box>
                 {/* Navigation Bar */}
                 {!readerMatch && (
                   <NavBar
@@ -507,132 +531,143 @@ function AppContent() {
                   />
                 )}
 
-                <ErrorBoundary resetKey={location.pathname}>
-                  <Suspense
-                    fallback={<RouteFallback pathname={location.pathname} />}
-                  >
-                    <Routes>
-                      <Route
-                        path="/login"
-                        element={<Auth onLoginSuccess={setUser} />}
-                      />
-                      <Route
-                        path="/"
-                        element={
-                          user ? (
-                            <Dashboard
-                              user={user}
-                              seriesList={seriesList}
-                              setSeriesList={setSeriesList}
-                              onSelectSeries={setSelectedSeries}
-                              mode={mode}
-                            />
-                          ) : null
-                        }
-                      />
-                      <Route
-                        path="/series/:seriesId"
-                        element={
-                          user ? (
-                            <SeriesDetails
-                              user={user}
-                              selectedSeries={selectedSeries}
-                              setSelectedSeries={setSelectedSeries}
-                              chapters={chapters}
-                              setChapters={setChapters}
-                              onSelectChapter={setSelectedChapter}
-                              isLoadingDetails={isLoadingDetails}
-                            />
-                          ) : null
-                        }
-                      />
-                      <Route
-                        path="/series/:seriesId/:slug"
-                        element={
-                          user ? (
-                            <SeriesDetails
-                              user={user}
-                              selectedSeries={selectedSeries}
-                              setSelectedSeries={setSelectedSeries}
-                              chapters={chapters}
-                              setChapters={setChapters}
-                              onSelectChapter={setSelectedChapter}
-                              isLoadingDetails={isLoadingDetails}
-                            />
-                          ) : null
-                        }
-                      />
-                      <Route
-                        path="/chapters/:chapterId"
-                        element={
-                          user ? (
-                            <ChapterGallery
-                              user={user}
-                              selectedSeries={selectedSeries}
-                              selectedChapter={selectedChapter}
-                              setSelectedChapter={setSelectedChapter}
-                              pages={pages}
-                              setPages={setPages}
-                              onSelectPage={NOOP}
-                              isLoadingDetails={isLoadingDetails}
-                              mode={mode}
-                            />
-                          ) : null
-                        }
-                      />
-                      <Route
-                        path="/chapters/:chapterId/:slug"
-                        element={
-                          user ? (
-                            <ChapterGallery
-                              user={user}
-                              selectedSeries={selectedSeries}
-                              selectedChapter={selectedChapter}
-                              setSelectedChapter={setSelectedChapter}
-                              pages={pages}
-                              setPages={setPages}
-                              onSelectPage={NOOP}
-                              isLoadingDetails={isLoadingDetails}
-                              mode={mode}
-                            />
-                          ) : null
-                        }
-                      />
-                      <Route
-                        path="/chapters/:chapterId/reader/:pageNumber"
-                        element={
-                          user ? (
-                            <Reader
-                              user={user}
-                              selectedSeries={selectedSeries}
-                              selectedChapter={selectedChapter}
-                              chapters={chapters}
-                              pages={pages}
-                              setPages={setPages}
-                              theme={mode}
-                            />
-                          ) : null
-                        }
-                      />
-                      <Route
-                        path="/chapters/:chapterId/:slug/reader/:pageNumber"
-                        element={
-                          user ? (
-                            <Reader
-                              user={user}
-                              selectedSeries={selectedSeries}
-                              selectedChapter={selectedChapter}
-                              chapters={chapters}
-                              pages={pages}
-                              setPages={setPages}
-                              theme={mode}
-                            />
-                          ) : null
-                        }
-                      />
-                    </Routes>
-                  </Suspense>
-                </ErrorBoundary>
+                {/*
+                  The skip link's target, and the app's only `main` landmark. tabIndex -1
+                  makes it programmatically focusable so the link actually moves focus
+                  rather than just moving the viewport.
+                */}
+                <Box
+                  component="main"
+                  id="main-content"
+                  tabIndex={-1}
+                >
+                  <ErrorBoundary resetKey={location.pathname}>
+                    <Suspense
+                      fallback={<RouteFallback pathname={location.pathname} />}
+                    >
+                      <Routes>
+                        <Route
+                          path="/login"
+                          element={<Auth onLoginSuccess={setUser} />}
+                        />
+                        <Route
+                          path="/"
+                          element={
+                            user ? (
+                              <Dashboard
+                                user={user}
+                                seriesList={seriesList}
+                                setSeriesList={setSeriesList}
+                                onSelectSeries={setSelectedSeries}
+                                mode={mode}
+                              />
+                            ) : null
+                          }
+                        />
+                        <Route
+                          path="/series/:seriesId"
+                          element={
+                            user ? (
+                              <SeriesDetails
+                                user={user}
+                                selectedSeries={selectedSeries}
+                                setSelectedSeries={setSelectedSeries}
+                                chapters={chapters}
+                                setChapters={setChapters}
+                                onSelectChapter={setSelectedChapter}
+                                isLoadingDetails={isLoadingDetails}
+                              />
+                            ) : null
+                          }
+                        />
+                        <Route
+                          path="/series/:seriesId/:slug"
+                          element={
+                            user ? (
+                              <SeriesDetails
+                                user={user}
+                                selectedSeries={selectedSeries}
+                                setSelectedSeries={setSelectedSeries}
+                                chapters={chapters}
+                                setChapters={setChapters}
+                                onSelectChapter={setSelectedChapter}
+                                isLoadingDetails={isLoadingDetails}
+                              />
+                            ) : null
+                          }
+                        />
+                        <Route
+                          path="/chapters/:chapterId"
+                          element={
+                            user ? (
+                              <ChapterGallery
+                                user={user}
+                                selectedSeries={selectedSeries}
+                                selectedChapter={selectedChapter}
+                                setSelectedChapter={setSelectedChapter}
+                                pages={pages}
+                                setPages={setPages}
+                                onSelectPage={NOOP}
+                                isLoadingDetails={isLoadingDetails}
+                                mode={mode}
+                              />
+                            ) : null
+                          }
+                        />
+                        <Route
+                          path="/chapters/:chapterId/:slug"
+                          element={
+                            user ? (
+                              <ChapterGallery
+                                user={user}
+                                selectedSeries={selectedSeries}
+                                selectedChapter={selectedChapter}
+                                setSelectedChapter={setSelectedChapter}
+                                pages={pages}
+                                setPages={setPages}
+                                onSelectPage={NOOP}
+                                isLoadingDetails={isLoadingDetails}
+                                mode={mode}
+                              />
+                            ) : null
+                          }
+                        />
+                        <Route
+                          path="/chapters/:chapterId/reader/:pageNumber"
+                          element={
+                            user ? (
+                              <Reader
+                                user={user}
+                                selectedSeries={selectedSeries}
+                                selectedChapter={selectedChapter}
+                                chapters={chapters}
+                                pages={pages}
+                                setPages={setPages}
+                                theme={mode}
+                              />
+                            ) : null
+                          }
+                        />
+                        <Route
+                          path="/chapters/:chapterId/:slug/reader/:pageNumber"
+                          element={
+                            user ? (
+                              <Reader
+                                user={user}
+                                selectedSeries={selectedSeries}
+                                selectedChapter={selectedChapter}
+                                chapters={chapters}
+                                pages={pages}
+                                setPages={setPages}
+                                theme={mode}
+                              />
+                            ) : null
+                          }
+                        />
+                      </Routes>
+                    </Suspense>
+                  </ErrorBoundary>
+                </Box>
 
                 <Suspense fallback={<LoadingSpinner />}>
                   {isSettingsOpen && (
