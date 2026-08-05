@@ -434,51 +434,50 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               gap: 1,
             }}
           >
+            {/*
+              These nine surfaces are now MUI Box, but every value that changes while a
+              drag is in flight — handle positions, the hue-driven backgrounds — stays on
+              the `style` prop rather than moving to `sx`. sx compiles through emotion and
+              mints a class per distinct value, which on a pointermove handler is a new
+              class per frame. Static styling is on sx; per-frame values are inline.
+            */}
             {/* Saturation / Brightness SV Square */}
-            <div
+            <Box
               ref={svRef}
               data-testid="sv-picker"
               onMouseDown={handleSvMouseDown}
               onTouchStart={handleSvMouseDown}
-              style={{
+              sx={{
                 position: "relative",
                 width: "100%",
                 height: "110px",
-                backgroundColor: `hsl(${h}, 100%, 50%)`,
                 borderRadius: "4px",
                 cursor: "crosshair",
                 userSelect: "none",
                 overflow: "hidden",
               }}
+              style={{ backgroundColor: `hsl(${h}, 100%, 50%)` }}
             >
               {/* White overlay */}
-              <div
-                style={{
+              <Box
+                sx={{
                   position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
+                  inset: 0,
                   background: "linear-gradient(to right, #fff, transparent)",
                 }}
               />
               {/* Black overlay */}
-              <div
-                style={{
+              <Box
+                sx={{
                   position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
+                  inset: 0,
                   background: "linear-gradient(to top, #000, transparent)",
                 }}
               />
               {/* Target Pointer Handle */}
-              <div
-                style={{
+              <Box
+                sx={{
                   position: "absolute",
-                  left: `${s}%`,
-                  top: `${100 - v}%`,
                   width: "10px",
                   height: "10px",
                   borderRadius: "50%",
@@ -486,18 +485,22 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                   boxShadow: "0 0 3px rgba(0,0,0,0.5)",
                   transform: "translate(-5px, -5px)",
                   pointerEvents: "none",
+                }}
+                style={{
+                  left: `${s}%`,
+                  top: `${100 - v}%`,
                   backgroundColor: hsvaToHex(h, s, v, 1),
                 }}
               />
-            </div>
+            </Box>
 
             {/* Rainbow Hue Slider Bar */}
-            <div
+            <Box
               ref={hueRef}
               data-testid="hue-slider"
               onMouseDown={handleHueMouseDown}
               onTouchStart={handleHueMouseDown}
-              style={{
+              sx={{
                 position: "relative",
                 width: "100%",
                 height: "12px",
@@ -509,10 +512,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               }}
             >
               {/* Hue slider handle */}
-              <div
-                style={{
+              <Box
+                sx={{
                   position: "absolute",
-                  left: `${(h / 360) * 100}%`,
                   top: "50%",
                   width: "12px",
                   height: "12px",
@@ -521,18 +523,21 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                   boxShadow: "0 0 2px rgba(0,0,0,0.5)",
                   transform: "translate(-6px, -50%)",
                   pointerEvents: "none",
+                }}
+                style={{
+                  left: `${(h / 360) * 100}%`,
                   backgroundColor: `hsl(${h}, 100%, 50%)`,
                 }}
               />
-            </div>
+            </Box>
 
             {/* Alpha Slider Bar */}
-            <div
+            <Box
               ref={alphaRef}
               data-testid="alpha-slider"
               onMouseDown={handleAlphaMouseDown}
               onTouchStart={handleAlphaMouseDown}
-              style={{
+              sx={{
                 position: "relative",
                 width: "100%",
                 height: "12px",
@@ -545,22 +550,16 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 userSelect: "none",
               }}
             >
-              <div
+              <Box
+                sx={{ position: "absolute", inset: 0, borderRadius: "6px" }}
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  borderRadius: "6px",
                   background: `linear-gradient(to right, transparent, ${hsvaToHex(h, s, v, 1)})`,
                 }}
               />
               {/* Alpha slider handle */}
-              <div
-                style={{
+              <Box
+                sx={{
                   position: "absolute",
-                  left: `${a * 100}%`,
                   top: "50%",
                   width: "12px",
                   height: "12px",
@@ -569,10 +568,13 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                   boxShadow: "0 0 2px rgba(0,0,0,0.5)",
                   transform: "translate(-6px, -50%)",
                   pointerEvents: "none",
+                }}
+                style={{
+                  left: `${a * 100}%`,
                   backgroundColor: hsvaToHex(h, s, v, a),
                 }}
               />
-            </div>
+            </Box>
 
             {/* Presets & Swatches Section */}
             <Box
