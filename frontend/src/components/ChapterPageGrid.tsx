@@ -1,4 +1,8 @@
 import React from "react";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import Chip from "@mui/material/Chip";
+import Grid from "@mui/material/Grid";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import CloseIcon from "@mui/icons-material/Close";
@@ -15,6 +19,17 @@ export interface ChapterPageGridProps {
   onNavigate?: (path: string) => void;
 }
 
+/**
+ * Overlay controls reveal on hover, and stay visible whenever anything inside them has focus.
+ * `:focus-within` is what makes them reachable by keyboard at all — an opacity-0 control is
+ * still in the tab order, so without it you could focus a delete button you cannot see.
+ */
+const REVEAL_ON_HOVER = {
+  opacity: 0,
+  transition: "opacity 0.2s ease",
+  ".MuiCard-root:hover &, .MuiCard-root:focus-within &": { opacity: 1 },
+};
+
 const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
   pages,
   onDeletePage,
@@ -25,69 +40,130 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
     <>
       <Typography
         variant="h5"
-        sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 600 }}
+        sx={{ fontWeight: 600 }}
       >
         Pages ({pages.length})
       </Typography>
-      <div className="pages-grid">
+      <Grid
+        container
+        spacing={2.5}
+        sx={{ mt: 0.5 }}
+      >
         {pages.map((p, idx) => (
-          <div
+          <Grid
             key={p.id}
-            className="page-thumbnail-container glass"
-            onClick={() => {
-              onSelectPage(p, idx);
-            }}
-            style={{ position: "relative" }}
+            size={{ xs: 6, sm: 4, md: 3, lg: 2 }}
           >
-            <LazyImage
-              src={p.thumbnailUrl}
-              className="page-thumbnail"
-              alt={`Page ${p.pageNumber}`}
-            />
-            <span className="page-num-tag">Page {p.pageNumber}</span>
-
-            <IconButton
-              className="delete-page-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeletePage(p.id);
+            <Card
+              onClick={() => {
+                onSelectPage(p, idx);
               }}
-              size="small"
-              sx={{ color: "white" }}
-              aria-label="Delete page"
-              title="Delete page"
+              sx={{
+                position: "relative",
+                aspectRatio: "3/4",
+                overflow: "hidden",
+                cursor: "pointer",
+                "&:hover img": { transform: "scale(1.05)" },
+              }}
             >
-              <CloseIcon fontSize="small" />
-            </IconButton>
+              <LazyImage
+                src={p.thumbnailUrl}
+                alt={`Page ${p.pageNumber}`}
+                sx={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  transition: "transform 0.3s ease",
+                }}
+              />
+              <Chip
+                label={`Page ${p.pageNumber}`}
+                size="small"
+                sx={{
+                  position: "absolute",
+                  bottom: 8,
+                  left: 8,
+                  fontWeight: 700,
+                  bgcolor: "rgba(0, 0, 0, 0.7)",
+                  color: "#f3f4f6",
+                }}
+              />
 
-            <div
-              className="reorder-controls"
-              onClick={(e) => e.stopPropagation()}
-            >
               <IconButton
-                className="reorder-btn"
-                onClick={() => onMovePage(idx, "left")}
-                disabled={idx === 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeletePage(p.id);
+                }}
                 size="small"
-                aria-label="Move page left"
-                title="Move page left"
+                aria-label="Delete page"
+                title="Delete page"
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  color: "common.white",
+                  bgcolor: "rgba(239, 68, 68, 0.9)",
+                  "&:hover": { bgcolor: "error.main" },
+                  ...REVEAL_ON_HOVER,
+                }}
               >
-                <ChevronLeftIcon fontSize="small" />
+                <CloseIcon fontSize="small" />
               </IconButton>
-              <IconButton
-                className="reorder-btn"
-                onClick={() => onMovePage(idx, "right")}
-                disabled={idx === pages.length - 1}
-                size="small"
-                aria-label="Move page right"
-                title="Move page right"
+
+              <Box
+                onClick={(e) => e.stopPropagation()}
+                sx={{
+                  position: "absolute",
+                  top: "50%",
+                  left: 0,
+                  right: 0,
+                  transform: "translateY(-50%)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  px: 1.5,
+                  zIndex: 5,
+                  // The band spans the full width across the middle of the card. Without this
+                  // it would swallow the click that opens the page.
+                  pointerEvents: "none",
+                  "& .MuiIconButton-root": { pointerEvents: "auto" },
+                  ...REVEAL_ON_HOVER,
+                }}
               >
-                <ChevronRightIcon fontSize="small" />
-              </IconButton>
-            </div>
-          </div>
+                <IconButton
+                  onClick={() => onMovePage(idx, "left")}
+                  disabled={idx === 0}
+                  size="small"
+                  aria-label="Move page left"
+                  title="Move page left"
+                  sx={{
+                    bgcolor: "primary.main",
+                    color: "common.white",
+                    boxShadow: 2,
+                    "&:hover": { bgcolor: "primary.dark" },
+                  }}
+                >
+                  <ChevronLeftIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  onClick={() => onMovePage(idx, "right")}
+                  disabled={idx === pages.length - 1}
+                  size="small"
+                  aria-label="Move page right"
+                  title="Move page right"
+                  sx={{
+                    bgcolor: "primary.main",
+                    color: "common.white",
+                    boxShadow: 2,
+                    "&:hover": { bgcolor: "primary.dark" },
+                  }}
+                >
+                  <ChevronRightIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            </Card>
+          </Grid>
         ))}
-      </div>
+      </Grid>
     </>
   );
 };
