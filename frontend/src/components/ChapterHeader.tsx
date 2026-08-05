@@ -70,8 +70,8 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
   // -------------------------------------------------------------------------------------
   // MODEL INHERITANCE LOGIC:
   // The backend already resolves the model inheritance (Global -> Series -> Chapter)
-  // and returns it in `selectedChapter.resolvedQa`. 
-  // However, we fetch `settings` here to dynamically check `providerModelsMap` 
+  // and returns it in `selectedChapter.resolvedQa`.
+  // However, we fetch `settings` here to dynamically check `providerModelsMap`
   // so we know whether to hide the `QA VLM` chip if the provider doesn't support VLMs.
   // -------------------------------------------------------------------------------------
   const qaVlmModels =
@@ -267,28 +267,31 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       }
                     />
                   </Grid>
-                {usesOpenRouter && (
-                  <Grid>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Strategy
-                    </Typography>
-                    {routingStrategy ? (
-                      <Chip
-                        size="small"
-                        color="secondary"
-                        label={routingStrategy}
-                      />
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        N/A
+                  {usesOpenRouter && (
+                    <Grid>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        gutterBottom
+                      >
+                        Strategy
                       </Typography>
-                    )}
-                  </Grid>
-                )}
+                      {routingStrategy ? (
+                        <Chip
+                          size="small"
+                          color="secondary"
+                          label={routingStrategy}
+                        />
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                        >
+                          N/A
+                        </Typography>
+                      )}
+                    </Grid>
+                  )}
                   <Grid>
                     <Typography
                       variant="body2"
@@ -303,7 +306,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                         label={`${selectedChapter.resolvedQa.mode} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
                       />
                     ) : (
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
                         N/A
                       </Typography>
                     )}
@@ -358,18 +364,25 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                       <Chip
                         size="small"
                         variant="outlined"
-                        disabled={selectedChapter.resolvedQa?.mode === "vlm" || selectedChapter.resolvedQa?.mode === "none"}
+                        disabled={
+                          selectedChapter.resolvedQa?.mode === "vlm" ||
+                          selectedChapter.resolvedQa?.mode === "none"
+                        }
                         label={`QA LLM: ${selectedChapter.resolvedQa.llmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
                       />
                     )}
-                    {selectedChapter.resolvedQa?.vlmModel && !qaVlmCapabilityMissing && (
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        disabled={selectedChapter.resolvedQa?.mode === "llm" || selectedChapter.resolvedQa?.mode === "none"}
-                        label={`QA VLM: ${selectedChapter.resolvedQa.vlmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
-                      />
-                    )}
+                    {selectedChapter.resolvedQa?.vlmModel &&
+                      !qaVlmCapabilityMissing && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          disabled={
+                            selectedChapter.resolvedQa?.mode === "llm" ||
+                            selectedChapter.resolvedQa?.mode === "none"
+                          }
+                          label={`QA VLM: ${selectedChapter.resolvedQa.vlmModel} ${selectedChapter.resolvedQa.source === "chapter" ? "(overridden)" : "(inherited)"}`}
+                        />
+                      )}
                   </Stack>
                 </Box>
 

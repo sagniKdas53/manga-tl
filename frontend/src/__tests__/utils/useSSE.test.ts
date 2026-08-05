@@ -236,7 +236,9 @@ describe("useSSE", () => {
       expect(global.EventSource).toHaveBeenCalledTimes(2);
 
       // Second failure must wait 10s — under the old flat 5s it would already have reconnected.
-      act(() => mockEventSourceInstances[1].triggerError(new Error("still down")));
+      act(() =>
+        mockEventSourceInstances[1].triggerError(new Error("still down")),
+      );
       act(() => void vi.advanceTimersByTime(5000));
       await flushTicketRequest();
       expect(global.EventSource).toHaveBeenCalledTimes(2);
@@ -258,7 +260,9 @@ describe("useSSE", () => {
       act(() => mockEventSourceInstances[1].triggerOpen());
 
       // A later failure starts from 5s again rather than inheriting the old streak.
-      act(() => mockEventSourceInstances[1].triggerError(new Error("blip again")));
+      act(() =>
+        mockEventSourceInstances[1].triggerError(new Error("blip again")),
+      );
       act(() => void vi.advanceTimersByTime(5000));
       await flushTicketRequest();
       expect(global.EventSource).toHaveBeenCalledTimes(3);

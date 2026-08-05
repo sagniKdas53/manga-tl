@@ -55,7 +55,9 @@ describe("CreateSeriesDialog", () => {
 
   it("renders when open", () => {
     render(<CreateSeriesDialog {...defaultProps} />);
-    expect(screen.getByRole("heading", { name: "Create Series" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Create Series" }),
+    ).toBeInTheDocument();
   });
 
   it("submits new series payload on Create Series click", async () => {

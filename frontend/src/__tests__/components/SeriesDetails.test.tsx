@@ -21,7 +21,10 @@ vi.mock("../../utils", () => ({
       json: () => Promise.resolve({}),
     }),
   toSlug: (s: string) => s.toLowerCase(),
-  resolveOverride: (_v1: unknown, v2: unknown) => ({ value: String(v2 || ""), source: "series" }),
+  resolveOverride: (_v1: unknown, v2: unknown) => ({
+    value: String(v2 || ""),
+    source: "series",
+  }),
 }));
 
 describe("SeriesDetails", () => {
@@ -118,7 +121,9 @@ describe("SeriesDetails", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Add Chapter/ }));
-    expect(screen.getByRole("heading", { name: "Add Chapter" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Add Chapter" }),
+    ).toBeInTheDocument();
   });
 
   it("opens import chapter dialog", () => {
@@ -135,7 +140,9 @@ describe("SeriesDetails", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Import Chapter/ }));
-    expect(screen.getByRole("heading", { name: /Import Chapter/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /Import Chapter/ }),
+    ).toBeInTheDocument();
   });
 
   it("opens edit series dialog", () => {
@@ -152,7 +159,9 @@ describe("SeriesDetails", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Edit Series/ }));
-    expect(screen.getByRole("heading", { name: "Edit Series" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Edit Series" }),
+    ).toBeInTheDocument();
   });
 
   it("opens delete confirm modal on delete series click", () => {
@@ -171,6 +180,8 @@ describe("SeriesDetails", () => {
     const deleteBtn = screen.getByRole("button", { name: /Delete Series/ });
     fireEvent.click(deleteBtn);
 
-    expect(screen.getByText(/Are you sure you want to delete this series/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Are you sure you want to delete this series/),
+    ).toBeInTheDocument();
   });
 });

@@ -27,7 +27,10 @@ vi.mock("react-router-dom", () => ({
 }));
 
 vi.mock("../../components/useNotifications", () => ({
-  useNotifications: () => ({ notifications: [], subscribe: vi.fn(() => vi.fn()) }),
+  useNotifications: () => ({
+    notifications: [],
+    subscribe: vi.fn(() => vi.fn()),
+  }),
 }));
 
 vi.mock("../../components/ToastContext", () => ({
@@ -41,7 +44,10 @@ vi.mock("../../components/ToastContext", () => ({
 const mockSafeFetch = vi.fn();
 vi.mock("../../utils", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../utils")>();
-  return { ...actual, safeFetch: (...args: unknown[]) => mockSafeFetch(...args) };
+  return {
+    ...actual,
+    safeFetch: (...args: unknown[]) => mockSafeFetch(...args),
+  };
 });
 
 const mockUser = {
@@ -147,7 +153,11 @@ function stubCanvas() {
     () => ctx,
   ) as unknown as HTMLCanvasElement["getContext"];
   HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
-    cb(new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: "image/png" }));
+    cb(
+      new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], {
+        type: "image/png",
+      }),
+    );
   } as HTMLCanvasElement["toBlob"];
 }
 
@@ -166,11 +176,14 @@ describe("Reader project ZIP export", () => {
     });
 
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    vi.spyOn(URL, "createObjectURL").mockImplementation((obj: Blob | MediaSource) => {
-      // The last object URL minted is the archive itself; the originals come first.
-      if (obj instanceof Blob && obj.type === "application/zip") capturedZip = obj;
-      return "blob:http://localhost/zip";
-    });
+    vi.spyOn(URL, "createObjectURL").mockImplementation(
+      (obj: Blob | MediaSource) => {
+        // The last object URL minted is the archive itself; the originals come first.
+        if (obj instanceof Blob && obj.type === "application/zip")
+          capturedZip = obj;
+        return "blob:http://localhost/zip";
+      },
+    );
 
     mockSafeFetch.mockImplementation((url: string) => {
       // Layers and original dimensions both arrive on the page-details response.
@@ -190,7 +203,8 @@ describe("Reader project ZIP export", () => {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve([]),
-        blob: () => Promise.resolve(new Blob(["original-bytes"], { type: "image/jpeg" })),
+        blob: () =>
+          Promise.resolve(new Blob(["original-bytes"], { type: "image/jpeg" })),
       });
     });
   });
@@ -212,8 +226,14 @@ describe("Reader project ZIP export", () => {
     );
 
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
-    Object.defineProperty(img, "naturalWidth", { value: 1200, configurable: true });
-    Object.defineProperty(img, "naturalHeight", { value: 1600, configurable: true });
+    Object.defineProperty(img, "naturalWidth", {
+      value: 1200,
+      configurable: true,
+    });
+    Object.defineProperty(img, "naturalHeight", {
+      value: 1600,
+      configurable: true,
+    });
     fireEvent.load(img);
 
     fireEvent.click(await screen.findByText("Export Project (ZIP)"));

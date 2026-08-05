@@ -42,22 +42,27 @@ interface UploadStateContextValue {
 }
 
 /** Legacy combined shape for backwards compatibility */
-interface UploadContextValue extends UploadDispatchContextValue, UploadStateContextValue {}
+interface UploadContextValue
+  extends UploadDispatchContextValue, UploadStateContextValue {}
 
-const UploadDispatchContext = createContext<UploadDispatchContextValue | null>(null);
+const UploadDispatchContext = createContext<UploadDispatchContextValue | null>(
+  null,
+);
 const UploadStateContext = createContext<UploadStateContextValue | null>(null);
 
 /** Use only the stable dispatch functions — zero re-renders from progress ticks */
 export const useUploadDispatch = (): UploadDispatchContextValue => {
   const ctx = useContext(UploadDispatchContext);
-  if (!ctx) throw new Error("useUploadDispatch must be used inside <UploadProvider>");
+  if (!ctx)
+    throw new Error("useUploadDispatch must be used inside <UploadProvider>");
   return ctx;
 };
 
 /** Use the reactive state (items, showPanel, isExpanded) */
 export const useUploadState = (): UploadStateContextValue => {
   const ctx = useContext(UploadStateContext);
-  if (!ctx) throw new Error("useUploadState must be used inside <UploadProvider>");
+  if (!ctx)
+    throw new Error("useUploadState must be used inside <UploadProvider>");
   return ctx;
 };
 
@@ -122,151 +127,151 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
     <UploadDispatchContext.Provider value={dispatchValue}>
       <UploadStateContext.Provider value={stateValue}>
         {children}
-      {showPanel && (
-        <Paper
-          sx={{
-            position: "fixed",
-            bottom: 24,
-            right: 24,
-            width: 360,
-            zIndex: 10000,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            boxShadow: "0 12px 32px rgba(0,0,0,0.3)",
-          }}
-        >
-          <Box
+        {showPanel && (
+          <Paper
             sx={{
-              px: 2,
-              py: 1,
+              position: "fixed",
+              bottom: 24,
+              right: 24,
+              width: 360,
+              zIndex: 10000,
+              overflow: "hidden",
               display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              cursor: "pointer",
-              userSelect: "none",
+              flexDirection: "column",
+              boxShadow: "0 12px 32px rgba(0,0,0,0.3)",
             }}
-            onClick={() => setIsExpanded(!isExpanded)}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  bgcolor: items.some(
-                    (i) => i.status === "uploading" || i.status === "pending",
-                  )
-                    ? "warning.main"
-                    : "success.main",
-                }}
-              />
-              <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 600 }}
-              >
-                {items.some(
-                  (i) => i.status === "uploading" || i.status === "pending",
-                )
-                  ? `Uploading ${items.filter((i) => i.status === "uploading" || i.status === "pending").length} file(s)...`
-                  : "Uploads Completed"}
-              </Typography>
-            </Box>
-            <Box
-              sx={{ display: "flex", alignItems: "center", gap: 1 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <IconButton
-                aria-label={
-                  isExpanded ? "Collapse upload list" : "Expand upload list"
-                }
-                aria-expanded={isExpanded}
-                size="small"
-                onClick={() => setIsExpanded(!isExpanded)}
-              >
-                {isExpanded ? (
-                  <ExpandLessIcon fontSize="small" />
-                ) : (
-                  <ExpandMoreIcon fontSize="small" />
-                )}
-              </IconButton>
-              <IconButton
-                aria-label="Dismiss uploads"
-                size="small"
-                onClick={dismiss}
-              >
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Box>
-          </Box>
-
-          <Collapse in={isExpanded}>
             <Box
               sx={{
-                p: 2,
+                px: 2,
+                py: 1,
                 display: "flex",
-                flexDirection: "column",
-                gap: 1.5,
-                maxHeight: 300,
-                overflowY: "auto",
+                justifyContent: "space-between",
+                alignItems: "center",
+                cursor: "pointer",
+                userSelect: "none",
               }}
+              onClick={() => setIsExpanded(!isExpanded)}
             >
-              {items.map((item) => (
-                <Box key={item.id}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        maxWidth: "75%",
-                      }}
-                      title={item.name}
-                    >
-                      {item.name}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontWeight: 600,
-                        color:
-                          item.status === "completed"
-                            ? "success.main"
-                            : item.status === "failed"
-                              ? "error.main"
-                              : "text.secondary",
-                      }}
-                    >
-                      {item.status === "uploading"
-                        ? `${item.progress}%`
-                        : item.status}
-                    </Typography>
-                  </Box>
-                  <LinearProgress
-                    variant="determinate"
-                    value={item.progress}
-                    color={
-                      item.status === "failed"
-                        ? "error"
-                        : item.status === "completed"
-                          ? "success"
-                          : "primary"
-                    }
-                    sx={{ height: 4, borderRadius: 2, mt: 0.25 }}
-                  />
-                </Box>
-              ))}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    bgcolor: items.some(
+                      (i) => i.status === "uploading" || i.status === "pending",
+                    )
+                      ? "warning.main"
+                      : "success.main",
+                  }}
+                />
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 600 }}
+                >
+                  {items.some(
+                    (i) => i.status === "uploading" || i.status === "pending",
+                  )
+                    ? `Uploading ${items.filter((i) => i.status === "uploading" || i.status === "pending").length} file(s)...`
+                    : "Uploads Completed"}
+                </Typography>
+              </Box>
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <IconButton
+                  aria-label={
+                    isExpanded ? "Collapse upload list" : "Expand upload list"
+                  }
+                  aria-expanded={isExpanded}
+                  size="small"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                >
+                  {isExpanded ? (
+                    <ExpandLessIcon fontSize="small" />
+                  ) : (
+                    <ExpandMoreIcon fontSize="small" />
+                  )}
+                </IconButton>
+                <IconButton
+                  aria-label="Dismiss uploads"
+                  size="small"
+                  onClick={dismiss}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
             </Box>
-          </Collapse>
-        </Paper>
-      )}
+
+            <Collapse in={isExpanded}>
+              <Box
+                sx={{
+                  p: 2,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1.5,
+                  maxHeight: 300,
+                  overflowY: "auto",
+                }}
+              >
+                {items.map((item) => (
+                  <Box key={item.id}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "75%",
+                        }}
+                        title={item.name}
+                      >
+                        {item.name}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 600,
+                          color:
+                            item.status === "completed"
+                              ? "success.main"
+                              : item.status === "failed"
+                                ? "error.main"
+                                : "text.secondary",
+                        }}
+                      >
+                        {item.status === "uploading"
+                          ? `${item.progress}%`
+                          : item.status}
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={item.progress}
+                      color={
+                        item.status === "failed"
+                          ? "error"
+                          : item.status === "completed"
+                            ? "success"
+                            : "primary"
+                      }
+                      sx={{ height: 4, borderRadius: 2, mt: 0.25 }}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            </Collapse>
+          </Paper>
+        )}
       </UploadStateContext.Provider>
     </UploadDispatchContext.Provider>
   );

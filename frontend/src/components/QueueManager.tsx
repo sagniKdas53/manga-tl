@@ -34,7 +34,7 @@ interface Job {
   type: string;
   imageId: string;
   status:
-  "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
+    "PENDING" | "PROCESSING" | "FAILED" | "PAUSED" | "COMPLETED" | "DELETED";
   payload: string | null;
   error: string | null;
   attempt: number;
@@ -163,7 +163,10 @@ interface JobLocation {
   pageLabel: string | null;
 }
 
-const renderJobLocation = (job: Job, parsed: ParsedPayload | null): JobLocation => {
+const renderJobLocation = (
+  job: Job,
+  parsed: ParsedPayload | null,
+): JobLocation => {
   if (!parsed) return { chapterPath: null, pageLabel: null };
   const parts: string[] = [];
   if (parsed.seriesTitle) parts.push(parsed.seriesTitle);
@@ -208,7 +211,6 @@ const renderProviderModel = (job: Job, parsed: ParsedPayload | null) => {
   return providerModel || null;
 };
 
-
 const formatErrorMessage = (error: string) => {
   if (!error) return "";
   if (
@@ -225,13 +227,20 @@ const formatErrorMessage = (error: string) => {
   ) {
     return "Internal API returned 500 error.";
   }
-  if (error.includes("402") && (error.includes("Payment Required") || error.includes("Insufficient Quota"))) {
+  if (
+    error.includes("402") &&
+    (error.includes("Payment Required") || error.includes("Insufficient Quota"))
+  ) {
     return "Provider Error (402): Out of credits or payment required.";
   }
   if (error.includes("404") && error.includes("Not Found")) {
     return "Provider Error (404): Resource or model not found.";
   }
-  if (error.includes("401") || error.includes("Unauthorized") || error.includes("AuthenticationError")) {
+  if (
+    error.includes("401") ||
+    error.includes("Unauthorized") ||
+    error.includes("AuthenticationError")
+  ) {
     return "Provider Error (401): Invalid API key or unauthorized.";
   }
   const match = error.match(/([a-zA-Z]+Error):\s*(.+)/);
@@ -290,7 +299,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     title: "",
     message: "",
     isDangerous: false,
-    action: () => { },
+    action: () => {},
   });
 
   useDependencyLogger(
@@ -303,58 +312,63 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     "QueueManager",
   );
 
-  const sortJobs = useCallback((jobsList: Job[]) => {
-    const statusOrder: Record<string, number> = {
-      PROCESSING: 1,
-      PENDING: 1,
-      COMPLETED: 1,
-      PAUSED: 2,
-      FAILED: 3,
-    };
+  const sortJobs = useCallback(
+    (jobsList: Job[]) => {
+      const statusOrder: Record<string, number> = {
+        PROCESSING: 1,
+        PENDING: 1,
+        COMPLETED: 1,
+        PAUSED: 2,
+        FAILED: 3,
+      };
 
-    // Group first, so a job's status changing (e.g. pausing) can never
-    // split it away from the rest of its chapter's jobs.
-    const groups = new Map<string, Job[]>();
-    const groupOrder: string[] = [];
-    jobsList.forEach((job) => {
-      const parsed = getParsed(job);
-      const key = renderJobLocation(job, parsed).chapterPath || `__solo__${job.id}`;
-      if (!groups.has(key)) {
-        groups.set(key, []);
-        groupOrder.push(key);
-      }
-      groups.get(key)!.push(job);
-    });
+      // Group first, so a job's status changing (e.g. pausing) can never
+      // split it away from the rest of its chapter's jobs.
+      const groups = new Map<string, Job[]>();
+      const groupOrder: string[] = [];
+      jobsList.forEach((job) => {
+        const parsed = getParsed(job);
+        const key =
+          renderJobLocation(job, parsed).chapterPath || `__solo__${job.id}`;
+        if (!groups.has(key)) {
+          groups.set(key, []);
+          groupOrder.push(key);
+        }
+        groups.get(key)!.push(job);
+      });
 
-    const rankGroup = (key: string) => {
-      const groupJobs = groups.get(key)!;
-      const bestStatus = Math.min(
-        ...groupJobs.map((j) => statusOrder[j.status] || 99),
-      );
-      const earliestCreated = Math.min(
-        ...groupJobs.map((j) => new Date(j.createdAt).getTime()),
-      );
-      return { bestStatus, earliestCreated };
-    };
-
-    const sortedKeys = [...groupOrder].sort((a, b) => {
-      const ra = rankGroup(a);
-      const rb = rankGroup(b);
-      if (ra.bestStatus !== rb.bestStatus) return ra.bestStatus - rb.bestStatus;
-      return ra.earliestCreated - rb.earliestCreated;
-    });
-
-    return sortedKeys.flatMap((key) =>
-      [...groups.get(key)!].sort((a, b) => {
-        const orderA = statusOrder[a.status] || 99;
-        const orderB = statusOrder[b.status] || 99;
-        if (orderA !== orderB) return orderA - orderB;
-        return (
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      const rankGroup = (key: string) => {
+        const groupJobs = groups.get(key)!;
+        const bestStatus = Math.min(
+          ...groupJobs.map((j) => statusOrder[j.status] || 99),
         );
-      }),
-    );
-  }, [getParsed]);
+        const earliestCreated = Math.min(
+          ...groupJobs.map((j) => new Date(j.createdAt).getTime()),
+        );
+        return { bestStatus, earliestCreated };
+      };
+
+      const sortedKeys = [...groupOrder].sort((a, b) => {
+        const ra = rankGroup(a);
+        const rb = rankGroup(b);
+        if (ra.bestStatus !== rb.bestStatus)
+          return ra.bestStatus - rb.bestStatus;
+        return ra.earliestCreated - rb.earliestCreated;
+      });
+
+      return sortedKeys.flatMap((key) =>
+        [...groups.get(key)!].sort((a, b) => {
+          const orderA = statusOrder[a.status] || 99;
+          const orderB = statusOrder[b.status] || 99;
+          if (orderA !== orderB) return orderA - orderB;
+          return (
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        }),
+      );
+    },
+    [getParsed],
+  );
 
   const fetchJobs = useCallback(async () => {
     if (!token) return;
@@ -687,17 +701,21 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     return statusColor[job.status] || "#9e9e9e";
   };
 
-  const statusSummary = useMemo(() => jobs.reduce(
-    (acc, job) => {
-      const label = getDisplayStatus(job.status).replace("...", "");
-      const color = getJobStatusColor(job);
-      const existing = acc.find((s) => s.label === label);
-      if (existing) existing.count += 1;
-      else acc.push({ label, color, count: 1 });
-      return acc;
-    },
-    [] as { label: string; color: string; count: number }[],
-  ), [jobs, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
+  const statusSummary = useMemo(
+    () =>
+      jobs.reduce(
+        (acc, job) => {
+          const label = getDisplayStatus(job.status).replace("...", "");
+          const color = getJobStatusColor(job);
+          const existing = acc.find((s) => s.label === label);
+          if (existing) existing.count += 1;
+          else acc.push({ label, color, count: 1 });
+          return acc;
+        },
+        [] as { label: string; color: string; count: number }[],
+      ),
+    [jobs, isPaused],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
 
   // jobs is already sorted so that a chapter's jobs are always contiguous;
   // this just folds consecutive same-chapter jobs into groups for rendering.
@@ -883,7 +901,9 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ px: 2, width: "45%" }}>Job</TableCell>
-                  <TableCell sx={{ px: 2, width: "40%" }}>Model &amp; Status</TableCell>
+                  <TableCell sx={{ px: 2, width: "40%" }}>
+                    Model &amp; Status
+                  </TableCell>
                   <TableCell
                     sx={{ px: 2, width: "15%" }}
                     align="right"
@@ -965,7 +985,10 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                           const color = getJobStatusColor(job);
                           const parsed = getParsed(job);
                           const { pageLabel } = renderJobLocation(job, parsed);
-                          const providerModel = renderProviderModel(job, parsed);
+                          const providerModel = renderProviderModel(
+                            job,
+                            parsed,
+                          );
                           const isRetry = isRetryLoopType(job.type);
 
                           return (
@@ -978,7 +1001,13 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                               }}
                             >
                               <TableCell
-                                sx={{ px: 2, py: 1.25, verticalAlign: "top", overflow: "hidden", textOverflow: "ellipsis" }}
+                                sx={{
+                                  px: 2,
+                                  py: 1.25,
+                                  verticalAlign: "top",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
                               >
                                 <Box
                                   sx={{
@@ -1188,7 +1217,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     sx={{
                                       visibility:
                                         job.status === "PENDING" ||
-                                          job.status === "PAUSED"
+                                        job.status === "PAUSED"
                                           ? "visible"
                                           : "hidden",
                                       width: 28,

@@ -214,8 +214,14 @@ describe("Reader Component", () => {
     );
 
     const img = await screen.findByAltText(`Page ${mockPage.pageNumber}`);
-    Object.defineProperty(img, "naturalWidth", { value: 1234, configurable: true });
-    Object.defineProperty(img, "naturalHeight", { value: 5678, configurable: true });
+    Object.defineProperty(img, "naturalWidth", {
+      value: 1234,
+      configurable: true,
+    });
+    Object.defineProperty(img, "naturalHeight", {
+      value: 5678,
+      configurable: true,
+    });
     fireEvent.load(img);
 
     await waitFor(() => {
