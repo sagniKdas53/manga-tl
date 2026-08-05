@@ -428,6 +428,84 @@ describe("ReaderRightSidebar", () => {
     expect(mockHandleSaveElementChanges).toHaveBeenCalledWith(mockElement);
   });
 
+  it("associates every inspector field caption with its control", () => {
+    // These captions used to be bare <label> siblings with no htmlFor, so they named
+    // nothing: the number boxes and dropdowns below reached assistive technology
+    // unlabelled. getByLabelText resolves htmlFor/id, aria-labelledby and labelId
+    // alike, so it fails on a caption that only *looks* like a label.
+    render(
+      <ReaderRightSidebar
+        selectedItem={{
+          id: "e1",
+          isLayerElement: true,
+          text: "Hello",
+          x: 10,
+          y: 20,
+          maxWidth: 100,
+          maxHeight: 200,
+          rotation: 45,
+        }}
+        setSelectedItem={vi.fn()}
+        activeLayerId={null}
+        setActiveLayerId={vi.fn()}
+        sortedLayers={[]}
+        layers={[]}
+        manuallyShownOcrLayers={new Set()}
+        cleanScanlationView={false}
+        handleMoveLayer={vi.fn()}
+        handleCreateTranslationLayer={vi.fn()}
+        handleCreateSfxLayer={vi.fn()}
+        handleToggleLayerVisibility={vi.fn()}
+        handleCloneLayer={vi.fn()}
+        handleDeleteLayer={vi.fn()}
+        handleAddNewElement={vi.fn()}
+        handleLaunchEyeDropper={vi.fn()}
+        handleRedoPageOcr={vi.fn()}
+        isRedoingPageOcr={false}
+        handleRedoPageTranslation={vi.fn()}
+        isRedoingPageTranslation={false}
+        handleExportPng={vi.fn()}
+        handleExportZip={vi.fn()}
+        interactionMode="none"
+        setInteractionMode={vi.fn()}
+        undoStack={[]}
+        handleUndo={vi.fn()}
+        handleEnterReshapeMode={vi.fn()}
+        handleUpdateSelectedElement={vi.fn()}
+        dirtyElements={new Set()}
+        handleSaveElementChanges={vi.fn()}
+        handleDeleteElement={vi.fn()}
+        ocrRegions={[]}
+        isRedoingRegionTl={false}
+        handleRedoRegion={vi.fn()}
+      />,
+    );
+
+    // Text fields — associated by htmlFor/id.
+    expect(screen.getByLabelText("Text Content")).toHaveValue("Hello");
+    expect(screen.getByLabelText("X Position")).toHaveValue(10);
+    expect(screen.getByLabelText("Y Position")).toHaveValue(20);
+    expect(screen.getByLabelText("Max Width")).toHaveValue(100);
+    expect(screen.getByLabelText("Max Height")).toHaveValue(200);
+    expect(screen.getByLabelText("Font Size (pt)")).toBeInTheDocument();
+
+    // Selects are not labelable elements, so these ride on labelId -> aria-labelledby.
+    for (const caption of [
+      "Font Family",
+      "Font Weight",
+      "Font Style",
+      "Box Shape",
+    ]) {
+      expect(screen.getByLabelText(caption)).toBeInTheDocument();
+    }
+
+    // The slider carries the live value in its caption, hence the regex.
+    expect(screen.getByLabelText(/^Rotation \(45°\)$/)).toHaveAttribute(
+      "type",
+      "range",
+    );
+  });
+
   it("renders correctly when selectedItem is an OCR region", () => {
     const mockRegion = {
       id: "r1",
