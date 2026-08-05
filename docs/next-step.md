@@ -1,14 +1,15 @@
-# Handoff — opened 2026-08-05 (third sitting)
+# Handoff — 2026-08-05 (fourth sitting)
 
 > The previous board is retired. Items 1–7 are done bar two halves: see [archive.md](./archive.md)
 > under *The 2026-08-05 third sitting* for the eleven commits, two corrected findings, one entry that
 > was bigger than its headline, and three process notes.
 >
-> **Resume at:** [§ The list](#the-list). Item 1 is a one-command unblock you have to run yourself.
+> **Fourth sitting, 2026-08-05:** the old items 1, 2 and 5 are **all closed**. The stack is deployed
+> and cold-booted clean, and everything is pushed. Two items remain, and they are the two that were
+> always going to want a sitting of their own.
 >
-> **Read this first:** the worker image is **built and verified but not deployed**, and deploying it
-> needs a `sudo chown` that an agent cannot run. That is item 1 and everything else can proceed
-> without it.
+> **Resume at:** [§ The list](#the-list). Nothing is blocked and nothing needs a command from you
+> before an agent can start.
 
 ## Where the work stands
 
@@ -25,79 +26,52 @@ Closed threads — do not reopen without a measurement that contradicts the file
 | AUDIT-F5, AUDIT-F6 | **Closed 2026-08-05**, with corrections — see archive.md. |
 | AUDIT-B6, AUDIT-D1 | **Were already fixed** and wrongly still open in `issues.md`. Corrected there. |
 | AUDIT-B7, P2, P3, P9 | **Closed 2026-08-05**, each red-green. P9's filed mechanism was wrong — see archive.md. |
-| AUDIT-D3, AUDIT-D4 | **Closed 2026-08-05.** D4 breaks in both directions, not just the worker's. |
+| AUDIT-D3, AUDIT-D4 | **Closed 2026-08-05.** D4 breaks in both directions, not just the worker's. D3's cold-boot check is now done too — see below. |
 | AUDIT-D2 multi-stage | **WON'T DO** — measured, no build-toolchain layer to drop. Image unchanged at 1.94 GB. |
-| AUDIT-D2 leftovers | **Closed 2026-08-05** (`9fd775b`). All four. See item 2. |
+| AUDIT-D2 leftovers | **Closed 2026-08-05** (`9fd775b`). All four: fonts pinned by commit SHA *and* sha256-verified; Arial/Courier New replaced by metric-compatible Liberation Sans/Mono, which also ends a real licensing problem; `libxrender1`; `PYTHONUNBUFFERED=1`; pip cache mount. 1.94 → 1.93 GB. **Note the visible change:** Liberation has real bold/italic faces where the scraped files mapped one weight to all four style keys, so bold Arial is now actually bold. It also revived dead code — `load_font`'s fallback already named Liberation paths that were never installed. |
 | Worker CI on Python 3.10 | **Closed 2026-08-05** (`0123ca6`). CI ran 3.10 while the image is 3.13, so every past green run tested the wrong interpreter. AUDIT-D2's pins made it fatal: numpy 2.3.5 has no 3.10 release. |
 | okhttp / dependabot #60 | **WON'T DO, and the pin is load-bearing.** okhttp ≥5 is a Kotlin-Multiplatform stub — its jar has **0 classes**, the JVM ones live in `okhttp-jvm`, wired by Gradle metadata Maven cannot read. Removing the 4.12.0 pin was tried: 73 errors, `NoClassDefFoundError: okhttp3/MediaType`. Documented in `pom.xml` (`b4085a8`). |
 | Landmarks / skip link | **Closed 2026-08-05** (`bc81040`). The last of AUDIT-F6. |
+| The non-root worker deploy | **Closed 2026-08-05.** Chowned to 10001, cold-booted, all three caches verified writable by probe. |
+| AUDIT-D3 cold boot | **Closed 2026-08-05.** Full `down && up` — see below. |
 
 Suites: **backend 395, frontend 306, worker 284.** All green, no skips.
 
-**Backend is deployed.** It was rebuilt on 2026-08-05 and came up healthy with no error lines, so
-AUDIT-F7's client listener and `server.compression` are live for the first time. The a11y and
-ColorPicker commits landed *after* that rebuild, so they need another one to be visible.
+**The whole stack is deployed and was cold-booted clean on 2026-08-05.** A full
+`docker compose down && docker compose up -d` brought all six services healthy with **zero error
+lines** in backend or worker. The ordering AUDIT-D3 fixed held exactly as designed: valkey, db and
+minio reached Healthy first, `db-backup` waited on db — *the case the original outage came from* —
+backend waited on all three, and worker waited on backend. That closes the last open loop on D3.
 
-**The worker is not deployed.** See item 1 — the image is built and verified, the chown is not done.
+The worker now runs the AUDIT-D2 image (`bf88fac8e264`) as uid 10001 with `PYTHONUNBUFFERED=1` live
+and all three bind-mounted caches writable, confirmed by writing into each one.
 
-**Not pushed.** The branch is now **25 commits ahead** of `github/main`, by decision rather than
-oversight. Three remotes exist (`github`, `codeberg`, `origin`/pi5); pick deliberately. Note the
-worker CI fix (`0123ca6`) only takes effect once the **submodule** is pushed to its own remote.
+**Everything is pushed.** `github/main` is at `be2b3c7`, the submodule at `9fd775b`. Getting there
+needed a rebase: `github/main` had **8 commits we did not have** — four merged dependabot frontend
+PRs — while we were 4 ahead. No overlap (ours touched `backend/pom.xml`, `docs/`, `worker`), so the
+rebase was clean. **Check `git fetch` before assuming this branch is ahead-only; it was not.**
+
+Two consequences of absorbing those four bumps:
+
+- `frontend/node_modules` is now **stale against the lockfile**. Run `npm ci` in `frontend/` before
+  touching item 1 below.
+- All four are dev/transitive (`eslint`, `@vitejs/plugin-react`, `postcss`, `undici`), so the
+  shipped bundle is unaffected and the backend image does **not** need an urgent rebuild for them.
 
 **The local `.venv` is Python 3.10.12 with numpy 2.2.6** — matching neither the image (3.13.14 /
 2.3.5) nor `requirements.txt`. Local `pytest` runs have therefore been on a different stack than
 production. Run the suite in the image (`docker run --rm -v "$PWD/tests:/app/tests:ro" …`) until
 that venv is rebuilt on 3.13.
 
-**Dependabot:** four PRs open, all red. #60 okhttp and #52 springdoc (3.x needs Spring Boot 4; we
-are on 3.5.16) are both **close, don't merge**. #51 testcontainers-bom 2.x and #40 TypeScript 7 are
-major-version projects of their own, not dependabot merges.
+**Dependabot:** four PRs open, all red, **all four are close-don't-merge.** #60 okhttp and #52
+springdoc (3.x needs Spring Boot 4; we are on 3.5.16) are blocked outright. #51 testcontainers-bom
+2.x and #40 TypeScript 7 are major-version projects of their own, not dependabot merges.
 
 ## The list
 
 Ranked by payoff per line changed, which is the ordering this project has asked for.
 
-### 1. Finish deploying the non-root worker *(one command, then one check)*
-
-AUDIT-D2's code is committed and verified — the image runs as `uid=10001(worker)` with both caches
-writable, and `ruff` / `ruff format` / `pyright` / 284 tests are all green. What is left cannot be
-done by an agent:
-
-```bash
-sudo chown -R 10001:10001 data/worker/{huggingface,paddlex,rendered_cache}
-docker compose up -d worker
-```
-
-374 MB of downloaded models sit in those three directories, owned by **`1000:1000` (`sagnik`)**, not
-`root:root` as first written. Without the chown the worker starts and cannot write to them.
-
-**Attempted and confirmed not applied on 2026-08-05.** A `chown` was run but the directories are
-still `1000:1000` — most likely `chown sagnik:sagnik`, which is a no-op here. The numeric ids are
-required: uid 10001 does not exist on the host, so a name-based chown cannot express it. Verified by
-probe rather than by inspection — a `touch` into all three mount points inside the running container
-returns `Permission denied`, while the container reports healthy because the models are
-world-readable and nothing had yet tried to write. `rendered_cache` is written on **every render**,
-so this is a live latent break, not cosmetic.
-
-The image built for item 2 is also waiting on the same command; `docker compose up -d worker` picks
-up both at once.
-
-### 2. ~~AUDIT-D2's leftovers~~ — **DONE 2026-08-05** (`9fd775b`, pointer `92f6902`)
-
-All four closed. Fonts pinned to commit SHAs *and* sha256-verified; Arial and Courier New replaced
-by metric-compatible Liberation Sans/Mono, which also removes a genuine licensing problem — the
-scraped copies came from repos with no right to redistribute Monotype fonts. `libxrender-dev` →
-`libxrender1`, `PYTHONUNBUFFERED=1`, pip on a BuildKit cache mount. Image 1.94 → 1.93 GB.
-
-Two things fell out that were not in the entry:
-
-- `load_font`'s last-ditch fallback already named `/usr/share/fonts/truetype/liberation/` paths that
-  were **never installed** — dead code that `fonts-liberation` now revives.
-- The registry's four style keys used to point at one file per family. Liberation has real bold and
-  italic faces, so bold Arial text is now actually bold. **This is a visible rendering change** on
-  any layer using Arial or Courier New with bold/italic.
-
-### 3. `ReaderRightSidebar`'s MUI miss *(its own sitting)*
+### 1. `ReaderRightSidebar`'s MUI miss *(its own sitting)*
 
 The other half of item 7 from the last board. 1,590 lines carrying **11 raw `<label>`s with inline
 styles and 8 `<span>`s**. `ColorPicker` is done (`64cea19`); this one was deferred on size, not on
@@ -106,7 +80,10 @@ difficulty. `Reader.tsx`'s 14 divs remain out of scope — that is AUDIT-F2.
 **Take the ColorPicker lesson with you:** `sx` is not a free swap for `style`. Anything that updates
 per frame belongs on `style`, because `sx` mints an emotion class per distinct value.
 
-### 4. The transitioning state for queued jobs *(observability, not performance)*
+**Run `npm ci` in `frontend/` first** — the lockfile moved under `node_modules` when the four merged
+dependabot PRs were rebased in.
+
+### 2. The transitioning state for queued jobs *(observability, not performance)*
 
 Move a waiting job to a *transitioning* state instead of leaving it labelled with the stage it last
 completed, so the shape of the wait is legible. **It will not move wall time** — file and measure it
@@ -117,12 +94,6 @@ as observability.
 open question is where the state should actually live: the backend leaves the row at `COMPLETED` for
 stage N while stage N+1 has not been enqueued, so the UI can say "transitioning" but cannot say
 *to what*. Decide whether that is a real job status or a derived display value before writing code.
-
-### 5. A cold-boot check on AUDIT-D3 *(cheap, and it closes a loop)*
-
-`55f9d00` was verified with `docker compose config` and observed on a single-service redeploy
-(`Waiting` → `Healthy` for db, minio, valkey). It has **not** been through a full `docker compose
-down && up`, which is the case the original db-backup outage came from. Worth one cold boot.
 
 ## The unverified backlog
 
@@ -243,7 +214,7 @@ Not tasks, but not forgotten either. Each was left undone for a stated reason.
 - Backend build is Maven (`mvn -o test`, no wrapper) **and must be run from `backend/`**. Frontend is
   `npx vitest run` / `npx tsc --noEmit` / `npm run lint` / `npm run format:check`. Worker is
   `python3 -m pytest -q`, `ruff check .`, `ruff format --check .` and `pyright .` — the last two are
-  CI gates and were both red on 2026-08-05.
+  CI gates. Worker CI runs Python 3.13 as of `0123ca6` — it ran 3.10 against a 3.13 image before that, so pre-2026-08-05 green runs tested the wrong interpreter.
 - **Testcontainers works.** If the backend suite goes red across many classes at once, read the
   surefire report's `Caused by` chain before blaming the environment.
 - **MinIO objects are readable straight off disk** — no container, no port 9000. Single-drive MinIO
@@ -267,31 +238,32 @@ but trust next-step.md over its status.
 CLOSED — do not reopen without a measurement that contradicts the file:
 the performance/scheduling thread, AUDIT-W5 (1.8%, WON'T DO), AUDIT-W2 (1.2%),
 AUDIT-W12, the 2026-08-04 correctness sweep, the whole SSE subsystem (B4, F3,
-F7), B1, B2, B3, B6, B7, D1, D3, D4, F4, F5, F6, P2, P3, P9, try_local_ai, and
-AUDIT-D2's multi-stage half (measured: no build-toolchain layer to drop).
+F7), B1, B2, B3, B6, B7, D1, D2 (all of it — leftovers included, multi-stage
+WON'T DO), D3 (cold boot done), D4, F4, F5, F6, P2, P3, P9, and try_local_ai.
+Also closed: the worker's non-root deploy, and the worker CI Python mismatch.
 
-STATE: everything is committed, nothing is pushed — 21 commits ahead of
-github/main, three remotes, ask before pushing. The BACKEND IS DEPLOYED as of
-the third sitting. The WORKER IS NOT: its image is built and verified but the
-host cache dirs are still root-owned. That is item 1 and it needs a sudo chown
-you have to run yourself.
+STATE: everything is committed AND pushed. github/main is at be2b3c7, the
+worker submodule at 9fd775b. The whole stack is deployed and was cold-booted
+clean — six services healthy, zero error lines. Nothing is blocked.
+
+Dependabot: four PRs open and all four are close-don't-merge. Do not spend a
+sitting on them; the reasoning is in next-step.md and, for okhttp, in a
+comment in backend/pom.xml that you should read before touching that pin.
 
 WHAT I WANT
 
-Work down "The list" in next-step.md in order, one commit each.
+Two items left, both of which want a sitting of their own. One commit each.
 
-1. Run the chown and bring the worker up (I do this; then you verify it).
-2. AUDIT-D2's four leftovers — fonts on a moving branch, libxrender-dev,
-   PYTHONUNBUFFERED, BuildKit cache mount. The headline never mentioned them.
-3. ReaderRightSidebar's MUI miss — 1,590 lines, 11 labels, 8 spans.
-4. The transitioning state. Scoped but not started; decide where the state
+1. ReaderRightSidebar's MUI miss — 1,590 lines, 11 labels, 8 spans. Run
+   `npm ci` in frontend/ first; the lockfile moved under node_modules.
+2. The transitioning state. Scoped but not started; decide where the state
    lives before writing code — see the entry.
-5. A cold `compose down && up` to close the loop on AUDIT-D3.
 
 For each: run impact() first, verify the fix red-green (break it, watch the test
 fail, restore it), and say plainly if the finding turns out to be stale or wrong
-when you actually read the code. Two more were corrected that way on 2026-08-05,
-including one whose stated mechanism was impossible against the live schema.
+when you actually read the code. That has now paid off repeatedly — including
+once when removing a dependency pin that looked redundant turned 395 green
+tests into 73 errors.
 
 CONSTRAINTS
 - CLAUDE.md is binding: reindex, impact() before edits, detect_changes() before
@@ -299,7 +271,9 @@ CONSTRAINTS
   `git diff -U0` hunk ranges before believing it. Use `git diff -w` when the
   change wraps JSX, which re-indents whole blocks.
 - Commit to main directly, with a pathspec; worker/ is a submodule and needs its
-  own commit plus a pointer bump.
+  own commit plus a pointer bump. `git fetch` before assuming this branch is
+  ahead-only — on 2026-08-05 it was 4 ahead AND 8 behind, because dependabot PRs
+  get merged on GitHub without this clone knowing.
 - Frontend lint is --max-warnings 0 and CI gates on prettier --check. The repo is
   Prettier-clean, so --write on a file you are already changing only touches what
   your change caused — verify with `git diff -w` rather than avoiding it blindly.
