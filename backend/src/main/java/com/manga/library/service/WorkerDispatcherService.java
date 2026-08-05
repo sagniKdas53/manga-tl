@@ -286,7 +286,10 @@ public class WorkerDispatcherService {
           log.debug(
               "Job from {} not dispatched (worker rejected/unreachable) — pushed back to queue",
               queue);
-          return;
+          // AUDIT-P3: stop draining *this* queue, not the whole slot class. This used to be a
+          // `return`, so one undispatchable job on queue:qa-re-ocr meant queue:ocr was not polled
+          // at all that cycle.
+          break;
         }
       }
     }
