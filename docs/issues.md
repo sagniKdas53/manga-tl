@@ -266,6 +266,11 @@ clone path will make the wrong call about whether OCR/TL data can be reused.
 
 The user-visible symptom is a pipeline that stops at a stage with no error anywhere in the UI.
 
+**Status: DONE 2026-08-05 (`11c79da`).** A permanent rejection now marks the row `FAILED` with the
+status and body in `jobs.error`, and emits `job_update` so a live reader sees it without a reload.
+Best-effort by design: the job is already off the queue, so a DB or SSE failure there must not abort
+the rest of the dispatch cycle. Verified red-green.
+
 #### AUDIT-P3 **[H]** — one undispatchable job blocks every remaining queue in its slot class
 
 `WorkerDispatcherService:254-263` — when no worker accepts a job it is pushed back and the method
@@ -278,6 +283,10 @@ almost certainly what was meant. This is head-of-line blocking across unrelated 
 idle *with work queued in its own class* in only **3.2%** (light) / **1.3%** (heavy) of 3,253
 samples. Worth fixing as a latent correctness issue, but it is not the cause of the throughput
 complaint at the top of this file — see AUDIT-W10.
+
+**Status: DONE 2026-08-05 (`19cab6f`).** `break` rather than the suggested `continue` — the two are
+equivalent here because the `while` condition is already false at that point, but `break` says "stop
+draining this queue" outright. The commit explicitly declines to claim a throughput win.
 
 #### AUDIT-P4 **[H]** — job recovery re-runs work the worker is still doing
 
@@ -346,6 +355,16 @@ page was deleted between enqueue and callback). It is then passed straight into
 `region.setPage(page)` (`:740`) and `ocrLayer.setPage(page)` (`:795`) with no guard. The rows save
 successfully and are then invisible to every `findByPageId` query — silent orphans that still count
 against cost. Guard and abort the callback instead.
+
+**Status: DONE 2026-08-05 (`a8abea3`) — and the mechanism above is wrong.** The rows do *not* save
+successfully. `ocr_regions.page_id` and `layers.page_id` are `NOT NULL` both in the entity mapping
+(`@JoinColumn(nullable = false)`) and in the live schema — checked against the running database and
+with a throwaway Testcontainers probe, which threw `ConstraintViolationException: null value in
+column "page_id"`. There are no silent orphans and there never were. What actually happened is a
+`DataIntegrityViolationException` at commit that rolls back the *entire completed OCR result*; the
+job then sits `PROCESSING` until `recoverStaleProcessingJobs` requeues it, the whole expensive OCR
+pass runs again and fails identically, up to `maxAttempts`. Real defect, wrong reason, and worse on
+cost than "still count against cost" suggests. The guard now fails the job once with a reason.
 
 ### Worker
 
@@ -670,6 +689,9 @@ argument. Importing a duplicate image into an empty chapter passes `pageNumber =
 `safePageNumber = 1`, and skips `recalculateChapterCover`. The chapter renders with no cover until
 something else touches it.
 
+**Status: DONE 2026-08-05 (`3455430`).** Both call sites now guard on `safePageNumber`. Verified
+red-green — the new test leaves the cover `null` on the raw-argument guard.
+
 #### AUDIT-B8 **[L]** — assorted backend defects
 
 + `WorkerDispatcherService:25` — `${WORKER_URLS:http://worker:9091}` defaults to port **9091**; the
@@ -887,6 +909,30 @@ Use `restart: unless-stopped` (`BACKUP_ON_START=TRUE` plus `SCHEDULE=@daily` alr
   every `print`. Setting the env var lets those be dropped.
 + `pip install` without a BuildKit cache mount, unlike the backend's Maven and npm stages.
 
+**Status: PARTLY DONE 2026-08-05** (worker `0894cb2`, pointer `9cdd365`). Read the whole entry before
+calling this closed — it bundles more than its headline, and only some of it is done.
+
+*Done.* **Pinning**: the base image is pinned by digest, and 19 of the 20 requirements carried no
+version at all — all 20 are now pinned to the versions the running worker was already on, so the
+change is behaviourally a no-op. **Non-root**: a fixed `uid 10001` (fixed, not useradd's choice,
+because the bind-mounted model caches carry host ownership through and a drifting uid would silently
+lose write access to 374 MB of models); the YOLO cache path in `config.py` moved off `/root` to match,
+and the compose mounts moved with it.
+
+*WON'T DO.* **Multi-stage**, on measurement. Of the 1.93 GB image, 1.53 GB is ML wheels and 280 MB is
+apt libs, and there is **no build-toolchain layer at all** — no `build-essential`, no gcc — so a
+builder stage has nothing to leave behind. The rebuilt image measured 1.94 GB, unchanged. Do not
+reopen without a measurement that contradicts this.
+
+*Still open, and not attempted.* The four font `wget`s against `raw.githubusercontent.com/.../main/`
+are still unpinned refs on a moving branch, with the Arial licensing question untouched;
+`libxrender-dev` is still a `-dev` package in the runtime image; there is still no
+`PYTHONUNBUFFERED=1`, so the `flush=True` littering stands; and `pip install` still has no BuildKit
+cache mount.
+
+*Not yet deployed.* The host directories under `data/worker/` are still root-owned and must be
+`chown`ed to `10001:10001` before `docker compose up -d worker`.
+
 #### AUDIT-D3 **[M]** — `depends_on` ignores the healthchecks that are already defined
 
 Every stateful service defines a `healthcheck`, but `backend:depends_on` (`:124-127`) and
@@ -894,6 +940,11 @@ Every stateful service defines a `healthcheck`, but `backend:depends_on` (`:124-
 The backend therefore races Postgres on a cold boot. Switch to
 `depends_on: { db: { condition: service_healthy } }` — the healthchecks are already written, they
 just aren't wired up.
+
+**Status: DONE 2026-08-05 (`55f9d00`).** All six dependencies across `backend` and `worker` now use
+`condition: service_healthy`, confirmed with `docker compose config`, and observed working on the
+backend redeploy — compose printed `Waiting` then `Healthy` for db, minio and valkey before starting
+the backend.
 
 #### AUDIT-D4 **[M]** — `MINIO_ENDPOINT` means two different things
 
@@ -903,6 +954,12 @@ it that way). Both read the **same variable**. The defaults paper over it, but t
 sets `MINIO_ENDPOINT` in `.env` — which the compose file invites — exactly one of the two services
 breaks. It is also absent from `.env.example`, so there is no documented correct value. Split into
 `MINIO_ENDPOINT` and `MINIO_ENDPOINT_INTERNAL`.
+
+**Status: DONE 2026-08-05 (`69ad910`).** Split as `MINIO_ENDPOINT_URL` (backend, carries the scheme)
+and `MINIO_ENDPOINT_HOST` (worker, bare host:port); the in-container variable stays `MINIO_ENDPOINT`
+on both sides so no application code changed. Both are now documented in `.env.example`, closing the
+"no documented correct value" half. It breaks in *both* directions, not just the worker's: the Java
+SDK's `MinioClient.endpoint()` treats a bare host as HTTPS.
 
 #### AUDIT-D5 **[L]** — remaining infrastructure items
 

@@ -1,15 +1,14 @@
-# Handoff — opened 2026-08-05 (second sitting)
+# Handoff — opened 2026-08-05 (third sitting)
 
-> The previous board is retired. Items 1–5 are done, plus a MUI migration pass and Prettier in CI:
-> see [archive.md](./archive.md) under *The 2026-08-05 second sitting* for the ten commits, the six
-> corrections that came out of reading the code, and three process notes.
+> The previous board is retired. Items 1–7 are done bar two halves: see [archive.md](./archive.md)
+> under *The 2026-08-05 third sitting* for the eleven commits, two corrected findings, one entry that
+> was bigger than its headline, and three process notes.
 >
-> **Resume at:** [§ The list](#the-list). Item 1 is a one-line fix in a file that is now 82% covered.
+> **Resume at:** [§ The list](#the-list). Item 1 is a one-command unblock you have to run yourself.
 >
-> **Read this first:** the new items at 1–4 were pulled up from `issues.md` and **each was
-> re-verified against the code on 2026-08-05** — they are live, not inherited claims. Everything in
-> [§ The unverified backlog](#the-unverified-backlog) was *not* checked and should be treated as a
-> lead, not a finding.
+> **Read this first:** the worker image is **built and verified but not deployed**, and deploying it
+> needs a `sudo chown` that an agent cannot run. That is item 1 and everything else can proceed
+> without it.
 
 ## Where the work stands
 
@@ -25,101 +24,78 @@ Closed threads — do not reopen without a measurement that contradicts the file
 | AUDIT-B3, AUDIT-B4 | **Fully closed 2026-08-05**, leftovers included. |
 | AUDIT-F5, AUDIT-F6 | **Closed 2026-08-05**, with corrections — see archive.md. |
 | AUDIT-B6, AUDIT-D1 | **Were already fixed** and wrongly still open in `issues.md`. Corrected there. |
+| AUDIT-B7, P2, P3, P9 | **Closed 2026-08-05**, each red-green. P9's filed mechanism was wrong — see archive.md. |
+| AUDIT-D3, AUDIT-D4 | **Closed 2026-08-05.** D4 breaks in both directions, not just the worker's. |
+| AUDIT-D2 multi-stage | **WON'T DO** — measured, no build-toolchain layer to drop. Image unchanged at 1.94 GB. |
+| Landmarks / skip link | **Closed 2026-08-05** (`bc81040`). The last of AUDIT-F6. |
 
-Suites: **backend 390, frontend 305, worker 284.** All green, no skips. Backend line coverage
-**0.8165** against the 0.80 gate.
+Suites: **backend 395, frontend 306, worker 284.** All green, no skips.
 
-**NOT deployed.** The backend image has not been rebuilt since the second sitting. Two changes are
-inert until it is: AUDIT-F7's client listener (the frontend compiles *into* the backend image) and
-the new `server.compression`. Rebuild before judging either.
+**Backend is deployed.** It was rebuilt on 2026-08-05 and came up healthy with no error lines, so
+AUDIT-F7's client listener and `server.compression` are live for the first time. The a11y and
+ColorPicker commits landed *after* that rebuild, so they need another one to be visible.
 
-**Not pushed.** The branch is **10 commits ahead** of `github/main`, by decision rather than
+**The worker is not deployed.** See item 1 — the image is built and verified, the chown is not done.
+
+**Not pushed.** The branch is now **21 commits ahead** of `github/main`, by decision rather than
 oversight. Three remotes exist (`github`, `codeberg`, `origin`/pi5); pick deliberately.
 
 ## The list
 
 Ranked by payoff per line changed, which is the ordering this project has asked for.
 
-### 1. AUDIT-B7 — a duplicate-image import leaves the chapter with no cover *(1 line)*
+### 1. Finish deploying the non-root worker *(one command, then one check)*
 
-**Verified live 2026-08-05.** `createPageAndImage` guards its cover recalculation on
-`safePageNumber == 1`; the near-identical `createPageWithExistingImage` still guards on the **raw**
-`pageNumber` argument (`PageService.java:138`). Importing a duplicate image into an empty chapter
-passes `pageNumber = null`, which resolves to `safePageNumber = 1` and then skips
-`recalculateChapterCover`. The chapter renders coverless until something else touches it.
+AUDIT-D2's code is committed and verified — the image runs as `uid=10001(worker)` with both caches
+writable, and `ruff` / `ruff format` / `pyright` / 284 tests are all green. What is left cannot be
+done by an agent:
 
-The fix is to use `safePageNumber` in both. `PageService` is now at **82% line coverage** with
-`createPageWithExistingImage` already under test, so the red-green step is cheap.
+```bash
+sudo chown -R 10001:10001 data/worker/{huggingface,paddlex,rendered_cache}
+docker compose up -d worker
+```
 
-### 2. AUDIT-P2 — permanently-rejected jobs are dropped without ever being failed *(~10 lines)*
+374 MB of downloaded models sit in those three directories, still owned by `root:root`. Without the
+chown the worker starts and cannot write to them. Until it is done the running container is the
+previous root image, so **the stack is consistent, not broken** — this is unfinished, not urgent.
 
-**Verified live 2026-08-05.** `WorkerDispatcherService.java:229-238`: on a `400`/`422` from the
-worker the job is popped off Redis and marked `sent = true; // prevent re-push to queue`. **Nothing
-marks the DB row `FAILED`.** It stays `PENDING` forever:
+### 2. AUDIT-D2's leftovers *(one commit)*
 
-- `recoverStaleProcessingJobs` only scans `PROCESSING`, so the sweeper never sees it.
-- `requeuePendingJobs` *will* re-push it — but only on the next backend restart, where it is
-  rejected again, silently, forever.
+The entry bundled four sub-items its headline never mentioned, none of them attempted:
 
-The user-visible symptom is a pipeline that stops at a stage with no error anywhere in the UI, which
-is the top complaint in `issues.md`. Highest-value item on this board.
+- The four font `wget`s hit `raw.githubusercontent.com/.../main/...` — unpinned refs on a moving
+  branch, so the build is not reproducible. The Arial pull from `root-project` also has a licensing
+  question for a published image.
+- `libxrender-dev` leaves a `-dev` package in the runtime image.
+- No `PYTHONUNBUFFERED=1`, which is exactly why the worker code is littered with `flush=True`.
+- `pip install` has no BuildKit cache mount, unlike the backend's Maven and npm stages.
 
-### 3. AUDIT-P3 — one undispatchable job blocks every other queue in its slot class *(1 word)*
+### 3. `ReaderRightSidebar`'s MUI miss *(its own sitting)*
 
-**Verified live 2026-08-05.** `WorkerDispatcherService.java:278` — when no worker accepts a job it
-is pushed back and the method `return`s, abandoning the rest of the loop. `HEAVY_QUEUES` is ordered
-`[qa-re-ocr, region-redo-ocr, ocr, panel-detection]`, so one stuck job on `queue:qa-re-ocr` stops
-`queue:ocr` being polled *at all* that cycle. `continue` is almost certainly what was meant.
+The other half of item 7 from the last board. 1,590 lines carrying **11 raw `<label>`s with inline
+styles and 8 `<span>`s**. `ColorPicker` is done (`64cea19`); this one was deferred on size, not on
+difficulty. `Reader.tsx`'s 14 divs remain out of scope — that is AUDIT-F2.
 
-**Measured 2026-08-02 and it is not currently costing throughput** — a slot sat idle with work
-queued in its own class in 3.2% (light) / 1.3% (heavy) of 3,253 samples. Fix it as latent
-correctness, and do **not** claim a throughput win from it.
+**Take the ColorPicker lesson with you:** `sx` is not a free swap for `style`. Anything that updates
+per frame belongs on `style`, because `sx` mints an emotion class per distinct value.
 
-### 4. AUDIT-P9 — OCR callbacks can write regions and layers with `page_id = NULL` *(~5 lines)*
-
-**Verified live 2026-08-05.** `resolvePageForCallback` (`JobCoordinatorService.java:189`) returns
-`null` when the page was deleted between enqueue and callback, and that `null` goes straight into
-`region.setPage(page)` (`:814`) and `ocrLayer.setPage(page)` (`:869`) with no guard. The rows save
-successfully and are then invisible to every `findByPageId` query — silent orphans that still count
-against cost. Guard and abort the callback instead.
-
-*Items 2–4 are all in the job pipeline and want one backend rebuild between them.*
-
-### 5. Infrastructure hygiene *(one commit each)*
-
-- **AUDIT-D3** — `docker-compose.yml` still uses the plain-list `depends_on` for backend and worker,
-  so the six healthchecks defined right above them are ignored on startup. Only `db-backup` uses the
-  `condition:` form. Same class of bug that took backups down for three days.
-- **AUDIT-D4** — **verified latent, not live (2026-08-05).** `MINIO_ENDPOINT` means two different
-  things: the backend's default wants a scheme (`http://minio:9000`), the worker's wants bare
-  (`minio:9000`). Both currently resolve correctly *because `.env` does not set it at all*. It
-  breaks the moment anyone does. Fix it as a trap, not an outage.
-- **AUDIT-D2** — the worker image is single-stage, runs as root, and pins nothing
-  (`worker/Dockerfile:1`, no `USER`). Also the largest image in the stack.
-
-### 6. Landmarks and a skip link *(new, 2026-08-05 — small)*
-
-The genuine remainder of AUDIT-F6's "focus order" half, which had no concrete defect of its own.
-The app has **no `<main>` or `<nav>` anywhere**, so screen-reader landmark navigation has nothing to
-land on and the skip link the guidelines ask for has no target. Touches the App shell rather than
-leaf components, which is why it was not folded into `ba21af6`.
-
-### 7. The MUI misses left behind *(new, 2026-08-05 — one sitting)*
-
-`b951ee2` migrated the two card grids and the drag overlay. Two real misses remain, both in large
-files and deliberately deferred:
-
-- `ReaderRightSidebar.tsx` — 11 raw `<label>`s with inline styles, plus 8 `<span>`s.
-- `ColorPicker.tsx` — 9 raw `<div>`s.
-
-`Reader.tsx`'s 14 divs are **not** in scope: that is AUDIT-F2, still a multi-sitting refactor.
-
-### 8. The transitioning state for queued jobs *(observability, not performance)*
+### 4. The transitioning state for queued jobs *(observability, not performance)*
 
 Move a waiting job to a *transitioning* state instead of leaving it labelled with the stage it last
 completed, so the shape of the wait is legible. **It will not move wall time** — file and measure it
-as observability. `getDisplayStatus` already renders `COMPLETED` as `TRANSITIONING...`, so some of
-the vocabulary exists.
+as observability.
+
+**Scoped on 2026-08-05 but not started.** `getDisplayStatus` (`QueueManager.tsx:695`) already maps
+`COMPLETED → "TRANSITIONING..."`, so the *vocabulary* exists but only as a frontend relabel. The
+open question is where the state should actually live: the backend leaves the row at `COMPLETED` for
+stage N while stage N+1 has not been enqueued, so the UI can say "transitioning" but cannot say
+*to what*. Decide whether that is a real job status or a derived display value before writing code.
+
+### 5. A cold-boot check on AUDIT-D3 *(cheap, and it closes a loop)*
+
+`55f9d00` was verified with `docker compose config` and observed on a single-service redeploy
+(`Waiting` → `Healthy` for db, minio, valkey). It has **not** been through a full `docker compose
+down && up`, which is the case the original db-backup outage came from. Worth one cold boot.
 
 ## The unverified backlog
 
@@ -255,53 +231,53 @@ Not tasks, but not forgotten either. Each was left undone for a stated reason.
 
 ```
 Continuing manga-library. Read docs/next-step.md first, then docs/archive.md's
-"2026-08-05 second sitting" and "2026-08-05 sitting" sections. Between them they
-have what shipped, what is settled and why, and what is still open. Do not
+"2026-08-05 third sitting" and "2026-08-05 second sitting" sections. Between them
+they have what shipped, what is settled and why, and what is still open. Do not
 re-audit the codebase and do not re-derive the run numbers — both are written
-down. docs/issues.md carries file:line anchors, but trust next-step.md over its
-status: two findings there sat marked open long after they were fixed.
+down. docs/issues.md carries file:line anchors and now carries Status: lines too,
+but trust next-step.md over its status.
 
 CLOSED — do not reopen without a measurement that contradicts the file:
 the performance/scheduling thread, AUDIT-W5 (1.8%, WON'T DO), AUDIT-W2 (1.2%),
 AUDIT-W12, the 2026-08-04 correctness sweep, the whole SSE subsystem (B4, F3,
-F7), B1, B2, B3, B6, D1, F4, F5, F6, try_local_ai.
+F7), B1, B2, B3, B6, B7, D1, D3, D4, F4, F5, F6, P2, P3, P9, try_local_ai, and
+AUDIT-D2's multi-stage half (measured: no build-toolchain layer to drop).
 
-STATE: everything is committed, nothing is pushed — 10 commits ahead of
-github/main, three remotes, ask before pushing. NOT DEPLOYED: the backend image
-has not been rebuilt, so AUDIT-F7's client half and the new server.compression
-are both inert until it is.
+STATE: everything is committed, nothing is pushed — 21 commits ahead of
+github/main, three remotes, ask before pushing. The BACKEND IS DEPLOYED as of
+the third sitting. The WORKER IS NOT: its image is built and verified but the
+host cache dirs are still root-owned. That is item 1 and it needs a sudo chown
+you have to run yourself.
 
 WHAT I WANT
 
-Work down "The list" in next-step.md in order, one commit each. Items 1-4 were
-each re-verified against the code on 2026-08-05, so they are live:
+Work down "The list" in next-step.md in order, one commit each.
 
-1. AUDIT-B7 — createPageWithExistingImage guards the cover recalculation on the
-   raw pageNumber instead of safePageNumber. One line; PageService is 82% covered.
-2. AUDIT-P2 — a 400/422 from the worker drops the job without marking it FAILED,
-   so it sits PENDING forever and the pipeline stops with no error in the UI.
-3. AUDIT-P3 — the dispatcher `return`s instead of `continue`ing, so one stuck job
-   blocks every other queue in its slot class. Latent, not a throughput win.
-4. AUDIT-P9 — OCR callbacks can write regions/layers with page_id = NULL.
-
-Then D3/D4/D2, then landmarks + skip link, then the remaining MUI misses, then
-the transitioning-state change.
-
-Items 2-4 are all job-pipeline and want one backend rebuild between them.
+1. Run the chown and bring the worker up (I do this; then you verify it).
+2. AUDIT-D2's four leftovers — fonts on a moving branch, libxrender-dev,
+   PYTHONUNBUFFERED, BuildKit cache mount. The headline never mentioned them.
+3. ReaderRightSidebar's MUI miss — 1,590 lines, 11 labels, 8 spans.
+4. The transitioning state. Scoped but not started; decide where the state
+   lives before writing code — see the entry.
+5. A cold `compose down && up` to close the loop on AUDIT-D3.
 
 For each: run impact() first, verify the fix red-green (break it, watch the test
 fail, restore it), and say plainly if the finding turns out to be stale or wrong
-when you actually read the code. Six items were corrected that way on 2026-08-05
-alone, including two that were already fixed.
+when you actually read the code. Two more were corrected that way on 2026-08-05,
+including one whose stated mechanism was impossible against the live schema.
 
 CONSTRAINTS
 - CLAUDE.md is binding: reindex, impact() before edits, detect_changes() before
   commits. Its CRITICAL/HIGH is usually the line-offset artefact — check
-  `git diff -U0` hunk ranges before believing it.
+  `git diff -U0` hunk ranges before believing it. Use `git diff -w` when the
+  change wraps JSX, which re-indents whole blocks.
 - Commit to main directly, with a pathspec; worker/ is a submodule and needs its
   own commit plus a pointer bump.
-- Frontend lint is --max-warnings 0 and CI gates on prettier --check. Do not run
-  prettier --write outside a formatting-only commit.
+- Frontend lint is --max-warnings 0 and CI gates on prettier --check. The repo is
+  Prettier-clean, so --write on a file you are already changing only touches what
+  your change caused — verify with `git diff -w` rather than avoiding it blindly.
+- sx is not a free swap for style on a drag path: it mints an emotion class per
+  distinct value. Per-frame values stay inline.
 - One performance variable per change.
 - Security findings (AUDIT-S*) are tracked separately; don't fold them in.
 ```
