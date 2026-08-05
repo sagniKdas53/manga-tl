@@ -1,4 +1,10 @@
 import React from "react";
+import Backdrop from "@mui/material/Backdrop";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 
 export interface ChapterDragOverlayProps {
   visible: boolean;
@@ -12,91 +18,66 @@ const ChapterDragOverlay: React.FC<ChapterDragOverlayProps> = ({
   if (!visible) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
+    <Backdrop
+      open
+      // Not interactive — it only reports that a drop is possible, and swallowing pointer
+      // events here would stop the drop landing on the page underneath.
+      sx={{
         zIndex: 10000,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "rgba(15, 15, 25, 0.85)",
+        pointerEvents: "none",
+        m: 2,
+        borderRadius: 4,
+        border: "4px dashed",
+        borderColor: "primary.main",
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
-        border: "4px dashed rgba(99, 102, 241, 0.6)",
-        borderRadius: "16px",
-        margin: "16px",
-        pointerEvents: "none",
       }}
     >
-      <div
-        style={{
-          background:
-            "linear-gradient(145deg, rgba(30,30,50,0.95) 0%, rgba(20,20,38,0.95) 100%)",
-          border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: "20px",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
-          padding: "40px 60px",
+      <Paper
+        elevation={24}
+        sx={{
+          px: { xs: 4, sm: 7.5 },
+          py: 5,
+          borderRadius: 2.5,
           textAlign: "center",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "16px",
+          maxWidth: "min(90vw, 480px)",
         }}
       >
-        <div
-          style={{
-            width: "60px",
-            height: "60px",
-            borderRadius: "16px",
-            background: "rgba(99, 102, 241, 0.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+        <Stack
+          alignItems="center"
+          spacing={2}
         >
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#818cf8"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <Box
+            sx={{
+              width: 60,
+              height: 60,
+              borderRadius: 2,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              // The theme's own primary, at low alpha, so this reads correctly in both modes.
+              bgcolor: (theme) => theme.palette.action.selected,
+              color: "primary.main",
+            }}
           >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line
-              x1="12"
-              y1="3"
-              x2="12"
-              y2="15"
-            />
-          </svg>
-        </div>
-        <h2
-          style={{
-            color: "#fff",
-            fontSize: "20px",
-            fontWeight: 700,
-            margin: 0,
-          }}
-        >
-          Drop Manga Pages Anywhere
-        </h2>
-        <p
-          style={{
-            color: "rgba(226,232,240,0.7)",
-            fontSize: "14px",
-            margin: 0,
-          }}
-        >
-          Release to add multiple files to Chapter {chapterNumber}
-        </p>
-      </div>
-    </div>
+            <FileUploadOutlinedIcon fontSize="large" />
+          </Box>
+          <Typography
+            variant="h6"
+            component="h2"
+            sx={{ fontWeight: 700 }}
+          >
+            Drop Manga Pages Anywhere
+          </Typography>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+          >
+            Release to add multiple files to Chapter {chapterNumber}
+          </Typography>
+        </Stack>
+      </Paper>
+    </Backdrop>
   );
 };
 

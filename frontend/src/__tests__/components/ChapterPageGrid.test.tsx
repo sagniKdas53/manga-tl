@@ -53,10 +53,30 @@ describe("ChapterPageGrid", () => {
       />,
     );
 
+    // The tile is a MUI Card since the migration off the hand-rolled .pages-grid CSS.
     const pageTag = screen.getByText("Page 1");
-    fireEvent.click(pageTag.closest(".page-thumbnail-container")!);
+    fireEvent.click(pageTag.closest(".MuiCard-root")!);
 
     expect(mockOnSelectPage).toHaveBeenCalledWith(mockPages[0], 0);
+  });
+
+  it("stops the reorder controls from swallowing the click that opens a page", () => {
+    render(
+      <ChapterPageGrid
+        pages={mockPages}
+        onDeletePage={mockOnDeletePage}
+        onMovePage={mockOnMovePage}
+        onSelectPage={mockOnSelectPage}
+      />,
+    );
+
+    // The reorder band spans the full width across the middle of the tile. The old CSS gave it
+    // pointer-events: none with auto on the buttons; losing that in the migration would have
+    // made the middle third of every thumbnail unclickable.
+    const band = screen
+      .getAllByTitle("Move page left")[0]
+      .closest("div") as HTMLElement;
+    expect(band).toHaveStyle({ pointerEvents: "none" });
   });
 
   it("triggers delete and reorder buttons", () => {
