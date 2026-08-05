@@ -113,6 +113,52 @@ public class PageServiceTest {
     verify(pageRepository, times(1)).save(any(Page.class));
   }
 
+  /**
+   * AUDIT-B7: importing a duplicate image into an empty chapter passes pageNumber = null, which
+   * resolves to safePageNumber 1. The cover recalculation must key off safePageNumber, not the raw
+   * argument, or the chapter is left coverless.
+   */
+  @Test
+  public void testCreatePageWithExistingImage_nullPageNumberOnEmptyChapterSetsCover() {
+    Chapter chapter = new Chapter();
+    chapter.setId(UUID.randomUUID());
+    chapter.setChapterNumber(1.0);
+    Series series = new Series();
+    series.setId(UUID.randomUUID());
+    chapter.setSeries(series);
+    Image image = new Image();
+    image.setId(UUID.randomUUID());
+    User user = new User();
+    Page saved =
+        new Page() {
+          {
+            setId(UUID.randomUUID());
+            setPageNumber(1);
+            setImage(image);
+          }
+        };
+
+    // Empty chapter: no page at 1 when we look for a collision, then the freshly saved page
+    // when recalculateChapterCover goes looking for the cover.
+    when(pageRepository.findByChapterIdAndPageNumber(chapter.getId(), 1))
+        .thenReturn(java.util.Optional.empty())
+        .thenReturn(java.util.Optional.of(saved));
+    when(pageRepository.save(any(Page.class))).thenReturn(saved);
+    when(chapterRepository.findById(chapter.getId())).thenReturn(java.util.Optional.of(chapter));
+    when(seriesRepository.findById(series.getId())).thenReturn(java.util.Optional.of(series));
+    when(chapterRepository.findMinChapterNumberWithCoverBySeriesId(series.getId()))
+        .thenReturn(null);
+
+    Page result = pageService.createPageWithExistingImage(chapter, image, null, user);
+
+    assertNotNull(result);
+    assertEquals(
+        image.getId(),
+        chapter.getCoverImageId(),
+        "a duplicate import into an empty chapter must still set the chapter cover");
+    verify(chapterRepository, times(1)).save(chapter);
+  }
+
   @Test
   public void testGetFileExtension() {
     assertEquals(".jpg", pageService.getFileExtension("image.jpg"));
