@@ -82,13 +82,6 @@ The two remaining complaints are measured, and neither is fixable in frontend co
 
 ---
 
-## `try_local_ai` ignores its `prompt` argument — **RESOLVED 2026-08-05**
-
-Fixed in worker `2b37cdd` (pointer bump `e8ccb49`). The caller's prompt now becomes the system
-message; the hardcoded translation prompts remain the default for a caller that supplies none.
-Regression tests assert on the outgoing payload, since the failure mode was silence. Detail in
-[archive.md](./archive.md) under *The 2026-08-05 sitting*.
-
 ## Plan a better backend one that doesn't use java
 
 I am tired of the boilerplate and bug factory that is java, it serves no real purpose and has no
@@ -133,18 +126,6 @@ for the Anthropic `cache_control`, the OpenRouter session/caching injection, and
 happy-path `200`s. See [AUDIT-T1](#audit-t1--the-e2e-test-is-not-an-e2e-test) below for the real
 shape of the testing gap.
 
-## Update the `configuration_guide.md` once everything is done
-
-We need to document how to setup the whole app like what needs to be populated in `.env` and
-what needs to populated in the secrets, how to set up the `providers.json` and other small
-stuff.
-
-**Status:** `configuration_guide.md` now covers env vars, slot allocation, and the model
-inheritance hierarchy in real depth — but it still has no section on Docker secrets file setup
-or on `providers.json` structure/editing, so the original ask isn't fully done yet.
-
----
-
 ## Full-Stack Audit — 2026-08-01
 
 A read-through of backend (`11.8k` LoC Java), worker (`8.3k` LoC Python), frontend (`26.8k` LoC
@@ -153,6 +134,14 @@ graph. Findings are new unless marked otherwise, and are ordered by severity. Ev
 `file:line` anchor so it can be picked up cold.
 
 Conventions: **[C]** critical · **[H]** high · **[M]** medium · **[L]** low/cleanup.
+
+> **Triaged against the code on 2026-08-05.** Every entry below was re-read against the working tree
+> and the closed ones moved to [archive.md](./archive.md). Six were **already fixed while still
+> marked open** — AUDIT-P1, AUDIT-P4, AUDIT-W6, AUDIT-W10, and one bullet each from AUDIT-W8 and
+> AUDIT-B8 — and AUDIT-T2's backend half was re-scoped by fixes that landed elsewhere. Severities
+> and line anchors below have been re-checked; where an anchor had drifted it is corrected inline.
+>
+> What survives here is open **as of 2026-08-05**, verified, and nothing in it is stale.
 
 ### Security
 
@@ -229,95 +218,27 @@ behind a cookie; and drop `%r` for `%U` in the access-log pattern.
 
 ### Pipeline correctness
 
-#### AUDIT-P1 **[H]** — chapter/series model overrides are silently discarded in `resolveConfigForChapter`
+#### AUDIT-P5 **[H]** — callbacks resolve "which job" by guessing instead of by `jobId`
 
-`config/providers.json` keys its model lists as `tl`, `qaLLM`, `qaVLM`, `ocr` (verified across all
-four providers). `enqueueJobDirectly` uses those keys correctly. But
-`JobCoordinatorService.resolveConfigForChapter:613-621` passes task names that **do not exist**:
+*Raised **[M] → [H]** on 2026-08-05: this is now AUDIT-P4's residual, and it undermines P4's fix.*
 
-| call site | task passed | valid? |
-| --- | --- | --- |
-| `:605` ocr | `"ocr"` | ✅ |
-| `:614` tlModel | `"translation"` | ❌ (should be `tl`) |
-| `:619` qaLlmModel | `"translation"` | ❌ (should be `qaLLM`) |
-| `:621` qaVlmModel | `"qa"` | ❌ (should be `qaVLM`) |
-
-**Confirmed 2026-08-02.** `ProviderConfigCache.isValidProviderModel` does `pData.models.get(task)`
-and returns `false` on a null list, so `resolveModelWithCheck` **always** discards the resolved
-value and returns the global default.
-
-Scope correction: `resolveConfigForChapter` is **not on the dispatch path**. The job payload is
-built by `enqueueJobDirectly`, which passes the correct keys (`tl`, `qaLLM`, `qaVLM`) and uses a
-plain `resolveModel` — no validity check — for `ocrModel`. So the pipeline is unaffected; the defect
-is confined to the duplicate-page config comparison in `PageController` and `SeriesController`. Net effect: the duplicate-page config comparison in
-`PageController:118-119` and `SeriesController:313-314` compares global defaults against global
-defaults, so it will report two chapters as configuration-identical when they are not, and the
-clone path will make the wrong call about whether OCR/TL data can be reused.
-
-#### AUDIT-P2 **[H]** — the dispatcher drops permanently-rejected jobs without failing them
-
-`WorkerDispatcherService:218-227`: on a `400`/`422` from the worker the job is popped off Redis and
-`sent = true; // prevent re-push to queue`. Nothing marks the DB row `FAILED`. The row stays
-`PENDING` forever:
-
-+ `recoverStaleProcessingJobs:131` only scans `PROCESSING`, so the sweeper never sees it.
-+ `requeuePendingJobs:538` *will* re-push it — but only on the next backend restart, at which point
-  it gets rejected again, silently, forever.
-
-The user-visible symptom is a pipeline that stops at a stage with no error anywhere in the UI.
-
-**Status: DONE 2026-08-05 (`11c79da`).** A permanent rejection now marks the row `FAILED` with the
-status and body in `jobs.error`, and emits `job_update` so a live reader sees it without a reload.
-Best-effort by design: the job is already off the queue, so a DB or SSE failure there must not abort
-the rest of the dispatch cycle. Verified red-green.
-
-#### AUDIT-P3 **[H]** — one undispatchable job blocks every remaining queue in its slot class
-
-`WorkerDispatcherService:254-263` — when no worker accepts a job it is pushed back and the method
-`return`s, abandoning the rest of the loop. `HEAVY_QUEUES` is ordered
-`[qa-re-ocr, region-redo-ocr, ocr, panel-detection]`, so a single stuck job on `queue:qa-re-ocr`
-prevents `queue:ocr` from being polled *at all* for that cycle. `continue` to the next queue is
-almost certainly what was meant. This is head-of-line blocking across unrelated work.
-
-**Measured 2026-08-02: real bug, not currently costing throughput.** On the drained run a slot sat
-idle *with work queued in its own class* in only **3.2%** (light) / **1.3%** (heavy) of 3,253
-samples. Worth fixing as a latent correctness issue, but it is not the cause of the throughput
-complaint at the top of this file — see AUDIT-W10.
-
-**Status: DONE 2026-08-05 (`19cab6f`).** `break` rather than the suggested `continue` — the two are
-equivalent here because the `while` condition is already false at that point, but `break` says "stop
-draining this queue" outright. The commit explicitly declines to claim a throughput win.
-
-#### AUDIT-P4 **[H]** — job recovery re-runs work the worker is still doing
-
-Two paths requeue a job without telling the worker to stop:
-
-+ `resetProcessingJobsToPending:99-124` at every backend boot. The worker is a *separate container*
-  that does not restart with the backend, so its in-flight OCR keeps running.
-+ `recoverStaleProcessingJobs:128-160` after a 10-minute silence — shorter than a slow cloud-VLM
-  OCR pass on a busy page.
-
-Because none of the callback handlers are idempotent (`handleOcrCallback:734-817` unconditionally
-`saveAll`s a fresh region set and creates a new layer; `saveJobCosts` likewise), the duplicate run
-produces **a second full set of `ocr_regions`, a second layer, and double-counted cost**. There is
-no dedup key, and the `jobId` that would provide one is already in the payload but unused
-(AUDIT-P5).
-
-**Confirmed 2026-08-02 — this is the one correctness defect measurably costing work.** The drained
-run logged **277 dispatches for 255 jobs (22 re-dispatches)** and produced 12 duplicate
-`(subject, type)` rows across 4 subjects; `e185e276` ran `translation`, `qa` **and** `render` 3×
-each. `translation` shows n=50 for 42 pages.
-
-`worker_pull_model.md` §5.4 already proposes the cancellation tombstone that fixes half of this;
-the idempotency half is not tracked anywhere.
-
-#### AUDIT-P5 **[M]** — callbacks resolve "which job" by guessing instead of by `jobId`
-
-`enqueueJobDirectly:306` puts `jobId` in the payload and the worker echoes it back. Yet
-`handleOcrCallback:703` and `handleTranslationCallback:968` locate the job with
+`enqueueJobDirectly:317-327` mints a `jobId`, sets it as the DB row's id, and puts it in the payload;
+the worker echoes it back. Yet the callback path locates the job with
 `findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, type)` — newest job of that type for that
 image. With a redo in flight, or an image backing pages in two chapters, this marks the wrong job
 `FAILED`/`COMPLETED`. The correct identifier is already in hand.
+
+**Why this got worse rather than better.** AUDIT-P4 is closed: `claimCallback` (`:705-714`) runs a
+conditional `UPDATE Job SET callback_applied_at = :now WHERE id = :id AND callback_applied_at IS
+NULL`, and all seven handlers gate on it, so a duplicate callback can no longer write a second
+region set, a second layer or a second cost row. But `claimCallback` picks *which row to claim*
+with the same `findFirstByImageIdAndTypeOrderByCreatedAtDesc` guess (`:709`). **The idempotency
+guard is keyed off the ambiguous identifier it exists to make safe** — claim the wrong row and the
+guard both mis-marks that row and leaves the real one unclaimed, so the genuine callback is free to
+apply twice. Passing `jobId` through fixes P5 and completes P4 in the same change.
+
+Adding `jobId` to the callback DTOs changes the OpenAPI spec, so this needs a backend rebuild plus
+`npm run generate-api` from `frontend/` per `CLAUDE.md`.
 
 #### AUDIT-P6 **[M]** — a lost `COMPLETED` PATCH silently re-runs the whole job
 
@@ -328,15 +249,17 @@ actual *results* has already landed by then, so the duplicate is pure waste plus
 
 #### AUDIT-P7 **[M]** — page-scoped Redis keys are written and never read
 
-`triggerPageRedo:1220-1222` writes `page:ocr:reason:{pageId}` / `page:translation:reason:{pageId}`.
-A grep across backend, worker and frontend finds **no reader** — the consumers at `:776` and
-`:1036` read `image:ocr:reason:{imageId}` / `image:translation:reason:{imageId}`. So a page-level
+*Anchors re-checked 2026-08-05; all still present, line numbers updated.*
+
+`triggerPageRedo:1463-1465` writes `page:ocr:reason:{pageId}` / `page:translation:reason:{pageId}`.
+A grep across backend, worker and frontend finds **no reader** — the consumers at `:879` and
+`:1301` read `image:ocr:reason:{imageId}` / `image:translation:reason:{imageId}`. So a page-level
 re-OCR never gets its "OCR (manual-re-ocr)" layer label, and the keys accumulate in Redis with no
 TTL (unlike `pipeline:trace:`, which gets `Duration.ofHours(2)`).
 
-Same function, `:1226`: `redisTemplate.delete("pipeline:trace:" + pageId)` — trace keys are stored
-under **imageId** (`:212`, `:282`, `:288`). The delete is a no-op, so a page redo inherits the
-previous run's trace ID. `triggerImageRedo:1257` gets this right, which is what makes it a typo
+Same function, `:1469`: `redisTemplate.delete("pipeline:trace:" + pageId)` — trace keys are stored
+under **imageId** (`:246`, `:303`, `:309`). The delete is a no-op, so a page redo inherits the
+previous run's trace ID. `triggerImageRedo:1492-1499` gets this right, which is what makes it a typo
 rather than a design.
 
 Related: the `image:*:reason:` keys are `set()` **without a TTL**. If the pipeline dies before the
@@ -344,31 +267,20 @@ callback, the key survives and mislabels the *next* run's layer.
 
 #### AUDIT-P8 **[M]** — `pipeline:trace` expires mid-pipeline on slow runs
 
-`:214` gives the trace key a 2-hour TTL; `:282-291` regenerates a fresh ID when it has expired. The
+*Anchors re-checked 2026-08-05; both `Duration.ofHours(2)` calls still present.*
+
+`:246` gives the trace key a 2-hour TTL; `:303-309` regenerates a fresh ID when it has expired. The
 run in `logs/run-3-fresh.log` took ~2h for 50 pages, so traces were being silently split. The TTL
 should outlive the longest realistic pipeline, or the trace should live on the `Job` row.
 
-#### AUDIT-P9 **[M]** — regions and layers get written with `page_id = NULL`
-
-`handleOcrCallback:713` allows `page` to be `null` (`resolvePageForCallback` returns `null` when the
-page was deleted between enqueue and callback). It is then passed straight into
-`region.setPage(page)` (`:740`) and `ocrLayer.setPage(page)` (`:795`) with no guard. The rows save
-successfully and are then invisible to every `findByPageId` query — silent orphans that still count
-against cost. Guard and abort the callback instead.
-
-**Status: DONE 2026-08-05 (`a8abea3`) — and the mechanism above is wrong.** The rows do *not* save
-successfully. `ocr_regions.page_id` and `layers.page_id` are `NOT NULL` both in the entity mapping
-(`@JoinColumn(nullable = false)`) and in the live schema — checked against the running database and
-with a throwaway Testcontainers probe, which threw `ConstraintViolationException: null value in
-column "page_id"`. There are no silent orphans and there never were. What actually happened is a
-`DataIntegrityViolationException` at commit that rolls back the *entire completed OCR result*; the
-job then sits `PROCESSING` until `recoverStaleProcessingJobs` requeues it, the whole expensive OCR
-pass runs again and fails identically, up to `maxAttempts`. Real defect, wrong reason, and worse on
-cost than "still count against cost" suggests. The guard now fails the job once with a reason.
-
 ### Worker
 
-#### AUDIT-W1 **[H]** — QA silently supports only 3 providers, 2 of which aren't in `providers.json`
+#### AUDIT-W1 **[L]** — QA's two default-model maps duplicate `providers.json`
+
+*Re-ranked **[H] → [L]** on 2026-08-05, applying the 2026-08-04 correction the entry already carried
+in its body but never applied to its heading. The original title is preserved below.*
+
+**Original title:** QA silently supports only 3 providers, 2 of which aren't in `providers.json`
 
 `handlers/qa.py` dispatches on a hardcoded `if/elif` chain in four separate places (`:213-246`,
 `:461-495`, `:763-781`, `:1039-1073`), each accepting only `openrouter`, `gemini`, `nvidia` and
@@ -395,7 +307,12 @@ model is configured at any level**. Since `providers.json` carries per-provider 
 reason. Re-rank as **[L]**: delete the two default maps in favour of the config, rather than
 extending them.
 
-#### AUDIT-W2 **[H]** — `RATE_LIMIT` is a single global throttle across all providers and tasks
+#### AUDIT-W2 **[L]** — the global `RATE_LIMIT` fallback should default to unlimited
+
+*Re-ranked **[H] → [L]** on 2026-08-05. Measured inert twice (0.0 s, then 1.2%); only the hardening
+below survives. The original title is preserved because the code reading under it is still correct.*
+
+**Original title:** `RATE_LIMIT` is a single global throttle across all providers and tasks
 
 `utils/rate_limit.py:20-31` — when a provider does not carry its own `rate_limits`, it falls back
 to the `RATE_LIMIT` env var under the lock key `"global"` (`:37`). `.env.example:105` sets
@@ -418,96 +335,42 @@ the reading stands. Only the unlimited-default hardening remains.
 
 #### AUDIT-W3 **[M]** — cooldowns and lock waits burn a job slot doing nothing
 
+*Anchors re-checked 2026-08-05; all three blocking calls confirmed present.*
+
 Three places block a worker thread that is *holding a concurrency slot*:
 
-+ `llm_client.py:57-64` `wait_for_cooldown` — `time.sleep` up to 60s.
-+ `utils/lock.py:23-27` `acquire_lock` — spin-waits up to **600s**.
-+ `translation.py:504` `try_local_ai` — `timeout=300` per endpoint × 2 endpoints = 10 minutes.
++ `services/llm_client.py:93-100` `wait_for_cooldown` — `time.sleep` up to 60s.
++ `utils/lock.py:21-26` `acquire_lock` — spin-waits at `time.sleep(0.5)` up to **600s**.
++ `services/translation.py:576` `try_local_ai` — `timeout=300` per endpoint × 2 endpoints = 10
+  minutes. Note the second local path (`:990`) already uses a `(10, 45)` connect/read pair, so the
+  fix pattern exists in the file; `try_local_ai` just never got it.
 
 With `MAX_HEAVY_SLOTS=1` a single provider cooldown stalls all heavy work. Slots should be released
 before sleeping, or the job re-queued with a delay.
 
+**Less urgent than when filed, for one tier only.** AUDIT-W10 is closed and light slots now derive
+to 4, so a cooldown on a light job no longer halts the light tier. Heavy is still `MAX_HEAVY_SLOTS=1`
+by design — that tier is local PaddleOCR on CPU and already saturates the container — so the
+original "one cooldown stalls all heavy work" reading is unchanged there.
+
 #### AUDIT-W4 **[M]** — the Valkey lock is per-container and releases other holders' locks
 
-`utils/lock.py:15` — `lock_key = f"lock:{lock_name}:{node_id}"`. Including the node ID means the
+*Anchors re-checked 2026-08-05; both defects confirmed present, unchanged.*
+
+`utils/lock.py:16` — `lock_key = f"lock:{lock_name}:{node_id}"`. Including the node ID means the
 `local-llm` lock does **not** serialise across workers, which is the one job it exists to do
 (`WORKER_URLS` is explicitly a comma-separated list, so multi-worker is a supported topology).
 
-`:35` then does an unconditional `redis_client.delete(lock_key)` in `finally`. With `timeout=600`
+`:37` then does an unconditional `redis_client.delete(lock_key)` in `finally`. With `timeout=600`
 and `expire=600` set equal, a holder that runs long enough for its lock to expire will delete the
 lock a *different* holder has since acquired. Needs a random token value plus a compare-and-delete
 Lua script.
 
-#### AUDIT-W5 **[M]** — `REUSE_IDLE_SLOTS` is dead code in the push model
-
-> **WON'T DO — closed 2026-08-04.** Re-measured payoff is **1.8%**, down from the 13.0% that put
-> this at the top of the list, and at that size lending the slot is probably not even the right fix.
-> Two corrections to the text below, both made by reading the code on 2026-08-03: `REUSE_IDLE_SLOTS`
-> **is** read (`worker/src/worker/main.py:206`), and the method is `hasLightSlot()` at
-> `WorkerDispatcherService.java:334`, not `:318`. Kept rather than deleted so this does not get
-> re-derived. See `docs/archive.md`.
-
-The worker will accept a light job into a spare global slot (`main.py:171-175`) and reports
-`overflow_light_jobs` in `/capabilities`. But the backend gates dispatch on
-`WorkerDispatcherService:318` `hasLightSlot() → activeLight < maxLight && activeTotal < maxTotal`,
-which never allows the overflow. So the feature can only ever fire for a job the dispatcher would
-not have sent. Either teach the dispatcher about it or delete the flag.
-
-**Confirmed 2026-08-02.** Across 3,253 samples of a clean drained run, `active_light` **never
-exceeded 1**, despite the worker reporting `reuse_idle_slots=true` and the heavy slot being free
-95.9% of the time. Every previous run that touched this was contended; this one was not.
-
-#### AUDIT-W10 **[C]** — `MAX_LIGHT_SLOTS=1` serialises four wildly different workloads
-
-*Added 2026-08-02 from the first drained run. This is the largest measured throughput lever in the
-codebase and it is a config change, not code.*
-
-`environment.md` for run `20260802-163445`:
-
-```txt
-max_concurrent_jobs=2, max_heavy_slots=1, max_light_slots=1, reuse_idle_slots=true
-```
-
-Four light stages share that one slot, and their per-job costs differ by three orders of magnitude:
-
-| light stage | total work | share of light tier | work p50 |
-| --- | ---: | ---: | ---: |
-| qa | 2,083 s | 52.4% | 53.8 s |
-| translation | 1,774 s | 44.6% | 30.5 s |
-| render | 96 s | 2.4% | 1.0 s |
-| layout | 24 s | 0.6% | **0.2 s** |
-
-So a **0.2 s** layout job queues behind 30–110 s LLM calls, one at a time, for a **591 s median
-wait**. Little's law closes the loop: mean layout queue depth 4.49 × 7,924 s ÷ 42 jobs = 847 s
-predicted vs 879 s measured.
-
-**The tier that bounds throughput has flipped.** Every throughput argument in `docs/` still assumes
-the single heavy slot is the floor — true when OCR was 13.7 s/page and QA was ~0.2 s/page. Today:
-
-| tier | per page | pages/min bound |
-| --- | ---: | ---: |
-| heavy (`ocr`, `panel-detection`) | 23.4 s | 2.57 |
-| **light** (`qa`, `translation`, `render`, `layout`) | **94.7 s** | **0.63** |
-
-The light tier is **4× slower** than the heavy tier, and the heavy slot sits idle 95.9% of the time.
-Headroom is available — worker CPU averaged **22.5%** (p95 191% of its 200% cap), and light work is
-network-bound LLM calls, not CPU.
-
-Raising `MAX_LIGHT_SLOTS` (and `CONCURRENT_JOBS` with it) attacks 99% of the measured queue wait.
-Note AUDIT-W6 below: the slot maths is unvalidated, so change both knobs together and check the
-resulting values. Interacts with AUDIT-W3 — light jobs that block on cooldowns/locks hold a slot,
-which matters more, not less, once several run concurrently.
-
-#### AUDIT-W6 **[M]** — slot maths can compute to zero or negative with no validation
-
-`concurrency.py:29` — `MAX_LIGHT_SLOTS = _parse_env_int("MAX_LIGHT_SLOTS", MAX_CONCURRENT_JOBS - MAX_HEAVY_SLOTS)`.
-`CONCURRENT_JOBS=1` with the default `MAX_HEAVY_SLOTS=1` yields `0`; `MAX_HEAVY_SLOTS=3` with
-`CONCURRENT_JOBS=2` yields `-1`. Combined with `REUSE_IDLE_SLOTS=false` that is a permanent `429`
-on every light queue — a hard pipeline deadlock from a plausible config. Nothing validates or warns.
-
 #### AUDIT-W7 **[M]** — the stale-job check hammers the heaviest endpoint, without a timeout
 
-`rq_tasks.py:35-38`:
+*Anchor re-checked 2026-08-05; confirmed present, still the file's only timeout-less request.*
+
+`rq_tasks.py:36`:
 
 ```python
 res = requests.get(backend_url, headers=BACKEND_HEADERS)
@@ -523,131 +386,52 @@ anyway.
 
 #### AUDIT-W8 **[M]** — provider payload defects in `LLMClient`
 
-`services/llm_client.py`:
+*Re-verified 2026-08-05. **One of the five is fixed and has been archived**; the remaining four are
+confirmed present, with anchors updated.*
 
-+ `:161` Anthropic `max_tokens` is hardcoded to `4096`. A dense page truncates mid-JSON and fails to
-  parse, indistinguishable from a model error.
-+ `:158-171` the Anthropic branch **ignores `response_schema` entirely** — no tool-use, no
-  structured output. Anthropic providers get no JSON enforcement at all.
-+ `:300` `choices[0].get("message", {}).get("content", "")` returns `None` (not `""`) when the key
++ ~~`:161` Anthropic `max_tokens` is hardcoded to `4096`.~~ **Fixed** — `_build_payload` now uses
+  `DEFAULT_MAX_OUTPUT_TOKENS` on both the Anthropic (`:205`) and OpenAI-shaped (`:220`) branches.
+
+`services/llm_client.py`, still open:
+
++ `:202-215` the Anthropic branch **ignores `response_schema` entirely** — the whole
+  `response_format` ladder (`:231-249`) sits inside the `else`, so no tool-use and no structured
+  output. Anthropic providers get no JSON enforcement at all. **This is the one that matters of the
+  four**, and it got sharper, not softer: every other provider gained a `json_schema` path around it.
++ `:361` `choices[0].get("message", {}).get("content", "")` returns `None` (not `""`) when the key
   is present with a null value, which is what providers send alongside a `refusal`. Downstream
   `json.loads(None)` raises `TypeError`. Use `or ""`.
-+ `:68` `PROVIDER_REGISTRY = get_provider_registry()` executes at **import time**, so editing
++ `:104` `PROVIDER_REGISTRY = get_provider_registry()` executes at **import time**, so editing
   `providers.json` requires a worker restart — the backend, by contrast, has
   `ProviderConfigCache.reload()`. Asymmetric and surprising.
-+ `:50-51` `PROVIDER_COOLDOWNS` / `PROVIDER_CONSECUTIVE_429S` are bare dicts mutated from multiple
-  job threads with no lock; concurrent 429s lose increments.
++ `:65-66` `PROVIDER_COOLDOWNS` / `PROVIDER_CONSECUTIVE_429S` are bare dicts mutated from multiple
+  job threads with no lock; concurrent 429s lose increments (`:310-314`, read-modify-write).
 
 #### AUDIT-W9 **[M]** — local JSON mode is not actually enforced
 
-`translation.py:489-492` sets `payload["format"] = "json"` for Ollama. That is the field name for
-Ollama's **native** `/api/generate` API, but the endpoint being called is the OpenAI-compatible
-`/v1/chat/completions` shim (`:465`), which ignores it — the OpenAI shim wants
-`response_format: {"type": "json_object"}`. So local structured output is silently unconstrained,
-compounding the already-tracked `try_local_ai` prompt bug.
+*Re-verified 2026-08-05. Confirmed present in **both** local call sites, and the default mismatch is
+worse than filed — it is now a four-way split, not three.*
 
-Also `:459` defaults `LOCAL_LLM_MODEL` to `gemma3:4b`, while `docker-compose.yml` and
-`.env.example:81` default it to `gemma4:e4b` — a tag that does not exist (probably meant
-`gemma3n:e4b`). And `:456` defaults `LOCAL_LLM_PROVIDER` to `lmstudio` where compose defaults to
-`ollama`. Three different defaults for the same two settings.
+`services/translation.py:561-565` sets `payload["format"] = "json"` when `local_provider ==
+"ollama"`. That is the field name for Ollama's **native** `/api/chat` and `/api/generate` APIs, but
+the endpoint being called is the OpenAI-compatible `/v1/chat/completions` shim (`:534`), which
+ignores it — the shim wants `response_format: {"type": "json_object"}`, which the `else` branch
+already sends for every non-Ollama local provider. So Ollama, the *default* local provider, is the
+one case that gets no JSON enforcement. The identical branch is duplicated at `:978-982`.
 
-#### AUDIT-W12 **[H]** — confirm QA actually emits `escalation` and `directFix` now
+The defaults for the same two settings now disagree four ways:
 
-> **CONFIRMED 2026-08-04.** QA does emit `escalation` / `directFix` against a live provider. The
-> contingency below — flattening the nested objects onto the result — is **not needed** and should
-> not be built. The 90 s/page of blind re-translation this was costing is recovered.
+| setting | `try_local_ai` (`:528`, `:530`) | second local path (`:942`) | `docker-compose.yml` (`:227`, `:229`) | `.env.example` (`:91`, `:93`) |
+| --- | --- | --- | --- | --- |
+| `LOCAL_LLM_PROVIDER` | `lmstudio` | `ollama` | `ollama` | `ollama` |
+| `LOCAL_LLM_MODEL` | `gemma3:4b` | — | `gemma4:e4b` | `gemma4:e4b` |
 
-Split out 2026-08-03. The schema change that makes both objects `required`, and the prompt rewrite
-that tells the model prose has no routing effect, are **committed but unconfirmed against a live
-provider** — the only evidence they were missing is observational (run `20260803-084755`: 10
-`direct_fix` verdicts with zero `directFix` payloads, 10 `failed` verdicts with zero `escalation`
-blocks), and nothing short of a real call proves the fix took.
-
-This matters more than its size suggests. Until `escalation.needsReOcr` arrives, every QA failure
-routes to a blind re-translation of the same unreadable OCR: measured at **450 s across 4 wasted
-cycles on 5 pages — 90 s/page, 39% of all work in the run** — and it never fixes the defect, because
-re-translating garbled OCR cannot recover the source text. The `qa-re-ocr` dispatch path already
-exists and is correct (`JobCoordinatorService`, "Re-OCR request" branch); it has simply never fired,
-because `regionsToReOcr` is only populated from a flag the model never set.
-
-**How to check on the next run** — all three are already logged, no new instrumentation needed:
-
-+ `zcat worker.log.gz | grep -c escalation` should be non-zero.
-+ `grep "carry no escalation block"` should be absent (the new warning in `_sanitize_qa_results`).
-+ `grep "Enqueuing qa-re-ocr job"` in the backend log should appear for garbled-OCR pages.
-
-If `escalation` is still absent, the provider is dropping the required keys and the next step is to
-flatten the fields onto the result object rather than nesting them — models emit optional nested
-objects far less reliably than flat scalars, and that is the pattern all four QA prompts share.
-
-#### AUDIT-W11 **[M]** — a chapter pinned to a dead provider has no escape hatch
-
-> **FIXED 2026-08-04** (worker `2f0abfa`). Fallback now crosses provider boundaries when — and
-> only when — the pinned provider is parked in `PROVIDER_AUTH_FAILURES`. Both translation paths
-> share `resolve_fallback_target()`. `ocr.py` and `qa.py` still carry the old rule; the failure was
-> only measured on translation, so they were left for their own commit.
-
-*Added 2026-08-03, split out of the translation-failure triage at the bottom of this file.*
-
-Visible in every traceback from run `20260802-163445`: `No fallback applied (global provider
-different or model identical)`. When a chapter-level override pins a provider that is down — the
-invalid `neurometric` key, 401 × 323 — the fallback logic declines to cross provider boundaries, so
-the global default (a working `openrouter`) is never tried and the chapter fails 100% of its
-translations.
-
-The safety argument for not crossing providers is real (a chapter pinned to a specific model
-presumably wants *that* model), but "the pinned provider is authenticating-failed and parked in
-`PROVIDER_AUTH_FAILURES`" is exactly the case where it should. Fallback should cross providers when
-the pinned one is parked, and say so in the log.
+`gemma4:e4b` is not a real tag (probably meant `gemma3n:e4b`), so the shipped default pulls nothing.
+And because `try_local_ai` defaults the provider to `lmstudio`, its `format`/`response_format` branch
+takes the *opposite* path from the deployed configuration — which is why the JSON bug above has
+never been seen in the one place someone would have looked.
 
 ### Backend (Spring)
-
-#### AUDIT-B1 **[H]** — one scheduler thread runs everything — **RESOLVED 2026-08-05**
-
-Fixed in `0e5bbd5`. `spring.task.scheduling.pool.size` is now 4 (override with
-`SCHEDULING_POOL_SIZE`). Confirmed in the deployed container: `scheduling-1`, `scheduling-3` and
-`scheduling-4` run concurrently where before there was only ever `scheduling-1`.
-
-#### AUDIT-B2 **[H]** — `@Transactional` bypassed on the startup path — **RESOLVED 2026-08-05**
-
-Fixed in `61d856c` via a `@Lazy` self-reference. Two corrections to this entry as written:
-
-+ The proxy fix alone was **not** sufficient. `resetProcessingJobsToPending` also caught every
-  exception internally, so the transaction never saw a failure and would commit the partial batch.
-  Exceptions now propagate; `onStartup` still logs and lets the app start.
-+ **`requeuePendingJobs` was never a defect.** This entry named it alongside
-  `resetProcessingJobsToPending`, but it carries no `@Transactional` at all — self-invocation loses
-  nothing there.
-
-#### AUDIT-B3 **[M]** — **FULLY RESOLVED 2026-08-05** (`f131e42` NPE, `80520a0` the rest)
-
-`f131e42` split the handler: `IllegalArgumentException` → 400 with its message,
-`NullPointerException` → 500, logged with the request description and full stack trace. The detail
-sent to the client is generic, since an NPE message describes our internals.
-
-*Live behaviour change:* any `Objects.requireNonNull` doing input validation now returns 500 rather
-than 400 (see AUDIT-Q1's 247 calls). That is the correct signal, and no test depended on the old
-mapping — but it is worth knowing when triaging a new 500.
-
-**Still open in this entry:**
-
-+ `handleInternalError` returns `"Something went wrong: " + ex.getMessage()` to the client — leaks
-  SQL fragments, file paths and internal identifiers.
-+ There is no `AccessDeniedException` handler, so a `@PreAuthorize` denial thrown at method level is
-  caught by the catch-all `Exception` handler and returned as **500 instead of 403**.
-
-#### AUDIT-B4 **[M]** — **FULLY RESOLVED 2026-08-05** (`c123cba` multi-tab, `6c9c624` the race)
-
-`c123cba` replaced the one-emitter-per-user map with
-`ConcurrentHashMap<UUID, Collection<SseEmitter>>` over `CopyOnWriteArrayList`, with removal **by
-identity** under `compute` — so an orphaned tab's completion callback can no longer evict the live
-tab's emitter, and the user's entry is dropped once its last connection goes rather than leaking an
-empty collection. The three send paths share one fan-out helper that reports whether anything took
-the event, which `emitNotificationToUser` uses to decide on queueing to Redis.
-
-**Still open in this entry:** `sendPendingNotifications` does `range(0,-1)` then `delete(key)`
-non-atomically, so a notification pushed between the two calls is lost. Untouched by the above, and
-a different kind of bug — a Redis race, not a map-keying mistake.
 
 #### AUDIT-B5 **[M]** — schema is managed by `ddl-auto: update` with a competing `init.sql`
 
@@ -663,56 +447,40 @@ entire request and lets lazy collections load during view rendering, which is a 
 contributor to the "backend is holding the UI back" complaint. Both deserve measurement before the
 Firefox profiling pass.
 
-#### AUDIT-B6 **[M]** — thumbnail decode serialised — **RESOLVED (verified 2026-08-05)**
-
-> The lock is now scoped to genuinely-WebP reads and writes (`PageService.isNativeWebpReader`,
-> `decodeForThumbnail`), and the `catch (Error)` is a `catch (… | LinkageError)`. The
-> `in.mark` without a `reset` went with the rewrite. Found already-fixed while pulling items
-> onto the 2026-08-05 board; the entry below is the original text.
-
-`PageService:23-27` says the WebP lock is "scoped to WebP work only so the thread-safe built-in
-PNG/JPEG/BMP codecs can still run in parallel". `:215-245` then wraps the **entire decode of every
-format** in `synchronized (WEBP_LOCK)`, and `:260-285` wraps the encode. The 4-thread
-`thumbnailExecutor` is therefore fully serialised for both halves of the work — which is the
-already-noted 100+ image upload slowdown, but the code comment actively misleads anyone
-investigating it. Only the WebP reader/writer calls need the lock.
-
-Same method: `:211` `in.mark(Integer.MAX_VALUE)` is never paired with a `reset()`; `:298` catches
-`Error`, which swallows `OutOfMemoryError` and `StackOverflowError` along with the
-`UnsatisfiedLinkError` it was written for (`LinkageError` is the intended net).
-
-#### AUDIT-B7 **[M]** — cover recalculation is skipped for duplicate-image imports
-
-`PageService:96` uses `if (safePageNumber == 1)`; the near-identical
-`createPageWithExistingImage:134` uses `if (pageNumber != null && pageNumber == 1)` — the **raw**
-argument. Importing a duplicate image into an empty chapter passes `pageNumber = null`, resolves to
-`safePageNumber = 1`, and skips `recalculateChapterCover`. The chapter renders with no cover until
-something else touches it.
-
-**Status: DONE 2026-08-05 (`3455430`).** Both call sites now guard on `safePageNumber`. Verified
-red-green — the new test leaves the cover `null` on the raw-argument guard.
-
 #### AUDIT-B8 **[L]** — assorted backend defects
 
-+ `WorkerDispatcherService:25` — `${WORKER_URLS:http://worker:9091}` defaults to port **9091**; the
+*Re-verified bullet-by-bullet 2026-08-05. **One of the nine is fixed and has been archived**; the
+other eight are confirmed present, with anchors updated. Note that `next-step.md`'s one-line summary
+of this entry listed only five of them — the `@PostConstruct` duplication, the `JwtAuthFilter`
+logging placeholder and the reader-mode terminal status were dropped somewhere between the two files
+and are restored here.*
+
++ ~~`JwtAuthFilter` is registered in both the servlet chain and the security chain.~~ **Fixed** —
+  `SecurityConfig:105-110` registers it through a `FilterRegistrationBean` with
+  `setEnabled(false)`, and `SseTicketAuthFilter` got the same treatment at `:112`.
+
+Still open:
+
++ `WorkerDispatcherService:27` — `${WORKER_URLS:http://worker:9091}` defaults to port **9091**; the
   worker listens on 8000 everywhere else (`Dockerfile EXPOSE 8000`, compose default).
-+ `WorkerDispatcherService:45-55` — `@PostConstruct init()` re-reads `WORKER_API_SECRET_FILE`
++ `WorkerDispatcherService:47-55` — `@PostConstruct init()` re-reads `WORKER_API_SECRET_FILE`
   manually, duplicating work `DockerSecretsEnvironmentPostProcessor` already did.
-+ `JwtAuthFilter` is a `@Component` **and** is added via `addFilterBefore` (`SecurityConfig:53`), so
-  it is registered in both the servlet chain and the security chain. Register it with a
-  `FilterRegistrationBean(setEnabled(false))`.
-+ `JwtUtils:19` — `jwtExpirationMs` is an `int`; anything past ~24.8 days overflows.
++ `JwtUtils:20` — `jwtExpirationMs` is an `int`; anything past ~24.8 days overflows. Used at `:31`
+  as `new Date(new Date().getTime() + jwtExpirationMs)`, so the overflow lands in the past.
 + `JwtAuthFilter:58` — `logger.error("Cannot set user authentication: {}", e)` fills the placeholder
   with `e.toString()` instead of attaching the throwable, so no stack trace is ever logged.
-+ `InternalJobController:158-170` — five `log.info("DEBUG_TL: …")` lines at INFO on the hottest
++ `InternalJobController:189-196` — five `log.info("DEBUG_TL: …")` lines at INFO on the hottest
   internal endpoint (called once per job, per AUDIT-W7).
-+ `InternalJobController:74` — `updateJobStatus` writes whatever `status` string the worker sends,
-  with no state-machine validation.
-+ `InternalJobController:451-455` — `resolveNotificationContext` uses `pages.get(0)`, reintroducing
++ `InternalJobController:68-105` — `updateJobStatus` writes whatever `status` string the worker
+  sends straight onto the row (`job.setStatus(payload.get("status"))`), with no state-machine
+  validation and no enum. It special-cases `PENDING` and `FAILED` for *logging* only, so a typo
+  reaches the DB and every downstream `equals` comparison silently stops matching.
++ `InternalJobController:651` — `resolveNotificationContext` uses `pages.get(0)`, reintroducing
   exactly the "first page for this image" ambiguity that commit `5e2d5ce` removed elsewhere. Two
   chapters sharing an image will get notifications naming the wrong chapter.
-+ `JobCoordinatorService:911-928` — reader mode (`source == target`) `return`s without setting any
-  terminal job status, so the layout job's completion depends entirely on the worker's PATCH.
++ `JobCoordinatorService:1029-1035` — reader mode (`source == target`) `return`s after logging
+  "Skipping translation, render, and QA" without setting any terminal job status, so the layout
+  job's completion depends entirely on the worker's PATCH — which AUDIT-P6 shows can be lost.
 
 ### Frontend
 
@@ -745,108 +513,6 @@ assuming the backend is at fault. Hoist static `sx` objects to module constants 
 entire reader. This is the natural first target for a deepening refactor — the sidebar, the canvas
 overlay and the page navigation are three independent modules sharing one component.
 
-#### AUDIT-F3 **[M]** — SSE reconnects forever with no backoff — **RESOLVED 2026-08-05**
-
-Fixed in `14f0c07`, closing all three gaps this entry accumulated. Exponential backoff from 5 s to a
-60 s cap with **equal jitter** — which keeps a floor of half the nominal delay, so retries still make
-steady progress while spreading a fleet of reconnecting tabs across the window instead of aligning
-them. The streak resets when a connection actually opens, so an unrelated blip weeks later starts
-from 5 s rather than inheriting an old 60 s.
-
-Retries also stop entirely while `document.visibilityState !== "visible"` and resume immediately on
-wake, rather than making the user wait out a backoff window they never saw start. Both hidden-tab
-cases are covered and tested: hidden when the failure happened, and hidden by the time the armed
-timer fired.
-
-*This is the precondition for deleting the `QueueManager.tsx:427` poll under AUDIT-F5 — that poll
-exists because SSE was not trusted to stay up. It is now safe to remove, and has not been yet.*
-
-#### AUDIT-F4 **[M]** — light-mode secondary text fails WCAG AA — **RESOLVED 2026-08-05**
-
-Fixed in `a39374c`: `text.secondary` `#b0b0b0` → `#5f5f5f`, giving 6.4:1 on paper and 5.9:1 on the
-default background.
-
-*Correction to this entry:* `text.disabled` (`#786e6a`) is **≈4.96:1**, not ≈4.6:1 — the new test
-computes WCAG relative luminance directly rather than eyeballing it. The inversion described was
-real and slightly worse than stated: secondary sat at **2.17:1**, well below disabled.
-
-The test checks both text colours against both background surfaces in both modes, so a future
-palette nudge cannot regress this quietly. It also pins the specific inversion: secondary must never
-be less legible than disabled.
-
-#### AUDIT-F5 **[L]** — smaller frontend items — **RESOLVED 2026-08-05** (`33f3902`)
-
-> All nine. Two corrections: the `getSnapshot` "tearing hazard" is not one (a string snapshot
-> compares fine under `Object.is`), and the precompressed-assets item would have emitted files
-> nothing serves — Spring's own `server.compression` was enabled instead. See archive.md.
-
-+ `useColorMode.ts:6` — `getSnapshot` calls `localStorage.getItem` directly, and React invokes it on
-  every render and every store check. Cache the snapshot; returning a fresh value each call is also
-  a `useSyncExternalStore` tearing hazard.
-+ `useColorMode.ts:22` writes `manga_theme`, and `App.tsx:187` writes it **again** in an effect —
-  two writers, one key.
-+ `useColorMode.ts:23` — the synthetic `StorageEvent` carries no `newValue`, so any future listener
-  that reads it breaks.
-+ `QueueManager.tsx:420` — `setInterval(fetchJobs, 30000)` polls on top of the SSE feed that already
-  pushes `job_update`.
-+ `package.json:20` — `esbuild` is a direct dependency; it belongs in `devDependencies`.
-+ `package.json:14` — `generate-api` hardcodes `http://localhost:8080/tlhub/...`, which breaks for
-  any non-default `CONTEXT_PATH`.
-
-**Re-checked 2026-08-04.** All six still open; line numbers have drifted —
-`App.tsx:287` is the duplicate `manga_theme` writer, `QueueManager.tsx:427` the poll,
-`package.json:21` the `esbuild` dependency. Three more of the same size, from the yt-diff
-comparison (see [frontend_improvements.md](./frontend_improvements.md)):
-
-+ **No precompressed assets.** `vite.config.ts` has no compression plugin and the MUI vendor chunk
-  ships at 380 kB (119 kB gzip). yt-diff emits `.gz` + `.br` at build time via
-  `vite-plugin-compression2`. Brotli is worth ~20–25% over gzip on that chunk, on a tablet.
-+ **`"lint": "eslint ."` does not fail on warnings.** yt-diff runs
-  `eslint src --report-unused-disable-directives --max-warnings 0`. Adopt the flags; it stops
-  warning drift for free.
-+ **Spinner-only loading states.** No `Skeleton` anywhere. The dashboard, chapter gallery and page
-  grid all have known cell shapes, so skeletons map onto them directly and remove the layout jump
-  a centred spinner causes.
-
-#### AUDIT-F6 **[M]** — icon-only controls carry no accessible name — **RESOLVED 2026-08-05** (`ba21af6`)
-
-> The count below is misleading: of 51 icon buttons, 21 were already named by a MUI `Tooltip`,
-> 17 by a native `title`, and only **12** had nothing — none of them in the five files named
-> here. `Reader.tsx` and `ReaderLeftSidebar` have no `IconButton` or `Fab` at all. The
-> focus-order half had no concrete defect; the real gap is landmarks, now on the board.
-
-The whole frontend has **5** `aria-label`s across 40 components. `Reader.tsx` — 3,954 lines, the
-primary surface, almost entirely icon-only `IconButton`s — has **zero**, as do `ReaderTopNav`,
-`ReaderLeftSidebar`, `ReaderRightSidebar` and `NavBar`.
-
-For scale, `yt-diff/frontend` has 56 across 11 components and labels every icon button
-(`Pagination.jsx` 5, `Nav.jsx` 13, `VideoPlayer.jsx` 15) — an independently built app of the same
-shape that got this right without a policy. Unlabelled icon buttons are unusable with a screen
-reader and give tests nothing stable to query, which is part of why the component suites here lean
-on text matching.
-
-Pairs with **AUDIT-F4**: between them they are the whole accessibility story, and F4 is a one-line
-fix. Do them as one pass.
-
-#### AUDIT-F7 **[M]** — nothing tells the client its session died — **RESOLVED 2026-08-05** (`ee24e53`)
-
-> Correction: "the client half of that already exists here" below is **wrong**. `App.tsx`
-> listens for a window `CustomEvent`; `useSSE` had no `session-expired` listener on the
-> `EventSource`, so the push would have been dropped silently. That was added too.
-
-Expiry is only ever discovered client-side, from the token's own `exp` (`utils.ts`, 2026-08-04) or
-from a 401 on the next request. A tab that is open but idle has no idea.
-
-yt-diff's backend arms a `setTimeout` at socket-connect for the token's exact `exp` and pushes
-`token-expired` before disconnecting (`yt-diff/src/socket/index.ts:75-100`), re-verifying
-periodically so a password change also kills live sessions. The client half of that already exists
-here: `SESSION_EXPIRED_EVENT` in `utils.ts` and the `SessionWatcher` listener in `App.tsx` would
-consume such an event with no change.
-
-Wants `SseTicketAuthFilter` to emit `session-expired` at the token's `exp`. **Complements rather
-than replaces the client timer** — a frozen mobile tab has no live SSE connection to receive a
-push, which is the exact case that produced the original blank-screen report.
-
 #### AUDIT-F8 **[L]** — lists are fetched whole; no pagination, search or debounce
 
 `App.tsx:216` fetches `/api/series` in full; the series route fetches every chapter. There is **no
@@ -875,91 +541,6 @@ browser: a Playwright viewport smoke test over the reader and dashboard. Given t
 is an Android tablet, nothing checks it today.
 
 ### Docker & Compose
-
-#### AUDIT-D1 **[H]** — `db-backup` restart policy — **RESOLVED (verified 2026-08-05)**
-
-> `docker-compose.yml` reads `restart: unless-stopped`, with a NOTE recording that `none` was
-> never a valid Compose value. Found already-fixed while pulling items onto the 2026-08-05
-> board. **Backup freshness itself was not re-checked** — verify `data/backups/last/` before
-> trusting it.
-
-`docker-compose.yml:29` — `restart: none`. The Compose spec values are `no`, `always`,
-`on-failure`, `unless-stopped`; `none` is not one of them. `docker compose config` passes it
-through unvalidated, but the container **does not currently exist** (`docker ps -a` finds no
-`manga-db-backup`), and the newest file in `data/backups/last/` is dated **2026-07-28** — four days
-stale as of this audit.
-
-Whatever stopped it, `restart: none` guarantees it never comes back after a stop or host reboot.
-Use `restart: unless-stopped` (`BACKUP_ON_START=TRUE` plus `SCHEDULE=@daily` already handles the
-"only run periodically" intent). **Verify the backups are actually current before trusting them.**
-
-#### AUDIT-D2 **[M]** — the worker image is single-stage, runs as root, and pins nothing
-
-`worker/Dockerfile`:
-
-+ **Not multi-stage** — the ML dependency tree (paddle, onnx, opencv) ships in one layer with no
-  builder/runtime split, and `libxrender-dev` (`:9`) leaves a `-dev` package in the runtime image.
-+ **No `USER`** — the container runs as root, while `backend/Dockerfile:47` correctly creates and
-  drops to a `spring` user. Inconsistent posture across the two images.
-+ `:20-28` downloads four fonts from GitHub `raw.githubusercontent.com/.../main/...` at build time.
-  Unpinned refs against a moving branch: the build is not reproducible and breaks if any upstream
-  path moves. Vendor the fonts or pin commit SHAs. (The Arial pull from the `root-project` repo also
-  has licensing implications for a published image.)
-+ **No `PYTHONUNBUFFERED=1`** — which is precisely why the code is littered with `flush=True` on
-  every `print`. Setting the env var lets those be dropped.
-+ `pip install` without a BuildKit cache mount, unlike the backend's Maven and npm stages.
-
-**Status: PARTLY DONE 2026-08-05** (worker `0894cb2`, pointer `9cdd365`). Read the whole entry before
-calling this closed — it bundles more than its headline, and only some of it is done.
-
-*Done.* **Pinning**: the base image is pinned by digest, and 19 of the 20 requirements carried no
-version at all — all 20 are now pinned to the versions the running worker was already on, so the
-change is behaviourally a no-op. **Non-root**: a fixed `uid 10001` (fixed, not useradd's choice,
-because the bind-mounted model caches carry host ownership through and a drifting uid would silently
-lose write access to 374 MB of models); the YOLO cache path in `config.py` moved off `/root` to match,
-and the compose mounts moved with it.
-
-*WON'T DO.* **Multi-stage**, on measurement. Of the 1.93 GB image, 1.53 GB is ML wheels and 280 MB is
-apt libs, and there is **no build-toolchain layer at all** — no `build-essential`, no gcc — so a
-builder stage has nothing to leave behind. The rebuilt image measured 1.94 GB, unchanged. Do not
-reopen without a measurement that contradicts this.
-
-*Still open, and not attempted.* The four font `wget`s against `raw.githubusercontent.com/.../main/`
-are still unpinned refs on a moving branch, with the Arial licensing question untouched;
-`libxrender-dev` is still a `-dev` package in the runtime image; there is still no
-`PYTHONUNBUFFERED=1`, so the `flush=True` littering stands; and `pip install` still has no BuildKit
-cache mount.
-
-*Not yet deployed.* The host directories under `data/worker/` are still root-owned and must be
-`chown`ed to `10001:10001` before `docker compose up -d worker`.
-
-#### AUDIT-D3 **[M]** — `depends_on` ignores the healthchecks that are already defined
-
-Every stateful service defines a `healthcheck`, but `backend:depends_on` (`:124-127`) and
-`worker:depends_on` (`:213-216`) use the short list form, which only waits for *container start*.
-The backend therefore races Postgres on a cold boot. Switch to
-`depends_on: { db: { condition: service_healthy } }` — the healthchecks are already written, they
-just aren't wired up.
-
-**Status: DONE 2026-08-05 (`55f9d00`).** All six dependencies across `backend` and `worker` now use
-`condition: service_healthy`, confirmed with `docker compose config`, and observed working on the
-backend redeploy — compose printed `Waiting` then `Healthy` for db, minio and valkey before starting
-the backend.
-
-#### AUDIT-D4 **[M]** — `MINIO_ENDPOINT` means two different things
-
-`docker-compose.yml:107` gives the backend `${MINIO_ENDPOINT:-http://minio:9000}` (with scheme);
-`:172` gives the worker `${MINIO_ENDPOINT:-minio:9000}` (without — the Python MinIO SDK requires
-it that way). Both read the **same variable**. The defaults paper over it, but the moment anyone
-sets `MINIO_ENDPOINT` in `.env` — which the compose file invites — exactly one of the two services
-breaks. It is also absent from `.env.example`, so there is no documented correct value. Split into
-`MINIO_ENDPOINT` and `MINIO_ENDPOINT_INTERNAL`.
-
-**Status: DONE 2026-08-05 (`69ad910`).** Split as `MINIO_ENDPOINT_URL` (backend, carries the scheme)
-and `MINIO_ENDPOINT_HOST` (worker, bare host:port); the in-container variable stays `MINIO_ENDPOINT`
-on both sides so no application code changed. Both are now documented in `.env.example`, closing the
-"no documented correct value" half. It breaks in *both* directions, not just the worker's: the Java
-SDK's `MinioClient.endpoint()` treats a bare host as HTTPS.
 
 #### AUDIT-D5 **[L]** — remaining infrastructure items
 
@@ -996,6 +577,11 @@ callback: not the translated text, not the region IDs, not the layer geometry, n
 regression that posted `{}` to all seven callbacks would pass. `mock_post.call_count == 7` is also
 brittle in the wrong direction — it breaks on any refactor while proving nothing about correctness.
 
+**Re-counted 2026-08-05 and the trend is the wrong way.** The suite grew and got *more* mocked, not
+less: **342 `@patch` across 49 files**, up from 320 across 46. `test_translation_flow_e2e.py` itself
+is now **19 `@patch` against 4 `assert`s**, so the two tests added since it was filed were the same
+shape as the ones it criticises. Nothing here is stale; it is worse.
+
 The suite-wide numbers say the same thing: **320 `@patch` + 191 `MagicMock` across 46 files**, and
 **217 tests pass in 6.3 seconds** — a full-pipeline suite that touches no real I/O at all. Worst
 mock-to-assert ratios:
@@ -1018,9 +604,21 @@ handlers can only be tested meaningfully against something that speaks the wire 
 > `PermanentAPIError` (×2, including that a non-401 4xx does *not* park the provider), and
 > timeout/connection errors. Auth-failure parking gained two more in the same pass.
 >
-> **Backend half still open, and it is the part that matters now**: none of the dispatcher's failure
-> paths are exercised, so AUDIT-P2 and AUDIT-P3 have no test to fail. Re-scope this entry to that
-> before picking it up — the "five cheap tests against existing mocks" framing below is spent.
+> **~~Backend half still open~~ — that framing is stale as of 2026-08-05.** It said "none of the
+> dispatcher's failure paths are exercised, so AUDIT-P2 and AUDIT-P3 have no test to fail."
+> `WorkerDispatcherServiceTest.java` is now **639 lines** and covers `PermanentRejection_400`,
+> `PermanentRejection_422` (both AUDIT-P2's paths), `MultipleWorkers_AllFail`,
+> `FirstThrowsExceptionSecondAccepts`, `ServerError500`, `CapabilitiesQueryFails`,
+> `AllWorkersInCooldown`, `LightSlotFull` and both independent-slot rejection cases. Those landed
+> alongside P2's and P3's fixes without anyone updating this note.
+>
+> **What is actually left**, and it is small: AUDIT-P3's fix was a `break` rather than a `continue`
+> — the choice that stops one undispatchable job from blocking its slot class — and no test is named
+> for it. A test that queues an undispatchable job ahead of a dispatchable one and asserts the
+> second still goes out would pin it. That is one test, not a body of work.
+>
+> With the worker half done (`ffab71d`) and the backend half down to a single test, **this entry is
+> now smaller than AUDIT-T1**, which is the opposite of how the two were ranked when filed.
 
 `test_llm_client.py` has five tests. All five stub a `200` response. There is **no test** for:
 
@@ -1039,11 +637,15 @@ bugs — do them before the mock-router work rather than waiting for it.
 
 ### Code quality
 
-#### AUDIT-Q1 — 247 `Objects.requireNonNull` calls, most of them impossible to trigger
+#### AUDIT-Q1 — 249 `Objects.requireNonNull` calls, most of them impossible to trigger
+
+*Re-counted 2026-08-05: **249**, up 2 from the filed 247. Nobody has been adding them deliberately;
+they arrive with new code because the surrounding style invites them. That is the argument for doing
+the mechanical pass rather than waiting — the count only moves one way on its own.*
 
 ```text
 $ grep -rho "Objects.requireNonNull" backend/src/main | wc -l
-247
+249
 ```
 
 Concentrated in `JobCoordinatorService` (61), `PageController` (36), `SeriesController` (30),
@@ -1064,199 +666,50 @@ go back to meaning "bug".
 
 #### AUDIT-Q2 — LLM thinking-out-loud committed as comments
 
+*Anchors re-checked 2026-08-05; both still present, line numbers updated.*
+
 ```java
-// PageService.java:430-431
+// PageService.java:669-670
 // Skip TL/QA fields in OCR cloning just to be clean, but they will be overwritten if TL is cloned.
 // Wait, actually OcrRegion contains TL/QA fields. If we ONLY clone OCR, we should clear TL fields.
 ```
 
 ```java
-// JobCoordinatorService.java:1052-1056
+// JobCoordinatorService.java:1318-1320
 // if summary is passed inside cost object, we can leave it there, or if we need to we can
 // extract it.
 // But user said move tl cost and summary under 'tl'.
 ```
 
-Both are an assistant reasoning with itself, left in the source. Worth a grep for `// Wait`,
-`// But user said`, `// Actually` before the next review.
+Both are an assistant reasoning with itself, left in the source. **The suggested grep has now been
+run** — `// Wait`, `// But user said` and `// Actually` across `backend/src/main/java` return
+exactly these two hits and nothing else, so this entry is two comments, not a class of problem.
 
 #### AUDIT-Q3 — vestigial and misleading code
 
-+ `handlers/qa.py:211` — builds a `cache_key`, logs it with a hardcoded `(hit=False)`, and **there is
-  no cache**. Four copies of this across the QA paths, actively misleading during debugging.
-+ `app.py:44-46` — `sum(1 for f in files if … and not os.remove(f))` performs the deletion as a side
-  effect inside a generator, relying on `os.remove` returning `None`. Works; should not survive
+*Re-verified bullet-by-bullet 2026-08-05. All seven confirmed present; anchors updated. One count is
+lower than filed and one bullet has grown a wider blast radius — both noted inline.*
+
++ `handlers/qa.py:390-391` and `:599-600` — builds a `cache_key`, logs it with a hardcoded
+  `(hit=False)`, and **there is no cache**. **Two** copies, not the four filed; the other two went
+  with the `if/elif` chains AUDIT-W1 records as removed.
++ `worker/app.py:46` — `sum(1 for f in files if … and not os.remove(f))` performs the deletion as a
+  side effect inside a generator, relying on `os.remove` returning `None`. Works; should not survive
   review.
-+ `rq_tasks.py:100` — dispatches on `"queue:region-redo"`, a queue name the backend never creates.
-+ `utils/rate_limit.py:50` — logs `[Translation]` from a rate limiter shared by OCR and QA.
-+ `PageService.cloneOcrData:487-516` and `cloneTranslationData:570-599` — the 25-line LayerElement
-  copy is duplicated verbatim. One `cloneLayerElement(source, targetLayer, regionIdMap)` helper
-  removes both copies and is the natural place to fix the next field that gets forgotten.
-+ `JobCoordinatorService.handleLayoutCallback:885` — `resolvePageForCallback` is called inside the
-  conversation loop and then again at `:912`; it is a DB round-trip each time.
-+ `resolveModel:561-573` — checks `!chapterVal.equals("inherit")` without trimming first, though the
-  preceding condition trims. `" inherit "` passes through as a real model name.
-
-### Status of the fix order — 2026-08-02
-
-Items 1–5 of the list below are **implemented and the full quality gate passes** (backend 330 tests
-
-+ PMD + SpotBugs + JaCoCo, frontend 253 tests + lint + build, worker 241 tests + ruff + pyright,
-85.4% coverage). What landed:
-
-| item | what changed |
-| --- | --- |
-| **S1/S2/S3** | `application.yml` ships no secret fallbacks; `SecretsStartupValidator` fails startup on a missing, too-short or known-public secret; dev values moved to `application-local.yml`; `DockerSecretsEnvironmentPostProcessor` warns on every missing/empty secret file instead of continuing silently; `InternalAuthFilter` uses `MessageDigest.isEqual`; the worker refuses to start without `WORKER_API_SECRET` and `verify_auth` denies when it is unset. |
-| **S4** | `SseTicketService` issues single-use 60s tickets; `SseTicketAuthFilter` redeems them; `JwtAuthFilter` no longer accepts `?token=` at all; access-log pattern `%r` → `%m %U %H`; `useSSE.ts` exchanges the JWT for a ticket over a header-authenticated POST. |
-| **W10/W6** | Defaults raised to `CONCURRENT_JOBS=5 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=4`; `resolve_slot_config` clamps any combination that computes to zero or negative slots and logs each adjustment. **Correction 2026-08-03: this never took effect at runtime.** The change landed in `docker-compose.yml` (`${CONCURRENT_JOBS:-5}`) and `.env.example`, but the real `.env` — which is gitignored and untracked — still pinned `CONCURRENT_JOBS=2`, and an `.env` value overrides a compose default. Run `20260803-084755` therefore measured the *baseline* 2/1/1 config. Now set to `4/1/3` in `.env`. |
-| **P4** | New `jobs.callback_applied_at` column plus `JobRepository.claimCallback`, a conditional UPDATE that makes the check-and-set atomic. Every result callback claims before writing, so a duplicate run is dropped instead of writing a second region set, layer and cost. A genuinely failed job never claimed, so its retry still applies. |
-| **P1 / W1** | `resolveConfigForChapter` now passes `tl` / `qaLLM` / `qaVLM`, matching `providers.json`. `handlers/qa.py`'s four hardcoded `if/elif` provider chains are replaced by `_qa_cloud_llm` / `_qa_cloud_vlm`, so `cloudflare` and `neurometric` work and an unresolvable model logs why. |
-
-Also fixed in passing, because the quality gate was already red before this batch: two dead private
-`enqueueJob` overloads (SpotBugs `UPM_UNCALLED_PRIVATE_METHOD`), a bare `catch (Exception)` in
-`WorkerDispatcherService.dispatchFromSlot` that swallowed interrupts, and a `UselessParentheses`
-PMD violation. The `JwtAuthFilter` double-registration from AUDIT-B8 is closed too, via
-`FilterRegistrationBean(setEnabled(false))`.
-
-**Not done, and why:** the callback dedup key is `Job.id` resolved through the existing
-`findFirstByImageIdAndTypeOrderByCreatedAtDesc` lookup rather than a `jobId` carried on the callback
-body. Adding a field to the callback DTOs changes the OpenAPI spec, and `npm run generate-api` reads
-the spec from the *running* backend container — so regenerating `schema.d.ts` correctly would mean
-rebuilding and redeploying the live stack mid-change. **AUDIT-P5** already tracks carrying the job
-id; doing it there removes the residual ambiguity noted in `claimCallback`'s javadoc.
-
-#### Still outstanding from that batch — 2026-08-03
-
-> **Closed out 2026-08-04.** Item 1 (the re-run) happened — `20260803-204638` (2 jobs) and
-> `20260803-211221` (30 jobs, 204 jobs total, all COMPLETED, 24 min wall, $0.19), both profiled
-> remotely so local profiling did not contend. Item 3 (`schema.d.ts`) is done — the file carries
-> `notifications/ticket`. Item 2 (the `neurometric` key) is still dead, but **AUDIT-W11 changed what
-> that costs**: a chapter pinned to a provider whose key is rejected now falls back across the
-> provider boundary instead of failing 100% of its translations. Replacing the key is housekeeping
-> now, not an outage.
->
-> The re-run's own conclusions live in `docs/archive.md` under the 2026-08-04 handoff: AUDIT-W5 fell
-> to 1.8%, AUDIT-W12 confirmed, AUDIT-W2 at 1.2%, and the large `layout` / `panel-detection` stage
-> times turned out to be an **attribution artefact rather than a stall** — those stages sit
-> immediately before the expensive ones, so a job accrues its whole wait under the stage it last
-> completed. Do not re-derive "queue wait is 90% of job lifetime" as a finding; it is the same
-> artefact seen from the other side.
-
-Carried over from `docs/Next Steps.md`, which was retired once items 1–5 landed. These three need a
-human and are not code work:
-
-1. **Re-run the drained capture.** ~~W10 raised the slots but the win is unmeasured.~~
-   **Attempted 2026-08-03 (`20260803-084755`) and invalid — the slot change was never in force.**
-   `environment.md` recorded `max_concurrent_jobs:2 / max_heavy_slots:1 / max_light_slots:1` and
-   `active_light` never exceeded 1 across 634 samples, because the untracked `.env` overrode the
-   compose default (see the W10/W6 row above). `.env` is now `CONCURRENT_JOBS=4 /
-   MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=3` — heavy deliberately stays at 1, since that tier is local
-   PaddleOCR on CPU and is where the worker already hits its full 200% cap; the light tier is LLM
-   API wait and costs almost no CPU to widen. **The re-run still needs to happen.**
-
-   **Verify the config is actually in force before trusting a run**: `docker compose config | grep
-   -E 'CONCURRENT_JOBS|MAX_(HEAVY|LIGHT)_SLOTS'`, and check the worker capabilities line in the
-   captured `environment.md`. Nothing in the repository can catch this class of mistake, because the
-   file that wins is not in the repository.
-
-   Watch two things while it runs: AUDIT-W6's clamped slot arithmetic in the worker startup log, and
-   whether the UI degrades — 71% of the browser's LongTask wall was already descheduling on this
-   4-core box, so if it worsens, cap worker CPU rather than reverting the slots.
-
-   **What `20260803-084755` was still good for**, since these are independent of slot count:
-   translation failures went 11/50 → **0/9** (the dead `neurometric` key was the whole 22%);
-   rate-limit sleep stayed at **0.0 s**, confirming AUDIT-W2 is inert; and `layout` still waits
-   **255.5 s per job for 1.9 s of work** (99.2%), with `panel-detection` at 50.1 s for 0.2 s —
-   together 97% of all queue wait. It also surfaced the QA silent-pass chain (now fixed, see
-   [archive.md](./archive.md)) and one measurement that reframes the whole exercise: **work totalled
-   1150.9 s against 1444 s of wall clock, so utilisation was 80% and even perfect scheduling recovers
-   at most ~20% of wall.** The baseline's "90.8% queue wait" overstates the recoverable time, because
-   most of that wait overlaps other jobs' work. Reducing *work* is the larger lever — and 450 s of
-   that 1150.9 s (**39%**) was QA re-translation cycles that fixed nothing.
-2. **Replace the `neurometric` API key** in `secrets/api_keys.json`. It returned 401 × 323 on the
-   baseline run and caused 100% translation failure on every chapter pinned to it. The
-   retry-amplification defect around it is fixed; the dead credential is not.
-3. **Regenerate `frontend/src/api/schema.d.ts`.** The S4 batch added `POST /api/notifications/ticket`,
-   so the generated client is a deploy behind. Per `CLAUDE.md`, run `npm run generate-api` from
-   `frontend/` *after* the next `docker compose build backend && docker compose up -d backend`.
-   Nothing is broken meanwhile: `useSSE.ts` calls the endpoint with a plain `fetch`, not the
-   generated client.
-
-### Suggested fix order
-
-> **Superseded 2026-08-04.** Everything this list ranked is now either done, measured away, or
-> reduced to housekeeping — see the current ordering in [next-step.md](./next-step.md). Kept below
-> because the *reasoning* about what was demoted and why is still the record.
->
-> | was | now |
-> | --- | --- |
-> | #3 AUDIT-W10 "top of the list until measured" | **Measured.** 30-page run, 204 jobs, zero failures. The scheduling thread is closed. |
-> | #6 AUDIT-W12 "90 s/page if it holds" | **CONFIRMED 2026-08-04.** It held. |
-> | #7 AUDIT-T2 "top of the un-started work" | Partly overtaken — the 2026-08-04 sweep added red-green regression tests across queue merge, chapter refresh, prefetch gate, ZIP export and the W11 fallback. The *original* error-branch gap in `llm_client` was closed by `ffab71d`. Re-scope before picking it up. |
-> | #8 AUDIT-P2 / P3 / B1 | **B1 done 2026-08-05** (`0e5bbd5`) — it was indeed one config line. P2/P3 stay latent-correctness. |
-> | #9 AUDIT-W2 | Second data point: 1.2%. Reading unchanged. |
-
-**Revised 2026-08-02** against measured data from the first drained run
-([perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md)). The previous
-ordering ranked AUDIT-W2 as "likely the single largest throughput win available" — it is inert, and
-the item that actually holds throughput (**AUDIT-W10**) was not in the list at all, because no run
-had ever drained.
-
-1. ~~**AUDIT-S1 / S2 / S3** — the fail-open secrets.~~ **Done 2026-08-02** (with S4).
-2. ~~**AUDIT-D1** — confirm whether backups are actually running.~~ **Done** — container healthy,
-   `restart: unless-stopped`, backups current.
-3. **AUDIT-W10** — ~~raise `MAX_LIGHT_SLOTS`~~ **code done 2026-08-02**, **config only actually in
-   force from 2026-08-03** (`CONCURRENT_JOBS=4 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=3` in `.env`;
-   the 2026-08-02 change sat in `docker-compose.yml` while the untracked `.env` overrode it, so run
-   `20260803-084755` measured the old 2/1/1). **Still unmeasured** — see "Still outstanding from
-   that batch" above. This is the top of the list until it is measured.
-
-   Temper the expectation: at 80% utilisation the *scheduling* win is capped near 20% of wall clock.
-   That is worth having, but **AUDIT-W12 below removes 39% of the work outright**, and removing work
-   beats reordering it.
-4. ~~**AUDIT-P4** — duplicate work.~~ **Done 2026-08-02** via `jobs.callback_applied_at` +
-   `claimCallback`. The residual `jobId`-on-the-callback-body work stays under **AUDIT-P5**.
-
-   **Still unexercised as of 2026-08-03, and `duplicate_jobs.csv` cannot test it.** Run
-   `20260803-084755` had 42 dispatches for 42 jobs and **zero** re-dispatches, so the duplicate path
-   never ran. The CSV was non-empty anyway (2 images × `translation`/`render`/`qa` × 3), but those
-   rows are QA retry cycles, not duplicates: sequential, same `trace_id`, `attempt=1`, each job
-   created the instant its predecessor completed, and **all 42 jobs have `callback_applied_at` set**
-   — nothing was ever dropped. The baseline's `e185e276` "ran translation, qa and render 3× each"
-   has the identical shape and was very likely also a QA loop. Any future check needs to exclude
-   QA-driven repeats before reading that file as evidence of duplication.
-5. ~~**AUDIT-P1 / W1** — the provider/task-key mismatches.~~ **Done 2026-08-02.**
-6. **AUDIT-W12** — confirm QA emits `escalation` / `directFix`. Costs one grep over the next run's
-   worker log; the payoff if it holds is 90 s/page of re-translation that currently fixes nothing.
-7. **AUDIT-T2** — the error-branch tests, before the mock-router build rather than after. **Now the
-   top of the un-started work.**
-8. **AUDIT-P2 / P3 / B1** — the dispatcher defects. Demoted from #3: all three are real, but the
-   drained run shows they are costing ~nothing right now (3.2% / 1.3% starvation, 0 stranded jobs).
-   Fix as latent correctness, not as a throughput measure.
-9. **AUDIT-W2** — demoted from #4. Falsified in practice; keep only the "global fallback should be
-   unlimited" hardening so a future provider without `rate_limits` cannot silently throttle
-   everything.
-10. Everything else as it is touched.
-
-**Not on this list on purpose:** the [worker pull model](./worker_pull_model.md). Measured, it would
-remove **408 s of 49,058 s of queue wait (0.83%)**. Worth building for latency, resilience and
-multi-worker scaling — not for throughput, and not before #3.
-
-**Triaged 2026-08-02 — not a code defect, and it does not belong above #4.** All 33 tracebacks are
-the same `RuntimeError: All N translation(s) failed`, and every one of them bottoms out in
-**HTTP 401 `Invalid API key provided.` from `neurometric`, 323 times across the run**. Chapters
-pinned to `neurometric` failed 100% of their translations; chapters on `openrouter` succeeded —
-that is the 22%. **The `neurometric` API key in `secrets/api_keys.json` is invalid and needs
-replacing; no code change fixes that.**
-
-The run did expose one real defect, now fixed: nothing treated a 401 as terminal. `PermanentAPIError`
-stopped Tenacity, but the layers above kept retrying the same dead provider — batch, then a retry
-pass, then per-region individual fallback, then the RQ job three times — so one bad credential cost
-9 identical 401s per region. `llm_client.py` now parks a provider that answers 401/403 in
-`PROVIDER_AUTH_FAILURES` for 300s and short-circuits without sleeping (deliberately not the 429
-cooldown, which blocks for up to 60s per call while holding a job slot).
-
-Also visible in the same traces and still open: `No fallback applied (global provider different or
-model identical)`. With the chapter pinned to a provider that is down and the global default set to
-a working one, the fallback declines to cross providers, so a dead chapter-level override has no
-escape hatch. **Split out 2026-08-03 as [AUDIT-W11](#audit-w11-m--a-chapter-pinned-to-a-dead-provider-has-no-escape-hatch).**
++ `rq_tasks.py:107` — dispatches on `"queue:region-redo"`, a queue name the backend never creates:
+  `JobCoordinatorService:1432` only ever produces `region-redo-ocr` or `region-redo-tl`, and both
+  are already handled at `:105-106`. Dead branch.
++ `utils/rate_limit.py:32` and `:51` — logs `[Translation]` from a rate limiter shared by OCR and QA.
++ `PageService.cloneOcrData:648` and `cloneTranslationData:762` — the 25-line LayerElement copy is
+  duplicated verbatim. One `cloneLayerElement(source, targetLayer, regionIdMap)` helper removes both
+  copies and is the natural place to fix the next field that gets forgotten.
++ `JobCoordinatorService.handleLayoutCallback:992` — `resolvePageForCallback` is called inside the
+  conversation loop and then again at `:1019`; it is a DB round-trip each time.
++ **`JobCoordinatorService.isOverride:588-593`** — checks `!value.equals("inherit")` without trimming
+  first, though the preceding condition trims. `" inherit "` passes through as a real model name.
+  **This is no longer local to `resolveModel`.** The predicate has been extracted to a `public
+  static` and its own Javadoc now says *"anything that reads this must use the same predicate the
+  pipeline uses, otherwise the UI can report a different model from the one that actually runs — see
+  `SeriesController.toChapterDto`."* So the untrimmed compare is now the shared definition of "is
+  this an override", and a padded value disagrees with the pipeline in exactly the way that comment
+  warns about. Cheapest fix in the file: trim once into a local and compare against that.
