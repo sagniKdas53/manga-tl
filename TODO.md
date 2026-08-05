@@ -52,11 +52,27 @@
 
 ### Output & Rendering Quality
 
-- [ ] Rendered output quality gap vs mangatranslator.ai
+- [ ] Rendered output quality gap vs mangatranslator.ai — **measured and root-caused
+  2026-08-05, see [render_quality_gap_2026-08-05.md](docs/render_quality_gap_2026-08-05.md)**
+  for the full comparison against all 31 examples, the 11 defects behind it, and the phased plan.
+
+  The short version: the gap is erasure and typesetting, not translation. We flatten **6.85%**
+  of page artwork on average against **1.92%** for mangatranslator.ai / mangatranslate.com /
+  human scanlation, and we lose on every page in the set — worst case `sample24` at 16%, where
+  a whole panel becomes one tan rectangle. Root cause is that there is *no inpainting anywhere*:
+  erasure is a flat colour fill over the region polygon, the polygon is the balloon's outer
+  contour (so the outline goes with it), and unconstrained region merging grows those polygons
+  across whole panels. Score any render with `scripts/render_quality_metrics.py`.
+
+  What they do differently, in one line: **their unit of erasure is the glyph, ours is the
+  region** — so every upstream mistake costs them a few misplaced letters and costs us a panel.
+  They also set type at literally 2× our size in the same balloon, and skip anything they
+  aren't confident is dialogue.
+
   - See Example 1:
     - Original: <br/><img src="examples/sample2/original.jpg" alt="original" width="600"/>
     - mangatranslator.ai: <br/><img src="examples/sample2/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>
-    - Ours: <br/><img src="examples/sample2/en-local.png" alt="ours" width="600"/>
+    - Ours: <br/><img src="examples/sample2/page-2-export(2).png" alt="ours" width="600"/>
 - [ ] **Multimodal VLM Quality Benchmarks & Render Tuning** — use VLMs (Kimi K3 or 5.6-Sol) to analyze translation and typesetting output against competitor benchmarks and refine `render.py` text fitting and inpainting algorithms.
 - [ ] **CHECKPOINT — delete the contour fallback.** `BUBBLE_CONTOUR_FALLBACK` is now **default off**,
   because the ~48% recovery it was built on was not real: 171 of the 172 results it accepted over a
