@@ -27,6 +27,9 @@ Closed threads — do not reopen without a measurement that contradicts the file
 | AUDIT-B7, P2, P3, P9 | **Closed 2026-08-05**, each red-green. P9's filed mechanism was wrong — see archive.md. |
 | AUDIT-D3, AUDIT-D4 | **Closed 2026-08-05.** D4 breaks in both directions, not just the worker's. |
 | AUDIT-D2 multi-stage | **WON'T DO** — measured, no build-toolchain layer to drop. Image unchanged at 1.94 GB. |
+| AUDIT-D2 leftovers | **Closed 2026-08-05** (`9fd775b`). All four. See item 2. |
+| Worker CI on Python 3.10 | **Closed 2026-08-05** (`0123ca6`). CI ran 3.10 while the image is 3.13, so every past green run tested the wrong interpreter. AUDIT-D2's pins made it fatal: numpy 2.3.5 has no 3.10 release. |
+| okhttp / dependabot #60 | **WON'T DO, and the pin is load-bearing.** okhttp ≥5 is a Kotlin-Multiplatform stub — its jar has **0 classes**, the JVM ones live in `okhttp-jvm`, wired by Gradle metadata Maven cannot read. Removing the 4.12.0 pin was tried: 73 errors, `NoClassDefFoundError: okhttp3/MediaType`. Documented in `pom.xml` (`b4085a8`). |
 | Landmarks / skip link | **Closed 2026-08-05** (`bc81040`). The last of AUDIT-F6. |
 
 Suites: **backend 395, frontend 306, worker 284.** All green, no skips.
@@ -37,8 +40,18 @@ ColorPicker commits landed *after* that rebuild, so they need another one to be 
 
 **The worker is not deployed.** See item 1 — the image is built and verified, the chown is not done.
 
-**Not pushed.** The branch is now **21 commits ahead** of `github/main`, by decision rather than
-oversight. Three remotes exist (`github`, `codeberg`, `origin`/pi5); pick deliberately.
+**Not pushed.** The branch is now **25 commits ahead** of `github/main`, by decision rather than
+oversight. Three remotes exist (`github`, `codeberg`, `origin`/pi5); pick deliberately. Note the
+worker CI fix (`0123ca6`) only takes effect once the **submodule** is pushed to its own remote.
+
+**The local `.venv` is Python 3.10.12 with numpy 2.2.6** — matching neither the image (3.13.14 /
+2.3.5) nor `requirements.txt`. Local `pytest` runs have therefore been on a different stack than
+production. Run the suite in the image (`docker run --rm -v "$PWD/tests:/app/tests:ro" …`) until
+that venv is rebuilt on 3.13.
+
+**Dependabot:** four PRs open, all red. #60 okhttp and #52 springdoc (3.x needs Spring Boot 4; we
+are on 3.5.16) are both **close, don't merge**. #51 testcontainers-bom 2.x and #40 TypeScript 7 are
+major-version projects of their own, not dependabot merges.
 
 ## The list
 
@@ -55,20 +68,34 @@ sudo chown -R 10001:10001 data/worker/{huggingface,paddlex,rendered_cache}
 docker compose up -d worker
 ```
 
-374 MB of downloaded models sit in those three directories, still owned by `root:root`. Without the
-chown the worker starts and cannot write to them. Until it is done the running container is the
-previous root image, so **the stack is consistent, not broken** — this is unfinished, not urgent.
+374 MB of downloaded models sit in those three directories, owned by **`1000:1000` (`sagnik`)**, not
+`root:root` as first written. Without the chown the worker starts and cannot write to them.
 
-### 2. AUDIT-D2's leftovers *(one commit)*
+**Attempted and confirmed not applied on 2026-08-05.** A `chown` was run but the directories are
+still `1000:1000` — most likely `chown sagnik:sagnik`, which is a no-op here. The numeric ids are
+required: uid 10001 does not exist on the host, so a name-based chown cannot express it. Verified by
+probe rather than by inspection — a `touch` into all three mount points inside the running container
+returns `Permission denied`, while the container reports healthy because the models are
+world-readable and nothing had yet tried to write. `rendered_cache` is written on **every render**,
+so this is a live latent break, not cosmetic.
 
-The entry bundled four sub-items its headline never mentioned, none of them attempted:
+The image built for item 2 is also waiting on the same command; `docker compose up -d worker` picks
+up both at once.
 
-- The four font `wget`s hit `raw.githubusercontent.com/.../main/...` — unpinned refs on a moving
-  branch, so the build is not reproducible. The Arial pull from `root-project` also has a licensing
-  question for a published image.
-- `libxrender-dev` leaves a `-dev` package in the runtime image.
-- No `PYTHONUNBUFFERED=1`, which is exactly why the worker code is littered with `flush=True`.
-- `pip install` has no BuildKit cache mount, unlike the backend's Maven and npm stages.
+### 2. ~~AUDIT-D2's leftovers~~ — **DONE 2026-08-05** (`9fd775b`, pointer `92f6902`)
+
+All four closed. Fonts pinned to commit SHAs *and* sha256-verified; Arial and Courier New replaced
+by metric-compatible Liberation Sans/Mono, which also removes a genuine licensing problem — the
+scraped copies came from repos with no right to redistribute Monotype fonts. `libxrender-dev` →
+`libxrender1`, `PYTHONUNBUFFERED=1`, pip on a BuildKit cache mount. Image 1.94 → 1.93 GB.
+
+Two things fell out that were not in the entry:
+
+- `load_font`'s last-ditch fallback already named `/usr/share/fonts/truetype/liberation/` paths that
+  were **never installed** — dead code that `fonts-liberation` now revives.
+- The registry's four style keys used to point at one file per family. Liberation has real bold and
+  italic faces, so bold Arial text is now actually bold. **This is a visible rendering change** on
+  any layer using Arial or Courier New with bold/italic.
 
 ### 3. `ReaderRightSidebar`'s MUI miss *(its own sitting)*
 
