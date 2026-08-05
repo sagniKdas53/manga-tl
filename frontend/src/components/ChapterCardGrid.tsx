@@ -218,6 +218,7 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
               <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
                 <IconButton
                   size="small"
+                  aria-label="Edit Chapter"
                   title="Edit Chapter"
                   onClick={(e) => onEditChapter(c, e)}
                 >
@@ -225,6 +226,7 @@ export const ChapterCardGrid: React.FC<ChapterCardGridProps> = ({
                 </IconButton>
                 <IconButton
                   size="small"
+                  aria-label="Delete Chapter"
                   title="Delete Chapter"
                   color="error"
                   onClick={(e) => onDeleteChapter(c.id, e)}

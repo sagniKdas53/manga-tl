@@ -288,6 +288,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
               <IconButton
                 size="small"
+                aria-label="Edit Series"
                 title="Edit Series"
                 onClick={(e) => handleEditSeriesClick(s, e)}
               >
@@ -295,6 +296,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </IconButton>
               <IconButton
                 size="small"
+                aria-label="Delete Series"
                 title="Delete Series"
                 color="error"
                 onClick={(e) => handleDeleteSeries(s.id, e)}

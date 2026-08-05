@@ -183,6 +183,7 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
                   </Typography>
                   <IconButton
                     onClick={onEditClick}
+                    aria-label="Edit Chapter Name & Number"
                     title="Edit Chapter Name & Number"
                     size="small"
                   >

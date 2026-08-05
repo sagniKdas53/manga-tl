@@ -159,4 +159,22 @@ describe("ModelOverridesAccordion", () => {
       1,
     );
   });
+
+  // AUDIT-F6: these clear-override buttons are icon-only and had no accessible name at all --
+  // no aria-label, no Tooltip, no title. A screen reader announced ten identical "button"s.
+  it("names each clear-override button", () => {
+    render(
+      <Harness
+        inherited={{}}
+        initialValue={{ ocrProvider: "local", qaMode: "llm" }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Clear OCR Provider override" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear QA Mode override" }),
+    ).toBeInTheDocument();
+  });
 });

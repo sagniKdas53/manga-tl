@@ -177,6 +177,10 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
               onClick={(e) => e.stopPropagation()}
             >
               <IconButton
+                aria-label={
+                  isExpanded ? "Collapse upload list" : "Expand upload list"
+                }
+                aria-expanded={isExpanded}
                 size="small"
                 onClick={() => setIsExpanded(!isExpanded)}
               >
@@ -187,6 +191,7 @@ export const UploadProvider: React.FC<UploadProviderProps> = ({ children }) => {
                 )}
               </IconButton>
               <IconButton
+                aria-label="Dismiss uploads"
                 size="small"
                 onClick={dismiss}
               >

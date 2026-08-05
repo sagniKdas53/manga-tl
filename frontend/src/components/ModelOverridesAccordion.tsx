@@ -295,6 +295,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {ocrProvider !== "" && (
             <IconButton
+              aria-label="Clear OCR Provider override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => handleProviderChange("ocrProvider", "")}
@@ -323,6 +324,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {ocrModel !== "" && (
             <IconButton
+              aria-label="Clear OCR Model override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("ocrModel", "")}
@@ -352,6 +354,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {tlProvider !== "" && (
             <IconButton
+              aria-label="Clear TL Provider override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => handleProviderChange("tlProvider", "")}
@@ -374,6 +377,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {tlModel !== "" && (
             <IconButton
+              aria-label="Clear TL Model override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("tlModel", "")}
@@ -403,6 +407,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {qaProvider !== "" && (
             <IconButton
+              aria-label="Clear QA Provider override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => handleProviderChange("qaProvider", "")}
@@ -432,6 +437,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {qaMode !== "" && (
             <IconButton
+              aria-label="Clear QA Mode override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("qaMode", "")}
@@ -454,6 +460,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {qaLlmModel !== "" && (
             <IconButton
+              aria-label="Clear QA LLM Model override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("qaLlmModel", "")}
@@ -476,6 +483,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {qaVlmModel !== "" && (
             <IconButton
+              aria-label="Clear QA VLM Model override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("qaVlmModel", "")}
@@ -509,6 +517,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {routingStrategy !== "" && (
             <IconButton
+              aria-label="Clear Routing Strategy override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("routingStrategy", "")}
@@ -537,6 +546,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
           </FormControl>
           {useFallbackModels !== null && (
             <IconButton
+              aria-label="Clear Use Fallback Models override"
               size="small"
               sx={{ mt: 0.5 }}
               onClick={() => onChange("useFallbackModels", null)}
