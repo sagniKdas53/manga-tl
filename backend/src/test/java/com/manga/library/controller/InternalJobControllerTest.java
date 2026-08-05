@@ -50,6 +50,38 @@ public class InternalJobControllerTest {
   @MockitoBean private com.manga.library.config.SseTicketAuthFilter sseTicketAuthFilter;
   @MockitoBean private JobRepository jobRepository;
 
+  /**
+   * AUDIT-W7: the worker's stale-job guard reads nothing but the status code, so it gets a HEAD
+   * that touches only {@code existsById} — the GET handler generates a presigned URL and loads
+   * every panel, page, region and layer first, and every job paid for that before doing any work.
+   */
+  @Test
+  public void testImageExists_HeadDoesNotTouchTheExpensiveLoads() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    when(imageRepository.existsById(imageId)).thenReturn(true);
+
+    mockMvc
+        .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head(
+            "/api/internal/images/" + imageId))
+        .andExpect(status().isOk());
+
+    verify(imageRepository, times(1)).existsById(imageId);
+    verify(imageRepository, never()).findById(any());
+    verify(minioService, never()).generatePresignedUrl(anyString());
+    verify(panelRepository, never()).findByImageId(any());
+  }
+
+  @Test
+  public void testImageExists_HeadReturns404WhenTheImageIsGone() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    when(imageRepository.existsById(imageId)).thenReturn(false);
+
+    mockMvc
+        .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head(
+            "/api/internal/images/" + imageId))
+        .andExpect(status().isNotFound());
+  }
+
   @Test
   public void testGetImageInfo_NotFound() throws Exception {
     UUID imageId = UUID.randomUUID();

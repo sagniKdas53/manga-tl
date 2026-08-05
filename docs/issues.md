@@ -313,37 +313,6 @@ to 4, so a cooldown on a light job no longer halts the light tier. Heavy is stil
 by design — that tier is local PaddleOCR on CPU and already saturates the container — so the
 original "one cooldown stalls all heavy work" reading is unchanged there.
 
-#### AUDIT-W4 **[M]** — the Valkey lock is per-container and releases other holders' locks
-
-*Anchors re-checked 2026-08-05; both defects confirmed present, unchanged.*
-
-`utils/lock.py:16` — `lock_key = f"lock:{lock_name}:{node_id}"`. Including the node ID means the
-`local-llm` lock does **not** serialise across workers, which is the one job it exists to do
-(`WORKER_URLS` is explicitly a comma-separated list, so multi-worker is a supported topology).
-
-`:37` then does an unconditional `redis_client.delete(lock_key)` in `finally`. With `timeout=600`
-and `expire=600` set equal, a holder that runs long enough for its lock to expire will delete the
-lock a *different* holder has since acquired. Needs a random token value plus a compare-and-delete
-Lua script.
-
-#### AUDIT-W7 **[M]** — the stale-job check hammers the heaviest endpoint, without a timeout
-
-*Anchor re-checked 2026-08-05; confirmed present, still the file's only timeout-less request.*
-
-`rq_tasks.py:36`:
-
-```python
-res = requests.get(backend_url, headers=BACKEND_HEADERS)
-```
-
-Two problems. It is the only `requests` call in the file with **no `timeout`** — every sibling uses
-`timeout=5` — so a wedged backend hangs a worker slot indefinitely. And the URL it hits is
-`/api/internal/images/{imageId}`, i.e. `InternalJobController.getImageInfo`, which generates a
-presigned URL, loads every panel, region, layer element, conversation and the previous page's text
-— all discarded, because the only thing being checked is `status_code == 200`. Every job pays for
-this before doing any work. Use a `HEAD`, or check the job row that is fetched two lines later
-anyway.
-
 #### AUDIT-W8 **[M]** — provider payload defects in `LLMClient`
 
 *Re-verified 2026-08-05. **One of the five is fixed and has been archived**; the remaining four are
@@ -430,7 +399,8 @@ Still open:
 + `JwtAuthFilter:58` — `logger.error("Cannot set user authentication: {}", e)` fills the placeholder
   with `e.toString()` instead of attaching the throwable, so no stack trace is ever logged.
 + `InternalJobController:189-196` — five `log.info("DEBUG_TL: …")` lines at INFO on the hottest
-  internal endpoint (called once per job, per AUDIT-W7).
+  internal endpoint. Still called once per job to fetch the image for processing; AUDIT-W7 (now
+  closed, see archive.md) only moved the *stale check* off it onto a HEAD.
 + `InternalJobController:68-105` — `updateJobStatus` writes whatever `status` string the worker
   sends straight onto the row (`job.setStatus(payload.get("status"))`), with no state-machine
   validation and no enum. It special-cases `PENDING` and `FAILED` for *logging* only, so a typo

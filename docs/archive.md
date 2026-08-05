@@ -133,6 +133,46 @@ reading, so the TTL only ever catches the abandoned case.
 redo, and asserts the image-scoped reason key is set, the page-scoped one is not, and the trace id
 changed. Reverting the two key names fails it on the first assertion.
 
+**AUDIT-W4 [M] — the Valkey lock is per-container and releases other holders' locks. Fixed, with
+one correction to the finding.**
+
+Both defects were real. The key embedded `platform.node()` unconditionally, so every lock was
+per-container; for `local-llm` that defeated it entirely, because `LOCAL_LLM_ENDPOINT` resolves to
+a *shared* address — the `ollama` compose service, or LM Studio on the host — so N workers each
+took their own lock and then hit the one instance concurrently. And the release was an
+unconditional `DELETE`, so with `timeout == expire == 600` a holder that overran its TTL deleted
+whatever lock had been acquired since.
+
+**Where the finding is wrong:** it treats the node id as wrong everywhere, but the `ocr` lock
+*should* be per-container. Its own comment says it serialises PP-OCR-Det and YOLO "on this host" to
+avoid CPU/GPU overload — a deployment-wide `ocr` lock would serialise detection across the whole
+fleet. So the fix adds `node_scoped` (default `False`, the global behaviour the finding asks for)
+and passes `True` at that one call site, rather than stripping the node id everywhere.
+
+The lock value is now a random token and the release is a compare-and-delete Lua script; a
+mismatch warns instead of silently freeing someone else's lock.
+
+**Verified red-green, each defect in isolation** — restoring the node id fails the global-key and
+timeout tests; restoring the unconditional delete alone fails the other-holder test. New
+`worker/tests/test_lock.py`, 5 tests; the lock had none before.
+
+**AUDIT-W7 [M] — the stale-job check hammers the heaviest endpoint, without a timeout. Fixed.**
+
+Accurate as filed. `check_stale_job` was the only `requests` call in `rq_tasks.py` with no
+`timeout` — every sibling has `timeout=5` — so a wedged backend held a worker slot open
+indefinitely. And it called `GET /api/internal/images/{imageId}`, which generates a presigned URL
+and loads every panel, page, OCR region, layer element and conversation, then read nothing but
+`status_code`. Every job paid for that before doing any work.
+
+Fixed by taking the finding's first suggestion: a dedicated `HEAD` handler on the *same* path,
+touching only `existsById`, so the worker changes only its verb. A `@GetMapping` alone would not
+have helped — Spring answers HEAD by running the GET handler and discarding the body, so the
+expensive loads still happen; the explicit HEAD mapping is what avoids them. Plus `timeout=5`.
+
+**Verified red-green.** Moving the HEAD mapping off the path makes the request fall through to the
+GET handler and 404 in the unit test. The worker tests assert `requests.get` is never called and
+that the timeout is 5.
+
 ### The 2026-08-05 verification pass — `issues.md` triaged against the code
 
 *Retired from `issues.md` on 2026-08-05. No code changed in this pass; every entry below was read
