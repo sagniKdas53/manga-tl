@@ -479,45 +479,6 @@ mock-to-assert ratios:
 This is what `mock_router.md` is for, and it is the strongest argument yet for building it: the
 handlers can only be tested meaningfully against something that speaks the wire protocol.
 
-#### AUDIT-T2 — the error branches, which is where the bugs are, have no coverage
-
-> **Worker half DONE** (`ffab71d`). `test_llm_client.py` is now 16 tests and **all five branches
-> listed below are covered**: 429 + cooldown escalation (×3, including `Retry-After`),
-> `json_schema` → `json_object` degradation, `5xx` → Tenacity retry (×2), `4xx` →
-> `PermanentAPIError` (×2, including that a non-401 4xx does *not* park the provider), and
-> timeout/connection errors. Auth-failure parking gained two more in the same pass.
->
-> **~~Backend half still open~~ — that framing is stale as of 2026-08-05.** It said "none of the
-> dispatcher's failure paths are exercised, so AUDIT-P2 and AUDIT-P3 have no test to fail."
-> `WorkerDispatcherServiceTest.java` is now **639 lines** and covers `PermanentRejection_400`,
-> `PermanentRejection_422` (both AUDIT-P2's paths), `MultipleWorkers_AllFail`,
-> `FirstThrowsExceptionSecondAccepts`, `ServerError500`, `CapabilitiesQueryFails`,
-> `AllWorkersInCooldown`, `LightSlotFull` and both independent-slot rejection cases. Those landed
-> alongside P2's and P3's fixes without anyone updating this note.
->
-> **What is actually left**, and it is small: AUDIT-P3's fix was a `break` rather than a `continue`
-> — the choice that stops one undispatchable job from blocking its slot class — and no test is named
-> for it. A test that queues an undispatchable job ahead of a dispatchable one and asserts the
-> second still goes out would pin it. That is one test, not a body of work.
->
-> With the worker half done (`ffab71d`) and the backend half down to a single test, **this entry is
-> now smaller than AUDIT-T1**, which is the opposite of how the two were ranked when filed.
-
-`test_llm_client.py` has five tests. All five stub a `200` response. There is **no test** for:
-
-+ the `429` path and its exponential cooldown (`llm_client.py:260-270`)
-+ the `json_schema` → `json_object` degradation (`:272-278`)
-+ `5xx` → `TransientAPIError` → Tenacity retry (`:280`)
-+ `4xx` → `PermanentAPIError` (`:282`)
-+ `requests.exceptions.Timeout` / `ConnectionError` (`:255-258`)
-
-Every defect in AUDIT-W8 lives in an untested branch. Same shape in the backend: 10 test classes use
-`@ExtendWith(MockitoExtension)` against 11 using `@SpringBootTest`/`@DataJpaTest`, and none of the
-dispatcher's failure paths (AUDIT-P2, AUDIT-P3) are exercised.
-
-**Suggested order:** these are cheap to write against the existing mocks and would have caught real
-bugs — do them before the mock-router work rather than waiting for it.
-
 ### Code quality
 
 #### AUDIT-Q1 — 249 `Objects.requireNonNull` calls, most of them impossible to trigger
