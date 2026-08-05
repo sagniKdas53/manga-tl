@@ -115,7 +115,12 @@ services:
       - SPRING_DATASOURCE_PASSWORD_FILE=/run/secrets/db_password
       - SPRING_DATA_REDIS_HOST=${REDIS_HOST:-redis}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
-      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
+      # AUDIT-D4: the two services want incompatible forms of this value, so they get
+      # separate .env knobs. The Java SDK's MinioClient.endpoint() treats a bare host
+      # as HTTPS, so this one must carry the scheme. See MINIO_ENDPOINT_HOST on the
+      # worker. Both used to read ${MINIO_ENDPOINT} and only agreed because .env sets
+      # nothing — setting it would have broken whichever service it did not suit.
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT_URL:-http://minio:9000}
       - MINIO_EXTERNAL_URL=${MINIO_EXTERNAL_URL:-}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY_FILE=/run/secrets/minio_password
@@ -188,7 +193,9 @@ services:
     environment:
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      # AUDIT-D4: bare host:port, no scheme — the Python SDK rejects a URL here and
+      # takes TLS from its own secure= flag. See MINIO_ENDPOINT_URL on the backend.
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT_HOST:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY_FILE=/run/secrets/minio_password
       - BACKEND_CALLBACK_URL=${BACKEND_CALLBACK_URL:-http://backend:8080}${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
