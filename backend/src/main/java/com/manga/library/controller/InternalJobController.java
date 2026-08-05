@@ -365,7 +365,7 @@ public class InternalJobController {
         }
       }
       jobCoordinatorService.handleLayoutCallback(
-          imageId, extractPageId(payload), regionTypes, conversations);
+          extractJobId(payload), imageId, extractPageId(payload), regionTypes, conversations);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing layout callback", e);
@@ -409,7 +409,8 @@ public class InternalJobController {
       if (rawPageId != null && !translations.isEmpty()) {
         translations.get(0).put("pageId", rawPageId);
       }
-      jobCoordinatorService.handleTranslationCallback(imageId, translations, cost);
+      jobCoordinatorService.handleTranslationCallback(
+          extractJobId(payload), imageId, translations, cost);
 
       return ResponseEntity.ok().build();
     } catch (Exception e) {
@@ -441,7 +442,8 @@ public class InternalJobController {
           }
         }
       }
-      jobCoordinatorService.handleQaReOcrCallback(imageId, extractPageId(payload), results);
+      jobCoordinatorService.handleQaReOcrCallback(
+          extractJobId(payload), imageId, extractPageId(payload), results);
       return ResponseEntity.ok().build();
     } catch (Exception e) {
       log.error("Error processing QA Re-OCR callback", e);
@@ -514,7 +516,7 @@ public class InternalJobController {
     log.info("Received render callback for image: {}", imageId);
     resolveNotificationContext(imageId);
     try {
-      jobCoordinatorService.handleRenderCallback(imageId, pageId);
+      jobCoordinatorService.handleRenderCallback(extractJobId(payload), imageId, pageId);
       imageRepository
           .findById(imageId)
           .ifPresent(
@@ -589,7 +591,8 @@ public class InternalJobController {
         cost = c;
       }
       String qaResultState =
-          jobCoordinatorService.handleQaCallback(imageId, extractPageId(payload), qaResults, cost);
+          jobCoordinatorService.handleQaCallback(
+              extractJobId(payload), imageId, extractPageId(payload), qaResults, cost);
       if ("COMPLETED".equals(qaResultState)) {
         sseService.emitNotificationForImage(
             imageId,
@@ -631,6 +634,18 @@ public class InternalJobController {
    * Reads the pageId the worker echoed back from the job payload. Callbacks must be attributed to
    * the exact page they were queued for — an image can back pages in several chapters.
    */
+  /**
+   * Pulls the {@code jobId} the worker echoed back from the payload it was enqueued with. It is the
+   * job row's primary key, so it resolves the callback's target exactly; the coordinator falls back
+   * to guessing by image and type when it is absent (AUDIT-P5).
+   */
+  private String extractJobId(Map<String, ?> payload) {
+    Object raw = payload == null ? null : payload.get("jobId");
+    if (raw == null) return null;
+    String jobId = raw.toString().trim();
+    return jobId.isEmpty() ? null : jobId;
+  }
+
   private UUID extractPageId(Map<String, ?> payload) {
     Object raw = payload == null ? null : payload.get("pageId");
     if (raw == null) return null;

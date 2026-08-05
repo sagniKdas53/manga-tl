@@ -197,7 +197,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testPanelCallback_Success() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
+    PanelCallbackDto dto = new PanelCallbackDto(null, UUID.randomUUID(), null, null);
     mockMvc
         .perform(
             post("/api/internal/jobs/callback/panel")
@@ -210,7 +210,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testPanelCallback_Failure() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
+    PanelCallbackDto dto = new PanelCallbackDto(null, UUID.randomUUID(), null, null);
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
         .handlePanelCallback(any(PanelCallbackDto.class));
@@ -225,7 +225,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testOcrCallback_Success() throws Exception {
-    OcrCallbackDto dto = new OcrCallbackDto(UUID.randomUUID(), null, null, null, null, null);
+    OcrCallbackDto dto = new OcrCallbackDto(null, UUID.randomUUID(), null, null, null, null, null);
     doNothing().when(jobCoordinatorService).handleOcrCallback(any());
 
     mockMvc
@@ -238,7 +238,7 @@ public class InternalJobControllerTest {
 
   @Test
   public void testOcrCallback_Failure() throws Exception {
-    OcrCallbackDto dto = new OcrCallbackDto(UUID.randomUUID(), null, null, null, null, null);
+    OcrCallbackDto dto = new OcrCallbackDto(null, UUID.randomUUID(), null, null, null, null, null);
     doThrow(new RuntimeException("error")).when(jobCoordinatorService).handleOcrCallback(any());
 
     mockMvc
@@ -251,8 +251,8 @@ public class InternalJobControllerTest {
 
   @Test
   public void testTranslateCallback_Success() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
-    doNothing().when(jobCoordinatorService).handleTranslationCallback(any(), any(), any());
+    PanelCallbackDto dto = new PanelCallbackDto(null, UUID.randomUUID(), null, null);
+    doNothing().when(jobCoordinatorService).handleTranslationCallback(any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -264,8 +264,8 @@ public class InternalJobControllerTest {
 
   @Test
   public void testLayoutCallback_Success() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
-    doNothing().when(jobCoordinatorService).handleLayoutCallback(any(), any(), any(), any());
+    PanelCallbackDto dto = new PanelCallbackDto(null, UUID.randomUUID(), null, null);
+    doNothing().when(jobCoordinatorService).handleLayoutCallback(any(), any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -277,8 +277,8 @@ public class InternalJobControllerTest {
 
   @Test
   public void testQaCallback_Success() throws Exception {
-    PanelCallbackDto dto = new PanelCallbackDto(UUID.randomUUID(), null, null);
-    doReturn("PASSED").when(jobCoordinatorService).handleQaCallback(any(), any(), any(), any());
+    PanelCallbackDto dto = new PanelCallbackDto(null, UUID.randomUUID(), null, null);
+    doReturn("PASSED").when(jobCoordinatorService).handleQaCallback(any(), any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -356,7 +356,7 @@ public class InternalJobControllerTest {
     payload.put("imageId", UUID.randomUUID().toString());
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
-        .handleLayoutCallback(any(), any(), any(), any());
+        .handleLayoutCallback(any(), any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -372,7 +372,7 @@ public class InternalJobControllerTest {
     payload.put("imageId", UUID.randomUUID().toString());
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
-        .handleTranslationCallback(any(), any(), any());
+        .handleTranslationCallback(any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -388,7 +388,7 @@ public class InternalJobControllerTest {
     payload.put("imageId", UUID.randomUUID().toString());
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
-        .handleQaReOcrCallback(any(), any(), any());
+        .handleQaReOcrCallback(any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -415,7 +415,7 @@ public class InternalJobControllerTest {
   public void testRenderCallback_Failure() throws Exception {
     Map<String, String> payload = new HashMap<>();
     payload.put("imageId", UUID.randomUUID().toString());
-    doThrow(new RuntimeException("error")).when(jobCoordinatorService).handleRenderCallback(any(), any());
+    doThrow(new RuntimeException("error")).when(jobCoordinatorService).handleRenderCallback(any(), any(), any());
 
     mockMvc
         .perform(
@@ -431,7 +431,7 @@ public class InternalJobControllerTest {
     payload.put("imageId", UUID.randomUUID().toString());
     doThrow(new RuntimeException("error"))
         .when(jobCoordinatorService)
-        .handleQaCallback(any(), any(), any(), any());
+        .handleQaCallback(any(), any(), any(), any(), any());
 
     mockMvc
         .perform(
@@ -445,7 +445,7 @@ public class InternalJobControllerTest {
   public void testResolveNotificationContext_Exception() throws Exception {
     UUID imageId = UUID.randomUUID();
     when(pageRepository.findByImageId(imageId)).thenThrow(new RuntimeException("db error"));
-    PanelCallbackDto dto = new PanelCallbackDto(imageId, null, null);
+    PanelCallbackDto dto = new PanelCallbackDto(null, imageId, null, null);
 
     mockMvc
         .perform(
@@ -615,7 +615,7 @@ public class InternalJobControllerTest {
                 .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isOk());
 
-    verify(jobCoordinatorService, times(1)).handleTranslationCallback(eq(imageId), any(), any());
+    verify(jobCoordinatorService, times(1)).handleTranslationCallback(any(), eq(imageId), any(), any());
   }
 
   @Test
@@ -631,6 +631,6 @@ public class InternalJobControllerTest {
                 .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isOk());
 
-    verify(jobCoordinatorService, times(1)).handleRenderCallback(any(), any());
+    verify(jobCoordinatorService, times(1)).handleRenderCallback(any(), any(), any());
   }
 }

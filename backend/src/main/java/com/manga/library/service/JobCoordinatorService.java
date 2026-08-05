@@ -194,11 +194,56 @@ public class JobCoordinatorService {
   }
 
   /**
-   * Marks the most recent job of {@code type} for {@code imageId} FAILED and pushes the update down
-   * the stream, so a stage that cannot proceed shows an error in the UI instead of stalling.
+   * Resolves the {@link Job} row a callback is reporting on.
+   *
+   * <p>AUDIT-P5: {@code enqueueJobDirectly} mints a {@code jobId}, stores it as the row's primary
+   * key and puts it in the worker payload, and the worker echoes it back on the callback. That is
+   * an exact answer, so prefer it. The fallback — newest job of this type for this image — is a
+   * guess, and it is wrong whenever a redo is in flight or an image backs pages in two chapters.
+   * It is kept only for callbacks that carry no {@code jobId}: a worker older than this change, or
+   * one of the internal call sites that has no job row of its own.
+   *
+   * <p>A {@code jobId} that resolves to a row of a different type is not trusted — that would mean
+   * the callback reached the wrong endpoint, and claiming it would mis-mark an unrelated job. Warn
+   * and fall back rather than act on it.
    */
-  private void failJob(UUID imageId, String type, String error) {
-    Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, type);
+  private Job resolveCallbackJob(String jobId, UUID imageId, String jobType) {
+    if (jobId != null && !jobId.isBlank()) {
+      Job job = jobRepository.findById(jobId).orElse(null);
+      if (job != null && jobType.equals(job.getType())) {
+        return job;
+      }
+      if (job == null) {
+        log.warn(
+            "{} callback for image {} carried jobId {}, but no such job row exists — "
+                + "falling back to the newest {} job for the image",
+            jobType,
+            imageId,
+            jobId,
+            jobType);
+      } else {
+        log.warn(
+            "{} callback for image {} carried jobId {}, but that job is of type {} — "
+                + "refusing to claim it, falling back to the newest {} job for the image",
+            jobType,
+            imageId,
+            jobId,
+            job.getType(),
+            jobType);
+      }
+    }
+    if (imageId == null) {
+      return null;
+    }
+    return jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, jobType);
+  }
+
+  /**
+   * Marks the job a callback belongs to FAILED and pushes the update down the stream, so a stage
+   * that cannot proceed shows an error in the UI instead of stalling.
+   */
+  private void failJob(String jobId, UUID imageId, String type, String error) {
+    Job job = resolveCallbackJob(jobId, imageId, type);
     if (job == null) {
       log.warn("No {} job row found for image {} — cannot mark it FAILED", type, imageId);
       return;
@@ -697,16 +742,15 @@ public class JobCoordinatorService {
    * leaves the claim unset and its retry is applied normally. Only a *second* result for work that
    * already landed is dropped.
    *
-   * <p>The job row is resolved the same way the handlers themselves resolve it. That inherits
-   * AUDIT-P5's ambiguity when a redo is in flight or an image backs pages in two chapters; carrying
-   * the job id on the callback would remove it, and is tracked there. When no job row can be found
-   * there is nothing to deduplicate against, so the callback is applied.
+   * <p>The row is resolved by {@code jobId} when the callback carries one (AUDIT-P5). That matters
+   * here specifically: the guard used to pick its row with the same "newest job of this type"
+   * guess it exists to make safe, so claiming the wrong row both mis-marked that row *and* left
+   * the real one unclaimed — freeing the genuine callback to apply twice, which is the exact
+   * failure this guard was added to prevent. When no job row can be found there is nothing to
+   * deduplicate against, so the callback is applied.
    */
-  private boolean claimCallback(UUID imageId, String jobType) {
-    if (imageId == null) {
-      return true;
-    }
-    Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, jobType);
+  private boolean claimCallback(String jobId, UUID imageId, String jobType) {
+    Job job = resolveCallbackJob(jobId, imageId, jobType);
     if (job == null) {
       return true;
     }
@@ -733,7 +777,7 @@ public class JobCoordinatorService {
     UUID imageId = dto.imageId();
     log.info("Received panel callback for image: {} with {} panels", imageId, dto.panels().size());
 
-    if (!claimCallback(imageId, "panel-detection")) {
+    if (!claimCallback(dto.jobId(), imageId, "panel-detection")) {
       return;
     }
 
@@ -780,7 +824,7 @@ public class JobCoordinatorService {
     UUID imageId = dto.imageId();
     log.info("Received OCR callback for image: {} with {} regions", imageId, dto.regions().size());
 
-    if (!claimCallback(imageId, "ocr")) {
+    if (!claimCallback(dto.jobId(), imageId, "ocr")) {
       return;
     }
 
@@ -791,7 +835,7 @@ public class JobCoordinatorService {
 
     if (dto.regions() == null || dto.regions().isEmpty()) {
       log.info("OCR found 0 regions for image {} — skipping downstream pipeline", imageId);
-      Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "ocr");
+      Job job = resolveCallbackJob(dto.jobId(), imageId, "ocr");
       if (job != null) {
         job.setStatus("COMPLETED");
         job.setUpdatedAt(OffsetDateTime.now());
@@ -811,7 +855,11 @@ public class JobCoordinatorService {
     if (page == null) {
       log.warn("OCR callback for image {} has no page (deleted mid-pipeline?) — failing the job",
           imageId);
-      failJob(imageId, "ocr", "Page no longer exists — it was deleted while OCR was running");
+      failJob(
+          dto.jobId(),
+          imageId,
+          "ocr",
+          "Page no longer exists — it was deleted while OCR was running");
       return;
     }
 
@@ -937,13 +985,23 @@ public class JobCoordinatorService {
       UUID callbackPageId,
       List<Map<String, String>> regionTypes,
       List<Map<String, Object>> conversations) {
+    handleLayoutCallback(null, imageId, callbackPageId, regionTypes, conversations);
+  }
+
+  @Transactional
+  public void handleLayoutCallback(
+      String jobId,
+      UUID imageId,
+      UUID callbackPageId,
+      List<Map<String, String>> regionTypes,
+      List<Map<String, Object>> conversations) {
     log.info(
         "Received Layout callback for image: {} with {} regionTypes, {} conversations",
         imageId,
         regionTypes != null ? regionTypes.size() : 0,
         conversations != null ? conversations.size() : 0);
 
-    if (!claimCallback(imageId, "layout")) {
+    if (!claimCallback(jobId, imageId, "layout")) {
       return;
     }
 
@@ -1194,12 +1252,21 @@ public class JobCoordinatorService {
   @Transactional
   public void handleTranslationCallback(
       UUID imageId, List<Map<String, Object>> translations, Map<String, Object> cost) {
+    handleTranslationCallback(null, imageId, translations, cost);
+  }
+
+  @Transactional
+  public void handleTranslationCallback(
+      String jobId,
+      UUID imageId,
+      List<Map<String, Object>> translations,
+      Map<String, Object> cost) {
     log.info(
         "Received Translation callback for image: {} with {} translations",
         imageId,
         translations != null ? translations.size() : 0);
 
-    if (!claimCallback(imageId, "translation")) {
+    if (!claimCallback(jobId, imageId, "translation")) {
       return;
     }
 
@@ -1230,7 +1297,7 @@ public class JobCoordinatorService {
 
     if (successCount == 0) {
       log.warn("All translations failed for image {} — not creating empty layer", imageId);
-      Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "translation");
+      Job job = resolveCallbackJob(jobId, imageId, "translation");
       if (job != null) {
         job.setStatus("FAILED");
         job.setError("Translation failed: no regions were successfully translated");
@@ -1510,13 +1577,19 @@ public class JobCoordinatorService {
   @Transactional
   public void handleQaReOcrCallback(
       UUID imageId, UUID callbackPageId, List<Map<String, Object>> results) {
+    handleQaReOcrCallback(null, imageId, callbackPageId, results);
+  }
+
+  @Transactional
+  public void handleQaReOcrCallback(
+      String jobId, UUID imageId, UUID callbackPageId, List<Map<String, Object>> results) {
     log.info(
         "Received QA Re-OCR callback for image: {} with {} results",
         imageId,
         results != null ? results.size() : 0);
     Objects.requireNonNull(imageId, "imageId cannot be null");
 
-    if (!claimCallback(imageId, "qa-re-ocr")) {
+    if (!claimCallback(jobId, imageId, "qa-re-ocr")) {
       return;
     }
 
@@ -1558,7 +1631,12 @@ public class JobCoordinatorService {
 
   @Transactional
   public void handleRenderCallback(UUID imageId, UUID pageId) {
-    if (!claimCallback(imageId, "render")) {
+    handleRenderCallback(null, imageId, pageId);
+  }
+
+  @Transactional
+  public void handleRenderCallback(String jobId, UUID imageId, UUID pageId) {
+    if (!claimCallback(jobId, imageId, "render")) {
       return;
     }
     List<Page> pages = pageId != null
@@ -1714,13 +1792,23 @@ public class JobCoordinatorService {
       UUID callbackPageId,
       List<Map<String, Object>> qaResults,
       Map<String, Object> cost) {
+    return handleQaCallback(null, imageId, callbackPageId, qaResults, cost);
+  }
+
+  @Transactional
+  public String handleQaCallback(
+      String jobId,
+      UUID imageId,
+      UUID callbackPageId,
+      List<Map<String, Object>> qaResults,
+      Map<String, Object> cost) {
     log.info(
         "Received QA callback for image: {} with {} results",
         imageId,
         qaResults != null ? qaResults.size() : 0);
     Objects.requireNonNull(imageId, "imageId cannot be null");
 
-    if (!claimCallback(imageId, "qa")) {
+    if (!claimCallback(jobId, imageId, "qa")) {
       return "DUPLICATE";
     }
 
