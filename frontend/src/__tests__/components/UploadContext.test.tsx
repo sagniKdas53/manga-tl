@@ -44,4 +44,26 @@ describe("UploadProvider & Context", () => {
     fireEvent.click(screen.getByText("Dismiss"));
     expect(screen.getByTestId("items-count")).toHaveTextContent("0");
   });
+
+  // AUDIT-F6: both were icon-only with no accessible name. The expand one also carries
+  // aria-expanded, since its label changes with the state it reports.
+  it("names the panel's icon-only controls", () => {
+    render(
+      <UploadProvider>
+        <TestUploadConsumer />
+      </UploadProvider>,
+    );
+    fireEvent.click(screen.getByText("Add Item"));
+
+    const collapse = screen.getByRole("button", { name: "Collapse upload list" });
+    expect(collapse).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByRole("button", { name: "Dismiss uploads" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(collapse);
+    expect(
+      screen.getByRole("button", { name: "Expand upload list" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
 });

@@ -54,6 +54,7 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
               }}
               size="small"
               sx={{ color: "white" }}
+              aria-label="Delete page"
               title="Delete page"
             >
               <CloseIcon fontSize="small" />
@@ -68,6 +69,7 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
                 onClick={() => onMovePage(idx, "left")}
                 disabled={idx === 0}
                 size="small"
+                aria-label="Move page left"
                 title="Move page left"
               >
                 <ChevronLeftIcon fontSize="small" />
@@ -77,6 +79,7 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
                 onClick={() => onMovePage(idx, "right")}
                 disabled={idx === pages.length - 1}
                 size="small"
+                aria-label="Move page right"
                 title="Move page right"
               >
                 <ChevronRightIcon fontSize="small" />

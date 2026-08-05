@@ -157,6 +157,7 @@ export const NotificationCenter: React.FC<Props> = ({
         onClick={onRequestOpen}
         color="inherit"
         size="small"
+        aria-label="Notifications"
         title="Notifications"
       >
         <Badge

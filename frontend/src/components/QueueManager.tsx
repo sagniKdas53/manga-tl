@@ -736,6 +736,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
         onClick={onRequestOpen}
         color="inherit"
         size="small"
+        aria-label="Queue Manager"
         title="Queue Manager"
       >
         <Badge

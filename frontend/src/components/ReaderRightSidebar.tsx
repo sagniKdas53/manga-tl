@@ -156,6 +156,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               <Box sx={{ display: "flex", gap: 0.25, alignItems: "center" }}>
                 <IconButton
                   size="small"
+                  aria-label="Move layer up"
                   title="Move layer up"
                   disabled={
                     !activeLayerId ||
@@ -173,6 +174,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 </IconButton>
                 <IconButton
                   size="small"
+                  aria-label="Move layer down"
                   title="Move layer down"
                   disabled={
                     !activeLayerId ||

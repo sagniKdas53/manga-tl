@@ -392,6 +392,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         <IconButton
           size="small"
           onClick={onLaunchEyeDropper}
+          aria-label="Eye dropper"
           title="Eye dropper"
         >
           <ColorizeIcon fontSize="small" />

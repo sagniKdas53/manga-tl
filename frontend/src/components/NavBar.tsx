@@ -87,6 +87,7 @@ export const NavBar: React.FC<NavBarProps> = ({
           <IconButton
             onClick={toggleMode}
             color="inherit"
+            aria-label={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
             title={`Switch to ${mode === "dark" ? "Light" : "Dark"} Mode`}
           >
             {mode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
@@ -96,6 +97,7 @@ export const NavBar: React.FC<NavBarProps> = ({
               <IconButton
                 onClick={() => setIsSettingsOpen(true)}
                 color="inherit"
+                aria-label="Settings"
                 title="Settings"
               >
                 <SettingsIcon />
@@ -118,6 +120,7 @@ export const NavBar: React.FC<NavBarProps> = ({
               <IconButton
                 onClick={() => setIsUserModalOpen(true)}
                 color="inherit"
+                aria-label="Account"
                 title="Account"
               >
                 {user.role === "admin" ? (
@@ -133,6 +136,7 @@ export const NavBar: React.FC<NavBarProps> = ({
                 size="small"
                 color="inherit"
                 sx={{ minWidth: "auto" }}
+                aria-label="Sign Out"
                 title="Sign Out"
               >
                 <LogoutIcon />
