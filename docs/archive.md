@@ -73,6 +73,73 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-05 third sitting — list items 1–7, minus two halves
+
+*Retired from `next-step.md` on 2026-08-05. Eleven parent commits (`3455430` … `64cea19`) plus worker
+`0894cb2`. Every code fix verified red-green. **Backend deployed; worker built but not deployed** —
+see the end.*
+
+Suites: **backend 390 → 395**, **frontend 305 → 306**, **worker 284** (unchanged). All green, no
+skips.
+
+| item | commit | what changed |
+| --- | --- | --- |
+| AUDIT-B7 | `3455430` | Cover recalculation guards on `safePageNumber` in both call sites. |
+| AUDIT-P2 | `11c79da` | A 400/422 marks the row `FAILED` with the reason, and emits `job_update`. |
+| AUDIT-P3 | `19cab6f` | `break` instead of `return` — a stuck queue no longer abandons its slot class. |
+| AUDIT-P9 | `a8abea3` | OCR callback fails the job when its page is gone, instead of dying at commit. |
+| AUDIT-D3 | `55f9d00` | All six `depends_on` entries moved to `condition: service_healthy`. |
+| AUDIT-D4 | `69ad910` | `MINIO_ENDPOINT_URL` / `MINIO_ENDPOINT_HOST`, both documented. |
+| AUDIT-D2 | `0894cb2`, `9cdd365` | Base pinned by digest, 19 requirements pinned, non-root `uid 10001`. |
+| landmarks | `bc81040` | `<nav>`, `<main id="main-content">`, and a skip link. |
+| MUI miss | `64cea19` | ColorPicker's nine painting surfaces onto MUI `Box`. |
+
+**Two findings were wrong, and one entry was bigger than its headline.**
+
+- **AUDIT-P9's mechanism is wrong.** It claims the rows "save successfully and are then invisible to
+  every `findByPageId` query — silent orphans that still count against cost". They cannot:
+  `ocr_regions.page_id` and `layers.page_id` are `NOT NULL` in the mapping *and* in the live schema.
+  Checked against the running database and with a throwaway Testcontainers probe, which threw
+  `ConstraintViolationException: null value in column "page_id"`. What actually happened is a
+  `DataIntegrityViolationException` at commit that rolls back the **entire completed OCR pass**,
+  after which the stale sweeper re-runs the expensive job to fail identically up to `maxAttempts`.
+  Real defect, wrong reason, and worse on cost than the entry suggests.
+- **AUDIT-D2's multi-stage half is a WON'T DO, on measurement.** Of the 1.93 GB image, 1.53 GB is ML
+  wheels and 280 MB is apt libs, and there is **no build-toolchain layer at all** — no
+  `build-essential`, no gcc — so a builder stage has nothing to leave behind. The rebuilt image came
+  out at 1.94 GB, unchanged. The real "pins nothing" defect was elsewhere and unmentioned by the
+  headline: **19 of 20 requirements carried no version**.
+- **AUDIT-D2 bundles four more sub-items that are still open** and were not attempted: the four font
+  `wget`s against a moving `main` branch (plus the Arial licensing question), `libxrender-dev` in the
+  runtime image, no `PYTHONUNBUFFERED=1`, and no BuildKit cache mount on `pip install`. The
+  "read the whole entry" rule earned its keep again.
+
+**Three process notes.**
+
+- **`detect_changes` returned HIGH on the a11y commit, and it was the line-offset artefact again** —
+  in its most extreme form yet. Wrapping the routes in `<main>` re-indented ~120 lines, so the raw
+  diff was 161/-126; `git diff -w` was **35 insertions and zero deletions**. All six flagged
+  processes (`SseRetryDelayMs`, `ParseJwt`, `TicketUrlFor`, …) traverse `AppContent`'s hooks, none of
+  which were touched — `AppContent` is a hub every flow enters at step 1. It also parsed the
+  `(t) => t.zIndex.tooltip + 1` arrow inside an `sx` prop as a symbol named `zIndex`.
+- **Wrapping JSX forces a re-indent, and Prettier is the right tool for it.** The standing rule is
+  never to run `prettier --write` outside a formatting commit. That rule exists because the repo was
+  *not* Prettier-clean; now that it is, `--write` on a file already being changed only touches lines
+  the change itself caused. Verified by checking the file was clean at `HEAD` first, then confirming
+  `git diff -w` showed no deletions.
+- **`sx` is not a free swap for `style` on a drag path.** ColorPicker's handles update on every
+  `pointermove`; `sx` compiles through emotion and mints a class per distinct value, so moving handle
+  positions there would mean a new class per frame. Static styling went to `sx`, per-frame values
+  stayed inline. A MUI migration is not always find-and-replace.
+
+**Deployment state.** The backend **was** rebuilt and deployed this sitting, so AUDIT-F7's client
+listener and `server.compression` are live for the first time; the container came up healthy with no
+error lines. The worker image is **built and verified but not deployed** — it runs as `uid 10001`,
+and the host directories under `data/worker/` are still root-owned. They need
+`sudo chown -R 10001:10001 data/worker/{huggingface,paddlex,rendered_cache}` before
+`docker compose up -d worker`. Until then the running worker is the previous root image and the stack
+is consistent.
+
 ### The 2026-08-05 second sitting — list items 1–5, a MUI pass, and Prettier in CI
 
 *Retired from `next-step.md` on 2026-08-05. Ten parent commits (`88b4cf6` … `3e1903c`) plus worker
