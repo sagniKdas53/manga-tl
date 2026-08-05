@@ -1,128 +1,180 @@
-# Handoff — 2026-08-05 (sixth sitting)
+# Handoff — 2026-08-05 (seventh sitting)
 
-> **The board is ranked again.** The fifth sitting ended with an empty list and two unranked piles.
-> This sitting did the verification pass that `Where to go next` recommended, and it paid: **six
-> findings were already fixed while still marked open**, one high-severity item had **fallen off the
-> board entirely**, and one entry's remaining work turned out to be a single test rather than a
-> project.
+> **Items 1–4 are done**, each verified red-green, each closing its `issues.md` entry in the same
+> commit. That is AUDIT-P5, P7, W4 and W7 — including the one correctness defect on the board, which
+> also completes AUDIT-P4's fix.
 >
-> `issues.md` went **1,262 → ~700 lines**. Everything closed is now in
-> [archive.md](./archive.md) under *"The 2026-08-05 verification pass"*, verbatim, in a `<details>`
-> block. What is left in `issues.md` is open **as of 2026-08-05 and verified against the tree** —
-> for the first time, its status can be trusted on its own.
+> **One finding was partly wrong** and is corrected rather than obeyed: AUDIT-W4 wanted the node id
+> stripped from *every* Valkey lock key. That is right for `local-llm` and wrong for `ocr`. See
+> [§ Where a finding was wrong](#where-a-finding-was-wrong).
 >
-> **No code changed this sitting.** Docs only. Working tree otherwise clean.
+> **The sixth sitting's docs were never committed.** They were sitting modified in the working tree
+> while its own handoff recorded the tree as clean. Committed as-is in `355d8fe`, unchanged, before
+> anything else.
+>
+> **Not pushed.** Six commits on local `main`, ahead of `github/main`. The worker submodule has
+> three commits of its own, and its pointer is bumped in the parent.
 
-## What this sitting did
+## What closed this sitting
 
-A read of the actual code behind every open entry in `issues.md`, then archiving. No fixes, by
-design — the point was to make the remainder schedulable.
-
-### Already fixed, still marked open
-
-| id | sev | filed as | actually |
+| # | id | sev | outcome |
 | --- | --- | --- | --- |
-| AUDIT-P1 | H | `resolveConfigForChapter` passes `translation`/`qa` as provider task keys | Fixed. `:646-655` passes `tl` / `qaLLM` / `qaVLM`, with a comment naming AUDIT-P1. |
-| AUDIT-P4 | H | job recovery re-runs in-flight work; callbacks not idempotent | Fixed. `callback_applied_at` + `claimCallback`'s conditional UPDATE guards **all seven** handlers. |
-| AUDIT-W6 | M | slot maths can compute to zero or negative, unvalidated | Fixed. `resolve_slot_config` clamps and warns; its docstring quotes the finding's own examples. |
-| AUDIT-W10 | C | `MAX_LIGHT_SLOTS=1` serialises four workloads | Fixed by config. Compose is `CONCURRENT_JOBS=5` with light deriving to 4. |
-| AUDIT-W8 | M | Anthropic `max_tokens` hardcoded 4096 (1 of 5 bullets) | Fixed → `DEFAULT_MAX_OUTPUT_TOKENS`. Other four bullets stand. |
-| AUDIT-B8 | L | `JwtAuthFilter` double-registered (1 of 9 bullets) | Fixed → `FilterRegistrationBean(setEnabled(false))`. Other eight stand. |
+| 1 | AUDIT-P5 | **H** | **Closed** (`3be57d4`). Completes AUDIT-P4. |
+| 2 | AUDIT-P7 | M | **Closed** (`215ada4`). All three bullets, including the TTL. |
+| 3 | AUDIT-W4 | M | **Closed** (`71cbad3` + worker `380c8f2`). One half of the finding corrected. |
+| 4 | AUDIT-W7 | M | **Closed** (`71cbad3` + worker `0d2c6c6`). |
 
-That is **six in one pass**, on top of AUDIT-B6, AUDIT-D1 and P9's wrong mechanism from earlier
-sittings. The working constraint about not trusting `issues.md`'s status has now been earned nine
-times. It should be *retired* rather than repeated — the file is trustworthy as of today, and the
-way to keep it that way is to close entries when the fix lands, in the same commit.
+### 1. AUDIT-P5 — the guard was keyed off the thing it existed to make safe
 
-### The one that fell off the board
+The finding was accurate as filed, including its claim on P4, and it is worth restating because the
+shape recurs: `claimCallback` ran the correct conditional `UPDATE … WHERE callback_applied_at IS
+NULL`, but chose *which row* to claim with `findFirstByImageIdAndTypeOrderByCreatedAtDesc`. Claim
+the wrong row and it both mis-marks that row **and** leaves the real one unclaimed — so the genuine
+callback is free to apply twice. Two claims that should have collided both succeed, which is
+precisely the failure P4 was closed to prevent. A correct guard on an ambiguous key is not a guard.
 
-**AUDIT-P4 was never in the fifth sitting's backlog table** — neither closed nor listed. Nor were
-P1, W1, W2, W6 or W10. The table carried 17 entries; `issues.md` had 23 open. Six went missing in
-the copy, and one of them was the file's own "the one correctness defect measurably costing work."
+`jobId` was already minted at enqueue, already the row's primary key, and already in the worker
+payload. It is now echoed back on all **12** callback-payload sites across the worker's 8 handlers,
+and `resolveCallbackJob` prefers `findById`, falling back to the old query only when a callback
+carries none — so an old worker and a new backend still interoperate. A `jobId` resolving to a row
+of a *different type* is refused rather than claimed; that would mean the callback reached the wrong
+endpoint, and acting on it would mis-mark an unrelated job.
 
-It happens to have been fixed already. The next one might not be. **Generate the board from
-`issues.md` rather than hand-copying it**, or at minimum diff the two before trusting the short list.
+The five `Map`-based handlers take `jobId` as a new first parameter with the previous arities kept
+as delegating overloads — the idiom the file already used for the `pageId` retrofit, which kept
+every existing test call site compiling.
 
-### AUDIT-P4's residual is AUDIT-P5, and it undermines P4's fix
+### 2. AUDIT-P7 — two one-word fixes, and a third bullet worth reading for
 
-This is the finding worth carrying, and it is why P5 moves to the top of the list.
+Exactly as filed. `triggerPageRedo` wrote `page:{ocr,translation}:reason:{pageId}` and nothing
+anywhere reads a page-scoped key; and its `delete("pipeline:trace:" + pageId)` named a key written
+under **imageId**, so it was a no-op and the redo inherited the previous run's trace id.
+`imageId` was already resolved one line above both statements.
 
-`claimCallback` makes callbacks idempotent with `UPDATE Job SET callback_applied_at = :now WHERE id
-= :id AND callback_applied_at IS NULL`. But it chooses *which row to claim* with
-`findFirstByImageIdAndTypeOrderByCreatedAtDesc` (`:709`) — the newest job of that type for that
-image, which is exactly the guess AUDIT-P5 is about.
+The entry's third bullet — the reason keys are written with no TTL, so a pipeline that dies before
+its callback leaves a key that mislabels the *next* run — was also real, and is fixed with
+`REDO_REASON_TTL` (24h) at all six write sites. **This is the fourth time reading the whole entry
+found work the headline did not mention.** Keep doing it.
 
-**So the idempotency guard is keyed off the ambiguous identifier it exists to make safe.** Claim the
-wrong row and it both mis-marks that row *and* leaves the real one unclaimed — so the genuine
-callback is free to apply twice, which is the precise failure P4 was closed to prevent. Two claims
-that should collide instead both succeed.
+### 3. AUDIT-W4 — see below, this one needed pushback
 
-`jobId` is already minted, already stored as the row's primary key, and already in the worker's
-payload (`:317-327`). Threading it through the callback DTOs fixes P5 and completes P4 in one change.
+### 4. AUDIT-W7 — the HEAD had to be explicit
 
-### AUDIT-T2 shrank to one test
+Accurate as filed. Worth recording *why* the obvious fix does not work: **Spring answers a HEAD
+request by invoking the `@GetMapping` handler and discarding the body.** Switching the worker to
+`requests.head` alone would have changed nothing — the presigned URL and every panel, region and
+layer would still be built, then thrown away. It takes an explicit
+`@RequestMapping(method = RequestMethod.HEAD)` on the same path, which Spring prefers over the GET
+handler, to actually skip the work. The red-green check for this is to move the HEAD mapping off
+the path and watch the request fall through to the GET handler.
 
-The entry says "none of the dispatcher's failure paths are exercised, so AUDIT-P2 and AUDIT-P3 have
-no test to fail." `WorkerDispatcherServiceTest.java` is now **639 lines** covering
-`PermanentRejection_400`/`_422` (P2's paths), `MultipleWorkers_AllFail`, `ServerError500`,
-`CapabilitiesQueryFails`, `AllWorkersInCooldown` and `LightSlotFull`. Those arrived with P2's and
-P3's fixes; nobody updated the note. What is left is a test for P3's `break`-not-`continue`, and
-that is one test.
+## Where a finding was wrong
 
-### AUDIT-T1 went the wrong way
+**AUDIT-W4 is right about `local-llm` and wrong about `ocr`.** The entry blames
+`lock_key = f"lock:{lock_name}:{node_id}"` as such, so the literal fix is to drop the node id
+everywhere. Do not.
 
-The only entry that got *worse* on its own. Filed at 320 `@patch` across 46 files; now **342 across
-49**. `test_translation_flow_e2e.py` is **19 `@patch` against 4 `assert`s**. The two tests added
-since it was filed have the same shape as the ones it criticises.
+- `local-llm` **must** be deployment-wide. `LOCAL_LLM_ENDPOINT` resolves to a *shared* address —
+  the `ollama` compose service, or LM Studio on the host — so N workers each took their own lock and
+  then hit the single instance concurrently. The lock did nothing.
+- `ocr` **must stay per-container.** Its own comment says it serialises PP-OCR-Det and YOLO
+  executing *on this host*, to avoid CPU/GPU overload and OOM. A deployment-wide `ocr` lock would
+  serialise detection across the entire fleet — a throughput regression dressed as a bug fix.
+
+So `acquire_lock` gained `node_scoped` (default `False`, the global behaviour the finding wants),
+with `True` passed at the single `ocr` call site. The second defect — an unconditional `DELETE` in
+`finally` that frees whatever lock exists, including one a different holder acquired after ours
+expired — was real and is fixed with a random token plus a compare-and-delete Lua script.
+
+**That is ten times a finding has turned out stale, wrong, or already fixed.** The habit pays.
+
+## Two process notes worth keeping
+
+- **`mvn -o test-compile` silently no-ops.** It reported `BUILD SUCCESS` over five real
+  constructor-arity errors because it decided sources were unchanged. `mvn -o clean test-compile`
+  caught them immediately. **Never trust an incremental Maven compile as evidence** that a signature
+  change is consistent.
+- **`node .gitnexus/run.cjs analyze` failed once with a native-worker abort and succeeded on a plain
+  retry**, same tree, no change. If it aborts, retry before debugging it.
 
 ## The ranked list
 
-Verified against the code on 2026-08-05. Sizes are honest; nothing here is speculative.
+Renumbered from the sixth sitting with 1–4 removed. Nothing below was re-derived — these are the
+sixth sitting's verified entries, minus what closed.
 
 | # | id | sev | what | size |
 | --- | --- | --- | --- | --- |
-| 1 | AUDIT-P5 | **H** | Thread `jobId` through the callback DTOs. Completes P4. | M — needs OpenAPI regen |
-| 2 | AUDIT-P7 | M | Page-redo writes `page:*:reason:` keys nothing reads, and deletes `pipeline:trace:{pageId}` which is stored under imageId. Two one-word fixes. | S |
-| 3 | AUDIT-W4 | M | Valkey lock keyed per-container, so it serialises nothing; `finally` deletes other holders' locks. | S–M |
-| 4 | AUDIT-W7 | M | Stale-job check: no timeout, on the heaviest endpoint, once per job. | S |
-| 5 | AUDIT-W8 | M | Anthropic gets no JSON enforcement at all; `content: null` → `TypeError`. | M |
-| 6 | AUDIT-W9 | M | Ollama — the default local provider — is the one case that gets no JSON mode. Plus a four-way default mismatch. | S |
-| 7 | AUDIT-T2 | — | One test for P3's `break`. | S |
-| 8 | AUDIT-B8 | L | Eight verified bullets. `updateJobStatus` accepting arbitrary strings is the real one. | M, splittable |
-| 9 | AUDIT-Q3 | L | Seven verified bullets. `isOverride`'s untrimmed `"inherit"` is now a shared predicate. | S–M |
-| 10 | AUDIT-P6 | M | Lost `COMPLETED` PATCH re-runs the job. Overlaps P5. | M |
-| 11 | AUDIT-P8 | M | 2-hour trace TTL expires mid-pipeline. | S |
-| 12 | AUDIT-D5 | L | Published DB/Valkey/console ports, `LOG_LEVEL=DEBUG`, `npm install` under an `npm ci` comment, no `MaxRAMPercentage`. | S–M |
-| 13 | AUDIT-B5 | M | `ddl-auto: update` against a competing `init.sql`. | L — a migration project |
-| 14 | AUDIT-Q1 | — | 249 `Objects.requireNonNull`, up 2 since filing. | L, mechanical |
-| 15 | AUDIT-T1 | — | The "e2e" test isn't one, and the suite got more mocked. | L — wants `mock_router.md` |
-| — | AUDIT-W1, W2 | L | Both re-ranked **[H] → [L]**, applying corrections their own bodies already carried. | S each |
+| 1 | AUDIT-W8 | M | Anthropic gets no JSON enforcement at all; `content: null` → `TypeError`. Four bullets. | M |
+| 2 | AUDIT-W9 | M | Ollama — the default local provider — is the one case that gets no JSON mode. Plus a four-way default mismatch. | S |
+| 3 | AUDIT-T2 | — | One test, for P3's `break`-not-`continue`. | S |
+| 4 | AUDIT-B8 | L | Eight verified bullets. `updateJobStatus` accepting arbitrary strings is the real one. | M, splittable |
+| 5 | AUDIT-Q3 | L | Seven verified bullets. `isOverride`'s untrimmed `"inherit"` is now a shared predicate. | S–M |
+| 6 | AUDIT-P6 | M | Lost `COMPLETED` PATCH re-runs the job. **Now smaller — see below.** | S–M |
+| 7 | AUDIT-P8 | M | 2-hour trace TTL expires mid-pipeline. | S |
+| 8 | AUDIT-D5 | L | Published DB/Valkey/console ports, `LOG_LEVEL=DEBUG`, `npm install` under an `npm ci` comment, no `MaxRAMPercentage`. | S–M |
+| 9 | AUDIT-B5 | M | `ddl-auto: update` against a competing `init.sql`. | L — a migration project |
+| 10 | AUDIT-Q1 | — | 249 `Objects.requireNonNull`, up 2 since filing. | L, mechanical |
+| 11 | AUDIT-T1 | — | The "e2e" test isn't one, and the suite got more mocked. | L — wants `mock_router.md` |
+| — | AUDIT-W1, W2 | L | Both re-ranked **[H] → [L]** by the sixth sitting. | S each |
 | — | AUDIT-W3 | M | Half-defused by W10: light slots are 4 now, so only the heavy tier still stalls. | M |
 
-**If you want one recommendation: do items 1–4.** Item 1 is the only correctness defect on the list
-and it closes a fix that is currently incomplete. Items 2–4 are small, verified, and independent of
-each other. That is a coherent sitting.
+**AUDIT-P6 shrank as a side effect of this sitting.** Its entry says the lost `COMPLETED` PATCH
+leaves the job `PROCESSING` until the stale sweeper requeues it, "duplicating work per AUDIT-P4."
+The duplicate result is now dropped on identity rather than on a guess, so what is left is the
+*wasted re-run*, not corrupted data. It is still worth fixing; it is no longer a correctness defect.
 
-**Do not start item 13 (AUDIT-B5) casually.** It is a schema-migration project — Flyway or
-Liquibase, plus reconciling `init.sql` against whatever `ddl-auto: update` has actually produced in
-the live database. It is correctly ranked low only because nothing is currently broken by it.
+**If you want one recommendation: do items 1 and 2 together.** Both are `LLMClient` payload
+construction, both are provider-specific JSON enforcement, and doing them in one pass means reading
+that builder once. They are the last two [M] worker findings.
+
+**Do not start item 9 (AUDIT-B5) casually.** It is a schema-migration project — Flyway or Liquibase,
+plus reconciling `init.sql` against whatever `ddl-auto: update` has actually produced live. Ranked
+low only because nothing is currently broken by it.
 
 ## Where the work stands
 
-Suites: **frontend 308**, **worker 284**, **backend 395**. **None re-run this sitting** — no code
-changed. The numbers are carried from the fifth sitting.
+Suites, all re-run this sitting: **backend 399** (was 395; +4 new tests), **worker 290** (was 284;
++6), **frontend 308** (unchanged — no frontend source changed, only the regenerated schema).
 
 **Dependabot is unchanged:** four PRs open, all four close-don't-merge. #60 okhttp (the pin is
 load-bearing — read the comment in `pom.xml` first) and #52 springdoc are blocked outright; #51
 testcontainers-bom 2.x and #40 TypeScript 7 are major-version projects of their own.
 
-**Deployment:** the fifth sitting's two frontend commits are pushed but **not live**. The frontend
-compiles into the backend image, so they need `docker compose build backend && docker compose up -d
-backend` (~10 min). This sitting adds nothing to that.
+### Deployment — read this before assuming the fixes are live
+
+- **The backend is live.** It was rebuilt and restarted twice this sitting (the OpenAPI regen needed
+  it), so it is running everything above, *plus* the fifth sitting's two frontend commits, which
+  were pending deployment for two sittings and are now deployed.
+- **The worker is NOT live.** All three worker commits — the `jobId` echo, the lock fix, the HEAD
+  stale check — need `docker compose build worker && docker compose up -d worker`. **Nothing breaks
+  in the meantime:** the backend falls back to the old query when a callback carries no `jobId`, and
+  the GET handler the old worker still calls is untouched. But none of the three fixes take effect
+  until that rebuild.
+
+### `schema.d.ts` had pre-existing drift
+
+The first regen picked up `layerType`, `layerVisible` and `regionType` on `LayerElement` — nothing
+to do with this sitting. They came from `c3fa119`, which added the JSON properties to the model and
+never ran `npm run generate-api`. Harmless, and now corrected. It is the exact drift `CLAUDE.md`'s
+OpenAPI rule exists to prevent, and it went unnoticed for several sittings, so **a periodic
+`npm run generate-api` with no backend change is worth doing** just to see whether the diff is
+empty.
+
+## Not mine — left alone deliberately
+
+The working tree has four changes this sitting did not make and did not touch:
+
+- `TODO.md` — a sample-image reference swapped to `page-2-export(2).png`.
+- `examples/sample4/en-our-version.png` — deleted.
+- `docs/render_quality_gap_2026-08-05.md` — new, untracked.
+- `scripts/render_quality_metrics.py` — new, untracked.
+
+All four appeared during the sitting and look like concurrent work on the render-quality thread.
+Every commit here used an explicit pathspec, so none of them were swept in.
 
 ## Carried forward — deliberately not done
 
-Unchanged from the fifth sitting; each was left undone for a stated reason and those reasons hold.
+Unchanged from the sixth sitting; each was left undone for a stated reason and those reasons hold.
 
 - **The cross-provider fallback rule has not reached `ocr.py` and `qa.py`.** AUDIT-W11 established it
   for translation and `is_provider_auth_parked()` is in place for the others. Left alone because the
@@ -166,40 +218,43 @@ Unchanged from the fifth sitting; each was left undone for a stated reason and t
   editing any symbol, report HIGH/CRITICAL, `detect_changes()` before committing.
   **`detect_changes` attributes by line offset**, so a large insertion flags untouched symbols below
   it — check `git diff -U0` hunk ranges before believing the blast radius, and **reindex first**
-  (`node .gitnexus/run.cjs analyze`). It has earned its keep once, catching a duplicated
-  `pipelineStages` chain. Read the list; verify it against the hunks.
+  (`node .gitnexus/run.cjs analyze`; retry once if it aborts in a native worker). Both CRITICAL
+  ratings this sitting were the expected fan-out of the change plus that artefact, confirmed against
+  the hunks.
 - **Running `analyze` rewrites the symbol counts in `CLAUDE.md` and `AGENTS.md`.** Keep that out of a
-  feature commit.
-- **Close entries in `issues.md` in the same commit as the fix.** Nine entries have now been found
-  fixed-but-open. The verification pass on 2026-08-05 made the file trustworthy; only this habit
-  keeps it that way.
-- **Generate the ranked board from `issues.md`, don't hand-copy it.** The fifth sitting's table
-  silently dropped six entries, one of them the highest-severity open item in the file.
+  feature commit — it gets its own `chore:` commit.
+- **`mvn -o test-compile` can silently skip recompiling and report success.** Use `mvn -o clean
+  test-compile` when a signature or record arity changed.
+- **Close entries in `issues.md` in the same commit as the fix.** Nine entries were found
+  fixed-but-open before the 2026-08-05 verification pass; all four closed this sitting followed the
+  rule.
 - **Verify a fix red-green.** Break it, watch the test fail, restore it. **Three times** a failing
-  test has turned out to be pinning a bug rather than the behaviour.
-- **Read the whole `issues.md` entry before calling it closed.** B3, B4, W8 and B8 each bundled
-  sub-findings the headline did not mention — W8 and B8 each had exactly one bullet already fixed.
+  test has turned out to be pinning a bug rather than the behaviour — and twice this sitting a test
+  passed for the *wrong reason* until the defects were reverted one at a time. When an entry has two
+  defects, revert them **individually**.
+- **Read the whole `issues.md` entry before calling it closed.** P7's third bullet was real work the
+  headline did not mention; B3, B4, W8 and B8 each bundled sub-findings the same way.
 - **One performance variable per change.** The delta has to be attributable.
 - **Commit straight to `main`** — no feature branches. **Use a pathspec** (`git commit -- <paths>`):
-  a bare `git commit` takes everything already staged.
+  a bare `git commit` takes everything already staged, and there is currently unrelated work in the
+  tree that must not be swept in.
 - **Never run `prettier --write` outside a commit whose purpose is formatting.** The repo is
   Prettier-clean and `ci-npm.yml` gates on `format:check`; verify with `git diff -w`.
 - **Frontend lint is `--report-unused-disable-directives --max-warnings 0`.** A warning fails the
   build.
+- **Worker gates are four:** `pytest -q`, `ruff check .`, `ruff format --check .`, `pyright .` — the
+  last two are CI gates and both catch things (`SIM117`, and a `float`/`int` parameter mismatch, this
+  sitting). Run all four.
 - **`.env` is gitignored and overrides `docker-compose.yml` defaults.** Verify with
   `docker compose config | grep -E 'CONCURRENT_JOBS|MAX_(HEAVY|LIGHT)_SLOTS'` before trusting a run.
-  Compose now defaults to `CONCURRENT_JOBS=5` with both `MAX_` values blank (light derives to 4);
-  `.env` may still pin the older `4 / 1 / 3`.
 - The frontend compiles **into** the backend image, so any frontend change needs
   `docker compose build backend && docker compose up -d backend` (~10 min).
 - Backend API changes require `npm run generate-api` from `frontend/` with the backend container up.
-  It honours `API_DOCS_URL`, defaulting to the previous hardcoded URL. **Item 1 on the list needs
-  this.**
-- **`worker/` is a git submodule.** Changes need their own commit plus a pointer bump in the parent.
+  It honours `API_DOCS_URL`. **Adding a `HEAD` mapping changes the spec too**, not just DTO fields.
 - Backend build is Maven (`mvn -o test`, no wrapper) **and must be run from `backend/`**. Frontend is
-  `npx vitest run` / `npx tsc --noEmit` / `npm run lint` / `npm run format:check`. Worker is
-  `python3 -m pytest -q`, `ruff check .`, `ruff format --check .` and `pyright .` — the last two are
-  CI gates. Worker CI runs Python 3.13 as of `0123ca6`.
+  `npx vitest run` / `npx tsc --noEmit` / `npm run lint` / `npm run format:check`.
+- **`worker/` is a git submodule.** Changes need their own commit plus a pointer bump. `git add
+  worker` stages the pointer; include it in the parent commit's pathspec.
 - **The local `.venv` is Python 3.13.12 / numpy 2.3.5** and matches the image. It is at the repo
   root, not in `worker/`; run the worker suite as `cd worker && ../.venv/bin/python -m pytest -q`.
 - **Testcontainers works.** If the backend suite goes red across many classes at once, read the
@@ -218,54 +273,54 @@ Unchanged from the fifth sitting; each was left undone for a stated reason and t
 <!-- markdownlint-disable MD031 MD040 -->
 
 ```
-Continuing manga-library. Read docs/next-step.md first. If you need more
-history, docs/archive.md's "2026-08-05 verification pass" section has every
-entry that was closed, verbatim. Do not re-audit the codebase and do not
-re-derive the run numbers — both are written down.
+Continuing manga-library. Read docs/next-step.md first. docs/archive.md's
+"2026-08-05 seventh sitting" section has what closed and why; the verification
+pass section below it has everything closed on 2026-08-05. Do not re-audit the
+codebase and do not re-derive the run numbers — both are written down.
 
-THE BOARD IS RANKED AGAIN. The 2026-08-05 verification pass read the code
-behind every open entry in issues.md and archived the closed ones. issues.md
-went 1,262 -> ~700 lines and its status is TRUSTWORTHY AS OF 2026-08-05 —
-that is new, and it is the first time that has been true.
+STATE: items 1-4 of the sixth sitting's board are done (AUDIT-P5, P7, W4, W7),
+each red-green verified, each closing its issues.md entry in the same commit.
+issues.md remains trustworthy. Six commits sit on local main, NOT pushed; the
+worker submodule has three of its own with its pointer bumped.
 
-Six entries were found already-fixed while still marked open: AUDIT-P1,
-AUDIT-P4, AUDIT-W6, AUDIT-W10, one bullet of AUDIT-W8 and one of AUDIT-B8.
-AUDIT-T2's backend half was re-scoped by fixes that landed elsewhere. Do not
-reopen any of them.
+DEPLOYMENT: the backend IS live with all of this. The worker is NOT — it needs
+`docker compose build worker && docker compose up -d worker`. Nothing breaks
+meanwhile (the backend falls back when a callback carries no jobId), but none
+of the three worker fixes take effect until then.
 
-STATE: working tree clean, main pushed. No code changed in the last sitting —
-docs only. The fifth sitting's two frontend commits are pushed but NOT live
-until `docker compose build backend && docker compose up -d backend` (~10 min).
+NOT MINE: TODO.md, examples/sample4/en-our-version.png, and two untracked files
+(docs/render_quality_gap_2026-08-05.md, scripts/render_quality_metrics.py)
+are concurrent work from outside the sitting. Leave them or commit them
+deliberately — every commit used an explicit pathspec to avoid them.
 
 WHAT I WANT
 
-Work the ranked list in next-step.md, top down. Items 1-4 are the recommended
-sitting — item 1 is the only correctness defect on the list, and 2-4 are small
-and independent.
-
-Item 1 (AUDIT-P5) is the important one and the reason it is ranked first:
-AUDIT-P4 is closed, but claimCallback picks which row to claim using
-findFirstByImageIdAndTypeOrderByCreatedAtDesc — the exact guess P5 is about.
-The idempotency guard is keyed off the ambiguous identifier it exists to make
-safe. jobId is already the row's primary key and already in the worker payload;
-threading it through the callback DTOs fixes P5 and completes P4. It changes
-the OpenAPI spec, so it needs a backend rebuild + `npm run generate-api`.
+Work the ranked list in next-step.md, top down. The recommendation is items 1
+and 2 together (AUDIT-W8 and W9): both are LLMClient payload construction and
+provider-specific JSON enforcement, so one read of that builder covers both.
+They are the last two [M] worker findings.
 
 Say plainly if a finding turns out stale or wrong when you actually read the
-code — that has now paid off nine times.
+code — that has now paid off ten times, including once this sitting (AUDIT-W4
+wanted the node id stripped from every lock key; that is correct for local-llm
+and a throughput regression for ocr).
 
 CONSTRAINTS
 - CLAUDE.md is binding: reindex, impact() before edits, detect_changes() before
   commits. Its CRITICAL/HIGH is usually the line-offset artefact — check
-  `git diff -U0` hunk ranges. Note `analyze` rewrites symbol counts in CLAUDE.md
-  and AGENTS.md — keep that out of a feature commit.
-- Close the issues.md entry in the SAME commit as the fix. Nine entries have
-  now been found fixed-but-open; that is the habit that prevents it.
-- Verify red-green. Three times a failing test has been pinning a bug rather
-  than the behaviour, so read what a test asserts before trusting it.
+  `git diff -U0` hunk ranges. `analyze` rewrites symbol counts in CLAUDE.md and
+  AGENTS.md — keep that in its own chore commit, and retry analyze once if it
+  aborts in a native worker.
+- Close the issues.md entry in the SAME commit as the fix.
+- Verify red-green, and when an entry has two defects revert them INDIVIDUALLY
+  — twice this sitting a test passed for the wrong reason otherwise.
+- Read the whole issues.md entry, not the headline. P7's third bullet was real
+  work the headline did not mention; that is now four times.
+- `mvn -o test-compile` silently no-ops and reports success. Use `clean
+  test-compile` after any signature or record-arity change.
+- Worker has FOUR gates: pytest, ruff check, ruff format --check, pyright.
 - Commit to main directly, with a pathspec; worker/ is a submodule and needs
-  its own commit plus a pointer bump. `git fetch` before assuming this branch
-  is ahead-only.
+  its own commit plus a pointer bump. `git fetch` before assuming ahead-only.
 - Frontend lint is --max-warnings 0 and CI gates on prettier --check.
 - One performance variable per change.
 - Security findings (AUDIT-S*) are tracked separately; don't fold them in.
