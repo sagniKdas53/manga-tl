@@ -218,28 +218,6 @@ behind a cookie; and drop `%r` for `%U` in the access-log pattern.
 
 ### Pipeline correctness
 
-#### AUDIT-P5 **[H]** — callbacks resolve "which job" by guessing instead of by `jobId`
-
-*Raised **[M] → [H]** on 2026-08-05: this is now AUDIT-P4's residual, and it undermines P4's fix.*
-
-`enqueueJobDirectly:317-327` mints a `jobId`, sets it as the DB row's id, and puts it in the payload;
-the worker echoes it back. Yet the callback path locates the job with
-`findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, type)` — newest job of that type for that
-image. With a redo in flight, or an image backing pages in two chapters, this marks the wrong job
-`FAILED`/`COMPLETED`. The correct identifier is already in hand.
-
-**Why this got worse rather than better.** AUDIT-P4 is closed: `claimCallback` (`:705-714`) runs a
-conditional `UPDATE Job SET callback_applied_at = :now WHERE id = :id AND callback_applied_at IS
-NULL`, and all seven handlers gate on it, so a duplicate callback can no longer write a second
-region set, a second layer or a second cost row. But `claimCallback` picks *which row to claim*
-with the same `findFirstByImageIdAndTypeOrderByCreatedAtDesc` guess (`:709`). **The idempotency
-guard is keyed off the ambiguous identifier it exists to make safe** — claim the wrong row and the
-guard both mis-marks that row and leaves the real one unclaimed, so the genuine callback is free to
-apply twice. Passing `jobId` through fixes P5 and completes P4 in the same change.
-
-Adding `jobId` to the callback DTOs changes the OpenAPI spec, so this needs a backend rebuild plus
-`npm run generate-api` from `frontend/` per `CLAUDE.md`.
-
 #### AUDIT-P6 **[M]** — a lost `COMPLETED` PATCH silently re-runs the whole job
 
 `rq_tasks.py:113` sends `update_job_status(job_id, "COMPLETED")` with `timeout=5`. On timeout the

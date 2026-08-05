@@ -1132,6 +1132,9 @@ export interface components {
             maskPolygon?: string;
             /** Format: uuid */
             layerId?: string;
+            layerType?: string;
+            layerVisible?: boolean;
+            regionType?: string;
             /** Format: uuid */
             regionId?: string;
             qaStatus?: string;
@@ -1140,6 +1143,7 @@ export interface components {
             qaFeedback?: string;
         };
         PanelCallbackDto: {
+            jobId?: string;
             /** Format: uuid */
             imageId?: string;
             /** Format: uuid */
@@ -1163,6 +1167,7 @@ export interface components {
             readingOrder?: number;
         };
         OcrCallbackDto: {
+            jobId?: string;
             /** Format: uuid */
             imageId?: string;
             /** Format: uuid */

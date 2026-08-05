@@ -73,6 +73,46 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-05 seventh sitting — AUDIT-P5, which completes AUDIT-P4
+
+**AUDIT-P5 [H] — callbacks resolve "which job" by guessing instead of by `jobId`. Fixed.**
+
+The finding was accurate as filed, including its claim on P4. `claimCallback` ran the right
+conditional UPDATE but picked its row with `findFirstByImageIdAndTypeOrderByCreatedAtDesc` — so the
+idempotency guard was keyed off the ambiguous identifier it existed to make safe. Claiming the wrong
+row mis-marked that row *and* left the real one unclaimed, so the genuine callback was free to apply
+twice: two claims that should have collided both succeeded, which is the precise failure P4 was
+closed to prevent.
+
+**What changed.** `jobId` — already minted by `enqueueJobDirectly`, already the job row's primary
+key, already in the worker payload — is now echoed back on every callback and used to resolve the
+row exactly.
+
+- A new `resolveCallbackJob(jobId, imageId, jobType)` prefers `findById`, falling back to the old
+  newest-of-type query only when a callback carries no `jobId` (a worker predating this change). A
+  `jobId` that resolves to a row of a *different type* is refused rather than claimed — that would
+  mean the callback reached the wrong endpoint, and acting on it would mis-mark an unrelated job.
+- `claimCallback` and `failJob` both route through it, as do the two inline job lookups that had
+  their own copy of the guess (the OCR zero-regions branch and the translation all-failed branch).
+- All seven handlers thread it: `panel-detection` and `ocr` read it off their DTOs; `layout`,
+  `translation`, `qa-re-ocr`, `render` and `qa` take it as a new first parameter, with the previous
+  arities kept as delegating overloads passing `null` — the same idiom the file already used for
+  the `pageId` retrofit.
+- `PanelCallbackDto` and `OcrCallbackDto` gained a `jobId` component, which is the OpenAPI change;
+  `frontend/src/api/schema.d.ts` was regenerated against a rebuilt backend.
+- Worker: all **12** callback-payload sites across 8 handler files now send
+  `"jobId": job_data.get("jobId")`.
+
+**Verified red-green.** `testHandleOcrCallback_ClaimsTheJobNamedByJobIdNotTheNewest` sets up an
+original job plus a newer redo for the same image and calls back naming the original. With
+`resolveCallbackJob`'s id branch disabled it fails on exactly the right assertion — *"the callback
+named the original job — that is the row that must be claimed"*, expected not-null — and passes
+with it restored.
+
+**Note for the next sitting:** `mvn -o test-compile` silently no-ops when it decides sources are
+unchanged, and reported BUILD SUCCESS over five real constructor-arity errors. `mvn -o clean
+test-compile` caught them. Do not trust an incremental Maven compile as evidence.
+
 ### The 2026-08-05 verification pass — `issues.md` triaged against the code
 
 *Retired from `issues.md` on 2026-08-05. No code changed in this pass; every entry below was read

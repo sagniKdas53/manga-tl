@@ -799,7 +799,7 @@ public class JobCoordinatorServiceTest {
             null, 0.99, null, null, null, null, null);
     com.manga.library.dto.OcrCallbackDto dto =
         new com.manga.library.dto.OcrCallbackDto(
-            image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r));
+            null, image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r));
 
     jobCoordinatorService.handleOcrCallback(dto);
 
@@ -851,7 +851,7 @@ public class JobCoordinatorServiceTest {
             null, 0.99, null, null, null, null, null);
     com.manga.library.dto.OcrCallbackDto dto =
         new com.manga.library.dto.OcrCallbackDto(
-            image.getId(), deletedPageId, "paddle-ocr", 0.98, null, List.of(r));
+            null, image.getId(), deletedPageId, "paddle-ocr", 0.98, null, List.of(r));
 
     assertDoesNotThrow(
         () -> jobCoordinatorService.handleOcrCallback(dto),
@@ -905,7 +905,7 @@ public class JobCoordinatorServiceTest {
             null, 0.99, null, null, null, null, null);
     com.manga.library.dto.OcrCallbackDto dto =
         new com.manga.library.dto.OcrCallbackDto(
-            image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r));
+            null, image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r));
 
     jobCoordinatorService.handleOcrCallback(dto);
 
@@ -965,13 +965,90 @@ public class JobCoordinatorServiceTest {
             null, 0.99, null, null, null, null, null);
     jobCoordinatorService.handleOcrCallback(
         new com.manga.library.dto.OcrCallbackDto(
-            image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r)));
+            null, image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r)));
 
     assertEquals(1, layerRepository.findByPageId(page.getId()).size());
 
     layerRepository.deleteAll(layerRepository.findByPageId(page.getId()));
     ocrRegionRepository.deleteAll(ocrRegionRepository.findByPageId(page.getId()));
     jobRepository.deleteById(job.getId());
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
+  /**
+   * AUDIT-P5: the callback must claim the job row its {@code jobId} names, not "the newest job of
+   * this type for this image".
+   *
+   * <p>This is AUDIT-P4's residual and it undermines P4's fix. The idempotency guard was keyed off
+   * the same guess it exists to make safe: with a redo enqueued while the original worker is still
+   * running, the original's callback claimed the *redo's* row instead. That both mis-marks the redo
+   * — which has produced nothing yet — and leaves the original row unclaimed, so the original's own
+   * duplicate callback finds a null {@code callback_applied_at} and applies a second time. Two
+   * claims that should have collided instead both succeed, which is exactly what P4 was closed to
+   * prevent.
+   */
+  @Test
+  public void testHandleOcrCallback_ClaimsTheJobNamedByJobIdNotTheNewest() {
+    Image image = new Image();
+    image.setFilename("test_ocr_p5.png");
+    image.setStoragePath("test/test_ocr_p5.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    // The original job, still in flight.
+    Job original = new Job();
+    original.setId(UUID.randomUUID().toString());
+    original.setType("ocr");
+    original.setImageId(image.getId());
+    original.setPageId(page.getId());
+    original.setStatus("PROCESSING");
+    original = jobRepository.save(original);
+
+    // A re-OCR enqueued while the original was still running — the newer row, and the one the
+    // "newest job of this type" lookup returns.
+    Job redo = new Job();
+    redo.setId(UUID.randomUUID().toString());
+    redo.setType("ocr");
+    redo.setImageId(image.getId());
+    redo.setPageId(page.getId());
+    redo.setStatus("PENDING");
+    redo = jobRepository.save(redo);
+
+    // @PrePersist stamps createdAt, so pin the ordering explicitly rather than relying on two
+    // now() calls in the same millisecond landing in the order they were written.
+    original.setCreatedAt(OffsetDateTime.now().minusMinutes(10));
+    redo.setCreatedAt(OffsetDateTime.now());
+    jobRepository.save(original);
+    jobRepository.save(redo);
+
+    com.manga.library.dto.OcrCallbackDto.OcrRegionData r =
+        new com.manga.library.dto.OcrCallbackDto.OcrRegionData(
+            "test", "ja", 0.98, 0.0, 0, 0, 100, 100, null, 1, null, null, null, null, null, null,
+            null, 0.99, null, null, null, null, null);
+
+    // The original worker calls back, naming its own job id.
+    jobCoordinatorService.handleOcrCallback(
+        new com.manga.library.dto.OcrCallbackDto(
+            original.getId(), image.getId(), page.getId(), "paddle-ocr", 0.98, null, List.of(r)));
+
+    assertNotNull(
+        jobRepository.findById(original.getId()).orElseThrow().getCallbackAppliedAt(),
+        "the callback named the original job — that is the row that must be claimed");
+    assertNull(
+        jobRepository.findById(redo.getId()).orElseThrow().getCallbackAppliedAt(),
+        "the redo has produced no result yet; claiming it both mis-marks it and leaves the "
+            + "original free to apply a second time");
+
+    layerRepository.deleteAll(layerRepository.findByPageId(page.getId()));
+    ocrRegionRepository.deleteAll(ocrRegionRepository.findByPageId(page.getId()));
+    jobRepository.deleteById(original.getId());
+    jobRepository.deleteById(redo.getId());
     pageRepository.delete(page);
     imageRepository.delete(image);
   }
@@ -1347,7 +1424,7 @@ public class JobCoordinatorServiceTest {
 
     com.manga.library.dto.OcrCallbackDto dto =
         new com.manga.library.dto.OcrCallbackDto(
-            image.getId(), page.getId(), "paddle-ocr", 0.98, null, Collections.emptyList());
+            null, image.getId(), page.getId(), "paddle-ocr", 0.98, null, Collections.emptyList());
 
     jobCoordinatorService.handleOcrCallback(dto);
 

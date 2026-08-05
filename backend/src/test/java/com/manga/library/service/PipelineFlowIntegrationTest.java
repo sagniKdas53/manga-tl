@@ -468,7 +468,7 @@ public class PipelineFlowIntegrationTest {
     // Step A: Panel Detection Callback -> triggers OCR
     PanelCallbackDto.PanelData panelData =
         new PanelCallbackDto.PanelData(10, 20, 500, 400, 1, 1, 1);
-    PanelCallbackDto panelCallback = new PanelCallbackDto(imageId, null, List.of(panelData));
+    PanelCallbackDto panelCallback = new PanelCallbackDto(null, imageId, null, List.of(panelData));
 
     mockMvc
         .perform(
@@ -507,7 +507,7 @@ public class PipelineFlowIntegrationTest {
             null,
             null);
     OcrCallbackDto ocrCallback =
-        new OcrCallbackDto(imageId, null, "Tesseract/Mock", 0.95, null, List.of(ocrRegion));
+        new OcrCallbackDto(null, imageId, null, "Tesseract/Mock", 0.95, null, List.of(ocrRegion));
 
     mockMvc
         .perform(
@@ -628,7 +628,7 @@ public class PipelineFlowIntegrationTest {
             null,
             null);
     OcrCallbackDto ocrCallback2 =
-        new OcrCallbackDto(imageId, null, "Tesseract/Mock-v2", 0.99, null, List.of(ocrRegion2));
+        new OcrCallbackDto(null, imageId, null, "Tesseract/Mock-v2", 0.99, null, List.of(ocrRegion2));
 
     mockMvc
         .perform(
