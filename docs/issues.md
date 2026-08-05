@@ -600,7 +600,7 @@ Fixed in `61d856c` via a `@Lazy` self-reference. Two corrections to this entry a
   `resetProcessingJobsToPending`, but it carries no `@Transactional` at all — self-invocation loses
   nothing there.
 
-#### AUDIT-B3 **[M]** — the NPE half is **RESOLVED 2026-08-05**; two sub-findings remain open
+#### AUDIT-B3 **[M]** — **FULLY RESOLVED 2026-08-05** (`f131e42` NPE, `80520a0` the rest)
 
 `f131e42` split the handler: `IllegalArgumentException` → 400 with its message,
 `NullPointerException` → 500, logged with the request description and full stack trace. The detail
@@ -617,7 +617,7 @@ mapping — but it is worth knowing when triaging a new 500.
 + There is no `AccessDeniedException` handler, so a `@PreAuthorize` denial thrown at method level is
   caught by the catch-all `Exception` handler and returned as **500 instead of 403**.
 
-#### AUDIT-B4 **[M]** — the multi-tab half is **RESOLVED 2026-08-05**; the Redis race remains
+#### AUDIT-B4 **[M]** — **FULLY RESOLVED 2026-08-05** (`c123cba` multi-tab, `6c9c624` the race)
 
 `c123cba` replaced the one-emitter-per-user map with
 `ConcurrentHashMap<UUID, Collection<SseEmitter>>` over `CopyOnWriteArrayList`, with removal **by
@@ -644,7 +644,12 @@ entire request and lets lazy collections load during view rendering, which is a 
 contributor to the "backend is holding the UI back" complaint. Both deserve measurement before the
 Firefox profiling pass.
 
-#### AUDIT-B6 **[M]** — thumbnail generation is serialised on decode, contradicting its own comment
+#### AUDIT-B6 **[M]** — thumbnail decode serialised — **RESOLVED (verified 2026-08-05)**
+
+> The lock is now scoped to genuinely-WebP reads and writes (`PageService.isNativeWebpReader`,
+> `decodeForThumbnail`), and the `catch (Error)` is a `catch (… | LinkageError)`. The
+> `in.mark` without a `reset` went with the rewrite. Found already-fixed while pulling items
+> onto the 2026-08-05 board; the entry below is the original text.
 
 `PageService:23-27` says the WebP lock is "scoped to WebP work only so the thread-safe built-in
 PNG/JPEG/BMP codecs can still run in parallel". `:215-245` then wraps the **entire decode of every
@@ -747,7 +752,11 @@ The test checks both text colours against both background surfaces in both modes
 palette nudge cannot regress this quietly. It also pins the specific inversion: secondary must never
 be less legible than disabled.
 
-#### AUDIT-F5 **[L]** — smaller frontend items
+#### AUDIT-F5 **[L]** — smaller frontend items — **RESOLVED 2026-08-05** (`33f3902`)
+
+> All nine. Two corrections: the `getSnapshot` "tearing hazard" is not one (a string snapshot
+> compares fine under `Object.is`), and the precompressed-assets item would have emitted files
+> nothing serves — Spring's own `server.compression` was enabled instead. See archive.md.
 
 + `useColorMode.ts:6` — `getSnapshot` calls `localStorage.getItem` directly, and React invokes it on
   every render and every store check. Cache the snapshot; returning a fresh value each call is also
@@ -777,7 +786,12 @@ comparison (see [frontend_improvements.md](./frontend_improvements.md)):
   grid all have known cell shapes, so skeletons map onto them directly and remove the layout jump
   a centred spinner causes.
 
-#### AUDIT-F6 **[M]** — icon-only controls carry no accessible name
+#### AUDIT-F6 **[M]** — icon-only controls carry no accessible name — **RESOLVED 2026-08-05** (`ba21af6`)
+
+> The count below is misleading: of 51 icon buttons, 21 were already named by a MUI `Tooltip`,
+> 17 by a native `title`, and only **12** had nothing — none of them in the five files named
+> here. `Reader.tsx` and `ReaderLeftSidebar` have no `IconButton` or `Fab` at all. The
+> focus-order half had no concrete defect; the real gap is landmarks, now on the board.
 
 The whole frontend has **5** `aria-label`s across 40 components. `Reader.tsx` — 3,954 lines, the
 primary surface, almost entirely icon-only `IconButton`s — has **zero**, as do `ReaderTopNav`,
@@ -792,7 +806,11 @@ on text matching.
 Pairs with **AUDIT-F4**: between them they are the whole accessibility story, and F4 is a one-line
 fix. Do them as one pass.
 
-#### AUDIT-F7 **[M]** — nothing tells the client its session died
+#### AUDIT-F7 **[M]** — nothing tells the client its session died — **RESOLVED 2026-08-05** (`ee24e53`)
+
+> Correction: "the client half of that already exists here" below is **wrong**. `App.tsx`
+> listens for a window `CustomEvent`; `useSSE` had no `session-expired` listener on the
+> `EventSource`, so the push would have been dropped silently. That was added too.
 
 Expiry is only ever discovered client-side, from the token's own `exp` (`utils.ts`, 2026-08-04) or
 from a 401 on the next request. A tab that is open but idle has no idea.
@@ -836,7 +854,12 @@ is an Android tablet, nothing checks it today.
 
 ### Docker & Compose
 
-#### AUDIT-D1 **[H]** — `db-backup` has an invalid restart policy and has not run since 2026-07-28
+#### AUDIT-D1 **[H]** — `db-backup` restart policy — **RESOLVED (verified 2026-08-05)**
+
+> `docker-compose.yml` reads `restart: unless-stopped`, with a NOTE recording that `none` was
+> never a valid Compose value. Found already-fixed while pulling items onto the 2026-08-05
+> board. **Backup freshness itself was not re-checked** — verify `data/backups/last/` before
+> trusting it.
 
 `docker-compose.yml:29` — `restart: none`. The Compose spec values are `no`, `always`,
 `on-failure`, `unless-stopped`; `none` is not one of them. `docker compose config` passes it
