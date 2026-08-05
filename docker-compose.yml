@@ -273,8 +273,10 @@ services:
       - api_keys
     volumes:
       - ./config/providers.json:/app/config/providers.json:ro
-      - ./data/worker/huggingface:/root/.cache/huggingface
-      - ./data/worker/paddlex:/root/.paddlex
+      # AUDIT-D2: the worker runs as UID 10001, so its caches live in that user's home
+      # rather than /root. The host directories are chowned to 10001 to match.
+      - ./data/worker/huggingface:/home/worker/.cache/huggingface
+      - ./data/worker/paddlex:/home/worker/.paddlex
       - ./data/worker/rendered_cache:/app/rendered_cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
