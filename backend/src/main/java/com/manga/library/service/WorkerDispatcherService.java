@@ -2,6 +2,7 @@ package com.manga.library.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manga.library.model.Job;
 import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -11,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -56,10 +58,18 @@ public class WorkerDispatcherService {
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
+  private final com.manga.library.repository.JobRepository jobRepository;
+  private final SseService sseService;
 
-  public WorkerDispatcherService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
+  public WorkerDispatcherService(
+      StringRedisTemplate redisTemplate,
+      ObjectMapper objectMapper,
+      com.manga.library.repository.JobRepository jobRepository,
+      SseService sseService) {
     this.redisTemplate = redisTemplate;
     this.objectMapper = objectMapper;
+    this.jobRepository = jobRepository;
+    this.sseService = sseService;
   }
 
   private final HttpClient httpClient =
@@ -235,6 +245,7 @@ public class WorkerDispatcherService {
                   response.body());
               sent = true; // prevent re-push to queue
               processed = true;
+              markPermanentlyRejected(jobId, response.statusCode(), response.body());
               break;
             } else if (response.statusCode() == 429) {
               // Apply exponential backoff
@@ -279,6 +290,48 @@ public class WorkerDispatcherService {
         }
       }
     }
+  }
+
+  /**
+   * Marks a permanently-rejected job FAILED (AUDIT-P2).
+   *
+   * <p>A 400/422 pops the job off Redis and sets {@code sent} so it is never re-pushed. Nothing used
+   * to touch the DB row, so it stayed PENDING forever: {@code recoverStaleProcessingJobs} only scans
+   * PROCESSING and never saw it, and {@code requeuePendingJobs} re-pushed it on the next backend
+   * restart only to have it rejected again. The user-visible symptom was a pipeline that stopped at
+   * a stage with no error anywhere in the UI.
+   *
+   * <p>Best-effort by design: the job is already off the queue, and a DB or SSE failure here must
+   * not abort the rest of the dispatch cycle.
+   */
+  private void markPermanentlyRejected(String jobId, int statusCode, String body) {
+    if (jobRepository == null || jobId == null || "unknown".equals(jobId)) {
+      log.warn("Permanently rejected job has no usable jobId — cannot mark it FAILED");
+      return;
+    }
+    try {
+      Job job = jobRepository.findById(jobId).orElse(null);
+      if (job == null) {
+        log.warn("Permanently rejected job {} has no DB row to mark FAILED", jobId);
+        return;
+      }
+      job.setStatus("FAILED");
+      job.setError("Worker rejected the job payload (HTTP " + statusCode + "): " + truncate(body));
+      job.setUpdatedAt(OffsetDateTime.now());
+      jobRepository.save(job);
+      if (sseService != null && job.getImageId() != null) {
+        sseService.emitEventForImage(job.getImageId(), "job_update", job);
+      }
+      log.error("Marked job {} FAILED after a permanent worker rejection (HTTP {})", jobId, statusCode);
+    } catch (RuntimeException e) {
+      log.error("Failed to mark rejected job {} as FAILED: {}", jobId, e.getMessage());
+    }
+  }
+
+  /** Keeps a verbose worker validation body out of the {@code jobs.error} column. */
+  private static String truncate(String body) {
+    if (body == null) return "";
+    return body.length() <= 500 ? body : body.substring(0, 500) + "…";
   }
 
   private List<String> buildWorkerUrlList() {

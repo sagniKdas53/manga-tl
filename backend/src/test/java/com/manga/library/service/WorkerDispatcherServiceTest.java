@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manga.library.model.Job;
+import com.manga.library.repository.JobRepository;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -12,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -34,6 +37,10 @@ public class WorkerDispatcherServiceTest {
   private ValueOperations<String, String> valueOps;
   @Mock
   private ListOperations<String, String> listOps;
+  @Mock
+  private JobRepository jobRepository;
+  @Mock
+  private SseService sseService;
 
   @InjectMocks
   private WorkerDispatcherService workerDispatcherService;
@@ -390,9 +397,69 @@ public class WorkerDispatcherServiceTest {
     verify(listOps, never()).leftPush(anyString(), anyString());
   }
 
+  /**
+   * AUDIT-P2: a permanent rejection pops the job off Redis and never re-pushes it, so unless the DB
+   * row is marked FAILED it sits PENDING forever — invisible to the stale-PROCESSING sweeper and
+   * re-rejected on every backend restart, with no error anywhere in the UI.
+   */
+  @Test
+  public void testDispatchJobs_PermanentRejection_MarksJobFailed() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    String jobId = UUID.randomUUID().toString();
+    when(listOps.leftPop("queue:panel-detection"))
+        .thenReturn("{\"jobId\": \"" + jobId + "\"}")
+        .thenReturn(null);
+
+    Job job = new Job();
+    job.setId(jobId);
+    job.setType("panel-detection");
+    job.setStatus("PENDING");
+    job.setImageId(UUID.randomUUID());
+    when(jobRepository.findById(jobId)).thenReturn(java.util.Optional.of(job));
+
+    HttpResponse<String> rejected = mockGeneric(HttpResponse.class);
+    when(rejected.statusCode()).thenReturn(422);
+    when(rejected.body()).thenReturn("{\"detail\":[{\"msg\":\"field required\"}]}");
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
+    when(httpClient.send(
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
+        .thenReturn(rejected);
+
+    workerDispatcherService.dispatchJobs();
+
+    assertEquals("FAILED", job.getStatus(), "a permanently rejected job must not stay PENDING");
+    assertNotNull(job.getError(), "the rejection reason must reach the jobs.error column");
+    assertTrue(job.getError().contains("422"), "the error should name the rejecting status");
+    verify(jobRepository).save(job);
+    verify(sseService).emitEventForImage(job.getImageId(), "job_update", job);
+  }
+
+  /** A rejection with no resolvable job row must not blow up the dispatch cycle. */
+  @Test
+  public void testDispatchJobs_PermanentRejection_UnknownJobIdIsSurvivable() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    when(listOps.leftPop("queue:panel-detection")).thenReturn("{\"id\": \"123\"}").thenReturn(null);
+
+    HttpResponse<String> rejected = mockGeneric(HttpResponse.class);
+    when(rejected.statusCode()).thenReturn(400);
+    when(rejected.body()).thenReturn("bad request");
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
+    when(httpClient.send(
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
+        .thenReturn(rejected);
+
+    assertDoesNotThrow(() -> workerDispatcherService.dispatchJobs());
+    verify(jobRepository, never()).save(any(Job.class));
+  }
+
   @Test
   public void testDispatchJobs_NullRedis() {
-    WorkerDispatcherService svc = new WorkerDispatcherService(null, objectMapper);
+    WorkerDispatcherService svc =
+        new WorkerDispatcherService(null, objectMapper, jobRepository, sseService);
     assertDoesNotThrow(() -> svc.dispatchJobs());
   }
 
