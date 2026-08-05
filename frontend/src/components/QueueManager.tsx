@@ -88,6 +88,34 @@ const stageLabels: Record<string, string> = {
   qa: "QA",
 };
 
+/**
+ * The stage the backend hands off to once `type` finishes, or null when nothing follows.
+ *
+ * A queue row is a *pipeline* projection, not a job row: `fetchJobs` keys by `imageId` and
+ * keeps only the newest job per image, so stage N+1 replaces stage N in place. That is why
+ * "transitioning" stays a derived display value rather than becoming a real job status — it
+ * describes the gap between two rows, and there is no single row to store it on. It is also
+ * a pure function of the stage, so storing it would buy nothing while adding a second write
+ * to clear it, which is one more way for a row to get stuck.
+ *
+ * The linear chain is already spelled out in `pipelineStages`, so this reads the successor
+ * off that rather than restating it. Anything outside the chain ends the pipeline as far as
+ * the queue can tell: `qa` is last and branches on its own verdict, and the one-shot manual
+ * `region-redo-*` jobs have no successor at all.
+ *
+ * One known imprecision: `render` only enqueues `qa` when the page carries no manual edits.
+ * A hand-edited page therefore reads "TRANSITIONING → QA" for the ten seconds before the row
+ * is pruned. Telling those apart needs the edit flag, which the queue payload does not carry.
+ */
+const nextPipelineStage = (type: string): string | null => {
+  // The QA retry loop re-runs OCR over a few regions and then rejoins at translation, so it
+  // is a detour rather than a position in the chain.
+  if (type === "qa-re-ocr") return "translation";
+  const index = pipelineStages.indexOf(type);
+  if (index === -1) return null;
+  return pipelineStages[index + 1] ?? null;
+};
+
 const isRetryLoopType = (jobType: string) =>
   jobType === "qa-re-ocr" || jobType === "region-redo";
 
@@ -692,10 +720,30 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     }
   };
 
-  const getDisplayStatus = (status: string) => {
-    if (isPaused && status === "PENDING") return "PAUSED";
-    if (status === "COMPLETED") return "TRANSITIONING...";
-    return status;
+  /**
+   * The stage this row is waiting to be handed to, or null when nothing follows.
+   *
+   * The previous rule relabelled *every* COMPLETED job as "TRANSITIONING...", which made the
+   * end of a pipeline unreadable: a finished `qa` — the whole chapter done — announced itself
+   * as mid-flight for the ten seconds before the row was pruned, as did the one-shot
+   * `region-redo-*` jobs that nothing follows.
+   */
+  const getTransitionTarget = (job: Job): string | null =>
+    job.status === "COMPLETED" ? nextPipelineStage(job.type) : null;
+
+  /** Coarse label for the summary chips, which group rows by state. */
+  const getSummaryLabel = (job: Job): string => {
+    if (isPaused && job.status === "PENDING") return "PAUSED";
+    return getTransitionTarget(job) ? "TRANSITIONING" : job.status;
+  };
+
+  /** Per-row label: the summary label, plus the stage actually being waited on. */
+  const getDisplayStatus = (job: Job): string => {
+    const target = getTransitionTarget(job);
+    if (!target) return getSummaryLabel(job);
+    // stageLabels carries the human spelling, so this reads "PANEL DETECTION" rather than
+    // "PANEL-DETECTION"; upper-cased to sit alongside PENDING/PROCESSING in the same chip.
+    return `TRANSITIONING → ${(stageLabels[target] ?? target).toUpperCase()}`;
   };
 
   const getJobStatusColor = (job: Job) => {
@@ -707,7 +755,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     () =>
       jobs.reduce(
         (acc, job) => {
-          const label = getDisplayStatus(job.status).replace("...", "");
+          const label = getSummaryLabel(job);
           const color = getJobStatusColor(job);
           const existing = acc.find((s) => s.label === label);
           if (existing) existing.count += 1;
@@ -716,7 +764,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
         },
         [] as { label: string; color: string; count: number }[],
       ),
-    // getDisplayStatus and getJobStatusColor are redeclared every render; listing them would
+    // getSummaryLabel and getJobStatusColor are redeclared every render; listing them would
     // defeat the memo entirely. Must be `next-line` rather than `line` -- Prettier splits the
     // dependency array onto its own line, which silently moved a trailing directive off it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1131,7 +1179,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   }}
                                 >
                                   <Chip
-                                    label={getDisplayStatus(job.status)}
+                                    label={getDisplayStatus(job)}
                                     size="small"
                                     sx={{
                                       height: 20,

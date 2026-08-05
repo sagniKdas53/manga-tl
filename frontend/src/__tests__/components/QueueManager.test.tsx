@@ -516,8 +516,84 @@ describe("QueueManager", () => {
     fireEvent.click(screen.getByTitle("Queue Manager"));
 
     await waitFor(() => {
-      const texts = screen.queryAllByText("TRANSITIONING...");
+      // Both rows are finished `qa` jobs, which end the pipeline — so the surviving row
+      // reads COMPLETED. This assertion used to look for "TRANSITIONING...", which the old
+      // blanket relabel produced for every COMPLETED job; that pinned the bug rather than
+      // the pruning this test is actually about.
+      const texts = screen.queryAllByText("COMPLETED");
       expect(texts.length).toBe(1);
     });
+  });
+
+  it("names the stage a finished job is waiting to be handed to", async () => {
+    // One row per pipeline: fetchJobs keys by imageId, so a COMPLETED row means stage N is
+    // done and stage N+1 has not been enqueued yet. Mid-chain stages should say what is
+    // coming; stages that end the pipeline should not claim anything is.
+    const completedAt = new Date(Date.now() - 1000).toISOString();
+    const jobAt = (id: string, type: string) => ({
+      id,
+      type,
+      imageId: `img-${id}`,
+      status: "COMPLETED",
+      payload: JSON.stringify({}),
+      error: null,
+      attempt: 1,
+      maxAttempts: 3,
+      createdAt: completedAt,
+      updatedAt: completedAt,
+    });
+
+    (safeFetch as Mock).mockImplementation((url: string) => {
+      if (url === "/api/jobs") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            isPaused: false,
+            jobs: [
+              jobAt("a", "panel-detection"),
+              jobAt("b", "ocr"),
+              jobAt("c", "layout"),
+              jobAt("d", "translation"),
+              jobAt("e", "render"),
+              jobAt("f", "qa-re-ocr"),
+              jobAt("g", "qa"),
+              jobAt("h", "region-redo-tl"),
+            ],
+          }),
+        });
+      }
+      return Promise.reject(new Error("Unknown URL"));
+    });
+
+    render(<QueueManagerWrapper />);
+    fireEvent.click(screen.getByTitle("Queue Manager"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("TRANSITIONING → OCR", { exact: false }),
+      ).toBeInTheDocument();
+    });
+
+    // Each mid-chain stage names its own successor rather than a generic label. Both
+    // `layout` and `qa-re-ocr` hand off to translation, hence the count of 2 there.
+    const expected: Record<string, number> = {
+      "TRANSITIONING → OCR": 1,
+      "TRANSITIONING → LAYOUT": 1,
+      "TRANSITIONING → TRANSLATION": 2,
+      "TRANSITIONING → RENDER": 1,
+      "TRANSITIONING → QA": 1,
+    };
+    for (const [label, count] of Object.entries(expected)) {
+      expect(screen.queryAllByText(label)).toHaveLength(count);
+    }
+
+    // The terminal stages — a finished `qa` and a one-shot region redo — end the pipeline,
+    // so they read COMPLETED and must not claim a successor.
+    expect(screen.queryAllByText("COMPLETED")).toHaveLength(2);
+    expect(screen.queryAllByText(/UNDEFINED|→\s*$/)).toHaveLength(0);
+
+    // The summary chips group on the coarse label, so the six in-flight rows fold into one.
+    expect(screen.getByText("6 Transitioning")).toBeInTheDocument();
+    expect(screen.getByText("2 Completed")).toBeInTheDocument();
   });
 });
