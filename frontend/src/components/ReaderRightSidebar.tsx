@@ -28,9 +28,57 @@ import CropIcon from "@mui/icons-material/Crop";
 import LayersIcon from "@mui/icons-material/Layers";
 import { ColorPicker } from "./ColorPicker";
 import SidebarSection from "./SidebarSection";
+import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 
 // --- Shared presentational helpers -----------------------------------------
+
+/**
+ * The inspector's field captions were eleven copies of the same raw `<label>` carrying the
+ * same three inline declarations. Worse, not one of them named a control: a `<label>` that
+ * is only a *sibling* of its input associates with nothing, so every number box and dropdown
+ * below reached assistive technology unnamed. Callers now pass either `htmlFor` (for the
+ * text fields, which really are labelable) or `id` (for `Select` and `Slider`, which are not
+ * — those point back at it with `labelId` / `aria-labelledby`).
+ */
+const FieldLabel: React.FC<{
+  htmlFor?: string;
+  id?: string;
+  children: React.ReactNode;
+}> = ({ htmlFor, id, children }) => (
+  <Box
+    component="label"
+    htmlFor={htmlFor}
+    id={id}
+    sx={{
+      fontSize: "11px",
+      fontWeight: "bold",
+      color: "var(--text-muted)",
+    }}
+  >
+    {children}
+  </Box>
+);
+
+/**
+ * `.meta-badge` is defined in index.css and these tints override it. As inline styles they
+ * always won; as plain `sx` they would only win on emotion happening to inject after the
+ * stylesheet, which is injection order, not a rule. Scoping to `&.meta-badge` makes the
+ * generated selector specificity (0,2,0) against the class's (0,1,0) — it wins outright.
+ * That matters most for the `capitalize` badge, which contradicts the class's `uppercase`.
+ */
+const MetaBadge: React.FC<{
+  overrides?: SystemStyleObject<Theme>;
+  children: React.ReactNode;
+}> = ({ overrides, children }) => (
+  <Box
+    component="span"
+    className="meta-badge"
+    sx={overrides ? { "&.meta-badge": overrides } : undefined}
+  >
+    {children}
+  </Box>
+);
 
 // Assuming types are defined here or imported
 // You may need to adjust types based on actual project structure
@@ -654,16 +702,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 gap: "4px",
               }}
             >
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
+              <FieldLabel htmlFor="element-text-content">
                 Text Content
-              </label>
+              </FieldLabel>
               <TextField
+                id="element-text-content"
                 multiline
                 minRows={3}
                 fullWidth
@@ -807,16 +850,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 size={6}
                 sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <label
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  X Position
-                </label>
+                <FieldLabel htmlFor="element-x">X Position</FieldLabel>
                 <TextField
+                  id="element-x"
                   type="number"
                   size="small"
                   value={selectedItem.x}
@@ -837,16 +873,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 size={6}
                 sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <label
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  Y Position
-                </label>
+                <FieldLabel htmlFor="element-y">Y Position</FieldLabel>
                 <TextField
+                  id="element-y"
                   type="number"
                   size="small"
                   value={selectedItem.y}
@@ -874,16 +903,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 size={6}
                 sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <label
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  Max Width
-                </label>
+                <FieldLabel htmlFor="element-max-width">Max Width</FieldLabel>
                 <TextField
+                  id="element-max-width"
                   type="number"
                   size="small"
                   value={selectedItem.maxWidth || 0}
@@ -904,16 +926,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 size={6}
                 sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <label
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  Max Height
-                </label>
+                <FieldLabel htmlFor="element-max-height">Max Height</FieldLabel>
                 <TextField
+                  id="element-max-height"
                   type="number"
                   size="small"
                   value={selectedItem.maxHeight || 0}
@@ -1040,16 +1055,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 size={6}
                 sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <label
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "var(--text-muted)",
-                  }}
-                >
+                <FieldLabel id="element-font-family-label">
                   Font Family
-                </label>
+                </FieldLabel>
                 <Select
+                  labelId="element-font-family-label"
                   size="small"
                   value={selectedItem.font || "Comic Neue"}
                   onChange={(e) =>
@@ -1072,16 +1082,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 size={6}
                 sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <label
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "var(--text-muted)",
-                  }}
-                >
+                <FieldLabel htmlFor="element-font-size">
                   Font Size (pt)
-                </label>
+                </FieldLabel>
                 <TextField
+                  id="element-font-size"
                   type="number"
                   size="small"
                   value={selectedItem.size || 16}
@@ -1110,16 +1115,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 size={6}
                 sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <label
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "var(--text-muted)",
-                  }}
-                >
+                <FieldLabel id="element-font-weight-label">
                   Font Weight
-                </label>
+                </FieldLabel>
                 <Select
+                  labelId="element-font-weight-label"
                   size="small"
                   value={selectedItem.fontWeight || "normal"}
                   onChange={(e) =>
@@ -1141,16 +1141,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 size={6}
                 sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
               >
-                <label
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "var(--text-muted)",
-                  }}
-                >
+                <FieldLabel id="element-font-style-label">
                   Font Style
-                </label>
+                </FieldLabel>
                 <Select
+                  labelId="element-font-style-label"
                   size="small"
                   value={selectedItem.fontStyle || "normal"}
                   onChange={(e) =>
@@ -1181,16 +1176,9 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 gap: "4px",
               }}
             >
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Box Shape
-              </label>
+              <FieldLabel id="element-box-shape-label">Box Shape</FieldLabel>
               <Select
+                labelId="element-box-shape-label"
                 size="small"
                 value={selectedItem.boxShape || "rectangular"}
                 onChange={(e) =>
@@ -1257,16 +1245,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 gap: "4px",
               }}
             >
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  color: "var(--text-muted)",
-                }}
-              >
+              <FieldLabel id="element-rotation-label">
                 Rotation ({selectedItem.rotation || 0}°)
-              </label>
+              </FieldLabel>
               <Slider
+                aria-labelledby="element-rotation-label"
                 size="small"
                 min={0}
                 max={360}
@@ -1303,11 +1286,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     }
                   />
                 }
-                label={
-                  <span style={{ fontSize: "12px" }}>
-                    Auto-size text to fit bubble
-                  </span>
-                }
+                slotProps={{ typography: { fontSize: "12px" } }}
+                label="Auto-size text to fit bubble"
               />
 
               <FormControlLabel
@@ -1322,7 +1302,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     }
                   />
                 }
-                label={<span style={{ fontSize: "12px" }}>Visible</span>}
+                slotProps={{ typography: { fontSize: "12px" } }}
+                label="Visible"
               />
 
               <FormControlLabel
@@ -1337,11 +1318,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     }
                   />
                 }
-                label={
-                  <span style={{ fontSize: "12px" }}>
-                    Clean background mask
-                  </span>
-                }
+                slotProps={{ typography: { fontSize: "12px" } }}
+                label="Clean background mask"
               />
             </Grid>
           </SidebarSection>
@@ -1432,11 +1410,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               margin: 0,
             }}
           >
-            <span>
+            <Typography component="span">
               {selectedItem.isConversation
                 ? "Conversation Inspector"
                 : "Region Inspector"}
-            </span>
+            </Typography>
             <Button
               variant="outlined"
               size="small"
@@ -1462,9 +1440,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               margin: "4px 0 8px",
             }}
           >
-            <span
-              className="meta-badge"
-              style={{
+            <MetaBadge
+              overrides={{
                 backgroundColor: "var(--primary-glow)",
                 color: "var(--primary-hover)",
                 borderColor: "var(--primary)",
@@ -1473,35 +1450,30 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               {selectedItem.isConversation
                 ? `Conv #${selectedItem.regions[0]?.bubbleReadingOrder}`
                 : `Bubble #${selectedItem.regions[0]?.bubbleReadingOrder}`}
-            </span>
-            <span
-              className="meta-badge"
-              style={{
+            </MetaBadge>
+            <MetaBadge
+              overrides={{
                 backgroundColor: "var(--success-glow)",
                 color: "var(--success)",
               }}
             >
               {selectedItem.regions[0]?.detectedLanguage || "unknown"}
-            </span>
+            </MetaBadge>
             {selectedItem.isConversation && (
-              <span
-                className="meta-badge"
-                style={{ textTransform: "capitalize" }}
-              >
+              <MetaBadge overrides={{ textTransform: "capitalize" }}>
                 {selectedItem.sceneType}
-              </span>
+              </MetaBadge>
             )}
             {selectedItem.approved && (
-              <span
-                className="meta-badge"
-                style={{
+              <MetaBadge
+                overrides={{
                   backgroundColor: "rgba(16, 185, 129, 0.15)",
                   color: "var(--success)",
                   borderColor: "var(--success)",
                 }}
               >
                 Approved
-              </span>
+              </MetaBadge>
             )}
           </Grid>
 
