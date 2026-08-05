@@ -173,6 +173,85 @@ expensive loads still happen; the explicit HEAD mapping is what avoids them. Plu
 GET handler and 404 in the unit test. The worker tests assert `requests.get` is never called and
 that the timeout is 5.
 
+### The 2026-08-05 eighth sitting — AUDIT-W8 and W9, the last two [M] worker findings
+
+**AUDIT-W8 [M] — provider payload defects in `LLMClient`. Fixed, all four remaining bullets.**
+
+Accurate as filed on all four, but **its severity was overstated for one deployment-specific
+reason worth recording: `config/providers.json` has no `anthropic` provider at all** — only
+`openrouter`, `cloudflare`, `nvidia` and `neurometric`. The Anthropic branch is therefore reachable
+only through the hardcoded fallback registry in `provider_config.py`, which fires when
+providers.json fails to load or parses empty. That is a live path, not a dead one, so the fix
+stands; but nothing was silently producing unstructured Anthropic output in the current
+deployment, because nothing was reaching Anthropic at all.
+
+- **No JSON enforcement on Anthropic.** The whole `response_format` ladder sat inside the `else`.
+  Anthropic has no `response_format`; the Messages API spells structured output as
+  `output_config.format`, and its `json_schema` variant takes the schema **directly**, not wrapped
+  in the OpenAI `{name, schema, strict}` object. Structured outputs are not available on every
+  Anthropic model and there is no `json_object` tier to step down to, so the existing 400-degrade
+  ladder gained a second arm that *drops* `output_config` and lets the caller's JSON system prompt
+  carry it — i.e. degrades deliberately to the pre-fix behaviour instead of failing the call.
+- **`content: null` → `TypeError`.** `.get("content", "")` returns `None` when the key is present
+  and null, which is what providers send alongside a `refusal`; a default only applies to a
+  *missing* key. Now `or ""`. **The Anthropic branch had the same bug one level over** and the
+  entry did not mention it: `content[0]` is not reliably the text block once thinking is on, and
+  `.get("text")` is `None` on any block that is not text. It now selects the first `text` block.
+  That is the fifth time reading past the headline found real work.
+- **Import-time registry.** The loader now tracks providers.json's mtime and `LLMClient.__init__`
+  reloads when it changed — one `stat` on a call about to spend seconds in HTTP. The registry dict
+  is mutated in place rather than rebound, because `translation.py` and the test suite hold
+  references to that exact object. `load_and_validate` also had to start clearing `self.providers`:
+  its loop only ever added, so a reload would not have dropped a deleted provider.
+- **Lost 429 increments.** The consecutive-429 count is a read-modify-write over a dict shared by
+  every job thread, so concurrent 429s from one provider collapsed into a single increment and the
+  backoff stayed flat at exactly the load that produces them. Extracted to `_register_rate_limit`
+  under a module lock. Single-key reads elsewhere stay unlocked on purpose — a stale cooldown read
+  costs one extra attempt and nothing else.
+
+Also replaced the fallback registry's `claude-3-5-sonnet-20241022`, **retired 2025-10-28**, so that
+branch could only ever have 404'd even when it was reached.
+
+**A test that passed for the wrong reason — the third instance, and a new mechanism.** The
+concurrency test originally took the `no_retry_sleep` fixture, which patches
+`worker.services.llm_client.time.sleep`. That patches the attribute on the **shared `time` module
+object**, so the test's own interleaving delay was neutralised too and it passed with the lock
+removed. It also mattered *where* the delay sat: sleeping before the read lets every other thread
+finish its whole read-modify-write first, which serialises them and hides the race. Reading first
+and then holding the stale value across the window reproduces it — 24 threads, 18 recorded.
+
+**Verified red-green by reverting each of the six changes individually**, per the standing rule.
+
+**AUDIT-W9 [M] — local JSON mode is not actually enforced. Fixed.**
+
+Accurate on the mechanism. Both local call sites set `payload["format"] = "json"` for Ollama —
+the field name for Ollama's **native** `/api/chat`, while the endpoint is its OpenAI-compatible
+`/v1/chat/completions` shim, which ignores the unknown key. The `else` branch already sent the
+right thing for every other local provider, so the conditional collapses entirely.
+
+Confirmed against the deployed instance rather than from documentation — same prompt, model and
+endpoint:
+
+| sent | returned |
+| --- | --- |
+| `response_format: {"type": "json_object"}` | `{"key": "a", "value": 1}` |
+| `format: "json"` | `"Sure! Here is an example..."` plus a ` ```javascript ` fence |
+
+The four-way default split is closed too: `try_local_ai` alone said `lmstudio`/`gemma3:4b`, so it
+resolved a different endpoint *and* took the other side of the format branch from the deployed
+configuration — which is exactly why the bug was never seen in the one place anyone would look.
+Both call sites now default to `ollama`/`gemma4:e4b`, matching `docker-compose.yml` and
+`.env.example`.
+
+#### Where a finding was wrong — the eleventh time
+
+**AUDIT-W9's claim that `gemma4:e4b` "is not a real tag (probably meant `gemma3n:e4b`), so the
+shipped default pulls nothing" is false.** The tag exists on the deployed Ollama host: `gemma4:e4b`,
+family `gemma4`, 8.0B, Q4_K_M, pulled 2026-07-05. Obeying that bullet would have renamed a working
+default to a non-existent one and broken the local path outright — the exact inversion of the
+finding's stated intent. Check a claim about the runtime *against the runtime*, not against
+plausibility: the tag looks like a typo for `gemma3n:e4b` and is not one.
+
 ### The 2026-08-05 verification pass — `issues.md` triaged against the code
 
 *Retired from `issues.md` on 2026-08-05. No code changed in this pass; every entry below was read

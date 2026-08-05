@@ -313,53 +313,6 @@ to 4, so a cooldown on a light job no longer halts the light tier. Heavy is stil
 by design — that tier is local PaddleOCR on CPU and already saturates the container — so the
 original "one cooldown stalls all heavy work" reading is unchanged there.
 
-#### AUDIT-W8 **[M]** — provider payload defects in `LLMClient`
-
-*Re-verified 2026-08-05. **One of the five is fixed and has been archived**; the remaining four are
-confirmed present, with anchors updated.*
-
-+ ~~`:161` Anthropic `max_tokens` is hardcoded to `4096`.~~ **Fixed** — `_build_payload` now uses
-  `DEFAULT_MAX_OUTPUT_TOKENS` on both the Anthropic (`:205`) and OpenAI-shaped (`:220`) branches.
-
-`services/llm_client.py`, still open:
-
-+ `:202-215` the Anthropic branch **ignores `response_schema` entirely** — the whole
-  `response_format` ladder (`:231-249`) sits inside the `else`, so no tool-use and no structured
-  output. Anthropic providers get no JSON enforcement at all. **This is the one that matters of the
-  four**, and it got sharper, not softer: every other provider gained a `json_schema` path around it.
-+ `:361` `choices[0].get("message", {}).get("content", "")` returns `None` (not `""`) when the key
-  is present with a null value, which is what providers send alongside a `refusal`. Downstream
-  `json.loads(None)` raises `TypeError`. Use `or ""`.
-+ `:104` `PROVIDER_REGISTRY = get_provider_registry()` executes at **import time**, so editing
-  `providers.json` requires a worker restart — the backend, by contrast, has
-  `ProviderConfigCache.reload()`. Asymmetric and surprising.
-+ `:65-66` `PROVIDER_COOLDOWNS` / `PROVIDER_CONSECUTIVE_429S` are bare dicts mutated from multiple
-  job threads with no lock; concurrent 429s lose increments (`:310-314`, read-modify-write).
-
-#### AUDIT-W9 **[M]** — local JSON mode is not actually enforced
-
-*Re-verified 2026-08-05. Confirmed present in **both** local call sites, and the default mismatch is
-worse than filed — it is now a four-way split, not three.*
-
-`services/translation.py:561-565` sets `payload["format"] = "json"` when `local_provider ==
-"ollama"`. That is the field name for Ollama's **native** `/api/chat` and `/api/generate` APIs, but
-the endpoint being called is the OpenAI-compatible `/v1/chat/completions` shim (`:534`), which
-ignores it — the shim wants `response_format: {"type": "json_object"}`, which the `else` branch
-already sends for every non-Ollama local provider. So Ollama, the *default* local provider, is the
-one case that gets no JSON enforcement. The identical branch is duplicated at `:978-982`.
-
-The defaults for the same two settings now disagree four ways:
-
-| setting | `try_local_ai` (`:528`, `:530`) | second local path (`:942`) | `docker-compose.yml` (`:227`, `:229`) | `.env.example` (`:91`, `:93`) |
-| --- | --- | --- | --- | --- |
-| `LOCAL_LLM_PROVIDER` | `lmstudio` | `ollama` | `ollama` | `ollama` |
-| `LOCAL_LLM_MODEL` | `gemma3:4b` | — | `gemma4:e4b` | `gemma4:e4b` |
-
-`gemma4:e4b` is not a real tag (probably meant `gemma3n:e4b`), so the shipped default pulls nothing.
-And because `try_local_ai` defaults the provider to `lmstudio`, its `format`/`response_format` branch
-takes the *opposite* path from the deployed configuration — which is why the JSON bug above has
-never been seen in the one place someone would have looked.
-
 ### Backend (Spring)
 
 #### AUDIT-B5 **[M]** — schema is managed by `ddl-auto: update` with a competing `init.sql`
