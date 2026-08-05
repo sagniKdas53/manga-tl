@@ -194,6 +194,23 @@ public class JobCoordinatorService {
   }
 
   /**
+   * Marks the most recent job of {@code type} for {@code imageId} FAILED and pushes the update down
+   * the stream, so a stage that cannot proceed shows an error in the UI instead of stalling.
+   */
+  private void failJob(UUID imageId, String type, String error) {
+    Job job = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, type);
+    if (job == null) {
+      log.warn("No {} job row found for image {} — cannot mark it FAILED", type, imageId);
+      return;
+    }
+    job.setStatus("FAILED");
+    job.setError(error);
+    job.setUpdatedAt(OffsetDateTime.now());
+    jobRepository.save(job);
+    sseService.emitEventForImage(imageId, "job_update", job);
+  }
+
+  /**
    * Safely extracts a UUID value from a map by key. Returns null if missing or
    * unparsable.
    */
@@ -786,9 +803,21 @@ public class JobCoordinatorService {
 
     Page page = resolvePageForCallback(imageId, dto.pageId());
 
+    // AUDIT-P9: the page can be deleted between enqueue and callback, and both ocr_regions.page_id
+    // and layers.page_id are NOT NULL. Without this guard the null flows into region.setPage() and
+    // ocrLayer.setPage() and the insert fails at commit, rolling back the entire OCR result — after
+    // which the job sits PROCESSING until the stale sweeper requeues it and the whole expensive OCR
+    // pass runs again, to fail identically, up to maxAttempts. Fail it once, here, with a reason.
+    if (page == null) {
+      log.warn("OCR callback for image {} has no page (deleted mid-pipeline?) — failing the job",
+          imageId);
+      failJob(imageId, "ocr", "Page no longer exists — it was deleted while OCR was running");
+      return;
+    }
+
     // Keep existing layers and regions for multi-pass history, but hide old OCR
     // layers
-    List<Layer> existingLayers = page != null ? layerRepository.findByPageId(page.getId()) : List.of();
+    List<Layer> existingLayers = layerRepository.findByPageId(page.getId());
     int maxZ = 0;
     for (Layer layer : existingLayers) {
       if (layer.getZOrder() > maxZ) {
@@ -891,7 +920,7 @@ public class JobCoordinatorService {
     layerElementRepository.saveAll(Objects.requireNonNull(elementsToSave));
 
     // Trigger Layout analysis
-    enqueueJobForPage("layout", imageId, page != null ? page.getId() : null);
+    enqueueJobForPage("layout", imageId, page.getId());
   }
 
   @Transactional
