@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import Dashboard from "../../components/Dashboard";
 
@@ -500,7 +506,7 @@ describe("Dashboard Component", () => {
     fireEvent.click(screen.getByRole("option", { name: /Created Date ↓/ }));
   });
 
-  it.skip(
+  it(
     "creates a new series with language and reading direction changed",
     { timeout: 15000 },
     async () => {
@@ -539,31 +545,27 @@ describe("Dashboard Component", () => {
         target: { value: "New Manga" },
       });
 
-      await waitFor(() => {
-        const combos = document.querySelectorAll('[role="combobox"]');
-        expect(combos.length).toBeGreaterThanOrEqual(3);
-      });
+      // Scoped to the dialog. Querying the whole document put the Dashboard's own sort Select at
+      // index 0, so this opened the sort menu and looked for a language in it -- which is why the
+      // test was skipped rather than fixed. MUI portals the open menu outside the dialog, so the
+      // options themselves are still found on `screen`.
+      const dialog = await screen.findByRole("dialog");
+      const pick = async (comboIndex: number, optionName: string) => {
+        const combos = within(dialog).getAllByRole("combobox");
+        fireEvent.mouseDown(combos[comboIndex]);
+        await waitFor(() => {
+          expect(screen.getByRole("listbox")).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByRole("option", { name: optionName }));
+        await waitFor(() => {
+          expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+        });
+      };
 
-      const comboboxes = document.querySelectorAll('[role="combobox"]');
-      fireEvent.mouseDown(comboboxes[0]);
-      await waitFor(() => {
-        expect(screen.getByRole("listbox")).toBeInTheDocument();
-      });
-      fireEvent.click(screen.getByRole("option", { name: "ko" }));
-
-      fireEvent.mouseDown(comboboxes[1]);
-      await waitFor(() => {
-        expect(screen.getByRole("listbox")).toBeInTheDocument();
-      });
-      fireEvent.click(screen.getByRole("option", { name: "zh-TW" }));
-
-      fireEvent.mouseDown(comboboxes[2]);
-      await waitFor(() => {
-        expect(screen.getByRole("listbox")).toBeInTheDocument();
-      });
-      fireEvent.click(
-        screen.getByRole("option", { name: "Left to Right (Comics)" }),
-      );
+      await pick(0, "ko");
+      await pick(1, "zh-TW");
+      // An em dash, not parentheses — the other reason this could not pass as written.
+      await pick(2, "Left to Right — Comics");
 
       const submitBtn = screen.getByRole("button", { name: /create/i });
       fireEvent.click(submitBtn);
