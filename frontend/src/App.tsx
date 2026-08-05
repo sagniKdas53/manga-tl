@@ -18,6 +18,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
 import CircularProgress from "@mui/material/CircularProgress";
+import CardGridSkeleton from "./components/CardGridSkeleton";
 import { themeObj } from "./theme";
 
 // Types
@@ -73,6 +74,21 @@ function LoadingSpinner() {
       <CircularProgress />
     </Box>
   );
+}
+
+/** The reader is a canvas, not a grid — a card skeleton would be a lie about what is coming. */
+const isGridRoute = (pathname: string) =>
+  !pathname.includes("/reader/") &&
+  (pathname === "/" ||
+    pathname.startsWith("/series/") ||
+    pathname.startsWith("/chapters/"));
+
+/**
+ * Route-shaped Suspense fallback. One boundary covers every lazy route, so the fallback has to
+ * pick its own shape rather than each route declaring one.
+ */
+function RouteFallback({ pathname }: { pathname: string }) {
+  return isGridRoute(pathname) ? <CardGridSkeleton /> : <LoadingSpinner />;
 }
 
 /** Watches the notification stream and fires a toast for translation-complete events,
@@ -282,9 +298,11 @@ function AppContent() {
     "none" | "queue" | "notifications"
   >("none");
 
+  // Reflects the mode onto the document. The write to `manga_theme` used to live here too, which
+  // made two writers for one key -- `useColorMode.toggleMode` is the other, and the only one that
+  // knows how to notify. This effect just mirrors; the hook owns the value.
   useEffect(() => {
     document.documentElement.classList.toggle("light", mode === "light");
-    localStorage.setItem("manga_theme", mode);
   }, [mode]);
 
   useDependencyLogger(
@@ -490,7 +508,9 @@ function AppContent() {
                 )}
 
                 <ErrorBoundary resetKey={location.pathname}>
-                  <Suspense fallback={<LoadingSpinner />}>
+                  <Suspense
+                    fallback={<RouteFallback pathname={location.pathname} />}
+                  >
                     <Routes>
                       <Route
                         path="/login"
