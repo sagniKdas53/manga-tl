@@ -225,24 +225,6 @@ exception is swallowed (`:58-59`, print-only). The job stays `PROCESSING` and is
 the stale sweeper 10 minutes later — duplicating work per AUDIT-P4. The callback that carries the
 actual *results* has already landed by then, so the duplicate is pure waste plus duplicate rows.
 
-#### AUDIT-P7 **[M]** — page-scoped Redis keys are written and never read
-
-*Anchors re-checked 2026-08-05; all still present, line numbers updated.*
-
-`triggerPageRedo:1463-1465` writes `page:ocr:reason:{pageId}` / `page:translation:reason:{pageId}`.
-A grep across backend, worker and frontend finds **no reader** — the consumers at `:879` and
-`:1301` read `image:ocr:reason:{imageId}` / `image:translation:reason:{imageId}`. So a page-level
-re-OCR never gets its "OCR (manual-re-ocr)" layer label, and the keys accumulate in Redis with no
-TTL (unlike `pipeline:trace:`, which gets `Duration.ofHours(2)`).
-
-Same function, `:1469`: `redisTemplate.delete("pipeline:trace:" + pageId)` — trace keys are stored
-under **imageId** (`:246`, `:303`, `:309`). The delete is a no-op, so a page redo inherits the
-previous run's trace ID. `triggerImageRedo:1492-1499` gets this right, which is what makes it a typo
-rather than a design.
-
-Related: the `image:*:reason:` keys are `set()` **without a TTL**. If the pipeline dies before the
-callback, the key survives and mislabels the *next* run's layer.
-
 #### AUDIT-P8 **[M]** — `pipeline:trace` expires mid-pipeline on slow runs
 
 *Anchors re-checked 2026-08-05; both `Duration.ofHours(2)` calls still present.*

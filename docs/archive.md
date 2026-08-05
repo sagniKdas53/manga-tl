@@ -113,6 +113,26 @@ with it restored.
 unchanged, and reported BUILD SUCCESS over five real constructor-arity errors. `mvn -o clean
 test-compile` caught them. Do not trust an incremental Maven compile as evidence.
 
+**AUDIT-P7 [M] — page-scoped Redis keys are written and never read. Fixed.**
+
+Accurate as filed, all three bullets. `triggerPageRedo` wrote
+`page:{ocr,translation}:reason:{pageId}` — and nothing in backend, worker or frontend reads a
+page-scoped reason key. The consumers (`:927`, `:1368`) read `image:…:reason:{imageId}`, so a
+page-level re-OCR never got its `(manual-re-ocr)` layer label and the key just accumulated. The
+same function's `delete("pipeline:trace:" + pageId)` named a key written under **imageId**, so it
+was a no-op and the redo inherited the previous run's trace id. `triggerImageRedo` already did
+both correctly, which is what marks it a typo rather than a design. `imageId` was already resolved
+one line above both statements.
+
+The entry's third bullet — the `image:*:reason:` keys are written with no TTL, so a pipeline that
+dies before its callback leaves a key that mislabels the *next* run — is fixed too, via a
+`REDO_REASON_TTL` of 24h applied at all six write sites. The consumer deletes the key after
+reading, so the TTL only ever catches the abandoned case.
+
+**Verified red-green.** `testTriggerPageRedo_UsesImageScopedKeys` seeds a stale trace id, runs the
+redo, and asserts the image-scoped reason key is set, the page-scoped one is not, and the trace id
+changed. Reverting the two key names fails it on the first assertion.
+
 ### The 2026-08-05 verification pass — `issues.md` triaged against the code
 
 *Retired from `issues.md` on 2026-08-05. No code changed in this pass; every entry below was read
