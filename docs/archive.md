@@ -73,6 +73,81 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-05 second sitting — list items 1–5, a MUI pass, and Prettier in CI
+
+*Retired from `next-step.md` on 2026-08-05. Ten parent commits (`88b4cf6` … `3e1903c`) plus worker
+`49ceaea`. Every fix verified red-green. **Not deployed** — see the note at the end.*
+
+Suites: **backend 366 → 390**, **frontend 297 + 1 skipped → 305 + 0 skipped**, **worker 284**
+(unchanged). Backend line coverage **0.7887 → 0.8165** against the 0.80 gate.
+
+| item | commit | what changed |
+| --- | --- | --- |
+| CI unblock | `88b4cf6` | Two SpotBugs bugs, one PMD violation, and the JaCoCo gate. `PageService` 54.8% → 82.3%. |
+| worker CI | `49ceaea`, `ca35171` | `ruff format` on `translation.py`; a pyright `Optional` in `test_typesetting.py`. |
+| AUDIT-F7 | `ee24e53` | Ticket carries the session `exp`; `subscribe` arms one cancellable push per connection. |
+| AUDIT-B4 leftover | `6c9c624` | `RENAME` to a scratch key; only the undelivered tail is requeued. |
+| AUDIT-B3 leftovers | `80520a0` | Generic 500 detail; new `AccessDeniedException` → 403. |
+| AUDIT-F6 | `ba21af6` | 12 nameless icon buttons named, 17 `title`-only ones given an explicit `aria-label`. |
+| MUI misses | `b951ee2` | Two card grids and the drag overlay onto MUI `Grid`/`Backdrop`; 132 lines of dead CSS. |
+| Prettier | `463b15b` | 27 files formatted, `format:check` gated in `ci-npm.yml`. |
+| AUDIT-F5 | `33f3902` | All nine sub-items; see the two corrections below. |
+| skipped test | `3e1903c` | The suite's only skipped test un-skipped. |
+
+**Six corrections made by reading the code.** The board's track record holds.
+
+- **AUDIT-F7's "the client half already exists" was wrong.** `App.tsx` listens for a *window*
+  `CustomEvent` that `utils.ts` dispatches. `useSSE` registered six `EventSource` listeners and
+  `session-expired` was not among them, so the backend push would have been dropped silently by the
+  browser. The item needed a frontend change it said it did not need.
+- **AUDIT-F6's framing overstated the defect and named the wrong files.** Classifying all 51 icon
+  buttons: **21** were already named by a MUI `Tooltip` (it injects `aria-label` for a string
+  title), **17** had a native `title` (a real name, by the weakest fallback), **1** had an
+  `aria-label`, and **12** had nothing. None of the 12 are in the five files the entry names —
+  `Reader.tsx` and `ReaderLeftSidebar` have no `IconButton` or `Fab` at all.
+- **AUDIT-F6's "focus order" half has no concrete defect.** No `tabIndex` overrides anywhere, so
+  tab order follows DOM order, and the single `outline: none` (`index.css:215`) is paired with a
+  `box-shadow` focus ring. What *is* missing is landmarks — no `<main>` or `<nav>` in the app — and
+  the skip link that depends on them. Carried onto the new board rather than invented here.
+- **AUDIT-F5's tearing rationale is wrong.** The entry calls the uncached `getSnapshot` "a
+  `useSyncExternalStore` tearing hazard". It is not: the snapshot is a string and `Object.is`
+  compares it fine however often it is read. The item is still worth doing for the avoided storage
+  read; the reason given is not the reason.
+- **AUDIT-F5's precompressed-assets item would have shipped dead files.** It asks for
+  `vite-plugin-compression2` to emit `.gz`/`.br`, copying yt-diff. This app serves its own frontend
+  from `classpath:/static`, Spring will not serve a precompressed sibling without an
+  `EncodedResourceResolver`, and the Traefik router carries no compress middleware — so the 380 kB
+  MUI chunk was going out **uncompressed** and the emitted files would never have been read.
+  Enabled Spring's own `server.compression` instead, with `mime-types` enumerated so
+  `text/event-stream` stays off it; compressing SSE would buffer events behind the encoder.
+- **`ErrorBoundary` is not a MUI migration miss.** Its docblock says it is dependency-free on
+  purpose so it can still render when MUI is what failed. Converting it would defeat it.
+
+**Two findings in `issues.md` were already fixed and still marked open** — now corrected there.
+**AUDIT-B6**'s WebP lock is already scoped to WebP-only work and already catches `LinkageError`
+rather than `Error`; **AUDIT-D1**'s `db-backup` already reads `restart: unless-stopped`, with a
+NOTE explaining the invalid `none`.
+
+**Three process notes worth keeping.**
+
+- **`prettier --write` on a repo that was never Prettier-clean buries the change you came to make.**
+  Formatting the files touched by the AUDIT-F6 sweep rewrote 270+ unrelated lines in
+  `UploadContext.tsx` alone; the sweep was reverted and redone by hand to keep the diff readable.
+  That is what motivated `463b15b`, and CI now gates on `format:check` so the drift cannot return.
+- **That formatting commit silently broke a lint suppression.** A trailing
+  `// eslint-disable-line react-hooks/exhaustive-deps` sat on the same line as a dependency array;
+  Prettier split them, so the directive stopped applying *and* became unused. Nothing failed,
+  because warnings were not gated. `--report-unused-disable-directives --max-warnings 0` — adopted
+  from the same AUDIT-F5 entry — catches exactly this, and was verified to go red on it.
+- **The `detect_changes` line-offset artefact fired three more times** (CRITICAL twice, HIGH once).
+  In the AUDIT-B4 case `sendPendingNotifications` — the method actually rewritten — was not even in
+  the changed list, while four untouched methods below the insertion were. `git diff -U0` hunk
+  ranges settled each one in a single command.
+
+**Not deployed.** The backend image has not been rebuilt since this sitting. Two changes need it to
+take effect: AUDIT-F7's client listener (the frontend compiles into the backend image) and the new
+`server.compression`. The branch is 10 commits ahead of `github/main` and nothing is pushed.
+
 ### The 2026-08-05 sitting — list items 1–5 and the AUDIT-F4 half of 6
 
 *Retired from `next-step.md` on 2026-08-05. Seven code commits (`0e5bbd5` … `f131e42`), each
