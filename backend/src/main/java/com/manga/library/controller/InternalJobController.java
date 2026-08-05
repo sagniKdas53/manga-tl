@@ -130,6 +130,23 @@ public class InternalJobController {
         .orElse(ResponseEntity.notFound().build());
   }
 
+  /**
+   * Existence check for the worker's stale-job guard (AUDIT-W7).
+   *
+   * <p>That guard used to call {@code GET /images/{imageId}} — which generates a presigned URL and
+   * loads every panel, page, OCR region, layer element, conversation and the previous page's text
+   * — and then read nothing but the status code. Every job paid for that before doing any work.
+   * Same path, so the worker only changes its verb; Spring routes HEAD here rather than to the GET
+   * handler because this mapping is explicit.
+   */
+  @RequestMapping(value = "/images/{imageId}", method = RequestMethod.HEAD)
+  public ResponseEntity<Void> imageExists(@PathVariable UUID imageId) {
+    Objects.requireNonNull(imageId, "imageId cannot be null");
+    return imageRepository.existsById(imageId)
+        ? ResponseEntity.ok().build()
+        : ResponseEntity.notFound().build();
+  }
+
   @GetMapping("/images/{imageId}")
   public ResponseEntity<?> getImageInfo(
       @PathVariable UUID imageId,
