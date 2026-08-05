@@ -21,6 +21,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class JobCoordinatorService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JobCoordinatorService.class);
 
+  /**
+   * TTL for the {@code image:{ocr,translation}:reason:} keys, which label the layer a redo produces.
+   *
+   * <p>AUDIT-P7: these were written without one. The consumer deletes the key after reading it, so
+   * the only way one survives is a pipeline that dies before its callback — and then it sits there
+   * forever and mislabels whatever run comes next. A day is far longer than any pipeline that is
+   * still alive and far shorter than the gap to a run that has nothing to do with this one.
+   */
+  private static final Duration REDO_REASON_TTL = Duration.ofHours(24);
+
   public record ResolvedPipelineConfig(
       String ocrProvider, String ocrModel,
       String tlProvider, String tlModel,
@@ -1526,14 +1536,21 @@ public class JobCoordinatorService {
         .findById(Objects.requireNonNull(pageId))
         .orElseThrow(() -> new IllegalArgumentException("Page not found: " + pageId));
     UUID imageId = page.getImage().getId();
+    // AUDIT-P7: both of these were keyed by pageId, and nothing anywhere reads a page-scoped key.
+    // The reason consumers (:927, :1368) read image:{ocr,translation}:reason:{imageId}, so a page
+    // redo never got its "(manual-re-ocr)" layer label and the keys accumulated in Redis unread;
+    // and trace keys are written under imageId (:246, :303, :309), so the delete was a no-op and
+    // the redo inherited the previous run's trace id. triggerImageRedo already did both correctly.
     if ("ocr".equals(jobType)) {
-      redisTemplate.opsForValue().set("page:ocr:reason:" + pageId, "manual-re-ocr");
+      redisTemplate.opsForValue().set("image:ocr:reason:" + imageId, "manual-re-ocr", REDO_REASON_TTL);
     } else if ("translation".equals(jobType)) {
-      redisTemplate.opsForValue().set("page:translation:reason:" + pageId, "manual-re-translate");
+      redisTemplate
+          .opsForValue()
+          .set("image:translation:reason:" + imageId, "manual-re-translate", REDO_REASON_TTL);
     }
 
     if (redisTemplate != null) {
-      redisTemplate.delete("pipeline:trace:" + pageId);
+      redisTemplate.delete("pipeline:trace:" + imageId);
     }
 
     UUID chapterFromPage = page.getChapter() != null ? page.getChapter().getId() : null;
@@ -1556,9 +1573,11 @@ public class JobCoordinatorService {
         jobType,
         chapterId);
     if ("ocr".equals(jobType)) {
-      redisTemplate.opsForValue().set("image:ocr:reason:" + imageId, "manual-re-ocr");
+      redisTemplate.opsForValue().set("image:ocr:reason:" + imageId, "manual-re-ocr", REDO_REASON_TTL);
     } else if ("translation".equals(jobType)) {
-      redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "manual-re-translate");
+      redisTemplate
+          .opsForValue()
+          .set("image:translation:reason:" + imageId, "manual-re-translate", REDO_REASON_TTL);
     }
 
     // Clear the traceId so a fresh one is generated for the new pipeline run
@@ -1620,7 +1639,9 @@ public class JobCoordinatorService {
     // Now proceed to retry translation with the new OCR text
     log.info("QA Re-OCR complete for image {}. Enqueuing translation job...", imageId);
     Page reOcrPage = resolvePageForCallback(imageId, callbackPageId);
-    redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "qa-re-ocr");
+    redisTemplate
+        .opsForValue()
+        .set("image:translation:reason:" + imageId, "qa-re-ocr", REDO_REASON_TTL);
     enqueueJobForPage("translation", imageId, reOcrPage != null ? reOcrPage.getId() : null);
   }
 
@@ -2057,7 +2078,9 @@ public class JobCoordinatorService {
             "QA failed for image {}. Retry {}/2. Enqueuing translation job...",
             imageId,
             retries + 1);
-        redisTemplate.opsForValue().set("image:translation:reason:" + imageId, "qa-re-translate");
+        redisTemplate
+            .opsForValue()
+            .set("image:translation:reason:" + imageId, "qa-re-translate", REDO_REASON_TTL);
         enqueueJobForPage("translation", imageId, qaPageId);
       }
       return "RETRIED";

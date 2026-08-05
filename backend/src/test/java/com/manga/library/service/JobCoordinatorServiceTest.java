@@ -1053,6 +1053,54 @@ public class JobCoordinatorServiceTest {
     imageRepository.delete(image);
   }
 
+  /**
+   * AUDIT-P7: a page redo wrote both of its Redis keys under {@code pageId}, and nothing anywhere
+   * reads a page-scoped key. The reason key never reached the consumer, which reads
+   * {@code image:ocr:reason:{imageId}}, so a page-level re-OCR lost its "(manual-re-ocr)" layer
+   * label and the key accumulated unread; and the trace delete named a key that is written under
+   * imageId, so it was a no-op and the redo inherited the previous run's trace id.
+   */
+  @Test
+  public void testTriggerPageRedo_UsesImageScopedKeys() {
+    Image image = new Image();
+    image.setFilename("test_p7.png");
+    image.setStoragePath("test/test_p7.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    UUID imageId = image.getId();
+    UUID pageId = page.getId();
+
+    String staleTrace = "trace-from-the-previous-run";
+    redisTemplate.opsForValue().set("pipeline:trace:" + imageId, staleTrace);
+
+    jobCoordinatorService.triggerPageRedo(pageId, "ocr");
+
+    assertEquals(
+        "manual-re-ocr",
+        redisTemplate.opsForValue().get("image:ocr:reason:" + imageId),
+        "the reason must land on the image-scoped key, which is the one the callback reads");
+    assertNull(
+        redisTemplate.opsForValue().get("page:ocr:reason:" + pageId),
+        "nothing reads a page-scoped reason key — writing one just leaks it into Redis");
+    assertNotEquals(
+        staleTrace,
+        redisTemplate.opsForValue().get("pipeline:trace:" + imageId),
+        "the redo must not inherit the previous run's trace id");
+
+    Job enqueued = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "ocr");
+    if (enqueued != null) {
+      jobRepository.delete(enqueued);
+    }
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
   @Test
   public void testPrepareHybridQa() {
     Image image = new Image();
