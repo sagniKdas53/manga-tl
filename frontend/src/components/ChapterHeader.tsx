@@ -65,6 +65,10 @@ const ChapterHeader: React.FC<ChapterHeaderProps> = ({
       .then((r) => r.json())
       .then((d) => setSettings(d))
       .catch(() => {});
+    // Deliberately keyed on the token, not on `user`: the object is rebuilt on every auth state
+    // change, and depending on it would refetch settings each time without the credentials
+    // having changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.token]);
 
   // -------------------------------------------------------------------------------------

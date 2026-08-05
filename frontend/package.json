@@ -6,20 +6,19 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "host": "vite --host",
-    "generate-api": "openapi-typescript http://localhost:8080/tlhub/v3/api-docs -o src/api/schema.d.ts"
+    "generate-api": "openapi-typescript \"${API_DOCS_URL:-http://localhost:8080/tlhub/v3/api-docs}\" -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
-    "esbuild": "^0.28.1",
     "jszip": "^3.10.1",
     "openapi-fetch": "^0.17.0",
     "react": "^19.2.6",
@@ -37,6 +36,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "@vitest/coverage-v8": "^4.1.10",
     "@vitest/ui": "^4.1.10",
+    "esbuild": "^0.28.1",
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",

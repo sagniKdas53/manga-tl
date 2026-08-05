@@ -388,7 +388,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
           newJobsList.forEach((job) => {
             const existing = pipelinesMap.get(job.imageId);
 
-            // A poll response can land after an SSE job_update that already carried a
+            // A fetch response can land after an SSE job_update that already carried a
             // newer status for the same job. `createdAt` is fixed for the lifetime of a
             // job, so comparing it alone cannot tell "same job, fresher" from "same job,
             // staler" — it accepted both, and the stale poll won by arriving last. Use
@@ -433,16 +433,18 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     } catch (err) {
       console.error("Failed to fetch jobs", err);
     }
-  }, [token]);
+  }, [token, sortJobs]);
 
+  // One fetch to seed the list; `job_update` over SSE keeps it current from there.
+  //
+  // AUDIT-F5: this used to also poll every 30s. That poll existed to paper over SSE dropping
+  // silently, which AUDIT-F3 fixed — the stream now reconnects with jittered backoff and
+  // resubscribes on wake. Polling on top of a working push feed cost every open tab two requests
+  // a minute for as long as it stayed open, almost always to learn nothing had changed.
   useEffect(() => {
     if (!token) return;
     const timeout = setTimeout(() => fetchJobs(), 0);
-    const interval = setInterval(fetchJobs, 30000);
-    return () => {
-      clearTimeout(timeout);
-      clearInterval(interval);
-    };
+    return () => clearTimeout(timeout);
   }, [token, fetchJobs]);
 
   useEffect(() => {
@@ -528,7 +530,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
         }
       }
     });
-  }, [token, subscribe]);
+  }, [token, subscribe, sortJobs]);
 
   const handleClearQueue = () => {
     setConfirmModal({
@@ -714,8 +716,12 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
         },
         [] as { label: string; color: string; count: number }[],
       ),
+    // getDisplayStatus and getJobStatusColor are redeclared every render; listing them would
+    // defeat the memo entirely. Must be `next-line` rather than `line` -- Prettier splits the
+    // dependency array onto its own line, which silently moved a trailing directive off it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [jobs, isPaused],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // jobs is already sorted so that a chapter's jobs are always contiguous;
   // this just folds consecutive same-chapter jobs into groups for rendering.

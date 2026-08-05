@@ -70,6 +70,19 @@ management:
 server:
   servlet:
     context-path: ${CONTEXT_PATH:/tlhub}
+  # AUDIT-F5 asked for precompressed .gz/.br from a Vite plugin, copying yt-diff. That does not
+  # work here: this app serves its own frontend from classpath:/static, Spring will not serve a
+  # precompressed sibling without an EncodedResourceResolver, and the Traefik router in front
+  # carries no compress middleware. Emitted .br files would simply never be read, and the 380 kB
+  # MUI chunk would keep going out uncompressed. Compressing where the bytes are actually served
+  # is the fix; it covers the API's JSON responses too.
+  compression:
+    enabled: true
+    # Enumerated, not defaulted, so text/event-stream stays off the list: compressing the SSE
+    # stream would buffer events behind the encoder and defeat the whole push channel.
+    mime-types: text/html,text/css,text/plain,application/javascript,application/json,image/svg+xml
+    # Below about a packet's worth, compression costs more than it saves.
+    min-response-size: 1024
   tomcat:
     accesslog:
       enabled: true
