@@ -111,6 +111,14 @@ describe("NavBar", () => {
     return render(<BrowserRouter>{ui}</BrowserRouter>);
   };
 
+  // The app had no landmark elements at all, so screen-reader landmark navigation had
+  // nothing to land on and the skip link in App.tsx had nowhere to point.
+  it("exposes a navigation landmark", () => {
+    renderWithRouter(<NavBar {...defaultProps} />);
+
+    expect(screen.getByRole("navigation")).toBeInTheDocument();
+  });
+
   it("renders basic elements when no user is logged in", () => {
     renderWithRouter(<NavBar {...defaultProps} />);
 
