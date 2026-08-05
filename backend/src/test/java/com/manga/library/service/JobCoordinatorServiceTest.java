@@ -815,6 +815,64 @@ public class JobCoordinatorServiceTest {
   }
 
   /**
+   * AUDIT-P9: the page can be deleted between enqueue and callback, and resolvePageForCallback then
+   * returns null. Both ocr_regions.page_id and layers.page_id are NOT NULL, so the null used to
+   * reach the inserts and blow the whole callback up at commit — discarding a completed OCR pass and
+   * leaving the job PROCESSING for the stale sweeper to re-run, identically, up to maxAttempts.
+   */
+  @Test
+  public void testHandleOcrCallback_DeletedPageFailsTheJobInsteadOfThrowing() {
+    Image image = new Image();
+    image.setFilename("test_ocr_deleted_page.png");
+    image.setStoragePath("test/test_ocr_deleted_page.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+    UUID deletedPageId = page.getId();
+
+    Job job = new Job();
+    job.setId(UUID.randomUUID().toString());
+    job.setType("ocr");
+    job.setImageId(image.getId());
+    job.setPageId(deletedPageId);
+    job.setStatus("PROCESSING");
+    jobRepository.save(job);
+
+    // The page goes away while the worker is still running.
+    pageRepository.delete(page);
+
+    com.manga.library.dto.OcrCallbackDto.OcrRegionData r =
+        new com.manga.library.dto.OcrCallbackDto.OcrRegionData(
+            "test", "ja", 0.98, 0.0, 0, 0, 100, 100, null, 1, null, null, null, null, null, null,
+            null, 0.99, null, null, null, null, null);
+    com.manga.library.dto.OcrCallbackDto dto =
+        new com.manga.library.dto.OcrCallbackDto(
+            image.getId(), deletedPageId, "paddle-ocr", 0.98, null, List.of(r));
+
+    assertDoesNotThrow(
+        () -> jobCoordinatorService.handleOcrCallback(dto),
+        "a callback for a deleted page must not abort on a not-null violation");
+
+    assertTrue(
+        ocrRegionRepository.findByPageId(deletedPageId).isEmpty(),
+        "no regions should be written for a page that no longer exists");
+    assertTrue(
+        layerRepository.findByPageId(deletedPageId).isEmpty(),
+        "no layers should be written for a page that no longer exists");
+
+    Job after = jobRepository.findById(job.getId()).orElseThrow();
+    assertEquals("FAILED", after.getStatus(), "the job must be failed, not left PROCESSING");
+    assertNotNull(after.getError(), "the failure needs a reason the UI can show");
+
+    jobRepository.delete(after);
+    imageRepository.delete(image);
+  }
+
+  /**
    * AUDIT-P4: a job requeued by resetProcessingJobsToPending or recoverStaleProcessingJobs runs
    * alongside the original worker, so the same job row produces two result callbacks. No handler
    * was idempotent, so the second wrote a second full region set, a second layer and double-counted
