@@ -140,9 +140,16 @@ services:
       - QA_LLM_MODEL_LIST=${QA_LLM_MODEL_LIST:-}
       - QA_VLM_MODEL_LIST=${QA_VLM_MODEL_LIST:-}
     depends_on:
-      - db
-      - redis
-      - minio
+      # AUDIT-D3: the plain-list form only waits for the container to be created, so
+      # the healthchecks defined on db, redis and minio were ignored on startup and
+      # the backend raced its own dependencies. Same class of bug that took db-backup
+      # down for three days.
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     secrets:
       - db_password
       - minio_password
@@ -243,9 +250,15 @@ services:
       - MKL_NUM_THREADS=${WORKER_THREADS:-2}
       - OPENBLAS_NUM_THREADS=${WORKER_THREADS:-2}
     depends_on:
-      - redis
-      - minio
-      - backend
+      # AUDIT-D3, as above. backend carries start_period: 40s, so a cold start holds
+      # the worker back until the backend can actually accept its callbacks — which
+      # is the point: the worker's first act is to register against it.
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     secrets:
       - minio_password
       - internal_api_token
