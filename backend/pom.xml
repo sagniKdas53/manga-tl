@@ -92,6 +92,22 @@
             <artifactId>minio</artifactId>
             <version>${minio.version}</version>
         </dependency>
+        <!--
+            DO NOT remove this pin, and DO NOT let dependabot bump it to 5.x.
+
+            No source file here imports okhttp3 — it is minio's transitive HTTP client.
+            minio ${minio.version} asks for okhttp 5.3.2, and nearest-definition mediation
+            makes this declaration win, so on paper the pin looks like a pointless
+            downgrade. It is not. From 5.0 okhttp is published as a Kotlin Multiplatform
+            module: com.squareup.okhttp3:okhttp:5.x is a stub whose jar contains zero
+            .class files, with the JVM classes split into okhttp-jvm and wired up only by
+            Gradle module metadata, which Maven does not read. Dropping this line resolves
+            okhttp 5.3.2 and fails 73 tests with NoClassDefFoundError: okhttp3/MediaType.
+            Verified 2026-08-05 by unzipping both jars — 4.12.0 has 317 classes, 5.3.2 has 0.
+
+            Moving to okhttp 5 means depending on com.squareup.okhttp3:okhttp-jvm instead,
+            which is its own change and needs minio to be happy with it.
+        -->
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
