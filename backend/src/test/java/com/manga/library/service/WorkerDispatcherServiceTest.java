@@ -456,6 +456,39 @@ public class WorkerDispatcherServiceTest {
     verify(jobRepository, never()).save(any(Job.class));
   }
 
+  /**
+   * AUDIT-P3: an undispatchable job used to abandon the whole slot class. HEAVY_QUEUES is ordered
+   * [qa-re-ocr, region-redo-ocr, ocr, panel-detection], so one stuck job on qa-re-ocr stopped
+   * queue:ocr being polled at all that cycle. A 500 is used rather than a 429 because a 429 also
+   * drops the worker from the capacity map, which would mask the defect under test.
+   */
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testDispatchJobs_StuckQueueDoesNotBlockTheRestOfItsSlotClass() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    when(listOps.leftPop("queue:qa-re-ocr")).thenReturn("{\"id\": \"stuck\"}").thenReturn(null);
+    when(listOps.leftPop("queue:ocr")).thenReturn("{\"id\": \"behind-it\"}").thenReturn(null);
+
+    HttpResponse<String> serverError = mockGeneric(HttpResponse.class);
+    when(serverError.statusCode()).thenReturn(500);
+    when(serverError.body()).thenReturn("internal error");
+    HttpResponse<String> accepted = mockGeneric(HttpResponse.class);
+    when(accepted.statusCode()).thenReturn(202);
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
+    when(httpClient.send(
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse, serverError, accepted);
+
+    workerDispatcherService.dispatchJobs();
+
+    // The stuck job goes back on its own queue...
+    verify(listOps).rightPush("queue:qa-re-ocr", "{\"id\": \"stuck\"}");
+    // ...and the queue behind it in the same slot class is still polled and dispatched.
+    verify(listOps, atLeastOnce()).leftPop("queue:ocr");
+    verify(listOps, never()).rightPush(eq("queue:ocr"), anyString());
+  }
+
   @Test
   public void testDispatchJobs_NullRedis() {
     WorkerDispatcherService svc =
