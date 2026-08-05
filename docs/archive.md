@@ -243,6 +243,30 @@ configuration — which is exactly why the bug was never seen in the one place a
 Both call sites now default to `ollama`/`gemma4:e4b`, matching `docker-compose.yml` and
 `.env.example`.
 
+**AUDIT-T2 — error-branch coverage. Closed as already done; nothing was written for it.**
+
+The entry had been narrowed to a single outstanding item: *"AUDIT-P3's fix was a `break` rather than
+a `continue` … and no test is named for it. A test that queues an undispatchable job ahead of a
+dispatchable one and asserts the second still goes out would pin it."*
+
+That test already exists. `WorkerDispatcherServiceTest.testDispatchJobs_StuckQueueDoesNotBlockThe
+RestOfItsSlotClass` queues a stuck job on `queue:qa-re-ocr` and a dispatchable one on `queue:ocr`,
+asserts the first is re-pushed and the second still dispatched, and carries a Javadoc naming
+AUDIT-P3 — including why it uses a 500 rather than a 429 (a 429 also drops the worker from the
+capacity map, which would mask the defect). `git log -S` puts it in **`19cab6f`, the same commit as
+P3's fix**. It was never open; the entry simply did not know.
+
+**It was checked, not assumed.** Reverting `break` to the pre-P3 `return` fails it on exactly the
+right assertion — `leftPop("queue:ocr")` wanted, never invoked, because the whole slot class was
+abandoned. Restored, 26/26 pass.
+
+**A new instance of the Maven trap, and a worse one.** The first full-class run *passed* with
+`return` in place. The documented failure mode is `mvn -o test-compile` silently no-op'ing; this was
+`mvn -o test` reporting 26/26 green against classes compiled before the edit, because a
+backgrounded run raced the source change. `mvn -o clean test`, or a single-method rerun after the
+compile had definitely landed, showed the real result. **Treat a green Maven run that started near
+an edit as no evidence at all** — the only trustworthy signal is `clean`.
+
 #### Where a finding was wrong — the eleventh time
 
 **AUDIT-W9's claim that `gemma4:e4b` "is not a real tag (probably meant `gemma3n:e4b`), so the
