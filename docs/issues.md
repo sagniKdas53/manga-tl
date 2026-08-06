@@ -225,14 +225,6 @@ exception is swallowed (`:58-59`, print-only). The job stays `PROCESSING` and is
 the stale sweeper 10 minutes later — duplicating work per AUDIT-P4. The callback that carries the
 actual *results* has already landed by then, so the duplicate is pure waste plus duplicate rows.
 
-#### AUDIT-P8 **[M]** — `pipeline:trace` expires mid-pipeline on slow runs
-
-*Anchors re-checked 2026-08-05; both `Duration.ofHours(2)` calls still present.*
-
-`:246` gives the trace key a 2-hour TTL; `:303-309` regenerates a fresh ID when it has expired. The
-run in `logs/run-3-fresh.log` took ~2h for 50 pages, so traces were being silently split. The TTL
-should outlive the longest realistic pipeline, or the trace should live on the `Job` row.
-
 ### Worker
 
 #### AUDIT-W1 **[L]** — QA's two default-model maps duplicate `providers.json`

@@ -173,6 +173,40 @@ expensive loads still happen; the explicit HEAD mapping is what avoids them. Plu
 GET handler and 404 in the unit test. The worker tests assert `requests.get` is never called and
 that the timeout is 5.
 
+### The 2026-08-06 ninth sitting — AUDIT-P8, pipeline trace lifetime
+
+**AUDIT-P8 [M] — `pipeline:trace:` expired mid-pipeline. Fixed, accurate as filed.**
+
+Both `Duration.ofHours(2)` calls were where the entry said they were. `startPipeline` wrote the key
+with a 2-hour TTL and nothing ever refreshed it, so the window ran from the *start of the pipeline*;
+`enqueueJobDirectly` minted a fresh id whenever it found the key gone. The 50-page run in
+`logs/run-3-fresh.log` took about two hours, which is why traces were splitting.
+
+The entry offered two fixes — a longer TTL, or moving the trace onto the `Job` row. Neither on its
+own is right. A longer TTL is still a bound picked in advance against an unbounded pipeline: whatever
+number you choose, a big enough chapter beats it. So the fix is both halves of a sliding window:
+
+- `PIPELINE_TRACE_TTL = Duration.ofHours(12)`, one constant replacing both literals, documented in
+  the same shape as AUDIT-P7's `REDO_REASON_TTL` right above it.
+- **Every hand-off through `enqueueJobDirectly` now calls `expire()` on the key it just read.** The
+  TTL therefore has to outlive a single *stage*, not a whole run — and a stage that stalls is
+  already given up on by the worker's stale sweeper after ten minutes. The bound stays only to stop
+  a pipeline that dies between stages from leaking the key forever.
+
+Moving the trace to the `Job` row was not done: the key is read before the `Job` row exists in
+`enqueueJobDirectly`, so that is a restructure, not a fix.
+
+**The first version of the test passed with the defect reinstated — the fifth instance.** The
+in-memory Redis fake in `JobCoordinatorServiceTest` accepted a `Duration` on `set` and dropped it on
+the floor, so *every* TTL assertion in that class was vacuously true; the fake had to learn TTLs
+before it could test them. Then the fixed test still passed with the 2-hour literal restored,
+because `startPipeline` hands straight off to `enqueueJobDirectly`, whose new sliding refresh
+overwrites the initial TTL before any assertion can read it. Asserting on the surviving value tests
+the refresh, not the write. The fake now records **every** TTL applied to a key, in order, and the
+test asserts over the whole history. Caught only by reverting the two defects individually.
+
+Backend 401 (was 399, +2). Both defects verified red in isolation, each failing only its own test.
+
 ### The 2026-08-05 eighth sitting — AUDIT-W8 and W9, the last two [M] worker findings
 
 **AUDIT-W8 [M] — provider payload defects in `LLMClient`. Fixed, all four remaining bullets.**

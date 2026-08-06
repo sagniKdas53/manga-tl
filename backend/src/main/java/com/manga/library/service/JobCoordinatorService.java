@@ -31,6 +31,22 @@ public class JobCoordinatorService {
    */
   private static final Duration REDO_REASON_TTL = Duration.ofHours(24);
 
+  /**
+   * TTL for {@code pipeline:trace:}, the key that keeps every stage of one image's pipeline under a
+   * single trace id.
+   *
+   * <p>AUDIT-P8: this was two hours, measured from {@code startPipeline} and never refreshed. The
+   * run in {@code logs/run-3-fresh.log} took about that long for 50 pages, so the key expired
+   * mid-pipeline, {@link #enqueueJobDirectly} minted a fresh id for the remaining stages, and the
+   * trace silently split in two — the one thing the key exists to prevent.
+   *
+   * <p>The window is refreshed on every enqueue, so it now has to outlive a single *stage* rather
+   * than a whole pipeline; the bound is what stops a pipeline that dies between stages from leaking
+   * the key. Twelve hours is far longer than any stage that is still alive (the worker's own stale
+   * sweeper gives up after ten minutes) and still expires within a day.
+   */
+  private static final Duration PIPELINE_TRACE_TTL = Duration.ofHours(12);
+
   public record ResolvedPipelineConfig(
       String ocrProvider, String ocrModel,
       String tlProvider, String tlModel,
@@ -300,7 +316,7 @@ public class JobCoordinatorService {
           .set(
               Objects.requireNonNull("pipeline:trace:" + imageId),
               Objects.requireNonNull(traceId),
-              Objects.requireNonNull(Duration.ofHours(2)));
+              Objects.requireNonNull(PIPELINE_TRACE_TTL));
     }
 
     // Panels are a property of the Image, not the Page: panel detection is a purely
@@ -363,7 +379,14 @@ public class JobCoordinatorService {
               .set(
                   Objects.requireNonNull("pipeline:trace:" + imageId),
                   Objects.requireNonNull(traceId),
-                  Objects.requireNonNull(Duration.ofHours(2)));
+                  Objects.requireNonNull(PIPELINE_TRACE_TTL));
+        } else {
+          // AUDIT-P8: slide the window forward on every hand-off. Without this the TTL runs from
+          // startPipeline, so a pipeline slower than the TTL loses its trace part-way through and
+          // the branch above splits it under a new id.
+          redisTemplate.expire(
+              Objects.requireNonNull("pipeline:trace:" + imageId),
+              Objects.requireNonNull(PIPELINE_TRACE_TTL));
         }
       } else {
         traceId = UUID.randomUUID().toString();
