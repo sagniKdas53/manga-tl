@@ -663,11 +663,17 @@ public class JobCoordinatorService {
    * report a different model from the one that actually runs — see SeriesController.toChapterDto.
    */
   public static boolean isOverride(String value) {
-    return value != null
-        && !value.trim().isEmpty()
-        && !value.equals("inherit")
-        && !value.equals("default")
-        && !value.contains("[ORPHANED]");
+    if (value == null) {
+      return false;
+    }
+    // AUDIT-Q3: trim once and compare against that. This used to trim for the emptiness check and
+    // then compare the *untrimmed* value against the placeholders, so " inherit " was not empty,
+    // was not equal to "inherit", and sailed through as a real model name.
+    String trimmed = value.trim();
+    return !trimmed.isEmpty()
+        && !trimmed.equals("inherit")
+        && !trimmed.equals("default")
+        && !trimmed.contains("[ORPHANED]");
   }
 
   public String resolveModel(String chapterVal, String seriesVal, String globalVal) {
@@ -1065,6 +1071,11 @@ public class JobCoordinatorService {
 
     // 2. Do not delete old conversations to preserve multi-pass history
 
+    // AUDIT-Q3: resolved once. This was called per conversation inside the loop below and then a
+    // third time at the enqueue step, all with the same two arguments — a findById (or a
+    // findByImageId) per conversation, for an answer that cannot change within the callback.
+    Page callbackPage = resolvePageForCallback(imageId, callbackPageId);
+
     // 3. Create new Conversation + ConversationRegion entries
     if (conversations != null) {
       for (Map<String, Object> convData : conversations) {
@@ -1080,9 +1091,8 @@ public class JobCoordinatorService {
             }
           }
 
-          Page page = resolvePageForCallback(imageId, callbackPageId);
           Conversation conv = new Conversation();
-          conv.setPage(page);
+          conv.setPage(callbackPage);
           conv.setSceneType(sceneType != null ? sceneType : "dialogue");
 
           Objects.requireNonNull(conv, "conv cannot be null");
@@ -1107,7 +1117,7 @@ public class JobCoordinatorService {
 
     // 4. Enqueue translation job
     boolean isReaderMode = false;
-    Page layoutPage = resolvePageForCallback(imageId, callbackPageId);
+    Page layoutPage = callbackPage;
     Series series = layoutPage != null && layoutPage.getChapter() != null
         ? layoutPage.getChapter().getSeries()
         : null;
