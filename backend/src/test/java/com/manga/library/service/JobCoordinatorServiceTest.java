@@ -47,6 +47,18 @@ public class JobCoordinatorServiceTest {
   private Series defaultSeries;
   private Chapter defaultChapter;
 
+  /**
+   * Every TTL the in-memory Redis fake has been asked to apply, in order, keyed by Redis key. The
+   * fake used to drop the {@link java.time.Duration} argument on the floor, which made every
+   * expiry-related assertion vacuously true.
+   *
+   * <p>This is a history and not just the current value on purpose. AUDIT-P8 adds a sliding refresh
+   * that rewrites the trace key's TTL immediately after {@code startPipeline} writes it, so a test
+   * reading only the final value cannot see what the initial write asked for — and passes with a
+   * 2-hour initial TTL reinstated.
+   */
+  private Map<String, List<java.time.Duration>> mockRedisTtlStore;
+
   @BeforeEach
   public void setUp() {
     Series series = new Series();
@@ -65,6 +77,8 @@ public class JobCoordinatorServiceTest {
     // Set up mock for redisTemplate using in-memory structures
     final Map<String, String> mockRedisValueStore = new HashMap<>();
     final Map<String, List<String>> mockRedisListStore = new HashMap<>();
+    final Map<String, List<java.time.Duration>> mockRedisTtls = new HashMap<>();
+    mockRedisTtlStore = mockRedisTtls;
 
     org.springframework.data.redis.core.ValueOperations<String, String> valueOps =
         mockGeneric(org.springframework.data.redis.core.ValueOperations.class);
@@ -80,6 +94,9 @@ public class JobCoordinatorServiceTest {
     org.mockito.Mockito.doAnswer(
             invocation -> {
               mockRedisValueStore.put(invocation.getArgument(0), invocation.getArgument(1));
+              mockRedisTtls
+                  .computeIfAbsent(invocation.getArgument(0), k -> new ArrayList<>())
+                  .add(invocation.getArgument(2));
               return null;
             })
         .when(valueOps)
@@ -125,8 +142,18 @@ public class JobCoordinatorServiceTest {
 
           @Override
           public Boolean delete(String key) {
+            mockRedisTtls.remove(key);
             return mockRedisValueStore.remove(key) != null
                 || mockRedisListStore.remove(key) != null;
+          }
+
+          @Override
+          public Boolean expire(String key, java.time.Duration timeout) {
+            if (!mockRedisValueStore.containsKey(key)) {
+              return false;
+            }
+            mockRedisTtls.computeIfAbsent(key, k -> new ArrayList<>()).add(timeout);
+            return true;
           }
         };
     org.springframework.test.util.ReflectionTestUtils.setField(
@@ -1097,6 +1124,108 @@ public class JobCoordinatorServiceTest {
     if (enqueued != null) {
       jobRepository.delete(enqueued);
     }
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
+  /**
+   * AUDIT-P8: {@code pipeline:trace:} was given a 2-hour TTL measured from {@code startPipeline}. A
+   * 50-page run in {@code logs/run-3-fresh.log} took about that long, so the key expired while the
+   * pipeline was still running and the remaining stages were traced under a fresh id.
+   */
+  @Test
+  public void testStartPipeline_TraceTtlOutlivesALongRun() {
+    Image image = new Image();
+    image.setFilename("test_p8_start.png");
+    image.setStoragePath("test/test_p8_start.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    UUID imageId = image.getId();
+    jobCoordinatorService.startPipeline(imageId, page.getId(), defaultChapter.getId());
+
+    List<java.time.Duration> ttls = mockRedisTtlStore.get("pipeline:trace:" + imageId);
+    assertNotNull(ttls, "startPipeline must give the trace key a TTL");
+    assertFalse(ttls.isEmpty(), "startPipeline must give the trace key a TTL");
+    // Assert on every TTL applied, not the final one: startPipeline hands straight off to
+    // enqueueJobDirectly, whose sliding refresh overwrites the initial value before the test can
+    // read it. Checking only the survivor passes with the 2-hour original reinstated.
+    for (java.time.Duration ttl : ttls) {
+      assertTrue(
+          ttl.compareTo(java.time.Duration.ofHours(2)) > 0,
+          "a 2-hour trace TTL expires inside a real 50-page run — one write asked for " + ttl);
+    }
+
+    Job enqueued = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "panel-detection");
+    if (enqueued != null) {
+      jobRepository.delete(enqueued);
+    }
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+  }
+
+  /**
+   * AUDIT-P8: the TTL is only useful if it survives the pipeline, and no bound picked in advance can
+   * promise that. Every hand-off through {@code enqueueJobDirectly} slides the window forward, so
+   * the TTL has to outlive one stage rather than the whole run.
+   */
+  @Test
+  public void testEnqueue_RefreshesTheTraceTtlOnEveryHandOff() {
+    Image image = new Image();
+    image.setFilename("test_p8_slide.png");
+    image.setStoragePath("test/test_p8_slide.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    OcrRegion region = new OcrRegion();
+    region.setPage(page);
+    region.setBboxX(10);
+    region.setBboxY(20);
+    region.setBboxW(100);
+    region.setBboxH(50);
+    region.setText("こんにちは");
+    region.setDetectedLanguage("ja");
+    region.setConfidence(0.9);
+    region.setQaStatus("pending");
+    region = ocrRegionRepository.save(region);
+
+    UUID imageId = image.getId();
+    String traceKey = "pipeline:trace:" + imageId;
+
+    // A trace that has been running a while: the id is still there, but its window is nearly up.
+    // triggerRedo is the enqueue path that does not delete the key first, so the existing id is
+    // read and reused — which is exactly when the window needs sliding.
+    String existingTrace = "trace-already-in-flight";
+    redisTemplate.opsForValue().set(traceKey, existingTrace, java.time.Duration.ofMinutes(1));
+
+    jobCoordinatorService.triggerRedo(region.getId(), "ocr");
+
+    assertEquals(
+        existingTrace,
+        redisTemplate.opsForValue().get(traceKey),
+        "the hand-off must keep the trace id it found, not mint a new one");
+    List<java.time.Duration> ttls = mockRedisTtlStore.get(traceKey);
+    assertEquals(
+        List.of(java.time.Duration.ofMinutes(1), java.time.Duration.ofHours(12)),
+        ttls,
+        "the hand-off must slide the near-expiry window forward, or a long pipeline outlives its"
+            + " own trace");
+
+    Job enqueued = jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(imageId, "region-redo-ocr");
+    if (enqueued != null) {
+      jobRepository.delete(enqueued);
+    }
+    ocrRegionRepository.delete(region);
     pageRepository.delete(page);
     imageRepository.delete(image);
   }
