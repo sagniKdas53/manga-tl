@@ -73,6 +73,109 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-06 fourteenth sitting — the drain queue: AUDIT-W1, AUDIT-W2, AUDIT-Q2
+
+Three deletions. All three were on the drain queue, all three are now closed, and the board is the
+three tracks plus the blocked AUDIT-D5.
+
+**One entry's headline turned out to be wrong (W2) and one undercounted its own subject (Q2). That
+takes the running count of stale, wrong or incomplete findings from twenty-two to twenty-four.**
+
+#### AUDIT-W1 — QA's two default-model maps duplicate `providers.json`
+
+`QA_DEFAULT_LLM_MODELS` and `QA_DEFAULT_VLM_MODELS` in `handlers/qa.py` listed `openrouter`,
+`gemini`, `nvidia`. `config/providers.json` ships `openrouter`, `cloudflare`, `nvidia`,
+`neurometric` — and has carried per-provider `defaultQALLMModel` / `defaultQAVLMModel` all along,
+parsed into `ProviderConfig.defaults` by `provider_config.py:173-178`. The tables were therefore
+both **incomplete** (cloudflare and neurometric had no built-in default, so an unconfigured chapter
+on either produced `None` and skipped QA) and **wrong** (`gemini` is not a provider in this
+deployment at all).
+
+`_resolve_qa_model` now takes the providers.json task key — `"qaLLM"` or `"qaVLM"` — instead of a
+dict, and a new `_qa_default_model` reads the provider's own default. It calls `reload_if_changed()`
+first, matching what `LLMClient.__init__` already does, so a provider added to `providers.json` does
+not need a worker restart to acquire a QA default.
+
+**Per-task, not per-provider.** `neurometric` has a `defaultQALLMModel` but `defaultQAVLMModel:
+null`, so it resolves for text QA and correctly declines for vision QA. The warning now names the
+task key it looked for.
+
+**Two tests were resting on the phantom.** `test_render_and_qa.py`'s two VLM tests set
+`QA_CONFIG.provider = "gemini"` with an empty `vlm_model`. They passed only because `qa.py` listed
+`gemini`; there is no such provider in `providers.json`, so under the new resolution they resolve
+nothing and the cloud call is never made. Switched to `openrouter`. **That is the red-green** — the
+two failures were the fix telling the truth about a default that never had a provider behind it.
+
+The test fixture `tests/test_providers.json` carried no per-provider defaults at all, so it could
+not exercise the fallback path in either direction. It now gives `openrouter` both QA defaults and
+`cloudflare` only a `qaLLM` one, which reproduces the real `neurometric` shape.
+
+#### AUDIT-W2 — the global `RATE_LIMIT` fallback now defaults to unlimited
+
+The entry was already falsified twice as a throughput item (0.0 s of sleep in 7,924 s; then 16.9 s
+in 1,457 s) and re-ranked `[L]` with only the unlimited-default hardening surviving. That hardening
+is done.
+
+**The prescription was in the wrong file.** `rate_limit.py` already read
+`os.environ.get("RATE_LIMIT", "")` — unset was *already* unlimited in code. The `10` lived in
+`docker-compose.yml` as `RATE_LIMIT=${RATE_LIMIT:-10}`, so the fallback bucket was populated on
+every deployment regardless. `.env.example:117` had a second copy. The entry cited only
+`.env.example`, at a line number that had since drifted from `:105` to `:117` — **the tell, not the
+shape.** Both defaults are now empty; `docker compose --env-file /dev/null config` reports
+`RATE_LIMIT: ""`.
+
+**The entry's title is wrong, and this is the part worth keeping.** It reads *"`RATE_LIMIT` is a
+single global throttle across all providers and tasks"*. It is not. `enforce_rate_limit` has exactly
+two callers:
+
+- `services/llm_client.py:208` — `enforce_rate_limit(self.provider, self.rate_limits)`. The provider
+  name is always passed, so `lock_key = provider` and **every cloud call is keyed on its own
+  provider bucket**, never on `"global"`, whether or not the provider declares `rateLimits`.
+- `services/translation.py:526` — a bare `enforce_rate_limit()` inside `try_local_ai`. This is the
+  **only** caller that reaches the `"global"` key, and it is the **local** Ollama/LM Studio path,
+  which has no remote API limit to respect. Under the old `RATE_LIMIT=10` default it spaced calls to
+  your own machine 6 seconds apart.
+
+So the finding described a cross-provider throttle that does not exist, and missed the one throttle
+that did: a cloud rate limit applied to a local endpoint. The unlimited default neutralises both.
+The `enforce_rate_limit()` call in `try_local_ai` was left in place — the local path is AUDIT-W3's,
+and one variable per change.
+
+**Red-green.** A compose default has no test, so the invariant it now relies on was pinned instead:
+`test_unset_rate_limit_is_unlimited` asserts no sleep with `RATE_LIMIT` unset, for both the
+`"global"` key and a provider passed with `provider_rpm=None`. Verified sensitive by mutating the
+code default to `"10"` — it fails, printing the 6-second spacing on both buckets.
+
+**Still live on this deployment.** `.env` (gitignored) carries `RATE_LIMIT=10` at line 84, so the
+committed default does not change this box until that line is removed. It is inert either way:
+`DISABLE_LOCAL_LLM=true`, so `try_local_ai` — the only `"global"`-keyed caller — is not running.
+
+#### AUDIT-Q2 — LLM thinking-out-loud committed as comments
+
+**The entry undercounted its own subject.** It quotes two comments as five lines; the
+`JobCoordinatorService` block is actually **five lines of deliberation, not three** — the anchor had
+drifted from `:1318-1320` to `:1438-1442` and the quote stopped one line early. Seven lines across
+the two sites, not "two comments".
+
+**And one of the lines was factually wrong.** `PageService.java:669` said *"Skip TL/QA fields in OCR
+cloning just to be clean, but they will be overwritten if TL is cloned"* — the code immediately
+below does not skip them, it explicitly nulls them. Line `:670` is the model catching its own error
+mid-thought. Deleting both would have left a non-obvious block ("why does a clone null fields?")
+unexplained, so the two lines were replaced by one accurate one rather than simply removed. The
+`JobCoordinatorService` block explains nothing the two adjacent statements do not and was deleted
+outright.
+
+**The suggested grep was re-run as a shape, not a tell.** The entry's grep was `// Wait`,
+`// But user said`, `// Actually` over `backend/src/main/java` only. Re-run over `backend/src`,
+`frontend/src`, `worker/src`, `worker/tests` and `scripts`, across `//`, `#` and `*` comment
+markers, and widened to `hmm`, `let me`, `i should/need to/will/think`, `on second thought`,
+`scratch that`, `never mind`, `as the user asked` and friends: **exactly the same two sites, and
+nothing in Python or TypeScript.** The entry's claim that this is two sites rather than a class of
+problem holds up under a much wider net than the one it proposed.
+
+No red-green: deleting comments cannot change behaviour. `mvn -o clean verify` was run to confirm
+the two files still compile and the suite is unchanged.
+
 ### The 2026-08-06 thirteenth sitting — the whole security track was already closed
 
 **All four `AUDIT-S*` entries were stale.** They were fixed on 2026-08-02, archived that same day

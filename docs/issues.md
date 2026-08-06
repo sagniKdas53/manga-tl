@@ -30,7 +30,8 @@ from work for the first time. Full analysis:
 > `layout` has a p50 wait of **591 s** around **0.2 s** of actual work.
 
 The cause is **not** the dispatcher (slots sat idle *with work queued* only 3.2% of samples) and
-**not** the rate limiter (AUDIT-W2, falsified below). It is `MAX_LIGHT_SLOTS=1`: four light stages
+**not** the rate limiter (AUDIT-W2, falsified and now closed — see
+[archive.md](./archive.md)). It is `MAX_LIGHT_SLOTS=1`: four light stages
 costing 0.2 s to 110 s each share one slot, so trivial jobs queue behind LLM calls. See
 **AUDIT-W10**. The heavy tier is no longer the floor — the light tier is now 4× slower.
 
@@ -162,64 +163,6 @@ Conventions: **[C]** critical · **[H]** high · **[M]** medium · **[L]** low/c
 ### Pipeline correctness
 
 ### Worker
-
-#### AUDIT-W1 **[L]** — QA's two default-model maps duplicate `providers.json`
-
-*Re-ranked **[H] → [L]** on 2026-08-05, applying the 2026-08-04 correction the entry already carried
-in its body but never applied to its heading. The original title is preserved below.*
-
-**Original title:** QA silently supports only 3 providers, 2 of which aren't in `providers.json`
-
-`handlers/qa.py` dispatches on a hardcoded `if/elif` chain in four separate places (`:213-246`,
-`:461-495`, `:763-781`, `:1039-1073`), each accepting only `openrouter`, `gemini`, `nvidia` and
-falling off the end to `return None`.
-
-`config/providers.json` ships `openrouter`, `cloudflare`, `nvidia`, `neurometric`. So:
-
-+ **`cloudflare` and `neurometric` are selectable in the UI and do nothing in QA** — silent `None`.
-+ **`gemini` is supported in code but absent from the config**, so it can't be selected.
-
-The failure is invisible because `None` falls through to the local-LLM branch (`:277-284`), which
-is itself broken (the `try_local_ai` prompt bug already tracked above), which returns something
-unparsable, which yields `results = []`, which completes QA with zero findings and no error.
-
-**Correction 2026-08-04 — the dispatch half of this is stale.** Found while researching a Mistral
-provider entry (archived under F.2 in [archive.md](./archive.md)). The four hardcoded `if/elif`
-chains no longer exist: `_qa_cloud_llm` (`handlers/qa.py:200`) and `_qa_cloud_vlm` (`:219`) are
-provider-generic and route through `LLMClient` for any provider in `config/providers.json` — their
-docstrings say so explicitly. What remains is narrower: `QA_DEFAULT_LLM_MODELS` /
-`QA_DEFAULT_VLM_MODELS` (`:38-46`) still list only `openrouter`, `gemini`, `nvidia`, so a provider
-absent from those maps has no built-in default and `_resolve_qa_model` returns `None` **when no
-model is configured at any level**. Since `providers.json` carries per-provider `defaultQALLMModel`
-/ `defaultQAVLMModel`, that path is reachable but no longer silent — `_resolve_qa_model` logs the
-reason. Re-rank as **[L]**: delete the two default maps in favour of the config, rather than
-extending them.
-
-#### AUDIT-W2 **[L]** — the global `RATE_LIMIT` fallback should default to unlimited
-
-*Re-ranked **[H] → [L]** on 2026-08-05. Measured inert twice (0.0 s, then 1.2%); only the hardening
-below survives. The original title is preserved because the code reading under it is still correct.*
-
-**Original title:** `RATE_LIMIT` is a single global throttle across all providers and tasks
-
-`utils/rate_limit.py:20-31` — when a provider does not carry its own `rate_limits`, it falls back
-to the `RATE_LIMIT` env var under the lock key `"global"` (`:37`). `.env.example:105` sets
-`RATE_LIMIT=10`, i.e. **one LLM call every 6 seconds across the entire worker** — OCR, translation
-and QA all queue behind the same token bucket, regardless of which provider each is hitting.
-
-**FALSIFIED IN PRACTICE 2026-08-02 — deprioritised.** The code reading above is correct, but the
-fallback never engages: all four providers in `config/providers.json` carry their own `rate_limits`
-(openrouter 40, cloudflare 40, nvidia 40, neurometric 60), so the `"global"` bucket is never used.
-Measured on the drained run: **0.0 s of sleep across 1 sleep** in 7,924 s.
-
-This item was previously ranked "likely the single largest throughput win available". It is inert.
-The hardening is still worth doing — the global fallback should default to unlimited so that adding
-a provider without `rate_limits` does not silently throttle everything — but it buys no throughput
-today.
-
-**Second data point, 2026-08-04** (`20260803-211221`, 30 pages): **16.9 s across 13 sleeps in
-1,457 s of wall — 1.2%.** Non-zero this time but still noise. Consistent with the 0.0 s baseline;
-the reading stands. Only the unlimited-default hardening remains.
 
 #### AUDIT-W3 **[M]** — cooldowns and lock waits burn a job slot doing nothing
 
@@ -409,25 +352,3 @@ None of these can fire. They add noise to every call site, and they are almost c
 the NPE→400 mapping in AUDIT-B3. A mechanical pass to delete the ones on freshly-constructed values,
 literals and already-validated locals would remove several hundred lines and let `NullPointerException`
 go back to meaning "bug".
-
-#### AUDIT-Q2 — LLM thinking-out-loud committed as comments
-
-*Anchors re-checked 2026-08-05; both still present, line numbers updated.*
-
-```java
-// PageService.java:669-670
-// Skip TL/QA fields in OCR cloning just to be clean, but they will be overwritten if TL is cloned.
-// Wait, actually OcrRegion contains TL/QA fields. If we ONLY clone OCR, we should clear TL fields.
-```
-
-```java
-// JobCoordinatorService.java:1318-1320
-// if summary is passed inside cost object, we can leave it there, or if we need to we can
-// extract it.
-// But user said move tl cost and summary under 'tl'.
-```
-
-Both are an assistant reasoning with itself, left in the source. **The suggested grep has now been
-run** — `// Wait`, `// But user said` and `// Actually` across `backend/src/main/java` return
-exactly these two hits and nothing else, so this entry is two comments, not a class of problem.
-

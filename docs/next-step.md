@@ -1,109 +1,112 @@
-# Handoff — 2026-08-06 (thirteenth sitting)
+# Handoff — 2026-08-06 (fourteenth sitting)
 
-> **The security track is closed, and it was already closed before this sitting started.** All four
-> `AUDIT-S*` entries were fixed on 2026-08-02 and archived that day. They stayed in `issues.md` for
-> four days because every handoff said *"security is tracked separately, don't fold it in"* and the
-> triage pass read that as *don't look at it*. See [§ What closed](#what-closed-this-sitting).
+> **The drain queue is empty.** AUDIT-W1, AUDIT-W2 and AUDIT-Q2 are closed. What remains open is
+> exactly the three tracks plus AUDIT-D5, which is blocked on a measurement — the goal the
+> thirteenth sitting set.
 >
-> **Nothing `[C]` or `[H]` is open anywhere in this project now** — not "outside the security track".
-> Anywhere.
+> **9 findings open, 43 of 52 closed (83%).** Nothing `[C]` or `[H]` anywhere.
 >
-> **The board is now three tracks, not a ranked list.** That is a deliberate change of format, agreed
-> with the owner: everything left either belongs to one of three projects or drains into them. See
-> [§ The three tracks](#the-three-tracks).
+> **Two more entries were wrong about their own subject.** W2's *title* describes a throttle that
+> does not exist and missed the one that does; Q2 undercounted its own comments and one of them was
+> factually wrong about the code beneath it. See [§ What closed](#what-closed-this-sitting).
 >
-> **Nothing needs deploying.** The one code change is inert on this deployment — see
+> **Nothing needs deploying**, but one live-config line is worth knowing about — see
 > [§ Deployment](#deployment).
 
 ## What closed this sitting
 
 | # | id | sev | outcome |
 | --- | --- | --- | --- |
-| 1 | AUDIT-S1 | C | **Stale.** Fixed 2026-08-02. One real residual found and fixed here. |
-| 2 | AUDIT-S2 | C | **Stale.** Fixed 2026-08-02. Verified live: 401, including against the old default token. |
-| 3 | AUDIT-S3 | H | **Stale.** Fixed 2026-08-02. Guard inverted to fail closed, plus a FATAL startup check. |
-| 4 | AUDIT-S4 | H | **Stale.** Fixed 2026-08-02. Single-use 60 s SSE ticket; access log is `%U`, not `%r`. |
+| 1 | AUDIT-W1 | L | Fixed. Both QA default-model tables deleted; `providers.json` is the source. |
+| 2 | AUDIT-W2 | L | Fixed. **Title was wrong** — the fix was in `docker-compose.yml`, not the worker. |
+| 3 | AUDIT-Q2 | — | Fixed. **Was 7 lines across 2 sites, not "two comments"**, and one line was false. |
 
-Full reasoning and the live probes are in `archive.md`, "2026-08-06 thirteenth sitting — the whole
-security track was already closed". Do not re-derive it.
+Full reasoning in `archive.md`, "2026-08-06 fourteenth sitting — the drain queue". Do not re-derive
+it.
 
-**That takes the running count of stale, wrong or incomplete findings from eighteen to twenty-two.**
+**That takes the running count of stale, wrong or incomplete findings from twenty-two to
+twenty-four.**
 
-### Why four critical findings sat open for four days
+### AUDIT-W2 — the finding named the wrong file *and* the wrong mechanism
 
-Not carelessness. A rule that was doing the opposite of its job.
+Two independent errors in one entry, and both are the same failure mode the last three sittings
+have been logging.
 
-Every handoff carried **"AUDIT-S\* — security is tracked separately, don't fold it in."** That was
-written to stop security work being casually mixed into performance sittings, which is reasonable.
-What it produced was a section marked *not mine to touch*, so the 2026-08-05 triage — the pass that
-explicitly claims "nothing in it is stale" — skipped it entirely. A section nobody triages is a
-section whose staleness compounds silently.
+**Wrong file.** `rate_limit.py` already read `os.environ.get("RATE_LIMIT", "")` — unset was
+*already* unlimited in code. The `10` lived in `docker-compose.yml` as `RATE_LIMIT=${RATE_LIMIT:-10}`
+and again in `.env.example`. The entry cited only `.env.example`, at a line number that had drifted
+from `:105` to `:117`. **Grepping the tell found one of three sites; grepping the shape found all
+three.**
 
-**The rule is gone.** Security is a track like any other and gets verified like any other. If a
-security finding lands in `issues.md` again, it gets read against the code before anyone believes it.
+**Wrong mechanism.** The title reads *"a single global throttle across all providers and tasks"*.
+`enforce_rate_limit` has exactly two callers:
 
-### The one thing that was genuinely open
+- `services/llm_client.py:208` passes the provider name, so `lock_key = provider`. **Every cloud
+  call is keyed on its own provider bucket, never on `"global"`** — including a provider with no
+  `rateLimits`. The cross-provider throttle the finding describes has never existed.
+- `services/translation.py:526` — a bare `enforce_rate_limit()` inside `try_local_ai`. This is the
+  **only** caller that reaches `"global"`, and it is the **local** Ollama/LM Studio path, which has
+  no remote limit to respect. At `RATE_LIMIT=10` it spaced calls to your own machine 6 s apart.
 
-`application.yml` still shipped the `postgres` and `minioadmin` fallbacks that `application-local.yml`
-was created to own. The S1 fix de-defaulted the two secrets the finding **named by variable**
-(`jwt.secret`, `internal.api-token`), *copied* the datasource password and MinIO keys into the local
-profile, and never deleted the originals — leaving a second source of truth directly above a comment
-reading "No fallbacks here on purpose".
+So the entry missed the only real instance while describing one that was not there. The unlimited
+default neutralises both. The `enforce_rate_limit()` call inside `try_local_ai` was **left in
+place** — the local path is AUDIT-W3's, and one variable per change.
 
-**Third instance of this exact lesson in three sittings.** The eleventh had a phantom cache key, the
-twelfth had a second `npm install` that only the first copy had a comment above, and this one had a
-fix applied to the enumerated instances rather than to every instance of the shape.
+### AUDIT-W1 — the tables were incomplete *and* wrong
 
-> **Grep for the shape, never for the tell — and when a fix names its targets, check whether the
-> class is bigger than the list.**
+`QA_DEFAULT_LLM_MODELS` / `QA_DEFAULT_VLM_MODELS` listed `openrouter`, `gemini`, `nvidia`.
+`providers.json` ships `openrouter`, `cloudflare`, `nvidia`, `neurometric` and has carried
+per-provider `defaultQALLMModel` / `defaultQAVLMModel` all along. So two real providers had no
+default, and `gemini` — which had one — **is not a provider in this deployment at all.**
 
-**Framed honestly: a consistency fix, not a hole.** Both credentials come from `_FILE` mounts in the
-real deployment, so the fallbacks were unreachable in production, and a missing secret failed loudly
-before and fails loudly after. What was wrong is that the file contradicted its own documented intent.
+**Two tests were resting on that phantom.** `test_render_and_qa.py`'s two VLM tests set
+`QA_CONFIG.provider = "gemini"`. They passed only because `qa.py` listed it. **That is the sitting's
+best red-green**: the fix broke exactly the two tests that were asserting against a provider that
+does not exist, and they were repointed at `openrouter`.
 
-**It does have a red-green, and it is not the production path.** `MinioConfig:14,17` reads
-`${minio.accessKey}` / `${minio.secretKey}` with no annotation default, and both test profiles were
-silently inheriting `minioadmin` from the base config. Dropping the fallback without giving them
-their own values fails **every `@SpringBootTest`** at context load with
-`AccessKey and SecretKey must not be empty`. Confirmed red before the fix and green after.
+The fixture `tests/test_providers.json` had **no per-provider defaults at all**, so it could not
+exercise the fallback in either direction. It now gives `openrouter` both and `cloudflare` only a
+`qaLLM` one, reproducing the real `neurometric` shape (`defaultQAVLMModel: null`) — resolution is
+**per task**, not per provider.
 
-> **The same lesson recurred inside this sitting, one file after it was written down.** The fix went
-> into `application-test.yml` only, and `verify` came back with 5 errors — all
-> `activeProfiles = ["integration"]`. **There are two test profiles**, `test` and `integration`, and
-> the second was found only by enumerating rather than by inference. Knowing the rule does not
-> protect you from it; enumerating does:
->
-> ```bash
-> find src -name "application*.yml" && grep -rho '@ActiveProfiles("[^"]*")' src/test/java | sort -u
-> ```
+### AUDIT-Q2 — the entry undercounted itself
+
+The `JobCoordinatorService` block was **five lines of deliberation, not three**; the anchor had
+drifted from `:1318-1320` to `:1438-1442` and the quote stopped one line early. Seven lines across
+two sites.
+
+**And `PageService.java:669` was factually wrong.** It said *"Skip TL/QA fields in OCR cloning"* —
+the code immediately below does not skip them, it nulls them. Line `:670` was the model catching its
+own error mid-thought. Deleting both would have left a genuinely non-obvious block ("why does a
+*clone* null fields?") unexplained, so they were replaced by one accurate line, verified against
+`cloneTranslationData` (`PageService.java:776`), which writes those same seven fields back.
+
+**The grep was re-run as a shape.** The entry's own grep was three phrases over
+`backend/src/main/java`. Re-run across `backend/src`, `frontend/src`, `worker/src`, `worker/tests`
+and `scripts`, over `//`, `#` and `*` markers, widened to `hmm`, `let me`, `i should/need to/will`,
+`on second thought`, `scratch that`, `never mind`, `as the user asked`: **exactly the same two
+sites.** The entry's claim that this is two sites and not a class of problem survives a much wider
+net than the one it proposed.
 
 ## Where `issues.md` actually stands
 
-**52 `AUDIT-*` findings filed in total. 12 are open. 40 are closed — 77%.**
-
-There is no longer a separate security track, so the working list and the open list are the same
-twelve entries.
+**52 `AUDIT-*` findings filed in total. 9 are open. 43 are closed — 83%.**
 
 | sev | open | which |
 | --- | --- | --- |
 | **[C]** | 0 | — |
 | **[H]** | 0 | — |
 | **[M]** | 4 | W3, B5, F1, F2 |
-| **[L]** | 5 | W1, W2, F8, F9, D5 *(partial — 2 of 5 bullets)* |
-| unranked | 3 | T1, Q1, Q2 |
+| **[L]** | 3 | F8, F9, D5 *(partial — 2 of 5 bullets)* |
+| unranked | 2 | T1, Q1 |
 
-Two `[L]`s are effectively neutralised already: **W2 is falsified** (measured inert twice, 0.0 s then
-1.2%; only an unlimited-default hardening survives) and **W1 was re-ranked `[H]` → `[L]`** when its
-dispatch half turned out stale. **W3** is half-defused by W10.
-
-`issues.md` also carries five prose sections above the audit that are not `AUDIT-*` entries and are
-not counted above. Three of them are now track owners rather than complaints — see below.
+**The board is now the three tracks and nothing else.** Every open entry belongs to a track except
+AUDIT-D5, which is blocked on a measurement. There is no drain queue left.
 
 ## The three tracks
 
-The ranked list is retired. It kept recommending whatever was smallest, and then ending with
-"after this, everything is a project". These are the projects. **The goal is that these three are the
-only things open.**
+Unchanged from the thirteenth sitting except that Track 2 lost Q2. **Pick one and say which before
+you start.**
 
 ### Track 1 — The UI is fast and good-looking
 
@@ -122,24 +125,23 @@ app code — the rest is React reconciliation and MUI. **"Better looking" has fa
 
 ### Track 2 — The backend is complete and clean enough to throw away
 
-The framing does the prioritising: **anything a Go/Python rewrite would have to re-derive must be
-written down first, and anything that is Java-shaped noise can just die.**
+**Anything a Go/Python rewrite would have to re-derive must be written down first; anything that is
+Java-shaped noise can just die.**
 
 | id | sev | what |
 | --- | --- | --- |
 | AUDIT-B5 | M | **The gate.** `ddl-auto: update` against a competing `init.sql`. Nobody knows what the live schema actually is. A Flyway/Liquibase baseline is a prerequisite for *any* migration. |
 | AUDIT-T1 | — | The "e2e" test isn't one — 19 `@patch` against 4 asserts, 342 `@patch` across 49 files suite-wide. Wants `mock_router.md`. |
 | AUDIT-Q1 | — | 249 `Objects.requireNonNull`, concentrated in four classes. One mechanical sweep, not incremental. |
-| AUDIT-W3 | M | Cooldowns and lock waits burn a job slot. Half-defused by W10 — only the heavy tier still stalls. |
-| AUDIT-Q2 | — | Two LLM thinking-out-loud comments. Two lines. |
+| AUDIT-W3 | M | Cooldowns and lock waits burn a job slot. Half-defused by W10 — only the heavy tier still stalls. **Now also owns `try_local_ai`'s bare `enforce_rate_limit()`** (see W2 above). |
 
-**"Do we really need a separate worker?" has to be answered inside this track, not after it.** It has
-been open and unanswered since the audit began, and it changes *what you are migrating*. Answer it
-before B5 completes, because the schema baseline differs depending on whether the worker keeps its
-own view of job state.
+**"Do we really need a separate worker?" has to be answered inside this track, not after it.** It
+has been open and unanswered since the audit began, and it changes *what you are migrating*. Answer
+it before B5 completes, because the schema baseline differs depending on whether the worker keeps
+its own view of job state.
 
-**Do not start B5 casually.** It is a schema-migration project: Flyway or Liquibase, plus reconciling
-`init.sql` against whatever `ddl-auto: update` has actually produced live.
+**Do not start B5 casually.** It is a schema-migration project: Flyway or Liquibase, plus
+reconciling `init.sql` against whatever `ddl-auto: update` has actually produced live.
 
 ### Track 3 — Understand the paid product and close the quality gap
 
@@ -168,39 +170,40 @@ Carried in this track:
   is bounded by the page only — it does not know where the artwork or neighbouring regions are.
 - **The VLM benchmarking item**, which is how the remaining unknowns get closed.
 
-### The drain queue
+### AUDIT-D5 — the one thing outside a track, and it is blocked
 
-Small, unglamorous, and the fastest route to a three-item board. **Take these first when a sitting has
-no appetite for a project.**
-
-| id | sev | what | size |
-| --- | --- | --- | --- |
-| AUDIT-W2 | L | Make the global `RATE_LIMIT` fallback default to unlimited. | **S** |
-| AUDIT-W1 | L | Delete `QA_DEFAULT_LLM_MODELS` / `QA_DEFAULT_VLM_MODELS` in favour of `providers.json`. | **S** |
-| AUDIT-Q2 | — | Delete two comments. | **XS** |
-| AUDIT-D5 | L | The memory pair — **blocked**, needs a measured backend peak first. | S once measured |
-
-**W1 and W2 are still the recommendation for the next sitting if you want momentum**: both `[L]`,
-both worker, both *deletions*, both in files the eleventh sitting already worked in.
-
-**AUDIT-D5 stays blocked.** Kernel 5.15's cgroup v2 has no `memory.peak` (added in 6.8), so there is
-no high-water mark to read back and instantaneous `docker stats` is not a peak. Sample
-`memory.current` through a thumbnail-heavy run first, then set the cap and `MaxRAMPercentage`
-together as one variable.
+**The memory pair. Blocked on a measurement, not on effort.** Kernel 5.15's cgroup v2 has no
+`memory.peak` (added in 6.8), so there is no high-water mark to read back and instantaneous
+`docker stats` is not a peak. Sample `memory.current` through a thumbnail-heavy run first, then set
+the cap and `MaxRAMPercentage` together as one variable.
 
 ## Where the work stands
 
-**No Java, Python or TypeScript source changed this sitting.** The commit is two YAML resources and
-three docs.
+Three commits: the GitNexus reindex chore, the worker submodule fix, and the parent commit carrying
+W2's compose half, Q2 and the pointer bump.
 
-`mvn -o clean verify` was run **twice, and it is the reason this sitting has a red-green at all**:
-green on the unmodified tree, red on a single `@SpringBootTest` with the test-profile MinIO values
-removed, green again with them in place. Worker and frontend gates were **not run** — no worker or
-frontend file changed. Counts carried forward unverified from the eleventh sitting: backend 414,
-worker 310, frontend 308.
+**All gates were run and all are green.**
 
-`markdownlint-cli2` on the three changed docs reports only the pre-existing MD012, which moved from
-`docs/issues.md:491` to `:434` as a result of this sitting's 65-line deletion. Not introduced here.
+| gate | result |
+| --- | --- |
+| `mvn -o clean verify` (backend) | **414 tests, 0 failures.** PMD and jacoco both pass. |
+| `pytest -q` (worker) | **315 passed**, up from the 310 baseline — 5 new tests. |
+| `ruff check .` / `ruff format --check .` | clean |
+| `pyright .` | 0 errors, 0 warnings |
+
+The carried-forward worker count of 310 is now **confirmed**, not assumed. Frontend gates were
+**not run** — no frontend file changed.
+
+**Red-green, per change:**
+
+- **W1** — the two `gemini` tests went red on the fix and were repointed. Plus a new test that
+  fails when `reload_if_changed()` is removed from `_qa_default_model`.
+- **W2** — a compose default has no test, so the invariant it now relies on was pinned instead:
+  `test_unset_rate_limit_is_unlimited`. Verified sensitive by mutating the code default to `"10"` —
+  it fails, printing the 6 s spacing on both buckets. **This is the "no red-green, so verify what
+  can break" pattern.**
+- **Q2** — none, and none is possible: deleting comments cannot change behaviour. `verify` was run
+  to confirm the two files still compile.
 
 No API surface changed, so `npm run generate-api` was not run. A periodic no-change regen is still
 worth doing — that is how the seventh sitting found drift.
@@ -208,47 +211,45 @@ worth doing — that is how the seventh sitting found drift.
 Dependabot unchanged: four PRs open, all four close-don't-merge. #60 okhttp (the pin is load-bearing
 — read the comment in `pom.xml` first) and #52 springdoc are blocked outright; #51 testcontainers-bom
 2.x and #40 TypeScript 7 are major-version projects of their own. **GitHub's 2 high-severity
-Dependabot alerts are now the only security items anywhere**, and they are no longer covered by an
-`AUDIT-S*` entry — if they matter, they need filing properly rather than inheriting a closed track.
+Dependabot alerts are the only security items anywhere**, and they are not covered by any `AUDIT-*`
+entry — if they matter, they need filing properly.
 
 ### Deployment
 
-**Nothing needs deploying, and nothing was deployed.**
+**Nothing needs deploying.** The worker and compose changes land with the next
+`docker compose build`.
 
-The twelfth sitting's loopback binding **is** now live — verified this sitting:
+**One live-config line was deliberately not touched.** `.env` (gitignored) carries `RATE_LIMIT=10`
+at line 84, so the new unlimited compose default does not change *this* box until that line is
+removed. Verified both ways:
 
 ```text
-manga-db      127.0.0.1:5432->5432/tcp
-manga-valkey  127.0.0.1:6379->6379/tcp
-manga-minio   9000/tcp, 127.0.0.1:9001->9001/tcp
+docker compose --env-file /dev/null config  →  RATE_LIMIT: ""     # shipped default, now unlimited
+docker compose config                       →  RATE_LIMIT: "10"   # this box, still pinned
 ```
 
-`manga-backend` is still `0.0.0.0:8080` and that is correct — Traefik routes to it and the documented
-`npm run generate-api` flow fetches `http://localhost:8080/tlhub/v3/api-docs`.
-
-This sitting's `application.yml` change is **inert on this deployment**: `MINIO_ACCESS_KEY` is set
-directly in compose and both secrets arrive via `_FILE` mounts, so the removed fallbacks were never
-being read. It lands with the next `docker compose build backend`; there is no reason to spend the
-~10 minutes now.
+**It is inert either way**: `DISABLE_LOCAL_LLM=true`, so `try_local_ai` — the only caller that
+reaches the `"global"` bucket — is not running. Removing the line is a one-word edit whenever you
+want it; it was left because `.env` is untracked and changing live config silently is not this
+sitting's job.
 
 ### GitNexus
 
-**Still stale**, last analysed at `1290f18` — now five commits behind. No `impact()` call was needed
-this sitting: **no function, class or method was edited**, only YAML and markdown, and the working
-constraints already record that `impact()` does not apply to such a sitting.
+**Reindexed and current at `365ad99`**, committed as its own `chore:`. Counts moved 5367 → 5377
+symbols, 13372 → 13382 relationships; 300 execution flows unchanged.
 
-**Both documented reindex commands abort on this box.** Use Node 22 explicitly, since the global
-install lives under the Node 26 prefix:
+**`detect_changes` is blind to submodule contents.** It runs `git diff` in the parent, which sees
+`worker` only as a pointer — it reported `changed_count: 0` for a commit that rewrote two worker
+modules and four test files. **For worker changes the blast radius has to come from `impact()`**,
+which does index worker symbols (`_resolve_qa_model` → LOW, 2 direct callers, both in `qa.py`).
+
+Both documented reindex commands still abort on this box. Use Node 22 explicitly:
 
 ```bash
 ~/.nvm/versions/node/v22.14.0/bin/node \
   ~/.nvm/versions/node/v26.1.0/lib/node_modules/gitnexus/dist/cli/index.js \
   analyze --embeddings --force
 ```
-
-Takes ~190 s. It warns about no VECTOR index (exact-scan fallback) and one parse-job idle timeout it
-recovers from by splitting the job — both normal, exit code 0. **Running `analyze` rewrites the symbol
-counts in `CLAUDE.md` and `AGENTS.md`; that gets its own `chore:` commit.**
 
 ## Not mine — left alone deliberately
 
@@ -266,6 +267,10 @@ Every commit used an explicit pathspec. **Keep doing that, and put `-F <file>` b
 Each was left undone for a stated reason and those reasons hold.
 
 - **The AUDIT-D5 memory pair.** Blocked on a measured peak, not on effort.
+- **`try_local_ai`'s bare `enforce_rate_limit()`.** New this sitting. The local path has no remote
+  limit to respect, but the call belongs to AUDIT-W3 and the unlimited default already makes it
+  inert by default.
+- **`RATE_LIMIT=10` in the untracked `.env`.** See Deployment above.
 - **Valkey has no `requirepass`.** Loopback removed the LAN reach, not the missing password. Adding
   one has to land in the backend's `SPRING_DATA_REDIS_*` and the worker's `REDIS_*` simultaneously; a
   half-applied Redis password takes the whole pipeline down.
@@ -305,12 +310,17 @@ Each was left undone for a stated reason and those reasons hold.
   editing any symbol, report HIGH/CRITICAL, `detect_changes()` before committing. **`detect_changes`
   attributes by line offset**, so a large insertion flags untouched symbols below it — check `git
   diff -U0` hunk ranges before believing the blast radius. It also **cannot distinguish a flow being
-  deliberately deleted from one breaking**. But **do not dismiss every CRITICAL as an artefact**: the
-  eleventh sitting's `isOverride` CRITICAL was real. **`impact()` does not apply to a sitting that
-  edits no symbols** — YAML, compose, Dockerfile and markdown changes have no indexed symbols.
+  deliberately deleted from one breaking**, and **it cannot see inside `worker/` at all** — the
+  parent repo diffs the submodule as a pointer. But **do not dismiss every CRITICAL as an
+  artefact**: the eleventh sitting's `isOverride` CRITICAL was real. **`impact()` does not apply to a
+  sitting that edits no symbols** — YAML, compose, Dockerfile and markdown changes have no indexed
+  symbols.
 - **No section of `issues.md` is exempt from triage.** The security track sat stale for four days
   because a "tracked separately" note was read as "do not verify". If an entry is out of scope for
   the *work*, it is still in scope for *being true*.
+- **A finding's title can be wrong about the mechanism while its body is right about the code.**
+  AUDIT-W2 described a cross-provider throttle that has never existed and missed a cloud rate limit
+  applied to a local endpoint. **Read what the callers pass, not what the function could do.**
 - **The pre-commit gate is `mvn -o clean verify`, not `test`.** `test` skips PMD and jacoco's rules.
   Use `mvn -o clean test` for red-green iteration, `verify` before you commit. **Never trust an
   incremental Maven run** — always `clean`.
@@ -318,18 +328,20 @@ Each was left undone for a stated reason and those reasons hold.
   command after an earlier `cd backend` fails, and a backgrounded build that fails to `cd` can report
   success while never having run. Use absolute paths for anything whose result you intend to trust.
 - **Verify a fix red-green, and revert defects INDIVIDUALLY.** If a bullet genuinely has no red-green
-  — pure duplication removal, a default change, a reproducibility fix — **say so** rather than writing
-  a test that passes either way, and verify the thing that *can* break instead. This sitting's config
-  change had no production red-green but a real test-context one; that is the pattern.
-- **When a bullet gives a count, re-derive the count across the tree, not the file.** Three times now:
-  a recount narrowed to the anchor's file, a bullet that found one of two copies because only that one
-  had a comment above it, and a fix applied to the two secrets a finding named by variable while two
-  more sat four lines above. **Grep for the shape, never for the tell.**
+  — pure duplication removal, a default change, a comment deletion — **say so** rather than writing
+  a test that passes either way, and verify the thing that *can* break instead. **The reliable
+  technique is mutation**: write the test, then break the code it is supposed to protect and confirm
+  it goes red. This sitting used it twice.
+- **When a bullet gives a count or a line anchor, re-derive it across the tree, not the file.** Four
+  times now: a recount narrowed to the anchor's file, a bullet that found one of two copies because
+  only that one had a comment above it, a fix applied to the two secrets a finding named by variable
+  while two more sat four lines above, and W2's `.env.example` anchor that was one of three sites and
+  had drifted twelve lines. **Grep for the shape, never for the tell.**
 - **A finding can be right and its prescribed fix still wrong.** AUDIT-D5's ports bullet diagnosed the
   exposure correctly and prescribed dropping mappings a working tool depends on. **Check the
   prescription against the consumers, not just the diagnosis against the code.**
 - **Read the whole `issues.md` entry before calling it closed** — and check the *mechanism*, not just
-  whether the line is still there. **Twenty-two findings** have now been stale, wrong or incomplete.
+  whether the line is still there. **Twenty-four findings** have now been stale, wrong or incomplete.
 - **One performance variable per change.** The delta has to be attributable.
 - **Commit straight to `main`** — no feature branches. **Use a pathspec** (`git commit -F <msgfile> --
   <paths>`): there is active concurrent work in the tree that commits *during* your sitting. **`-F`
@@ -349,6 +361,10 @@ Each was left undone for a stated reason and those reasons hold.
 - **Worker source lives at `worker/src/worker/`**, not `worker/`. The `issues.md` anchors are written
   relative to the package (`handlers/qa.py`, `rq_tasks.py`), so resolve them under `src/worker/`.
   `worker/app.py` is the one file genuinely at the submodule root.
+- **The worker test fixture is `worker/tests/test_providers.json`**, forced by `conftest.py` via
+  `PROVIDERS_CONFIG`. It is **not** `config/providers.json` and is much thinner — if a test depends
+  on provider config, check the fixture actually carries the key before assuming the behaviour is
+  broken.
 - **`@MockitoSpyBean` works on Spring Data repositories** in this codebase (spring-test 6.2). It is how
   `JobCoordinatorServiceTest` counts `pageRepository.findById` calls; the spy delegates, so every other
   test in the class is unaffected. Use `mockingDetails(...).getInvocations()` for a count.
@@ -356,12 +372,14 @@ Each was left undone for a stated reason and those reasons hold.
   var ending in `_FILE` to the stripped key, `application-local.yml` holds dev values, and
   `application-test.yml` holds test values. `application.yml` carries **no** credential fallbacks —
   keep it that way. `SecretsStartupValidator` refuses startup on unset, too-short or known-public
-  values for `jwt.secret` and `internal.api-token`.
+  values for `jwt.secret` and `internal.api-token`. **There are two test profiles**, `test` and
+  `integration`; enumerate with
+  `find src -name "application*.yml" && grep -rho '@ActiveProfiles("[^"]*")' src/test/java | sort -u`.
 - **`.env` is gitignored and overrides `docker-compose.yml` defaults.** Verify with `docker compose
   config | grep -E 'CONCURRENT_JOBS|MAX_(HEAVY|LIGHT)_SLOTS'` before trusting a run. Currently
   `CONCURRENT_JOBS=4`, `MAX_HEAVY_SLOTS=1`, `MAX_LIGHT_SLOTS=3`, `DISABLE_LOCAL_LLM=true`,
-  `LOG_LEVEL=INFO`, `LOG_LEVEL_WORKER=DEBUG`. **To see the *shipped* defaults, run `docker compose
-  --env-file /dev/null config`.**
+  `LOG_LEVEL=INFO`, `LOG_LEVEL_WORKER=DEBUG`, `RATE_LIMIT=10`. **To see the *shipped* defaults, run
+  `docker compose --env-file /dev/null config`.**
 - The frontend compiles **into** the backend image, so any frontend change needs `docker compose build
   backend && docker compose up -d backend` (~10 min). To check just the frontend stage cheaply:
   `docker build --target frontend-build -f backend/Dockerfile .` (~1 min once cached).
@@ -390,37 +408,49 @@ Each was left undone for a stated reason and those reasons hold.
 
 ```
 Continuing manga-library. Read docs/next-step.md first. docs/archive.md has a
-"2026-08-06 thirteenth sitting" section with what closed and why. Do not
+"2026-08-06 fourteenth sitting" section with what closed and why. Do not
 re-audit the codebase and do not re-derive the run numbers — both are written
 down.
 
-STATE: The security track is CLOSED. All four AUDIT-S entries were stale — fixed
-2026-08-02, verified against the code and the live stack on 2026-08-06, removed
-from issues.md. Nothing [C] or [H] is open anywhere now. 40 of 52 findings
-closed; 12 open.
+STATE: The drain queue is EMPTY. W1, W2 and Q2 all closed this sitting. 43 of
+52 findings closed; 9 open. Nothing [C] or [H] anywhere.
 
-The board is now THREE TRACKS, not a ranked list:
-  1. UI is fast and good-looking      — F1, F2, F8, F9
-  2. Backend complete enough to throw away — B5 (the gate), T1, Q1, W3, Q2
+The board is now EXACTLY the three tracks plus one blocked item:
+  1. UI is fast and good-looking            — F1, F2, F8, F9
+  2. Backend complete enough to throw away  — B5 (the gate), T1, Q1, W3
   3. Understand the paid product, close the quality gap — render/inpainting
-Plus a drain queue of small items: W2, W1, Q2, and D5 (blocked on a measurement).
-The goal is that those three tracks are the ONLY things open.
+  + AUDIT-D5, blocked on a measured backend memory peak (kernel 5.15 has no
+    memory.peak; sample memory.current through a thumbnail-heavy run first).
 
-NOTHING NEEDS DEPLOYING. The loopback binding from the twelfth sitting is live
-and verified. This sitting's application.yml change is inert on this deployment
-and lands with the next backend build.
+There are no small items left. PICK ONE TRACK and say which and why before you
+start. Track 2's gate (AUDIT-B5) is the highest-value thing on the board — no
+migration can begin until the schema has a baseline — but it is a project, not
+a sitting: Flyway/Liquibase plus reconciling init.sql against whatever
+ddl-auto: update has actually produced live. Track 2 also has to ANSWER "do we
+really need a separate worker?", open since the audit began, which changes what
+you are migrating.
 
-GitNexus is stale (last analysed 1290f18, now 5 commits behind). BOTH documented
-reindex commands abort on this box. Use Node 22 explicitly:
+NOTHING NEEDS DEPLOYING. One note: .env (gitignored) still pins RATE_LIMIT=10,
+so the new unlimited compose default does not change this box until that line
+goes. It is inert either way — DISABLE_LOCAL_LLM=true and the only caller that
+reaches the "global" bucket is try_local_ai.
+
+GITNEXUS IS CURRENT at 365ad99. If you need to reindex, both documented commands
+abort on this box; use Node 22 explicitly:
   ~/.nvm/versions/node/v22.14.0/bin/node \
     ~/.nvm/versions/node/v26.1.0/lib/node_modules/gitnexus/dist/cli/index.js \
     analyze --embeddings --force
 Then commit the CLAUDE.md/AGENTS.md count rewrite as its own chore: commit.
 
+detect_changes() CANNOT SEE INSIDE worker/ — the parent diffs the submodule as a
+pointer and reports changed_count: 0. For worker changes get the blast radius
+from impact(), which does index worker symbols.
+
 GATE: `mvn -o clean verify`, NOT `mvn -o clean test`. Worker has FOUR gates:
-pytest, ruff check, ruff format --check, pyright. Watch the shell's working
-directory — it persists between calls, and a backgrounded build that fails to cd
-can report success without ever running.
+pytest, ruff check, ruff format --check, pyright. Baselines are now CONFIRMED,
+not assumed: backend 414, worker 315. Watch the shell's working directory — it
+persists between calls, and a backgrounded build that fails to cd can report
+success without ever running.
 
 REMOTES: `git fetch --all` hangs on `origin` (pi5 over Tailscale, unreachable).
 Use `git fetch github` / `git push github main`.
@@ -429,26 +459,18 @@ NOT MINE: the free-model benchmarking thread commits concurrently. Use an
 explicit pathspec on every commit, and put -F <msgfile> BEFORE the -- or git
 reads it as a pathspec.
 
-WHAT I WANT
-
-If you want momentum, take the drain queue: W2 and W1 together, then Q2. They
-are the last small items on the board and all three are deletions.
-
-Otherwise pick ONE track and say which and why before you start. Track 2's gate
-(AUDIT-B5) is the highest-value thing on the whole board, because no migration
-can begin until the schema has a baseline — but it is a project, not a sitting.
-Track 2 also has to ANSWER "do we really need a separate worker?", which has been
-open and unanswered since the audit began and changes what you are migrating.
-
 Say plainly if a finding turns out stale, wrong or INCOMPLETE when you actually
-read the code — that has now paid off TWENTY-TWO times. This sitting found four
-stale entries in one section, and the reason they survived is worth remembering:
-a handoff note saying "tracked separately, don't fold it in" was read as "don't
-verify it". No section of issues.md is exempt from triage.
+read the code — that has now paid off TWENTY-FOUR times. This sitting found two
+more, and both were the SAME failure in a new disguise: AUDIT-W2's title
+described a cross-provider throttle that has never existed while missing the one
+real instance (a cloud rate limit applied to the LOCAL LLM path), and its fix
+was in docker-compose.yml, not the file the entry named. AUDIT-Q2 undercounted
+its own comments and one of them was factually wrong about the code beneath it.
 
-Three sittings running, the same lesson has appeared in a new disguise: a fix
-lands on the instances a finding ENUMERATES rather than every instance of the
-shape. Grep for the shape, never for the tell.
+FOUR sittings running: a fix lands on the instances a finding ENUMERATES rather
+than every instance of the shape, and an entry's TITLE can be wrong while its
+body is right. Grep for the shape, never for the tell. Read what the callers
+pass, not what the function could do.
 
 CONSTRAINTS
 - CLAUDE.md is binding: impact() before edits, detect_changes() before commits.
@@ -456,7 +478,7 @@ CONSTRAINTS
 - Close the issues.md entry in the SAME commit as the fix: remove it from
   issues.md, write the reasoning into archive.md.
 - Verify red-green. If a change genuinely has no red-green, say so and verify
-  the thing that CAN break instead.
+  the thing that CAN break instead — mutate the code and confirm the test reds.
 - Read the whole issues.md entry, not the headline.
 - Commit to main directly, with a pathspec; worker/ is a submodule and needs its
   own commit plus a pointer bump, pushed before the parent.
