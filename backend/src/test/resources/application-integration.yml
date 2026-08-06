@@ -13,6 +13,10 @@ spring:
       database: 1
 minio:
   endpoint: http://127.0.0.1:1
+  # Same reason as application-test.yml: MinioConfig has no annotation default and the
+  # application.yml fallback is gone (AUDIT-S1). Both test profiles need their own values.
+  accessKey: integration-profile-minio-access-key
+  secretKey: integration-profile-minio-secret-key
 worker:
   health-url: http://127.0.0.1:1/health
   urls: http://127.0.0.1:1
