@@ -8,12 +8,22 @@
 
 ## 🟢 Current Goals
 
-### Do these next (2026-08-04)
+### Do these next (2026-08-06)
 
-> The ordered list with file:line anchors and effort estimates lives in
-> **[next-step.md](./docs/next-step.md)**. What was settled and why — including several things
-> dropped *because they were measured* — is in [archive.md](./docs/archive.md) under
-> *The 2026-08-04 handoff*. Read that before reopening anything performance-related.
+> **The board is three tracks now, not a ranked list.** The goal is that these three are the *only*
+> things open; everything else either drains into one of them or gets closed outright. The tracks,
+> with `file:line` anchors and effort estimates, live in **[next-step.md](./docs/next-step.md)**.
+>
+> 1. **The UI is fast and good-looking** — AUDIT-F1, F2, F8, F9. Note the measured ceiling: 71% of
+>    the reported lag is the main thread *descheduled* (host CPU contention), so "better looking"
+>    has far more headroom than "faster".
+> 2. **The backend is complete and clean enough to throw away** — AUDIT-B5 is the gate; no migration
+>    to Go or Python can start until the schema has a baseline. Also has to *answer* "do we really
+>    need a separate worker?", which has been open since the audit began.
+> 3. **Understand the paid product and close the quality gap** — the render/inpainting work below.
+>
+> What was settled and why — including several things dropped *because they were measured* — is in
+> [archive.md](./docs/archive.md). Read that before reopening anything performance-related.
 
 - [x] ~~**Re-run the drained capture to confirm the AUDIT-W10 win.**~~ **Done 2026-08-04** —
   `20260803-204638` (2 jobs) and `20260803-211221` (30 pages, 204 jobs, all COMPLETED, 24 min,
@@ -29,10 +39,13 @@
   changed what it costs**: a chapter pinned to a provider whose key is rejected now falls back
   across the provider boundary instead of failing 100% of its translations. Housekeeping, not an
   outage.
-- [ ] **AUDIT-B1 — scheduler pool size.** One line in `application.yml`; five `@Scheduled` tasks
-  currently share Spring's default single thread, so one unresponsive worker stalls stale-job
-  recovery, debounced renders and export cleanup for up to 30 s per dispatch. Best payoff-per-line
-  on the board — see next-step.md item 1.
+- [x] ~~**AUDIT-B1 — scheduler pool size.**~~ **Done 2026-08-05** (`0e5bbd5`) — it was indeed one
+  config line. `spring.task.scheduling.pool.size` is 4, overridable via `SCHEDULING_POOL_SIZE`.
+  This box stayed unticked until 2026-08-06 while the fix had been live for a day.
+- [x] ~~**AUDIT-S1 / S2 / S3 / S4 — the fail-open secrets and the SSE token leak.**~~ **Done
+  2026-08-02**, verified against the code and the running stack **2026-08-06** and removed from
+  `issues.md`. **Nothing `[C]` or `[H]` is open anywhere in this project now.** The security track
+  no longer exists as a separate list — see [next-step.md](./docs/next-step.md).
 
 ### Fix recent issues
 
