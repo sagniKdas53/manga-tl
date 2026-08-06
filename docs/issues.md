@@ -195,6 +195,32 @@ diverges from the entities over time with no migration history and no rollback. 
 biggest obstacle to the "plan a better backend" item above — a Flyway/Liquibase baseline is a
 prerequisite for *any* migration, in Java or otherwise.
 
+**Measured against the live database 2026-08-06. The diagnosis holds; the scale claim does not.**
+"Nobody knows what the live schema actually is" was true only because nobody had looked.
+
++ **22 tables in `init.sql`, 22 live — identical set.** No missing or extra tables.
++ **Column drift is exactly one column**: `images.reader_storage_path`, live but absent from
+  `init.sql`, written by `PageService.java:474`. `ddl-auto: update` caught in the act, once.
++ **`init.sql` is a `pg_dump`**, not a hand-written schema, so "two competing sources of truth" is
+  really one snapshot one column behind the entities.
++ **An empty `flyway_schema_history` already exists live** — created by `init.sql:99`, carried in
+  from a previously Flyway-managed database. Nothing in this repo has ever run Flyway, and
+  `backend/pom.xml` has zero Flyway/Liquibase references. Adopting Flyway is a `baselineOnMigrate`
+  decision against a table that is already there.
++ **`init.sql` only runs on an empty data directory**, so on this deployment it ran once at first
+  boot and every schema change since has come from `ddl-auto`.
+
+**`SchemaValidationTest` does not guard this.** It runs against Testcontainers with the schema built
+*from the entities* by `ddl-auto`, so it validates the entities against themselves; it asserts 8
+named tables exist and that every table has a primary key. It would not have caught
+`reader_storage_path`. A test comparing the entity-derived schema against the checked-in `init.sql`
+fails today on exactly one column and passes once reconciled — **that is the red-green for the
+baseline.**
+
+Order: reconcile the column, pick Flyway, baseline with `baselineOnMigrate`, then drop `ddl-auto` to
+`validate` (not `none`) **last and deliberately** — that is the step that can take the deployment
+down.
+
 `:17` `open-in-view: true` is also explicit rather than inherited: it holds a DB connection for the
 entire request and lets lazy collections load during view rendering, which is a plausible
 contributor to the "backend is holding the UI back" complaint. Both deserve measurement before the
