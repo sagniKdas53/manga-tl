@@ -73,6 +73,105 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-07 fifteenth sitting — AUDIT-B5, the schema baseline
+
+The gate on Track 2, closed. **No migration framework was adopted** — the user explicitly rejected
+Flyway mid-sitting: fresh installs must work out of the box from `database/init.sql` alone, and
+schema changes are made by hand from here on. That redirect discarded a half-built Flyway baseline
+(dependency, `V1__baseline.sql`, `baselineOnMigrate` config, a second guard test) in favour of the
+simpler design below — see "the Flyway detour" for what was tried and undone.
+
+**Three commits, one variable each, matching the "reconcile / baseline / flip ddl-auto" split the
+handoff asked for** — except step 2 became "adopt no tool" instead of "adopt Flyway":
+
+1. **Reconciled `database/init.sql`** — added `images.reader_storage_path` (`character
+   varying(255)`, nullable, confirmed against the live `information_schema.columns`), matching
+   `Image.java:38`'s mapping. 22/22 tables, 0 column drift, confirmed against the live database
+   directly rather than trusted from last sitting's number.
+2. **Added `InitScriptReconciliationTest`** — loads `database/init.sql` and
+   `src/test/resources/init-test.sql` into two databases in one throwaway Postgres and diffs their
+   column sets for every table both define. Red-green: reverting step 1 and rerunning reproduces
+   exactly the `reader_storage_path` mismatch as an `AssertionFailedError`; reapplying it passes.
+3. **`ddl-auto: update` → `validate`** (`application.yml:20`) — the deliberate, deployment-risk
+   step, done last. No test profile actually exercises the base `application.yml` value (both
+   `application-integration.yml` and `application-test.yml` set their own), so there is no
+   automated red-green for the line itself. What *can* be verified is whether `validate` actually
+   catches drift in this codebase's exact Hibernate/dialect configuration: renamed
+   `Image.readerStoragePath`'s `@Column` to a typo'd name and reran `SchemaValidationTest`
+   (already `validate`-configured, real Postgres via Testcontainers) — it failed at context
+   startup with `SchemaManagementException: Schema-validation: missing column
+   [reader_storage_path_typo] in table [images]`. Reverted. That is the exact failure mode this
+   commit now enables for the live deployment: a forgotten manual DDL change becomes a boot
+   failure, not a silent gap.
+
+**A twenty-fifth stale/wrong/incomplete finding, and it is B5's own claim about
+`SchemaValidationTest`.** The entry said the test "runs against Testcontainers with the schema
+built from the entities by `ddl-auto`, so it validates the entities against themselves." That is
+not what happens: `src/test/resources/application-integration.yml:10` already sets `ddl-auto:
+validate`, not `update` — `TestcontainersConfig` seeds the container from
+`src/test/resources/init-test.sql` (a *second*, hand-maintained, hand-truncated schema file, 16
+tables against the 22 entity-relevant ones... no, against the 16 that have `@Entity` classes at
+all) and Hibernate then validates the entities against *that*, not against itself. The practical
+conclusion the entry drew — "it would not have caught `reader_storage_path`" — was still correct,
+but for a different reason: `init-test.sql` already carried `reader_storage_path` (someone kept it
+in sync), so the test was validating entities against a schema that was already right while the
+*production* `database/init.sql` drifted unnoticed. The real gap was never "entities validate
+against themselves," it was "two hand-maintained schema files with no mechanical link between
+them" — which is exactly what `InitScriptReconciliationTest` now closes.
+
+**A live discovery that reframes the baseline's scope: 5 of the 22 tables are dead.** `queue_job`,
+`search_index`, `translations`, `translation_regions` and `volumes` exist in `database/init.sql`
+and live, have zero `@Entity` mappings, zero rows (`SELECT count(*)` confirmed live), and zero code
+references anywhere in `backend/`, `worker/` or `scripts/` — not even in a comment. They are not
+part of the audit's own accounting (which is why "22 tables, 22 live, identical set" read as a full
+match); they are pg_dump artifacts from a superseded design (a pre-`ocr_regions` translation model,
+a predecessor to `jobs`, an abandoned search feature, an abandoned volume-grouping level above
+chapters). Left alone — dropping dead tables is a schema-narrowing change with its own blast
+radius, and B5 baselines what exists, it does not clean it up. Worth a dedicated
+`AUDIT-B10`-style entry if anyone wants the cleanup; not filed, since "5 confirmed-dead tables"
+is already the actionable form of that finding and refiling it as a ticket would just be a pointer
+back to this paragraph.
+
+**"Do we really need a separate worker?" answered for the one thing gating B5, not in general.**
+The open question in `issues.md` was whether the worker keeps its own view of job state, which
+would mean the baseline has two schemas to reconcile instead of one. It does not, and never has:
+`docker-compose.yml`'s `worker` service carries no `POSTGRES_*` / `SPRING_DATASOURCE_*` env vars,
+and `worker/` has zero Postgres client dependency (`psycopg`, `sqlalchemy`, anything) anywhere in
+its source or requirements. `jobs`, `queue_job` and `job_costs` are exclusively backend-owned; the
+worker's only state touchpoints are Redis (the queue) and one HTTP callback
+(`BACKEND_CALLBACK_URL`) back to the backend. So the baseline never had a second schema to account
+for, regardless of how the bigger "should this split exist at all" question eventually resolves —
+noted in `issues.md`, left open there.
+
+**`open-in-view: true` measured, not touched — and it is not free to disable.** Spun into its own
+entry, **AUDIT-B9**, because it surfaced a genuine, narrow blocker: every entity in this codebase
+`@JsonIgnore`s its lazy `@ManyToOne` relations except `LayerEditHistory`, whose `layerElement` and
+`editedBy` fields don't, and `LayerController.getLayerElementHistory` (`:141`) returns
+`List<LayerEditHistory>` directly with no `@Transactional`. Disabling `open-in-view` today would
+turn that one endpoint into a `LazyInitializationException` on every call. Everything else in the
+codebase already routes through DTOs or `@JsonIgnore`s the relations that would matter, so the flag
+is doing real work in exactly one place — fix that place before touching it, not as part of this
+sitting.
+
+**The Flyway detour.** Before the redirect, a full Flyway adoption was built and verified: `V1__baseline.sql`
+(the reconciled dump, stripped of `pg_dump`'s `\restrict`/`\unrestrict` meta-commands and `OWNER TO
+tladmin` — the latter would have failed on a fresh install using the shipped `POSTGRES_USER=postgres`
+default, since only *this* deployment's `.env` happens to set `POSTGRES_USER=tladmin`), a
+`FlywayBaselineTest` proving the migration executes cleanly against a genuinely empty Postgres
+(21 app tables + Flyway's own `flyway_schema_history` = 22, matching the live count), and a
+`FlywayAutoConfiguration` exclusion for the H2-backed `test` profile (Flyway would otherwise try to
+run PostgreSQL-specific DDL — `uuid`, `jsonb`, `uuid-ossp` — against H2 and fail). All of it worked;
+none of it shipped. Recorded here so nobody re-derives it from scratch if the decision is revisited.
+
+| gate | result |
+| --- | --- |
+| `mvn -o clean verify` | **415 tests, 0 failures** (414 baseline + `InitScriptReconciliationTest`). |
+| `detect_changes()` | `risk_level: low` on both commits; the `init.sql` + test commit touched 0
+  indexed symbols (SQL data + a wholly new test file), the `ddl-auto` + docs commit touched only
+  `docs/issues.md` markdown sections. |
+
+Frontend and worker gates not run — no frontend or worker file changed.
+
 ### The 2026-08-06 fourteenth sitting — the drain queue: AUDIT-W1, AUDIT-W2, AUDIT-Q2
 
 Three deletions. All three were on the drain queue, all three are now closed, and the board is the

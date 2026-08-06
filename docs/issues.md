@@ -96,6 +96,17 @@ upto date or good, so maybe remake it when tackling this issue.
 
 like what does the backend do that cannot be done by the worker, why do we need this split?
 
+**Update 2026-08-07 (AUDIT-B5):** measured the one narrow slice of this that gated the schema
+baseline — does the worker keep its own view of job state, so the baseline would have to reconcile
+two schemas? No. `docker-compose.yml`'s `worker` service carries no `POSTGRES_*`/`SPRING_DATASOURCE_*`
+env vars at all, and `worker/` has zero `psycopg`/`sqlalchemy`/any-Postgres-client dependency.
+`jobs`, `queue_job` and `job_costs` are owned exclusively by the backend's Postgres schema; the
+worker's only state touchpoints are Redis (the queue) and an HTTP callback
+(`BACKEND_CALLBACK_URL`) back to the backend. So the schema baseline does not depend on this
+question either way — a merged worker would still go through the same repositories, not a second
+schema. The bigger architectural question (should the split exist at all) is untouched and still
+open; this only closes the narrow "does the DB schema need to account for it" sub-question.
+
 ## validate if the testing is really testing or just mocking everything and calling it a day
 
 Check the [test-guide](./testing_isolation_guide.md) and make sure the tests are actually
@@ -186,45 +197,28 @@ original "one cooldown stalls all heavy work" reading is unchanged there.
 
 ### Backend (Spring)
 
-#### AUDIT-B5 **[M]** — schema is managed by `ddl-auto: update` with a competing `init.sql`
+#### AUDIT-B9 **[M]** — `open-in-view: true` is load-bearing for one endpoint, safe to disable everywhere else
 
-`application.yml:16` sets `spring.jpa.hibernate.ddl-auto: update` while
-`docker-compose.yml` also mounts `database/init.sql` as a Postgres init script. Two sources of
-truth for the schema, and `update` never drops or narrows a column, so the live schema silently
-diverges from the entities over time with no migration history and no rollback. This is the single
-biggest obstacle to the "plan a better backend" item above — a Flyway/Liquibase baseline is a
-prerequisite for *any* migration, in Java or otherwise.
+`application.yml:22` sets `spring.jpa.open-in-view: true` explicitly rather than inheriting it,
+holding a DB connection for the entire request so lazy associations can still resolve during view
+rendering. Measured 2026-08-07, as its own variable, per AUDIT-B5's note that this is not a
+migration item: **almost every entity in this codebase already defangs this by `@JsonIgnore`-ing
+its lazy `@ManyToOne`/`@OneToOne` relations** (`Image`, `Layer`, `LayerElement`, `OcrRegion`,
+`Panel`, `Conversation`, `Series` all do), and the few that don't (`Chapter`, `Page`) are never
+returned as raw entities — every controller path serializes them through `ChapterDto`/`PageDto`
+first.
 
-**Measured against the live database 2026-08-06. The diagnosis holds; the scale claim does not.**
-"Nobody knows what the live schema actually is" was true only because nobody had looked.
+**One exception: `LayerEditHistory`.** Its two lazy relations, `layerElement` (`:14-17`) and
+`editedBy` (`:27-29`), carry no `@JsonIgnore`. `LayerController.getLayerElementHistory` (`:141`)
+returns `List<LayerEditHistory>` straight from the repository with no `@Transactional`, so
+serialization happens after the request-scoped transaction has closed — today that's fine because
+`open-in-view` keeps the session open through view rendering, but disabling it would turn this into
+a `LazyInitializationException` on every call. Fix before touching the flag: either `@JsonIgnore`
+both fields (consistent with every other entity here) or move the endpoint onto a DTO.
 
-+ **22 tables in `init.sql`, 22 live — identical set.** No missing or extra tables.
-+ **Column drift is exactly one column**: `images.reader_storage_path`, live but absent from
-  `init.sql`, written by `PageService.java:474`. `ddl-auto: update` caught in the act, once.
-+ **`init.sql` is a `pg_dump`**, not a hand-written schema, so "two competing sources of truth" is
-  really one snapshot one column behind the entities.
-+ **An empty `flyway_schema_history` already exists live** — created by `init.sql:99`, carried in
-  from a previously Flyway-managed database. Nothing in this repo has ever run Flyway, and
-  `backend/pom.xml` has zero Flyway/Liquibase references. Adopting Flyway is a `baselineOnMigrate`
-  decision against a table that is already there.
-+ **`init.sql` only runs on an empty data directory**, so on this deployment it ran once at first
-  boot and every schema change since has come from `ddl-auto`.
-
-**`SchemaValidationTest` does not guard this.** It runs against Testcontainers with the schema built
-*from the entities* by `ddl-auto`, so it validates the entities against themselves; it asserts 8
-named tables exist and that every table has a primary key. It would not have caught
-`reader_storage_path`. A test comparing the entity-derived schema against the checked-in `init.sql`
-fails today on exactly one column and passes once reconciled — **that is the red-green for the
-baseline.**
-
-Order: reconcile the column, pick Flyway, baseline with `baselineOnMigrate`, then drop `ddl-auto` to
-`validate` (not `none`) **last and deliberately** — that is the step that can take the deployment
-down.
-
-`:17` `open-in-view: true` is also explicit rather than inherited: it holds a DB connection for the
-entire request and lets lazy collections load during view rendering, which is a plausible
-contributor to the "backend is holding the UI back" complaint. Both deserve measurement before the
-Firefox profiling pass.
+Not itself a "backend holds the UI back" verdict — that needs request-latency measurement, not just
+a serialization-safety audit — but it clears the one correctness blocker on doing that measurement
+by actually flipping the flag.
 
 ### Frontend
 

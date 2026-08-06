@@ -11,7 +11,13 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      # AUDIT-B5: was `update`, which silently ALTERs the live schema and never records what it
+      # did -- that is how images.reader_storage_path ended up live but absent from
+      # database/init.sql. Schema changes are made by hand now: edit the entity, manually apply
+      # the matching DDL to the live database, and update database/init.sql to match (guarded by
+      # InitScriptReconciliationTest). `validate` makes forgetting any of those a boot-time
+      # failure instead of a silent, unrecorded ALTER TABLE.
+      ddl-auto: validate
     show-sql: false
     open-in-view: true
     properties:
