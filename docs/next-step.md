@@ -1,402 +1,270 @@
-# Handoff — 2026-08-06 (fourteenth sitting)
+# Handoff — 2026-08-07 (fifteenth sitting)
 
-> **The next sitting is AUDIT-B5.** The drain queue is empty, the board is the three tracks, and
-> B5 is the gate on the highest-value one. This handoff is written to make B5 startable cold —
-> see [§ Start here: B5](#start-here-audit-b5).
+> **AUDIT-B5 is closed, deployed, and validated against a real boot.** `ddl-auto: validate`
+> started clean against the live database — see [§ Deployment
+> validation](#deployment-validation-run-4-no-flyawaylog) for the log evidence, not just the
+> reasoning.
 >
-> **B5 is far smaller than its entry claims.** The entry says "nobody knows what the live schema
-> actually is." It was measured this sitting: **the live schema diverges from `init.sql` by exactly
-> one column.**
+> **No migration framework was adopted.** The user rejected Flyway mid-sitting: fresh installs
+> must keep working out of the box from `database/init.sql` alone, schema changes are made by hand
+> from here on. A full Flyway build existed and was discarded — see
+> [archive.md](./archive.md#the-2026-08-07-fifteenth-sitting--audit-b5-the-schema-baseline) if
+> that decision is ever revisited.
 >
-> **9 findings open, 43 of 52 closed (83%).** Nothing `[C]` or `[H]` anywhere.
+> **44 of 53 findings closed (83%). 9 open, nothing `[C]` or `[H]`.** One new finding
+> (`AUDIT-B9`) was filed this sitting, spun off from B5's own second bullet. See [§ Where issues.md
+> stands](#where-issuesmd-stands).
 >
-> **CI is red for reasons that are not ours** — a GitHub Actions outage. See [§ CI](#ci-is-red-and-it-is-not-the-code).
->
-> **Dependabot #60 (okhttp) — close it.** Verified against 5.4.0, not just the changelog. See
-> [§ Dependabot](#dependabot).
+> **Pushed to `github/main` for the first time in three sittings** (`5f7f0f6..cf118de`) — CI has
+> not been checked yet. See [§ CI](#ci-not-yet-checked).
 
-## Start here: AUDIT-B5
+## Deployment validation (`run-4-no-flyaway.log`)
 
-**`ddl-auto: update` against a competing `init.sql`, with no migration history.** It is the
-prerequisite for any backend rewrite, because no migration can begin until the schema has a
-baseline. It was the "do not start casually" item for two sittings. It is now scoped.
+The user deployed and supplied `logs/run-4-no-flyaway.log` (2395 lines, `docker compose up`
+through steady-state health checks). Read in full, not sampled:
 
-### What was measured this sitting
-
-Read-only, against the live database. **Do not re-derive this.**
-
-| question | answer |
+| check | result |
 | --- | --- |
-| tables in `init.sql` vs live | **22 vs 22 — identical set, no missing or extra tables** |
-| column-level drift | **exactly one column**, `images.reader_storage_path` |
-| is Flyway/Liquibase on the classpath? | **No.** Zero references in `backend/pom.xml`. |
-| does `flyway_schema_history` exist live? | **Yes — and it is empty (0 rows).** |
+| `ERROR` lines anywhere in the log | **zero** |
+| `EntityManagerFactory` init (where `ddl-auto: validate` would throw) | `19:14:11.669Z ... Initialized JPA EntityManagerFactory for persistence unit 'default'` — no `SchemaManagementException` |
+| App startup | `Started MangaLibraryApplication in 20.897 seconds` |
+| `images.reader_storage_path` exercised for real | `PageService` wrote it twice — `Generated reader variant reader/cdea1b43....webp` (19:15:12) and `reader/27b7f568....webp` (19:17:17) — a live `imageRepository.save()` against the exact column this sitting reconciled |
+| Worker | started, processed at least one real job (`5084f907`), health checks green through the end of the log |
 
-**`images.reader_storage_path` is the whole divergence.** It is live, it is absent from `init.sql`,
-and it is written by `PageService.java:474` (`setReaderStoragePath`). This is `ddl-auto: update`
-doing exactly what the finding predicted — adding a column for a feature and never recording it —
-caught in the act, once.
-
-### Three things that reframe the work
-
-**1. `init.sql` is a `pg_dump`, not a hand-written schema.** It carries `-- Name: X; Type: TABLE;
-Owner: tladmin` headers throughout. So "two competing sources of truth" is really *one snapshot
-that has fallen one column behind the entities*. Regenerating it is a dump, not an authoring job.
-
-**2. There is already an empty `flyway_schema_history` table live**, and it came in through that
-dump — `init.sql:99` creates it. Nothing in this repo has ever run Flyway. So the schema was
-Flyway-managed in some earlier incarnation, the dump carried the bookkeeping table across, and it
-has sat empty ever since. **Adopting Flyway means reckoning with a baseline table that already
-exists and is empty** — that is a `baselineOnMigrate` decision, and it is better to know now than
-to discover it mid-migration.
-
-**3. `init.sql` only ever runs on an empty data directory.** Postgres init scripts are skipped when
-the volume already has data, so on this deployment it ran once at first boot and *every* schema
-change since has come from `ddl-auto: update`. The file has not been protecting anything for a long
-time.
-
-### What `SchemaValidationTest` does and does not do
-
-`backend/src/test/java/com/manga/library/SchemaValidationTest.java` sounds like it guards this. **It
-does not.** It runs `@ActiveProfiles("integration")` against Testcontainers, where the schema is
-built **from the entities by `ddl-auto`** — so it validates the entities against themselves. It
-asserts 8 named tables exist and that every table has a primary key. It would never have caught
-`reader_storage_path`, and it will not catch the next one.
-
-**That is the red-green opening.** A test that compares the entity-derived schema against the
-checked-in `init.sql` fails today on exactly one column and passes once they are reconciled. That
-is a genuine red-green for a migration baseline, which is normally the hardest kind of change to
-verify.
-
-### Suggested order
-
-1. **Reconcile the one column.** Regenerate `init.sql` from the live schema, or add
-   `reader_storage_path` to it. Confirm 22/22 tables and 0 column drift.
-2. **Decide the tool.** Flyway is the lower-friction choice here — the history table already exists
-   and Spring Boot autoconfigures it. Liquibase buys database-independence nobody has asked for.
-3. **Baseline, do not migrate.** `V1__baseline.sql` = the reconciled dump, applied with
-   `baselineOnMigrate: true` so the existing (empty) history table is adopted rather than fought.
-4. **Then turn `ddl-auto` down to `validate`** — not `none`. `validate` makes the next drift a
-   startup failure instead of a silent `ALTER TABLE`.
-5. **Add the entity-vs-`init.sql` test** so step 1 cannot silently regress.
-
-**Do step 4 last and deliberately.** It is the step that can take the deployment down, and it is
-also the entire point of the exercise.
-
-### The question B5 has to answer along the way
-
-**"Do we really need a separate worker?"** — open and unanswered since the audit began, and it
-changes *what you are migrating*. Answer it before B5 completes, because the schema baseline differs
-depending on whether the worker keeps its own view of job state (`jobs`, `queue_job`, `job_costs`).
-
-`AUDIT-B5` also carries a second bullet that is **not** about migrations: `application.yml:17` sets
-`open-in-view: true` explicitly rather than inheriting it, holding a DB connection for the whole
-request. It is a plausible contributor to the "backend holds the UI back" complaint and **deserves
-its own measurement** — do not fold it into the migration change. One variable at a time.
-
-## CI is red, and it is not the code
-
-**GitHub Actions was in a critical-impact outage** — incident opened 2026-08-06 15:22 UTC, still
-`investigating` at 17:02 UTC. The push landed at 16:50 UTC, inside the window.
-
-> "Workflow runs are still failing or delayed in starting, and some queued jobs may time out."
-
-| job on `b0b4390` | what actually happened |
-| --- | --- |
-| Build and push backend image | failed in **"Set up job"** — step 1, before checkout |
-| Build and test backend | **cancelled with zero steps executed.** Maven never started. |
-| CodeQL java / js / python | cancelled at 15m; the two light ones passed |
-
-**No CI verdict exists to contradict the local gates.** The backend job never reached `mvn`. The
-previous commit `365ad99` — the thirteenth sitting's, not this one's — had the same job cancelled at
-16:20 UTC, which is the giveaway that this is platform-side.
-
-**It is not rate limiting.** Unauthenticated API budget was 57/60 at the time, and pushes are not
-the throttled resource. **Re-run the two failed workflows once the incident clears; change nothing.**
-
-## Dependabot
-
-**#60 okhttp — close it. Verified, not assumed.** The `pom.xml` comment documented 5.3.2 while the PR
-has moved to **5.4.0**, so the jars were re-checked rather than trusting the old note:
-
-```text
-okhttp     4.12.0 : 317 .class files, 789531 bytes
-okhttp      5.4.0 :   0 .class files,    754 bytes   <- what #60 proposes
-okhttp-jvm  5.4.0 : 330 .class files                 <- where the classes actually live
-```
-
-`okhttp3/MediaType` is present in 4.12.0 and in `okhttp-jvm` 5.4.0, absent from `okhttp` 5.4.0.
-The KMP-stub mechanism is unchanged, so merging reproduces the 73 `NoClassDefFoundError` failures.
-**The pin is still load-bearing.** The `pom.xml` comment now records the 5.4.0 re-verification and
-says to check the jar rather than the changelog on any future 5.x bump.
-
-The real 5.x migration is a one-line swap of `okhttp` → `okhttp-jvm`, gated on minio accepting it.
-Small project, not a merge.
-
-The other three are unchanged and still close-don't-merge: #52 springdoc blocked outright, #51
-testcontainers-bom 2.x and #40 TypeScript 7 are major-version projects of their own. **GitHub's 2
-high-severity Dependabot alerts are the only security items anywhere** and are not covered by any
-`AUDIT-*` entry — if they matter, file them properly.
+This is stronger evidence than the sitting's own reasoning chain (live-db == init.sql == init-test.sql
+== entities) — it is the live database itself, under `validate`, accepting a write to the
+previously-drifted column. **`AUDIT-B5` is not just closed in `issues.md`, it is deployed and
+confirmed.**
 
 ## Where `issues.md` stands
 
-**52 filed. 9 open. 43 closed — 83%.**
+**53 filed. 9 open. 44 closed — 83%.**
 
 | sev | open | which |
 | --- | --- | --- |
 | **[C]** | 0 | — |
 | **[H]** | 0 | — |
-| **[M]** | 4 | **B5**, W3, F1, F2 |
+| **[M]** | 4 | W3, **B9** *(new)*, F1, F2 |
 | **[L]** | 3 | F8, F9, D5 *(partial — 2 of 5 bullets)* |
 | unranked | 2 | T1, Q1 |
 
-**There is no drain queue left.** Every open entry belongs to a track except AUDIT-D5, which is
-blocked on a measurement.
+`AUDIT-B5` closed. `AUDIT-B9` is new, spun off from B5's own `open-in-view` bullet — see below.
 
-## The other two tracks
+### AUDIT-B9 **[M]** — `open-in-view: true`, measured not fixed
+
+Filed this sitting (`docs/issues.md`). Every entity in the codebase `@JsonIgnore`s its lazy
+`@ManyToOne` relations except one: `LayerEditHistory.layerElement` and `.editedBy` (`:14-17`,
+`:27-29`). `LayerController.getLayerElementHistory` (`:141`) returns `List<LayerEditHistory>`
+directly, no `@Transactional`, no DTO. Disabling `open-in-view` today would turn every call to that
+one endpoint into a `LazyInitializationException`. Small fix (either `@JsonIgnore` both fields, or
+DTO-ify the endpoint), and it's the one thing standing between "measured" and "can actually flip
+the flag and remeasure the backend-holds-the-UI-back claim." **Reasonable next-sitting candidate**
+precisely because it's small and self-contained — see the prompt at the bottom.
+
+### A twenty-fifth stale/wrong/incomplete finding
+
+`AUDIT-B5`'s own claim about `SchemaValidationTest` was wrong about the mechanism.
+`application-integration.yml` already sets `ddl-auto: validate`, not `update` — the test never
+built its schema from the entities, it validated entities against a *second* hand-maintained file
+(`init-test.sql`) that happened to already carry `reader_storage_path`. The practical conclusion
+("it wouldn't have caught this") was still right, for the wrong reason. Full writeup in
+`archive.md`.
+
+### The worker question, answered for B5's slice of it
+
+`docs/issues.md`'s open "Do we really need a separate worker?" section now carries a
+2026-08-07 update: the worker has zero Postgres coupling (no `POSTGRES_*`/`SPRING_DATASOURCE_*` env
+vars, no DB client dependency anywhere in `worker/`), so the schema baseline never had a second
+schema to reconcile regardless of that answer. The bigger "should the split exist at all" question
+is untouched and still open.
+
+### Five confirmed-dead tables (not filed, not fixed, recorded)
+
+`queue_job`, `search_index`, `translations`, `translation_regions`, `volumes` — 0 rows live, 0
+`@Entity` mappings, 0 code references anywhere in `backend/`, `worker/` or `scripts/`. Pure
+pg_dump carry-over from superseded designs. Not filed as its own `AUDIT-*` because this paragraph
+(and the fuller one in `archive.md`) already is the actionable form of the finding — baselining
+what exists is not cleanup, and dropping tables is a separate, narrower-schema change with its own
+blast radius.
+
+## CI: not yet checked
+
+This sitting pushed to `github/main` for the first time since the thirteenth sitting
+(`5f7f0f6..cf118de`, 3 commits). The prior two sittings' commits sat local-only. **No CI verdict
+exists yet for this push** — check `gh run list` (unavailable in this environment; the two prior
+sittings' outage-diagnosis pattern still applies if it's red: check whether the failure is platform
+or these changes before assuming the latter). GitHub's 2 high-severity Dependabot alerts remain
+present at push time, unrelated to this sitting's changes (confirmed absent from any `AUDIT-*`
+scope, per the fourteenth sitting's note).
+
+## The three tracks
+
+Unchanged in shape from the fourteenth sitting's framing, except **Track 2's gate (`AUDIT-B5`) is
+now clear** — there is no more "no migration can begin until the schema has a baseline" blocker.
+That does **not** mean a Java-to-something-else rewrite is scheduled: `issues.md`'s "Plan a better
+backend one that doesn't use java" is still an unscoped complaint, not a plan, and nothing this
+sitting did picks a direction for it. Don't read the cleared gate as a mandate to start that
+migration — it just means the prerequisite work (know the schema, know how it's owned, know the
+worker's coupling to it) is now actually done if someone decides to.
 
 ### Track 1 — The UI is fast and good-looking
 
-| id | sev | what |
-| --- | --- | --- |
-| AUDIT-F1 | M | Theme rebuilt from scratch on every light/dark toggle → `colorSchemes` + `cssVariables`. Bundle with the next MUI major. |
-| AUDIT-F2 | M | `Reader.tsx` at 3,954 lines / 28 `useState`; `ReaderRightSidebar.tsx` with 65 inline `sx`. The profile says **split the component**. |
-| AUDIT-F8 | L | No pagination, search or debounce. **Decide the ceiling before building anything.** |
-| AUDIT-F9 | L | Responsive behaviour never verified. Wants Playwright, same infrastructure as the ZIP-pixel item. |
+Unchanged: `AUDIT-F1` (theme rebuild on toggle), `AUDIT-F2` (`Reader.tsx` / `ReaderRightSidebar.tsx`
+size and inline `sx`), `AUDIT-F8` (no pagination/search/debounce — decide the ceiling first),
+`AUDIT-F9` (responsive behaviour unverified). Same headroom note as before: 71% of LongTask wall
+time is host CPU contention, not app code — "better looking" has more headroom than "faster."
 
-**Know the ceiling before starting.** Both remaining halves of "the UI is laggy" are **not fixable in
-frontend code**: 71% of LongTask wall time is the main thread *descheduled* (host CPU contention),
-and of the reader's 8.80 s of JS self CPU only 0.715 s (8%) is app code. **"Better looking" has far
-more headroom than "faster"**, and that is the honest ordering.
+### Track 2 — Plan a better backend (gate cleared, direction still undecided)
+
+What's now known and doesn't need re-deriving: 22 live tables (17 in active use, 5 confirmed dead),
+schema ownership is 100% the backend's (worker has zero DB coupling), `open-in-view` has exactly
+one unsafe endpoint (`AUDIT-B9`), and `updateJobStatus` still has no state-machine validation
+against the `jobs` table (carried forward below — a rewrite would re-derive this badly if it isn't
+decided explicitly first).
 
 ### Track 3 — Understand the paid product and close the quality gap
 
-Measured against mangatranslator.ai across 31 examples: **we flatten 6.85% of page artwork on average
-against their 1.92%**, losing on every page — worst case `sample24` at 16%, where a whole panel
-becomes one tan rectangle. Full comparison in `render_quality_gap_2026-08-05.md`; score any render
-with `scripts/render_quality_metrics.py`.
+Unchanged: the 6.85% vs 1.92% flattening gap, `BUBBLE_CONTOUR_FALLBACK` removal checkpoint, the VLM
+benchmarking item. See the fourteenth sitting's handoff (preserved in this file's git history) for
+the full writeup if picking this up.
 
-Root cause is three compounding things: **no inpainting anywhere**, erasure is a flat colour fill
-over the region polygon, that polygon is the balloon's *outer* contour (so the outline goes with it),
-and unconstrained region merging grows those polygons across whole panels.
+### AUDIT-D5 — still blocked
 
-> **In one line: their unit of erasure is the glyph, ours is the region.** Every upstream mistake
-> costs them a few misplaced letters and costs us a panel.
-
-Carried here: the `BUBBLE_CONTOUR_FALLBACK` removal checkpoint (**a bigger YOLO is not the
-replacement** — `yolo26s_manga109` recovers 4/180 vs yolo11n's 1/180 and the contour search already
-had all four; training distribution, not model size), free-floating text collision handling, and the
-VLM benchmarking item.
-
-### AUDIT-D5 — blocked, not deferred
-
-Kernel 5.15's cgroup v2 has no `memory.peak` (added in 6.8), so there is no high-water mark and
-instantaneous `docker stats` is not a peak. Sample `memory.current` through a thumbnail-heavy run
-first, then set the cap and `MaxRAMPercentage` together as one variable.
+Kernel 5.15 has no `memory.peak`. Unchanged; needs a sampled `memory.current` run through a
+thumbnail-heavy load before it can move.
 
 ## What this sitting did
 
-Five commits: reindex chore, worker fix (submodule), the W2/Q2 parent commit, the worker's own
-index chore (submodule), and the index-split chore.
+Three commits, one variable each, matching the handoff's ask exactly (reconcile / adopt-a-tool /
+flip-ddl-auto), except step 2 became "adopt no tool" after the user's mid-sitting redirect:
 
-**AUDIT-W1, AUDIT-W2 and AUDIT-Q2 closed.** Reasoning in `archive.md` under "2026-08-06 fourteenth
-sitting". **Two more entries were wrong about their own subject, taking the running count of stale,
-wrong or incomplete findings from twenty-two to twenty-four:**
+1. `ad113a9` — reconciled `database/init.sql` (added `images.reader_storage_path`), added
+   `InitScriptReconciliationTest` (diffs `database/init.sql` against `init-test.sql` in a
+   throwaway Postgres; red-green verified by reverting and rerunning).
+2. `fc987c4` — `ddl-auto: update` → `validate`; closed `AUDIT-B5` in `issues.md`; filed `AUDIT-B9`;
+   updated the worker-question section; wrote the reasoning into `archive.md`. Verified the
+   `validate` mechanism itself by mutating `Image.java`'s `@Column` name and confirming
+   `SchemaValidationTest` fails to boot with `SchemaManagementException`; reverted.
+3. `cf118de` — GitNexus reindex chore (5265 → 5414 symbols, 13261 → 13437 relationships, still 300
+   flows).
 
-- **W2's title** describes "a single global throttle across all providers" that **has never
-  existed** — `llm_client.py:208` always passes the provider name, so every cloud call is keyed on
-  its own bucket. The one caller that reaches `"global"` is `try_local_ai`, applying a *cloud* rate
-  limit to the *local* LLM path. And the fix was in `docker-compose.yml`, not the file the entry
-  named.
-- **Q2 undercounted itself** — 7 lines across 2 sites, not "two comments" — and
-  `PageService.java:669` was *factually wrong* about the code beneath it.
+A full Flyway adoption (dependency, `V1__baseline.sql`, `baselineOnMigrate`, a
+`FlywayBaselineTest` proving it applies cleanly to an empty Postgres, an `application-test.yml`
+exclusion for the H2 profile) was built, verified working, then entirely reverted per the user's
+redirect. Nothing of it shipped; `git diff HEAD~3 -- backend/pom.xml
+backend/src/test/resources/application-test.yml` is empty. Full detail in `archive.md` under "the
+Flyway detour" in case the decision is revisited later.
 
 | gate | result |
 | --- | --- |
-| `mvn -o clean verify` | **414 tests, 0 failures.** PMD and jacoco pass. |
-| worker `pytest -q` | **315 passed**, up from the 310 baseline |
-| ruff check / format --check / pyright | clean, 0 errors |
+| `mvn -o clean verify` | **415 tests, 0 failures** (414 baseline + `InitScriptReconciliationTest`) |
+| `detect_changes()` | `risk_level: low` on both code commits |
+| Live deployment | **validated against `logs/run-4-no-flyaway.log`** — see above |
 
-**Both baselines are now confirmed rather than carried forward.** Frontend gates not run — no
-frontend file changed. `npm run generate-api` not run — no API surface changed.
+Worker not touched — no reindex, no gate run there. Frontend not touched.
 
-### The worker now has its own index
+## GitNexus
 
-**`worker/` is indexed separately as `manga-tl-worker`** (975 symbols, 1825 relationships, 79
-execution flows), because the parent's `detect_changes()` is structurally blind to it: it runs
-`git diff` in the parent, which sees the submodule as a pointer, and reported `changed_count: 0` for
-a commit that rewrote two worker modules and four test files.
-
-- **For worker changes, run `detect_changes({repo: "manga-tl-worker"})`.** Verified: on a one-line
-  probe it returns the changed symbol **plus 6 affected execution flows** — flows the parent index
-  does not carry at all.
-- `worktree: "<path>/worker"` does **not** work; it is rejected as "not a worktree of repo
-  manga-library".
-- Nothing was lost by splitting: backend and worker talk over HTTP and Redis, not calls, so no call
-  edges spanned the boundary.
-- **Reindex them separately** — `analyze` from the repo root for `manga-library`, from `worker/` for
-  `manga-tl-worker`.
-
-**The parent count went *down*, 5377 → 5265, and that is mostly not deletions.** The parser exhausted
-its cumulative timeout budget on `backend/src/main/c/jni/jni.h` and respawned with that file
-excluded, so this index is missing that header's declarations. It is a vendored JNI header nothing
-runs `impact()` on, so practical coverage is unchanged — but do not read 5265 as "the codebase shrank
-by 112 symbols".
-
-### Deployment
-
-**Nothing needs deploying.** The worker and compose changes land with the next `docker compose
-build`.
-
-**One live-config line was deliberately not touched.** `.env` (gitignored) carries `RATE_LIMIT=10` at
-line 84, so the new unlimited compose default does not change *this* box until it is removed:
-
-```text
-docker compose --env-file /dev/null config  →  RATE_LIMIT: ""     # shipped default, now unlimited
-docker compose config                       →  RATE_LIMIT: "10"   # this box, still pinned
-```
-
-**Inert either way**: `DISABLE_LOCAL_LLM=true`, so `try_local_ai` — the only caller reaching the
-`"global"` bucket — is not running.
+`manga-library` reindexed at `cf118de`: **5414 symbols, 13437 relationships, 300 execution flows.**
+(The post-reindex commit itself always leaves the index one commit stale by construction — that's
+expected, not a problem to chase.) `manga-tl-worker` untouched this sitting, still indexed at its
+last recorded point since no `worker/` file changed.
 
 ## Not mine — left alone deliberately
 
-The free-model benchmarking thread is **still active and still commits during a sitting**:
+Same as last sitting — the free-model benchmarking thread (`docs/benchmarking.md`,
+`docs/run_ocr_bench.md`, `docs/free_openrouter_translation_benchmark_2026-08-06.md`,
+`docs/translation_bench.md`, `scripts/benchmark_translation.py`,
+`scripts/build_translation_corpus.py`, `scripts/test-providers.json`) commits concurrently. Use an
+explicit pathspec on every commit, `-F <file>` before the `--`.
 
-- `docs/benchmarking.md`, `docs/run_ocr_bench.md`
-- `docs/free_openrouter_translation_benchmark_2026-08-06.md`, `docs/translation_bench.md`
-- `scripts/benchmark_translation.py`, `scripts/build_translation_corpus.py`, `scripts/test-providers.json`
-
-**Use an explicit pathspec on every commit, and put `-F <file>` before the `--`.**
+**One thing this sitting discovered about "not mine":** `origin` (the pi5 remote) had a commit
+(`3896bc3`) `github` didn't, from that thread. It never blocked anything here — `github/main` was a
+clean fast-forward behind all three of this sitting's commits — but if a future sitting needs
+`origin` for something, check `git log origin/main..github/main` and vice versa before assuming
+the two remotes agree.
 
 ## Carried forward — deliberately not done
 
-- **The AUDIT-D5 memory pair.** Blocked on a measured peak.
-- **`try_local_ai`'s bare `enforce_rate_limit()`.** The local path has no remote limit to respect,
-  but the call belongs to AUDIT-W3 and the unlimited default already makes it inert by default.
-- **`RATE_LIMIT=10` in the untracked `.env`.** See Deployment.
-- **Valkey has no `requirepass`.** Loopback removed the LAN reach, not the missing password. It has
-  to land in the backend's `SPRING_DATA_REDIS_*` and the worker's `REDIS_*` simultaneously; a
-  half-applied Redis password takes the whole pipeline down.
-- **`SeriesController.resolveSetting`'s untrimmed placeholder compare.** Dormant — every *reader*
-  treats a padded placeholder as inert, so such a value can only be stored, not acted on.
-- **`updateJobStatus` has no state-machine validation**, only vocabulary validation. A transition
-  guard has to tell a stale worker's late callback from a live one, and the `Job` row carries nothing
-  to do it with. **B5 has to decide this explicitly** — it is exactly what a rewrite would re-derive
-  badly, and it touches the `jobs` table the baseline will freeze.
-- **The cross-provider fallback rule has not reached `ocr.py` and `qa.py`.** AUDIT-W11 established it
-  for translation; the failure was only ever measured there.
-- **The exported ZIP's pixel content is unverified.** jsdom has no canvas. Needs a real browser.
-- **The `neurometric` key in `secrets/api_keys.json` is still dead.** A chapter pinned to it escapes
-  to the global provider.
-- **A scan for other `@Transactional` self-invocations has not been done.** AUDIT-B2 was the known
-  instance; the class of bug is invisible at the call site and this codebase has hit an
-  annotation-binding failure three times.
+- **The `AUDIT-D5` memory pair.** Blocked on a measured peak.
+- **`AUDIT-B9`.** Measured, not fixed — see above. Reasonable small next sitting.
+- **Five confirmed-dead tables.** Not cleaned up — baselining isn't cleanup.
+- **`updateJobStatus` has no state-machine validation**, only vocabulary validation. Still
+  unaddressed; still exactly what a rewrite would re-derive badly, and it touches the `jobs` table
+  the (informal, hand-maintained) baseline now tracks.
+- **`try_local_ai`'s bare `enforce_rate_limit()`.** Belongs to `AUDIT-W3`; inert by default
+  (`DISABLE_LOCAL_LLM=true` on this box).
+- **Valkey has no `requirepass`.** Needs backend `SPRING_DATA_REDIS_*` and worker `REDIS_*`
+  simultaneously — a half-applied Redis password takes the whole pipeline down.
+- **`SeriesController.resolveSetting`'s untrimmed placeholder compare.** Dormant.
+- **The cross-provider fallback rule has not reached `ocr.py` and `qa.py`.**
+- **The exported ZIP's pixel content is unverified.** jsdom has no canvas; needs a real browser.
+- **The `neurometric` key in `secrets/api_keys.json` is still dead.**
+- **A scan for other `@Transactional` self-invocations has not been done.**
 - **`NotificationController.currentUser` throws `RuntimeException("Unauthorized")`** — a 500, not a
   401/403.
-- **`Reader.tsx` guards on `.delete-page-btn` and `.reorder-controls`** in its canvas-pan handlers.
-  Provably dead since `b951ee2`. Left because that file is Track 1's.
+- **`Reader.tsx`'s dead canvas-pan guards** on `.delete-page-btn`/`.reorder-controls`. Track 1's.
 - **`PageService`'s "variant not smaller" branch is uncovered.** Needs a contrived incompressible
   fixture.
-- **`JobController` still lists `queue:region-redo` in its queue-clear `delete`.** Legacy cleanup.
+- **`JobController` still lists `queue:region-redo`** in its queue-clear `delete`.
 
 ## Out of scope unless deliberately reopened
 
-- **The worker pull model.** Measured at 408 s of 49,058 s of queue wait (0.83%). Build it for
-  latency, resilience and multi-worker scaling — never for throughput.
-- **A reader downscale cap.** A 3000 px long-edge cap hits 124 images and saves a further 46 MB.
-  Real but secondary, and a second performance variable.
-- **AUDIT-W5**, and re-deriving the queue-wait share. Both settled; see `archive.md`.
+- **The worker pull model.** Measured at 0.83% of queue wait. Build for latency/resilience, never
+  throughput.
+- **A reader downscale cap.** Real but secondary; a second performance variable.
+- **`AUDIT-W5`**, the queue-wait share re-derivation. Both settled; see `archive.md`.
+- **The "should the worker split exist at all" architecture question.** Answered narrowly for B5
+  (no DB coupling either way); the bigger question is untouched.
 
 ## Working constraints
 
-- **`CLAUDE.md` is binding.** `impact({target, direction:"upstream", repo:"manga-library"})` before
-  editing any symbol, report HIGH/CRITICAL, `detect_changes()` before committing. **`detect_changes`
-  attributes by line offset**, so a large insertion flags untouched symbols below it — check `git
-  diff -U0` hunk ranges before believing the blast radius. It **cannot distinguish a flow being
-  deliberately deleted from one breaking**, and **it cannot see inside `worker/`** — use
-  `repo: "manga-tl-worker"` there. Do not dismiss every CRITICAL as an artefact: the eleventh
-  sitting's `isOverride` CRITICAL was real. **`impact()` does not apply to a sitting that edits no
-  symbols.**
-- **No section of `issues.md` is exempt from triage.** If an entry is out of scope for the *work*, it
-  is still in scope for *being true*.
-- **A finding's title can be wrong about the mechanism while its body is right about the code.**
-  AUDIT-W2 described a throttle that never existed and missed the real one. **Read what the callers
-  pass, not what the function could do.**
-- **An entry's difficulty estimate is also a claim, and can also be wrong.** B5 said nobody knows the
-  live schema; it is one column. **Measure the scope before believing the scare.**
-- **The pre-commit gate is `mvn -o clean verify`, not `test`.** `test` skips PMD and jacoco's rules.
-  Use `mvn -o clean test` for red-green iteration, `verify` before you commit. **Never trust an
-  incremental Maven run** — always `clean`.
-- **Watch the shell's working directory.** It persists between calls, and it bit this sitting: a
-  `grep CLAUDE.md` after an unrelated `cd worker` read the wrong file. **Use absolute paths for
-  anything whose result you intend to trust**, and `pwd` when in doubt.
-- **Verify a fix red-green.** If a change genuinely has none — a default change, a comment deletion —
-  **say so** rather than writing a test that passes either way, and verify the thing that *can*
-  break. **The reliable technique is mutation**: write the test, break the code it protects, confirm
-  it reds. Used twice this sitting.
-- **When a bullet gives a count or a line anchor, re-derive it across the tree, not the file.** Four
-  times now. **Grep for the shape, never for the tell.**
-- **A finding can be right and its prescribed fix still wrong.** Check the prescription against the
-  consumers, not just the diagnosis against the code.
-- **Read the whole `issues.md` entry before calling it closed** — and check the *mechanism*, not just
-  whether the line is still there. **Twenty-four findings** have been stale, wrong or incomplete.
-- **One performance variable per change.**
-- **Commit straight to `main`** — no feature branches. **Use a pathspec** (`git commit -F <msgfile> --
-  <paths>`): there is active concurrent work that commits *during* your sitting. **`-F` goes before
-  the `--`**, or git reads it as a pathspec.
-- **`git fetch --all` hangs** on `origin` (a pi5 over Tailscale, unreachable). Use `git fetch github`
-  / `git push github main`. The worker submodule's `origin` is a different, working GitHub remote, so
-  a plain `git push origin main` is correct *there*.
-- **Never run `prettier --write` outside a commit whose purpose is formatting.** `ci-npm.yml` gates on
-  `format:check`; verify with `git diff -w`.
-- **Frontend lint is `--report-unused-disable-directives --max-warnings 0`.** A warning fails the build.
-- **Worker gates are four:** `pytest -q`, `ruff check .`, `ruff format --check .`, `pyright .`. Run
-  `ruff check --fix . && ruff format .` before the final pytest, not after. **markdownlint does not
-  gate the worker** — its CI is ruff/ruff/pyright/pytest only.
-- **Pyright rejects `from tenacity import retry_if_exception_type`** as a private import. Follow
-  `llm_client.py`: `from tenacity.retry import ...`, `.stop`, `.wait`.
-- **Worker source lives at `worker/src/worker/`**, not `worker/`. `issues.md` anchors are relative to
-  the package, so resolve them under `src/worker/`. `worker/app.py` is the one file genuinely at the
-  submodule root.
-- **The worker test fixture is `worker/tests/test_providers.json`**, forced by `conftest.py` via
-  `PROVIDERS_CONFIG`. It is **not** `config/providers.json` and is much thinner — check the fixture
-  carries a key before assuming behaviour is broken.
-- **`@MockitoSpyBean` works on Spring Data repositories** here (spring-test 6.2). It is how
-  `JobCoordinatorServiceTest` counts `pageRepository.findById` calls; the spy delegates. Use
-  `mockingDetails(...).getInvocations()` for a count.
-- **Secrets resolve through three layers.** `DockerSecretsEnvironmentPostProcessor` maps **any** env
-  var ending in `_FILE` to the stripped key, `application-local.yml` holds dev values,
-  `application-test.yml` holds test values. `application.yml` carries **no** credential fallbacks —
-  keep it that way. `SecretsStartupValidator` refuses startup on unset, too-short or known-public
-  `jwt.secret` / `internal.api-token`. **There are two test profiles**, `test` and `integration`;
-  enumerate with
-  `find src -name "application*.yml" && grep -rho '@ActiveProfiles("[^"]*")' src/test/java | sort -u`.
-- **`.env` is gitignored and overrides `docker-compose.yml` defaults.** Currently `CONCURRENT_JOBS=4`,
-  `MAX_HEAVY_SLOTS=1`, `MAX_LIGHT_SLOTS=3`, `DISABLE_LOCAL_LLM=true`, `LOG_LEVEL=INFO`,
-  `LOG_LEVEL_WORKER=DEBUG`, `RATE_LIMIT=10`. **For the *shipped* defaults run `docker compose
-  --env-file /dev/null config`.**
-- The frontend compiles **into** the backend image, so any frontend change needs `docker compose build
-  backend && docker compose up -d backend` (~10 min). Cheap frontend-only check:
-  `docker build --target frontend-build -f backend/Dockerfile .` (~1 min cached).
-- Backend API changes require `npm run generate-api` from `frontend/` with the backend container up.
-- Backend build is Maven (no wrapper) **and must be run from `backend/`**. Frontend is `npx vitest run`
-  / `npx tsc --noEmit` / `npm run lint` / `npm run format:check`.
-- **`worker/` is a git submodule.** Changes need their own commit plus a pointer bump. `git add worker`
-  stages the pointer. **Push the submodule first.**
-- **The local `.venv` is Python 3.13.12 / numpy 2.3.5** and matches the image. It is at the parent repo
-  root, not in `worker/`; run the suite as `cd worker && ../.venv/bin/python -m pytest -q`.
-- **Testcontainers works.** If the backend suite goes red across many classes at once, read the
-  surefire report's `Caused by` chain before blaming the environment.
-- **The `postgres` MCP tools query the live database directly** and are how B5's drift was measured.
-  Read-only queries against `information_schema` are cheap and need no container juggling.
-- **MinIO objects are readable straight off disk** — no container, no port 9000. Single-drive MinIO
-  prefixes a 32-byte bitrot checksum to each 1 MiB block; strip those and the bytes come back verbatim.
-  Handle three layouts: single-part, multi-part (`part.1..N`, numeric order), and small objects inlined
-  into `xl.meta` as a trailing msgpack `bin32`. Verified against all 743 ETags.
-- **Never upload Firefox profiles** — they carry series names and URLs.
-- **`sx` is not a free swap for `style`:** per-frame values mint an emotion class per value, and `sx`
-  loses the cascade to a plain CSS class on a specificity tie. Scope to `&.the-class` when overriding.
+- **`CLAUDE.md` is binding.** `impact()` before editing any symbol, `detect_changes()` before
+  committing — **including config-only commits**; `application.yml` isn't indexed as symbols so
+  `detect_changes()` reports 0 changed symbols for a pure-YAML change, but the tool still needs to
+  run so an unexpected code change riding alongside isn't missed. `impact()` does not apply to a
+  sitting that edits no symbols.
+- **A user correction mid-sitting overrides the handoff that started it.** This sitting's own
+  handoff prescribed Flyway in detail; the user rejected it after most of that work was already
+  built and verified. Revert cleanly (`git diff HEAD~N` against the untouched files to confirm),
+  don't half-keep pieces of the discarded approach, and say plainly what was undone rather than
+  quietly dropping it from the record — see "the Flyway detour" in `archive.md`.
+- **Deployment logs are a stronger red-green than reasoning chains, when available.** The sitting's
+  own transitive proof (live-db == init.sql == init-test.sql == entities) was solid, but the actual
+  `logs/run-4-no-flyaway.log` — a clean boot under `ddl-auto: validate` plus a real write to the
+  reconciled column — is direct evidence, not inference. Ask for the log rather than trusting the
+  chain alone when a live deployment is available to check against.
+- **Two git remotes, `origin` and `github`, can diverge without warning.** `origin` (the pi5 over
+  Tailscale) is usually unreachable (`git fetch --all` hangs) but was not, this time, and carried a
+  commit `github` didn't. Diff `origin/main..github/main` before assuming `git status -sb`'s
+  "ahead N" against whichever remote is tracked tells the whole story.
+- **The pre-commit gate is `mvn -o clean verify`, not `test`.** `test` skips PMD and jacoco.
+- **Watch the shell's working directory.** It persists between calls in the *foreground*, but a
+  `run_in_background` command's `cd` does **not** carry back to the main session — confirmed this
+  sitting when a background `mvn` run's directory change had no effect on the next foreground
+  command. Use absolute paths or an explicit `cd` in every command you intend to trust.
+- **Verify a fix red-green; when there is none, verify the mechanism instead.** Two cases this
+  sitting: `InitScriptReconciliationTest` has a direct red-green (revert the reconciliation, it
+  fails). The `ddl-auto` flip has no test-suite red-green at all (no profile exercises the base
+  `application.yml` value) — mutated `Image.java`'s `@Column` name and confirmed
+  `SchemaValidationTest` fails to boot, proving `validate` catches drift in this exact
+  configuration, then reverted the mutation.
+- **Say plainly if a finding turns out stale, wrong or incomplete** — twenty-five times now.
+  `AUDIT-B5`'s own claim about `SchemaValidationTest`'s mechanism was the twenty-fifth: the
+  practical conclusion held, the reasoning was wrong.
+- **Commit straight to `main`, no feature branches, always a pathspec.** `-F <msgfile>` goes
+  *before* the `--`. The free-model benchmarking thread still commits concurrently.
+- **`git fetch --all` hangs on `origin`.** Use `git fetch github` / `git push github main`. Worker
+  submodule's `origin` is a separate, working remote — `git push origin main` is correct *there*.
+- **Worker source lives at `worker/src/worker/`**, not `worker/`. Fixture is
+  `worker/tests/test_providers.json`, forced by `conftest.py`.
+- **`worker/` is a git submodule.** Its own commit plus a pointer bump; push the submodule first.
+- **The `postgres` MCP tools query the live database directly.** Cheap, read-only, and how both
+  this sitting's and last sitting's schema measurements were made.
+- **GitNexus: two indexes.** `manga-library` (parent) and `manga-tl-worker` (submodule).
+  `detect_changes()` on the parent cannot see inside `worker/` — use `repo: "manga-tl-worker"`
+  there. If reindexing, both documented commands abort on this box; use Node 22:
+  `~/.nvm/versions/node/v22.14.0/bin/node ~/.nvm/versions/node/v26.1.0/lib/node_modules/gitnexus/dist/cli/index.js analyze --embeddings --force`
 
 ## Prompt for the next chat
 
@@ -404,89 +272,82 @@ The free-model benchmarking thread is **still active and still commits during a 
 
 ```
 Continuing manga-library. Read docs/next-step.md first — it is written to make
-this sitting startable cold. docs/archive.md has a "2026-08-06 fourteenth
-sitting" section. Do not re-audit the codebase and do not re-derive the run
-numbers or the schema measurements — all three are written down.
+this sitting startable cold. docs/archive.md has a "2026-08-07 fifteenth
+sitting" section. Do not re-audit the codebase and do not re-derive the schema
+measurements, the deployment validation, or the run numbers — all are written
+down.
 
-THIS SITTING IS AUDIT-B5, the schema baseline. It is the gate on Track 2 and the
-highest-value thing on the board: no migration can begin until the schema has a
-baseline.
+AUDIT-B5 IS CLOSED AND DEPLOYED. The schema baseline exists: 22 live tables (17
+active, 5 confirmed dead with zero code references), ddl-auto is validate (not
+update), database/init.sql is reconciled and guarded by
+InitScriptReconciliationTest. Validated against a real deployment log
+(logs/run-4-no-flyaway.log): clean boot under validate, plus a real write to
+the reconciled images.reader_storage_path column. NO MIGRATION FRAMEWORK WAS
+ADOPTED — the user explicitly rejected Flyway; schema changes are made by hand
+from here on. Do not reopen that decision without asking.
 
-B5 IS MUCH SMALLER THAN ITS ENTRY CLAIMS. The entry says "nobody knows what the
-live schema actually is." It was measured against the live DB last sitting:
-  - 22 tables in init.sql, 22 live — identical set.
-  - Column drift is EXACTLY ONE COLUMN: images.reader_storage_path, live but
-    absent from init.sql, written by PageService.java:474.
-  - No Flyway/Liquibase in backend/pom.xml.
-  - BUT an empty flyway_schema_history table already exists live — it came in
-    via init.sql:99, which is a pg_dump of a previously Flyway-managed DB.
-  - init.sql only runs on an empty data dir, so every change since first boot
-    came from ddl-auto: update.
+SUGGESTED NEXT SITTING: AUDIT-B9, small and self-contained. open-in-view:
+true is currently load-bearing for exactly one endpoint —
+LayerController.getLayerElementHistory returns List<LayerEditHistory> whose
+layerElement/editedBy lazy relations aren't @JsonIgnore'd, unlike every other
+entity in the codebase. Fix it (add @JsonIgnore to both fields, matching the
+codebase's existing pattern, OR convert the endpoint to a DTO), then it's
+possible to actually flip open-in-view off and re-measure whether it's really
+contributing to "backend holds the UI back" — that second half is a distinct,
+larger measurement, don't fold it into the B9 fix itself. Board otherwise
+unchanged: Track 1 (F1, F2, F8, F9), Track 3 (quality gap), AUDIT-D5 (blocked
+on a measured memory peak), AUDIT-W3 (worker concurrency, larger effort),
+AUDIT-T1/Q1 (unranked).
 
-SchemaValidationTest does NOT guard this — it builds the schema from the
-entities via ddl-auto against Testcontainers, so it validates entities against
-themselves. A test comparing entity-derived schema to init.sql fails today on
-one column and passes once reconciled: that is your red-green.
+STATE: 53 filed, 44 closed, 9 open (83%). Nothing [C] or [H].
 
-Suggested order in the handoff: reconcile the one column, pick Flyway,
-baseline with baselineOnMigrate against the existing empty history table, THEN
-turn ddl-auto down to `validate` (not none) LAST and deliberately — that is the
-step that can take the deployment down.
+CI: this sitting pushed to github/main for the first time in three sittings
+(5f7f0f6..cf118de). NOT YET CHECKED — gh CLI was unavailable in the sitting
+that pushed it. Check it before assuming green.
 
-B5 also has to ANSWER "do we really need a separate worker?", open since the
-audit began, because the baseline differs depending on whether the worker keeps
-its own view of job state (jobs, queue_job, job_costs). And B5's second bullet,
-open-in-view: true, is NOT a migration item — measure it separately.
-
-STATE: 43 of 52 findings closed, 9 open. Nothing [C] or [H]. The drain queue is
-empty; the board is the three tracks plus AUDIT-D5 (blocked on a measured memory
-peak — kernel 5.15 has no memory.peak).
-
-CI: GitHub Actions had a critical outage on 2026-08-06; the backend job was
-cancelled with ZERO steps executed, so there is no CI verdict contradicting the
-local gates. Re-run the failed workflows, change nothing.
-
-DEPENDABOT #60 (okhttp): CLOSE IT. Re-verified against 5.4.0 — the jar is 754
-bytes with 0 .class files; okhttp-jvm 5.4.0 has 330. The pom comment records it.
-
-GITNEXUS: TWO indexes now. manga-library (parent) and manga-tl-worker (the
-submodule). detect_changes() on the parent CANNOT see inside worker/ — use
-detect_changes({repo: "manga-tl-worker"}) there. Reindex each from its own root.
-If reindexing, both documented commands abort on this box; use Node 22:
+GITNEXUS: manga-library reindexed at cf118de (5414 symbols, 13437
+relationships, 300 flows). manga-tl-worker untouched, still at its prior
+index point. Two separate indexes — detect_changes() on the parent cannot see
+inside worker/, use repo: "manga-tl-worker" there. Reindex command (both
+documented ones abort on this box):
   ~/.nvm/versions/node/v22.14.0/bin/node \
     ~/.nvm/versions/node/v26.1.0/lib/node_modules/gitnexus/dist/cli/index.js \
     analyze --embeddings --force
 
-GATE: `mvn -o clean verify`, NOT `mvn -o clean test`. Worker has FOUR gates:
-pytest, ruff check, ruff format --check, pyright. Baselines are CONFIRMED:
-backend 414, worker 315. Watch the shell's working directory — it persists
-between calls and it bit the last sitting; use absolute paths.
+GATE: mvn -o clean verify (not test) — currently 415 passing. Worker gates
+(pytest, ruff check, ruff format --check, pyright) untouched this sitting,
+still at the 315-test baseline. A backgrounded command's `cd` does NOT persist
+to the next foreground command in this environment — use absolute paths.
 
-REMOTES: `git fetch --all` hangs on `origin` (pi5 over Tailscale, unreachable).
-Use `git fetch github` / `git push github main`.
+REMOTES: git fetch --all hangs on origin (pi5, usually unreachable, but
+carried an unrelated commit this sitting that github didn't — diff
+origin/main..github/main before trusting one remote's view). Use git fetch
+github / git push github main for the parent; the worker submodule's origin is
+a separate, working remote.
 
-NOT MINE: the free-model benchmarking thread commits concurrently. Use an
-explicit pathspec on every commit, and put -F <msgfile> BEFORE the -- or git
-reads it as a pathspec.
+NOT MINE: the free-model benchmarking thread commits concurrently. Explicit
+pathspec on every commit, -F <msgfile> BEFORE the --.
 
-Say plainly if a finding turns out stale, wrong or INCOMPLETE — that has now
-paid off TWENTY-FOUR times. B5 itself is the newest variant: not stale, but its
-DIFFICULTY was overstated, and nobody had measured it in four sittings of
-calling it "a project, not a sitting". Measure the scope before believing the
-scare.
+Say plainly if a finding turns out stale, wrong or incomplete — twenty-five
+times now, most recently AUDIT-B5's own claim about how SchemaValidationTest
+worked (right conclusion, wrong mechanism).
 
 CONSTRAINTS
-- CLAUDE.md is binding: impact() before edits, detect_changes() before commits.
-  impact() does not apply to a sitting that edits no symbols.
+- CLAUDE.md is binding: impact() before edits, detect_changes() before
+  commits (yes, even for YAML-only changes — the point is catching an
+  unexpected code change riding along, not just symbol-diffing the YAML
+  itself). impact() does not apply to a sitting that edits no symbols.
 - Close the issues.md entry in the SAME commit as the fix: remove it from
   issues.md, write the reasoning into archive.md.
 - Verify red-green. If a change genuinely has no red-green, say so and verify
-  the thing that CAN break instead — mutate the code and confirm the test reds.
+  the mechanism instead — mutate the code and confirm it reds, or point to a
+  real deployment log if one exists.
 - Read the whole issues.md entry, not the headline.
-- Commit to main directly, with a pathspec; worker/ is a submodule and needs its
-  own commit plus a pointer bump, pushed before the parent.
-- One variable per change — especially in B5: reconcile, baseline, and flip
-  ddl-auto are three separate commits.
+- Commit to main directly, with a pathspec; worker/ is a submodule and needs
+  its own commit plus a pointer bump, pushed before the parent.
+- If the user redirects mid-sitting, revert the discarded approach cleanly
+  (verify with git diff against untouched files) and record what was tried
+  and undone — don't just quietly drop it.
 ```
 
 <!-- markdownlint-enable MD031 MD040 -->
