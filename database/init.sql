@@ -127,7 +127,8 @@ CREATE TABLE public.images (
     storage_path character varying(255) NOT NULL,
     thumbnail_storage_path character varying(255),
     width integer,
-    created_by uuid
+    created_by uuid,
+    reader_storage_path character varying(255)
 );
 
 
