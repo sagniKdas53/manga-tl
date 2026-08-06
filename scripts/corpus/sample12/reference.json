@@ -1,0 +1,18 @@
+{
+  "source_image": "examples/sample12/original.jpeg",
+  "reference_image": "examples/sample12/human-tl.jpeg",
+  "reference_provenance": "human-tl.jpeg",
+  "reference_translations": {
+    "r1": "MORNING, OUR BODY WE WOKE SHRUNK UP THIS WHEN HAD",
+    "r2": "HAVE FAIRY FIRST, I'LL OUT WHAT THIS, AND W-WELL. CAUSED FIGURE THEN...",
+    "r3": "DUCTS ARE CRYING... MY TEAR BROKEN! I CAN'T STOP SHOULD I DO~ WHAT OO!! BRO BIG",
+    "r4": null,
+    "r5": "SHRINKING AN EFFECT MIGHT BE OF THE THAT",
+    "r6": "LET'S CALL HELP FOR",
+    "r7": "PLEASE ...AH... BELLE, WAIT WITH EOUS HERE",
+    "r8": "RIGHT BACK, SO PLEASE WAIT FOR I'LL BE ME!",
+    "r9": "ARE YOU GOING WHERE BRO, BIG !?",
+    "r10": "DOWNSTAIRS MY PHONE'S TO GET THE I'M GOING DIED, SO CHARGER BATTERY",
+    "r11": "YESTERDAY LIKE I LEFT IT THERE IT LOOKS"
+  }
+}

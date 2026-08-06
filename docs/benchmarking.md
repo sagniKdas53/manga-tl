@@ -2,6 +2,11 @@
 
 This document provides step-by-step instructions on how to use `benchmark_local_ocr.py` and `benchmark_vlm_ocr.py` inside the Docker container to benchmark different manga page images.
 
+> Translation-stage benchmarking (repeatable, multi-provider via `config/providers.json`,
+> multi-page via `scripts/corpus/`): [`translation_bench.md`](translation_bench.md) — methodology
+> and how to run it. [`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md)
+> is the dated report (14 free OpenRouter models) that motivated building it.
+
 ---
 
 ## 🛠️ Prerequisites

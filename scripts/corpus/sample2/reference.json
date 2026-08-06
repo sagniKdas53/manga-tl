@@ -1,0 +1,11 @@
+{
+  "source_image": "examples/sample2/original.jpg",
+  "reference_image": "examples/sample2/en-mangatranslator.ai.jpg",
+  "reference_provenance": "en-mangatranslator.ai.jpg",
+  "reference_translations": {
+    "r1": "DIFFERENT ACTUALLY PLANET. FROM WAS A EVEN THOUGH I WAS BORN, EARTH WHERE FELT LIKE I BE ON THE FOR SOME REASON IT I SHOULD",
+    "r2": "@兔猫锚",
+    "r3": "mbasion",
+    "r4": "mangatranslator.almao兔猫锚qwen3-235b"
+  }
+}

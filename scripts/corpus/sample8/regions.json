@@ -1,0 +1,29 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ねねぇせんせ今日は一緒に寝てい１い？"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "その：ヒカリには内緒でさ："
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "え?なに?どうしたの?"
+  }
+]

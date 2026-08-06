@@ -1,0 +1,92 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ルシのハキングてどんな感じでやるんだ?"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "気になる?ハクしてあげようか?"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "されたい!"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "しょうがない子…"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ほら…"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "どんなきぶん気分？"
+  },
+  {
+    "id": "r7",
+    "panel": 1,
+    "bubble": 7,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "IL"
+  },
+  {
+    "id": "r8",
+    "panel": 1,
+    "bubble": 8,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "やべえな!有X前の親父"
+  },
+  {
+    "id": "r9",
+    "panel": 1,
+    "bubble": 9,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "インプラントな無しでハックされる訳ね工のに!れでシラフか"
+  },
+  {
+    "id": "r10",
+    "panel": 1,
+    "bubble": 10,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "nPまた全くもては恥かし…"
+  }
+]

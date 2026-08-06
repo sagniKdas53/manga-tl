@@ -1,0 +1,65 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ダニ"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "もう少しいいじないですか"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "そろそろ離れてくれないか"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "そう言い始めてもう一時間だぞ"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "その一時間前は必死に好き好き言ていた癖に"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "出すもの出したら用済みですか?"
+  },
+  {
+    "id": "r7",
+    "panel": 1,
+    "bubble": 7,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "いトイレに…"
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "source_image": "examples/sample15/orginal.png",
+  "reference_image": "examples/sample15/human-tl.png",
+  "reference_provenance": "human-tl.png",
+  "reference_translations": {
+    "r1": "CLASS P.E.",
+    "r2": "八",
+    "r3": "HERTA WAIT, !?",
+    "r4": "ARE YOU HERE? DOING WHAT HAVING P.E. HERTA'S WASN'T IN THE CLASS GYM? HUH?",
+    "r5": "WASTING MY ENERGY ON LUXURY OF EXERCISE HAVE THE I DON'T VALUABLE GENIUS'S TIME IS …A",
+    "r6": null,
+    "r7": "SKIPPING CLASS.. YOU'RE JUST so,",
+    "r8": "RIGHT AWAY... HANG OUT IN A PLACE LIKE GET CAUGHT THIS, YOU'LL IF YOU",
+    "r9": null,
+    "r10": "A PROPER CEMENT, SO IT'LL BE FINE REPLA- I LEFT UNDERESTI- MATE ME, OKAY? DON'T",
+    "r11": "A PROPER CEMENT? REPLA-",
+    "r12": "SMALL? ALWAYS HERTA WAS THIS",
+    "r13": null,
+    "r14": "WILL FIND OUT! THEY NO, YES"
+  }
+}

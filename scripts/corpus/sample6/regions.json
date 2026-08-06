@@ -1,0 +1,29 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "あのうでが胸に当たてるんだけど、"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "h?なんもないぞ"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ぶコとばすわよ"
+  }
+]

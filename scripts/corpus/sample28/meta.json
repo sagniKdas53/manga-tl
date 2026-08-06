@@ -1,0 +1,8 @@
+{
+  "sample_id": "sample28",
+  "extraction_method": "manual",
+  "region_count": 7,
+  "reference_matched_count": 6,
+  "reference_match_rate": 0.857,
+  "notes": "Hand-transcribed and hand-aligned (see docs/free_openrouter_translation_benchmark_2026-08-06.md). r7 (SFX, repeated onomatopoeia) has no reference translation because the reference render leaves it untranslated. Treated as the corpus reliability baseline for auto-extracted pages to be compared against."
+}

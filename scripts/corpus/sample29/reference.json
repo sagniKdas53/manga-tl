@@ -1,0 +1,15 @@
+{
+  "source_image": "examples/sample29/original.3.jpeg",
+  "reference_image": "examples/sample29/human-tl.jpeg",
+  "reference_provenance": "human-tl.jpeg",
+  "reference_translations": {
+    "r1": "INCIDENT, KIND OF DUETO TWO... THESE SOME",
+    "r2": "SWITCHING ENDED UP BODIES! THEIR",
+    "r3": "I HAVE THIS A FAVOR TO ASK WHILE FIREFLY! I'VE GOT CHANCE! PLEASE,",
+    "r4": "TRANSFORM I WANT TO INTO SAM!",
+    "r5": "Fidget",
+    "r6": "BEFORE YOU PUT ON THE HAVE TO CLOTHES CHANGE SUIT... FIRST YOU UMM, FOR Fidget THAT... NO...",
+    "r7": "GOT IT! I TOOK THEM OFF!",
+    "r8": "00 00 00 00 00 OP ST"
+  }
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "生まれた地球にいるはずなのに何故か本当は僕だけが違う星から来たみたいだった"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "@兔猫锚"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "SON"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "免猫锚"
+  }
+]

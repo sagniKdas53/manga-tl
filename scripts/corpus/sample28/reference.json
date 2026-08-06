@@ -1,0 +1,14 @@
+{
+  "source_image": "examples/sample28/original.jpg",
+  "reference_image": "examples/sample28/en-manga-tl-ai.jpg",
+  "reference_note": "Reference render is watermarked 'mangatranslator.ai / qwen3-235b' — a competitor paid pipeline used as our quality baseline, per docs/render_quality_gap_2026-08-05.md convention.",
+  "reference_translations": {
+    "r1": "ANAL AUTHENTICATION ERROR",
+    "r2": "IT LOOKS VERY SIMILAR TO SHEFFIELD, BUT THERE ARE SLIGHT DIFFERENCES.",
+    "r3": "THAT IDIOT COMMANDER...",
+    "r4": "I REALLY SHOULD'VE KILLED HIM AFTER ALL...!",
+    "r5": "WHAT DO YOU MEAN 'SWITCHED TO ANAL AUTHENTICATION❤'...?",
+    "r6": "BESIDES, YOU MESS WITH IT EVERY NIGHT, SO IT'S CAUSING ERRORS...!",
+    "r7": null
+  }
+}

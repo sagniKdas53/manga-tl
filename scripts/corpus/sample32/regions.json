@@ -1,0 +1,56 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "一俺先生のこと好きです昔から今に至るまでずつと好きでした"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "一先生もロキシ・グレイラットに名前を変えるつもりはありませんガ?"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "そうですあと十数年した時に考えが变わらかつたらもう一度言つてください」"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "一僕先生のこ好きですよ!こ"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "甲龍暦四二三年"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "甲龍暦四一年"
+  }
+]

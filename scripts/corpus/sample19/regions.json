@@ -1,0 +1,47 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "イメージ"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "これを私が?あはは何言てんの"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "もうそんな歳じやないよ"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "リアル"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "叶が"
+  }
+]

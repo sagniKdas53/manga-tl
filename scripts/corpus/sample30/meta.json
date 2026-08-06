@@ -1,0 +1,11 @@
+{
+  "sample_id": "sample30",
+  "extraction_method": "auto-ocr",
+  "region_count": 6,
+  "source_fragment_count": 29,
+  "merge_ratio": 0.207,
+  "over_merge_risk": true,
+  "reference_matched_count": 3,
+  "reference_match_rate": 0.5,
+  "notes": "regionType defaults to 'speech' (OCR alone can't classify sign/sfx/caption); reading order is a row-banded page-level heuristic, not panel-aware. over_merge_risk=true means region_count collapsed a lot relative to raw OCR fragments — likely several unrelated text blocks were merged into one region (see render_quality_gap_2026-08-05.md §D4); spot-check before use."
+}
