@@ -234,7 +234,10 @@ services:
       - QA_VLM_MODEL=${QA_VLM_MODEL:-}
       - QA_LLM_MODEL_LIST=${QA_LLM_MODEL_LIST:-}
       - QA_VLM_MODEL_LIST=${QA_VLM_MODEL_LIST:-}
-      - RATE_LIMIT=${RATE_LIMIT:-10}
+      # AUDIT-W2: unset, i.e. unlimited. Every provider in config/providers.json carries its own
+      # `rateLimits`; this is only the fallback for one that does not, and it used to default to
+      # 10 RPM, so such a provider silently inherited one call every 6 seconds.
+      - RATE_LIMIT=${RATE_LIMIT:-}
       - DISABLE_LOCAL_OCR=${DISABLE_LOCAL_OCR:-false}
       - DISABLE_DEEPL_TRANSLATE=${DISABLE_DEEPL_TRANSLATE:-false}
       - DISABLE_GOOGLE_TRANSLATE=${DISABLE_GOOGLE_TRANSLATE:-false}

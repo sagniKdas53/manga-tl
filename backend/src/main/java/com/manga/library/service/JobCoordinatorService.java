@@ -1436,11 +1436,6 @@ public class JobCoordinatorService {
     if (cost != null) {
       com.fasterxml.jackson.databind.node.ObjectNode tlNode = objectMapper.createObjectNode();
       tlNode.set("cost", objectMapper.valueToTree(cost));
-      // if summary is passed inside cost object, we can leave it there, or if we need
-      // to we can
-      // extract it.
-      // But user said move tl cost and summary under 'tl'.
-      // If summary is in cost, it'll naturally move under 'tl'.
       metadata.set("tl", tlNode);
       saveJobCosts(imageId, cost);
     }

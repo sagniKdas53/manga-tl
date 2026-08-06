@@ -110,7 +110,7 @@ You can enable or disable different fallback layers in [.env](file:///home/sagni
 
 To respect remote API limitations and avoid bombarding servers with request storms, the worker enforces two mechanisms:
 
-1. **Rate Limiting Delay**: The `RATE_LIMIT` environment variable (e.g., `RATE_LIMIT=30` representing 30 requests per minute) calculates a minimum delay (e.g., 2.0 seconds) enforced between consecutive requests using `time.sleep()`.
+1. **Rate Limiting Delay**: Each provider's `rateLimits` in `config/providers.json` gives the requests per minute for that provider, from which a minimum delay between consecutive requests to it is enforced with `time.sleep()`. The `RATE_LIMIT` environment variable is only a fallback for a provider that does not declare one (e.g. `RATE_LIMIT=30` for 30 requests per minute, giving a 2.0 second delay); it is **unset by default, meaning unlimited**.
 2. **429 Provider Cooldown**: If a remote provider returns a `429 (Too Many Requests)` status code:
     * The worker initiates a **60-second cooldown** for that specific provider.
     * Subsequent requests within that 60-second window immediately bypass the provider and trigger fallback tiers.

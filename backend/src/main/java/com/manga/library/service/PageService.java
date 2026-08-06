@@ -666,8 +666,10 @@ public class PageService {
       // Panel relationship is handled via Image, so we don't need to clone panels since they share the Image
       clonedRegion.setPanel(sourceRegion.getPanel());
       clonedRegion.setText(sourceRegion.getText());
-      // Skip TL/QA fields in OCR cloning just to be clean, but they will be overwritten if TL is cloned.
-      // Wait, actually OcrRegion contains TL/QA fields. If we ONLY clone OCR, we should clear TL fields.
+      // OcrRegion carries the TL and QA fields too, so cloning OCR alone has to clear them rather
+      // than copy them: a clone of the OCR is not a clone of a translation that was never redone.
+      // When the caller goes on to clone TL as well, cloneTranslationData writes these same seven
+      // fields back from the source.
       clonedRegion.setTranslatedText(null);
       clonedRegion.setApproved(false);
       clonedRegion.setTranslationFailed(false);
