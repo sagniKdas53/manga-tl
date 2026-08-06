@@ -7,7 +7,12 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
     ports:
-      - "5432:5432"
+      # AUDIT-D5: bound to loopback rather than 0.0.0.0. Nothing in the stack reaches
+      # Postgres this way — backend and worker both use the manga-net hostname `db`.
+      # The mapping exists only for host-side tooling (psql, MCP clients, the
+      # migrate_thumbnails.py script's DB_HOST/DB_PORT override), so it does not need
+      # to be reachable from the LAN. Same treatment on redis and minio below.
+      - "127.0.0.1:5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -65,7 +70,11 @@ services:
     container_name: manga-valkey
     command: [ "valkey-server", "--appendonly", "yes" ]
     ports:
-      - "6379:6379"
+      # AUDIT-D5: loopback only. Valkey runs with no `requirepass`, so on 0.0.0.0 this
+      # was an unauthenticated data store on the LAN — the sharpest edge of that entry.
+      # Adding a password is a separate change: it has to land in the backend's
+      # SPRING_DATA_REDIS_* config and the worker's REDIS_* config at the same time.
+      - "127.0.0.1:6379:6379"
     volumes:
       - ./data/redis:/data
     networks:
@@ -85,7 +94,12 @@ services:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_ROOT_PASSWORD_FILE=/run/secrets/minio_password
     ports:
-      - "9001:9001"
+      # AUDIT-D5: loopback only. This is the console (9001), not the S3 API (9000) —
+      # 9000 is not published at all and everything in the stack talks to it over
+      # manga-net. The console is a browser UI with no in-network consumer, so it is
+      # the one mapping here that cannot simply be dropped; loopback keeps it usable
+      # from this host while taking it off the LAN.
+      - "127.0.0.1:9001:9001"
     volumes:
       - ./data/minio:/data
     secrets:
@@ -132,7 +146,10 @@ services:
       - WORKER_API_SECRET_FILE=/run/secrets/worker_api_secret
       - USE_REMOTE_ML=${USE_REMOTE_ML:-false}
       - REMOTE_ML_URL=${REMOTE_ML_URL:-http://worker:8000}
-      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      # AUDIT-D5: the shipped default was DEBUG. application.yml already defaults both
+      # `root` and `com.manga.library` to INFO, so compose was the only thing forcing
+      # DEBUG on a deployment with no .env.
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - OCR_MODEL_PROVIDER=${OCR_MODEL_PROVIDER:-openrouter}
       - OCR_VLM_MODEL=${OCR_VLM_MODEL:-}
       - OCR_VLM_MODEL_LIST=${OCR_VLM_MODEL_LIST:-}
@@ -244,7 +261,11 @@ services:
       # - PADDLEX_OFFLINE_MODE=1
       # - PADDLE_DISABLE_TELEMETRY=1
       # Log Level
-      - LOG_LEVEL=${LOG_LEVEL_WORKER:-DEBUG}
+      # AUDIT-D5: shipped default was DEBUG here too; config.py already falls back to
+      # INFO. Note this reads LOG_LEVEL_WORKER, not LOG_LEVEL — .env and .env.example
+      # both set it to DEBUG deliberately, and that is left alone. Only the default
+      # for a deployment carrying no .env changes.
+      - LOG_LEVEL=${LOG_LEVEL_WORKER:-INFO}
       - PADDLEOCR_DET_MODEL=${PADDLEOCR_DET_MODEL:-PP-OCRv6_medium_det}
       - PADDLEOCR_REC_MODEL=${PADDLEOCR_REC_MODEL:-PP-OCRv6_medium_rec}
       - PADDLEOCR_DEVICE=${PADDLEOCR_DEVICE:-cpu}
