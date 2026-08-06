@@ -18,6 +18,7 @@ import com.manga.library.service.MinioService;
 import com.manga.library.service.SseService;
 import java.util.*;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -664,5 +665,228 @@ public class InternalJobControllerTest {
         .andExpect(status().isOk());
 
     verify(jobCoordinatorService, times(1)).handleRenderCallback(any(), any(), any());
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // AUDIT-B8
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * The endpoint used to write whatever word the worker sent onto the row. AUDIT-P6 has since made
+   * the worker <em>retry</em> against this endpoint, so a bad payload arrives up to four times; a
+   * 400 is what stops that retry loop, because the worker treats a non-408/429 4xx as terminal.
+   */
+  @Test
+  public void testUpdateJobStatus_RejectsAnUnknownStatusWord() throws Exception {
+    Job job =
+        new Job() {
+          {
+            setId("job1");
+            setType("ocr");
+            setStatus("PROCESSING");
+          }
+        };
+    when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                    "/api/internal/jobs/job1/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("status", "COMPLETE"))))
+        .andExpect(status().isBadRequest());
+
+    // The row is untouched: not saved, not pushed back onto Redis, no SSE fan-out.
+    org.junit.jupiter.api.Assertions.assertEquals("PROCESSING", job.getStatus());
+    verify(jobRepository, never()).save(any());
+    verify(jobCoordinatorService, never()).pushJobToRedis(any());
+    verify(sseService, never()).emitEventForImage(any(), anyString(), any());
+  }
+
+  /** Case is not folded — {@code completed} is a bug in the sender, not an alias. */
+  @Test
+  public void testUpdateJobStatus_RejectsAWrongCaseStatus() throws Exception {
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                    "/api/internal/jobs/job1/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("status", "completed"))))
+        .andExpect(status().isBadRequest());
+
+    // Rejected before the row is even looked up.
+    verify(jobRepository, never()).findById(anyString());
+  }
+
+  /** Every word the worker and the backend actually emit has to survive the guard. */
+  @Test
+  public void testUpdateJobStatus_AcceptsTheWholeKnownVocabulary() throws Exception {
+    for (String status : List.of("PENDING", "PROCESSING", "COMPLETED", "FAILED", "PAUSED")) {
+      Job job =
+          new Job() {
+            {
+              setId("job1");
+              setType("ocr");
+              setStatus("PROCESSING");
+            }
+          };
+      when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
+
+      mockMvc
+          .perform(
+              org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                      "/api/internal/jobs/job1/status")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(objectMapper.writeValueAsString(Map.of("status", status))))
+          .andExpect(status().isOk());
+
+      org.junit.jupiter.api.Assertions.assertEquals(status, job.getStatus());
+    }
+  }
+
+  /** A payload that carries only {@code error}/{@code attempt} and no status stays legal. */
+  @Test
+  public void testUpdateJobStatus_APayloadWithoutAStatusIsStillApplied() throws Exception {
+    Job job =
+        new Job() {
+          {
+            setId("job1");
+            setType("ocr");
+            setStatus("PROCESSING");
+          }
+        };
+    when(jobRepository.findById("job1")).thenReturn(Optional.of(job));
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                    "/api/internal/jobs/job1/status")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("error", "boom"))))
+        .andExpect(status().isOk());
+
+    org.junit.jupiter.api.Assertions.assertEquals("PROCESSING", job.getStatus());
+    org.junit.jupiter.api.Assertions.assertEquals("boom", job.getError());
+  }
+
+  /**
+   * Seven of the eight {@code resolveNotificationContext} call sites threw the result away — a
+   * {@code findByImageId} plus a lazy chapter and series load per callback, for nothing. Only the
+   * QA callback ever built a notification from it.
+   */
+  @Test
+  public void testOcrCallback_DoesNotResolveNotificationContext() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    OcrCallbackDto dto = new OcrCallbackDto(null, imageId, null, null, null, null, List.of());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/ocr")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isOk());
+
+    verify(pageRepository, never()).findByImageId(any());
+  }
+
+  /**
+   * AUDIT-B8: the notification context used to be {@code pages.get(0)}, the same "first page for
+   * this image" guess {@code 5e2d5ce} removed from the callback path. An image shared by two
+   * chapters got a notification naming whichever page the repository returned first.
+   */
+  @Test
+  public void testQaCallback_NamesTheChapterTheJobWasQueuedFor() throws Exception {
+    UUID imageId = UUID.randomUUID();
+    UUID wantedPageId = UUID.randomUUID();
+
+    Series seriesA = new Series();
+    seriesA.setTitle("Wrong Series");
+    Chapter chapterA = new Chapter();
+    chapterA.setChapterNumber(1.0);
+    chapterA.setTitle("Wrong Chapter");
+    chapterA.setSeries(seriesA);
+    Page pageA = new Page();
+    pageA.setId(UUID.randomUUID());
+    pageA.setPageNumber(1);
+    pageA.setChapter(chapterA);
+
+    Series seriesB = new Series();
+    seriesB.setTitle("Right Series");
+    Chapter chapterB = new Chapter();
+    chapterB.setChapterNumber(7.0);
+    chapterB.setTitle("Right Chapter");
+    chapterB.setSeries(seriesB);
+    Page pageB = new Page();
+    pageB.setId(wantedPageId);
+    pageB.setPageNumber(42);
+    pageB.setChapter(chapterB);
+
+    // pageA first — exactly the ordering that made pages.get(0) pick the wrong chapter.
+    when(pageRepository.findByImageId(imageId)).thenReturn(List.of(pageA, pageB));
+    when(jobCoordinatorService.handleQaCallback(any(), any(), any(), any(), any()))
+        .thenReturn("COMPLETED");
+
+    Map<String, Object> payload =
+        Map.of(
+            "imageId", imageId.toString(),
+            "pageId", wantedPageId.toString(),
+            "qaResults", List.of());
+
+    mockMvc
+        .perform(
+            post("/api/internal/jobs/callback/qa")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isOk());
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, String>> ctx = ArgumentCaptor.forClass((Class) Map.class);
+    verify(sseService)
+        .emitNotificationForImage(
+            eq(imageId), eq("SUCCESS"), anyString(), anyString(), ctx.capture());
+
+    org.junit.jupiter.api.Assertions.assertEquals("Right Series", ctx.getValue().get("seriesTitle"));
+    org.junit.jupiter.api.Assertions.assertEquals("7.0", ctx.getValue().get("chapterNumber"));
+    org.junit.jupiter.api.Assertions.assertEquals("42", ctx.getValue().get("pageNumber"));
+  }
+
+  /**
+   * The five {@code DEBUG_TL:} lines sat at INFO on {@code GET /images/{imageId}} — the hottest
+   * internal endpoint, called once per job to fetch the image for processing.
+   */
+  @Test
+  public void testGetImageInfo_DebugLinesAreNotLoggedAtInfo() throws Exception {
+    ch.qos.logback.classic.Logger controllerLogger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(InternalJobController.class);
+    ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+        new ch.qos.logback.core.read.ListAppender<>();
+    appender.start();
+    ch.qos.logback.classic.Level previous = controllerLogger.getLevel();
+    controllerLogger.setLevel(ch.qos.logback.classic.Level.INFO);
+    controllerLogger.addAppender(appender);
+    try {
+      UUID imageId = UUID.randomUUID();
+      Image image = new Image();
+      image.setId(imageId);
+      image.setFilename("test.png");
+      image.setStoragePath("orig/test.png");
+      when(imageRepository.findById(imageId)).thenReturn(Optional.of(image));
+      when(minioService.generatePresignedUrl(anyString())).thenReturn("http://presigned-url");
+      when(panelRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+      when(pageRepository.findByImageId(imageId)).thenReturn(Collections.emptyList());
+
+      mockMvc.perform(get("/api/internal/images/" + imageId)).andExpect(status().isOk());
+
+      long debugTl =
+          appender.list.stream()
+              .filter(e -> e.getMessage() != null && e.getMessage().startsWith("DEBUG_TL:"))
+              .count();
+      org.junit.jupiter.api.Assertions.assertEquals(
+          0, debugTl, "DEBUG_TL lines must not reach an INFO-level appender");
+    } finally {
+      controllerLogger.detachAppender(appender);
+      controllerLogger.setLevel(previous);
+    }
   }
 }

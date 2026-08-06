@@ -1122,6 +1122,18 @@ public class JobCoordinatorService {
           "Reader mode detected (source=target={}) for image {}. Skipping translation, render, and QA.",
           series.getSourceLanguage(),
           imageId);
+      // AUDIT-B8: this branch is the end of the pipeline, so nothing downstream will ever mark the
+      // layout job terminal. It used to return with the row still PROCESSING and lean entirely on
+      // the worker's PATCH — which AUDIT-P6 showed can be lost, after which
+      // recoverStaleProcessingJobs requeues the layout pass ten minutes later for a chapter that
+      // is already finished. Same shape as the empty-OCR branch above.
+      Job layoutJob = resolveCallbackJob(jobId, imageId, "layout");
+      if (layoutJob != null) {
+        layoutJob.setStatus("COMPLETED");
+        layoutJob.setUpdatedAt(OffsetDateTime.now());
+        jobRepository.save(layoutJob);
+        sseService.emitEventForImage(imageId, "job_update", layoutJob);
+      }
       return;
     }
 

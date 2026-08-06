@@ -70,6 +70,20 @@ public class InternalJobController {
       @PathVariable String jobId, @RequestBody Map<String, String> payload) {
     Objects.requireNonNull(jobId, "jobId cannot be null");
     log.info("Worker updating job {} status to {}", jobId, payload.get("status"));
+    // AUDIT-B8: reject an unknown status word rather than persisting it. A 4xx that is not 408/429
+    // is terminal for the worker's retry wrapper (AUDIT-P6), which is what a typo deserves — no
+    // number of attempts will fix the spelling, and the old behaviour wrote it to the row and let
+    // every downstream equals() comparison quietly stop matching.
+    if (payload.containsKey("status") && !JobStatus.isKnown(payload.get("status"))) {
+      log.warn("Rejecting unknown status {} for job {}", payload.get("status"), jobId);
+      return ResponseEntity.badRequest()
+          .body(
+              Map.of(
+                  "error",
+                  "Unknown job status: " + payload.get("status"),
+                  "allowed",
+                  Arrays.toString(JobStatus.values())));
+    }
     if ("PENDING".equals(payload.get("status"))) {
       log.info("Worker re-queued job {} for retry (attempt {})", jobId, payload.get("attempt"));
     } else if ("FAILED".equals(payload.get("status"))) {
@@ -203,14 +217,14 @@ public class InternalJobController {
                   latestOcrLayer = l;
                 }
               }
-              log.info("DEBUG_TL: selected pageId = {}", page != null ? page.getId() : "null");
-              log.info("DEBUG_TL: allOcrRegions size = {}", allOcrRegions.size());
-              log.info("DEBUG_TL: allLayers size = {}", allLayers.size());
+              log.debug("DEBUG_TL: selected pageId = {}", page != null ? page.getId() : "null");
+              log.debug("DEBUG_TL: allOcrRegions size = {}", allOcrRegions.size());
+              log.debug("DEBUG_TL: allLayers size = {}", allLayers.size());
               if (latestOcrLayer != null) {
-                log.info("DEBUG_TL: latestOcrLayer id = {}", latestOcrLayer.getId());
+                log.debug("DEBUG_TL: latestOcrLayer id = {}", latestOcrLayer.getId());
                 List<LayerElement> ocrElements =
                     layerElementRepository.findByLayerId(latestOcrLayer.getId());
-                log.info("DEBUG_TL: ocrElements size = {}", ocrElements.size());
+                log.debug("DEBUG_TL: ocrElements size = {}", ocrElements.size());
                 Set<UUID> activeRegionIds = new HashSet<>();
                 for (LayerElement el : ocrElements) {
                   if (el.getRegion() != null) {
@@ -319,7 +333,6 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/panel")
   public ResponseEntity<?> panelCallback(@RequestBody PanelCallbackDto dto) {
     log.info("Received panel callback for image: {}", dto.imageId());
-    resolveNotificationContext(dto.imageId());
     try {
       jobCoordinatorService.handlePanelCallback(dto);
       return ResponseEntity.ok().build();
@@ -332,7 +345,6 @@ public class InternalJobController {
   @PostMapping("/jobs/callback/ocr")
   public ResponseEntity<?> ocrCallback(@RequestBody OcrCallbackDto dto) {
     log.info("Received OCR callback for image: {}", dto.imageId());
-    resolveNotificationContext(dto.imageId());
     try {
       jobCoordinatorService.handleOcrCallback(dto);
       return ResponseEntity.ok().build();
@@ -347,7 +359,6 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received layout callback for image: {}", imageId);
-    resolveNotificationContext(imageId);
     try {
       List<?> rawRegionTypes = (List<?>) payload.get("regionTypes");
       List<Map<String, String>> regionTypes = new ArrayList<>();
@@ -395,7 +406,6 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received translation callback for image: {}", imageId);
-    resolveNotificationContext(imageId);
     try {
       List<?> rawTranslations = (List<?>) payload.get("translations");
       List<Map<String, Object>> translations = new ArrayList<>();
@@ -441,7 +451,6 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received QA Re-OCR callback for image: {}", imageId);
-    resolveNotificationContext(imageId);
     try {
       List<?> rawResults = (List<?>) payload.get("results");
       List<Map<String, Object>> results = new ArrayList<>();
@@ -484,7 +493,6 @@ public class InternalJobController {
                         ? region.getPage().getImage().getId()
                         : null;
 
-                resolveNotificationContext(imageId);
                 if (payload.containsKey("text")) {
                   region.setText((String) payload.get("text"));
                 }
@@ -531,7 +539,6 @@ public class InternalJobController {
         ? UUID.fromString(payload.get("pageId"))
         : null;
     log.info("Received render callback for image: {}", imageId);
-    resolveNotificationContext(imageId);
     try {
       jobCoordinatorService.handleRenderCallback(extractJobId(payload), imageId, pageId);
       imageRepository
@@ -583,7 +590,7 @@ public class InternalJobController {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
     log.info("Received QA callback for image: {}", imageId);
-    Map<String, String> ctx = resolveNotificationContext(imageId);
+    Map<String, String> ctx = resolveNotificationContext(imageId, extractPageId(payload));
     try {
       List<?> rawResults = (List<?>) payload.get("qaResults");
       List<Map<String, Object>> qaResults = new ArrayList<>();
@@ -674,13 +681,35 @@ public class InternalJobController {
     }
   }
 
-  private Map<String, String> resolveNotificationContext(UUID imageId) {
+  /**
+   * Series / chapter / page labels for the notification text on a callback.
+   *
+   * <p>AUDIT-B8: this used to take the image alone and read {@code pages.get(0)}, which is the
+   * same "first page for this image" guess commit {@code 5e2d5ce} removed from the callback path
+   * — an image can back pages in several chapters, and the notification then names whichever one
+   * the repository happened to return first. {@code callbackPageId} is the pageId the worker
+   * echoed back from the job payload, so when it is present the page is exact. The {@code
+   * pages.get(0)} fallback stays for callbacks queued before the pageId echo existed; it is a
+   * label on a notification, not a write.
+   */
+  private Map<String, String> resolveNotificationContext(UUID imageId, UUID callbackPageId) {
     Map<String, String> context = new HashMap<>();
     if (imageId == null) return context;
     try {
       List<Page> pages = pageRepository.findByImageId(imageId);
       if (pages != null && !pages.isEmpty()) {
-        Page page = pages.get(0);
+        Page page = null;
+        if (callbackPageId != null) {
+          for (Page p : pages) {
+            if (callbackPageId.equals(p.getId())) {
+              page = p;
+              break;
+            }
+          }
+        }
+        if (page == null) {
+          page = pages.get(0);
+        }
         context.put("pageNumber", String.valueOf(page.getPageNumber()));
         if (page.getChapter() != null) {
           Chapter chapter = page.getChapter();

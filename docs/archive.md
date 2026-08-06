@@ -173,6 +173,72 @@ expensive loads still happen; the explicit HEAD mapping is what avoids them. Plu
 GET handler and 404 in the unit test. The worker tests assert `requests.get` is never called and
 that the timeout is 5.
 
+### The 2026-08-06 tenth sitting — AUDIT-B8, the callback-path half
+
+Four of AUDIT-B8's eight bullets, all in `InternalJobController` and the layout callback it feeds.
+All four were **accurate as filed**, and one of them was hiding a larger defect than the one filed.
+
+**`updateJobStatus` accepted arbitrary strings.** Exactly as described: `job.setStatus(payload.get(
+"status"))` with no validation, and `PENDING`/`FAILED` special-cased for logging only. The endpoint
+now rejects anything outside the vocabulary already documented on `Job.status` — `PENDING`,
+`PROCESSING`, `COMPLETED`, `FAILED`, `PAUSED` — with a 400, before the row is looked up.
+
+The new `JobStatus` enum is a **validator, not a mapping**. Making `Job.status` an actual enum field
+is the obvious next thought and it is the wrong change to bundle here: the entity is serialised onto
+SSE, into Redis and into the frontend's generated schema, so its type is a schema change with a blast
+radius well past this entry. Column and field stay `String`.
+
+Case is deliberately not folded. `completed` is a bug in whatever sent it, and folding it would hide
+the bug rather than surface it — the whole point of the guard.
+
+**The state-machine half of that bullet was deliberately not done.** A transition guard has to tell a
+stale worker's late callback from a live one, and this row carries nothing to do it with: AUDIT-P4
+solved the duplicate-*result* problem with `callbackAppliedAt`, not the duplicate-*status* one. There
+is no correct guard to write here without job generation tracking, so rejecting an unknown word — the
+part that can be done correctly — is what shipped. Written down rather than silently skipped.
+
+This composes with AUDIT-P6 by design. P6 made the worker retry the PATCH, and its classifier treats
+a 4xx that is not 408/429 as terminal — which is right, because no number of attempts fixes a typo.
+
+**`resolveNotificationContext`'s `pages.get(0)` — and the bullet's unmentioned half.** The filed
+ambiguity is real and is now resolved off `extractPageId(payload)`, the pageId the worker echoes back,
+with the `get(0)` fallback kept for callbacks predating the echo. It is a label on a notification, not
+a write, so the fallback is acceptable where it would not be on the result path.
+
+What the entry does not mention is that **seven of the eight call sites threw the return value away**
+— `resolveNotificationContext(imageId);` as a bare statement in the panel, OCR, layout, translation,
+QA-re-OCR, region-redo and render callbacks. Each one is a `findByImageId` plus a lazy chapter and
+series load, per callback, for nothing; only `qaCallback` ever built a notification from it. All seven
+are deleted. That is the **seventh** time reading past the headline found real work.
+
+This is also why `detect_changes` reported CRITICAL with 36 affected processes: about thirty of them
+are `OcrCallback → GetChapter`-shaped flows that exist *only* because of those dead calls. They do not
+break, they cease to exist. `formatMessage` and `JobCoordinatorService.FREE_TEXT_MAX_WIDEN` were the
+usual line-offset artefacts — both sit below a 12-line insertion and neither was touched.
+
+**Reader mode left the layout job `PROCESSING`.** Accurate as filed, and it is the same hole AUDIT-P6
+documented from the other end: `source == target` is the *end* of the pipeline, so nothing downstream
+was ever going to mark the job terminal, and completion fell entirely to the worker's PATCH. Ten
+minutes of that going missing and `recoverStaleProcessingJobs` requeues a layout pass for a chapter
+that is already finished. Now marked `COMPLETED` in the same shape as the empty-OCR branch —
+`resolveCallbackJob`, `setUpdatedAt`, save, SSE. The test also asserts no translation job is enqueued,
+so the branch is still a skip and not a silent pipeline restart.
+
+**The DEBUG_TL lines** are five `log.info` calls on `GET /images/{imageId}`, still hit once per job.
+Now `log.debug`. The test pins a logback `ListAppender` at INFO to the controller's logger and asserts
+zero `DEBUG_TL:` events reach it — a level change is otherwise invisible to a test.
+
+All five defects were reverted **individually** and each went red on its own test: the missing guard
+(2 tests), the INFO level, the restored dead call, `pages.get(0)` with the new signature left in place,
+and the missing `COMPLETED`. Backend **409** (was 401, +8), `mvn -o clean test`, full suite.
+
+**One filed bullet is wrong and is left open.** `JwtAuthFilter:58` is described as filling the `{}`
+with `e.toString()` so that no stack trace is logged. `logger` there is inherited from
+`GenericFilterBean` and is a commons-logging `Log`, so `logger.error(String, Exception)` resolves to
+`error(Object, Throwable)` — the throwable *is* attached and the stack trace *is* written. What is
+actually broken is the opposite half: commons-logging does not interpolate, so the `{}` prints
+literally. Still worth fixing, but it is a cosmetic message defect, not a lost stack trace.
+
 ### The 2026-08-06 ninth sitting — AUDIT-P6 and P8, the last two [M] pipeline findings
 
 **AUDIT-P6 [M] — a lost `COMPLETED` PATCH re-ran the whole job. Fixed, accurate as filed.**
