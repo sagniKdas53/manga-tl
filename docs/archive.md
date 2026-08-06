@@ -121,6 +121,14 @@ does not currently exist for any commit past `829a073d` (2026-08-06T13:27:01Z, t
 actually ran and passed; `365ad99`'s own attempt right after it was itself cancelled). Flagged, not
 silently treated as green.
 
+**Update, same sitting, from the user directly:** GitHub was having a platform-wide outage around
+this time (2026-08-07) — the user read this independently, not something confirmed from inside the
+repo. Consistent with the "platform-side non-start" reading above (a cancelled run with 0 steps
+executed is exactly what an Actions-side outage looks like from a workflow_runs read). Downgrades
+this from "unexplained gap, needs a decision" to "probably explained, needs re-checking once the
+outage clears" — still worth re-running `CI - Backend`/`CI - Frontend` against current `HEAD` once
+GitHub's Actions service is confirmed healthy again, since that hasn't been verified, only inferred.
+
 ### The 2026-08-07 fifteenth sitting — AUDIT-B5, the schema baseline
 
 The gate on Track 2, closed. **No migration framework was adopted** — the user explicitly rejected

@@ -195,6 +195,11 @@ to 4, so a cooldown on a light job no longer halts the light tier. Heavy is stil
 by design — that tier is local PaddleOCR on CPU and already saturates the container — so the
 original "one cooldown stalls all heavy work" reading is unchanged there.
 
+**Deprioritized 2026-08-07 (user decision): last in the queue, behind Track 1's pagination work,
+F9, and Q1.** Fixing this properly (slot release before sleep, or requeue-with-delay) needs real
+concurrency testing to verify it doesn't just move the deadlock risk elsewhere — that's
+experimentation-heavy work, not a quick pass. Picked up only after everything ahead of it lands.
+
 ### Frontend
 
 #### AUDIT-F1 **[M]** — the theme is rebuilt from scratch on every light/dark toggle
@@ -240,6 +245,32 @@ baked into the routing layer, where it is most expensive to change later. **Deci
 rather than the fix:** if a few hundred series is the realistic cap, write that down and close
 this. Debounced search is a cheap independent win either way.
 
+**Decided 2026-08-07: fix it, not just decide the ceiling.** Ceiling decision superseded — going
+straight to server-side pagination, three independent surfaces, each infinite-scroll (fetch next
+page automatically as the user scrolls, not a page-number control):
+
+- **Series list** (`App.tsx:216`, `GET /api/series`) — 10 per page. Scroll to the end loads the
+  next 10.
+- **Chapters list** (`GET /api/series/{seriesId}/chapters`) — 15 per page, same pattern.
+- **Pages list** (`Reader.tsx:175` `fetchPages()`, `GET /api/chapters/{chapterId}/pages`) — 25 per
+  page. **The reader-specific requirement:** page navigation must not be capped at the first
+  window. If a chapter has 30 pages and the reader starts at page 1 with only pages 1–25 loaded,
+  clicking "next" from page 25 must transparently fetch pages 26–30 (and beyond, for longer
+  chapters) rather than stopping — the 25-page window is a fetch-batch size, not a navigation
+  limit. This is the part most likely to be gotten wrong: a naive "fetch next batch on scroll"
+  implementation ported from the series/chapters lists would leave the reader's "next page" button
+  dead-ended at the batch boundary instead of triggering a fetch.
+- All three need matching API changes (offset/limit or cursor params on the three `GET` list
+  endpoints above, currently parameterless) and matching frontend changes (infinite-scroll fetch
+  triggers for series/chapters, boundary-aware prefetch for the reader). Test design is part of the
+  work, not an afterthought — both the new API pagination params and the reader's
+  "fetch-past-the-batch" behavior need coverage, not just the infinite-scroll UI.
+- **Sequencing (user-set, 2026-08-07):** F1 + F2 + this land together as the next unit of frontend
+  work. F9 (responsive verification) and a pagination benchmarking pass follow, paired. Q1 (the
+  `requireNonNull` sweep) happens in whatever slack exists while the pagination benchmarks are
+  running, since it's backend-only and doesn't contend with frontend work. T1, D5, W3 are
+  deliberately last — see their own entries for why.
+
 #### AUDIT-F9 **[L]** — responsive behaviour is never verified
 
 **Zero** uses of `useMediaQuery` or `theme.breakpoints` — all responsiveness is `sx`/CSS.
@@ -280,6 +311,11 @@ measured peak, and this kernel cannot supply one.*
   `memory.current` through a thumbnail-heavy run, or run the backend briefly under a generous cap
   and watch `memory.events`. Then set the cap and `MaxRAMPercentage` together, one variable.
 
+**Deprioritized 2026-08-07 (user decision): last in the queue**, same reasoning as `AUDIT-W3` —
+getting a real peak means a sampled run under thumbnail-heavy load, not a quick measurement, and
+it was already blocked on exactly that. No change to the blocker itself, just where it sits in the
+queue.
+
 ### Testing
 
 #### AUDIT-T1 — the "e2e" test is not an e2e test
@@ -318,6 +354,11 @@ mock-to-assert ratios:
 
 This is what `mock_router.md` is for, and it is the strongest argument yet for building it: the
 handlers can only be tested meaningfully against something that speaks the wire protocol.
+
+**Deprioritized 2026-08-07 (user decision): last in the queue, alongside `AUDIT-W3`/`AUDIT-D5`.**
+Building `mock_router.md`'s wire-protocol double and reworking the worst-offender test files is a
+real design-and-experimentation effort (get the mock router's shape right, then re-derive the
+suite against it), not a mechanical pass — same category as the other two last-in-queue items.
 
 ### Code quality
 

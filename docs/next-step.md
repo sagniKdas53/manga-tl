@@ -18,6 +18,16 @@
 >
 > **45 of 53 findings closed (85%). 8 open, nothing `[C]` or `[H]`.** No new finding filed this
 > sitting. See [§ Where issues.md stands](#where-issuesmd-stands).
+>
+> **Board re-ranked by the user, same sitting, after the code changes landed.** `AUDIT-F1` +
+> `AUDIT-F2` + `AUDIT-F8` (server-side pagination, spec below) are next, as one unit, with tests
+> designed alongside the implementation, not after. `AUDIT-F9` + a pagination benchmarking pass
+> follow, paired. `AUDIT-Q1` fills whatever slack exists while the benchmarks run. `AUDIT-T1`,
+> `AUDIT-D5`, `AUDIT-W3` are explicitly last — all three need real experimentation (concurrency
+> testing, a sampled memory run, a wire-protocol test double) rather than a mechanical pass, which
+> is exactly why they're being deferred rather than picked up opportunistically. See [§
+> Roadmap](#roadmap-re-ranked-2026-08-07) — this supersedes the old "three tracks" framing below it
+> for scheduling purposes; the track framing itself (what Track 1/2/3 mean) is still accurate.
 
 ## What this sitting did
 
@@ -83,6 +93,12 @@ runs stuck queued/in-progress, the workflow YAML's `paths:` filter genuinely mat
 smells like a GitHub Actions platform hiccup (workflow evaluation silently not firing despite a
 path match), not something in this repo's config — but that's a hypothesis, not a confirmed cause.
 
+**Update, later the same sitting:** the user reported (from outside news, not confirmed from
+inside the repo) that GitHub was having a platform-wide outage around 2026-08-07. That fits the
+"platform-side non-start" reading above and is the most likely explanation. **Still not verified**
+— re-check `CI - Backend`/`CI - Frontend` against current `HEAD` (`362fa60`) once GitHub's Actions
+service is confirmed healthy again, rather than assuming the outage was the whole story.
+
 **What this means practically:** the strongest available evidence for `main`'s backend health
 right now is the local gate (`mvn -o clean verify`, 416/416 as of this sitting) plus CodeQL, not an
 actual GitHub Actions test-suite green tick — because one doesn't exist for any commit past
@@ -117,38 +133,80 @@ diagnosis from inside the repo can confirm.
 No new finding filed this sitting — AUDIT-B9's fix was self-contained, no side-discoveries spun
 into a new `AUDIT-*`.
 
-## The three tracks
+## Roadmap, re-ranked 2026-08-07
 
-Unchanged in shape. AUDIT-B9's closure doesn't unblock a new track — the "backend holds the UI
-back" latency measurement it enables is still undone (see above), and is the most direct follow-up
-if Track 2 is what gets picked up next.
+User-set ordering, explicit and sequential — not a menu, a queue. Full detail on each item lives in
+`issues.md`; this is the schedule, not a re-statement of the findings.
 
-### Track 1 — The UI is fast and good-looking
+### 1. Next up — AUDIT-F1 + AUDIT-F2 + AUDIT-F8 (pagination), as one unit
 
-Unchanged: `AUDIT-F1` (theme rebuild on toggle), `AUDIT-F2` (`Reader.tsx` /
-`ReaderRightSidebar.tsx` size and inline `sx`), `AUDIT-F8` (no pagination/search/debounce — decide
-the ceiling first), `AUDIT-F9` (responsive behaviour unverified).
+Frontend + API, landed together, tests designed alongside the implementation rather than bolted on
+after:
 
-### Track 2 — Plan a better backend (gate cleared, direction still undecided)
+- **`AUDIT-F1`** — `theme.ts`'s `themeObj(mode)` rebuild on toggle → MUI v9
+  `createTheme({ colorSchemes, cssVariables: true })`.
+- **`AUDIT-F2`** — hoist `ReaderRightSidebar.tsx`'s 65 inline `sx={{…}}` literals (and
+  `QueueManager.tsx`'s 45) to module constants / `styled()`.
+- **`AUDIT-F8` — server-side pagination, three surfaces, exact spec (decided this sitting,
+  supersedes the old "decide the ceiling" framing in `issues.md`):**
+  - **Series** (`GET /api/series`, consumed at `App.tsx:216`) — **10 per page**, infinite-scroll
+    fetch-next-10 at the scroll boundary.
+  - **Chapters** (`GET /api/series/{seriesId}/chapters`) — **15 per page**, same pattern.
+  - **Pages** (`GET /api/chapters/{chapterId}/pages`, consumed by `Reader.tsx:175`'s
+    `fetchPages()`) — **25 per page**, but the reader itself must not dead-end at the batch
+    boundary: navigating from page 25 to page 26 in a 30-page chapter must transparently trigger
+    the next fetch rather than stopping. This is the one most likely to get shipped wrong if
+    ported mechanically from the series/chapters infinite-scroll pattern — those two only need a
+    scroll-triggered fetch, the reader needs a **navigation**-triggered one too.
+  - All three list endpoints currently take no query params at all — this is a real API change
+    (offset/limit or cursor), not just a frontend one. Coordinate with the OpenAPI-sync rule in
+    `CLAUDE.md` (regenerate `frontend/src/api/schema.d.ts` after the backend change).
+  - **Test design is part of the deliverable**, not an afterthought: coverage needed for (a) the
+    new pagination params on each endpoint (boundary pages, partial final page, empty result), and
+    (b) the reader's fetch-past-the-batch behavior specifically, since that's the part a naive port
+    would miss silently rather than loudly.
 
-`AUDIT-B9`'s correctness blocker is now cleared, which means the `open-in-view` flip-and-remeasure
-is actually doable if someone wants to pick it up: flip `spring.jpa.open-in-view` to `false` in
-`application.yml`, run the full test suite (the fix should mean nothing breaks — `LayerEditHistory`
-was the only unsafe path), then measure real request latency before/after under a representative
-load to answer "does this actually matter" rather than just "is it now safe." `updateJobStatus`
-still has no state-machine validation against the `jobs` table — unchanged, still what a rewrite
-would re-derive badly if undecided first.
+### 2. Then — AUDIT-F9 paired with pagination benchmarking
 
-### Track 3 — Understand the paid product and close the quality gap
+Two things landing together on purpose: `AUDIT-F9` (zero `useMediaQuery`/`theme.breakpoints` use,
+43 test files at one implicit viewport — needs the yt-diff-style dual-viewport `vitest projects`
+setup) and a benchmarking pass measuring what the pagination work from step 1 actually bought
+(request count, payload size, perceived load time, before/after against the old fetch-everything
+baseline). Paired because both need the pagination work to exist first, and both are measurement
+passes rather than one-line fixes.
+
+### 3. In parallel with the benchmarking — AUDIT-Q1
+
+`Objects.requireNonNull` sweep, 249 calls, most unreachable. Backend-only and doesn't contend with
+the frontend benchmarking work above, so it fills the slack while step 2's benchmarks run rather
+than waiting its turn.
+
+### 4. Last, deliberately — AUDIT-T1, AUDIT-D5, AUDIT-W3
+
+All three deprioritized by the user this sitting for the same reason: each needs real
+experimentation before a fix can be trusted, not a mechanical pass.
+
+- **`AUDIT-T1`** — the worker's "e2e" test is 19 `@patch`/4 `assert`; fixing it for real means
+  building `mock_router.md`'s wire-protocol double first, then re-deriving the suite against it.
+- **`AUDIT-D5`** — the backend memory-limit pair is blocked on a measured peak; kernel 5.15 has no
+  `memory.peak`, so it needs a sampled `memory.current` run through a thumbnail-heavy load.
+- **`AUDIT-W3`** — releasing worker concurrency slots before a cooldown sleep (or requeuing with a
+  delay) needs concurrency testing to confirm it doesn't just relocate the deadlock risk.
+
+### Track 2 — Plan a better backend (gate cleared, direction still undecided; not in the queue above)
+
+`AUDIT-B9`'s correctness blocker is cleared, which means the `open-in-view` flip-and-remeasure is
+doable whenever someone picks Track 2 back up: flip `spring.jpa.open-in-view` to `false`, run the
+full suite (should be clean — `LayerEditHistory` was the only unsafe path), then measure real
+request latency before/after. Not part of the re-ranked queue above — the user's ordering this
+sitting was scoped to Track 1 + the three deferred items; Track 2's direction is still undecided
+and untouched.
+
+### Track 3 — Understand the paid product and close the quality gap (also not in the queue above)
 
 Unchanged: the 6.85% vs 1.92% flattening gap, `BUBBLE_CONTOUR_FALLBACK` removal checkpoint, the VLM
 benchmarking item. See the fourteenth sitting's handoff (preserved in this file's git history) for
 the full writeup if picking this up.
-
-### AUDIT-D5 — still blocked
-
-Kernel 5.15 has no `memory.peak`. Unchanged; needs a sampled `memory.current` run through a
-thumbnail-heavy load before it can move.
 
 ## GitNexus
 
@@ -176,16 +234,17 @@ explicit pathspec on every commit, `-F <file>` before the `--`.
 
 ## Carried forward — deliberately not done
 
-- **The `open-in-view` flip-and-remeasure.** Now unblocked by this sitting's fix. Distinct,
-  larger measurement (request latency, not serialization safety) — see Track 2 above.
-- **CI - Backend / CI - Frontend not triggering on push.** Flagged this sitting, root cause
-  unconfirmed from read-only access. See § CI above.
-- **The `AUDIT-D5` memory pair.** Blocked on a measured peak.
+- **The re-ranked queue itself** (§ Roadmap above) — nothing in steps 1–4 has started.
+- **The `open-in-view` flip-and-remeasure.** Unblocked by AUDIT-B9, but Track 2's direction is
+  undecided and it's not part of this sitting's re-ranked queue — see Track 2 above.
+- **CI - Backend / CI - Frontend not triggering on push.** Flagged this sitting, likely explained
+  by a GitHub-wide outage the user independently confirmed, but **not yet re-verified** — check
+  `CI - Backend`/`CI - Frontend` against `362fa60` once GitHub's Actions service is healthy again.
 - **Five confirmed-dead tables** (`queue_job`, `search_index`, `translations`,
   `translation_regions`, `volumes`). Not cleaned up — baselining isn't cleanup.
 - **`updateJobStatus` has no state-machine validation**, only vocabulary validation.
-- **`try_local_ai`'s bare `enforce_rate_limit()`.** Belongs to `AUDIT-W3`; inert by default
-  (`DISABLE_LOCAL_LLM=true` on this box).
+- **`try_local_ai`'s bare `enforce_rate_limit()`.** Belongs to `AUDIT-W3` (now last-in-queue);
+  inert by default (`DISABLE_LOCAL_LLM=true` on this box).
 - **Valkey has no `requirepass`.** Needs backend `SPRING_DATA_REDIS_*` and worker `REDIS_*`
   simultaneously — a half-applied Redis password takes the whole pipeline down.
 - **`SeriesController.resolveSetting`'s untrimmed placeholder compare.** Dormant.
@@ -254,23 +313,47 @@ this sitting startable cold. docs/archive.md has a "2026-08-07 sixteenth
 sitting" section. Do not re-audit the codebase and do not re-derive the schema
 measurements or the AUDIT-B9 red-green mechanics — all are written down.
 
-AUDIT-B5 IS CLOSED AND DEPLOYED (unchanged since the fifteenth sitting).
-AUDIT-B9 IS NOW ALSO CLOSED: LayerEditHistory.layerElement/.editedBy carry
-@JsonIgnore, matching every other entity. Red-green verified with a real
-Testcontainers integration test, not just a status check. NOT done: the
-open-in-view flip-and-remeasure itself (request-latency measurement) — that's
-the natural next Track-2 step if anyone picks it up, but it's a distinct,
-larger piece of work, not owed by this sitting.
+THE BOARD IS RE-RANKED, USER-SET, 2026-08-07. This is a queue, not a menu —
+work it in order unless redirected:
+  1. AUDIT-F1 + AUDIT-F2 + AUDIT-F8, as one unit. F8 is server-side pagination
+     with an exact spec already decided: series 10/page, chapters 15/page,
+     pages 25/page, all infinite-scroll. THE READER IS THE PART MOST LIKELY TO
+     GET SHIPPED WRONG: navigating past the loaded page window (e.g. page 25
+     of a 30-page chapter) must transparently fetch more, not dead-end at the
+     batch boundary — that's a navigation-triggered fetch, not just the
+     scroll-triggered one the series/chapters lists need. All three list
+     endpoints (GET /api/series, GET /api/series/{id}/chapters, GET
+     /api/chapters/{id}/pages) currently take no query params at all, so this
+     is a real backend API change too, plus an OpenAPI regen per CLAUDE.md.
+     Design tests alongside the implementation, not after — see
+     docs/next-step.md's Roadmap section 1 and issues.md's AUDIT-F8 entry for
+     the full spec.
+  2. AUDIT-F9 (responsive verification, dual-viewport vitest projects) paired
+     with a pagination benchmarking pass measuring what step 1 bought.
+  3. AUDIT-Q1 (249 Objects.requireNonNull sweep) in whatever slack exists
+     while step 2's benchmarks run — backend-only, doesn't contend with the
+     frontend work above it.
+  4. AUDIT-T1, AUDIT-D5, AUDIT-W3, last, deliberately — all three need real
+     experimentation (a mock wire-protocol double, a sampled memory peak,
+     concurrency testing) before a fix can be trusted, not a mechanical pass.
+Track 2 (the open-in-view flip-and-remeasure, unblocked by AUDIT-B9) and
+Track 3 (the quality gap) are NOT part of this queue — direction on both is
+still undecided, don't start either without asking first.
 
-CI GAP, FLAGGED NOT FIXED: CI - Backend / CI - Frontend never triggered on
-GitHub for the fifteenth sitting's push despite matching path filters exactly
-(confirmed via the GitHub compare API). Only CodeQL ran. Last real passing
-CI - Backend run is on commit 829a073d, several commits behind HEAD. Root
-cause not found from read-only API access — smells like a GitHub Actions
-platform issue, not a repo config problem, but that's unconfirmed. Check
-whether it recurs on this sitting's own push before doing anything more
-elaborate (workflow_dispatch fallback, retriggering) — see docs/next-step.md's
-CI section for the full diagnosis and options.
+AUDIT-B5 IS CLOSED AND DEPLOYED (unchanged since the fifteenth sitting).
+AUDIT-B9 IS ALSO CLOSED: LayerEditHistory.layerElement/.editedBy carry
+@JsonIgnore, matching every other entity. Red-green verified with a real
+Testcontainers integration test, not just a status check.
+
+CI GAP, LIKELY EXPLAINED BUT NOT RE-VERIFIED: CI - Backend / CI - Frontend
+never triggered on GitHub for the fifteenth sitting's push despite matching
+path filters exactly. Only CodeQL ran. The user independently confirmed a
+GitHub-wide platform outage around this date, which fits the "cancelled with
+0 steps executed" pattern seen on the last real CI-Backend attempt — probable
+explanation, not a confirmed one. Re-check CI - Backend/CI - Frontend against
+commit 362fa60 (or later) once GitHub's Actions service is confirmed healthy
+again before assuming it's resolved. See docs/next-step.md's CI section for
+the full diagnosis.
 
 STATE: 53 filed, 45 closed, 8 open (85%). Nothing [C] or [H]. No new finding
 filed this sitting.
