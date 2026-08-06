@@ -217,19 +217,60 @@ public class WorkerDispatcherServiceTest {
     assertEquals("test_secret", request.headers().firstValue("WORKER_API_SECRET").orElse(null));
   }
 
+  /**
+   * AUDIT-B8 replaces {@code testInit_SecretFile}. The {@code @PostConstruct init()} that read
+   * {@code WORKER_API_SECRET_FILE} off disk is gone —
+   * {@link com.manga.library.config.DockerSecretsEnvironmentPostProcessor} already turns every
+   * {@code *_FILE} env var into the matching property and adds the source with {@code addFirst}.
+   * What is left to pin is the half that could silently regress: that this bean actually resolves
+   * its secret from the {@code WORKER_API_SECRET} *property*. Rename either side and this fails.
+   *
+   * <p>The post-processor's own env-var-to-property half is not covered here, and deliberately so:
+   * it reads {@code System.getenv()}, which a JVM cannot set for itself, and a test that stubbed
+   * that away would assert on its own fixture rather than on the code.
+   */
+  /**
+   * AUDIT-B8: the {@code @Value} default was {@code http://worker:9091}. The worker listens on
+   * 8000 — {@code Dockerfile EXPOSE 8000}, the compose default, and its own healthcheck. Nothing
+   * caught it because compose always sets {@code WORKER_URLS} explicitly and every other test in
+   * this class sets the field by reflection, so the default is the one value never exercised. It
+   * only bites where the fallback is what runs: a bare {@code docker run}, or a stripped compose
+   * file.
+   */
   @Test
-  public void testInit_SecretFile() throws Exception {
-    Path tempFile = Files.createTempFile("worker_secret", ".txt");
-    Files.writeString(tempFile, "file_secret");
+  public void testWorkerUrls_DefaultsToThePortTheWorkerActuallyListensOn() {
+    new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+        .withBean(StringRedisTemplate.class, () -> redisTemplate)
+        .withBean(ObjectMapper.class, () -> objectMapper)
+        .withBean(JobRepository.class, () -> jobRepository)
+        .withBean(SseService.class, () -> sseService)
+        .withBean(WorkerDispatcherService.class)
+        .run(
+            context -> {
+              WorkerDispatcherService bean = context.getBean(WorkerDispatcherService.class);
+              assertEquals(
+                  "http://worker:8000",
+                  ReflectionTestUtils.getField(bean, "workerUrlsConfig"),
+                  "the WORKER_URLS fallback must match the worker's actual port");
+            });
+  }
 
-    ReflectionTestUtils.setField(
-        workerDispatcherService, "workerApiSecretFile", tempFile.toString());
-    workerDispatcherService.init();
-
-    String secret = (String) ReflectionTestUtils.getField(workerDispatcherService, "workerApiSecret");
-    assertEquals("file_secret", secret);
-
-    Files.deleteIfExists(tempFile);
+  @Test
+  public void testWorkerApiSecret_ResolvesFromTheEnvironmentProperty() {
+    new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+        .withPropertyValues("WORKER_API_SECRET=secret-from-the-post-processor")
+        .withBean(StringRedisTemplate.class, () -> redisTemplate)
+        .withBean(ObjectMapper.class, () -> objectMapper)
+        .withBean(JobRepository.class, () -> jobRepository)
+        .withBean(SseService.class, () -> sseService)
+        .withBean(WorkerDispatcherService.class)
+        .run(
+            context -> {
+              WorkerDispatcherService bean = context.getBean(WorkerDispatcherService.class);
+              assertEquals(
+                  "secret-from-the-post-processor",
+                  ReflectionTestUtils.getField(bean, "workerApiSecret"));
+            });
   }
 
   @Test
@@ -585,13 +626,6 @@ public class WorkerDispatcherServiceTest {
     workerDispatcherService.dispatchJobs();
 
     verify(listOps).rightPush("queue:panel-detection", "{\"id\": \"123\"}");
-  }
-
-  @Test
-  public void testInit_SecretFileReadError() {
-    ReflectionTestUtils.setField(
-        workerDispatcherService, "workerApiSecretFile", "/nonexistent/path/secret.txt");
-    assertDoesNotThrow(() -> workerDispatcherService.init());
   }
 
   @Test

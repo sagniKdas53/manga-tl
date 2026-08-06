@@ -3,13 +3,10 @@ package com.manga.library.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.model.Job;
-import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -24,14 +21,22 @@ public class WorkerDispatcherService {
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(WorkerDispatcherService.class);
 
-  @org.springframework.beans.factory.annotation.Value("${WORKER_URLS:http://worker:9091}")
+  @org.springframework.beans.factory.annotation.Value("${WORKER_URLS:http://worker:8000}")
   private String workerUrlsConfig;
 
+  /**
+   * AUDIT-B8: resolved from the environment, not read off disk here.
+   *
+   * <p>There used to be a {@code @PostConstruct init()} that re-read {@code WORKER_API_SECRET_FILE}
+   * with {@code Files.readString} and overwrote this field. {@link
+   * com.manga.library.config.DockerSecretsEnvironmentPostProcessor} has already done exactly that
+   * — it turns every {@code *_FILE} env var into the corresponding property and adds the source
+   * with {@code addFirst}, so this {@code @Value} sees the secret's contents. The duplicate was a
+   * second place for the mount to be wrong, and it logged its own failures separately from the
+   * post-processor's.
+   */
   @org.springframework.beans.factory.annotation.Value("${WORKER_API_SECRET:}")
   private String workerApiSecret;
-
-  @org.springframework.beans.factory.annotation.Value("${WORKER_API_SECRET_FILE:}")
-  private String workerApiSecretFile;
 
   /** Base cooldown duration (seconds) after a 429 from a worker. Doubles each consecutive 429. */
   private static final int COOLDOWN_BASE_SECONDS = 10;
@@ -43,18 +48,6 @@ public class WorkerDispatcherService {
 
   /** Per-worker consecutive 429 counter (for exponential backoff). */
   private final Map<String, Integer> workerConsecutive429s = new ConcurrentHashMap<>();
-
-  @PostConstruct
-  public void init() {
-    if (workerApiSecretFile != null && !workerApiSecretFile.isEmpty()) {
-      try {
-        workerApiSecret = Files.readString(Path.of(workerApiSecretFile)).trim();
-        log.info("Loaded WORKER_API_SECRET from file");
-      } catch (Exception e) {
-        log.error("Failed to read WORKER_API_SECRET_FILE", e);
-      }
-    }
-  }
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;

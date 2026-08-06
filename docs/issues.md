@@ -314,39 +314,6 @@ entire request and lets lazy collections load during view rendering, which is a 
 contributor to the "backend is holding the UI back" complaint. Both deserve measurement before the
 Firefox profiling pass.
 
-#### AUDIT-B8 **[L]** — assorted backend defects
-
-*Re-verified bullet-by-bullet 2026-08-05. **Five of the nine are now fixed and archived**; the other
-four are confirmed present, with anchors updated. Note that `next-step.md`'s one-line summary of this
-entry listed only five of them — the `@PostConstruct` duplication, the `JwtAuthFilter` logging
-placeholder and the reader-mode terminal status were dropped somewhere between the two files and are
-restored here.*
-
-+ ~~`JwtAuthFilter` is registered in both the servlet chain and the security chain.~~ **Fixed** —
-  `SecurityConfig:105-110` registers it through a `FilterRegistrationBean` with
-  `setEnabled(false)`, and `SseTicketAuthFilter` got the same treatment at `:112`.
-+ ~~`updateJobStatus` writes whatever `status` string the worker sends straight onto the row.~~
-  **Fixed 2026-08-06** — see archive.md, tenth sitting.
-+ ~~Five `log.info("DEBUG_TL: …")` lines at INFO on the hottest internal endpoint.~~ **Fixed
-  2026-08-06.**
-+ ~~`resolveNotificationContext` uses `pages.get(0)`.~~ **Fixed 2026-08-06** — and seven of its
-  eight call sites turned out to discard the result entirely.
-+ ~~Reader mode returns without setting a terminal job status.~~ **Fixed 2026-08-06.**
-
-Still open:
-
-+ `WorkerDispatcherService:27` — `${WORKER_URLS:http://worker:9091}` defaults to port **9091**; the
-  worker listens on 8000 everywhere else (`Dockerfile EXPOSE 8000`, compose default).
-+ `WorkerDispatcherService:47-55` — `@PostConstruct init()` re-reads `WORKER_API_SECRET_FILE`
-  manually, duplicating work `DockerSecretsEnvironmentPostProcessor` already did.
-+ `JwtUtils:20` — `jwtExpirationMs` is an `int`; anything past ~24.8 days overflows. Used at `:31`
-  as `new Date(new Date().getTime() + jwtExpirationMs)`, so the overflow lands in the past.
-+ `JwtAuthFilter:58` — `logger.error("Cannot set user authentication: {}", e)`. **The filed
-  mechanism is wrong** — `logger` is inherited from `GenericFilterBean` and is a commons-logging
-  `Log`, so this binds to `error(Object, Throwable)` and the stack trace *is* attached; what is
-  actually broken is the `{}`, which commons-logging never interpolates and which therefore prints
-  literally. Real but cosmetic. Verify before fixing.
-
 ### Frontend
 
 #### AUDIT-F1 **[M]** — the theme is rebuilt from scratch on every light/dark toggle

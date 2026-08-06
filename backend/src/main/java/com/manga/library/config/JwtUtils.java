@@ -16,8 +16,13 @@ public class JwtUtils {
   @Value("${jwt.secret}")
   private String jwtSecret;
 
+  /**
+   * AUDIT-B8: a {@code long}. As an {@code int} this capped at ~24.8 days, and the overflow did not
+   * fail loudly — {@code new Date(now + jwtExpirationMs)} with a wrapped negative value produces an
+   * expiry in the *past*, so every token minted would be born already expired.
+   */
   @Value("${jwt.expirationMs}")
-  private int jwtExpirationMs;
+  private long jwtExpirationMs;
 
   private SecretKey getSigningKey() {
     byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);

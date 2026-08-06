@@ -21,6 +21,16 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
+  /**
+   * AUDIT-B8. The inherited {@code logger} from {@link org.springframework.web.filter.GenericFilterBean}
+   * is a commons-logging {@code Log}, which has no {@code (String, Object...)} overload and does not
+   * interpolate — {@code logger.error("…: {}", e)} bound to {@code error(Object, Throwable)}, so the
+   * throwable was attached correctly but the {@code {}} printed literally. (The issue was filed the
+   * other way round, as a lost stack trace.) An SLF4J logger of our own removes the ambiguity: this
+   * class now says which overload it means.
+   */
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JwtAuthFilter.class);
+
   private final JwtUtils jwtUtils;
   private final UserRepository userRepository;
 
@@ -55,7 +65,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
       }
     } catch (Exception e) {
-      logger.error("Cannot set user authentication: {}", e);
+      log.error("Cannot set user authentication", e);
     }
 
     filterChain.doFilter(request, response);

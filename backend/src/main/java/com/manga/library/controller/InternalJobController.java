@@ -488,11 +488,6 @@ public class InternalJobController {
           .ifPresent(
               region -> {
                 Objects.requireNonNull(region, "region cannot be null");
-                UUID imageId =
-                    region.getPage() != null && region.getPage().getImage() != null
-                        ? region.getPage().getImage().getId()
-                        : null;
-
                 if (payload.containsKey("text")) {
                   region.setText((String) payload.get("text"));
                 }
