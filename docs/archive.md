@@ -173,6 +173,59 @@ expensive loads still happen; the explicit HEAD mapping is what avoids them. Plu
 GET handler and 404 in the unit test. The worker tests assert `requests.get` is never called and
 that the timeout is 5.
 
+### The 2026-08-06 tenth sitting — AUDIT-B8 closed
+
+Both halves landed in one sitting; the entry is now gone from `issues.md`. The second commit takes
+the four config/dispatcher bullets.
+
+**`WORKER_URLS` defaulted to port 9091.** Accurate. The worker listens on 8000 — `Dockerfile EXPOSE
+8000`, the compose default, its own healthcheck. Nothing caught it because compose always sets
+`WORKER_URLS` explicitly and **every** test in `WorkerDispatcherServiceTest` sets the field by
+reflection, so the `@Value` default was the one value in the class never exercised. The new test
+pins it through an `ApplicationContextRunner` with the property absent, which is the only way to
+observe a `@Value` fallback at all.
+
+**The `@PostConstruct init()` duplication.** Accurate, and removed.
+`DockerSecretsEnvironmentPostProcessor` already turns every `*_FILE` env var into the matching
+property and adds the source with `addFirst`, so `@Value("${WORKER_API_SECRET:}")` sees the file's
+contents; `init()` was a second, independently-failing place for the same mount to be wrong.
+
+**This one bullet has no red-green, and that is not an oversight.** It is duplication removal, not a
+defect fix: there is no state in which the old code produced a wrong answer, so there is no test that
+goes red when it is restored. Its two tests (`testInit_SecretFile`, `testInit_SecretFileReadError`)
+tested the deleted method and are replaced by one that pins the contract the deletion *depends* on —
+that the bean resolves its secret from the `WORKER_API_SECRET` property. The post-processor's own
+env-var-to-property half stays uncovered on purpose: it reads `System.getenv()`, which a JVM cannot
+set for itself, and stubbing that away would assert on the fixture rather than the code. Net −1 test.
+
+**`jwtExpirationMs` as an `int`.** Accurate, and worse in practice than the entry says. The expected
+failure is an expiry ~24.8 days out wrapping negative; what actually happens with a 30-day value is
+that the token comes back **unparseable** — `exp` lands so far in the past that parsing throws
+`ExpiredJwtException` before any claim is returned. Every token minted would be born expired. Now a
+`long`. Only reachable by configuration (`application.yml` ships 24 h), which is why it never bit.
+
+**`JwtAuthFilter:58` — the entry is wrong, and this was verified rather than argued.** Filed as
+"fills the placeholder with `e.toString()` instead of attaching the throwable, so no stack trace is
+ever logged". The inherited `logger` is a commons-logging `Log` from `GenericFilterBean`, whose only
+two-arg overload is `error(Object, Throwable)` — so `logger.error("…: {}", e)` binds there and the
+throwable *is* attached.
+
+Confirmed empirically, not by reading: with the original line restored and the `{}` assertion
+removed, `event.getThrowableProxy()` is non-null and its class name is the thrown exception's. The
+real defect is the opposite half — commons-logging does not interpolate, so `{}` printed literally.
+Fixed by giving the class its own SLF4J logger, which removes the overload ambiguity that caused the
+misreading in the first place. **That is the thirteenth finding that turned out stale or wrong**, and
+the first where the filed mechanism was precisely inverted.
+
+**A PMD violation escaped the first commit.** `mvn -o clean test` passes but CI runs `mvn clean
+verify`, and `maven-pmd-plugin` is bound there: deleting `regionCallback`'s discarded
+`resolveNotificationContext(imageId)` left `imageId` unused. Caught before pushing and folded into
+this commit. **Use `mvn -o clean verify`, not `test`, as the gate** — `test` does not run PMD or
+jacoco's rules, and the last several handoffs have been recommending the weaker command.
+
+Backend **412** (was 409 at the first commit, 401 at the start of the sitting). Three of these four
+bullets verified red individually; the fourth is explained above.
+
 ### The 2026-08-06 tenth sitting — AUDIT-B8, the callback-path half
 
 Four of AUDIT-B8's eight bullets, all in `InternalJobController` and the layout callback it feeds.
