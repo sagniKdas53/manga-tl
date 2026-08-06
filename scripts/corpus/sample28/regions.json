@@ -1,0 +1,65 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "sign",
+    "conversationGroup": null,
+    "text": "肛門認証エラー"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "sign",
+    "conversationGroup": null,
+    "text": "シェフィールドに酷似してますが若干の差異が見られます"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": "rant",
+    "text": "あの　バカ指揮官…"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": "rant",
+    "text": "やはり殺しておくべきでした…!"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": "rant",
+    "text": "なにが「肛門認証に変えたから♥」ですか…!"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": "rant",
+    "text": "てか毎晩いじるからエラー出ちゃってるし…!"
+  },
+  {
+    "id": "r7",
+    "panel": 1,
+    "bubble": 7,
+    "speaker": null,
+    "regionType": "sfx",
+    "conversationGroup": null,
+    "text": "プルプル"
+  }
+]

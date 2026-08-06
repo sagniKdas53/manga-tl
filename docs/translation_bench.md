@@ -1,0 +1,373 @@
+# Translation-stage benchmarking: methodology & how to run it
+
+A repeatable benchmark for the translation stage of the pipeline (`translate_batch_llm()` in
+`worker/services/translation.py`) — run it whenever a model is added to
+`config/providers.json`, before promoting a model into the production fallback chain, or
+periodically to catch a provider silently degrading a model. Complements
+[`run_ocr_bench.md`](run_ocr_bench.md) (OCR-stage) — this doc covers translation only.
+
+For a worked example of the deeper, manual quality pass this tooling doesn't replace, see
+[`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md)
+— the dated report that motivated building this into a repeatable tool.
+
+---
+
+## 1. What it measures
+
+For every `(provider, model, corpus page)` combination:
+
+| Signal | How | What it tells you |
+|---|---|---|
+| **Structured output support** | Try `response_format: json_schema` → `json_object` → none, in order, record which one worked | Empirical, not the provider's self-reported capability metadata — see §5 |
+| **Structured input fidelity** | Does the response echo every input region `id`, no drops/dupes/extras? | Whether the model reliably respects the id-keyed batch schema the worker sends |
+| **Latency** | Wall-clock time for one full batch request | What the pipeline actually experiences — not a vendor's synthetic TTFT number, see the 2026-08-06 report §4 for why those two diverge |
+| **Schema validity** | Response parses as JSON and matches `TRANSLATION_JSON_SCHEMA` | Whether the worker can consume the output at all |
+| **Lexical similarity to reference** | `difflib` ratio, normalized, per region, averaged per page | A **repeatable, zero-cost proxy** for translation quality — not a semantic judgment. See §6. |
+
+---
+
+## 2. Corpus format (`scripts/corpus/`)
+
+Each `scripts/corpus/<sampleId>/` is **text only** — no images are stored, per the instruction that
+started this (source pages can be adult content; the corpus should be committable without
+carrying that).
+
+```
+scripts/corpus/
+  sample28/
+    regions.json      # source-language text regions, in reading order
+    reference.json     # id -> reference (ground-truth) translation, or null if unmatched
+    meta.json           # provenance + reliability signals
+```
+
+**`regions.json`** — matches exactly what `worker/services/translation.py`'s
+`translate_batch_llm()` receives, and what `test_translation.py`'s `build_batch_prompt()`
+expects:
+
+```json
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "……"
+  }
+]
+```
+
+**`reference.json`**:
+
+```json
+{
+  "source_image": "examples/sample28/original.jpg",
+  "reference_image": "examples/sample28/en-manga-tl-ai.jpg",
+  "reference_provenance": "en-mangatranslator.ai.jpeg",
+  "reference_translations": { "r1": "…", "r2": null }
+}
+```
+
+`reference_translations[id]` is `null` when no reference render exists for that region (a
+region only the source has, or one the automatic aligner in §3 couldn't confidently match).
+Regions with a `null` reference are skipped by the lexical-similarity scorer, not penalized.
+
+**`meta.json`**:
+
+```json
+{
+  "sample_id": "sample28",
+  "extraction_method": "manual" | "auto-ocr",
+  "region_count": 7,
+  "source_fragment_count": 9,
+  "merge_ratio": 0.78,
+  "over_merge_risk": false,
+  "reference_matched_count": 6,
+  "reference_match_rate": 0.857
+}
+```
+
+`extraction_method` is the trust signal:
+
+- **`manual`** — hand-transcribed and hand-aligned by reading both images directly. Currently
+  just `sample28`. Treat as ground truth.
+- **`auto-ocr`** — built by `scripts/build_translation_corpus.py` (§3). Reliable for simple
+  dialogue-only pages; noisy on dense pages (stat sheets, many small captions) — that's what
+  `over_merge_risk` flags.
+
+---
+
+## 3. Building / extending the corpus
+
+```bash
+source .venv/bin/activate
+
+# See what's eligible without running any OCR
+python scripts/build_translation_corpus.py --list-eligible
+
+# Build everything (~30 samples, two full-page PaddleOCR passes each — several minutes)
+python scripts/build_translation_corpus.py --out-dir scripts/corpus
+
+# Rebuild just one page (e.g. after adding a new examples/sampleN/)
+python scripts/build_translation_corpus.py --sample sample17 --out-dir scripts/corpus
+```
+
+How it works, and where it's weak:
+
+1. Finds the source image (`original.*` / `orginal.*`, or a file with an `en-<name>`
+   sibling — same heuristic `render_quality_gap_2026-08-05.md`'s suite runner uses) and the
+   best available reference render (`en-mangatranslator.ai.*` preferred, then other `en-*`,
+   then `human-tl*`).
+2. Runs PaddleOCR full-page on each — source in the project's configured JA/CJK model
+   (`PADDLEOCR_DET_MODEL`/`PADDLEOCR_REC_MODEL`), reference in PaddleOCR's English model.
+   **Don't pass explicit model names when adding a new OCR language here** — PaddleOCR
+   silently ignores `lang` whenever model names are given, which will run English text
+   through the CJK-tuned recognizer and garble it.
+3. Merges OCR line fragments into bubble-level regions with `worker.services.merge_regions.merge_ocr_regions`
+   — the same function the production pipeline uses. This function was built for
+   per-bubble-crop merging; run full-page, it over-merges on dense pages (documented
+   production bug `render_quality_gap_2026-08-05.md` §D4). `over_merge_risk` in `meta.json`
+   is `true` when `region_count / source_fragment_count < 0.35` on a page with ≥6 raw
+   fragments — a proxy for "several unrelated text blocks probably got merged into one."
+4. Orders regions with a row-banded, right-to-left heuristic — a page-level approximation,
+   not the panel-aware reading order the real pipeline computes from YOLO panel detection.
+5. Aligns source regions to reference regions by nearest centroid in normalized (0–1)
+   coordinate space, within a `0.15` max distance. This works because reference renders keep
+   translated text in the same bubble position as the source (see
+   `render_quality_gap_2026-08-05.md` §3) — it will silently produce wrong pairings on any
+   page where a reference pipeline reflows text into a different layout.
+
+`regionType` defaults to `"speech"` for every auto-extracted region — OCR alone can't tell
+sign/sfx/caption apart. If a page's region-type mix matters for what you're testing (e.g.
+you specifically want to stress-test sfx transliteration), edit that page's `regions.json`
+by hand after building.
+
+**Promoting a page to `manual`:** view both images (`Read` on the image path works fine for
+this), hand-transcribe `regions.json` and `reference.json` the way `sample28`'s were built,
+set `extraction_method: "manual"` in `meta.json`, and add the sample id to
+`MANUAL_SAMPLES` in `build_translation_corpus.py` so future corpus rebuilds don't overwrite it.
+
+---
+
+## 4. Provider config integration (`config/providers.json`)
+
+The benchmark reads the **same file the backend reads** to build its model fallback chain —
+add a model there and it's benchmarkable with no code changes:
+
+```json
+{
+  "providers": {
+    "openrouter": {
+      "models": {
+        "tl": [
+          { "id": "openai/gpt-oss-20b:free", "name": "GPT-OSS 20B", "free": true }
+        ]
+      }
+    }
+  }
+}
+```
+
+Only models listed under a provider's `models.tl` are candidates — this benchmark tests the
+translation stage specifically, not `qaLLM`/`qaVLM`/`ocr`.
+
+```bash
+# One provider, free models only (default), quick corpus subset (default)
+python scripts/benchmark_translation.py --provider openrouter
+
+# One specific model
+python scripts/benchmark_translation.py --provider nvidia --model nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+
+# Cloudflare Workers AI
+python scripts/benchmark_translation.py --provider cloudflare
+
+# Every provider, every free model
+python scripts/benchmark_translation.py
+
+# Once OpenRouter has paid credits again — include the paid tier too
+python scripts/benchmark_translation.py --provider openrouter --include-paid
+
+# Full corpus instead of the quick sample28-only smoke test
+python scripts/benchmark_translation.py --corpus-subset all --out-dir results/full-run
+
+# Only pages that passed the auto-corpus reliability gate (manual + clean auto-ocr pages)
+python scripts/benchmark_translation.py --corpus-subset clean
+
+# Explicit page list
+python scripts/benchmark_translation.py --pages sample28,sample1,sample12
+```
+
+> **A known gap this surfaced:** as of 2026-08-06, `google/gemma-4-26b-a4b-it:free` — the
+> best-scoring free model in the dated report — isn't in `providers.json`'s `openrouter.tl`
+> list at all (only `qaVLM`/`ocr`). Worth adding if the report's finding holds up on a wider
+> corpus run.
+
+Cloudflare's `baseUrl` contains `${CLOUDFLARE_ACCOUNT_ID}`, substituted from the environment
+at request time — no other provider needs this, but the substitution is generic (`${VAR}` →
+`os.environ[VAR]`) if a future provider entry needs the same pattern.
+
+### `scripts/test-providers.json` — the exploratory candidate pool
+
+`config/providers.json` is the curated, production `tl` list — what the backend's fallback
+chain actually uses. `scripts/test-providers.json` is deliberately wider: every chat/instruct/
+vision-language-capable model each provider currently exposes, pulled 2026-08-06 from
+OpenRouter's live `GET /api/v1/models` (free-tier only), Cloudflare's
+[models catalog](https://developers.cloudflare.com/workers-ai/models/), and NVIDIA's live
+`GET /v1/models` on `integrate.api.nvidia.com` — 107 candidates total, most never benchmarked.
+Point `--providers-config` at it to test beyond what's already promoted:
+
+```bash
+python scripts/benchmark_translation.py --providers-config scripts/test-providers.json --provider nvidia
+```
+
+Worth calling out before you run it:
+
+- **NVIDIA has a dedicated translation model family** — `nvidia/riva-translate-4b-instruct`
+  (and `-v1.1`/`-v2`) — purpose-built for MT rather than a general chat model repurposed for
+  it. Untested here; worth prioritizing.
+- `nvidia/nvidia-nemotron-nano-9b-v2` (NVIDIA-hosted) is the same underlying model as
+  OpenRouter's `nvidia/nemotron-nano-9b-v2:free`, which burned its entire 65,536-token
+  completion budget on hidden reasoning in the 2026-08-06 report (2099s for one batch, see
+  §1 there). Cap reasoning effort before trusting either host's latency number.
+- `nvidia/nemotron-nano-3-30b-a3b` and `nvidia/nemotron-3-nano-30b-a3b` are **different ids**
+  on the same catalog — confirm which is current before relying on either.
+- Cloudflare's `@cf/nvidia/nemotron-3-120b-a12b` and OpenRouter's
+  `nvidia/nemotron-3-super-120b-a12b:free` appear to be the same underlying model
+  (Cloudflare's catalog drops "super" from the name) hosted differently — a good pair for an
+  apples-to-apples same-model-different-host latency comparison.
+- `test-providers.json`'s `free: true` reflects "no listed cost as of 2026-08-06," not a
+  quality or reliability signal — several entries (content-safety classifiers accidentally
+  left in a `tl` list, code-specialized models, medical/finance-specialized ones) are
+  included for completeness and are expected to score poorly or fail outright, the same way
+  `nvidia/nemotron-3.5-content-safety:free` did in the OpenRouter run.
+
+---
+
+## 5. Structured output: declared vs. actual
+
+Every model is tried with `response_format: json_schema` first, regardless of whether the
+provider's model metadata claims support. Two things this has already caught:
+
+- `inclusionai/ling-3.0-flash:free` genuinely doesn't support any `response_format` mode —
+  confirmed both by this benchmark and by the production incident in
+  `render_quality_gap_2026-08-05.md` §6 (110 failed batches, `does not support feature:
+  structured-outputs`).
+- Cloudflare's `@cf/google/gemma-4-26b-a4b-it`, which `test_translation.py`'s comments say
+  needs a `json_object` downgrade, actually accepted `json_schema` cleanly in testing —
+  provider capabilities drift; trust the empirical result over any comment (including this
+  one) that isn't re-verified.
+
+**Don't gate a model out of a provider's fallback chain based on declared
+`supported_parameters` alone — run it through this benchmark and look at `mode_used` in the
+results instead.**
+
+---
+
+## 6. Reading the output
+
+```
+<out-dir>/
+  <provider>/<model>/<sampleId>.json   # full request/response detail for one run
+  _summary.json                         # one row per (provider, model), aggregated across pages
+```
+
+Per-run JSON includes `mode_used`, `elapsed_s`, `schema_valid`, `id_fidelity`, `quality`
+(per-region + mean lexical similarity), token counts, and the raw model output —
+everything needed to re-derive a manual quality judgment later without re-calling the API.
+
+`_summary.json` rows:
+
+```json
+{
+  "provider": "openrouter",
+  "model": "openai/gpt-oss-20b:free",
+  "pages_attempted": 5,
+  "pages_ok": 5,
+  "schema_valid_rate": 1.0,
+  "id_fidelity_perfect_rate": 1.0,
+  "mean_latency_s": 41.2,
+  "max_latency_s": 119.9,
+  "mean_lexical_similarity": 0.83,
+  "modes_used": ["json_schema"]
+}
+```
+
+Sorted by `mean_lexical_similarity` desc, then `mean_latency_s` asc — highest quality-proxy
+first, ties broken by speed.
+
+### The lexical similarity score is a proxy, not a verdict
+
+`mean_lexical_similarity` is `difflib.SequenceMatcher` ratio on lowercased,
+punctuation-stripped text — pure lexical/character overlap with the reference. It:
+
+- **Is** deterministic, free, and fast enough to run on every corpus page for every model on
+  every check-in — good for regression detection ("did this model's output quality drop
+  after a provider update?") and rough triage across a dozen+ candidates.
+- **Is not** a semantic quality judgment. It cannot see that a translation flipped who's
+  being accused in a sentence, used the wrong pronoun referent, or invented a proper noun —
+  the exact defects §3 of the 2026-08-06 report found by hand, none of which reliably move a
+  lexical overlap score. A paraphrase that's *better* than the reference can score lower than
+  a stilted one that borrows more of the reference's exact words.
+
+**Use it to shortlist, not to promote.** When `mean_lexical_similarity` picks a small set of
+finalists, do one pass of manual (or LLM-judge) reading like the 2026-08-06 report's §3
+before changing `providers.json`'s ordering or defaults.
+
+---
+
+## 7. Decision framework — finding the right fit
+
+In priority order, for adding a model to a provider's fallback chain:
+
+1. **`schema_valid_rate` and `id_fidelity_perfect_rate` must both be 1.0** (or very close)
+   across the pages you ran. A model that can't reliably return parseable, correctly-shaped
+   JSON breaks the pipeline regardless of how good its prose is — this is a hard gate, not a
+   tiebreaker.
+2. **`mean_latency_s` and `max_latency_s`, not just the mean.** A model that's usually fast
+   but occasionally spikes (like `nvidia/nemotron-nano-9b-v2:free` burning its full
+   completion-token budget on hidden reasoning in the 2026-08-06 report) will look fine on
+   average and then hang a real batch job. If a provider supports it, cap reasoning effort
+   (`reasoning: {effort: "low"}` / `include_reasoning: false`) and re-run before trusting a
+   reasoning-capable model's latency number.
+3. **`mean_lexical_similarity` to shortlist**, then a manual/LLM-judge pass on the shortlist
+   (§6) before it goes in `providers.json`.
+4. **Free-tier sustainability** isn't in the summary numbers but matters: a 500B+ "free"
+   model is more likely to be rate-limited into uselessness or pulled from the free tier than
+   a small one scoring similarly — prefer the smaller model at comparable quality for a
+   default, and keep the large one as an explicit opt-in fallback.
+
+---
+
+## 8. Troubleshooting
+
+> [!WARNING]
+> **`[ERROR] No matching models found in providers config for the given filters.`**
+> The model id isn't listed under that provider's `models.tl` in `config/providers.json` —
+> check spelling and that it's under `tl`, not `qaLLM`/`qaVLM`/`ocr`. Models only benchmarked
+> for OCR/QA won't show up here by design; add them to `tl` first if you want translation
+> numbers.
+
+> [!WARNING]
+> **`ValueError: <VAR> not set in environment/.env`**
+> A provider's `baseUrl` or `keyEnvVar` references an environment variable that isn't set.
+> Check `.env` at the repo root — `scripts/benchmark_translation.py` loads it the same way
+> `test_translation.py` does.
+
+> [!WARNING]
+> **`http_401` from Neurometric (or any provider)**
+> Not a benchmark bug — the API key in `.env` is invalid or expired for that provider.
+> Verify directly against the provider's dashboard.
+
+> [!WARNING]
+> **`Could not import worker.services.merge_regions`** (only `build_translation_corpus.py`)
+> Run from the repo root with `.venv` active: `source .venv/bin/activate`. The script adds
+> `worker/src` to `sys.path` itself, but `paddleocr`/`cv2`/`numpy` still need to be installed
+> in the active interpreter.
+
+> [!WARNING]
+> **A corpus page's regions look obviously wrong (garbled, wrong language, scrambled order)**
+> Check `over_merge_risk` and `reference_match_rate` in that page's `meta.json` first — if
+> `over_merge_risk: true`, the automatic merge step likely blobbed several unrelated text
+> elements together (§3). Either exclude it (`--corpus-subset clean` already does), or
+> promote it to a hand-verified `manual` entry if you need that specific page.

@@ -1,0 +1,13 @@
+{
+  "source_image": "examples/sample30/4bffaba1-7b8d-4e74-99a6-72dff6b50394.jpg",
+  "reference_image": "examples/sample30/en-4bffaba1-7b8d-4e74-99a6-72dff6b50394.jpg",
+  "reference_provenance": "en-4bffaba1-7b8d-4e74-99a6-72dff6b50394.jpg",
+  "reference_translations": {
+    "r1": null,
+    "r2": null,
+    "r3": null,
+    "r4": "ふ～っ…",
+    "r5": "1",
+    "r6": "(n)"
+  }
+}

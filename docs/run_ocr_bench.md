@@ -2,6 +2,13 @@
 
 This guide details how to benchmark different manga pages across local OCR engines and cloud Vision-Language Models (VLMs) using the built-in benchmarking scripts inside the `manga-worker` Docker container.
 
+> **Benchmarking the translation stage instead of OCR?** See
+> [`translation_bench.md`](translation_bench.md) — a repeatable, multi-page,
+> multi-provider benchmark driven by `config/providers.json` and a text-only corpus in
+> `scripts/corpus/`, with a worked example in
+> [`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md).
+> This guide covers the OCR stage only (local engines + VLM-as-OCR).
+
 ---
 
 ## 📋 Prerequisites

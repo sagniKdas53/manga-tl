@@ -1,0 +1,128 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "体育の時間"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "八八"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ってヘルタ!"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "あれ?ヘルタのクラスは体育館で体育だったよね?なんでここに"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "…天才の時間は貴重なの"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "運動にリソスを割いてる余裕はないんだよ"
+  },
+  {
+    "id": "r7",
+    "panel": 1,
+    "bubble": 7,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "つまりサボりか"
+  },
+  {
+    "id": "r8",
+    "panel": 1,
+    "bubble": 8,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "こんなところにいたらすぐバレるて："
+  },
+  {
+    "id": "r9",
+    "panel": 1,
+    "bubble": 9,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "舐めないでくれる?"
+  },
+  {
+    "id": "r10",
+    "panel": 1,
+    "bubble": 10,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ちんと代わりを置いてきたから大丈夫だよ"
+  },
+  {
+    "id": "r11",
+    "panel": 1,
+    "bubble": 11,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "代わり?"
+  },
+  {
+    "id": "r12",
+    "panel": 1,
+    "bubble": 12,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ヘルタさんってこんなに小さかたかしら…"
+  },
+  {
+    "id": "r13",
+    "panel": 1,
+    "bubble": 13,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "あ"
+  },
+  {
+    "id": "r14",
+    "panel": 1,
+    "bubble": 14,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "バレるって!レ"
+  }
+]

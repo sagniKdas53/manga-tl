@@ -1,0 +1,17 @@
+{
+  "source_image": "examples/sample13/original.jpeg",
+  "reference_image": "examples/sample13/human-tl.jpeg",
+  "reference_provenance": "human-tl.jpeg",
+  "reference_translations": {
+    "r1": "SO, HOW HACKING WORK? LUCY'S DOES",
+    "r2": "CURIOUS? WANT ME TO HACK YOU?",
+    "r3": "WANT YOU TO!!",
+    "r4": "HOPELESS YOU'RE SUCH A CASE...",
+    "r5": "YOU GO THERE",
+    "r6": "FEEL? DOES THAT HOW",
+    "r7": "AAAH... AAAH... IS THE BEST IS THE BEST LUCY THIS LUCY THIS",
+    "r8": "THAT OLD MAN OF YOURS! CRAZY! HE'S",
+    "r9": "SOBER? DOING BEING THAT AND HE'S ALL LOL F*CKING WAY THERE'S NO WITHOUT AN HE'D GET HACKED! IMPLANT, EVEN",
+    "r10": "JUST SO RASSING EMBAR- THIS IS"
+  }
+}
