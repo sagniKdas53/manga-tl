@@ -376,18 +376,28 @@ is an Android tablet, nothing checks it today.
 
 #### AUDIT-D5 **[L]** — remaining infrastructure items
 
-+ `:9`, `:52`, `:76` publish Postgres (5432), Valkey (6379) and the MinIO console (9001) to the host.
-  Valkey has no `requirepass`. On a multi-user or bridged host that is an unauthenticated data
-  store on the LAN. Drop the port mappings — everything that needs them is on `manga-net`.
-+ `LOG_LEVEL` defaults to `DEBUG` for both backend (`:113`) and worker (`:200`) in the shipped
-  compose file.
-+ `backend/Dockerfile:9-12` — the comment reads *"npm ci: reproducible, faster, uses lockfile
-  exactly — preferred over npm install for CI/production"* and the very next line runs
-  `npm install`. The lockfile is not honoured and builds are not reproducible.
-+ `backend/Dockerfile:66` — no `-XX:MaxRAMPercentage`; the JVM defaults to 25% of container RAM,
-  which is both wasteful and prone to OOM-kill under the thumbnail load.
-+ No `deploy.resources` limits on any service — already noted in `TODO.md` for the ML container,
-  applies to all of them.
+*Re-verified bullet-by-bullet 2026-08-06. **Three of five are now fixed and archived** (the published
+ports, the `DEBUG` log defaults, the `npm install`). The two below are the memory pair, and both were
+**wrong as filed** — corrected here. They are deliberately deferred: they cannot be sized without a
+measured peak, and this kernel cannot supply one.*
+
++ `backend/Dockerfile:66` — no `-XX:MaxRAMPercentage`. **The filed reasoning is inverted.** The
+  backend has no `deploy.resources` limit, so "25% of container RAM" is 25% of the *host*: on this
+  19.3 GiB box the JVM already gets a ~4.8 GiB max heap. It is neither starved nor OOM-prone for
+  being too small. Adding `MaxRAMPercentage=75` **on its own makes it strictly worse** — ~14.5 GiB.
+  This bullet is only meaningful landed together with the one below, and only after the pair is
+  sized.
++ No `deploy.resources` limits on **db, db-backup, redis, minio or backend**. **The filed wording
+  ("any service") is stale** — the worker was capped at 2 CPUs / 4 GiB on 2026-08-01 and `TODO.md`
+  line 163 is checked off. What remains is the other five.
++ **Why both are deferred, and what unblocks them.** The worker's 4 GiB came from a *measured*
+  2.1 GiB peak. There is no equivalent number for the backend and no cheap way to get one here:
+  kernel 5.15's cgroup v2 has no `memory.peak` (added in 6.8), so there is no high-water mark to
+  read, and instantaneous `docker stats` is not a peak — backend idles at 433 MiB, db 69 MiB,
+  valkey 10 MiB, minio 123 MiB. Sizing a cap from idle numbers on a JVM that is currently allowed
+  4.8 GiB is how you get an OOM-kill under thumbnail load. **Get a peak first:** sample
+  `memory.current` through a thumbnail-heavy run, or run the backend briefly under a generous cap
+  and watch `memory.events`. Then set the cap and `MaxRAMPercentage` together, one variable.
 
 ### Testing
 

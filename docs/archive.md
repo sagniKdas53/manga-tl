@@ -73,6 +73,106 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-06 twelfth sitting — AUDIT-D5, three of five bullets
+
+**Three closed, two deferred with their reasoning corrected.** The entry is still open in
+`issues.md`. The two that remain are the memory pair, and the reason they are deferred is not
+reluctance — it is that **both were wrong as filed** and neither can be sized from anything this box
+can measure. That is written into the entry itself so the next sitting does not re-derive it.
+
+#### What the entry got wrong
+
+**Bullet 5, "No `deploy.resources` limits on any service", is stale.** The worker has had them since
+2026-08-01 — 2 CPUs / 4 GiB at `docker-compose.yml:305-312`, with a comment explaining the sizing —
+and `TODO.md:163` is checked off accordingly. The bullet's own parenthetical ("already noted in
+`TODO.md` for the ML container") is pointing at a box that has since been ticked. It is true of db,
+db-backup, redis, minio and backend, and that is now what it says.
+
+**Bullet 4's reasoning is inverted, and the fix is unsafe on its own.** The bullet asks for
+`-XX:MaxRAMPercentage` because "the JVM defaults to 25% of container RAM, which is both wasteful and
+prone to OOM-kill under the thumbnail load". But the backend has **no** memory limit, so there is no
+container RAM to take 25% of — the JVM takes 25% of the *host*, and on this 19.3 GiB box that is
+already a **~4.8 GiB max heap**. The heap is not starved. Setting `MaxRAMPercentage=75` with no cap
+in place raises it to **~14.5 GiB**, which is strictly worse than the state the bullet complains
+about. Bullets 4 and 5 are one change, not two, and 4 must never land alone.
+
+**Why they were not simply sized and landed.** The worker's 4 GiB is defensible because it came from
+a *measured* 2.1 GiB peak. There is no equivalent number for the backend, and this host cannot cheaply
+produce one: kernel 5.15's cgroup v2 has no `memory.peak` (that landed in 6.8), so there is no
+high-water mark to read back, and instantaneous `docker stats` is not a peak — backend 433 MiB, db
+69 MiB, valkey 10 MiB, minio 123 MiB, all idle. Capping a JVM currently permitted 4.8 GiB on the
+basis of a 433 MiB idle reading is how the thumbnail path gets OOM-killed in production. Deferred
+deliberately, with the unblocking measurement spelled out in the entry.
+
+#### What the entry undercounted
+
+**The `npm install` has a second copy, at `frontend/Dockerfile:5`.** The bullet names only
+`backend/Dockerfile:9-12`, where the tell is loud — a comment praising `npm ci` immediately above an
+`npm install`. `frontend/Dockerfile` has the same `npm install` with no comment to give it away, so
+grepping for the *comment* finds one and grepping for the *shape* finds two. That image is genuinely
+vestigial — `docker-compose.yml` does not reference it, and `ci-npm.yml` lists it as a `paths:`
+trigger only while installing with `npm ci` on the runner — but the fix is one word and leaving a
+known-bad line in a file CI watches is how it comes back.
+
+#### Where the prescription was over-broad
+
+Bullet 1 said *"Drop the port mappings — everything that needs them is on `manga-net`."* That is true
+of Postgres and Valkey and **false of MinIO's console.** 9001 is the console, not the S3 API; 9000 is
+not published at all and every in-stack consumer talks to it over `manga-net`. The console is a
+browser UI whose only possible consumer is the host, so dropping it does not relocate access, it
+removes it.
+
+All three are now bound to `127.0.0.1` instead of `0.0.0.0`. That closes the exposure the bullet
+actually names — *"on a multi-user or bridged host that is an unauthenticated data store on the
+LAN"* — while leaving host-side tooling (psql, MCP clients, `redis-cli`, the console in a browser,
+`scripts/migrate_thumbnails.py`'s `DB_HOST`/`DB_PORT` override) working. It is also the pattern
+already established on this host: the sibling `yt-diff` stack binds `127.0.0.1:5433` and
+`127.0.0.1:6380`. `docs/testing_isolation_guide.md:9-11` documents these ports as host-reachable and
+stays accurate under loopback; it would have needed a rewrite under a drop.
+
+**Valkey still has no `requirepass`.** Loopback removes the LAN exposure, not the missing password.
+Adding one is a separate change because it has to land in the backend's `SPRING_DATA_REDIS_*` config
+and the worker's `REDIS_*` config simultaneously, and a half-applied Redis password takes the whole
+pipeline down. Noted in the compose comment rather than filed, since after this change nothing
+reaches Valkey but this host.
+
+`backend:8080` is deliberately left on `0.0.0.0`: Traefik routes to it and the documented
+`npm run generate-api` flow fetches `http://localhost:8080/tlhub/v3/api-docs`.
+
+#### The log-level bullet is real but inert here
+
+`LOG_LEVEL` defaulted to `DEBUG` for backend and worker in the compose file; both now default to
+`INFO`. This changes **nothing about the running stack** — `.env` sets `LOG_LEVEL=INFO` and
+`LOG_LEVEL_WORKER=DEBUG`, and `.env` wins. What it fixes is a deployment carrying no `.env`, which
+previously got DEBUG on both services against `application.yml`'s and `config.py`'s own INFO
+fallbacks; compose was the only thing forcing it.
+
+`.env.example:37-38` ships the same `INFO`/`DEBUG` split as the live `.env` and was **left alone**.
+The asymmetry is uncommented but it is consistent across two files, which reads as a deliberate
+operational choice rather than the drift the bullet is about. The bullet says *"in the shipped
+compose file"*, and that is exactly what changed.
+
+#### Verification
+
+**Bullet 1 has a real before/after**; bullets 2 and 3 do not, and saying so is better than a test
+that passes either way.
+
+- *Ports.* `docker compose config` now emits `host_ip: 127.0.0.1` on db, minio and redis, and no
+  `host_ip` on backend. Before the change none of the four carried one.
+- *Log level.* Verified both directions: `docker compose config` still reports the worker at `DEBUG`
+  (the `.env` value is preserved, which is the point), while `docker compose --env-file /dev/null
+  config` — the shipped default — now reports `INFO` for both services where it previously reported
+  `DEBUG` for both.
+- *`npm ci`.* No red-green exists: `npm install` also succeeds, and the defect is reproducibility,
+  not behaviour. What *was* verified is that the swap does not break the build, which is the only
+  way this change can go wrong — `npm ci` aborts outright on a lockfile out of sync with
+  `package.json`. `npm ci` against a copy of `frontend/package*.json` exits 0, and
+  `docker build --target frontend-build -f backend/Dockerfile .` builds clean through
+  `npm run build`.
+
+Nothing was rebuilt or restarted for this: the port change needs `docker compose up -d db redis
+minio` to take effect, and the compose log-level defaults are shadowed by `.env` regardless.
+
 ### The 2026-08-05 seventh sitting — AUDIT-P5, which completes AUDIT-P4
 
 **AUDIT-P5 [H] — callbacks resolve "which job" by guessing instead of by `jobId`. Fixed.**
