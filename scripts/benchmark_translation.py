@@ -54,11 +54,17 @@ REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 sys.path.insert(0, SCRIPT_DIR)
 
 from test_translation import (  # noqa: E402
-    load_env,
     build_batch_prompt,
     MANGA_TRANSLATION_JSON_SYSTEM_PROMPT,
     TRANSLATION_JSON_SCHEMA,
     validate_response,
+)
+from provider_config import (  # noqa: E402
+    load_env,
+    load_providers_config,
+    resolve_base_url,
+    build_headers,
+    list_candidate_models,
 )
 
 load_env(os.path.join(REPO_ROOT, ".env"))
@@ -71,52 +77,6 @@ DEFAULT_CORPUS_DIR = os.path.join(SCRIPT_DIR, "corpus")
 # (scripts/build_translation_corpus.py) and carries an over_merge_risk / match-rate signal
 # in its meta.json — see docs/translation_bench.md for how "clean" is chosen.
 QUICK_SUBSET = ["sample28"]
-
-
-# ---------------------------------------------------------------------------
-# Provider config loading (config/providers.json)
-# ---------------------------------------------------------------------------
-
-def load_providers_config(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def resolve_base_url(url_template):
-    """Substitute ${VAR} placeholders (e.g. Cloudflare's ${CLOUDFLARE_ACCOUNT_ID}) from env."""
-    def repl(m):
-        var = m.group(1)
-        val = os.environ.get(var, "")
-        if not val:
-            raise ValueError(f"{var} not set in environment/.env (required for this provider's baseUrl)")
-        return val
-    return re.sub(r"\$\{([A-Z0-9_]+)\}", repl, url_template)
-
-
-def build_headers(provider_cfg):
-    api_key = os.environ.get(provider_cfg["keyEnvVar"], "")
-    if not api_key:
-        raise ValueError(f"{provider_cfg['keyEnvVar']} not set in environment/.env")
-    headers = {
-        "Content-Type": "application/json",
-        provider_cfg["authHeader"]: f"{provider_cfg.get('authPrefix', '')}{api_key}",
-    }
-    headers.update(provider_cfg.get("extraHeaders", {}))
-    return headers
-
-
-def list_candidate_models(providers_cfg, provider_filter, include_paid, model_filter):
-    """Yields (provider_name, provider_cfg, model_id, model_name, free) for every model to test."""
-    for provider_name, provider_cfg in providers_cfg["providers"].items():
-        if provider_filter and provider_name != provider_filter:
-            continue
-        tl_models = (provider_cfg.get("models") or {}).get("tl") or []
-        for m in tl_models:
-            if model_filter and m["id"] != model_filter:
-                continue
-            if not m.get("free", False) and not include_paid:
-                continue
-            yield provider_name, provider_cfg, m["id"], m.get("name", m["id"]), m.get("free", False)
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +316,7 @@ def main():
         print(f"[ERROR] No corpus pages resolved for subset={args.corpus_subset!r}. Run scripts/build_translation_corpus.py first.")
         sys.exit(1)
 
-    candidates = list(list_candidate_models(providers_cfg, args.provider, not args.free_only, args.model))
+    candidates = list(list_candidate_models(providers_cfg, "tl", args.provider, not args.free_only, args.model))
     if not candidates:
         print("[ERROR] No matching models found in providers config for the given filters.")
         sys.exit(1)
