@@ -316,15 +316,22 @@ Firefox profiling pass.
 
 #### AUDIT-B8 **[L]** — assorted backend defects
 
-*Re-verified bullet-by-bullet 2026-08-05. **One of the nine is fixed and has been archived**; the
-other eight are confirmed present, with anchors updated. Note that `next-step.md`'s one-line summary
-of this entry listed only five of them — the `@PostConstruct` duplication, the `JwtAuthFilter`
-logging placeholder and the reader-mode terminal status were dropped somewhere between the two files
-and are restored here.*
+*Re-verified bullet-by-bullet 2026-08-05. **Five of the nine are now fixed and archived**; the other
+four are confirmed present, with anchors updated. Note that `next-step.md`'s one-line summary of this
+entry listed only five of them — the `@PostConstruct` duplication, the `JwtAuthFilter` logging
+placeholder and the reader-mode terminal status were dropped somewhere between the two files and are
+restored here.*
 
 + ~~`JwtAuthFilter` is registered in both the servlet chain and the security chain.~~ **Fixed** —
   `SecurityConfig:105-110` registers it through a `FilterRegistrationBean` with
   `setEnabled(false)`, and `SseTicketAuthFilter` got the same treatment at `:112`.
++ ~~`updateJobStatus` writes whatever `status` string the worker sends straight onto the row.~~
+  **Fixed 2026-08-06** — see archive.md, tenth sitting.
++ ~~Five `log.info("DEBUG_TL: …")` lines at INFO on the hottest internal endpoint.~~ **Fixed
+  2026-08-06.**
++ ~~`resolveNotificationContext` uses `pages.get(0)`.~~ **Fixed 2026-08-06** — and seven of its
+  eight call sites turned out to discard the result entirely.
++ ~~Reader mode returns without setting a terminal job status.~~ **Fixed 2026-08-06.**
 
 Still open:
 
@@ -334,21 +341,11 @@ Still open:
   manually, duplicating work `DockerSecretsEnvironmentPostProcessor` already did.
 + `JwtUtils:20` — `jwtExpirationMs` is an `int`; anything past ~24.8 days overflows. Used at `:31`
   as `new Date(new Date().getTime() + jwtExpirationMs)`, so the overflow lands in the past.
-+ `JwtAuthFilter:58` — `logger.error("Cannot set user authentication: {}", e)` fills the placeholder
-  with `e.toString()` instead of attaching the throwable, so no stack trace is ever logged.
-+ `InternalJobController:189-196` — five `log.info("DEBUG_TL: …")` lines at INFO on the hottest
-  internal endpoint. Still called once per job to fetch the image for processing; AUDIT-W7 (now
-  closed, see archive.md) only moved the *stale check* off it onto a HEAD.
-+ `InternalJobController:68-105` — `updateJobStatus` writes whatever `status` string the worker
-  sends straight onto the row (`job.setStatus(payload.get("status"))`), with no state-machine
-  validation and no enum. It special-cases `PENDING` and `FAILED` for *logging* only, so a typo
-  reaches the DB and every downstream `equals` comparison silently stops matching.
-+ `InternalJobController:651` — `resolveNotificationContext` uses `pages.get(0)`, reintroducing
-  exactly the "first page for this image" ambiguity that commit `5e2d5ce` removed elsewhere. Two
-  chapters sharing an image will get notifications naming the wrong chapter.
-+ `JobCoordinatorService:1029-1035` — reader mode (`source == target`) `return`s after logging
-  "Skipping translation, render, and QA" without setting any terminal job status, so the layout
-  job's completion depends entirely on the worker's PATCH — which AUDIT-P6 shows can be lost.
++ `JwtAuthFilter:58` — `logger.error("Cannot set user authentication: {}", e)`. **The filed
+  mechanism is wrong** — `logger` is inherited from `GenericFilterBean` and is a commons-logging
+  `Log`, so this binds to `error(Object, Throwable)` and the stack trace *is* attached; what is
+  actually broken is the `{}`, which commons-logging never interpolates and which therefore prints
+  literally. Real but cosmetic. Verify before fixing.
 
 ### Frontend
 

@@ -2290,6 +2290,68 @@ public class JobCoordinatorServiceTest {
     verify(mockProviderConfigCache).isValidProviderModel("p", "chapterQaVlmModel", "qaVLM");
   }
 
+  /**
+   * AUDIT-B8: reader mode (source == target) is the end of the pipeline — no translation, render
+   * or QA follows it — so nothing downstream was ever going to mark the layout job terminal. The
+   * branch returned with the row still PROCESSING and left completion entirely to the worker's
+   * PATCH, which AUDIT-P6 showed can be lost; ten minutes later {@code
+   * recoverStaleProcessingJobs} requeues a layout pass for a chapter that is already finished.
+   */
+  @Test
+  public void testHandleLayoutCallback_ReaderModeMarksTheLayoutJobCompleted() {
+    Series readerSeries = new Series();
+    readerSeries.setTitle("Reader Mode Series");
+    readerSeries.setOriginalLanguage("en");
+    readerSeries.setSourceLanguage("en");
+    readerSeries.setTargetLanguage("en");
+    readerSeries.setReadingDirection("ltr");
+    readerSeries = seriesRepository.save(readerSeries);
+
+    Chapter readerChapter = new Chapter();
+    readerChapter.setSeries(readerSeries);
+    readerChapter.setChapterNumber(1.0);
+    readerChapter = chapterRepository.save(readerChapter);
+
+    Image image = new Image();
+    image.setFilename("reader_mode.png");
+    image.setStoragePath("test/reader_mode.png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(readerChapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+
+    Job job = new Job();
+    job.setId(UUID.randomUUID().toString());
+    job.setType("layout");
+    job.setImageId(image.getId());
+    job.setPageId(page.getId());
+    job.setStatus("PROCESSING");
+    jobRepository.save(job);
+
+    jobCoordinatorService.handleLayoutCallback(
+        job.getId(), image.getId(), page.getId(), List.of(), List.of());
+
+    Job after = jobRepository.findById(job.getId()).orElseThrow();
+    assertEquals(
+        "COMPLETED",
+        after.getStatus(),
+        "reader mode ended the pipeline but left the layout job PROCESSING");
+
+    // The branch is still a *skip*: no translation job may be enqueued behind it.
+    assertNull(
+        jobRepository.findFirstByImageIdAndTypeOrderByCreatedAtDesc(image.getId(), "translation"),
+        "reader mode must not enqueue translation");
+
+    jobRepository.delete(after);
+    pageRepository.delete(page);
+    imageRepository.delete(image);
+    chapterRepository.delete(readerChapter);
+    seriesRepository.delete(readerSeries);
+  }
+
   @SuppressWarnings("unchecked")
   private <T> T mockGeneric(Class<?> clazz) {
     return (T) org.mockito.Mockito.mock(clazz);
