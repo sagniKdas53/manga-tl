@@ -173,6 +173,52 @@ expensive loads still happen; the explicit HEAD mapping is what avoids them. Plu
 GET handler and 404 in the unit test. The worker tests assert `requests.get` is never called and
 that the timeout is 5.
 
+### The 2026-08-06 eleventh sitting — AUDIT-Q3, the worker half
+
+Four of AUDIT-Q3's seven bullets, all in the worker submodule. All four **accurate as filed**; two
+were hiding more than the bullet claimed. Each defect reverted individually and red on its own test.
+
+**The `[Translation]` prefix on a shared rate limiter.** Accurate, both anchors still live.
+`enforce_rate_limit` is called from the translation, OCR and QA paths, so anyone grepping the worker
+log for why an OCR batch stalled found nothing, and anyone grepping for `[Translation]` found sleeps
+that were not translation's. Now `[RateLimit]`.
+
+**`queue:region-redo` in the dispatcher.** Accurate, and the codebase had already half-fixed it
+everywhere else. `/capabilities` (`main.py`) advertises only `region-redo-ocr` / `region-redo-tl`,
+`concurrency.py`'s `HEAVY_QUEUES` / `LIGHT_QUEUES` carry only those two — with
+`test_region_redo_removed_from_heavy` pinning that — and `check_stale_job`'s `image_bound_queues`
+likewise. The bare name survived in `process_job_rq` alone, so had anything ever pushed to it, the
+job would have run a real region redo while bypassing *both* the stale check and the heavy/light
+slot accounting. The backend only ever mints the two suffixed names
+(`JobCoordinatorService:1544`). `JobController` still lists the bare key in its queue-clear
+`delete`; deleting a key that never exists is free and that is legacy cleanup, so it is left alone.
+
+**The phantom cache keys — and the entry undercounts them.** The bullet says two copies in
+`handlers/qa.py`, correcting an earlier "four". Two is right *for `qa.py`*. There is a **third** at
+`services/translation.py:756`, identical in shape — `tl:{provider}:{model}:{hash(text)}` built,
+logged with a hardcoded `(hit=False)`, discarded — that the 2026-08-05 recount missed because it
+only looked at `qa.py`. It is the worst of the three: the qa copies fire once per image, this one
+fires once per *text segment*. Nothing in the worker reads or writes any of those keys.
+
+The red-green test is on the translation copy, because `translate_text` is directly callable. The
+two `qa.py` copies are the same removal inside a nested `attempt_llm` / `attempt_vlm` reachable only
+through a ~15-mock harness; writing one to assert a log line's *absence* would have added exactly
+the kind of test AUDIT-T1 exists to complain about. They ride on the translation test instead, and
+that is a deliberate choice rather than an omission.
+
+**`cleanup_audit_cache`'s generator, which is a defect and not just a style problem.** The bullet
+calls `sum(1 for f in files if … and not os.remove(f))` unreadable and says it "works". It does not
+quite. The unlink happens inside the generator, so one raising `os.remove` propagates out of `sum`
+into the enclosing `except Exception` — which means a single locked or concurrently-deleted file
+aborts the whole sweep: every later file stays on disk and the count is never printed. On a cache
+directory that is *by definition* being written to while the sweep runs, that is a reachable race,
+not a theoretical one. Now an explicit loop with a per-file guard, so a vanishing file costs one
+file rather than the sweep. `test_cleanup_continues_past_a_file_that_cannot_be_removed` goes red on
+the old code with the second and third files still present.
+
+Worker **310** (was 305). All four gates green: `pytest`, `ruff check`, `ruff format --check`,
+`pyright` 0 errors.
+
 ### The 2026-08-06 tenth sitting — AUDIT-B8 closed
 
 Both halves landed in one sitting; the entry is now gone from `issues.md`. The second commit takes
