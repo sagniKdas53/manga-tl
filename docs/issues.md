@@ -480,19 +480,10 @@ exactly these two hits and nothing else, so this entry is two comments, not a cl
 
 #### AUDIT-Q3 — vestigial and misleading code
 
-*Re-verified bullet-by-bullet 2026-08-05. All seven confirmed present; anchors updated. One count is
-lower than filed and one bullet has grown a wider blast radius — both noted inline.*
+*Re-verified bullet-by-bullet 2026-08-05. **The four worker bullets are now fixed and archived**;
+the three backend bullets below are confirmed present, with anchors updated. One bullet has grown a
+wider blast radius — noted inline.*
 
-+ `handlers/qa.py:390-391` and `:599-600` — builds a `cache_key`, logs it with a hardcoded
-  `(hit=False)`, and **there is no cache**. **Two** copies, not the four filed; the other two went
-  with the `if/elif` chains AUDIT-W1 records as removed.
-+ `worker/app.py:46` — `sum(1 for f in files if … and not os.remove(f))` performs the deletion as a
-  side effect inside a generator, relying on `os.remove` returning `None`. Works; should not survive
-  review.
-+ `rq_tasks.py:107` — dispatches on `"queue:region-redo"`, a queue name the backend never creates:
-  `JobCoordinatorService:1432` only ever produces `region-redo-ocr` or `region-redo-tl`, and both
-  are already handled at `:105-106`. Dead branch.
-+ `utils/rate_limit.py:32` and `:51` — logs `[Translation]` from a rate limiter shared by OCR and QA.
 + `PageService.cloneOcrData:648` and `cloneTranslationData:762` — the 25-line LayerElement copy is
   duplicated verbatim. One `cloneLayerElement(source, targetLayer, regionIdMap)` helper removes both
   copies and is the natural place to fix the next field that gets forgotten.
