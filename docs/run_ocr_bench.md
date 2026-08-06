@@ -22,9 +22,10 @@ This guide details how to benchmark different manga pages across local OCR engin
 
 2. **API Keys Configured:**
    Ensure required API keys for cloud VLMs are defined in the `.env` file at the root of the project:
-   * `OPENROUTER_API_KEY` (for Qwen and Gemini models)
+   * `OPENROUTER_API_KEY` (for Qwen, Gemini, and free-tier VLMs like Gemma)
    * `GEMINI_API_KEY` (direct Google Gemini API access)
    * `NVIDIA_API_KEY` (for Nvidia Nemotron models)
+   * `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (for Cloudflare Workers AI VLMs)
 
 ---
 
@@ -47,6 +48,12 @@ docker cp path/to/my_page.png manga-worker:/app/my_page.png
 > docker cp examples/sample1/benchmark_local_ocr.py manga-worker:/app/benchmark_local_ocr.py
 > docker cp examples/sample1/benchmark_vlm_ocr.py manga-worker:/app/benchmark_vlm_ocr.py
 > ```
+>
+> `benchmark_vlm_ocr.py` now also imports `scripts/provider_config.py` and reads
+> `config/providers.json` by default (`--providers-config` to override) — copy
+> `provider_config.py` alongside it, and either confirm `config/providers.json` is reachable
+> at the path the container resolves (one level up from wherever the script lands), or pass
+> `--providers-config` with an explicit in-container path.
 
 ---
 
@@ -79,11 +86,31 @@ Execute the VLM OCR script. This script detects both speech bubbles (YOLO-detect
 docker compose exec worker python benchmark_vlm_ocr.py --image my_page.png --lang Japanese
 ```
 
+Or locally via `.venv` (same pattern as [`benchmarking.md`](benchmarking.md)'s local workflow):
+
+```bash
+source .venv/bin/activate
+python scripts/benchmark_vlm_ocr.py --image examples/sample28/original.jpg --lang Japanese
+```
+
+Model source is `config/providers.json`'s `models.ocr` lists — same file the backend reads,
+same as [`translation_bench.md`](translation_bench.md)'s approach for the translation stage.
+A model is benchmarkable the moment it's added there; no code changes needed.
+
 #### Key Arguments for Cloud VLM OCR
 
-* `--image`: Target image filename in `/app` (default: `original.jpeg`).
+* `--image`: Target image path (default: `original.jpeg`).
 * `--lang`: Language name (e.g. `Japanese`, `English`, `Korean`).
-* `--model`: Benchmark a specific model instead of all preconfigured VLMs. Example: `--model gemini-3.5-flash` or `--model qwen3-vl-8b`.
+* `--providers-config`: Path to a providers.json-shaped file (default: `config/providers.json`).
+  Point at `scripts/test-providers.json` for the wider, unvetted candidate pool (§ below).
+* `--provider`: Only this provider (`openrouter` / `cloudflare` / `nvidia`).
+* `--model`: Only this exact model id — must match the id in the config exactly (e.g.
+  `google/gemini-3.5-flash`, not a partial string like `gemini-3.5-flash`).
+* `--free-only` (default) / `--include-paid`: `config/providers.json`'s `ocr` lists are
+  mostly paid models — pass `--include-paid` to benchmark them, or narrow with `--provider`/`--model`.
+* `--skip-specialized`: Skip non-chat specialized OCR endpoints (currently just
+  `nvidia/nemotron-ocr-v2`, which uses a different payload shape — see §
+  "Exploratory free VLM candidates" below).
 
 ---
 
@@ -117,6 +144,35 @@ docker cp manga-worker:/app/demo_output_qwen_qwen3-vl-8b-instruct.jpg ./
 | `qwen/qwen-2.5-vl-72b-instruct` | OpenRouter | $1.20 | Premium Qwen VL model. |
 | `nvidia/nemotron-nano-12b-v2-vl` | NVIDIA API | $0.00 | Free API, but prone to minor OCR errors. |
 | `nvidia/nemotron-ocr-v2` | NVIDIA OCR | $0.00 | Specialized OCR model. |
+
+---
+
+## 🧪 Exploratory free VLM candidates (untested)
+
+OCR needs a model that actually accepts image input — most of a provider's free-tier chat
+models don't. `scripts/test-providers.json`'s `models.ocr` list per provider is
+**pre-filtered to vision-capable models only** (checked against each provider's live model
+metadata on 2026-08-06), unlike its `models.tl` list which includes plenty of text-only
+models that would silently fail here. None of the following have been run for real yet
+(beyond a one-region wiring smoke test — see `scripts/benchmark_vlm_ocr.py`'s commit):
+
+```bash
+python scripts/benchmark_vlm_ocr.py --image examples/sample28/original.jpg --lang Japanese \
+  --providers-config scripts/test-providers.json
+```
+
+| Provider | Vision-capable free candidates |
+| --- | --- |
+| OpenRouter | `google/gemma-4-26b-a4b-it:free`, `google/gemma-4-31b-it:free`, `nvidia/nemotron-nano-12b-v2-vl:free`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` |
+| Cloudflare | `@cf/moondream/moondream3.1-9B-A2B` (small, purpose-built VLM — already in `config/providers.json`'s production list), `@cf/google/gemma-4-26b-a4b-it`, `@cf/moonshotai/kimi-k2.6`, `@cf/moonshotai/kimi-k2.7-code`, `@cf/meta/llama-3.2-11b-vision-instruct`, `@cf/meta/llama-4-scout-17b-16e-instruct`, `@cf/mistralai/mistral-small-3.1-24b-instruct` |
+| NVIDIA | `nvidia/nemotron-nano-12b-v2-vl`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, `nvidia/cosmos-reason2-8b`, `nvidia/neva-22b`, `nvidia/vila`, `meta/llama-3.2-11b-vision-instruct`, `meta/llama-3.2-90b-vision-instruct`, `microsoft/phi-3-vision-128k-instruct`, `adept/fuyu-8b` (base model, not instruction-tuned — likely needs a different prompt style) |
+
+`nvidia/nemotron-ocr-v2` is listed separately in `test-providers.json` under
+`nvidia.models.ocr_specialized_non_chat` — it's a dedicated OCR endpoint
+(`https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2`) with an `{"input": [...]}`
+payload, not OpenAI-style chat messages, so `benchmark_vlm_ocr.py` special-cases it in
+`call_nvidia_ocr_v2()` and runs it in a separate loop from the generic chat-VLM candidates.
+Pass `--skip-specialized` to exclude it (e.g. when you only want the generic-shaped models).
 
 ---
 

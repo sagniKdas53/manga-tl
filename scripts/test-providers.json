@@ -86,9 +86,32 @@
             "name": "Cohere: North Mini Code (free)",
             "free": true
           }
+        ],
+        "ocr": [
+          {
+            "id": "google/gemma-4-26b-a4b-it:free",
+            "name": "Google: Gemma 4 26B A4B (free) — vision",
+            "free": true
+          },
+          {
+            "id": "google/gemma-4-31b-it:free",
+            "name": "Google: Gemma 4 31B (free) — vision",
+            "free": true
+          },
+          {
+            "id": "nvidia/nemotron-nano-12b-v2-vl:free",
+            "name": "NVIDIA: Nemotron Nano 12B 2 VL (free) — vision",
+            "free": true
+          },
+          {
+            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            "name": "NVIDIA: Nemotron 3 Nano Omni (free) — vision, slow/verbose per docs/benchmarking.md",
+            "free": true
+          }
         ]
       },
-      "defaultTLModel": "google/gemma-4-26b-a4b-it:free"
+      "defaultTLModel": "google/gemma-4-26b-a4b-it:free",
+      "defaultOCRModel": "google/gemma-4-26b-a4b-it:free"
     },
     "cloudflare": {
       "displayName": "Cloudflare Workers AI",
@@ -210,9 +233,47 @@
             "name": "QwQ 32B (reasoning)",
             "free": true
           }
+        ],
+        "ocr": [
+          {
+            "id": "@cf/moondream/moondream3.1-9B-A2B",
+            "name": "Moondream 3.1 9B — small, purpose-built VLM (visual QA/captioning); already in config/providers.json's production ocr list",
+            "free": true
+          },
+          {
+            "id": "@cf/google/gemma-4-26b-a4b-it",
+            "name": "Gemma 4 26B A4B IT — vision",
+            "free": true
+          },
+          {
+            "id": "@cf/moonshotai/kimi-k2.6",
+            "name": "Kimi K2.6 — vision",
+            "free": true
+          },
+          {
+            "id": "@cf/moonshotai/kimi-k2.7-code",
+            "name": "Kimi K2.7 Code — vision",
+            "free": true
+          },
+          {
+            "id": "@cf/meta/llama-3.2-11b-vision-instruct",
+            "name": "Llama 3.2 11B Vision Instruct",
+            "free": true
+          },
+          {
+            "id": "@cf/meta/llama-4-scout-17b-16e-instruct",
+            "name": "Llama 4 Scout 17B — vision",
+            "free": true
+          },
+          {
+            "id": "@cf/mistralai/mistral-small-3.1-24b-instruct",
+            "name": "Mistral Small 3.1 24B Instruct — vision",
+            "free": true
+          }
         ]
       },
-      "defaultTLModel": "@cf/openai/gpt-oss-120b"
+      "defaultTLModel": "@cf/openai/gpt-oss-120b",
+      "defaultOCRModel": "@cf/google/gemma-4-26b-a4b-it"
     },
     "nvidia": {
       "displayName": "NVIDIA NIM",
@@ -574,6 +635,66 @@
             "name": "DeepSeek Coder 6.7B Instruct",
             "free": true
           }
+        ],
+        "ocr": [
+          {
+            "id": "nvidia/nemotron-nano-12b-v2-vl",
+            "name": "Nemotron Nano 12B VL",
+            "free": true
+          },
+          {
+            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+            "name": "Nemotron 3 Nano Omni 30B A3B Reasoning",
+            "free": true
+          },
+          {
+            "id": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+            "name": "Llama 3.1 Nemotron Nano VL 8B v1",
+            "free": true
+          },
+          {
+            "id": "nvidia/cosmos-reason2-8b",
+            "name": "Cosmos Reason2 8B — VLM, reasoning",
+            "free": true
+          },
+          {
+            "id": "nvidia/neva-22b",
+            "name": "NeVA 22B",
+            "free": true
+          },
+          {
+            "id": "nvidia/vila",
+            "name": "VILA",
+            "free": true
+          },
+          {
+            "id": "meta/llama-3.2-11b-vision-instruct",
+            "name": "Llama 3.2 11B Vision Instruct",
+            "free": true
+          },
+          {
+            "id": "meta/llama-3.2-90b-vision-instruct",
+            "name": "Llama 3.2 90B Vision Instruct",
+            "free": true
+          },
+          {
+            "id": "microsoft/phi-3-vision-128k-instruct",
+            "name": "Phi-3 Vision 128K Instruct",
+            "free": true
+          },
+          {
+            "id": "adept/fuyu-8b",
+            "name": "Fuyu 8B — base VLM, not instruction-tuned; likely needs a different prompt style than the others",
+            "free": true
+          }
+        ],
+        "ocr_specialized_non_chat": [
+          {
+            "id": "nvidia/nemotron-ocr-v2",
+            "name": "Nemotron OCR v2 — specialized OCR endpoint, NOT chat-completion shaped",
+            "free": true,
+            "note": "Different endpoint (https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2) and payload shape ({'input': [{'type': 'image_url', 'url': ...}]}, no messages/response_format) — benchmark_translation.py's generic OpenAI-chat caller cannot call this directly. See benchmark_vlm_ocr.py's call_nvidia_ocr_v2() for the special-cased request shape. Fastest and most accurate NVIDIA OCR option per docs/run_ocr_bench.md's existing sample18 results (1.55s total, full-page)."
+          }
         ]
       },
       "defaultTLModel": "nvidia/riva-translate-4b-instruct-v2",
@@ -613,7 +734,8 @@
           "nvidia/nvclip",
           "snowflake/arctic-embed-l"
         ]
-      }
+      },
+      "defaultOCRModel": "nvidia/nemotron-nano-12b-v2-vl"
     },
     "neurometric": {
       "displayName": "Neurometric",

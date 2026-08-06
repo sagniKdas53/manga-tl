@@ -8,22 +8,22 @@ import argparse
 import requests
 import numpy as np
 
-def load_env(filepath):
-    if not os.path.exists(filepath):
-        return
-    with open(filepath, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            parts = line.split('=', 1)
-            if len(parts) == 2:
-                key = parts[0].strip()
-                val = parts[1].strip().strip('\'"')
-                os.environ[key] = val
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, SCRIPT_DIR)
 
-# Ensure we can import from unified-workers if run from examples dir
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../unified-workers')))
+from provider_config import (  # noqa: E402
+    load_env,
+    load_providers_config,
+    resolve_base_url,
+    build_headers,
+    list_candidate_models,
+    list_specialized_models,
+)
+
+# worker/src is where worker.* actually lives (see scripts/build_translation_corpus.py's
+# same fix) — this previously pointed at a nonexistent ../../unified-workers, which silently
+# degraded detect_bubbles_yolo and the background-text merge path to no-ops.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'worker', 'src')))
 
 try:
     from worker.services.bubble_detector import detect_bubbles_yolo
@@ -31,158 +31,28 @@ except ImportError:
     print("Warning: Could not import detect_bubbles_yolo. Make sure PYTHONPATH is set correctly.")
     detect_bubbles_yolo = None
 
-load_env(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.env')))
+load_env(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env')))
+
+DEFAULT_PROVIDERS_CONFIG = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "config", "providers.json"))
+
+# nemotron-ocr-v2 (and any future entry under a provider's models.ocr_specialized_non_chat)
+# is a dedicated computer-vision endpoint, not an OpenAI-style chat completion — it takes a
+# flat {"input": [{"type": "image_url", ...}]} payload and returns text_detections, not
+# choices[].message.content. It runs once per whole page, not per region crop, and reuses
+# its parent provider's auth (keyEnvVar) rather than declaring its own baseUrl/headers, so we
+# special-case it here instead of trying to force it through the generic chat call path.
+NVIDIA_OCR_URL = "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2"
 
 
-# Provider configurations
-PROVIDERS = {
-    "openrouter": {
-        "url": "https://openrouter.ai/api/v1/chat/completions",
-        "key_env": "OPENROUTER_API_KEY",
-        "headers": lambda key: {"Authorization": f"Bearer {key}", "HTTP-Referer": "https://manga-library"}
-    },
-    "nvidia": {
-        "url": "https://integrate.api.nvidia.com/v1/chat/completions",
-        "key_env": "NVIDIA_API_KEY",
-        "headers": lambda key: {"Authorization": f"Bearer {key}"}
-    },
-    "openai": {
-        "url": "https://api.openai.com/v1/chat/completions",
-        "key_env": "OPENAI_API_KEY",
-        "headers": lambda key: {"Authorization": f"Bearer {key}"}
-    },
-    "nvidia_ocr": {
-        "url": "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2",
-        "key_env": "NVIDIA_API_KEY",
-        "headers": lambda key: {"Authorization": f"Bearer {key}", "Accept": "application/json"}
-    }
-}
-
-# Target models to benchmark — updated July 2026
-# cost_input / cost_output are per 1M tokens in USD
-# free=True models have no cost. Marked accordingly.
-MODELS_TO_TEST = [
-    # --- FREE models (NVIDIA NIM — all free tier) ---
-    {
-        "name": "nvidia/nemotron-nano-12b-v2-vl",
-        "provider": "nvidia",
-        "cost_input": 0.0,
-        "cost_output": 0.0,
-        "free": True,
-        "notes": "Free NVIDIA VLM, good for OCR"
-    },
-    {
-        "name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-        "provider": "nvidia",
-        "cost_input": 0.0,
-        "cost_output": 0.0,
-        "free": True,
-        "notes": "Free NVIDIA multimodal reasoning model"
-    },
-    # --- FREE models (OpenRouter free tier) ---
-    {
-        "name": "google/gemma-4-26b-a4b-it:free",
-        "provider": "openrouter",
-        "cost_input": 0.0,
-        "cost_output": 0.0,
-        "free": True,
-        "notes": "Free Gemma 4 via OpenRouter"
-    },
-    {
-        "name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-        "provider": "openrouter",
-        "cost_input": 0.0,
-        "cost_output": 0.0,
-        "free": True,
-        "notes": "Free Nemotron via OpenRouter"
-    },
-    # --- Paid models (OpenRouter) — updated July 2026 pricing ---
-    {
-        "name": "qwen/qwen3-vl-8b-instruct",
-        "provider": "openrouter",
-        "cost_input": 0.12,
-        "cost_output": 0.46,
-        "free": False,
-        "notes": "Best cost/quality ratio for OCR"
-    },
-    {
-        "name": "qwen/qwen3-vl-30b-a3b-instruct",
-        "provider": "openrouter",
-        "cost_input": 0.13,
-        "cost_output": 0.52,
-        "free": False,
-        "notes": "MoE model, fast and accurate"
-    },
-    {
-        "name": "qwen/qwen3-vl-32b-instruct",
-        "provider": "openrouter",
-        "cost_input": 0.10,
-        "cost_output": 0.42,
-        "free": False,
-        "notes": "Dense 32B, very accurate"
-    },
-    {
-        "name": "qwen/qwen3-vl-235b-a22b-instruct",
-        "provider": "openrouter",
-        "cost_input": 0.26,
-        "cost_output": 2.60,
-        "free": False,
-        "notes": "Top-tier Qwen VL, highest accuracy"
-    },
-    {
-        "name": "google/gemini-3.1-flash-lite",
-        "provider": "openrouter",
-        "cost_input": 0.25,
-        "cost_output": 1.50,
-        "free": False,
-        "notes": "Cost-efficient Gemini Lite"
-    },
-    {
-        "name": "google/gemini-3.5-flash",
-        "provider": "openrouter",
-        "cost_input": 1.50,
-        "cost_output": 9.00,
-        "free": False,
-        "notes": "High-capability Gemini Flash"
-    },
-    {
-        "name": "google/gemini-3.5-flash-lite",
-        "provider": "openrouter",
-        "cost_input": 0.15,
-        "cost_output": 1.00,
-        "free": False,
-        "notes": "Newest Gemini Lite, fast and cheap"
-    },
-    # --- NVIDIA specialized OCR ---
-    {
-        "name": "nvidia/nemotron-ocr-v2",
-        "provider": "nvidia_ocr",
-        "cost_input": 0.0,
-        "cost_output": 0.0,
-        "free": True,
-        "notes": "Specialized OCR model (requires NVIDIA API key)"
-    },
-]
-
-def estimate_cost(model_info, prompt_tokens, completion_tokens):
-    """Calculate estimated cost using separate input/output pricing."""
-    cost_in = model_info.get("cost_input", 0.0) * prompt_tokens / 1_000_000
-    cost_out = model_info.get("cost_output", 0.0) * completion_tokens / 1_000_000
-    return cost_in + cost_out
-
-def call_vlm_ocr(image_crop, model_info, language):
-    """Call the VLM API with the bubble crop."""
-    provider_name = model_info["provider"]
-    model_name = model_info["name"]
-
-    if provider_name not in PROVIDERS:
-        return {"error": f"Unknown provider {provider_name}"}
-
-    provider_cfg = PROVIDERS[provider_name]
-    api_key = os.environ.get(provider_cfg["key_env"])
-
-    if not api_key:
-        return {"error": f"Missing API key for {provider_cfg['key_env']}"}
+def call_vlm_ocr(image_crop, provider_name, provider_cfg, model_id, language):
+    """Call a chat-completion-shaped VLM API with the bubble crop. Models under a provider's
+    models.ocr_specialized_non_chat (e.g. nemotron-ocr-v2) don't go through this — see
+    call_nvidia_ocr_v2() and main()'s specialized-model loop instead."""
+    try:
+        url = resolve_base_url(provider_cfg["baseUrl"])
+        headers = build_headers(provider_cfg)
+    except ValueError as e:
+        return {"error": str(e)}
 
     # Encode crop
     _, buffer = cv2.imencode('.jpg', image_crop)
@@ -200,66 +70,44 @@ Do not translate.
 Do not explain.
 Do not infer missing characters."""
 
-    if provider_name == "nvidia_ocr":
-        payload = {
-            "input": [{"type": "image_url", "url": f"data:image/jpeg;base64,{base64_image}"}]
-        }
-    else:
-        payload = {
-            "model": model_name,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]
-                }
-            ]
-        }
-        if provider_name in ("nvidia", "openrouter"):
-            payload["response_format"] = {"type": "json_object"}
-        if provider_name == "openrouter":
-            payload["plugins"] = [{"id": "response-healing"}]
-
-    headers = provider_cfg["headers"](api_key)
-    headers["Content-Type"] = "application/json"
+    payload = {
+        "model": model_id,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                ]
+            }
+        ],
+        "response_format": {"type": "json_object"},
+    }
+    if provider_name == "openrouter":
+        payload["plugins"] = [{"id": "response-healing"}]
 
     start_time = time.time()
     try:
-        response = requests.post(provider_cfg["url"], headers=headers, json=payload, timeout=30)
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
 
-        if provider_name == "nvidia_ocr":
-            text_lines = []
-            for dt in data.get("data", []):
-                for det in dt.get("text_detections", []):
-                    text_lines.append(det.get("text_prediction", {}).get("text", ""))
-            parsed = {
-                "text": "\n".join(text_lines).strip(),
-                "language": "",
-                "writing_direction": ""
-            }
-            prompt_tokens = 0
-            completion_tokens = 0
-        else:
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
-            # Clean markdown formatting if present
-            content = content.strip()
-            if content.startswith("```json"):
-                content = content[7:]
-            if content.startswith("```"):
-                content = content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
+        # Clean markdown formatting if present
+        content = content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
 
-            parsed = json.loads(content.strip())
+        parsed = json.loads(content.strip())
 
-            usage = data.get("usage", {})
-            prompt_tokens = usage.get("prompt_tokens", 0)
-            completion_tokens = usage.get("completion_tokens", 0)
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
 
         return {
             "result": parsed,
@@ -268,8 +116,75 @@ Do not infer missing characters."""
             "completion_tokens": completion_tokens
         }
     except Exception as e:
-        print(f"  [!] API Error ({model_name}): {e}")
+        print(f"  [!] API Error ({model_id}): {e}")
         return {"error": str(e), "time": time.time() - start_time}
+
+
+def call_nvidia_ocr_v2(img, regions_list, nvidia_provider_cfg):
+    """Full-page OCR via nemotron-ocr-v2's dedicated CV endpoint, then intersect its
+    detections against each already-detected region's bbox. Returns (results, total_time)
+    in the same per-region shape the chat-model path produces, or (None, error_message)."""
+    try:
+        headers = build_headers(nvidia_provider_cfg)
+    except ValueError as e:
+        return None, str(e)
+    headers["Accept"] = "application/json"
+
+    start_time = time.time()
+    scale = 1.0
+    while True:
+        resized = cv2.resize(img, (0, 0), fx=scale, fy=scale)
+        _, buffer = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        b64 = base64.b64encode(buffer).decode('utf-8')
+        if len(b64) < 175000:
+            break
+        scale -= 0.1
+
+    payload = {'input': [{'type': 'image_url', 'url': f'data:image/jpeg;base64,{b64}'}]}
+
+    try:
+        resp = requests.post(NVIDIA_OCR_URL, headers=headers, json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        return None, str(e)
+
+    full_text_detections = []
+    for dt in data.get("data", []):
+        for det in dt.get("text_detections", []):
+            pts = det.get("bounding_box", {}).get("points", [])
+            text = det.get("text_prediction", {}).get("text", "")
+            if pts and text:
+                min_x = min(p["x"] for p in pts)
+                max_x = max(p["x"] for p in pts)
+                min_y = min(p["y"] for p in pts)
+                max_y = max(p["y"] for p in pts)
+                full_text_detections.append({"text": text, "nx1": min_x, "ny1": min_y, "nx2": max_x, "ny2": max_y})
+
+    total_time = time.time() - start_time
+    print(f"  -> Full image OCR took {total_time:.2f}s. Detected {len(full_text_detections)} text regions.")
+
+    results = []
+    for i, r_item in enumerate(regions_list):
+        x, y, w, h = r_item['bbox']
+        px, py = max(0, x - 10), max(0, y - 10)
+        pw, ph = min(img.shape[1] - px, w + 20), min(img.shape[0] - py, h + 20)
+
+        bnx1, bny1 = px / img.shape[1], py / img.shape[0]
+        bnx2, bny2 = (px + pw) / img.shape[1], (py + ph) / img.shape[0]
+
+        intersecting_texts = []
+        for det in full_text_detections:
+            ix1, iy1 = max(bnx1, det["nx1"]), max(bny1, det["ny1"])
+            ix2, iy2 = min(bnx2, det["nx2"]), min(bny2, det["ny2"])
+            if ix1 < ix2 and iy1 < iy2:
+                intersecting_texts.append(det["text"])
+
+        final_text = "\n".join(intersecting_texts).strip() or "[No Text Detected]"
+        print(f"  -> Region {i+1}/{len(regions_list)} Text: {final_text}")
+        results.append({"bbox": [px, py, pw, ph], "text": final_text, "language": "", "dir": ""})
+
+    return results, total_time
 
 def draw_results(image, results, output_path, model_name, stats=None):
     """Draw bounding boxes and OCR text on the image, similar to PP-OCRv5 demo."""
@@ -485,11 +400,18 @@ def get_all_text_regions(img, lang_key):
     return regions_list
 
 def main():
-    parser = argparse.ArgumentParser(description="Benchmark VLM OCR Models")
+    parser = argparse.ArgumentParser(description="Benchmark VLM OCR Models — driven by config/providers.json (or scripts/test-providers.json)")
     parser.add_argument("--image", default="original.jpeg", help="Input image path")
     parser.add_argument("--lang", default="Japanese", help="Source language (e.g. Japanese, Korean, English)")
-    parser.add_argument("--model", help="Specific model name to test (otherwise tests all)")
-    parser.add_argument("--free-only", action="store_true", help="Only run free-tier models")
+    parser.add_argument("--providers-config", default=DEFAULT_PROVIDERS_CONFIG,
+                         help="Path to a providers.json-shaped file. config/providers.json is the curated "
+                              "production list; scripts/test-providers.json is the wider, unvetted candidate pool.")
+    parser.add_argument("--provider", help="Only this provider (openrouter/cloudflare/nvidia)")
+    parser.add_argument("--model", help="Only this model id")
+    parser.add_argument("--free-only", action="store_true", default=True, help="Default: free models only")
+    parser.add_argument("--include-paid", dest="free_only", action="store_false", help="Also test paid models")
+    parser.add_argument("--skip-specialized", action="store_true",
+                         help="Skip provider models.ocr_specialized_non_chat entries (e.g. nemotron-ocr-v2)")
     args = parser.parse_args()
 
     img = cv2.imread(args.image)
@@ -504,18 +426,29 @@ def main():
     if not regions_list:
         return
 
-    models_to_run = MODELS_TO_TEST
-    if args.model:
-        models_to_run = [m for m in MODELS_TO_TEST if args.model.lower() in m["name"].lower()]
-    elif args.free_only:
-        models_to_run = [m for m in MODELS_TO_TEST if m.get("free", False)]
+    providers_cfg = load_providers_config(args.providers_config)
+    # models.ocr is pre-filtered to vision-capable models by whoever built the providers
+    # config (see docs/translation_bench.md and scripts/test-providers.json's generation
+    # notes) — this script trusts that filtering rather than re-deriving modality itself.
+    candidates = list(list_candidate_models(providers_cfg, "ocr", args.provider, not args.free_only, args.model))
+    specialized = [] if args.skip_specialized else list(
+        list_specialized_models(providers_cfg, "ocr_specialized_non_chat", args.provider, args.model)
+    )
 
-    for model_info in models_to_run:
-        free_label = " [FREE]" if model_info.get("free") else f" [${model_info['cost_input']:.2f}in/${model_info['cost_output']:.2f}out per 1M]"
+    if not candidates and not specialized:
+        print("[ERROR] No matching OCR (VLM) models found in the providers config for the given filters.")
+        print("        config/providers.json's 'ocr' lists are mostly paid — try --providers-config "
+              "scripts/test-providers.json --include-paid, or narrow with --provider/--model.")
+        return
+
+    print(f"\n[INFO] {len(candidates)} chat-VLM candidate(s), {len(specialized)} specialized non-chat candidate(s)")
+
+    for provider_name, provider_cfg, model_id, model_name, free in candidates:
+        free_label = " [FREE]" if free else " [PAID — pricing not tracked here, check the provider's pricing page]"
         print(f"\n========================================")
-        print(f"Benchmarking Model: {model_info['name']}{free_label}")
-        if model_info.get("notes"):
-            print(f"Notes: {model_info['notes']}")
+        print(f"Benchmarking Model: {provider_name}/{model_id}{free_label}")
+        if model_name != model_id:
+            print(f"Name: {model_name}")
         print(f"========================================")
 
         results = []
@@ -523,139 +456,90 @@ def main():
         total_input_tokens = 0
         total_output_tokens = 0
 
-        if model_info["provider"] == "nvidia_ocr":
-            print("  -> Running full image OCR for nemotron-ocr-v2...")
-            import base64, requests
-            start_time = time.time()
-            scale = 1.0
-            while True:
-                resized = cv2.resize(img, (0,0), fx=scale, fy=scale)
-                _, buffer = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-                b64 = base64.b64encode(buffer).decode('utf-8')
-                if len(b64) < 175000:
-                    break
-                scale -= 0.1
+        for i, r_item in enumerate(regions_list):
+            x, y, w, h = r_item['bbox']
+            px, py = max(0, x - 10), max(0, y - 10)
+            pw, ph = min(img.shape[1] - px, w + 20), min(img.shape[0] - py, h + 20)
 
-            provider_cfg = PROVIDERS["nvidia_ocr"]
-            api_key = os.environ.get(provider_cfg["key_env"])
-            headers = provider_cfg["headers"](api_key)
-            headers["Content-Type"] = "application/json"
-            payload = {'input': [{'type': 'image_url', 'url': f'data:image/jpeg;base64,{b64}'}]}
+            crop = img[py:py+ph, px:px+pw]
 
-            try:
-                resp = requests.post(provider_cfg["url"], headers=headers, json=payload, timeout=30)
-                resp.raise_for_status()
-                data = resp.json()
+            print(f"  -> Processing Region {i+1}/{len(regions_list)} ({r_item['type']}, Size: {pw}x{ph})")
+            res = call_vlm_ocr(crop, provider_name, provider_cfg, model_id, args.lang)
 
-                full_text_detections = []
-                for dt in data.get("data", []):
-                    for det in dt.get("text_detections", []):
-                        pts = det.get("bounding_box", {}).get("points", [])
-                        text = det.get("text_prediction", {}).get("text", "")
-                        if pts and text:
-                            min_x = min(p["x"] for p in pts)
-                            max_x = max(p["x"] for p in pts)
-                            min_y = min(p["y"] for p in pts)
-                            max_y = max(p["y"] for p in pts)
-                            full_text_detections.append({
-                                "text": text,
-                                "nx1": min_x, "ny1": min_y, "nx2": max_x, "ny2": max_y
-                            })
+            if "error" in res:
+                print(f"    Error: {res['error']}")
+            else:
+                text = res['result'].get('text', '')
+                print(f"    Text: {text} | Time: {res['time']:.2f}s")
+                total_time += res['time']
+                total_input_tokens += res['prompt_tokens']
+                total_output_tokens += res['completion_tokens']
 
-                total_time = time.time() - start_time
-                print(f"  -> Full image OCR took {total_time:.2f}s. Detected {len(full_text_detections)} text regions.")
+                results.append({
+                    "bbox": [px, py, pw, ph],
+                    "text": text,
+                    "language": res['result'].get('language', ''),
+                    "dir": res['result'].get('writing_direction', '')
+                })
 
-                for i, r_item in enumerate(regions_list):
-                    x, y, w, h = r_item['bbox']
-                    px, py = max(0, x-10), max(0, y-10)
-                    pw, ph = min(img.shape[1]-px, w+20), min(img.shape[0]-py, h+20)
+        _report_and_save(img, results, regions_list, provider_name, model_id, free,
+                          total_time, total_input_tokens, total_output_tokens, args.image, args.lang)
 
-                    bnx1, bny1 = px / img.shape[1], py / img.shape[0]
-                    bnx2, bny2 = (px + pw) / img.shape[1], (py + ph) / img.shape[0]
+    for provider_name, provider_cfg, model_id, model_name, note in specialized:
+        print(f"\n========================================")
+        print(f"Benchmarking Specialized Model: {provider_name}/{model_id}")
+        if note:
+            print(f"Note: {note}")
+        print(f"========================================")
 
-                    intersecting_texts = []
-                    for det in full_text_detections:
-                        ix1 = max(bnx1, det["nx1"])
-                        iy1 = max(bny1, det["ny1"])
-                        ix2 = min(bnx2, det["nx2"])
-                        iy2 = min(bny2, det["ny2"])
-                        if ix1 < ix2 and iy1 < iy2:
-                            intersecting_texts.append(det["text"])
+        if model_id != "nvidia/nemotron-ocr-v2":
+            print(f"  [!] No special-case handler wired up for {model_id} yet — skipping. "
+                  f"Add one alongside call_nvidia_ocr_v2() if this is a new non-chat CV endpoint.")
+            continue
 
-                    final_text = "\n".join(intersecting_texts).strip()
-                    if not final_text:
-                        final_text = "[No Text Detected]"
+        nvidia_cfg = providers_cfg["providers"].get("nvidia", provider_cfg)
+        results, total_time_or_err = call_nvidia_ocr_v2(img, regions_list, nvidia_cfg)
+        if results is None:
+            print(f"    Error: {total_time_or_err}")
+            continue
 
-                    print(f"  -> Region {i+1}/{len(regions_list)} Text: {final_text}")
-                    results.append({
-                        "bbox": [px, py, pw, ph],
-                        "text": final_text,
-                        "language": "",
-                        "dir": ""
-                    })
-            except Exception as e:
-                print(f"    Error: {str(e)}")
-        else:
-            for i, r_item in enumerate(regions_list):
-                x, y, w, h = r_item['bbox']
-                # Add slight padding
-                px, py = max(0, x-10), max(0, y-10)
-                pw, ph = min(img.shape[1]-px, w+20), min(img.shape[0]-py, h+20)
+        _report_and_save(img, results, regions_list, provider_name, model_id, True,
+                          total_time_or_err, 0, 0, args.image, args.lang)
 
-                crop = img[py:py+ph, px:px+pw]
 
-                print(f"  -> Processing Region {i+1}/{len(regions_list)} ({r_item['type']}, Size: {pw}x{ph})")
-                res = call_vlm_ocr(crop, model_info, args.lang)
+def _report_and_save(img, results, regions_list, provider_name, model_id, free,
+                      total_time, total_input_tokens, total_output_tokens, image_path, lang):
+    free_str = "FREE" if free else "PAID"
+    avg_time = total_time / max(1, len(regions_list))
 
-                if "error" in res:
-                    print(f"    Error: {res['error']}")
-                else:
-                    text = res['result'].get('text', '')
-                    print(f"    Text: {text} | Time: {res['time']:.2f}s")
-                    total_time += res['time']
-                    total_input_tokens += res['prompt_tokens']
-                    total_output_tokens += res['completion_tokens']
+    print(f"\nSummary for {provider_name}/{model_id}:")
+    print(f"  Total Time: {total_time:.2f}s")
+    print(f"  Average Time/Region: {avg_time:.2f}s")
+    print(f"  Total Tokens: {total_input_tokens} In, {total_output_tokens} Out")
+    print(f"  Tier: {free_str}")
 
-                    results.append({
-                        "bbox": [px, py, pw, ph],
-                        "text": text,
-                        "language": res['result'].get('language', ''),
-                        "dir": res['result'].get('writing_direction', '')
-                    })
+    safe_name = f"{provider_name}_{model_id}".replace('/', '_').replace(':', '_').replace('@', '')
+    out_path = f"demo_output_{safe_name}.jpg"
+    draw_results(img, results, out_path, f"{provider_name}/{model_id}", {
+        "Total Time": f"{total_time:.2f}s",
+        "Avg Time/Region": f"{avg_time:.2f}s",
+        "Tier": free_str,
+    })
+    print(f"  Saved demo image to: {out_path}")
 
-        # Estimate cost using separate input/output pricing
-        est_cost = estimate_cost(model_info, total_input_tokens, total_output_tokens)
-        cost_str = f"FREE" if model_info.get("free") else f"${est_cost:.6f}"
-
-        print(f"\nSummary for {model_info['name']}:")
-        print(f"  Total Time: {total_time:.2f}s")
-        print(f"  Average Time/Region: {total_time/max(1, len(regions_list)):.2f}s")
-        print(f"  Total Tokens: {total_input_tokens} In, {total_output_tokens} Out")
-        print(f"  Estimated Cost: {cost_str}")
-
-        # Save output image
-        safe_name = model_info['name'].replace('/', '_').replace(':', '_')
-        out_path = f"demo_output_{safe_name}.jpg"
-        draw_results(img, results, out_path, model_info['name'], {
-            "Total Time": f"{total_time:.2f}s",
-            "Avg Time/Region": f"{total_time/max(1, len(regions_list)):.2f}s",
-            "Est Cost": cost_str
-        })
-        print(f"  Saved demo image to: {out_path}")
-
-        # Save output JSON
-        json_path = f"ocr_results_{safe_name}.json"
-        with open(json_path, "w", encoding="utf-8") as f:
-            import json
-            json.dump({
-                "engine": model_info['name'],
-                "image": args.image,
-                "lang": args.lang,
-                "total_time": total_time,
-                "avg_time_per_bubble": total_time / max(1, len(regions_list)),
-                "regions": results
-            }, f, ensure_ascii=False, indent=2)
-        print(f"  Saved OCR JSON to: {json_path}")
+    json_path = f"ocr_results_{safe_name}.json"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "provider": provider_name,
+            "engine": model_id,
+            "image": image_path,
+            "lang": lang,
+            "free": free,
+            "total_time": total_time,
+            "avg_time_per_bubble": avg_time,
+            "regions": results
+        }, f, ensure_ascii=False, indent=2)
+    print(f"  Saved OCR JSON to: {json_path}")
 
 if __name__ == "__main__":
     main()
