@@ -73,6 +73,54 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-07 sixteenth sitting — AUDIT-B9, the `open-in-view` serialization gap
+
+`LayerEditHistory` was the one entity in the codebase whose lazy `@ManyToOne` relations
+(`layerElement`, `editedBy`) weren't `@JsonIgnore`'d, and `LayerController.getLayerElementHistory`
+returned `List<LayerEditHistory>` straight from the repository — safe today only because
+`open-in-view: true` keeps the Hibernate session open through serialization. Fixed the way every
+other entity in the codebase already does it: added
+`@com.fasterxml.jackson.annotation.JsonIgnore` to both fields (`LayerEditHistory.java:14-17`,
+`:27-29`), matching `Layer.page`, `LayerElement.layer`/`.region`, etc. — no DTO needed since the
+existing pattern already covers this shape of problem.
+
+**Red-green, via content not just status code.** `impact()` on `LayerEditHistory` came back `LOW`
+risk (2 direct callers: `LayerController.updateLayerElement`, `LayerEditHistoryRepository`, 0
+processes affected) — a `@JsonIgnore` addition doesn't change any signature. The existing
+`LayerControllerTest#testGetLayerElementHistory_Success` couldn't prove anything here: it's a
+`@WebMvcTest` with a mocked repository returning an empty list, so it never touches a real
+Hibernate lazy proxy either way. Added
+`PipelineFlowIntegrationTest#testLayerElementHistory_DoesNotSerializeLazyRelations` instead — real
+Testcontainers Postgres, real entities, a real `LayerEditHistory` row with both relations
+populated, hit through `MockMvc` over HTTP. Asserted the response body does **not** contain
+`layerElement` or `editedBy` keys. Confirmed red without the fix (`git stash` on just the model
+file, rerun: `AssertionFailedError: expected: <false> but was: <true>` — the field was present),
+green with it restored. Full `mvn -o clean verify`: **416 tests, 0 failures** (415 baseline + 1
+new). `detect_changes()`: `risk_level: low`, 6 symbols touched across exactly the two files edited
+(`LayerEditHistory.java`, `PipelineFlowIntegrationTest.java`), nothing unexpected riding along.
+
+**Not done, deliberately — per the suggested-next-sitting note itself:** flipping `open-in-view` to
+`false` and remeasuring whether it's actually contributing to "backend holds the UI back" is a
+separate, larger measurement (request-latency, not serialization-safety) and wasn't folded into
+this fix. `AUDIT-B9` closes as "the one correctness blocker is cleared," not as "the flag is off."
+
+**CI, checked as asked, and it's a genuine gap, not a green light.** The prior sitting's push
+(`5f7f0f6..cf118de`, plus `dfb4c30` on top) never actually triggered `CI - Backend` or
+`CI - Frontend` on GitHub, despite the diff (confirmed via the GitHub compare API) touching
+`backend/src/main/resources/application.yml`, a new `backend/src/test/.../
+InitScriptReconciliationTest.java`, and `database/init.sql` — all three match `ci-maven.yml`'s
+`paths:` filter exactly. Only the path-filter-free CodeQL workflow ran, and it passed (3/5 jobs
+succeeded, 2 — `python`, `actions` — cancelled, consistent with a newer push superseding an
+in-flight CodeQL run for the same ref, not a failure of this sitting's code). The last real
+`CI - Backend` attempt, on the earlier `5f7f0f6` push, was itself **cancelled with 0 steps
+executed** — a platform-side non-start, not a red test run. No root cause found from read-only API
+access (repo isn't archived/disabled, no queued/in-progress runs sitting stuck, workflow YAML
+`paths:` matches the actual diff). Best available evidence for main's health right now is the
+local gate (416/416, this sitting) plus CodeQL, not an actual `CI - Backend` green tick — that tick
+does not currently exist for any commit past `829a073d` (2026-08-06T13:27:01Z, the last one that
+actually ran and passed; `365ad99`'s own attempt right after it was itself cancelled). Flagged, not
+silently treated as green.
+
 ### The 2026-08-07 fifteenth sitting — AUDIT-B5, the schema baseline
 
 The gate on Track 2, closed. **No migration framework was adopted** — the user explicitly rejected

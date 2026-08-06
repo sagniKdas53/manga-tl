@@ -47,6 +47,7 @@ public class PipelineFlowIntegrationTest {
   @Autowired private OcrRegionRepository ocrRegionRepository;
   @Autowired private LayerRepository layerRepository;
   @Autowired private LayerElementRepository layerElementRepository;
+  @Autowired private LayerEditHistoryRepository layerEditHistoryRepository;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
   private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
@@ -825,6 +826,78 @@ public class PipelineFlowIntegrationTest {
             Map.class);
     List<?> hiddenOcrRegions = (List<?>) hiddenInfo.get("ocrRegions");
     assertEquals(1, hiddenOcrRegions.size());
+  }
+
+  @Test
+  public void testLayerElementHistory_DoesNotSerializeLazyRelations() throws Exception {
+    Image image = new Image();
+    image.setFilename("test-history.png");
+    image.setStoragePath("originals/test-history.png");
+    image.setHash("test-history-hash");
+    image = imageRepository.save(image);
+
+    Series series = new Series();
+    series.setTitle("History Test");
+    series.setOriginalLanguage("ja");
+    series.setReadingDirection("rtl");
+    series = seriesRepository.save(series);
+    createdSeriesIds.add(series.getId());
+
+    Chapter chapter = new Chapter();
+    chapter.setSeries(series);
+    chapter.setChapterNumber(1.0);
+    chapter = chapterRepository.save(chapter);
+    createdChapterIds.add(chapter.getId());
+
+    Page page = new Page();
+    page.setChapter(chapter);
+    page.setImage(image);
+    page.setPageNumber(1);
+    page = pageRepository.save(page);
+    createdPageIds.add(page.getId());
+
+    Layer layer = new Layer();
+    layer.setPage(page);
+    layer.setType("translation");
+    layer.setVisible(true);
+    layer.setZOrder(0);
+    layer = layerRepository.save(layer);
+
+    LayerElement element = new LayerElement();
+    element.setLayer(layer);
+    element.setText("Original Text");
+    element.setX(10.0);
+    element.setY(10.0);
+    element = layerElementRepository.save(element);
+
+    User adminUser = userRepository.findByEmail("admin@manga.local").orElseThrow();
+
+    LayerEditHistory history = new LayerEditHistory();
+    history.setLayerElement(element);
+    history.setEditedBy(adminUser);
+    history.setPreviousValueJson("{\"text\":\"old\"}");
+    history.setNewValueJson("{\"text\":\"new\"}");
+    layerEditHistoryRepository.save(history);
+
+    MvcResult result =
+        mockMvc
+            .perform(
+                get("/api/layer-elements/" + element.getId() + "/history")
+                    .header("Authorization", adminToken))
+            .andExpect(status().isOk())
+            .andReturn();
+
+    List<?> body =
+        objectMapper.readValue(
+            result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8),
+            List.class);
+    assertEquals(1, body.size());
+    Map<?, ?> entry = (Map<?, ?>) body.get(0);
+    assertEquals(
+        objectMapper.readTree("{\"text\":\"new\"}"),
+        objectMapper.readTree((String) entry.get("newValueJson")));
+    assertFalse(entry.containsKey("layerElement"));
+    assertFalse(entry.containsKey("editedBy"));
   }
 
   @SuppressWarnings("unchecked")

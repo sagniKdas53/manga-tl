@@ -195,31 +195,6 @@ to 4, so a cooldown on a light job no longer halts the light tier. Heavy is stil
 by design — that tier is local PaddleOCR on CPU and already saturates the container — so the
 original "one cooldown stalls all heavy work" reading is unchanged there.
 
-### Backend (Spring)
-
-#### AUDIT-B9 **[M]** — `open-in-view: true` is load-bearing for one endpoint, safe to disable everywhere else
-
-`application.yml:22` sets `spring.jpa.open-in-view: true` explicitly rather than inheriting it,
-holding a DB connection for the entire request so lazy associations can still resolve during view
-rendering. Measured 2026-08-07, as its own variable, per AUDIT-B5's note that this is not a
-migration item: **almost every entity in this codebase already defangs this by `@JsonIgnore`-ing
-its lazy `@ManyToOne`/`@OneToOne` relations** (`Image`, `Layer`, `LayerElement`, `OcrRegion`,
-`Panel`, `Conversation`, `Series` all do), and the few that don't (`Chapter`, `Page`) are never
-returned as raw entities — every controller path serializes them through `ChapterDto`/`PageDto`
-first.
-
-**One exception: `LayerEditHistory`.** Its two lazy relations, `layerElement` (`:14-17`) and
-`editedBy` (`:27-29`), carry no `@JsonIgnore`. `LayerController.getLayerElementHistory` (`:141`)
-returns `List<LayerEditHistory>` straight from the repository with no `@Transactional`, so
-serialization happens after the request-scoped transaction has closed — today that's fine because
-`open-in-view` keeps the session open through view rendering, but disabling it would turn this into
-a `LazyInitializationException` on every call. Fix before touching the flag: either `@JsonIgnore`
-both fields (consistent with every other entity here) or move the endpoint onto a DTO.
-
-Not itself a "backend holds the UI back" verdict — that needs request-latency measurement, not just
-a serialization-safety audit — but it clears the one correctness blocker on doing that measurement
-by actually flipping the flag.
-
 ### Frontend
 
 #### AUDIT-F1 **[M]** — the theme is rebuilt from scratch on every light/dark toggle
