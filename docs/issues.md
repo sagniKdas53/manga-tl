@@ -478,22 +478,3 @@ Both are an assistant reasoning with itself, left in the source. **The suggested
 run** — `// Wait`, `// But user said` and `// Actually` across `backend/src/main/java` return
 exactly these two hits and nothing else, so this entry is two comments, not a class of problem.
 
-#### AUDIT-Q3 — vestigial and misleading code
-
-*Re-verified bullet-by-bullet 2026-08-05. **The four worker bullets are now fixed and archived**;
-the three backend bullets below are confirmed present, with anchors updated. One bullet has grown a
-wider blast radius — noted inline.*
-
-+ `PageService.cloneOcrData:648` and `cloneTranslationData:762` — the 25-line LayerElement copy is
-  duplicated verbatim. One `cloneLayerElement(source, targetLayer, regionIdMap)` helper removes both
-  copies and is the natural place to fix the next field that gets forgotten.
-+ `JobCoordinatorService.handleLayoutCallback:992` — `resolvePageForCallback` is called inside the
-  conversation loop and then again at `:1019`; it is a DB round-trip each time.
-+ **`JobCoordinatorService.isOverride:588-593`** — checks `!value.equals("inherit")` without trimming
-  first, though the preceding condition trims. `" inherit "` passes through as a real model name.
-  **This is no longer local to `resolveModel`.** The predicate has been extracted to a `public
-  static` and its own Javadoc now says *"anything that reads this must use the same predicate the
-  pipeline uses, otherwise the UI can report a different model from the one that actually runs — see
-  `SeriesController.toChapterDto`."* So the untrimmed compare is now the shared definition of "is
-  this an override", and a padded value disagrees with the pipeline in exactly the way that comment
-  warns about. Cheapest fix in the file: trim once into a local and compare against that.

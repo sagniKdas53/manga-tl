@@ -35,7 +35,10 @@ public class JobCoordinatorServiceTest {
   @Autowired private LayerElementRepository layerElementRepository;
   @Autowired private JobRepository jobRepository;
   @Autowired private TransactionTemplate transactionTemplate;
-  @Autowired private PageRepository pageRepository;
+  // Spied, not plain-autowired, so testHandleLayoutCallback_ResolvesThePageOnce... can count
+  // findById calls. A spy delegates to the real repository, so every other test is unaffected.
+  @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+  private PageRepository pageRepository;
   @Autowired private ChapterRepository chapterRepository;
   @Autowired private SeriesRepository seriesRepository;
   @Autowired private JobCostRepository jobCostRepository;
@@ -2350,6 +2353,86 @@ public class JobCoordinatorServiceTest {
     imageRepository.delete(image);
     chapterRepository.delete(readerChapter);
     seriesRepository.delete(readerSeries);
+  }
+
+  /**
+   * AUDIT-Q3: {@code isOverride} trimmed for the emptiness check and then compared the
+   * <em>untrimmed</em> value against the placeholders, so {@code " inherit "} was not empty, was
+   * not {@code equals("inherit")}, and came back as a real override.
+   *
+   * <p>This is not local to {@code resolveModel} any more. The predicate is {@code public static}
+   * and its own Javadoc says anything reading it must use the same definition the pipeline uses,
+   * otherwise the UI reports a different model from the one that runs — and {@code
+   * SeriesController.hasOverride} is that other reader. A padded placeholder disagreed with the
+   * pipeline in exactly the way that comment warns about.
+   */
+  @Test
+  public void testIsOverride_TrimsBeforeComparingAgainstPlaceholders() {
+    assertFalse(JobCoordinatorService.isOverride(" inherit "), "\" inherit \" is not an override");
+    assertFalse(JobCoordinatorService.isOverride("inherit "), "\"inherit \" is not an override");
+    assertFalse(JobCoordinatorService.isOverride("\tdefault\n"), "padded default is not an override");
+    assertFalse(JobCoordinatorService.isOverride(" gpt-4 [ORPHANED] "), "orphaned is not an override");
+
+    // Unchanged for everything else.
+    assertFalse(JobCoordinatorService.isOverride(null));
+    assertFalse(JobCoordinatorService.isOverride(""));
+    assertFalse(JobCoordinatorService.isOverride("   "));
+    assertFalse(JobCoordinatorService.isOverride("inherit"));
+    assertFalse(JobCoordinatorService.isOverride("default"));
+    assertTrue(JobCoordinatorService.isOverride("openai/gpt-4o-mini"));
+    assertTrue(JobCoordinatorService.isOverride(" openai/gpt-4o-mini "));
+  }
+
+  /**
+   * AUDIT-Q3: {@code resolvePageForCallback} was called once per conversation inside the loop and
+   * then again at the enqueue step, every time with the same two arguments — a DB round-trip per
+   * conversation for an answer that cannot change within a single callback.
+   *
+   * <p>Asserted as invariance rather than an absolute count on purpose: the enqueue path resolves
+   * pages of its own, so the meaningful property is that the number of lookups does not grow with
+   * the number of conversations.
+   */
+  @Test
+  public void testHandleLayoutCallback_ResolvesThePageOnceRegardlessOfConversationCount() {
+    long withOne = layoutCallbackPageLookups(1);
+    long withFive = layoutCallbackPageLookups(5);
+
+    assertEquals(
+        withOne,
+        withFive,
+        "page lookups scaled with the conversation count — resolvePageForCallback is back inside the loop");
+  }
+
+  /**
+   * Runs one layout callback carrying {@code conversationCount} conversations against a fresh
+   * image/page, and returns how many times that page was looked up by id.
+   */
+  private long layoutCallbackPageLookups(int conversationCount) {
+    Image image = new Image();
+    image.setFilename("layout_lookup_" + conversationCount + ".png");
+    image.setStoragePath("test/layout_lookup_" + conversationCount + ".png");
+    image = imageRepository.save(image);
+
+    Page page = new Page();
+    page.setChapter(defaultChapter);
+    page.setImage(image);
+    page.setPageNumber(conversationCount);
+    page = pageRepository.save(page);
+
+    List<Map<String, Object>> conversations = new ArrayList<>();
+    for (int i = 0; i < conversationCount; i++) {
+      conversations.add(Map.of("sceneType", "dialogue", "regionIds", List.of()));
+    }
+
+    org.mockito.Mockito.clearInvocations(pageRepository);
+    // No Job row, so claimCallback waves it through — this test is about query count, not claiming.
+    jobCoordinatorService.handleLayoutCallback(null, image.getId(), page.getId(), List.of(), conversations);
+
+    UUID pageId = page.getId();
+    return org.mockito.Mockito.mockingDetails(pageRepository).getInvocations().stream()
+        .filter(inv -> "findById".equals(inv.getMethod().getName()))
+        .filter(inv -> pageId.equals(inv.getArgument(0)))
+        .count();
   }
 
   @SuppressWarnings("unchecked")

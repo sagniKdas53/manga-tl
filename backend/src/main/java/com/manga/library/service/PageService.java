@@ -724,38 +724,51 @@ public class PageService {
         .toList();
 
     for (LayerElement sourceEl : sourceElements) {
-      LayerElement clonedEl = new LayerElement();
-      clonedEl.setLayer(clonedOcrLayer);
-      if (sourceEl.getRegion() != null && regionIdMap.containsKey(sourceEl.getRegion().getId())) {
-        UUID newRegionId = regionIdMap.get(sourceEl.getRegion().getId());
-        clonedEl.setRegion(ocrRegionRepository.findById(newRegionId).orElse(null));
-      }
-      clonedEl.setText(sourceEl.getText());
-      clonedEl.setFont(sourceEl.getFont());
-      clonedEl.setSize(sourceEl.getSize());
-      clonedEl.setAutoSize(sourceEl.getAutoSize());
-      clonedEl.setMaxWidth(sourceEl.getMaxWidth());
-      clonedEl.setMaxHeight(sourceEl.getMaxHeight());
-      clonedEl.setWordWrap(sourceEl.getWordWrap());
-      clonedEl.setRotation(sourceEl.getRotation());
-      clonedEl.setX(sourceEl.getX());
-      clonedEl.setY(sourceEl.getY());
-      clonedEl.setVisible(sourceEl.getVisible());
-      clonedEl.setOverflow(sourceEl.getOverflow());
-      clonedEl.setBackgroundColor(sourceEl.getBackgroundColor());
-      clonedEl.setTextColor(sourceEl.getTextColor());
-      clonedEl.setFontWeight(sourceEl.getFontWeight());
-      clonedEl.setFontStyle(sourceEl.getFontStyle());
-      clonedEl.setIsManuallyEdited(sourceEl.getIsManuallyEdited());
-      clonedEl.setEditedAt(sourceEl.getEditedAt());
-      clonedEl.setBoxShape(sourceEl.getBoxShape());
-      clonedEl.setMaskPolygon(sourceEl.getMaskPolygon());
-
-      layerElementRepository.save(clonedEl);
+      layerElementRepository.save(cloneLayerElement(sourceEl, clonedOcrLayer, regionIdMap));
     }
 
     layerElementRepository.flush();
     return regionIdMap;
+  }
+
+  /**
+   * Copies every field of a {@link LayerElement} onto a fresh one attached to {@code targetLayer},
+   * repointing its region through {@code regionIdMap}.
+   *
+   * <p>AUDIT-Q3: {@link #cloneOcrData} and {@link #cloneTranslationData} carried this block
+   * verbatim, differing only in which layer the clone was attached to. Both copies were complete
+   * when this was extracted — the point is that the next field added to {@code LayerElement} now
+   * has one place to be forgotten instead of two.
+   */
+  private LayerElement cloneLayerElement(
+      LayerElement sourceEl, Layer targetLayer, Map<UUID, UUID> regionIdMap) {
+    LayerElement clonedEl = new LayerElement();
+    clonedEl.setLayer(targetLayer);
+    if (sourceEl.getRegion() != null && regionIdMap.containsKey(sourceEl.getRegion().getId())) {
+      UUID newRegionId = regionIdMap.get(sourceEl.getRegion().getId());
+      clonedEl.setRegion(ocrRegionRepository.findById(newRegionId).orElse(null));
+    }
+    clonedEl.setText(sourceEl.getText());
+    clonedEl.setFont(sourceEl.getFont());
+    clonedEl.setSize(sourceEl.getSize());
+    clonedEl.setAutoSize(sourceEl.getAutoSize());
+    clonedEl.setMaxWidth(sourceEl.getMaxWidth());
+    clonedEl.setMaxHeight(sourceEl.getMaxHeight());
+    clonedEl.setWordWrap(sourceEl.getWordWrap());
+    clonedEl.setRotation(sourceEl.getRotation());
+    clonedEl.setX(sourceEl.getX());
+    clonedEl.setY(sourceEl.getY());
+    clonedEl.setVisible(sourceEl.getVisible());
+    clonedEl.setOverflow(sourceEl.getOverflow());
+    clonedEl.setBackgroundColor(sourceEl.getBackgroundColor());
+    clonedEl.setTextColor(sourceEl.getTextColor());
+    clonedEl.setFontWeight(sourceEl.getFontWeight());
+    clonedEl.setFontStyle(sourceEl.getFontStyle());
+    clonedEl.setIsManuallyEdited(sourceEl.getIsManuallyEdited());
+    clonedEl.setEditedAt(sourceEl.getEditedAt());
+    clonedEl.setBoxShape(sourceEl.getBoxShape());
+    clonedEl.setMaskPolygon(sourceEl.getMaskPolygon());
+    return clonedEl;
   }
 
   @Transactional
@@ -807,34 +820,7 @@ public class PageService {
         .toList();
 
     for (LayerElement sourceEl : sourceElements) {
-      LayerElement clonedEl = new LayerElement();
-      clonedEl.setLayer(clonedTlLayer);
-      if (sourceEl.getRegion() != null && regionIdMap.containsKey(sourceEl.getRegion().getId())) {
-        UUID newRegionId = regionIdMap.get(sourceEl.getRegion().getId());
-        clonedEl.setRegion(ocrRegionRepository.findById(newRegionId).orElse(null));
-      }
-      clonedEl.setText(sourceEl.getText());
-      clonedEl.setFont(sourceEl.getFont());
-      clonedEl.setSize(sourceEl.getSize());
-      clonedEl.setAutoSize(sourceEl.getAutoSize());
-      clonedEl.setMaxWidth(sourceEl.getMaxWidth());
-      clonedEl.setMaxHeight(sourceEl.getMaxHeight());
-      clonedEl.setWordWrap(sourceEl.getWordWrap());
-      clonedEl.setRotation(sourceEl.getRotation());
-      clonedEl.setX(sourceEl.getX());
-      clonedEl.setY(sourceEl.getY());
-      clonedEl.setVisible(sourceEl.getVisible());
-      clonedEl.setOverflow(sourceEl.getOverflow());
-      clonedEl.setBackgroundColor(sourceEl.getBackgroundColor());
-      clonedEl.setTextColor(sourceEl.getTextColor());
-      clonedEl.setFontWeight(sourceEl.getFontWeight());
-      clonedEl.setFontStyle(sourceEl.getFontStyle());
-      clonedEl.setIsManuallyEdited(sourceEl.getIsManuallyEdited());
-      clonedEl.setEditedAt(sourceEl.getEditedAt());
-      clonedEl.setBoxShape(sourceEl.getBoxShape());
-      clonedEl.setMaskPolygon(sourceEl.getMaskPolygon());
-
-      layerElementRepository.save(clonedEl);
+      layerElementRepository.save(cloneLayerElement(sourceEl, clonedTlLayer, regionIdMap));
     }
 
     layerElementRepository.flush();

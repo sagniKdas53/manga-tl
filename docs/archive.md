@@ -173,6 +173,52 @@ expensive loads still happen; the explicit HEAD mapping is what avoids them. Plu
 GET handler and 404 in the unit test. The worker tests assert `requests.get` is never called and
 that the timeout is 5.
 
+### The 2026-08-06 eleventh sitting — AUDIT-Q3 closed
+
+The remaining three bullets, all backend. The entry is now gone from `issues.md`. All three
+**accurate as filed**, with the anchors drifted by the tenth sitting's edits but the mechanisms
+intact.
+
+**`isOverride` compared placeholders untrimmed.** Exactly as filed: it trimmed for the emptiness
+check and then compared the *untrimmed* value, so `" inherit "` was not empty, was not
+`equals("inherit")`, and came back as a real model name. Now trimmed once into a local and compared
+against that.
+
+The entry's note that this is no longer local to `resolveModel` is the important half.
+`SeriesController.hasOverride` is a second reader of the same `public static` predicate, and the
+predicate's own Javadoc says every reader must use the same definition or the UI reports a different
+model from the one that runs. So a padded placeholder was not just a bad model name — it was the
+shared definition of "is this an override" disagreeing with itself. `impact` rates the symbol
+**CRITICAL**, 2 direct callers and 6 processes, and that is not the usual line-offset artefact: it
+really is a shared predicate. The change narrows it, and both readers want the narrowed answer.
+
+**Not fixed, and worth knowing: `SeriesController.resolveSetting` has the same untrimmed compare on
+the write path.** It nulls `"inherit"` / `"default"` out of an incoming DTO before persisting, and
+misses `" inherit "` for the same reason. Left alone because it is a different method in a different
+file and outside this entry's bullets — the consequence after this commit is only that a padded
+placeholder can still be *stored*, where every reader now correctly treats it as inert. Worth filing
+if anyone wants the write path tightened too.
+
+**`resolvePageForCallback` inside the conversation loop.** Accurate. Called once per conversation and
+then again at the enqueue step, always with the same two arguments. Hoisted to one local. The test
+asserts *invariance* rather than an absolute count — the enqueue path resolves pages of its own, so
+the meaningful property is that lookups do not grow with conversation count. Red on the old code at
+3 lookups for 1 conversation vs 7 for 5; green at equal.
+
+**The `LayerElement` copy duplicated in `cloneOcrData` and `cloneTranslationData`.** Accurate, and
+verified byte-identical: normalising the layer variable makes the two 29-line blocks diff clean.
+Every non-`id` field on `LayerElement` is copied by both, so nothing was being forgotten *yet* —
+extracting `cloneLayerElement(source, targetLayer, regionIdMap)` is prevention, which is what the
+bullet says it is.
+
+**This bullet has no red-green and that is not an oversight.** It is duplication removal with both
+copies complete; there is no state in which the old code gave a wrong answer, so no test goes red
+when it is restored. A test asserting "all fields are copied" would have passed identically before
+and after. Written down rather than papered over.
+
+Backend **414** (was 412). `mvn -o clean verify` — the gate that runs PMD and jacoco's rules, per the
+tenth sitting's correction — full suite, green.
+
 ### The 2026-08-06 eleventh sitting — AUDIT-Q3, the worker half
 
 Four of AUDIT-Q3's seven bullets, all in the worker submodule. All four **accurate as filed**; two
