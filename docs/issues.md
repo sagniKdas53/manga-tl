@@ -218,13 +218,6 @@ behind a cookie; and drop `%r` for `%U` in the access-log pattern.
 
 ### Pipeline correctness
 
-#### AUDIT-P6 **[M]** — a lost `COMPLETED` PATCH silently re-runs the whole job
-
-`rq_tasks.py:113` sends `update_job_status(job_id, "COMPLETED")` with `timeout=5`. On timeout the
-exception is swallowed (`:58-59`, print-only). The job stays `PROCESSING` and is re-dispatched by
-the stale sweeper 10 minutes later — duplicating work per AUDIT-P4. The callback that carries the
-actual *results* has already landed by then, so the duplicate is pure waste plus duplicate rows.
-
 ### Worker
 
 #### AUDIT-W1 **[L]** — QA's two default-model maps duplicate `providers.json`

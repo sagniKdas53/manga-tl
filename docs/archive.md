@@ -173,7 +173,39 @@ expensive loads still happen; the explicit HEAD mapping is what avoids them. Plu
 GET handler and 404 in the unit test. The worker tests assert `requests.get` is never called and
 that the timeout is 5.
 
-### The 2026-08-06 ninth sitting — AUDIT-P8, pipeline trace lifetime
+### The 2026-08-06 ninth sitting — AUDIT-P6 and P8, the last two [M] pipeline findings
+
+**AUDIT-P6 [M] — a lost `COMPLETED` PATCH re-ran the whole job. Fixed, accurate as filed.**
+
+The mechanism is exactly as described, and it is worth recording *why* it is as expensive as it is:
+**nothing else tells the backend a job finished.** The results callbacks (`handleOcrCallback` and
+friends) write results, not status — the single `setStatus("COMPLETED")` in the whole backend is in
+`JobCoordinatorService`'s *empty-OCR* branch, which returns early. So job completion depends
+entirely on the worker's PATCH, and `recoverStaleProcessingJobs` requeues anything left `PROCESSING`
+for ten minutes on a 5-minute scan.
+
+The PATCH now goes through a tenacity-wrapped `_patch_job_status` — four attempts, exponential
+backoff, the same idiom as `LLMClient._execute_with_retry`. The worst case is about 27s of a worker
+slot against the minutes a duplicate OCR or translation pass costs.
+
+**The entry describes only the timeout, and it has a quieter twin it does not mention.** `requests`
+does not raise on an error status and the original call never looked at the response, so a 500 lost
+the update with no exception to print at all — the same cost, arrived at more silently than the case
+that was filed. That is the **sixth** time reading past the headline found real work. The response
+is now classified: 5xx/408/429 retry; 404 means the row was deleted or cancelled and gives up at
+once rather than spending the budget on a row that will not come back; any other 4xx is a rejected
+payload that will not heal, logged once. Exhausting the retries still cannot raise into the caller,
+which is mid-pipeline.
+
+`test_update_job_status` had to change with it: its response was a bare `MagicMock`, harmless while
+nothing read it, but a `MagicMock` compares as `NotImplemented` against an int, so it had to become
+a real response once `status_code` is inspected.
+
+The new tests disarm tenacity's backoff by swapping the `sleep` callable **on that one `Retrying`
+instance**, not by patching `time.sleep`. Patching the shared `time` module object is precisely what
+neutralised a test in the eighth sitting; this keeps the blast radius to the object under test.
+
+Worker 305 (was 301, +4). All four gates clean. Both defects verified red individually.
 
 **AUDIT-P8 [M] — `pipeline:trace:` expired mid-pipeline. Fixed, accurate as filed.**
 
