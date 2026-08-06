@@ -13,6 +13,7 @@ public class LayerEditHistory {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "layer_element_id", nullable = false)
+  @com.fasterxml.jackson.annotation.JsonIgnore
   @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
   private LayerElement layerElement;
 
@@ -26,6 +27,7 @@ public class LayerEditHistory {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "edited_by")
+  @com.fasterxml.jackson.annotation.JsonIgnore
   private User editedBy;
 
   @Column(name = "edited_at", nullable = false, updatable = false)
