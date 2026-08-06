@@ -149,72 +149,15 @@ Conventions: **[C]** critical · **[H]** high · **[M]** medium · **[L]** low/c
 > [security_boundary.md](./security_boundary.md).** The derived image variants
 > (`/api/images/*/thumbnail`, `/api/images/*/reader`) are public **on purpose** and are not a
 > finding. Everything that decides, changes or reveals state stays authenticated.
-
-#### AUDIT-S1 **[C]** — every secret has a hardcoded fallback, and a missing secret file fails open
-
-`backend/src/main/resources/application.yml:44-51` ships working defaults for all four secrets:
-
-```yaml
-jwt:
-  secret: ${JWT_SECRET:5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437}
-internal:
-  api-token: ${INTERNAL_API_TOKEN:manga-library-internal-token-12345}
-```
-
-plus `minio.secretKey: minioadmin` (`:39`) and `spring.datasource.password: postgres` (`:10`).
-That JWT default is a **verbatim copy of the key from a popular JWT tutorial** — it is on GitHub
-tens of thousands of times. Anyone who knows it can mint a token for any email and, via
-`JwtAuthFilter`, become whatever role that user holds.
-
-This is only a latent default until you combine it with
-`DockerSecretsEnvironmentPostProcessor:52-68`: if the secret file is missing or unreadable, it
-logs nothing at all for that key and **silently continues**, so the app boots happily on the
-tutorial key. There is no startup assertion that the secrets actually loaded.
-
-**Fix:** fail startup when `JWT_SECRET` / `INTERNAL_API_TOKEN` are unset in a non-dev profile.
-Move the dev defaults into an `application-local.yml` that production never activates.
-
-#### AUDIT-S2 **[C]** — `/api/internal/**` is `permitAll`, guarded only by a filter with the same weak default
-
-`SecurityConfig:44-45` marks `/api/internal/**` `permitAll()`. The only thing standing in front of
-the callback API — which writes OCR regions, mutates job state, and creates layers — is
-`InternalAuthFilter:17`, whose token defaults to `manga-library-internal-token-12345` (AUDIT-S1).
-The backend is published through Traefik on a public hostname, so with the default in effect the
-entire pipeline-mutation surface is unauthenticated.
-
-Secondary: `token.equals(internalApiToken)` (`:32`) is a short-circuiting compare — use
-`MessageDigest.isEqual` for a shared secret.
-
-#### AUDIT-S3 **[H]** — the worker's auth is also fail-open
-
-`worker/src/worker/main.py:81-84`:
-
-```python
-if conc.WORKER_API_SECRET and worker_api_secret != conc.WORKER_API_SECRET:
-    raise HTTPException(status_code=401, detail="Unauthorized")
-```
-
-If `WORKER_API_SECRET` resolves to `""` — which `concurrency.py:48-54` will happily do when the
-secret file is absent, catching the exception and printing to stdout — the guard evaluates to
-falsy and **every endpoint becomes public**, including `/api/v1/jobs/submit`. Same pattern as
-AUDIT-S1: the absence of a credential disables the check instead of failing.
-
-#### AUDIT-S4 **[H]** — JWTs travel in the query string and land in the access log
-
-Chain, all three parts verified:
-
-1. `frontend/src/utils/useSSE.ts:25` — `EventSource` cannot set headers, so the token is appended:
-   `` `${url}?token=${encodeURIComponent(token)}` ``.
-2. `JwtAuthFilter:77-80` accepts `request.getParameter("token")` as a credential.
-3. `application.yml:60-63` enables the Tomcat access log with pattern `'%h %l %u %t "%r" %s %b %Dms'`
-   — `%r` is the full request line **including the query string**.
-
-So every SSE connection writes a valid 24-hour bearer token to `catalina` access logs in plaintext,
-where it also reaches any log shipper and the Traefik access log upstream. The token is
-additionally kept in `localStorage` (`Auth.tsx:78`, `utils.ts:47`), so it is XSS-readable.
-
-**Fix:** issue a short-lived, single-purpose SSE ticket instead of the session JWT, or move SSE
-behind a cookie; and drop `%r` for `%U` in the access-log pattern.
+>
+> **All four `AUDIT-S*` findings are closed** (S1, S2, S3, S4 — fixed 2026-08-02, verified against
+> the code and the running stack on 2026-08-06). They sat here as "open" for four days because the
+> handoff rule *"security is tracked separately, don't fold it in"* was read as *don't triage it
+> either*. Reasoning and the live probes are in
+> [archive.md](./archive.md#the-2026-08-06-thirteenth-sitting--the-whole-security-track-was-already-closed).
+>
+> **Security is not exempt from verification.** If a finding lands here again, it gets read against
+> the code like any other entry.
 
 ### Pipeline correctness
 

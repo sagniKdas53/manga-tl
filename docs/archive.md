@@ -73,6 +73,95 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-06 thirteenth sitting — the whole security track was already closed
+
+**All four `AUDIT-S*` entries were stale.** They were fixed on 2026-08-02, archived that same day
+under *Status of the fix order* item 1, and then left sitting in `issues.md` for four days while
+every handoff counted them as the four highest-severity open findings on the board.
+
+**That takes the running count of stale/wrong/incomplete findings from eighteen to twenty-two.**
+
+#### Why they survived the triage that was supposed to catch them
+
+The 2026-08-05 verification pass states that every entry was re-read against the working tree and
+that "nothing in it is stale". It was wrong about that, and the mechanism is worth recording because
+it will recur: **every handoff carries the instruction "AUDIT-S\* — security is tracked separately,
+don't fold it in."** That instruction was written to stop security work being casually mixed into
+performance sittings. What it actually did was mark the security section as *not mine to touch*, so
+the triage pass skipped it — and a section nobody triages is a section whose staleness compounds.
+
+The rule was load-bearing in the wrong direction. **"Tracked separately" has to mean "tracked", not
+"skipped".** Corrected in `next-step.md`: security is now a track that gets verified like any other,
+and the four entries are gone rather than parked.
+
+#### What was verified, and how
+
+Not by reading the fix commits — by reading the current code and then probing the running stack.
+
+| finding | claim | state |
+| --- | --- | --- |
+| **S1** | hardcoded fallbacks for four secrets; missing file fails open | **closed** — `application.yml:52-57` ships `${JWT_SECRET:}` / `${INTERNAL_API_TOKEN:}` with no fallback, and `SecretsStartupValidator` refuses startup on unset, too-short, or known-public values. 10 tests. |
+| **S2** | `/api/internal/**` `permitAll` behind a filter with the same weak default | **closed** — `InternalAuthFilter:53-58` uses `MessageDigest.isEqual`, has no fallback token, and an unconfigured token returns `false` rather than matching. |
+| **S3** | worker auth fails open on an empty secret | **closed** — `main.py:120` inverted to `if not conc.WORKER_API_SECRET or not secrets.compare_digest(...)`, plus a FATAL startup check at `:35`. |
+| **S4** | JWT in the SSE query string lands in the access log | **closed** — `useSSE.ts` spends the JWT on a POST `Authorization` header and puts a single-use 60 s ticket in the query string; the access-log pattern is `%m %U %H`, not `%r`. |
+
+Live probes against the deployed stack:
+
+```text
+POST /tlhub/api/internal/jobs/status                                    → 401
+POST /tlhub/api/internal/jobs/status  (X-Internal-Token: the old default) → 401
+GET  /tlhub/api/notifications/stream  (no ticket)                        → 403
+```
+
+The second probe is the one that matters: the tutorial token from the S1 write-up is *specifically*
+rejected, so this is the fixed build and not a coincidence.
+
+#### The one thing that was genuinely still open
+
+**`application.yml` still shipped the `postgres` and `minioadmin` fallbacks that `application-local.yml`
+was created to own.** S1's fix moved the two secrets the finding *named by variable* — `jwt.secret`
+and `internal.api-token` — into the local profile, and *copied* the datasource password and the MinIO
+keys there. It never deleted the originals. So the base config carried duplicated dev credentials
+directly above a comment reading "No fallbacks here on purpose (AUDIT-S1/S2)".
+
+**Third instance of the same lesson in three sittings.** The eleventh sitting's phantom cache key, the
+twelfth's second `npm install`, and now this: the fix landed on the instances the finding *enumerated*
+rather than on every instance of the shape. Grep for the shape, never for the tell.
+
+**Framed honestly: this is a consistency fix, not a hole being closed.** A missing DB or MinIO secret
+failed loudly before the change and fails loudly after it — both credentials come from `_FILE` mounts
+in the real deployment (`docker-compose.yml:129,140,217`), so the fallbacks were unreachable in
+production. What was actually wrong is that the file contradicted its own documented intent and kept
+two sources of truth for the same dev values.
+
+**No production red-green exists for it, and none was manufactured.** What can break is the test
+context: `MinioConfig:14,17` reads `${minio.accessKey}` / `${minio.secretKey}` with **no annotation
+default**, and neither test profile set them — the suite was silently inheriting `minioadmin` from
+the base config. Dropping the fallback without giving the test profiles their own values fails every
+`@SpringBootTest` at context load with `AccessKey and SecretKey must not be empty`. Confirmed red,
+then green.
+
+#### The lesson repeated itself inside this sitting, one file later
+
+Having just written "grep for the shape, never for the tell" into this entry, the fix was applied to
+`application-test.yml` **only** — and `mvn -o clean verify` came back with 5 errors across
+`SchemaValidationTest`, `OpenApiSpecTest` and `PipelineFlowIntegrationTest`, every one of them
+`activeProfiles = ["integration"]`.
+
+**There are two test profiles, not one.** `@ActiveProfiles("test")` and `@ActiveProfiles("integration")`,
+backed by `application-test.yml` and `application-integration.yml`. The first was found by looking at
+the profile the *failing symptom* pointed at; the second only by enumerating every
+`application*.yml` in the tree and every distinct `@ActiveProfiles` value.
+
+Recorded rather than quietly patched, because it is the cleanest possible demonstration of the
+failure mode: **knowing the rule does not protect you from it.** The protection is mechanical — list
+every instance of the shape *before* editing, not after a gate goes red. The command that would have
+prevented it:
+
+```bash
+find src -name "application*.yml" && grep -rho '@ActiveProfiles("[^"]*")' src/test/java | sort -u
+```
+
 ### The 2026-08-06 twelfth sitting — AUDIT-D5, three of five bullets
 
 **Three closed, two deferred with their reasoning corrected.** The entry is still open in
