@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 # com.github.gotson:webp-imageio ships glibc builds only (native/Linux/<arch>), so on
 # Alpine/musl the JNI lib fails to load with UnsatisfiedLinkError and thumbnails 404.
 # Compile the wrapper (vendored from gotson/webp-imageio) against Alpine's musl libwebp.
-FROM alpine:3.23 AS webp-native-build
+FROM alpine:3.24 AS webp-native-build
 RUN apk add --no-cache libwebp-dev musl-dev build-base
 WORKDIR /src
 COPY backend/src/main/c/ ./
