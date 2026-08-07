@@ -2,9 +2,11 @@ package com.manga.library.controller;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.manga.library.config.JwtAuthFilter;
+import com.manga.library.model.Chapter;
 import com.manga.library.model.Series;
 import com.manga.library.repository.ChapterRepository;
 import com.manga.library.repository.ImageRepository;
@@ -87,8 +89,81 @@ public class SeriesControllerTest {
             setTitle("Test Series");
           }
         };
-    when(seriesRepository.findAll()).thenReturn(java.util.List.of(series));
-    mockMvc.perform(get("/api/series")).andExpect(status().isOk());
+    when(seriesRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(series),
+                org.springframework.data.domain.PageRequest.of(0, 10),
+                1));
+    mockMvc
+        .perform(get("/api/series"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[0].title").value("Test Series"))
+        .andExpect(jsonPath("$.size").value(10))
+        .andExpect(jsonPath("$.totalElements").value(1));
+  }
+
+  @Test
+  public void testListSeries_BoundaryPage_PartialFinalPage() throws Exception {
+    Series series =
+        new Series() {
+          {
+            setId(UUID.randomUUID());
+            setTitle("Last One");
+          }
+        };
+    when(seriesRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(series),
+                org.springframework.data.domain.PageRequest.of(2, 10),
+                21));
+
+    mockMvc
+        .perform(get("/api/series").param("page", "2"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.page").value(2))
+        .andExpect(jsonPath("$.totalElements").value(21))
+        .andExpect(jsonPath("$.totalPages").value(3));
+  }
+
+  @Test
+  public void testListSeries_EmptyResult() throws Exception {
+    when(seriesRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(),
+                org.springframework.data.domain.PageRequest.of(0, 10),
+                0));
+
+    mockMvc
+        .perform(get("/api/series"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isEmpty())
+        .andExpect(jsonPath("$.totalElements").value(0))
+        .andExpect(jsonPath("$.totalPages").value(0));
+  }
+
+  @Test
+  public void testListSeries_DefaultSize_UnknownSortByFallsBackToUpdatedAt() throws Exception {
+    org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+    when(seriesRepository.findAll(captor.capture()))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(),
+                org.springframework.data.domain.PageRequest.of(0, 10),
+                0));
+
+    mockMvc
+        .perform(get("/api/series").param("sortBy", "title"))
+        .andExpect(status().isOk());
+
+    org.springframework.data.domain.Pageable used = captor.getValue();
+    org.junit.jupiter.api.Assertions.assertEquals(10, used.getPageSize());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        "updatedAt", used.getSort().iterator().next().getProperty());
   }
 
   @Test
@@ -319,9 +394,69 @@ public class SeriesControllerTest {
   public void testListChapters_Success() throws Exception {
     UUID seriesId = UUID.randomUUID();
     when(seriesRepository.existsById(seriesId)).thenReturn(true);
-    when(chapterRepository.findBySeriesId(seriesId)).thenReturn(java.util.Collections.emptyList());
+    when(chapterRepository.findBySeriesId(
+            eq(seriesId), any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                java.util.Collections.emptyList(),
+                org.springframework.data.domain.PageRequest.of(0, 15),
+                0));
 
-    mockMvc.perform(get("/api/series/" + seriesId + "/chapters")).andExpect(status().isOk());
+    mockMvc
+        .perform(get("/api/series/" + seriesId + "/chapters"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.size").value(15))
+        .andExpect(jsonPath("$.content").isEmpty());
+  }
+
+  @Test
+  public void testListChapters_BoundaryPage_PartialFinalPage() throws Exception {
+    UUID seriesId = UUID.randomUUID();
+    Chapter chapter =
+        new Chapter() {
+          {
+            setId(UUID.randomUUID());
+            setSeries(new Series());
+            setChapterNumber(16.0);
+          }
+        };
+    when(seriesRepository.existsById(seriesId)).thenReturn(true);
+    when(chapterRepository.findBySeriesId(
+            eq(seriesId), any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(chapter),
+                org.springframework.data.domain.PageRequest.of(1, 15),
+                16));
+
+    mockMvc
+        .perform(get("/api/series/" + seriesId + "/chapters").param("page", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.totalElements").value(16))
+        .andExpect(jsonPath("$.totalPages").value(2));
+  }
+
+  @Test
+  public void testListChapters_SortDirDescSortsByChapterNumber() throws Exception {
+    UUID seriesId = UUID.randomUUID();
+    org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+    when(seriesRepository.existsById(seriesId)).thenReturn(true);
+    when(chapterRepository.findBySeriesId(eq(seriesId), captor.capture()))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                java.util.Collections.emptyList(),
+                org.springframework.data.domain.PageRequest.of(0, 15),
+                0));
+
+    mockMvc
+        .perform(get("/api/series/" + seriesId + "/chapters").param("sortDir", "desc"))
+        .andExpect(status().isOk());
+
+    org.springframework.data.domain.Sort.Order order = captor.getValue().getSort().iterator().next();
+    org.junit.jupiter.api.Assertions.assertEquals("chapterNumber", order.getProperty());
+    org.junit.jupiter.api.Assertions.assertTrue(order.isDescending());
   }
 
   @Test
@@ -610,6 +745,13 @@ public class SeriesControllerTest {
   public void testListChapters_SeriesNotFound() throws Exception {
     UUID seriesId = UUID.randomUUID();
     when(seriesRepository.existsById(seriesId)).thenReturn(false);
+    when(chapterRepository.findBySeriesId(
+            eq(seriesId), any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                java.util.Collections.emptyList(),
+                org.springframework.data.domain.PageRequest.of(0, 15),
+                0));
 
     mockMvc.perform(get("/api/series/" + seriesId + "/chapters")).andExpect(status().isOk());
   }

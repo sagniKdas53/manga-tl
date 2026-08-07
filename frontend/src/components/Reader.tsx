@@ -45,6 +45,12 @@ interface ReaderProps {
   pages: Page[];
   theme: "light" | "dark";
   setPages?: React.Dispatch<React.SetStateAction<Page[]>>;
+  /** Total page count on the server — `pages.length` is only what's loaded so far. */
+  pagesTotalCount?: number;
+  /** Fetches whichever batch contains the given 0-based page index, if not already loaded. */
+  ensurePageLoaded?: (index: number) => void;
+  /** Drops the accumulated pages and refetches page 0 — used after a mutation. */
+  reloadPages?: () => Promise<void>;
 }
 
 /** A single renderable item in the reader — either a conversation group or a standalone region. */
@@ -163,9 +169,21 @@ export const Reader: React.FC<ReaderProps> = ({
   pages,
   setPages,
   theme,
+  pagesTotalCount = 0,
+  ensurePageLoaded,
+  reloadPages,
 }) => {
   const navigate = useNavigate();
   const { pageNumber } = useParams<{ pageNumber: string }>();
+  // The chapter's true page count once known. `pages.length` alone is wrong two ways: it's
+  // only what's been fetched so far, and — since `ensurePageLoaded` can land a sparse,
+  // non-contiguous batch when jumping straight to an unloaded page — a loaded page's own
+  // `pageNumber` need not equal how many pages are loaded. The floor is "the highest page
+  // number seen so far must exist," which degrades gracefully before the server has told us
+  // the real total (fresh mount, or a caller that doesn't wire pagination at all).
+  const totalPageCount =
+    pagesTotalCount ||
+    (pages.length > 0 ? Math.max(...pages.map((p) => p.pageNumber)) : 0);
 
   // Suppress unused warning for theme prop
   if (theme) {
@@ -173,19 +191,13 @@ export const Reader: React.FC<ReaderProps> = ({
   }
 
   const fetchPages = useCallback(async () => {
-    if (!setPages || !selectedChapter) return;
+    if (!setPages || !selectedChapter || !reloadPages) return;
     try {
-      const res = await safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      if (res.ok) {
-        const pagesData = await res.json();
-        setPages(pagesData);
-      }
+      await reloadPages();
     } catch (e) {
       console.error("Failed to fetch pages:", e);
     }
-  }, [selectedChapter, user.token, setPages]);
+  }, [selectedChapter, setPages, reloadPages]);
 
   const curPageNum = parseInt(pageNumber || "1");
   const selectedPage = pages.find((p) => p.pageNumber === curPageNum);
@@ -1895,7 +1907,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
         // Smooth Navigation to the new URL if we moved the current page
         if (selectedPage?.id === pageId) {
-          const targetPageNumber = newNumber === 0 ? pages.length : newNumber;
+          const targetPageNumber = newNumber === 0 ? totalPageCount : newNumber;
           navigate(
             `/chapters/${selectedChapter?.id}/${toSlug(selectedChapter?.title || "chapter")}/reader/${targetPageNumber}`,
             { replace: true },
@@ -1916,7 +1928,7 @@ export const Reader: React.FC<ReaderProps> = ({
       selectedPage,
       selectedChapter,
       user.token,
-      pages,
+      totalPageCount,
     ],
   );
 
@@ -2725,17 +2737,33 @@ export const Reader: React.FC<ReaderProps> = ({
   ]);
 
   // --- STABLE NAVIGATOR CALLBACK ---
+  // Bounded by the chapter's true page count, not by how much has been fetched so far —
+  // pages 1-25 being loaded must not stop navigation to page 26 of a 30-page chapter. The
+  // fetch for whatever isn't loaded yet happens in the "ensure the target page is loaded"
+  // effect below, keyed off the URL this pushes.
   const navigateToPage = useCallback(
     (num: number) => {
-      if (num >= 1 && num <= pages.length && selectedChapter) {
+      if (num >= 1 && num <= totalPageCount && selectedChapter) {
         const slugPart = selectedChapter.title
           ? `${toSlug(selectedChapter.title)}/`
           : `chapter-${selectedChapter.chapterNumber}/`;
         navigate(`/chapters/${selectedChapter.id}/${slugPart}reader/${num}`);
       }
     },
-    [pages, selectedChapter, navigate],
+    [totalPageCount, selectedChapter, navigate],
   );
+
+  // --- FETCH-PAST-THE-BATCH: navigating beyond what's loaded triggers the next fetch ---
+  // The 25-page fetch window is a batch size, not a navigation limit. Without this, "next"
+  // from the last loaded page would silently do nothing once `navigateToPage`'s own bound
+  // stops rejecting it (it now only rejects truly out-of-range numbers).
+  useEffect(() => {
+    if (!ensurePageLoaded) return;
+    if (curPageNum < 1 || curPageNum > totalPageCount) return;
+    const alreadyLoaded = pages.some((p) => p.pageNumber === curPageNum);
+    if (alreadyLoaded) return;
+    ensurePageLoaded(curPageNum - 1);
+  }, [curPageNum, totalPageCount, pages, ensurePageLoaded]);
 
   // --- KEYBOARD WRITER EFFECT ---
   useEffect(() => {
@@ -3088,23 +3116,26 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   };
 
-  // Page out-of-bounds protection: redirect to first valid page if page doesn't exist
+  // Page out-of-bounds protection: redirect to the first valid page only when the page
+  // number is truly out of range, not merely unloaded — a page inside [1, totalPageCount]
+  // that isn't in `pages` yet is exactly what the fetch-past-batch effect above is fetching,
+  // and this used to redirect it straight back to page 1 before that fetch had a chance to
+  // land, defeating navigation past the loaded batch entirely.
   useEffect(() => {
-    if (!pages || pages.length === 0 || !selectedChapter) return;
+    if (!selectedChapter || totalPageCount === 0) return;
     const pageNum = pageNumber ? parseInt(pageNumber, 10) : 1;
-    const pageExists = pages.some((p) => p.pageNumber === pageNum);
+    const outOfRange = pageNum < 1 || pageNum > totalPageCount;
+    if (!outOfRange) return;
 
-    if (!pageExists) {
-      const firstValidPage = pages[0]?.pageNumber || 1;
-      const slugPart = selectedChapter.title
-        ? `${toSlug(selectedChapter.title)}/`
-        : "";
-      navigate(
-        `/chapters/${selectedChapter.id}/${slugPart}reader/${firstValidPage}`,
-        { replace: true },
-      );
-    }
-  }, [pages, pageNumber, selectedChapter, navigate]);
+    const firstValidPage = pages[0]?.pageNumber || 1;
+    const slugPart = selectedChapter.title
+      ? `${toSlug(selectedChapter.title)}/`
+      : "";
+    navigate(
+      `/chapters/${selectedChapter.id}/${slugPart}reader/${firstValidPage}`,
+      { replace: true },
+    );
+  }, [totalPageCount, pages, pageNumber, selectedChapter, navigate]);
 
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     // Only a fallback now. If the API reported the original size, that wins — the element may be
@@ -3116,7 +3147,14 @@ export const Reader: React.FC<ReaderProps> = ({
     });
   };
 
-  if (pages.length > 0 && !selectedPage) {
+  // Truly out of range (not just "not loaded yet") — matches the redirect effect above, and
+  // exists to cover the one render before that effect's `navigate` takes hold. A page that's
+  // in range but simply hasn't arrived from its batch yet falls through to the generic
+  // "Loading page..." state below instead, since it does exist and is on its way.
+  const pageOutOfRange =
+    totalPageCount > 0 && (curPageNum < 1 || curPageNum > totalPageCount);
+
+  if (pageOutOfRange) {
     return (
       <div
         className="reader-container-nhentai"
@@ -3130,8 +3168,8 @@ export const Reader: React.FC<ReaderProps> = ({
       >
         <h2>Page {pageNumber} does not exist in this chapter.</h2>
         <p>
-          This chapter has {pages.length} page{pages.length !== 1 ? "s" : ""}.
-          Redirecting...
+          This chapter has {totalPageCount} page
+          {totalPageCount !== 1 ? "s" : ""}. Redirecting...
         </p>
       </div>
     );
@@ -3190,7 +3228,7 @@ export const Reader: React.FC<ReaderProps> = ({
             setPrefetchAhead={setPrefetchAhead}
             setFitMode={setFitMode}
             curPageNum={selectedPage?.pageNumber || 0}
-            totalPages={pages.length}
+            totalPages={totalPageCount}
             navigateToPage={navigateToPage}
             prevChapter={prevChapter}
             nextChapter={nextChapter}

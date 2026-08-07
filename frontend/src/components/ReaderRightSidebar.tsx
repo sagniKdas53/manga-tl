@@ -31,7 +31,283 @@ import SidebarSection from "./SidebarSection";
 import type { SystemStyleObject, Theme } from "@mui/system";
 import type { Layer, LayerElement, OcrRegion } from "../types";
 
+// --- AUDIT-F2: static sx literals hoisted to module scope --------------------
+//
+// Every one of these was previously a fresh object literal reconstructed on every render of
+// this component (28 state values live one level up in Reader.tsx, so this sidebar re-renders
+// on most reader interactions). None of them depend on props, state, or loop variables, so
+// there is nothing to gain from inlining them — Emotion can cache a stable reference instead
+// of re-serialising the same declarations every time. Blocks that genuinely vary per render
+// (loop index, active/visible flags, interaction mode) stay inline below; a few of those split
+// their static parts out here too, merged in via the `sx` array form.
+
+const emptyStateContainerSx = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 1,
+  color: "var(--text-dim, var(--text-muted))",
+  textAlign: "center",
+  py: 3,
+  mb: 2,
+  borderBottom: "1px solid var(--border-color)",
+} as const;
+
+const emptyStateIconSx = { fontSize: 22, opacity: 0.5 } as const;
+
+const emptyStateTextSx = {
+  fontSize: "12.5px",
+  color: "var(--text-muted)",
+  maxWidth: 210,
+} as const;
+
+const layerHeaderActionsSx = {
+  display: "flex",
+  gap: 0.25,
+  alignItems: "center",
+} as const;
+
+const layerMoveButtonSx = { p: 0.25, color: "var(--text-muted)" } as const;
+
+const layerHeaderDividerSx = {
+  width: "1px",
+  height: "14px",
+  backgroundColor: "var(--border-color)",
+  mx: 0.5,
+} as const;
+
+const smallAddIconSx = { fontSize: 14 } as const;
+
+const addLayerButtonSx = {
+  fontSize: "10px",
+  minWidth: 0,
+  px: 1,
+  py: 0.25,
+  color: "var(--text-muted)",
+  borderColor: "var(--border-color)",
+} as const;
+
+const noLayersTextSx = {
+  fontSize: "11px",
+  color: "var(--text-dim, var(--text-muted))",
+  py: 0.5,
+} as const;
+
+// The layer row itself depends on `isActive`/`isVisible` per item, so the dynamic half stays
+// inline — but the declarations that never change are still worth not reallocating every time
+// any layer's active/visible state changes any *other* row.
+const layerRowBaseSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 1,
+  p: "6px 8px",
+  mb: 0.75,
+  borderRadius: "8px",
+  cursor: "pointer",
+  transition: "opacity 0.15s ease, border-color 0.15s ease",
+} as const;
+
+const layerStackNumberBaseSx = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 20,
+  height: 20,
+  borderRadius: "5px",
+  fontSize: "10px",
+  fontWeight: 700,
+  flexShrink: 0,
+} as const;
+
+const layerNameColumnSx = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
+  flex: 1,
+  minWidth: 0,
+} as const;
+
+const layerNameBaseSx = {
+  fontSize: "13px",
+  lineHeight: 1.2,
+  wordBreak: "break-word",
+} as const;
+
+const layerElementCountSx = {
+  fontSize: "9px",
+  color: "var(--text-dim, var(--text-muted))",
+} as const;
+
+const layerActionsRowSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 0.25,
+  flexShrink: 0,
+} as const;
+
+const cloneLayerButtonSx = { color: "var(--text-muted)" } as const;
+
+const deleteLayerButtonSx = {
+  color: "var(--text-muted)",
+  "&:hover": { color: "var(--error)" },
+} as const;
+
+const editorToolRowSx = { display: "flex", gap: 1, mb: 1 } as const;
+
+const editorToolButtonSx = {
+  flex: 1,
+  py: 1,
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "var(--text-main)",
+  borderColor: "var(--border-color)",
+  "&:hover": {
+    borderColor: "var(--primary)",
+    color: "var(--primary)",
+    backgroundColor: "var(--primary-glow)",
+  },
+} as const;
+
+const colorDropperButtonSx = {
+  color: "var(--text-main)",
+  borderColor: "var(--border-color)",
+  "&:hover": {
+    borderColor: "var(--primary)",
+    color: "var(--primary)",
+  },
+} as const;
+
+const inlineSpinnerSx = { color: "inherit" } as const;
+
+const redoOcrButtonSx = {
+  mb: 1,
+  color: "var(--warning)",
+  borderColor: "var(--warning)",
+  "&:hover": { backgroundColor: "var(--warning)", color: "#fff" },
+} as const;
+
+const redoTranslationButtonSx = {
+  color: "var(--warning)",
+  borderColor: "var(--warning)",
+  "&:hover": { backgroundColor: "var(--warning)", color: "#fff" },
+} as const;
+
+const exportSectionSx = { mb: 5 } as const;
+
+const exportButtonWithMarginSx = {
+  mb: 1,
+  color: "var(--primary)",
+  borderColor: "var(--primary)",
+  "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
+} as const;
+
+const exportButtonSx = {
+  color: "var(--primary)",
+  borderColor: "var(--primary)",
+  "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
+} as const;
+
+const inspectorHeaderRowSx = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  pb: 1.25,
+  mb: 0.5,
+  borderBottom: "1px solid var(--border-color)",
+} as const;
+
+const inspectorTitleSx = {
+  fontSize: "10.5px",
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  color: "var(--text-dim, var(--text-muted))",
+  lineHeight: 1.2,
+} as const;
+
+const inspectorSubtitleSx = {
+  fontSize: "11px",
+  color: "var(--text-muted)",
+} as const;
+
+// Shared by both the layer-element inspector and the region inspector's own "Deselect".
+const deselectButtonSx = {
+  borderColor: "var(--border-color)",
+  color: "var(--text-main)",
+  fontSize: "11px",
+  fontWeight: 600,
+  minWidth: "auto",
+  padding: "2px 8px",
+} as const;
+
+const textContentFieldSx = {
+  "& .MuiOutlinedInput-root": {
+    backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))",
+    fontSize: "13px",
+    fontFamily: "inherit",
+  },
+} as const;
+
+const regionRedoGridSx = { mb: 0.5 } as const;
+const regionRedoColSx = { display: "flex" } as const;
+const redoSpinnerMarginSx = { mr: 0.5 } as const;
+
+// Reused across all four X/Y/MaxWidth/MaxHeight fields and both Font Size columns.
+const fieldColumnSx = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 0.5,
+} as const;
+
+// Reused across every plain numeric TextField in Position/Size and Typography.
+const numericFieldInputSx = {
+  "& .MuiInputBase-input": {
+    fontSize: "13px",
+    padding: "6px 10px",
+  },
+} as const;
+
+// Reused across all four Select fields (font family/weight/style, box shape).
+const selectFieldSx = {
+  fontSize: "13px",
+  height: "38px",
+  backgroundColor: "var(--bg-surface)",
+} as const;
+
+const rotationSliderSx = { width: "100%", mt: 1 } as const;
+
+// Identical glow applied to whichever of Drag/Reshape is currently active.
+const activeModeGlowSx = {
+  boxShadow: "0 0 0 3px var(--primary-glow)",
+} as const;
+
+const interactionHintTextSx = {
+  fontSize: "10.5px",
+  color: "var(--text-dim, var(--text-muted))",
+} as const;
+
+const unsavedChangesRowSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 0.5,
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "var(--warning, #eab308)",
+} as const;
+
+const unsavedChangesDotSx = {
+  width: 6,
+  height: 6,
+  borderRadius: "50%",
+  backgroundColor: "var(--warning, #eab308)",
+} as const;
+
 // --- Shared presentational helpers -----------------------------------------
+
+const fieldLabelSx = {
+  fontSize: "11px",
+  fontWeight: "bold",
+  color: "var(--text-muted)",
+} as const;
 
 /**
  * The inspector's field captions were eleven copies of the same raw `<label>` carrying the
@@ -50,11 +326,7 @@ const FieldLabel: React.FC<{
     component="label"
     htmlFor={htmlFor}
     id={id}
-    sx={{
-      fontSize: "11px",
-      fontWeight: "bold",
-      color: "var(--text-muted)",
-    }}
+    sx={fieldLabelSx}
   >
     {children}
   </Box>
@@ -171,27 +443,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
     <Grid className="reader-right-sidebar-nhentai">
       {!selectedItem && (
         <>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 1,
-              color: "var(--text-dim, var(--text-muted))",
-              textAlign: "center",
-              py: 3,
-              mb: 2,
-              borderBottom: "1px solid var(--border-color)",
-            }}
-          >
-            <LayersIcon sx={{ fontSize: 22, opacity: 0.5 }} />
+          <Box sx={emptyStateContainerSx}>
+            <LayersIcon sx={emptyStateIconSx} />
             <Typography
               variant="body2"
-              sx={{
-                fontSize: "12.5px",
-                color: "var(--text-muted)",
-                maxWidth: 210,
-              }}
+              sx={emptyStateTextSx}
             >
               Select an OCR region or a text layer to inspect and edit details.
             </Typography>
@@ -201,7 +457,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           <SidebarSection
             title="Layers"
             headerExtra={
-              <Box sx={{ display: "flex", gap: 0.25, alignItems: "center" }}>
+              <Box sx={layerHeaderActionsSx}>
                 <IconButton
                   size="small"
                   aria-label="Move layer up"
@@ -216,7 +472,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   onClick={() =>
                     activeLayerId && handleMoveLayer(activeLayerId, "up")
                   }
-                  sx={{ p: 0.25, color: "var(--text-muted)" }}
+                  sx={layerMoveButtonSx}
                 >
                   <KeyboardArrowUpIcon fontSize="small" />
                 </IconButton>
@@ -233,49 +489,28 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   onClick={() =>
                     activeLayerId && handleMoveLayer(activeLayerId, "down")
                   }
-                  sx={{ p: 0.25, color: "var(--text-muted)" }}
+                  sx={layerMoveButtonSx}
                 >
                   <KeyboardArrowDownIcon fontSize="small" />
                 </IconButton>
-                <Box
-                  sx={{
-                    width: "1px",
-                    height: "14px",
-                    backgroundColor: "var(--border-color)",
-                    mx: 0.5,
-                  }}
-                />
+                <Box sx={layerHeaderDividerSx} />
                 <Button
                   variant="outlined"
                   size="small"
-                  startIcon={<AddIcon sx={{ fontSize: 14 }} />}
+                  startIcon={<AddIcon sx={smallAddIconSx} />}
                   onClick={handleCreateTranslationLayer}
                   title="Add Translation Layer"
-                  sx={{
-                    fontSize: "10px",
-                    minWidth: 0,
-                    px: 1,
-                    py: 0.25,
-                    color: "var(--text-muted)",
-                    borderColor: "var(--border-color)",
-                  }}
+                  sx={addLayerButtonSx}
                 >
                   TL
                 </Button>
                 <Button
                   variant="outlined"
                   size="small"
-                  startIcon={<AddIcon sx={{ fontSize: 14 }} />}
+                  startIcon={<AddIcon sx={smallAddIconSx} />}
                   onClick={handleCreateSfxLayer}
                   title="Add SFX Layer"
-                  sx={{
-                    fontSize: "10px",
-                    minWidth: 0,
-                    px: 1,
-                    py: 0.25,
-                    color: "var(--text-muted)",
-                    borderColor: "var(--border-color)",
-                  }}
+                  sx={addLayerButtonSx}
                 >
                   SFX
                 </Button>
@@ -285,11 +520,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             {sortedLayers.length === 0 ? (
               <Typography
                 variant="body2"
-                sx={{
-                  fontSize: "11px",
-                  color: "var(--text-dim, var(--text-muted))",
-                  py: 0.5,
-                }}
+                sx={noLayersTextSx}
               >
                 No active layers.
               </Typography>
@@ -302,71 +533,52 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   <Box
                     key={lData.layer.id}
                     onClick={() => setActiveLayerId(lData.layer.id)}
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      p: "6px 8px",
-                      mb: 0.75,
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      border: isActive
-                        ? "1px solid var(--primary)"
-                        : "1px solid var(--border-color)",
-                      backgroundColor: isActive
-                        ? "var(--primary-glow)"
-                        : "transparent",
-                      boxShadow: isActive
-                        ? "0 0 8px var(--primary-glow)"
-                        : "none",
-                      opacity: isVisible ? 1 : 0.5,
-                      transition: "opacity 0.15s ease, border-color 0.15s ease",
-                      "&:hover": {
-                        borderColor: isActive
-                          ? "var(--primary)"
-                          : "var(--text-dim, var(--text-muted))",
+                    sx={[
+                      layerRowBaseSx,
+                      {
+                        border: isActive
+                          ? "1px solid var(--primary)"
+                          : "1px solid var(--border-color)",
+                        backgroundColor: isActive
+                          ? "var(--primary-glow)"
+                          : "transparent",
+                        boxShadow: isActive
+                          ? "0 0 8px var(--primary-glow)"
+                          : "none",
+                        opacity: isVisible ? 1 : 0.5,
+                        "&:hover": {
+                          borderColor: isActive
+                            ? "var(--primary)"
+                            : "var(--text-dim, var(--text-muted))",
+                        },
                       },
-                    }}
+                    ]}
                   >
                     <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: 20,
-                        height: 20,
-                        borderRadius: "5px",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        flexShrink: 0,
-                        backgroundColor: isActive
-                          ? "var(--primary)"
-                          : "var(--bg-input, rgba(0,0,0,0.06))",
-                        color: isActive ? "#fff" : "var(--text-muted)",
-                      }}
+                      sx={[
+                        layerStackNumberBaseSx,
+                        {
+                          backgroundColor: isActive
+                            ? "var(--primary)"
+                            : "var(--bg-input, rgba(0,0,0,0.06))",
+                          color: isActive ? "#fff" : "var(--text-muted)",
+                        },
+                      ]}
                     >
                       {stackNumber}
                     </Box>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "2px",
-                        flex: 1,
-                        minWidth: 0,
-                      }}
-                    >
+                    <Box sx={layerNameColumnSx}>
                       <Typography
                         component="span"
-                        sx={{
-                          fontSize: "13px",
-                          fontWeight: isActive ? 700 : 600,
-                          lineHeight: 1.2,
-                          wordBreak: "break-word",
-                          color: isActive
-                            ? "var(--primary-hover)"
-                            : "var(--text-main)",
-                        }}
+                        sx={[
+                          layerNameBaseSx,
+                          {
+                            fontWeight: isActive ? 700 : 600,
+                            color: isActive
+                              ? "var(--primary-hover)"
+                              : "var(--text-main)",
+                          },
+                        ]}
                       >
                         {typeof lData.layer.metadataJson?.layer_name ===
                         "string"
@@ -381,22 +593,14 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       </Typography>
                       <Typography
                         component="span"
-                        sx={{
-                          fontSize: "9px",
-                          color: "var(--text-dim, var(--text-muted))",
-                        }}
+                        sx={layerElementCountSx}
                       >
                         {lData.elements.length} elements
                         {!isVisible ? " · hidden" : ""}
                       </Typography>
                     </Box>
                     <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.25,
-                        flexShrink: 0,
-                      }}
+                      sx={layerActionsRowSx}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Tooltip title={isVisible ? "Hide layer" : "Show layer"}>
@@ -423,7 +627,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         <IconButton
                           size="small"
                           onClick={() => handleCloneLayer(lData.layer.id)}
-                          sx={{ color: "var(--text-muted)" }}
+                          sx={cloneLayerButtonSx}
                         >
                           <ContentCopyIcon fontSize="small" />
                         </IconButton>
@@ -433,10 +637,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                         <IconButton
                           size="small"
                           onClick={() => handleDeleteLayer(lData.layer.id)}
-                          sx={{
-                            color: "var(--text-muted)",
-                            "&:hover": { color: "var(--error)" },
-                          }}
+                          sx={deleteLayerButtonSx}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
@@ -450,23 +651,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
 
           {/* Editor Tools Section */}
           <SidebarSection title="Editor Tools">
-            <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
+            <Box sx={editorToolRowSx}>
               <Button
                 variant="outlined"
                 size="small"
-                sx={{
-                  flex: 1,
-                  py: 1,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--text-main)",
-                  borderColor: "var(--border-color)",
-                  "&:hover": {
-                    borderColor: "var(--primary)",
-                    color: "var(--primary)",
-                    backgroundColor: "var(--primary-glow)",
-                  },
-                }}
+                sx={editorToolButtonSx}
                 onClick={() => handleAddNewElement("text")}
                 disabled={!activeLayerId}
                 title={
@@ -480,19 +669,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               <Button
                 variant="outlined"
                 size="small"
-                sx={{
-                  flex: 1,
-                  py: 1,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--text-main)",
-                  borderColor: "var(--border-color)",
-                  "&:hover": {
-                    borderColor: "var(--primary)",
-                    color: "var(--primary)",
-                    backgroundColor: "var(--primary-glow)",
-                  },
-                }}
+                sx={editorToolButtonSx}
                 onClick={() => handleAddNewElement("mask")}
                 disabled={!activeLayerId}
                 title={
@@ -509,14 +686,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               size="small"
               startIcon={<ColorizeIcon />}
               fullWidth
-              sx={{
-                color: "var(--text-main)",
-                borderColor: "var(--border-color)",
-                "&:hover": {
-                  borderColor: "var(--primary)",
-                  color: "var(--primary)",
-                },
-              }}
+              sx={colorDropperButtonSx}
               onClick={() => handleLaunchEyeDropper("backgroundColor")}
               disabled={!selectedItem || !selectedItem.isLayerElement}
               title="Sample color from screen to apply to selected element's background"
@@ -534,7 +704,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 isRedoingPageOcr ? (
                   <CircularProgress
                     size={12}
-                    sx={{ color: "inherit" }}
+                    sx={inlineSpinnerSx}
                   />
                 ) : (
                   <RefreshIcon />
@@ -544,12 +714,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               disabled={isRedoingPageOcr}
               fullWidth
               title="Discards this page's current OCR results and re-runs detection"
-              sx={{
-                mb: 1,
-                color: "var(--warning)",
-                borderColor: "var(--warning)",
-                "&:hover": { backgroundColor: "var(--warning)", color: "#fff" },
-              }}
+              sx={redoOcrButtonSx}
             >
               Redo Page OCR
             </Button>
@@ -560,7 +725,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 isRedoingPageTranslation ? (
                   <CircularProgress
                     size={12}
-                    sx={{ color: "inherit" }}
+                    sx={inlineSpinnerSx}
                   />
                 ) : (
                   <RefreshIcon />
@@ -570,11 +735,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               disabled={isRedoingPageTranslation}
               fullWidth
               title="Discards this page's current translation and re-runs it"
-              sx={{
-                color: "var(--warning)",
-                borderColor: "var(--warning)",
-                "&:hover": { backgroundColor: "var(--warning)", color: "#fff" },
-              }}
+              sx={redoTranslationButtonSx}
             >
               Redo Page Translation
             </Button>
@@ -583,7 +744,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
           {/* Export Section */}
           <SidebarSection
             title="Export"
-            sx={{ mb: 5 }}
+            sx={exportSectionSx}
           >
             <Button
               variant="outlined"
@@ -591,12 +752,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               startIcon={<FileDownloadIcon />}
               onClick={handleExportPng}
               fullWidth
-              sx={{
-                mb: 1,
-                color: "var(--primary)",
-                borderColor: "var(--primary)",
-                "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
-              }}
+              sx={exportButtonWithMarginSx}
             >
               Export Page (PNG)
             </Button>
@@ -606,12 +762,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               startIcon={<FileDownloadIcon />}
               onClick={handleExportZip}
               fullWidth
-              sx={{
-                mb: 1,
-                color: "var(--primary)",
-                borderColor: "var(--primary)",
-                "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
-              }}
+              sx={exportButtonWithMarginSx}
             >
               Export Project (ZIP)
             </Button>
@@ -621,11 +772,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               startIcon={<FileDownloadIcon />}
               onClick={handleExportRenderedPng}
               fullWidth
-              sx={{
-                color: "var(--primary)",
-                borderColor: "var(--primary)",
-                "&:hover": { backgroundColor: "var(--primary)", color: "#fff" },
-              }}
+              sx={exportButtonSx}
             >
               Export Rendered PNG
             </Button>
@@ -643,33 +790,18 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             gap: "12px",
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              pb: 1.25,
-              mb: 0.5,
-              borderBottom: "1px solid var(--border-color)",
-            }}
-          >
+          <Box sx={inspectorHeaderRowSx}>
             <Box>
               <Typography
                 variant="overline"
                 component="div"
-                sx={{
-                  fontSize: "10.5px",
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  color: "var(--text-dim, var(--text-muted))",
-                  lineHeight: 1.2,
-                }}
+                sx={inspectorTitleSx}
               >
                 Element Inspector
               </Typography>
               <Typography
                 variant="caption"
-                sx={{ fontSize: "11px", color: "var(--text-muted)" }}
+                sx={inspectorSubtitleSx}
               >
                 {selectedItem.text !== undefined && selectedItem.text !== null
                   ? "Text element"
@@ -680,14 +812,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               variant="outlined"
               size="small"
               onClick={() => setSelectedItem(null)}
-              sx={{
-                borderColor: "var(--border-color)",
-                color: "var(--text-main)",
-                fontSize: "11px",
-                fontWeight: 600,
-                minWidth: "auto",
-                padding: "2px 8px",
-              }}
+              sx={deselectButtonSx}
             >
               Deselect
             </Button>
@@ -716,13 +841,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                 onChange={(e) =>
                   handleUpdateSelectedElement({ text: e.target.value })
                 }
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    backgroundColor: "var(--bg-input, rgba(0,0,0,0.05))",
-                    fontSize: "13px",
-                    fontFamily: "inherit",
-                  },
-                }}
+                sx={textContentFieldSx}
               />
             </Grid>
 
@@ -731,11 +850,11 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               <Grid
                 container
                 spacing={1}
-                sx={{ mb: 0.5 }}
+                sx={regionRedoGridSx}
               >
                 <Grid
                   size={6}
-                  sx={{ display: "flex" }}
+                  sx={regionRedoColSx}
                 >
                   <Button
                     fullWidth
@@ -773,7 +892,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     {isRedoingRegionOcr ? (
                       <CircularProgress
                         size={12}
-                        sx={{ mr: 0.5 }}
+                        sx={redoSpinnerMarginSx}
                       />
                     ) : (
                       <svg
@@ -793,7 +912,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
 
                 <Grid
                   size={6}
-                  sx={{ display: "flex" }}
+                  sx={regionRedoColSx}
                 >
                   <Button
                     fullWidth
@@ -818,7 +937,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     {isRedoingRegionTl ? (
                       <CircularProgress
                         size={12}
-                        sx={{ mr: 0.5 }}
+                        sx={redoSpinnerMarginSx}
                       />
                     ) : (
                       <svg
@@ -848,7 +967,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               <Grid
                 size={6}
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                sx={fieldColumnSx}
               >
                 <FieldLabel htmlFor="element-x">X Position</FieldLabel>
                 <TextField
@@ -861,17 +980,12 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       x: parseFloat(e.target.value) || 0,
                     })
                   }
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontSize: "13px",
-                      padding: "6px 10px",
-                    },
-                  }}
+                  sx={numericFieldInputSx}
                 />
               </Grid>
               <Grid
                 size={6}
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                sx={fieldColumnSx}
               >
                 <FieldLabel htmlFor="element-y">Y Position</FieldLabel>
                 <TextField
@@ -884,12 +998,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       y: parseFloat(e.target.value) || 0,
                     })
                   }
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontSize: "13px",
-                      padding: "6px 10px",
-                    },
-                  }}
+                  sx={numericFieldInputSx}
                 />
               </Grid>
             </Grid>
@@ -901,7 +1010,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               <Grid
                 size={6}
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                sx={fieldColumnSx}
               >
                 <FieldLabel htmlFor="element-max-width">Max Width</FieldLabel>
                 <TextField
@@ -914,17 +1023,12 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       maxWidth: parseInt(e.target.value) || 0,
                     })
                   }
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontSize: "13px",
-                      padding: "6px 10px",
-                    },
-                  }}
+                  sx={numericFieldInputSx}
                 />
               </Grid>
               <Grid
                 size={6}
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                sx={fieldColumnSx}
               >
                 <FieldLabel htmlFor="element-max-height">Max Height</FieldLabel>
                 <TextField
@@ -937,12 +1041,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       maxHeight: parseInt(e.target.value) || 0,
                     })
                   }
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontSize: "13px",
-                      padding: "6px 10px",
-                    },
-                  }}
+                  sx={numericFieldInputSx}
                 />
               </Grid>
             </Grid>
@@ -980,9 +1079,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     }
                     title="Drag the element to a new position on the image"
                     sx={
-                      interactionMode === "drag"
-                        ? { boxShadow: "0 0 0 3px var(--primary-glow)" }
-                        : undefined
+                      interactionMode === "drag" ? activeModeGlowSx : undefined
                     }
                   >
                     {interactionMode === "drag" ? "Dragging…" : "Drag"}
@@ -1020,7 +1117,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     title="Drag individual vertices to reshape the bubble polygon. Auto-generates polygon for rect/ellipse shapes."
                     sx={
                       interactionMode === "reshape"
-                        ? { boxShadow: "0 0 0 3px var(--primary-glow)" }
+                        ? activeModeGlowSx
                         : undefined
                     }
                   >
@@ -1031,10 +1128,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               {interactionMode !== "none" && (
                 <Typography
                   variant="caption"
-                  sx={{
-                    fontSize: "10.5px",
-                    color: "var(--text-dim, var(--text-muted))",
-                  }}
+                  sx={interactionHintTextSx}
                 >
                   {interactionMode === "drag"
                     ? "Touch or drag the bubble on the page to move it."
@@ -1053,7 +1147,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               <Grid
                 size={6}
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                sx={fieldColumnSx}
               >
                 <FieldLabel id="element-font-family-label">
                   Font Family
@@ -1065,11 +1159,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                   onChange={(e) =>
                     handleUpdateSelectedElement({ font: e.target.value })
                   }
-                  sx={{
-                    fontSize: "13px",
-                    height: "38px",
-                    backgroundColor: "var(--bg-surface)",
-                  }}
+                  sx={selectFieldSx}
                 >
                   <MenuItem value="Comic Neue">Comic Neue</MenuItem>
                   <MenuItem value="Bangers">Bangers</MenuItem>
@@ -1080,7 +1170,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               </Grid>
               <Grid
                 size={6}
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                sx={fieldColumnSx}
               >
                 <FieldLabel htmlFor="element-font-size">
                   Font Size (pt)
@@ -1096,12 +1186,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       autoSize: false,
                     })
                   }
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontSize: "13px",
-                      padding: "6px 10px",
-                    },
-                  }}
+                  sx={numericFieldInputSx}
                 />
               </Grid>
             </Grid>
@@ -1113,7 +1198,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             >
               <Grid
                 size={6}
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                sx={fieldColumnSx}
               >
                 <FieldLabel id="element-font-weight-label">
                   Font Weight
@@ -1127,11 +1212,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       fontWeight: e.target.value as string,
                     })
                   }
-                  sx={{
-                    fontSize: "13px",
-                    height: "38px",
-                    backgroundColor: "var(--bg-surface)",
-                  }}
+                  sx={selectFieldSx}
                 >
                   <MenuItem value="normal">Normal</MenuItem>
                   <MenuItem value="bold">Bold</MenuItem>
@@ -1139,7 +1220,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               </Grid>
               <Grid
                 size={6}
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
+                sx={fieldColumnSx}
               >
                 <FieldLabel id="element-font-style-label">
                   Font Style
@@ -1153,11 +1234,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                       fontStyle: e.target.value as string,
                     })
                   }
-                  sx={{
-                    fontSize: "13px",
-                    height: "38px",
-                    backgroundColor: "var(--bg-surface)",
-                  }}
+                  sx={selectFieldSx}
                 >
                   <MenuItem value="normal">Normal</MenuItem>
                   <MenuItem value="italic">Italic</MenuItem>
@@ -1186,11 +1263,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     boxShape: e.target.value as string,
                   })
                 }
-                sx={{
-                  fontSize: "13px",
-                  height: "38px",
-                  backgroundColor: "var(--bg-surface)",
-                }}
+                sx={selectFieldSx}
               >
                 <MenuItem value="rectangular">Rectangular</MenuItem>
                 <MenuItem value="elliptical">
@@ -1259,7 +1332,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
                     rotation: val as number,
                   })
                 }
-                sx={{ width: "100%", mt: 1 }}
+                sx={rotationSliderSx}
               />
             </Grid>
           </SidebarSection>
@@ -1334,24 +1407,8 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
             }}
           >
             {dirtyElements.has(selectedItem.id) && (
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--warning, #eab308)",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    backgroundColor: "var(--warning, #eab308)",
-                  }}
-                />
+              <Box sx={unsavedChangesRowSx}>
+                <Box sx={unsavedChangesDotSx} />
                 Unsaved changes
               </Box>
             )}
@@ -1419,14 +1476,7 @@ const ReaderRightSidebar: React.FC<ReaderRightSidebarProps> = (props) => {
               variant="outlined"
               size="small"
               onClick={() => setSelectedItem(null)}
-              sx={{
-                borderColor: "var(--border-color)",
-                color: "var(--text-main)",
-                fontSize: "11px",
-                fontWeight: 600,
-                minWidth: "auto",
-                padding: "2px 8px",
-              }}
+              sx={deselectButtonSx}
             >
               Deselect
             </Button>

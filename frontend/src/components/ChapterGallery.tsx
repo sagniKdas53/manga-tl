@@ -23,6 +23,11 @@ interface ChapterGalleryProps {
   onSelectPage: (page: Page) => void;
   isLoadingDetails: boolean;
   mode: "light" | "dark";
+  pagesTotalCount: number;
+  hasMorePages: boolean;
+  isLoadingMorePages: boolean;
+  onLoadMorePages: () => void;
+  reloadPages: () => Promise<void>;
 }
 
 export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
@@ -35,6 +40,11 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   onSelectPage,
   isLoadingDetails,
   mode,
+  pagesTotalCount,
+  hasMorePages,
+  isLoadingMorePages,
+  onLoadMorePages,
+  reloadPages,
 }) => {
   const navigate = useNavigate();
 
@@ -202,22 +212,13 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
       // Refresh pages list automatically at the end
       try {
-        const r = await safeFetch(`/api/chapters/${selectedChapter.id}/pages`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        });
-        if (r.ok) {
-          const data: Page[] = await r.json();
-          if (selectedChapterIdRef.current !== selectedChapter.id) return;
-          setPages(data);
-          if (successCount > 0) {
-            showToast(
-              `Successfully uploaded ${successCount} page(s)`,
-              "success",
-            );
-          }
-          if (failCount > 0) {
-            showToast(`Failed to upload ${failCount} page(s)`, "error");
-          }
+        await reloadPages();
+        if (selectedChapterIdRef.current !== selectedChapter.id) return;
+        if (successCount > 0) {
+          showToast(`Successfully uploaded ${successCount} page(s)`, "success");
+        }
+        if (failCount > 0) {
+          showToast(`Failed to upload ${failCount} page(s)`, "error");
         }
       } catch (err) {
         console.error("Error refreshing pages:", err);
@@ -226,8 +227,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     [
       selectedChapter,
       pages.length,
-      user.token,
-      setPages,
+      reloadPages,
       uploadFileWithProgress,
       showToast,
       addItems,
@@ -317,18 +317,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       if (res.ok) {
         showToast("Project imported successfully!", "success");
         // Refresh pages list
-        const pagesRes = await safeFetch(
-          `/api/chapters/${selectedChapter.id}/pages`,
-          {
-            headers: { Authorization: `Bearer ${user.token}` },
-          },
-        );
-        if (pagesRes.ok) {
-          const data: Page[] = await pagesRes.json();
-          if (selectedChapterIdRef.current === selectedChapter.id) {
-            setPages(data);
-          }
-        }
+        await reloadPages();
       } else {
         const errData = await res.json().catch(() => ({}));
         showToast(errData.message || "Failed to import project", "error");
@@ -535,18 +524,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             // Filter locally
             setPages((prev) => prev.filter((p) => p.id !== pageId));
             showToast("Page deleted successfully", "success");
-            // Re-fetch pages list to verify orders
+            // Re-fetch to verify orders
             if (selectedChapter) {
-              const chapterId = selectedChapter.id;
-              const r = await safeFetch(`/api/chapters/${chapterId}/pages`, {
-                headers: { Authorization: `Bearer ${user.token}` },
-              });
-              if (r.ok) {
-                const data: Page[] = await r.json();
-                if (selectedChapterIdRef.current === chapterId) {
-                  setPages(data);
-                }
-              }
+              await reloadPages();
             }
           } else if (res.status === 403) {
             showToast(
@@ -600,17 +580,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       console.error("Error saving page order:", err);
       // Revert if error
       if (selectedChapter) {
-        const chapterId = selectedChapter.id;
-        safeFetch(`/api/chapters/${chapterId}/pages`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        })
-          .then((r) => r.json())
-          .then((data) => {
-            if (selectedChapterIdRef.current === chapterId) setPages(data);
-          })
-          .catch((fetchErr) =>
-            console.error("Error reverting page order:", fetchErr),
-          );
+        reloadPages().catch((fetchErr) =>
+          console.error("Error reverting page order:", fetchErr),
+        );
       }
     }
   };
@@ -670,6 +642,10 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
       <ChapterPageGrid
         pages={pages}
+        totalCount={pagesTotalCount}
+        hasMore={hasMorePages}
+        isLoadingMore={isLoadingMorePages}
+        onLoadMore={onLoadMorePages}
         onDeletePage={handleDeletePage}
         onMovePage={handleMovePage}
         onSelectPage={(p) => {

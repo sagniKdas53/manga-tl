@@ -73,6 +73,142 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-07 seventeenth sitting — AUDIT-F1 + AUDIT-F2 + AUDIT-F8, landed together
+
+User-set queue, this sitting: pagination (F8) as the real driver, with the theme rebuild (F1) and
+`sx` hoisting (F2) bundled in as the same unit of frontend work. All three closed.
+
+**AUDIT-F8 — server-side pagination, three surfaces, exact spec from the prior sitting's
+decision.** Backend: new `PagedResponse<T>` record (`content, page, size, totalElements,
+totalPages`) and a `PagedResponse.from(Page<S>, Function<S,T>)` helper; `SeriesController.listSeries`
+(`page`/`size`/`sortBy`/`sortDir`, default size 10, sort allow-listed to `createdAt`/`updatedAt`),
+`.listChapters` (size 15, `sortDir` over `chapterNumber` — the only field the UI ever sorted by),
+`PageController.listPages` (size 25, fixed `pageNumber` ascending). All three previously took no
+query params and returned a bare array. `ChapterRepository`/`PageRepository` each got a `Pageable`
+overload alongside the existing unpaginated one (the latter still used by `reorderPages` and a few
+other call sites that legitimately want the whole list).
+
+Frontend: one new hook, `usePaginatedResource<T>` (`frontend/src/hooks/usePaginatedResource.ts`),
+backs all three surfaces instead of three bespoke fetch effects — `items`, `totalCount`, `hasMore`,
+`isLoading`, `loadMore` (scroll-triggered), `ensureLoaded(index)` (fetches whichever batch contains
+an arbitrary index — the generalization `loadMore` is built on), `setItems` (for the existing
+optimistic-mutation call sites), `reload()` (drops everything and refetches page 0, for the
+call sites that used to re-GET the whole list after a delete/reorder/upload). A `LoadMoreSentinel`
+component (`IntersectionObserver`, modeled on `LazyImage.tsx`'s lazy-trigger pattern but not
+self-disconnecting, since it has to keep firing) wires the scroll-triggered case into
+`Dashboard.tsx`, `ChapterCardGrid.tsx`, `ChapterPageGrid.tsx`.
+
+**The reader-specific requirement, and the bug already sitting in wait for it.** The spec's own
+text flagged this as "the part most likely to be gotten wrong," and it very nearly was, twice over:
+
+1. `Reader.tsx`'s `navigateToPage` bounded `num` against `pages.length` (the loaded count) rather
+   than the chapter's true total — a naive port would leave "next" from page 25 as a silent no-op
+   once 25 pages were loaded. Rebounded against `totalPageCount` instead, with a new effect that
+   calls `ensurePageLoaded(curPageNum - 1)` whenever the URL lands on a page that's in range but
+   not yet loaded.
+2. **A pre-existing effect was actively fighting the fix.** `Reader.tsx` already had a "page
+   out-of-bounds protection" effect that redirected to page 1 whenever the current page number
+   wasn't found in the loaded `pages` array — which, before this sitting, was indistinguishable
+   from "doesn't exist" because `pages` was always the complete list. Under pagination, a
+   legitimately in-range page that simply hasn't arrived yet would have hit this exact branch and
+   been redirected straight back to page 1 before `ensurePageLoaded`'s fetch ever had a chance to
+   land, defeating the whole feature. Rebounded the same way, against `totalPageCount` instead of
+   "currently loaded."
+3. `totalPageCount`'s own fallback (`pagesTotalCount || pages.length`, for callers that don't wire
+   pagination at all) was itself wrong the same way: a loaded page's `pageNumber` need not equal
+   how many pages are loaded once `ensureLoaded` can land a sparse, non-contiguous batch. Fixed to
+   fall back to the highest known `pageNumber` instead of the loaded count — caught by
+   `ReaderExportZip.test.tsx`'s existing fixtures (a single mock page numbered 22) going red under
+   the naive fallback.
+
+**A second-order blast radius: every raw refetch of the pages-list endpoint broke.** Once
+`GET /api/chapters/{id}/pages` returns `PagedResponse<PageDto>` instead of a bare array, every call
+site that used to do `safeFetch(...).then(r => r.json()).then(setPages)` and expected an array
+would have set `pages` state to the envelope object instead — a severe regression, not caught by
+type-checking since `res.json()` types as `any`. Found and fixed four such sites: `Reader.tsx`'s own
+`fetchPages()` (used after reorder/renumber), and three in `ChapterGallery.tsx` (post-upload
+refresh, post-delete refresh, reorder-failure revert). All four now call the hook's `reload()`
+instead of hand-rolling the fetch — one code path, not four ways to get it wrong. Existing tests
+for these flows (`ChapterGallery.test.tsx`) asserted on the old raw-`safeFetch` shape and needed
+updating to match; one of them (the stale-chapter-switch race test) had its assertion moved from
+"stale page data must not be written" (that guarantee now lives inside the hook's own generation
+counter, verified there instead) to "a stale upload-success toast must not surface" (still a real
+guarantee `ChapterGallery.tsx` itself owns, via `selectedChapterIdRef`).
+
+**AUDIT-F1 — theme rebuild, plus a real bug the migration itself introduced and caught live.**
+`theme.ts`'s `themeObj(mode)` (rebuilt via `useMemo(() => themeObj(mode), [mode])` on every toggle)
+replaced with a single `createTheme({ colorSchemes: { light, dark }, cssVariables: true })` built
+once at module scope; `App.tsx` drops the `useMemo` entirely and syncs `useColorMode`'s mode onto
+MUI's own scheme via a small `ColorSchemeSync` watcher component (has to be a child of
+`ThemeProvider`, not called from `AppContent` itself, since `useColorScheme()` reads provider
+context) calling `setMode()`. `defaultMode={mode}` on `ThemeProvider` avoids a flash on first paint
+since `useColorMode()`'s snapshot is already known synchronously at render time.
+
+**The bug:** MUI defaults to `colorSchemeSelector: "media"` whenever both `light` and `dark`
+schemes are present and the selector isn't set explicitly — meaning the actual rendered CSS
+follows the OS's `prefers-color-scheme`, not `setMode()`/the app's own toggle button at all.
+`setMode()` still updated React state and localStorage correctly; the colors just never moved.
+Caught live, not in the automated suite (jsdom doesn't evaluate `@media` the way a real browser's
+CSS engine does, so vitest stayed green throughout — the theme contrast test reads
+`theme.colorSchemes[mode].palette` directly, which was always correct regardless of which selector
+strategy was active). Fixed with `colorSchemeSelector: "class"`, which happens to converge with the
+app's own pre-existing `.light`/`.dark` class toggle on `documentElement` (untouched, still doing
+its own separate job for the app's own `--bg-base`/`--text-muted`/etc. custom CSS vars) — both
+mechanisms now toggle the same class off the same `mode` value. Verified via a real headless
+Chromium session: `--mui-palette-primary-main` read `#0197fc` (light's value) in *both* dark and
+light mode before the fix, and correctly read `#ee2553` / `#0197fc` after it, matching
+`documentElement`'s `.dark`/`.light` class and the dashboard's actual rendered background
+(`rgb(15,15,15)` dark / `rgb(245,245,245)` light).
+
+**AUDIT-F2 — inline `sx` literals hoisted to module scope**, `ReaderRightSidebar.tsx` (65) and
+`QueueManager.tsx` (45). Genuinely static ones (the large majority in both files) became plain
+module-level `const`s; ones that depend on a per-item or per-render value (layer active/visible
+state, per-job status color, collapse/visibility flags) kept a small dynamic object inline, merged
+with a static base via MUI's `sx` array form (`sx={[baseSx, { dynamicPart }]}`) rather than staying
+one fully-inline literal. A handful of exact-duplicate literals (e.g. the four numeric-field inputs
+in the element inspector, the two summary-chip shapes, the drag/reshape "active" glow) collapsed
+to one shared constant used from multiple call sites.
+
+**Verification.** Backend: `mvn -o clean verify`, 424 tests (416 baseline + 8 new pagination
+tests: boundary page/partial final page/empty result/default size/sort-allow-list-rejection across
+all three endpoints). Frontend: `npm run test`, 316 tests (308 baseline + 6 new
+`usePaginatedResource.test.ts` cases, including a real red-green on the generation/staleness guard
+— temporarily removed the guard, confirmed the stale-response test failed with the wrong data
+landing, restored it, confirmed green — + 2 new `Reader.test.tsx` cases for the fetch-past-batch
+behavior specifically, red-green verified the same way against the pre-fix `navigateToPage` bound
+and the missing `ensurePageLoaded` effect). `npm run lint` / `format:check` / `tsc --noEmit` all
+clean. Live browser verification (registered a fresh viewer test account,
+`verify-f8@test.local`, via the app's own `/api/auth/register` — real seeded data, not fixtures):
+deep-linked straight to page 26 of Neurometric ch. 6 (177 real pages) with nothing pre-loaded,
+confirmed the network fetched exactly `pages?page=1&size=25` and the page rendered correctly
+(`26 / 177`, no bounce back to page 1); confirmed the chapter gallery's `Pages (177)` header shows
+the true total while the grid itself renders exactly the first 25-item batch; confirmed
+`chapters?page=0&size=15&sortDir=asc` on the series-details route; confirmed both dark and light
+color schemes render correctly post-fix. Series/chapters "scroll to load more" itself wasn't
+exercised live — the seeded dev data only has 4 series and at most 15 chapters in one series, both
+under a single page — but the mechanism is the same `loadMore`/`LoadMoreSentinel` path covered by
+the hook's own unit tests.
+
+`impact()`/`detect_changes()` per `CLAUDE.md`: all backend/frontend symbols touched came back
+`LOW` risk (the three controller methods had 0 direct Java callers — REST entry points; the two F2
+components had 0 traced callers in GitNexus's React-component graph, a known limitation of static
+analysis on JSX rather than a real absence of callers — both are rendered from `Reader.tsx`/
+`NavBar.tsx` as confirmed by direct reading). Reindexed `manga-library` at the start of this sitting
+(the prior sitting's index, `cf987c4`, predates this sitting's ~20-file change) — one native-worker
+crash on `backend/src/main/c/jni/jni.h` on the first attempt, succeeded on retry (5,292 nodes,
+13,331 edges, 243 clusters, 300 flows, excluding that one file). `detect_changes()` before
+committing, per the working constraints.
+
+**Not done, deliberately.** Cross-chapter navigation (the reader's prev/next-*chapter* buttons,
+not pages within a chapter) still reads off the same paginated `chapters` array `SeriesDetails`
+loads — a chapter beyond the first loaded batch (>15 chapters, not yet scrolled into view) won't be
+found by `Reader.tsx`'s `sortedChapters.findIndex`, so `nextChapter`/`prevChapter` would come back
+null even though the chapter exists. This is a real, new-since-pagination edge case, but it's
+outside AUDIT-F8's explicit scope (the spec called out *page* navigation within a chapter
+specifically, not chapter-to-chapter), and none of the current seeded data exercises it (largest
+series has 15 chapters, exactly one page). Flagged here rather than silently left for someone to
+rediscover.
+
 ### The 2026-08-07 sixteenth sitting — AUDIT-B9, the `open-in-view` serialization gap
 
 `LayerEditHistory` was the one entity in the codebase whose lazy `@ManyToOne` relations

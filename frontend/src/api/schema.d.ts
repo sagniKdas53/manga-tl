@@ -1241,6 +1241,35 @@ export interface components {
             currentPassword: string;
             newPassword: string;
         };
+        Pageable: {
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            sort?: string[];
+        };
+        PagedResponseSeriesDto: {
+            content?: components["schemas"]["SeriesDto"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        PagedResponseChapterDto: {
+            content?: components["schemas"]["ChapterDto"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
         StreamingResponseBody: Record<string, never>;
         SseEmitter: {
             /** Format: int64 */
@@ -1249,21 +1278,10 @@ export interface components {
         LayerEditHistory: {
             /** Format: uuid */
             id?: string;
-            layerElement?: components["schemas"]["LayerElement"];
             previousValueJson?: string;
             newValueJson?: string;
-            editedBy?: components["schemas"]["User"];
             /** Format: date-time */
             editedAt?: string;
-        };
-        User: {
-            /** Format: uuid */
-            id?: string;
-            email?: string;
-            displayName?: string;
-            role?: string;
-            /** Format: date-time */
-            createdAt?: string;
         };
         PageDto: {
             /** Format: uuid */
@@ -1277,6 +1295,17 @@ export interface components {
             filename?: string;
             url?: string;
             thumbnailUrl?: string;
+        };
+        PagedResponsePageDto: {
+            content?: components["schemas"]["PageDto"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
         };
     };
     responses: never;
@@ -1659,7 +1688,11 @@ export interface operations {
     };
     listSeries: {
         parameters: {
-            query?: never;
+            query: {
+                unsortedPageable: components["schemas"]["Pageable"];
+                sortBy?: string;
+                sortDir?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1672,7 +1705,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["SeriesDto"][];
+                    "*/*": components["schemas"]["PagedResponseSeriesDto"];
                 };
             };
         };
@@ -1703,7 +1736,10 @@ export interface operations {
     };
     listChapters: {
         parameters: {
-            query?: never;
+            query: {
+                unsortedPageable: components["schemas"]["Pageable"];
+                sortDir?: string;
+            };
             header?: never;
             path: {
                 seriesId: string;
@@ -1718,7 +1754,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ChapterDto"][];
+                    "*/*": components["schemas"]["PagedResponseChapterDto"];
                 };
             };
         };
@@ -2910,7 +2946,9 @@ export interface operations {
     };
     listPages: {
         parameters: {
-            query?: never;
+            query: {
+                pageable: components["schemas"]["Pageable"];
+            };
             header?: never;
             path: {
                 chapterId: string;
@@ -2925,7 +2963,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageDto"][];
+                    "*/*": components["schemas"]["PagedResponsePageDto"];
                 };
             };
         };

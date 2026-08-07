@@ -743,21 +743,24 @@ public class PageController {
 
   @GetMapping("/chapters/{chapterId}/pages")
   @Transactional(readOnly = true)
-  public ResponseEntity<List<PageDto>> listPages(@PathVariable UUID chapterId) {
-    List<PageDto> list =
-        pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId).stream()
-            .map(
-                p ->
-                    new PageDto(
-                        p.getId(),
-                        p.getPageNumber(),
-                        p.getImage().getId(),
-                        p.getChapter().getId(),
-                        p.getImage().getFilename(),
-                        getImageUrl(p.getImage().getId()),
-                        getThumbnailUrl(p.getImage().getId())))
-            .collect(Collectors.toList());
-    return ResponseEntity.ok(list);
+  public ResponseEntity<com.manga.library.dto.PagedResponse<PageDto>> listPages(
+      @PathVariable UUID chapterId,
+      @org.springframework.data.web.PageableDefault(size = 25) org.springframework.data.domain.Pageable pageable) {
+    org.springframework.data.domain.Page<Page> pagePage =
+        pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId, pageable);
+
+    return ResponseEntity.ok(
+        com.manga.library.dto.PagedResponse.from(
+            pagePage,
+            p ->
+                new PageDto(
+                    p.getId(),
+                    p.getPageNumber(),
+                    p.getImage().getId(),
+                    p.getChapter().getId(),
+                    p.getImage().getFilename(),
+                    getImageUrl(p.getImage().getId()),
+                    getThumbnailUrl(p.getImage().getId()))));
   }
 
   @Operation(

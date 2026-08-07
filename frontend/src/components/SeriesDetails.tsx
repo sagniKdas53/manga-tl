@@ -22,6 +22,14 @@ interface SeriesDetailsProps {
   setChapters: React.Dispatch<React.SetStateAction<Chapter[]>>;
   onSelectChapter: (chapter: Chapter) => void;
   isLoadingDetails: boolean;
+  // AUDIT-F8: sort now drives a server-side query (App.tsx owns the fetch), for the same
+  // reason Dashboard's sort moved up — re-sorting a partial infinite-scroll prefix
+  // client-side would be wrong.
+  sortAsc: boolean;
+  setSortAsc: React.Dispatch<React.SetStateAction<boolean>>;
+  hasMoreChapters: boolean;
+  isLoadingMoreChapters: boolean;
+  onLoadMoreChapters: () => void;
 }
 
 export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
@@ -32,13 +40,13 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   setChapters,
   onSelectChapter,
   isLoadingDetails,
+  sortAsc,
+  setSortAsc,
+  hasMoreChapters,
+  isLoadingMoreChapters,
+  onLoadMoreChapters,
 }) => {
   const navigate = useNavigate();
-
-  const [sortAsc, setSortAsc] = useState<boolean>(() => {
-    const cached = localStorage.getItem("chapters_sort_asc");
-    return cached === null ? true : cached === "true";
-  });
 
   const [showSeriesModal, setShowSeriesModal] = useState(false);
 
@@ -233,6 +241,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         onEditChapter={handleEditChapterClick}
         onDeleteChapter={handleDeleteChapter}
         onNavigate={(path) => navigate(path)}
+        hasMore={hasMoreChapters}
+        isLoadingMore={isLoadingMoreChapters}
+        onLoadMore={onLoadMoreChapters}
       />
 
       <EditSeriesDialog

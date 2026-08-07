@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  Suspense,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, Suspense, useCallback } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -14,12 +8,12 @@ import {
   matchPath,
 } from "react-router-dom";
 
-import { ThemeProvider } from "@mui/material/styles";
+import { ThemeProvider, useColorScheme } from "@mui/material/styles";
 import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
 import CircularProgress from "@mui/material/CircularProgress";
 import CardGridSkeleton from "./components/CardGridSkeleton";
-import { themeObj } from "./theme";
+import { theme } from "./theme";
 
 // Types
 import type { User, Series, Chapter, Page } from "./types";
@@ -46,6 +40,7 @@ import { useNotifications } from "./components/useNotifications";
 import { NavBar } from "./components/NavBar";
 import { useColorMode } from "./hooks/useColorMode";
 import { useDependencyLogger } from "./hooks/useDependencyLogger";
+import { usePaginatedResource } from "./hooks/usePaginatedResource";
 
 // Lazy-loaded route components
 const Auth = React.lazy(() => import("./components/Auth"));
@@ -235,6 +230,21 @@ function GlobalErrorListener() {
   return null;
 }
 
+/**
+ * AUDIT-F1: syncs `useColorMode`'s mode (the app's own localStorage-backed, cross-tab-synced
+ * source of truth — unchanged) onto MUI's own color scheme, which flips CSS custom properties
+ * rather than rebuilding the theme object. `useColorScheme()` reads the `ThemeProvider`
+ * context, so this has to be a child of it rather than called in `AppContent` itself, which is
+ * what renders the provider.
+ */
+function ColorSchemeSync({ mode }: { mode: "light" | "dark" }) {
+  const { setMode } = useColorScheme();
+  useEffect(() => {
+    setMode(mode);
+  }, [mode, setMode]);
+  return null;
+}
+
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -282,17 +292,62 @@ function AppContent() {
   });
 
   // Domain States
-  const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
-  const [pages, setPages] = useState<Page[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
+  // AUDIT-F8: sort controls live here, not in Dashboard/SeriesDetails, because the fetch
+  // they steer is server-side now — a client-side re-sort of a partial infinite-scroll
+  // prefix would just be wrong. Both persist to the same localStorage keys the UI already
+  // used, so an existing user's preference survives the migration.
+  const [seriesSortBy, setSeriesSortBy] = useState<"createdAt" | "updatedAt">(
+    () => {
+      const saved = localStorage.getItem("dashboard_sort_by");
+      return saved === "createdAt" ? "createdAt" : "updatedAt";
+    },
+  );
+  const [seriesSortDir, setSeriesSortDir] = useState<"asc" | "desc">(() => {
+    const saved = localStorage.getItem("dashboard_sort_dir");
+    return saved === "asc" ? "asc" : "desc";
+  });
+  const [chaptersSortAsc, setChaptersSortAsc] = useState<boolean>(() => {
+    const cached = localStorage.getItem("chapters_sort_asc");
+    return cached === null ? true : cached === "true";
+  });
+
+  const seriesPagination = usePaginatedResource<Series>(
+    user && location.pathname === "/" ? "/api/series" : null,
+    10,
+    user?.token,
+    [seriesSortBy, seriesSortDir],
+    { params: { sortBy: seriesSortBy, sortDir: seriesSortDir } },
+  );
+  const seriesList = seriesPagination.items;
+  const setSeriesList = seriesPagination.setItems;
+
+  const chaptersPagination = usePaginatedResource<Chapter>(
+    user && seriesId ? `/api/series/${seriesId}/chapters` : null,
+    15,
+    user?.token,
+    [seriesId, chaptersSortAsc],
+    { params: { sortDir: chaptersSortAsc ? "asc" : "desc" } },
+  );
+  const chapters = chaptersPagination.items;
+  const setChapters = chaptersPagination.setItems;
+
+  const pagesPagination = usePaginatedResource<Page>(
+    user && chapterId ? `/api/chapters/${chapterId}/pages` : null,
+    25,
+    user?.token,
+    [chapterId],
+    { sortKey: (p) => p.pageNumber },
+  );
+  const pages = pagesPagination.items;
+  const setPages = pagesPagination.setItems;
+
   const { mode } = useColorMode();
-  const appliedTheme = useMemo(() => themeObj(mode), [mode]);
 
   const [activeDrawer, setActiveDrawer] = useState<
     "none" | "queue" | "notifications"
@@ -330,26 +385,10 @@ function AppContent() {
     }
   }, [user, location.pathname, navigate]);
 
-  // Fetch Series List (Dashboard)
-  useEffect(() => {
-    if (user && location.pathname === "/") {
-      safeFetch("/api/series", {
-        headers: { Authorization: `Bearer ${user.token}` },
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch series list");
-          return res.json();
-        })
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setSeriesList(data);
-          }
-        })
-        .catch((err) => console.error("Error fetching series:", err));
-    }
-  }, [user, location.pathname]);
+  // Series list fetch (page 0 onward) lives in `seriesPagination` above.
 
-  // Load series details and chapters when seriesId is active in route
+  // Load series details when seriesId is active in route. Chapters (page 0 onward) come
+  // from `chaptersPagination` above — its own url/deps-driven effect handles the reset.
   useEffect(() => {
     if (user && seriesId) {
       Promise.resolve().then(() => {
@@ -361,25 +400,15 @@ function AppContent() {
         });
       });
 
-      Promise.all([
-        safeFetch(`/api/series/${seriesId}`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        }).then((res) => {
+      safeFetch(`/api/series/${seriesId}`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+        .then((res) => {
           if (!res.ok) throw new Error("Series not found");
           return res.json();
-        }),
-        safeFetch(`/api/series/${seriesId}/chapters`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        }).then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch chapters");
-          return res.json();
-        }),
-      ])
-        .then(([seriesData, chaptersData]) => {
+        })
+        .then((seriesData) => {
           setSelectedSeries(seriesData);
-          if (Array.isArray(chaptersData)) {
-            setChapters(chaptersData);
-          }
           setIsLoadingDetails(false);
         })
         .catch((err) => {
@@ -389,13 +418,11 @@ function AppContent() {
     }
   }, [seriesId, user]);
 
-  // Load chapter details and pages when chapterId is active in route
+  // Load chapter details when chapterId is active in route. Pages (page 0 onward) come
+  // from `pagesPagination` above — its own url/deps-driven effect handles the reset.
   useEffect(() => {
     if (user && chapterId) {
-      Promise.resolve().then(() => {
-        setPages([]);
-        setIsLoadingDetails(true);
-      });
+      Promise.resolve().then(() => setIsLoadingDetails(true));
 
       safeFetch(`/api/series/chapters/${chapterId}`, {
         headers: { Authorization: `Bearer ${user.token}` },
@@ -406,26 +433,15 @@ function AppContent() {
         })
         .then((chapterData) => {
           setSelectedChapter(chapterData);
-          return Promise.all([
-            safeFetch(`/api/series/${chapterData.seriesId}`, {
-              headers: { Authorization: `Bearer ${user.token}` },
-            }).then((res) => {
-              if (!res.ok) throw new Error("Series not found");
-              return res.json();
-            }),
-            safeFetch(`/api/chapters/${chapterId}/pages`, {
-              headers: { Authorization: `Bearer ${user.token}` },
-            }).then((res) => {
-              if (!res.ok) throw new Error("Failed to fetch pages");
-              return res.json();
-            }),
-          ]);
+          return safeFetch(`/api/series/${chapterData.seriesId}`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+          }).then((res) => {
+            if (!res.ok) throw new Error("Series not found");
+            return res.json();
+          });
         })
-        .then(([seriesData, pagesData]) => {
+        .then((seriesData) => {
           setSelectedSeries(seriesData);
-          if (Array.isArray(pagesData)) {
-            setPages(pagesData);
-          }
           setIsLoadingDetails(false);
         })
         .catch((err) => {
@@ -476,7 +492,10 @@ function AppContent() {
   const handleSessionEnd = useCallback(() => setUser(null), []);
 
   return (
-    <ThemeProvider theme={appliedTheme}>
+    <ThemeProvider
+      theme={theme}
+      defaultMode={mode}
+    >
       <CssBaseline />
       <Box
         sx={{
@@ -487,6 +506,7 @@ function AppContent() {
         <NotificationProvider token={user?.token || null}>
           <ToastProvider>
             <UploadProvider>
+              <ColorSchemeSync mode={mode} />
               <GlobalErrorListener />
               <SessionWatcher
                 token={user?.token ?? null}
@@ -560,6 +580,13 @@ function AppContent() {
                                 setSeriesList={setSeriesList}
                                 onSelectSeries={setSelectedSeries}
                                 mode={mode}
+                                sortBy={seriesSortBy}
+                                setSortBy={setSeriesSortBy}
+                                sortDir={seriesSortDir}
+                                setSortDir={setSeriesSortDir}
+                                hasMore={seriesPagination.hasMore}
+                                isLoadingMore={seriesPagination.isLoading}
+                                onLoadMore={seriesPagination.loadMore}
                               />
                             ) : null
                           }
@@ -576,6 +603,13 @@ function AppContent() {
                                 setChapters={setChapters}
                                 onSelectChapter={setSelectedChapter}
                                 isLoadingDetails={isLoadingDetails}
+                                sortAsc={chaptersSortAsc}
+                                setSortAsc={setChaptersSortAsc}
+                                hasMoreChapters={chaptersPagination.hasMore}
+                                isLoadingMoreChapters={
+                                  chaptersPagination.isLoading
+                                }
+                                onLoadMoreChapters={chaptersPagination.loadMore}
                               />
                             ) : null
                           }
@@ -592,6 +626,13 @@ function AppContent() {
                                 setChapters={setChapters}
                                 onSelectChapter={setSelectedChapter}
                                 isLoadingDetails={isLoadingDetails}
+                                sortAsc={chaptersSortAsc}
+                                setSortAsc={setChaptersSortAsc}
+                                hasMoreChapters={chaptersPagination.hasMore}
+                                isLoadingMoreChapters={
+                                  chaptersPagination.isLoading
+                                }
+                                onLoadMoreChapters={chaptersPagination.loadMore}
                               />
                             ) : null
                           }
@@ -610,6 +651,11 @@ function AppContent() {
                                 onSelectPage={NOOP}
                                 isLoadingDetails={isLoadingDetails}
                                 mode={mode}
+                                pagesTotalCount={pagesPagination.totalCount}
+                                hasMorePages={pagesPagination.hasMore}
+                                isLoadingMorePages={pagesPagination.isLoading}
+                                onLoadMorePages={pagesPagination.loadMore}
+                                reloadPages={pagesPagination.reload}
                               />
                             ) : null
                           }
@@ -628,6 +674,11 @@ function AppContent() {
                                 onSelectPage={NOOP}
                                 isLoadingDetails={isLoadingDetails}
                                 mode={mode}
+                                pagesTotalCount={pagesPagination.totalCount}
+                                hasMorePages={pagesPagination.hasMore}
+                                isLoadingMorePages={pagesPagination.isLoading}
+                                onLoadMorePages={pagesPagination.loadMore}
+                                reloadPages={pagesPagination.reload}
                               />
                             ) : null
                           }
@@ -644,6 +695,9 @@ function AppContent() {
                                 pages={pages}
                                 setPages={setPages}
                                 theme={mode}
+                                pagesTotalCount={pagesPagination.totalCount}
+                                ensurePageLoaded={pagesPagination.ensureLoaded}
+                                reloadPages={pagesPagination.reload}
                               />
                             ) : null
                           }
@@ -660,6 +714,9 @@ function AppContent() {
                                 pages={pages}
                                 setPages={setPages}
                                 theme={mode}
+                                pagesTotalCount={pagesPagination.totalCount}
+                                ensurePageLoaded={pagesPagination.ensureLoaded}
+                                reloadPages={pagesPagination.reload}
                               />
                             ) : null
                           }

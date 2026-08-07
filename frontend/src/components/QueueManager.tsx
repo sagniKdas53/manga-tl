@@ -88,25 +88,203 @@ const stageLabels: Record<string, string> = {
   qa: "QA",
 };
 
-/**
- * The stage the backend hands off to once `type` finishes, or null when nothing follows.
- *
- * A queue row is a *pipeline* projection, not a job row: `fetchJobs` keys by `imageId` and
- * keeps only the newest job per image, so stage N+1 replaces stage N in place. That is why
- * "transitioning" stays a derived display value rather than becoming a real job status — it
- * describes the gap between two rows, and there is no single row to store it on. It is also
- * a pure function of the stage, so storing it would buy nothing while adding a second write
- * to clear it, which is one more way for a row to get stuck.
- *
- * The linear chain is already spelled out in `pipelineStages`, so this reads the successor
- * off that rather than restating it. Anything outside the chain ends the pipeline as far as
- * the queue can tell: `qa` is last and branches on its own verdict, and the one-shot manual
- * `region-redo-*` jobs have no successor at all.
- *
- * One known imprecision: `render` only enqueues `qa` when the page carries no manual edits.
- * A hand-edited page therefore reads "TRANSITIONING → QA" for the ten seconds before the row
- * is pruned. Telling those apart needs the edit flag, which the queue payload does not carry.
- */
+// --- AUDIT-F2: static sx literals hoisted to module scope --------------------
+//
+// This drawer re-renders on every job list/status change (job_update fires often while the
+// pipeline is active), so a static object literal recreated per render bought nothing but a
+// cache miss for Emotion. Blocks that genuinely depend on a per-job value (status color,
+// collapsed/visible flags) keep a small dynamic part inline, merged with a static base via the
+// `sx` array form.
+
+const drawerPaperSx = { width: 520 } as const;
+
+const drawerRootSx = {
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+} as const;
+
+const drawerHeaderSx = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  px: 2,
+  py: 1,
+  borderBottom: 1,
+  borderColor: "divider",
+} as const;
+
+// Reused for both the drawer's own title row and each chapter group's header row.
+const flexRowGapHalfSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 0.5,
+} as const;
+
+const drawerTitleTextSx = { fontSize: "16px", fontWeight: 600 } as const;
+
+const infoIconSx = {
+  fontSize: 15,
+  color: "text.disabled",
+  cursor: "help",
+} as const;
+
+const drawerActionsRowSx = { display: "flex", gap: 1 } as const;
+
+const statusSummaryRowSx = {
+  display: "flex",
+  gap: 0.75,
+  flexWrap: "wrap",
+  px: 2,
+  py: 1,
+  borderBottom: 1,
+  borderColor: "divider",
+  backgroundColor: "action.hover",
+} as const;
+
+// Per-status color is dynamic; everything else about a summary chip is not.
+const statusChipBaseSx = {
+  height: 22,
+  fontSize: "11px",
+  fontWeight: 600,
+} as const;
+
+const emptyStateSx = {
+  flex: 1,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "text.secondary",
+} as const;
+
+const queueTableSx = { tableLayout: "fixed" } as const;
+const jobColumnHeaderSx = { px: 2, width: "45%" } as const;
+const statusColumnHeaderSx = { px: 2, width: "40%" } as const;
+const actionsColumnHeaderSx = { px: 2, width: "15%" } as const;
+
+const chapterRowSx = {
+  cursor: "pointer",
+  "&:hover": { backgroundColor: "action.selected" },
+} as const;
+
+const chapterCellSx = {
+  px: 1,
+  py: 0.5,
+  backgroundColor: "action.hover",
+  borderBottom: 0,
+} as const;
+
+// The collapse chevron's rotation is the only dynamic part.
+const chapterChevronBaseSx = {
+  fontSize: 16,
+  color: "text.secondary",
+  transition: "transform 0.15s ease",
+} as const;
+
+const chapterLabelSx = {
+  fontWeight: 600,
+  color: "text.secondary",
+  fontSize: "10.5px",
+  letterSpacing: 0.2,
+} as const;
+
+const chapterJobCountSx = { color: "text.disabled", fontSize: "10px" } as const;
+
+const jobRowSx = {
+  "&:last-child td, &:last-child th": { borderBottom: 0 },
+} as const;
+
+// Shared by the Job and Model & Status columns — both cells use the identical shape.
+const jobCellSx = {
+  px: 2,
+  py: 1.25,
+  verticalAlign: "top",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+} as const;
+
+const jobRowContentSx = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 1,
+} as const;
+
+// Status color is dynamic; size/shape/position are not.
+const statusDotBaseSx = {
+  width: 8,
+  height: 8,
+  borderRadius: "50%",
+  flexShrink: 0,
+  mt: 0.4,
+} as const;
+
+const minWidthZeroSx = { minWidth: 0 } as const;
+const jobTitleRowSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 0.5,
+} as const;
+const jobTypeLabelSx = { fontWeight: 600, fontSize: "13px" } as const;
+const pageLabelSx = { color: "text.secondary", fontWeight: 400 } as const;
+const retryLoopIconSx = { fontSize: 13, color: "text.disabled" } as const;
+
+const providerModelBoxSx = { minHeight: 16 } as const;
+
+const providerModelTextSx = {
+  display: "block",
+  color: "text.primary",
+  fontSize: "11px",
+  fontWeight: 500,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+} as const;
+
+const providerModelPlaceholderSx = {
+  display: "block",
+  color: "text.disabled",
+  fontSize: "11px",
+} as const;
+
+const statusRowSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 1,
+  mt: 0.5,
+  flexWrap: "wrap",
+} as const;
+
+// Per-status color is dynamic; everything else about the job's status chip is not.
+const jobStatusChipBaseSx = {
+  height: 20,
+  fontSize: "10px",
+  fontWeight: 700,
+  letterSpacing: 0.2,
+  "& .MuiChip-label": { px: 1 },
+} as const;
+
+// Reused for both the "Attempt N/M" and the last-updated timestamp captions.
+const mutedCaptionSx = { color: "text.disabled", fontSize: "10px" } as const;
+
+const errorBoxSx = { minHeight: 14, mt: 0.25 } as const;
+
+const errorTextSx = {
+  display: "block",
+  color: "error.main",
+  fontSize: "10px",
+} as const;
+
+const actionsCellSx = { px: 2, py: 1.25, verticalAlign: "top" } as const;
+const actionsRowSx = {
+  display: "flex",
+  gap: 0.5,
+  justifyContent: "flex-end",
+} as const;
+
+// Visibility is dynamic (depends on job status); the reserved footprint is not — the row
+// must not reflow as different jobs show different subsets of these three actions.
+const actionSlotBaseSx = { width: 28, height: 28 } as const;
+
 const nextPipelineStage = (type: string): string | null => {
   // The QA retry loop re-runs OCR over a few regions and then rejoins at translation, so it
   // is a detour rather than a position in the chain.
@@ -118,6 +296,19 @@ const nextPipelineStage = (type: string): string | null => {
 
 const isRetryLoopType = (jobType: string) =>
   jobType === "qa-re-ocr" || jobType === "region-redo";
+
+const pipelineStepperSx = {
+  display: "flex",
+  gap: 0.5,
+  mt: 0.75,
+  maxWidth: 140,
+} as const;
+
+const pipelineSegmentBaseSx = {
+  flex: 1,
+  height: 3,
+  borderRadius: 2,
+} as const;
 
 const PipelineStepper: React.FC<{
   jobType: string;
@@ -147,25 +338,25 @@ const PipelineStepper: React.FC<{
       title={stageName}
       placement="top"
     >
-      <Box sx={{ display: "flex", gap: 0.5, mt: 0.75, maxWidth: 140 }}>
+      <Box sx={pipelineStepperSx}>
         {pipelineStages.map((stage, i) => {
           const isDone = isComplete || (currentIndex >= 0 && i < currentIndex);
           const isCurrent = !isComplete && i === currentIndex;
           return (
             <Box
               key={stage}
-              sx={{
-                flex: 1,
-                height: 3,
-                borderRadius: 2,
-                backgroundColor:
-                  isDone || isCurrent ? color : "action.disabledBackground",
-                backgroundImage:
-                  isCurrent && isRetry
-                    ? `repeating-linear-gradient(45deg, ${color} 0px, ${color} 2px, transparent 2px, transparent 4px)`
-                    : "none",
-                opacity: isDone ? 0.4 : 1,
-              }}
+              sx={[
+                pipelineSegmentBaseSx,
+                {
+                  backgroundColor:
+                    isDone || isCurrent ? color : "action.disabledBackground",
+                  backgroundImage:
+                    isCurrent && isRetry
+                      ? `repeating-linear-gradient(45deg, ${color} 0px, ${color} 2px, transparent 2px, transparent 4px)`
+                      : "none",
+                  opacity: isDone ? 0.4 : 1,
+                },
+              ]}
             />
           );
         })}
@@ -833,24 +1024,14 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
         anchor="right"
         open={forceOpen}
         onClose={onClose}
-        slotProps={{ paper: { sx: { width: 520 } } }}
+        slotProps={{ paper: { sx: drawerPaperSx } }}
       >
-        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              px: 2,
-              py: 1,
-              borderBottom: 1,
-              borderColor: "divider",
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <Box sx={drawerRootSx}>
+          <Box sx={drawerHeaderSx}>
+            <Box sx={flexRowGapHalfSx}>
               <Typography
                 variant="h6"
-                sx={{ fontSize: "16px", fontWeight: 600 }}
+                sx={drawerTitleTextSx}
               >
                 Queue Manager
               </Typography>
@@ -858,12 +1039,10 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                 title="QA can fail and loop back through re-OCR → translate → render → QA, up to 2 retries (14 queued jobs worst case, 17 in hybrid QA mode). Rows with a striped bar are part of that retry loop, not fresh forward progress."
                 placement="bottom-start"
               >
-                <InfoOutlinedIcon
-                  sx={{ fontSize: 15, color: "text.disabled", cursor: "help" }}
-                />
+                <InfoOutlinedIcon sx={infoIconSx} />
               </Tooltip>
             </Box>
-            <Box sx={{ display: "flex", gap: 1 }}>
+            <Box sx={drawerActionsRowSx}>
               <Tooltip title="Force Clear Queue">
                 <IconButton
                   size="small"
@@ -904,62 +1083,41 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
           </Box>
 
           {jobs.length > 0 && (
-            <Box
-              sx={{
-                display: "flex",
-                gap: 0.75,
-                flexWrap: "wrap",
-                px: 2,
-                py: 1,
-                borderBottom: 1,
-                borderColor: "divider",
-                backgroundColor: "action.hover",
-              }}
-            >
+            <Box sx={statusSummaryRowSx}>
               {statusSummary.map((s) => (
                 <Chip
                   key={s.label}
                   size="small"
                   label={`${s.count} ${s.label.charAt(0)}${s.label.slice(1).toLowerCase()}`}
-                  sx={{
-                    height: 22,
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: s.color,
-                    backgroundColor: `${s.color}1A`,
-                    border: `1px solid ${s.color}40`,
-                  }}
+                  sx={[
+                    statusChipBaseSx,
+                    {
+                      color: s.color,
+                      backgroundColor: `${s.color}1A`,
+                      border: `1px solid ${s.color}40`,
+                    },
+                  ]}
                 />
               ))}
             </Box>
           )}
 
           {jobs.length === 0 ? (
-            <Box
-              sx={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "text.secondary",
-              }}
-            >
-              No active jobs
-            </Box>
+            <Box sx={emptyStateSx}>No active jobs</Box>
           ) : (
             <Table
               size="small"
               stickyHeader
-              sx={{ tableLayout: "fixed" }}
+              sx={queueTableSx}
             >
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ px: 2, width: "45%" }}>Job</TableCell>
-                  <TableCell sx={{ px: 2, width: "40%" }}>
+                  <TableCell sx={jobColumnHeaderSx}>Job</TableCell>
+                  <TableCell sx={statusColumnHeaderSx}>
                     Model &amp; Status
                   </TableCell>
                   <TableCell
-                    sx={{ px: 2, width: "15%" }}
+                    sx={actionsColumnHeaderSx}
                     align="right"
                   >
                     Actions
@@ -976,55 +1134,33 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                       {group.chapterPath && (
                         <TableRow
                           onClick={() => toggleChapterCollapse(group.key)}
-                          sx={{
-                            cursor: "pointer",
-                            "&:hover": { backgroundColor: "action.selected" },
-                          }}
+                          sx={chapterRowSx}
                         >
                           <TableCell
                             colSpan={3}
-                            sx={{
-                              px: 1,
-                              py: 0.5,
-                              backgroundColor: "action.hover",
-                              borderBottom: 0,
-                            }}
+                            sx={chapterCellSx}
                           >
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 0.5,
-                              }}
-                            >
+                            <Box sx={flexRowGapHalfSx}>
                               <ExpandMoreIcon
-                                sx={{
-                                  fontSize: 16,
-                                  color: "text.secondary",
-                                  transition: "transform 0.15s ease",
-                                  transform: isCollapsed
-                                    ? "rotate(-90deg)"
-                                    : "rotate(0deg)",
-                                }}
+                                sx={[
+                                  chapterChevronBaseSx,
+                                  {
+                                    transform: isCollapsed
+                                      ? "rotate(-90deg)"
+                                      : "rotate(0deg)",
+                                  },
+                                ]}
                               />
                               <Typography
                                 variant="caption"
-                                sx={{
-                                  fontWeight: 600,
-                                  color: "text.secondary",
-                                  fontSize: "10.5px",
-                                  letterSpacing: 0.2,
-                                }}
+                                sx={chapterLabelSx}
                               >
                                 {group.chapterPath}
                               </Typography>
                               {isCollapsed && (
                                 <Typography
                                   variant="caption"
-                                  sx={{
-                                    color: "text.disabled",
-                                    fontSize: "10px",
-                                  }}
+                                  sx={chapterJobCountSx}
                                 >
                                   · {group.groupJobs.length} job
                                   {group.groupJobs.length !== 1 ? "s" : ""}
@@ -1048,62 +1184,30 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                           return (
                             <TableRow
                               key={job.id}
-                              sx={{
-                                "&:last-child td, &:last-child th": {
-                                  borderBottom: 0,
-                                },
-                              }}
+                              sx={jobRowSx}
                             >
-                              <TableCell
-                                sx={{
-                                  px: 2,
-                                  py: 1.25,
-                                  verticalAlign: "top",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    alignItems: "flex-start",
-                                    gap: 1,
-                                  }}
-                                >
+                              <TableCell sx={jobCellSx}>
+                                <Box sx={jobRowContentSx}>
                                   <Box
-                                    sx={{
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: "50%",
-                                      backgroundColor: color,
-                                      boxShadow: `0 0 6px ${color}66`,
-                                      flexShrink: 0,
-                                      mt: 0.4,
-                                    }}
+                                    sx={[
+                                      statusDotBaseSx,
+                                      {
+                                        backgroundColor: color,
+                                        boxShadow: `0 0 6px ${color}66`,
+                                      },
+                                    ]}
                                   />
-                                  <Box sx={{ minWidth: 0 }}>
-                                    <Box
-                                      sx={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 0.5,
-                                      }}
-                                    >
+                                  <Box sx={minWidthZeroSx}>
+                                    <Box sx={jobTitleRowSx}>
                                       <Typography
                                         variant="body2"
-                                        sx={{
-                                          fontWeight: 600,
-                                          fontSize: "13px",
-                                        }}
+                                        sx={jobTypeLabelSx}
                                       >
                                         {formatJobType(job.type)}
                                         {pageLabel && (
                                           <Box
                                             component="span"
-                                            sx={{
-                                              color: "text.secondary",
-                                              fontWeight: 400,
-                                            }}
+                                            sx={pageLabelSx}
                                           >
                                             {" "}
                                             · {pageLabel}
@@ -1112,12 +1216,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                       </Typography>
                                       {isRetry && (
                                         <Tooltip title="Part of the QA retry loop, re-running after a failed QA pass">
-                                          <LoopIcon
-                                            sx={{
-                                              fontSize: 13,
-                                              color: "text.disabled",
-                                            }}
-                                          />
+                                          <LoopIcon sx={retryLoopIconSx} />
                                         </Tooltip>
                                       )}
                                     </Box>
@@ -1129,29 +1228,13 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   </Box>
                                 </Box>
                               </TableCell>
-                              <TableCell
-                                sx={{
-                                  px: 2,
-                                  py: 1.25,
-                                  verticalAlign: "top",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                <Box sx={{ minHeight: 16 }}>
+                              <TableCell sx={jobCellSx}>
+                                <Box sx={providerModelBoxSx}>
                                   {providerModel ? (
                                     <Tooltip title={providerModel}>
                                       <Typography
                                         variant="caption"
-                                        sx={{
-                                          display: "block",
-                                          color: "text.primary",
-                                          fontSize: "11px",
-                                          fontWeight: 500,
-                                          whiteSpace: "nowrap",
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis",
-                                        }}
+                                        sx={providerModelTextSx}
                                       >
                                         {providerModel}
                                       </Typography>
@@ -1159,46 +1242,29 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   ) : (
                                     <Typography
                                       variant="caption"
-                                      sx={{
-                                        display: "block",
-                                        color: "text.disabled",
-                                        fontSize: "11px",
-                                      }}
+                                      sx={providerModelPlaceholderSx}
                                     >
                                       —
                                     </Typography>
                                   )}
                                 </Box>
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 1,
-                                    mt: 0.5,
-                                    flexWrap: "wrap",
-                                  }}
-                                >
+                                <Box sx={statusRowSx}>
                                   <Chip
                                     label={getDisplayStatus(job)}
                                     size="small"
-                                    sx={{
-                                      height: 20,
-                                      fontSize: "10px",
-                                      fontWeight: 700,
-                                      letterSpacing: 0.2,
-                                      color,
-                                      backgroundColor: `${color}1A`,
-                                      border: `1px solid ${color}55`,
-                                      "& .MuiChip-label": { px: 1 },
-                                    }}
+                                    sx={[
+                                      jobStatusChipBaseSx,
+                                      {
+                                        color,
+                                        backgroundColor: `${color}1A`,
+                                        border: `1px solid ${color}55`,
+                                      },
+                                    ]}
                                   />
                                   {job.attempt > 1 && (
                                     <Typography
                                       variant="caption"
-                                      sx={{
-                                        color: "text.disabled",
-                                        fontSize: "10px",
-                                      }}
+                                      sx={mutedCaptionSx}
                                     >
                                       Attempt {job.attempt}/{job.maxAttempts}
                                     </Typography>
@@ -1206,10 +1272,7 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                   {job.updatedAt && (
                                     <Typography
                                       variant="caption"
-                                      sx={{
-                                        color: "text.disabled",
-                                        fontSize: "10px",
-                                      }}
+                                      sx={mutedCaptionSx}
                                     >
                                       {new Date(
                                         job.updatedAt,
@@ -1220,16 +1283,12 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     </Typography>
                                   )}
                                 </Box>
-                                <Box sx={{ minHeight: 14, mt: 0.25 }}>
+                                <Box sx={errorBoxSx}>
                                   {job.error && (
                                     <Tooltip title={job.error}>
                                       <Typography
                                         variant="caption"
-                                        sx={{
-                                          display: "block",
-                                          color: "error.main",
-                                          fontSize: "10px",
-                                        }}
+                                        sx={errorTextSx}
                                       >
                                         {formatErrorMessage(job.error)}
                                       </Typography>
@@ -1238,25 +1297,20 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                 </Box>
                               </TableCell>
                               <TableCell
-                                sx={{ px: 2, py: 1.25, verticalAlign: "top" }}
+                                sx={actionsCellSx}
                                 align="right"
                               >
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    gap: 0.5,
-                                    justifyContent: "flex-end",
-                                  }}
-                                >
+                                <Box sx={actionsRowSx}>
                                   <Box
-                                    sx={{
-                                      visibility:
-                                        job.status === "FAILED"
-                                          ? "visible"
-                                          : "hidden",
-                                      width: 28,
-                                      height: 28,
-                                    }}
+                                    sx={[
+                                      actionSlotBaseSx,
+                                      {
+                                        visibility:
+                                          job.status === "FAILED"
+                                            ? "visible"
+                                            : "hidden",
+                                      },
+                                    ]}
                                   >
                                     <Tooltip title="Retry">
                                       <IconButton
@@ -1268,15 +1322,16 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     </Tooltip>
                                   </Box>
                                   <Box
-                                    sx={{
-                                      visibility:
-                                        job.status === "PENDING" ||
-                                        job.status === "PAUSED"
-                                          ? "visible"
-                                          : "hidden",
-                                      width: 28,
-                                      height: 28,
-                                    }}
+                                    sx={[
+                                      actionSlotBaseSx,
+                                      {
+                                        visibility:
+                                          job.status === "PENDING" ||
+                                          job.status === "PAUSED"
+                                            ? "visible"
+                                            : "hidden",
+                                      },
+                                    ]}
                                   >
                                     <Tooltip
                                       title={
@@ -1303,14 +1358,15 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
                                     </Tooltip>
                                   </Box>
                                   <Box
-                                    sx={{
-                                      visibility:
-                                        job.status !== "PROCESSING"
-                                          ? "visible"
-                                          : "hidden",
-                                      width: 28,
-                                      height: 28,
-                                    }}
+                                    sx={[
+                                      actionSlotBaseSx,
+                                      {
+                                        visibility:
+                                          job.status !== "PROCESSING"
+                                            ? "visible"
+                                            : "hidden",
+                                      },
+                                    ]}
                                   >
                                     <Tooltip title="Delete">
                                       <IconButton
