@@ -118,6 +118,72 @@ describe("Reader Component", () => {
     expect(await screen.findByText(/Test Series/)).toBeInTheDocument();
   });
 
+  it("navigates from the last loaded page to the next one when more pages exist on the server (AUDIT-F8)", async () => {
+    const { useParams } = await import("react-router-dom");
+    vi.mocked(useParams).mockReturnValue({ pageNumber: "25" });
+
+    const loadedPages = Array.from({ length: 25 }, (_, i) => ({
+      ...mockPage,
+      id: `p${i + 1}`,
+      pageNumber: i + 1,
+    }));
+
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={loadedPages}
+        pagesTotalCount={30}
+        ensurePageLoaded={vi.fn()}
+        theme="dark"
+      />,
+    );
+    await screen.findByText(/Test Series/);
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+
+    // A naive port of the series/chapters infinite-scroll pattern bounds navigation against
+    // `pages.length` (25 loaded), which would reject page 26 outright. The fix bounds against
+    // the server-reported total (30) instead, so "next" past the loaded batch still navigates
+    // rather than dead-ending.
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.stringContaining("/reader/26"),
+    );
+  });
+
+  it("fetches the batch containing a page that's in range but not yet loaded (AUDIT-F8)", async () => {
+    const { useParams } = await import("react-router-dom");
+    vi.mocked(useParams).mockReturnValue({ pageNumber: "26" });
+
+    const loadedPages = Array.from({ length: 25 }, (_, i) => ({
+      ...mockPage,
+      id: `p${i + 1}`,
+      pageNumber: i + 1,
+    }));
+    const ensurePageLoaded = vi.fn();
+
+    render(
+      <Reader
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        chapters={[mockChapter]}
+        pages={loadedPages}
+        pagesTotalCount={30}
+        ensurePageLoaded={ensurePageLoaded}
+        theme="dark"
+      />,
+    );
+
+    // Page 26 is within the chapter's true 30-page total but past the loaded 25-page batch —
+    // this is the transparent fetch the batch boundary must trigger, not a dead-end.
+    await waitFor(() => {
+      expect(ensurePageLoaded).toHaveBeenCalledWith(25); // 0-based index for page 26
+    });
+  });
+
   it("loads the page image with an auth header, not a ?token= URL", async () => {
     render(
       <Reader

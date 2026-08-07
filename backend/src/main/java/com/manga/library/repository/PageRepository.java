@@ -11,6 +11,9 @@ import org.springframework.data.repository.query.Param;
 public interface PageRepository extends JpaRepository<Page, UUID> {
   List<Page> findByChapterIdOrderByPageNumberAsc(UUID chapterId);
 
+  org.springframework.data.domain.Page<Page> findByChapterIdOrderByPageNumberAsc(
+      UUID chapterId, org.springframework.data.domain.Pageable pageable);
+
   List<Page> findByImageId(UUID imageId);
 
   Optional<Page> findByChapterIdAndPageNumber(UUID chapterId, Integer pageNumber);

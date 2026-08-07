@@ -10,6 +10,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import type { Page } from "../types";
 import LazyImage from "./LazyImage";
+import LoadMoreSentinel from "./LoadMoreSentinel";
 
 export interface ChapterPageGridProps {
   pages: Page[];
@@ -17,6 +18,11 @@ export interface ChapterPageGridProps {
   onMovePage: (index: number, direction: "left" | "right") => void;
   onSelectPage: (page: Page, index: number) => void;
   onNavigate?: (path: string) => void;
+  /** Total page count on the server — `pages.length` is only what's loaded so far. */
+  totalCount: number;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
 }
 
 /**
@@ -35,6 +41,10 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
   onDeletePage,
   onMovePage,
   onSelectPage,
+  totalCount,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
 }) => {
   return (
     <>
@@ -42,7 +52,7 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
         variant="h5"
         sx={{ fontWeight: 600 }}
       >
-        Pages ({pages.length})
+        Pages ({totalCount || pages.length})
       </Typography>
       <Grid
         container
@@ -164,6 +174,12 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
           </Grid>
         ))}
       </Grid>
+
+      <LoadMoreSentinel
+        hasMore={hasMore}
+        isLoading={isLoadingMore}
+        onLoadMore={onLoadMore}
+      />
     </>
   );
 };

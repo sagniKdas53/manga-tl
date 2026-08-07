@@ -21,6 +21,7 @@ import { safeFetch, toSlug } from "../utils";
 import ConfirmModal from "./ConfirmModal";
 import CreateSeriesDialog from "./CreateSeriesDialog";
 import LazyImage from "./LazyImage";
+import LoadMoreSentinel from "./LoadMoreSentinel";
 
 interface DashboardProps {
   user: User;
@@ -28,6 +29,16 @@ interface DashboardProps {
   setSeriesList: React.Dispatch<React.SetStateAction<Series[]>>;
   onSelectSeries: (series: Series) => void;
   mode: "light" | "dark";
+  // AUDIT-F8: sort now drives a server-side query (App.tsx owns the fetch), so the
+  // selection lives there too — sorting a partial infinite-scroll prefix client-side would
+  // just be wrong once the list is no longer fetched whole.
+  sortBy: "createdAt" | "updatedAt";
+  setSortBy: React.Dispatch<React.SetStateAction<"createdAt" | "updatedAt">>;
+  sortDir: "asc" | "desc";
+  setSortDir: React.Dispatch<React.SetStateAction<"asc" | "desc">>;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -35,28 +46,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
   seriesList,
   setSeriesList,
   onSelectSeries,
+  sortBy,
+  setSortBy,
+  sortDir,
+  setSortDir,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
 }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt">(() => {
-    const saved = localStorage.getItem("dashboard_sort_by");
-    return saved === "createdAt" ? "createdAt" : "updatedAt";
-  });
-
-  const [sortDir, setSortDir] = useState<"asc" | "desc">(() => {
-    const saved = localStorage.getItem("dashboard_sort_dir");
-    return saved === "asc" ? "asc" : "desc";
-  });
-
-  const sortedSeriesList = [...seriesList].sort((a, b) => {
-    const field = sortBy;
-    const aVal = a[field];
-    const bVal = b[field];
-    if (!aVal || !bVal) return 0;
-    const cmp = new Date(aVal).getTime() - new Date(bVal).getTime();
-    return sortDir === "asc" ? cmp : -cmp;
-  });
+  // Already sorted server-side (see App.tsx); this only renders the accumulated pages
+  // in the order they arrived.
+  const sortedSeriesList = seriesList;
 
   // Series modal state
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -307,6 +310,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </Card>
         ))}
       </Box>
+
+      <LoadMoreSentinel
+        hasMore={hasMore}
+        isLoading={isLoadingMore}
+        onLoadMore={onLoadMore}
+      />
 
       <CreateSeriesDialog
         key={editingSeries?.id ?? `create-${createCounter}`}

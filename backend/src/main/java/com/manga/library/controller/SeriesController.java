@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -284,12 +283,29 @@ public class SeriesController {
     return ResponseEntity.ok(toDto(series));
   }
 
-  @GetMapping
-  public ResponseEntity<List<SeriesDto>> listSeries() {
-    List<Series> seriesList = seriesRepository.findAll();
+  /** Only these fields may be sorted on; an unrecognized value falls back to {@code updatedAt}. */
+  private static final java.util.Set<String> SERIES_SORT_FIELDS =
+      java.util.Set.of("createdAt", "updatedAt");
 
-    List<SeriesDto> list = seriesList.stream().map(this::toDto).collect(Collectors.toList());
-    return ResponseEntity.ok(list);
+  @GetMapping
+  public ResponseEntity<com.manga.library.dto.PagedResponse<SeriesDto>> listSeries(
+      @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable unsortedPageable,
+      @RequestParam(value = "sortBy", defaultValue = "updatedAt") String sortBy,
+      @RequestParam(value = "sortDir", defaultValue = "desc") String sortDir) {
+    String resolvedSortBy = SERIES_SORT_FIELDS.contains(sortBy) ? sortBy : "updatedAt";
+    org.springframework.data.domain.Sort.Direction direction =
+        "asc".equalsIgnoreCase(sortDir)
+            ? org.springframework.data.domain.Sort.Direction.ASC
+            : org.springframework.data.domain.Sort.Direction.DESC;
+    org.springframework.data.domain.Pageable pageable =
+        org.springframework.data.domain.PageRequest.of(
+            unsortedPageable.getPageNumber(),
+            unsortedPageable.getPageSize(),
+            org.springframework.data.domain.Sort.by(direction, resolvedSortBy));
+
+    org.springframework.data.domain.Page<Series> seriesPage = seriesRepository.findAll(pageable);
+    return ResponseEntity.ok(
+        com.manga.library.dto.PagedResponse.from(seriesPage, this::toDto));
   }
 
 
@@ -401,19 +417,27 @@ public class SeriesController {
 
   @GetMapping("/{seriesId}/chapters")
   @org.springframework.transaction.annotation.Transactional(readOnly = true)
-  public ResponseEntity<List<ChapterDto>> listChapters(@PathVariable UUID seriesId) {
-    List<Chapter> chapters = chapterRepository.findBySeriesId(seriesId);
+  public ResponseEntity<com.manga.library.dto.PagedResponse<ChapterDto>> listChapters(
+      @PathVariable UUID seriesId,
+      @org.springframework.data.web.PageableDefault(size = 15) org.springframework.data.domain.Pageable unsortedPageable,
+      @RequestParam(value = "sortDir", defaultValue = "asc") String sortDir) {
+    org.springframework.data.domain.Sort.Direction direction =
+        "desc".equalsIgnoreCase(sortDir)
+            ? org.springframework.data.domain.Sort.Direction.DESC
+            : org.springframework.data.domain.Sort.Direction.ASC;
+    org.springframework.data.domain.Pageable pageable =
+        org.springframework.data.domain.PageRequest.of(
+            unsortedPageable.getPageNumber(),
+            unsortedPageable.getPageSize(),
+            org.springframework.data.domain.Sort.by(direction, "chapterNumber"));
+
+    org.springframework.data.domain.Page<Chapter> chapterPage =
+        chapterRepository.findBySeriesId(seriesId, pageable);
     SystemSettingsDto globalSettings = systemSettingsService.getSettings();
 
-    List<ChapterDto> list =
-        chapters.stream()
-            .map(
-                c -> {
-                  ChapterDto dto = toChapterDto(c, globalSettings);
-                  return dto;
-                })
-            .collect(Collectors.toList());
-    return ResponseEntity.ok(list);
+    return ResponseEntity.ok(
+        com.manga.library.dto.PagedResponse.from(
+            chapterPage, c -> toChapterDto(c, globalSettings)));
   }
 
   @GetMapping("/chapters/{chapterId}")

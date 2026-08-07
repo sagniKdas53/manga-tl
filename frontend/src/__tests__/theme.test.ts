@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { themeObj } from "../theme";
+import { theme } from "../theme";
 
 /** Relative luminance of an #rrggbb colour, per WCAG 2.1. */
 const luminance = (hex: string) => {
@@ -29,7 +29,7 @@ describe("theme colour contrast (AUDIT-F4)", () => {
 
   (["light", "dark"] as const).forEach((mode) => {
     describe(`${mode} mode`, () => {
-      const palette = themeObj(mode).palette;
+      const palette = theme.colorSchemes[mode].palette;
 
       it.each(["primary", "secondary"] as const)(
         "text.%s meets WCAG AA against both background surfaces",

@@ -9,6 +9,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ChapterRepository extends JpaRepository<Chapter, UUID> {
   List<Chapter> findBySeriesId(UUID seriesId);
 
+  org.springframework.data.domain.Page<Chapter> findBySeriesId(
+      UUID seriesId, org.springframework.data.domain.Pageable pageable);
+
   Optional<Chapter> findBySeriesIdAndChapterNumber(UUID seriesId, Double chapterNumber);
 
   @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"series"})

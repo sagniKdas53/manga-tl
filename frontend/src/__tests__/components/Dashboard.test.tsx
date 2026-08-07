@@ -78,6 +78,9 @@ describe("Dashboard Component", () => {
 
   const mockSetSeriesList = vi.fn();
   const mockOnSelectSeries = vi.fn();
+  const mockSetSortBy = vi.fn();
+  const mockSetSortDir = vi.fn();
+  const mockOnLoadMore = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -92,6 +95,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -108,6 +118,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -142,6 +159,13 @@ describe("Dashboard Component", () => {
           user={mockUser}
           seriesList={initialSeries}
           setSeriesList={mockSetSeriesList}
+          sortBy="updatedAt"
+          setSortBy={mockSetSortBy}
+          sortDir="desc"
+          setSortDir={mockSetSortDir}
+          hasMore={false}
+          isLoadingMore={false}
+          onLoadMore={mockOnLoadMore}
           onSelectSeries={mockOnSelectSeries}
         />,
       );
@@ -202,6 +226,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -255,6 +286,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -283,6 +321,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -313,6 +358,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -348,6 +400,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -381,6 +440,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -413,6 +479,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -467,6 +540,13 @@ describe("Dashboard Component", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         seriesList={seriesWithDates as any}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -490,6 +570,13 @@ describe("Dashboard Component", () => {
         user={mockUser}
         seriesList={initialSeries}
         setSeriesList={mockSetSeriesList}
+        sortBy="updatedAt"
+        setSortBy={mockSetSortBy}
+        sortDir="desc"
+        setSortDir={mockSetSortDir}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={mockOnLoadMore}
         onSelectSeries={mockOnSelectSeries}
       />,
     );
@@ -528,6 +615,13 @@ describe("Dashboard Component", () => {
           user={mockUser}
           seriesList={initialSeries}
           setSeriesList={mockSetSeriesList}
+          sortBy="updatedAt"
+          setSortBy={mockSetSortBy}
+          sortDir="desc"
+          setSortDir={mockSetSortDir}
+          hasMore={false}
+          isLoadingMore={false}
+          onLoadMore={mockOnLoadMore}
           onSelectSeries={mockOnSelectSeries}
         />,
       );

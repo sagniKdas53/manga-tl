@@ -101,6 +101,8 @@ describe("ChapterGallery Component", () => {
 
   const mockSetSelectedChapter = vi.fn();
   const mockSetPages = vi.fn();
+  const mockOnLoadMorePages = vi.fn();
+  const mockReloadPages = vi.fn().mockResolvedValue(undefined);
   const mockOnSelectPage = vi.fn();
 
   beforeEach(() => {
@@ -119,6 +121,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={mockPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -141,6 +148,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={mockPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -171,6 +183,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={mockPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -218,11 +235,6 @@ describe("ChapterGallery Component", () => {
 
   it("handles deleting a page", async () => {
     mockSafeFetch.mockResolvedValueOnce({ ok: true });
-    // For the refresh fetch
-    mockSafeFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([]),
-    });
 
     render(
       <ChapterGallery
@@ -233,6 +245,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={mockPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -278,6 +295,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={mockPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -314,6 +336,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={twoPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -351,6 +378,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={mockPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -405,11 +437,6 @@ describe("ChapterGallery Component", () => {
 
     vi.stubGlobal("XMLHttpRequest", XHRMock);
 
-    mockSafeFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([]),
-    }); // for pages refresh
-
     render(
       <ChapterGallery
         mode="dark"
@@ -419,6 +446,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={mockPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -441,14 +473,16 @@ describe("ChapterGallery Component", () => {
 
     // Wait for pages refresh
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith(
-        "/api/chapters/c1/pages",
-        expect.any(Object),
-      );
+      expect(mockReloadPages).toHaveBeenCalled();
     });
   });
 
-  it("drops a page refresh for a chapter the user has navigated away from", async () => {
+  it("does not show an upload-success toast for a chapter the user has navigated away from", async () => {
+    // Staleness protection for the *data* now lives inside usePaginatedResource's own
+    // generation guard (see its test file) — ChapterGallery no longer receives page data
+    // directly from the refresh, it just calls the `reloadPages` prop. What ChapterGallery
+    // itself still guards, via `selectedChapterIdRef`, is not surfacing an upload-result
+    // toast for a chapter that's no longer on screen by the time the refresh lands.
     interface MockXHR {
       open: ReturnType<typeof vi.fn>;
       send: ReturnType<typeof vi.fn>;
@@ -480,13 +514,7 @@ describe("ChapterGallery Component", () => {
     const refreshInFlight = new Promise<void>((r) => {
       landRefresh = r;
     });
-    const c1Pages = [{ ...mockPages[0], id: "c1-page" }];
-    mockSafeFetch.mockImplementationOnce(() =>
-      refreshInFlight.then(() => ({
-        ok: true,
-        json: () => Promise.resolve(c1Pages),
-      })),
-    );
+    mockReloadPages.mockImplementationOnce(() => refreshInFlight);
 
     const props = {
       mode: "dark" as const,
@@ -497,6 +525,11 @@ describe("ChapterGallery Component", () => {
       setPages: mockSetPages,
       onSelectPage: mockOnSelectPage,
       isLoadingDetails: false,
+      pagesTotalCount: mockPages.length,
+      hasMorePages: false,
+      isLoadingMorePages: false,
+      onLoadMorePages: mockOnLoadMorePages,
+      reloadPages: mockReloadPages,
     };
 
     const { rerender } = render(
@@ -528,7 +561,7 @@ describe("ChapterGallery Component", () => {
       />,
     );
 
-    mockSetPages.mockClear();
+    mockShowToast.mockClear();
     landRefresh();
     await refreshInFlight;
     rerender(
@@ -539,13 +572,13 @@ describe("ChapterGallery Component", () => {
     );
 
     await waitFor(() => {
-      expect(mockSafeFetch).toHaveBeenCalledWith(
-        "/api/chapters/c1/pages",
-        expect.any(Object),
-      );
+      expect(mockReloadPages).toHaveBeenCalled();
     });
-    // c1's pages must not be written into c2's view.
-    expect(mockSetPages).not.toHaveBeenCalledWith(c1Pages);
+    // c1's "upload succeeded" toast must not surface once the user is viewing c2.
+    expect(mockShowToast).not.toHaveBeenCalledWith(
+      expect.stringContaining("Successfully uploaded"),
+      "success",
+    );
   });
 
   it("handles edit chapter failure", async () => {
@@ -563,6 +596,11 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={mockPages}
         setPages={mockSetPages}
+        pagesTotalCount={mockPages.length}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,

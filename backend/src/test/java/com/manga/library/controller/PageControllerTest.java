@@ -19,7 +19,9 @@ import com.manga.library.service.JobCoordinatorService;
 import com.manga.library.service.MinioService;
 import com.manga.library.service.PageService;
 import com.manga.library.service.SseService;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -107,12 +109,7 @@ public class PageControllerTest {
         .andExpect(jsonPath("$.detail").value("Page not found: " + pageId));
   }
 
-  @Test
-  public void testListPages_Success() throws Exception {
-    UUID chapterId = UUID.randomUUID();
-    UUID pageId = UUID.randomUUID();
-    UUID imageId = UUID.randomUUID();
-
+  private static Page pageFixture(UUID pageId, int pageNumber, UUID imageId, UUID chapterId) {
     Image image =
         new Image() {
           {
@@ -126,27 +123,117 @@ public class PageControllerTest {
             setId(chapterId);
           }
         };
-    Page page =
-        new Page() {
-          {
-            setId(pageId);
-            setPageNumber(1);
-            setImage(image);
-            setChapter(chapter);
-          }
-        };
+    return new Page() {
+      {
+        setId(pageId);
+        setPageNumber(pageNumber);
+        setImage(image);
+        setChapter(chapter);
+      }
+    };
+  }
 
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId))
-        .thenReturn(Collections.singletonList(page));
+  @Test
+  public void testListPages_Success() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    UUID pageId = UUID.randomUUID();
+    UUID imageId = UUID.randomUUID();
+
+    Page page = pageFixture(pageId, 1, imageId, chapterId);
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(
+            eq(chapterId), any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                Collections.singletonList(page),
+                org.springframework.data.domain.PageRequest.of(0, 25),
+                1));
 
     mockMvc
         .perform(get("/api/chapters/" + chapterId + "/pages"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].id").value(pageId.toString()))
-        .andExpect(jsonPath("$[0].pageNumber").value(1))
+        .andExpect(jsonPath("$.content[0].id").value(pageId.toString()))
+        .andExpect(jsonPath("$.content[0].pageNumber").value(1))
         .andExpect(
-            jsonPath("$[0].thumbnailUrl")
-                .value(endsWith("/api/images/" + imageId + "/thumbnail")));
+            jsonPath("$.content[0].thumbnailUrl")
+                .value(endsWith("/api/images/" + imageId + "/thumbnail")))
+        .andExpect(jsonPath("$.page").value(0))
+        .andExpect(jsonPath("$.size").value(25))
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.totalPages").value(1));
+  }
+
+  @Test
+  public void testListPages_DefaultSizeIsTwentyFive() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(eq(chapterId), captor.capture()))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                Collections.emptyList(),
+                org.springframework.data.domain.PageRequest.of(0, 25),
+                0));
+
+    mockMvc
+        .perform(get("/api/chapters/" + chapterId + "/pages"))
+        .andExpect(status().isOk());
+
+    org.junit.jupiter.api.Assertions.assertEquals(25, captor.getValue().getPageSize());
+    org.junit.jupiter.api.Assertions.assertEquals(0, captor.getValue().getPageNumber());
+  }
+
+  @Test
+  public void testListPages_BoundaryPage_PartialFinalPage() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    UUID imageId = UUID.randomUUID();
+
+    // 30 total pages at size 25 -> page 1 (0-indexed) holds the trailing 5 (26..30). Spring's
+    // PageImpl recomputes totalElements from offset + content.size() whenever the passed total
+    // looks inconsistent with the page, so the content list has to actually hold all 5 for the
+    // total to round-trip as 30 rather than being silently corrected down to 26.
+    List<Page> trailingFive = new ArrayList<>();
+    for (int pageNumber = 26; pageNumber <= 30; pageNumber++) {
+      trailingFive.add(pageFixture(UUID.randomUUID(), pageNumber, imageId, chapterId));
+    }
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(
+            eq(chapterId), any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                trailingFive,
+                org.springframework.data.domain.PageRequest.of(1, 25),
+                30));
+
+    mockMvc
+        .perform(get("/api/chapters/" + chapterId + "/pages").param("page", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(5))
+        .andExpect(jsonPath("$.content[0].pageNumber").value(26))
+        .andExpect(jsonPath("$.page").value(1))
+        .andExpect(jsonPath("$.totalElements").value(30))
+        .andExpect(jsonPath("$.totalPages").value(2));
+  }
+
+  @Test
+  public void testListPages_EmptyResult() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(
+            eq(chapterId), any(org.springframework.data.domain.Pageable.class)))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                Collections.emptyList(),
+                org.springframework.data.domain.PageRequest.of(0, 25),
+                0));
+
+    mockMvc
+        .perform(get("/api/chapters/" + chapterId + "/pages"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isEmpty())
+        .andExpect(jsonPath("$.totalElements").value(0))
+        .andExpect(jsonPath("$.totalPages").value(0));
   }
 
   @Test
