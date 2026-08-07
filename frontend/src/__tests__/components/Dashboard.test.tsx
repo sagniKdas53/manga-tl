@@ -591,6 +591,15 @@ describe("Dashboard Component", () => {
     });
 
     fireEvent.click(screen.getByRole("option", { name: /Created Date ↓/ }));
+
+    // AUDIT-T3: this test used to end at the click with no assertion at all — deleting the
+    // Select's entire `onChange` would not have failed it. `Dashboard` owns exactly two
+    // things here: telling the parent what was picked, and persisting it. What the parent
+    // then *fetches* is the wiring, covered in DashboardSortWiring.test.tsx.
+    await waitFor(() => expect(mockSetSortBy).toHaveBeenCalledWith("createdAt"));
+    expect(mockSetSortDir).toHaveBeenCalledWith("desc");
+    expect(localStorage.getItem("dashboard_sort_by")).toBe("createdAt");
+    expect(localStorage.getItem("dashboard_sort_dir")).toBe("desc");
   });
 
   it(

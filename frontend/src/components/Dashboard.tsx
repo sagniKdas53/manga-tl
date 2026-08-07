@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -39,6 +40,10 @@ interface DashboardProps {
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore: () => void;
+  // AUDIT-F12: without this an empty grid means either "no series yet" or "the fetch
+  // failed", and the user cannot tell which. `safeFetch`'s global `api-error` toast is
+  // transient and generic; this is what the list itself renders.
+  loadError?: string | null;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -53,6 +58,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   hasMore,
   isLoadingMore,
   onLoadMore,
+  loadError = null,
 }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -209,6 +215,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </Button>
         </Stack>
       </Box>
+
+      {loadError && sortedSeriesList.length === 0 && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Couldn&apos;t load your series. {loadError}
+        </Alert>
+      )}
 
       <Box
         sx={{

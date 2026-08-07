@@ -73,6 +73,150 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-07 nineteenth sitting — AUDIT-F10 + F11 + F12
+
+The eighteenth sitting's two `[H]` regressions and the `[M]` next to them, closed as one unit
+because all three lived in `frontend/src/hooks/usePaginatedResource.ts` and fixing them
+separately meant touching the same 200-line file three times.
+
+**Both probes were reproduced against the real hook before anything was changed, and both came
+back with the eighteenth sitting's exact numbers.** PROBE B in particular reproduced verbatim —
+`AssertionError: expected 15 to be less than or equal to 3` — so neither finding was stale. The
+probes are no longer throwaway: they are permanent tests in
+`src/__tests__/hooks/usePaginatedResource.test.ts`. Eight new red tests went green; nothing was
+written about a defect that had not first been made to fail.
+
+**AUDIT-F10 — the sort controls.** `fetchPage` now depends on `paramsKey`, a serialization of
+`params` via `new URLSearchParams(params ?? {}).toString()`, and rebuilds its query *from that
+string* rather than from the captured object — so the dependency and the request cannot drift.
+The `eslint-disable-next-line react-hooks/exhaustive-deps` that hid the stale closure is gone,
+and `npx eslint` is clean without it. `sortKey` was the one remaining thing the rule would have
+demanded: it is a fresh closure every render by design and only orders an already-fetched batch,
+so it moved to a ref (assigned in an effect — assigning during render trips
+`react-hooks/refs` — the same pattern `LoadMoreSentinel` already uses for `onLoadMoreRef`).
+
+**AUDIT-F11 — the unbounded walk.** All three changes the finding specified, not one of them:
+`loadMore` seeks the lowest *unloaded* index instead of `max(loaded) + 1`; `hasMore` became
+`loadedPageCount < totalPages` (the server was already sending `totalPages` and the hook threw it
+away) instead of `items.length < totalCount`, which a sparse jump makes permanently unconvergeable;
+and `fetchPage` refuses `pageIndex >= totalPages` once known. The third is the backstop that makes
+an unbounded walk impossible even if the other two regress later. `totalPages` is held in both
+state (for `hasMore`) and a ref (for the synchronous guard inside `fetchPage`).
+
+**Two pre-existing tests went red on the F11 backstop, and their fixtures were the bug.** Both
+declared `size: 25, totalElements: 2` — a resource with exactly *one* page — and then expected a
+page 1 to exist. They only ever passed because nothing bounded the walk. Rewritten at page size 1,
+where two elements really are two batches. This is worth recording as its own small finding: the
+old fixtures encoded the defect as the expectation.
+
+**AUDIT-F12 — and one correction to how it was filed.** `isLoading` is now `inFlightCount > 0`,
+a refcount, so the first of two overlapping fetches to settle no longer clears the spinner out
+from under the second. On reset the count is deliberately *not* zeroed — the requests it counts
+are still running and each will decrement once, so zeroing would drive it negative. A related
+dedupe hole was closed in passing: `fetchPage`'s `finally` now deletes from the `inFlightRef` Set
+it captured at request time rather than re-reading `inFlightRef.current`, which a reset may have
+since replaced.
+
+**The error half of AUDIT-F12 was filed slightly too strongly.** It says fetch failures are
+"invisible" and go "only to `console.error`". That is not quite right: `safeFetch` dispatches a
+global `api-error` event on exhausted retries and `App.tsx`'s `GlobalErrorListener` turns it into
+a toast, so a failure was never silent. What *was* true, and is the part worth fixing, is that the
+list surface itself could not tell the two apart — a failed page-0 fetch rendered as an empty
+grid indistinguishable from an empty library, and a transient generic toast cannot change that.
+The hook now exposes `error: string | null` (generation-guarded on the same terms as the success
+path, so a stale failure cannot paint over a list that has already been replaced), `App.tsx`
+passes it to `Dashboard` as `loadError`, and `Dashboard` renders an `Alert` when the list is empty
+*and* the fetch failed. Exposing the state without a consumer would have been half a fix.
+
+**AUDIT-T3's frontend half, closed with it.** Two of its three bullets are gone. The
+assertion-less `"changes sort order via select"` test now asserts what `Dashboard` actually owns.
+More importantly, `src/__tests__/components/DashboardSortWiring.test.tsx` closes the seam the
+finding named: it renders the real `Dashboard` against the real hook, wired the way `App.tsx`
+wires them, and asserts on the query string. AUDIT-F10 lived in exactly that gap — `Dashboard`
+tested with sort props injected, the hook tested with literal arguments, and nothing rendering the
+composition — which is how 316 green tests shipped over a dead sort control. T3's third bullet
+(`@WebMvcTest` cannot prove a pagination fix) is backend and stays open with AUDIT-B10.
+
+**Gates.** `mvn -o clean verify` → `BUILD SUCCESS`, 424 backend tests (untouched, no backend
+change). `vitest` → **326/326 across 46 files**, up from 316/45.
+
+**GitNexus reindex — the documented command aborts on this box and here is what fixes it.** The
+handoff's command died in a native worker with `Analysis aborted in a native worker or native
+binding path`, exit code 0 but no index written, having burned its whole retry budget on
+`backend/src/main/c/jni/jni.h` — a 74 KB vendored Oracle JDK header. It is not a broken install
+and reinstalling does not help; the parse is simply slower than the default 30 s idle timeout. It
+succeeds on the same command with the budget raised:
+
+```
+GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000 GITNEXUS_WORKER_MAX_CUMULATIVE_TIMEOUT_MS=600000 \
+  ~/.nvm/versions/node/v22.14.0/bin/node \
+  ~/.nvm/versions/node/v26.1.0/lib/node_modules/gitnexus/dist/cli/index.js \
+  analyze --embeddings --force
+```
+
+188.8 s, 5,532 nodes / 13,635 edges / 300 flows. `impact()` on `usePaginatedResource` then
+returned `LOW` with one direct caller (`AppContent`, 7 flows) — which is the real answer, and the
+reason the handoff was right to insist on reindexing first: before it, the same call returned
+"symbol not found", which reads like safety and is actually blindness.
+
+### The 2026-08-07 eighteenth sitting — code review of AUDIT-F1/F2/F8
+
+A review sitting, not an implementation one: no production code was changed. The seventeenth
+sitting's commit `8c4c509` (29 files, ~2,500 insertions) was read against the working tree and
+its claims re-verified independently.
+
+**Both gates re-run and both are genuinely green.** `mvn -o clean verify` → `BUILD SUCCESS`, and
+the surefire XML sums to **424** tests, matching the commit message exactly. `npx vitest run` →
+**45 files, 316/316**. The "live-verified in a real browser against a 177-page chapter" claim was
+not independently reproduced, but nothing found contradicts it. The `sx` hoisting claim was
+checked by counting: `ReaderRightSidebar.tsx` is down to **1** inline `sx={{` from 65 and
+`QueueManager.tsx` to **0** from 45. AUDIT-F2 is genuinely delivered.
+
+**What is right, and worth not re-litigating.** The reader's fetch-past-the-batch work — the part
+the handoff correctly identified as most likely to ship wrong — is correct. `totalPageCount`
+derives from the server total with a defensible `Math.max(pageNumber)` fallback; `navigateToPage`
+is bounded on the true total rather than the loaded count; and the pre-existing "redirect to page
+1 if the page isn't in the list" effect was spotted as something that would have fought the new
+fetch and was re-scoped to `outOfRange` instead of `!loaded`. That interaction is the kind that
+normally ships broken. The `colorSchemeSelector: "class"` catch in the theme migration is a real
+bug found by live verification that no jsdom test would have surfaced. `PagedResponse.from` is a
+clean abstraction. Docs bookkeeping was correct — entries removed from `issues.md` and reasoning
+written to `archive.md` in the same commit — and `impact()`/`detect_changes()` were run and
+recorded per `CLAUDE.md`.
+
+**What the review found: eight new findings, two of them `[H]`.** Filed as AUDIT-F10, F11, F12,
+F13, B10, B11, T3, Q2 — see `issues.md` for each. The two `[H]`s were *proven*, not inferred: a
+throwaway probe was written against the real `usePaginatedResource` hook and run. Preserved here
+because the probe is the evidence, and both findings are subtle enough to be argued with:
+
+```text
+PROBE A: changing a `params` value re-fetches with the NEW param
+  AssertionError: expected '/api/series?page=0&size=10&sortDir=de…' to contain 'sortDir=asc'
+  Received: "/api/series?page=0&size=10&sortDir=desc"
+
+PROBE B: a sparse jump then scrolling must terminate, not fetch forever
+  PROBE B requested pages: [0,3,4,5,6,7,8,9,10,11,12,13,14,15]
+  PROBE B items: 50 total: 100 hasMore: true
+  AssertionError: expected 15 to be less than or equal to 3
+```
+
+PROBE A drives AUDIT-F10: `fetchPage`'s `useCallback` omits `params` from its dependency list
+behind an `eslint-disable`, so the sort a user picks is never the sort that gets requested — and
+the same commit deleted Dashboard's working client-side sort on the grounds that the server now
+handles it. PROBE B drives AUDIT-F11: on a 4-page resource the hook requested page 15 and was
+still climbing when the probe's iteration cap stopped it, because `loadMore` walks `max + 1`,
+`hasMore` compares item counts that a sparse jump makes unreachable, and nothing refuses a page
+index past the end.
+
+**The process lesson, which is the one worth carrying.** The fifteenth sitting wrote into its
+handoff constraints that *"a `@WebMvcTest` with a mocked repository cannot prove a
+lazy-serialization fix"*. The same limitation applies to a pagination fix — a mocked repository
+returns whatever `Page` the test hands it and can say nothing about how Spring Data resolved the
+`Pageable` — and `PageControllerTest`/`SeriesControllerTest` are `@WebMvcTest` with
+`@MockitoBean`. The constraint was recorded and not applied. Separately, sixteen new tests landed
+under an explicit "test design is part of the deliverable" instruction, and one of them
+(`Dashboard.test.tsx:558`) has no assertion after its interaction at all. See AUDIT-T3.
+
 ### The 2026-08-07 seventeenth sitting — AUDIT-F1 + AUDIT-F2 + AUDIT-F8, landed together
 
 User-set queue, this sitting: pagination (F8) as the real driver, with the theme rebuild (F1) and

@@ -173,6 +173,48 @@ Conventions: **[C]** critical · **[H]** high · **[M]** medium · **[L]** low/c
 
 ### Pipeline correctness
 
+### Backend (Spring)
+
+*Both entries filed 2026-08-07 (eighteenth sitting) against AUDIT-F8's commit `8c4c509`.*
+
+#### AUDIT-B10 **[M]** — `listPages` forwards the caller's `sort` unvalidated; its two sibling endpoints do not
+
+The same commit added pagination to three endpoints and validated sort input on two of them:
+
++ `SeriesController.listSeries` (`:288-308`) takes the resolved `Pageable` as `unsortedPageable`,
+  checks `sortBy` against an explicit `SERIES_SORT_FIELDS` allowlist, falls back to `updatedAt` on
+  anything unrecognized, and rebuilds a fresh `PageRequest`. Correct, and tested
+  (`SeriesControllerTest:160` passes `sortBy=title` and asserts the fallback).
++ `SeriesController.listChapters` (`:420-441`) does the same, hardcoding `chapterNumber`. Correct.
++ `PageController.listPages` (`:746-763`) does **not**. It takes `@PageableDefault(size = 25)
+  Pageable pageable` and passes it straight into
+  `pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId, pageable)`.
+
+Spring Boot's `SpringDataWebAutoConfiguration` registers `PageableHandlerMethodArgumentResolver`
+unconditionally, so `?sort=` on that endpoint is read into the `Pageable` and reaches Spring Data's
+query derivation as a caller-controlled property name. Two things follow, and **neither is
+currently verified** — see AUDIT-T3, the controller tests mock the repository and cannot observe
+either:
+
+1. An unrecognized property is expected to raise `PropertyReferenceException`, which
+   `GlobalExceptionHandler`'s catch-all `@ExceptionHandler(Exception.class)` (`:142`) would render
+   as a 500 on ordinary user input rather than a 400.
+2. The interaction between the derived query's own `OrderByPageNumberAsc` and a caller-supplied
+   `Sort` is unspecified here — a caller may be able to reorder the reader's pages.
+
+**Do the measurement before the fix**: hit the live endpoint with `?sort=bogus` and with
+`?sort=id,desc` and record what actually comes back, then make it match the siblings (ignore
+caller sort entirely, or allowlist it).
+
+#### AUDIT-B11 **[L]** — no page-size ceiling, so the unbounded response AUDIT-F8 removed is still reachable
+
+None of the three endpoints constrains `size`, and `application.yml` sets no
+`spring.data.web.pageable.max-page-size`, so all three inherit Spring's default of **2000**.
+`@PageableDefault(size = …)` sets the default only; `?size=2000` overrides it. AUDIT-F8's whole
+premise was that unbounded list responses were costing load time, and a caller can still ask for
+2000 pages/chapters/series in one request. One line of config: pin `max-page-size` near the
+intended batch sizes (100 is generous against 10/15/25).
+
 ### Worker
 
 #### AUDIT-W3 **[M]** — cooldowns and lock waits burn a job slot doing nothing
@@ -201,6 +243,20 @@ concurrency testing to verify it doesn't just move the deadlock risk elsewhere �
 experimentation-heavy work, not a quick pass. Picked up only after everything ahead of it lands.
 
 ### Frontend
+
+> **AUDIT-F10, F11 and F12 were closed 2026-08-07 (nineteenth sitting)** — see
+> [archive.md](./archive.md#the-2026-08-07-nineteenth-sitting--audit-f10--f11--f12). Both probes
+> were reproduced as permanent tests before the fix, then went green. **AUDIT-F13 remains open**;
+> it was filed alongside them but lives in `ChapterPageGrid`, not the hook.
+
+#### AUDIT-F13 **[L]** — index-based reorder controls now reason about the loaded prefix
+
+`ChapterPageGrid.tsx:159` disables "move page right" on `idx === pages.length - 1`. Since
+AUDIT-F8, `pages.length` is the number of pages **fetched so far**, not the chapter's length. On
+the 177-page chapter the sixteenth sitting live-tested against, page 25 cannot be moved right
+until more batches load, even though 152 pages follow it. The same class of problem applies to any
+index-derived reorder across a batch boundary, and to `onMovePage`'s notion of "the next page".
+Not addressed by the pagination commit and not mentioned in its handoff.
 
 #### AUDIT-F9 **[L]** — responsive behaviour is never verified
 
@@ -248,6 +304,35 @@ it was already blocked on exactly that. No change to the blocker itself, just wh
 queue.
 
 ### Testing
+
+#### AUDIT-T3 — AUDIT-F8's tests were designed to the seam the bugs fall through
+
+*Filed 2026-08-07 (eighteenth sitting). This is the specific, current instance of the standing
+"is the testing real?" issue above — and it matters more than usual because the sixteenth
+sitting's handoff made "test design is part of the deliverable, not an afterthought" an explicit
+condition of the AUDIT-F8 work.* Sixteen new tests landed with the commit; all pass; AUDIT-F10
+and AUDIT-F11 are both trivially reachable and neither is caught. Three distinct causes:
+
+*Two of the three bullets were closed 2026-08-07 (nineteenth sitting) alongside the AUDIT-F10/F11/F12
+fix. The third is backend and rides with AUDIT-B10.*
+
++ ~~**A test with no assertion.**~~ **Closed.** `Dashboard.test.tsx`'s `"changes sort order via
+  select"` ended at its click with nothing asserted — deleting the Select's `onChange` entirely
+  would not have failed it. It now asserts the two things `Dashboard` actually owns: that it
+  reports the pick upward (`setSortBy`/`setSortDir`) and that it persists to `localStorage`.
++ ~~**The seam is drawn around the defect.**~~ **Closed.** `frontend/src/__tests__/components/
+  DashboardSortWiring.test.tsx` renders the real `Dashboard` against the real
+  `usePaginatedResource`, wired as `App.tsx` wires them, and asserts on the query string that
+  goes over the wire. This is the test that would have caught AUDIT-F10, and it was red against
+  the unfixed hook before it was green against the fixed one.
++ **`@WebMvcTest` cannot prove a pagination fix** — **still open.**, for the same reason the fifteenth sitting
+  recorded that it could not prove a lazy-serialization fix. `PageControllerTest` and
+  `SeriesControllerTest` are `@WebMvcTest` with `@MockitoBean` repositories, so the mock returns
+  whatever `Page` the test hands it and the assertions confirm the controller's envelope shape —
+  never that Spring Data resolved the `Pageable`, applied the `Sort`, or that the derived query's
+  `OrderBy` and a caller `Sort` compose sanely. AUDIT-B10 is invisible from there by construction.
+  **The prior sitting had already written this lesson into its handoff constraints and it was not
+  carried across** — that's the process finding, not just the coverage one.
 
 #### AUDIT-T1 — the "e2e" test is not an e2e test
 
@@ -319,3 +404,28 @@ None of these can fire. They add noise to every call site, and they are almost c
 the NPE→400 mapping in AUDIT-B3. A mechanical pass to delete the ones on freshly-constructed values,
 literals and already-validated locals would remove several hundred lines and let `NullPointerException`
 go back to meaning "bug".
+
+#### AUDIT-Q2 **[L]** — fully-qualified class names inline instead of imports
+
+*Filed 2026-08-07 (eighteenth sitting), against AUDIT-F8's commit `8c4c509`.*
+
+The pagination commit writes types out in full at every use site rather than importing them:
+`org.springframework.data.domain.Pageable`, `org.springframework.data.domain.Page`,
+`org.springframework.data.domain.PageRequest`, `org.springframework.data.domain.Sort.Direction`,
+`org.springframework.data.web.PageableDefault`, `com.manga.library.dto.PagedResponse` and
+`java.util.Set` — across `SeriesController`, `PageController`, `ChapterRepository` and
+`PageRepository`. `SeriesController.listSeries`'s signature is three lines of package prefix, and
+`listChapters`'s `PageRequest.of(...)` call spans four.
+
+Two reasons this is worth a pass rather than a shrug:
+
++ **It contradicts the same diff.** That commit *removes* a now-unused `import
+  java.util.stream.Collectors` from `SeriesController` while adding a dozen inline FQNs to it.
++ **It is spreading.** `SeriesController` had exactly one pre-existing instance of the habit
+  (`@org.springframework.transaction.annotation.Transactional` on `listChapters`); the commit
+  multiplied it into the surrounding methods. Same dynamic AUDIT-Q1 describes for
+  `Objects.requireNonNull` — the surrounding style invites more of it, so the count only moves one
+  way on its own.
+
+Mechanical and low-risk: add the imports, delete the prefixes. Natural to fold into AUDIT-Q1's
+sweep, which is already a backend-only mechanical pass over the same controllers.

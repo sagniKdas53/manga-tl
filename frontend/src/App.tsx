@@ -587,6 +587,7 @@ function AppContent() {
                                 hasMore={seriesPagination.hasMore}
                                 isLoadingMore={seriesPagination.isLoading}
                                 onLoadMore={seriesPagination.loadMore}
+                                loadError={seriesPagination.error}
                               />
                             ) : null
                           }
