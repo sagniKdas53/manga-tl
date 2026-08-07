@@ -179,10 +179,16 @@ GitHub-wide outage as the working theory. Neither part holds.
    `main`. No push, no `push` event, no workflow run — nothing was being filtered out, there was
    nothing to filter. The "outage" was an unpushed branch.
 
-**Confirmed by doing it.** Pushing this sitting's work triggered `ci-maven.yml`, `ci-npm.yml` and
-`ci-backend-docker.yml` immediately, on the same path filters that were suspected. `ci-maven.yml`
-and `ci-backend-docker.yml` passed. The older `cancelled` runs from 2026-08-06 are a separate,
-genuinely GitHub-side thing and are not evidence about triggering.
+**Confirmed by doing it, and green.** Pushing this sitting's work triggered `ci-maven.yml`,
+`ci-npm.yml` and `ci-backend-docker.yml` immediately, on the same path filters that were
+suspected. Final state on `main`: `ci-maven.yml` **success** (`8f4ce67`), `ci-npm.yml` **success**
+(`9d82db4`), `ci-backend-docker.yml` **success** (`9d82db4`). The older `cancelled` runs from
+2026-08-06 are a separate, genuinely GitHub-side thing and are not evidence about triggering.
+
+The path filters demonstrably work in both directions: `9d82db4` touches only `frontend/**` and
+`docs/`, and correctly did **not** trigger `ci-maven.yml` — which is why that workflow's latest
+run is still `8f4ce67`. A backend workflow not running on a frontend-only commit is the filter
+doing its job, not a repeat of the gap.
 
 **And CI caught something the local gate did not.** `ci-npm.yml` failed on `95e14d3` at the
 **Format check** step — `prettier --check` on two files this sitting touched. `npm run lint` and
@@ -199,7 +205,7 @@ npm run test:coverage  # not plain `vitest run`
 npm run build          # tsc + vite, the only typecheck in the pipeline
 ```
 
-All four are green as of `9b8a86d`. Note the frontend workflow is **`ci-npm.yml`**, not
+All four are green as of `9d82db4`. Note the frontend workflow is **`ci-npm.yml`**, not
 `ci-node.yml`. Registered workflows: `ci-maven.yml`, `ci-npm.yml`, `ci-backend-docker.yml`, plus
 dependabot and CodeQL. Query `actions/workflows/<file>/runs` — `commits/<sha>/check-runs` does not
 answer "did this workflow run at all".
@@ -363,7 +369,7 @@ ALL FOUR CI steps for frontend work, from frontend/:
   npm run lint
   npm run test:coverage  # not plain `vitest run`
   npm run build          # tsc + vite, the only typecheck in the pipeline
-All four green as of 9b8a86d. Frontend workflow is ci-npm.yml, not ci-node.yml.
+All four green as of 9d82db4. Frontend workflow is ci-npm.yml, not ci-node.yml.
 Query actions/workflows/<file>/runs, not commits/<sha>/check-runs.
 
 REMOTES: git fetch --all hangs on origin. Use git fetch github / git push
