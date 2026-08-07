@@ -154,18 +154,39 @@ call. Cross-check with grep before trusting a zero.
 
 `manga-tl-worker` untouched, still at its prior index point.
 
-## CI — still not re-verified, and the API probe failed on the wrong URL
+## CI — measured this sitting, and the gap is real and ongoing
 
-Carried forward. `CI - Backend` / `CI - Frontend` never triggered for the fifteenth sitting's push
-despite matching `ci-maven.yml`'s path filters; only CodeQL ran. A GitHub-wide outage around
-2026-08-07 is the probable but unconfirmed explanation.
+**Previous handoffs could not confirm this because they were querying the wrong repo.** The slug
+is `sagniKdas53/manga-tl`, not `Sagnik-Das-53/manga-library`; a guessed URL 404s in a way that
+reads as "no check runs" rather than "no such repo". `commits/<sha>/check-runs` returns nothing
+useful for these commits either — **the workflow-scoped endpoint is the one that answers this**,
+which is exactly the lesson the sixteenth sitting recorded.
 
-**One correction for whoever picks this up:** the repo is `sagniKdas53/manga-tl`, *not*
-`Sagnik-Das-53/manga-library` — a guessed URL returns a 404 that looks like "no check runs" but is
-actually "no such repo". Get the slug from `git remote -v` first. `8c4c509` is still the best probe
-(it touches `backend/src/**` and `frontend/**`), and this sitting's commit is a second one. Check
-**both** `commits/<sha>/check-runs` and `actions/workflows/<file>/runs` — `check-runs` alone is
-what missed that two whole workflows never ran.
+Measured against `actions/workflows/ci-maven.yml/runs`:
+
+| head | branch | created | conclusion |
+| --- | --- | --- | --- |
+| `5f7f0f6` | main | 2026-08-06T17:51Z | **cancelled** (reported as `failure`) |
+| `b0b4390` | main | 2026-08-06T16:50Z | **cancelled** |
+| `365ad99` | main | 2026-08-06T16:20Z | cancelled |
+| `829a073` | main | 2026-08-06T13:27Z | success |
+
+**`ci-maven.yml` has not been triggered since 2026-08-06T17:51Z.** Three `main` commits landed on
+2026-08-07 — `362fa60`, `18d5239`, `8c4c509` — all matching its path filters, and **none of them
+produced a run at all.** `ci-npm.yml` last ran at `829a073` (2026-08-06T13:27Z) and likewise has
+nothing since.
+
+**The two "failures" are not test failures.** Inspecting the jobs of the most recent run: the
+`Build and test backend` job is `cancelled` with no failed step — the same "cancelled with zero
+steps executed" signature the sixteenth sitting saw. So `main` is not red on its merits; the
+symptom is the runner never doing work, which is consistent with (but still does not *prove*) the
+GitHub-side outage the user reported.
+
+**What would settle it:** push this sitting's commit and re-query the same workflow-scoped
+endpoint. It touches `frontend/**`, so `ci-npm.yml` should fire; if it does not, the path filters
+are not the explanation and the workflow triggers themselves need reading. Registered workflows
+are `ci-maven.yml`, `ci-npm.yml`, `ci-backend-docker.yml`, plus dependabot and CodeQL — note the
+frontend workflow is **`ci-npm.yml`**, not `ci-node.yml`.
 
 The strongest available evidence for `main`'s health remains the local gate: backend 424,
 frontend 326.
@@ -308,13 +329,18 @@ frontend/, 326 passing across 46 files. From the repo root it loads the wrong
 config and every test fails with "document is not defined" — that's a wrong
 cwd, not a regression. Worker gates untouched, still at 315.
 
-CI: still not re-verified. CI - Backend / CI - Frontend never triggered for
-the fifteenth sitting's push despite matching path filters; only CodeQL ran.
-A GitHub-wide outage around 2026-08-07 is the probable but unconfirmed
-explanation. THE REPO SLUG IS sagniKdas53/manga-tl — a guessed URL 404s in a
-way that looks like "no check runs". Check BOTH commits/<sha>/check-runs and
-actions/workflows/<file>/runs; check-runs alone is what missed two workflows
-never running.
+CI: MEASURED last sitting, gap is real and ongoing. ci-maven.yml has not been
+triggered since 2026-08-06T17:51Z; three main commits on 2026-08-07 (362fa60,
+18d5239, 8c4c509) all match its path filters and produced NO run at all.
+ci-npm.yml likewise nothing since 829a073. The last two ci-maven runs report
+"failure" but the job is CANCELLED with no failed step — main is not red on
+its merits. THE REPO SLUG IS sagniKdas53/manga-tl (older handoffs queried a
+nonexistent repo and read the 404 as "no check runs"), and the FRONTEND
+workflow is ci-npm.yml, not ci-node.yml. Use the workflow-scoped endpoint
+actions/workflows/<file>/runs — commits/<sha>/check-runs does not answer this.
+NEXT PROBE: push last sitting's commit (it touches frontend/**, so ci-npm.yml
+should fire) and re-query. If it still doesn't fire, path filters are not the
+explanation and the workflow triggers need reading.
 
 REMOTES: git fetch --all hangs on origin. Use git fetch github / git push
 github main. Worker submodule's origin is separate and works.
