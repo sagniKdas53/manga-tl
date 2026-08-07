@@ -73,6 +73,37 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-07 nineteenth sitting — the CI gap, explained and closed
+
+Three sittings carried "`CI - Backend` / `CI - Frontend` never triggered despite matching path
+filters" forward as an open question, with a GitHub-wide outage as the working theory. Both parts
+were wrong, and the way they were wrong is the part worth keeping.
+
+**Two mistakes stacked, each of which made the other look confirmed.** First, the API probes were
+aimed at `Sagnik-Das-53/manga-library`, which does not exist — the slug is `sagniKdas53/manga-tl`.
+GitHub's 404 for a nonexistent repo is indistinguishable, at a glance, from an empty check-runs
+list, so every probe came back reading like evidence for the theory. Second, and the actual cause:
+`362fa60`, `18d5239` and `8c4c509` had never been pushed. They were sitting on local `main`. There
+was no `push` event, so there was no workflow run — nothing was being filtered out by path
+filters, because there was nothing to filter.
+
+**Settled by doing it rather than reasoning about it.** Pushing this sitting's commits triggered
+`ci-maven.yml`, `ci-npm.yml` and `ci-backend-docker.yml` immediately, on exactly the path filters
+that had been under suspicion. The `cancelled` runs from 2026-08-06 are a separate and genuinely
+GitHub-side thing; they say nothing about triggering, and conflating the two is what kept the
+theory alive.
+
+**Then CI immediately earned its keep.** `ci-npm.yml` failed at the **Format check** step —
+`prettier --check` on two files this sitting had touched. `npm run lint` was clean and all 326
+vitest tests passed; the format gate is simply a different gate, and it was not being run locally.
+`ci-npm.yml` runs four steps and this sitting had been running two of them. The other two are not
+redundant: `test:coverage` is what CI runs rather than plain `vitest run`, and `build` is the only
+place `tsc` typechecks the app. All four are now recorded in the handoff as the frontend gate.
+
+The lesson generalises past this repo: **a local gate that is a subset of CI will eventually pass
+something CI rejects, and the failure will look like a CI problem.** It is worth checking what the
+pipeline actually runs rather than assuming the local script is the same set.
+
 ### The 2026-08-07 nineteenth sitting — AUDIT-B11
 
 One line of `application.yml`, but verified rather than assumed.
