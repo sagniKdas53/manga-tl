@@ -29,6 +29,14 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+    web:
+      pageable:
+        # AUDIT-B11: without this, all three paginated endpoints inherit Spring's default
+        # ceiling of 2000. `@PageableDefault(size = ...)` on listSeries/listChapters/listPages
+        # sets the *default* only -- `?size=2000` overrides it -- so the unbounded list
+        # response AUDIT-F8 existed to remove was still one query parameter away. 100 is
+        # generous against the intended batch sizes of 10/15/25 and no caller asks for more.
+        max-page-size: 100
   servlet:
     multipart:
       max-file-size: 50MB

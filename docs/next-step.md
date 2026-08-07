@@ -5,12 +5,15 @@
 > fix, and PROBE B reproduced the eighteenth sitting's number verbatim
 > (`expected 15 to be less than or equal to 3`) — neither finding was stale.
 >
-> **Gates: `mvn -o clean verify` → `BUILD SUCCESS`, 424 backend tests (untouched). `vitest` →
+> **Gates: `mvn -o clean verify` → `BUILD SUCCESS`, **426** backend tests. `vitest` →
 > 326/326 across 46 files**, up from 316/45. `npx eslint` clean on every changed file — with the
 > `react-hooks/exhaustive-deps` suppression *deleted*, not moved.
 >
-> **61 filed, 51 closed, 10 open (84%).** No `[C]`, and **no `[H]`** — the board is back to two
-> `[M]` and five `[L]` plus three unranked. See [§ Where issues.md stands](#where-issuesmd-stands).
+> **AUDIT-B11 closed too** — `spring.data.web.pageable.max-page-size: 100`, proven red first
+> (`expected: <100> but was: <2000>`). Backend 424 → **426**.
+>
+> **61 filed, 52 closed, 9 open (85%).** No `[C]`, and **no `[H]`** — the board is two `[M]`,
+> four `[L]` and three unranked. See [§ Where issues.md stands](#where-issuesmd-stands).
 >
 > **The reindex command in the last handoff does not work on this box. The fixed one is in
 > [§ GitNexus](#gitnexus)** — it needs two env vars, and without them `analyze` exits 0 having
@@ -27,7 +30,9 @@
    Eight new red tests total, covering F10, F11's three parts, and F12's two.
 3. **Fixed all three findings in one pass** over `usePaginatedResource.ts`, as the queue specified.
 4. **Closed AUDIT-T3's two frontend bullets**, including a new integration test at the seam.
-5. Docs: F10/F11/F12 removed from `issues.md`, T3 amended, reasoning into `archive.md`.
+5. **Landed AUDIT-B11** — one line of `application.yml`, proven red first by stashing the
+   config and rerunning the new test (`expected: <100> but was: <2000>`).
+6. Docs: F10/F11/F12/B11 removed from `issues.md`, T3 amended, reasoning into `archive.md`.
 
 ## The fixes
 
@@ -66,14 +71,14 @@ failed page-0 fetch from an empty library. The hook now exposes `error: string |
 
 ## Where `issues.md` stands
 
-**61 filed. 10 open. 51 closed — 84%.** (Was 61/13/48 = 79%.)
+**61 filed. 9 open. 52 closed — 85%.** (Was 61/13/48 = 79%.)
 
 | sev | open | which |
 | --- | --- | --- |
 | **[C]** | 0 | — |
 | **[H]** | 0 | — |
 | **[M]** | 2 | W3, B10 |
-| **[L]** | 5 | F9, D5, F13, B11, Q2 |
+| **[L]** | 4 | F9, D5, F13, Q2 |
 | unranked | 3 | T1, Q1, T3 |
 
 `AUDIT-T3` stays open on its **third bullet only** (`@WebMvcTest` cannot prove a pagination fix)
@@ -84,18 +89,23 @@ failed page-0 fetch from an empty library. The hook now exposes `error: string |
 Unchanged from the last handoff apart from step 1 being done. The user's 2026-08-07 ordering
 still governs.
 
-### 1. Next up — AUDIT-B10 + AUDIT-B11 (backend pagination hardening)
+### 1. Next up — AUDIT-B10 (AUDIT-B11 is done)
 
-**B10 needs a measurement before a fix, and this has not been done.** `PageController.listPages`
+**B10 needs a measurement before a fix, and this is the one thing this sitting could not do** —
+it needs the stack up, which was out of scope by the user's call. `PageController.listPages`
 forwards the caller's `?sort=` into Spring Data unvalidated while its two siblings allowlist
 theirs. Hit the **live** endpoint with `?sort=bogus` and `?sort=id,desc` and record what actually
 comes back before changing anything — the expected 500 via `GlobalExceptionHandler`'s catch-all is
-**unverified**, and the `@WebMvcTest`s cannot tell you (that is exactly AUDIT-T3's remaining
-bullet). Then make `listPages` match its siblings. **B11 is one line of `application.yml`**
-(`spring.data.web.pageable.max-page-size`), so `?size=2000` stops working.
+**unverified**, and the `@WebMvcTest`s cannot tell you. Then make `listPages` match its siblings.
 
-Closing T3's third bullet means a `@SpringBootTest` + Testcontainers test that proves Spring Data
-actually applied the `Sort` — `PipelineFlowIntegrationTest` is the working example.
+Closing AUDIT-T3's remaining third bullet means a `@SpringBootTest` + Testcontainers test that
+proves Spring Data actually applied the `Sort` — `PipelineFlowIntegrationTest` is the working
+example. **Note the line the B11 work drew, because it sharpens T3's bullet rather than
+contradicting it:** a `@WebMvcTest` *can* prove `max-page-size`, because
+`PageableHandlerMethodArgumentResolver` applies the cap before the controller runs and the result
+is visible in the `Pageable` a mocked repository is handed. It cannot prove B10, because whether a
+caller `Sort` composes sanely with a derived query's `OrderBy` is Spring Data's business. The test
+that matters is which *layer* owns the behaviour, not which annotation is on the test class.
 
 ### 2. Then — AUDIT-F9 paired with pagination benchmarking
 
@@ -188,7 +198,7 @@ are not the explanation and the workflow triggers themselves need reading. Regis
 are `ci-maven.yml`, `ci-npm.yml`, `ci-backend-docker.yml`, plus dependabot and CodeQL — note the
 frontend workflow is **`ci-npm.yml`**, not `ci-node.yml`.
 
-The strongest available evidence for `main`'s health remains the local gate: backend 424,
+The strongest available evidence for `main`'s health remains the local gate: backend 426,
 frontend 326.
 
 ## Not mine — left alone deliberately
@@ -280,22 +290,27 @@ survived is written down.
 
 LAST SITTING CLOSED BOTH [H]s. AUDIT-F10 + F11 + F12 fixed as one unit in
 frontend/src/hooks/usePaginatedResource.ts, plus AUDIT-T3's two frontend
-bullets. Gates green: mvn -o clean verify = BUILD SUCCESS, 424 backend tests;
-vitest = 326/326 across 46 files (up from 316/45). eslint clean with the
+bullets, and AUDIT-B11 (max-page-size). Gates green: mvn -o clean verify =
+BUILD SUCCESS, 426 backend tests; vitest = 326/326 across 46 files (up from
+316/45). eslint clean with the
 exhaustive-deps suppression DELETED, not moved.
 
-STATE: 61 filed, 51 closed, 10 open (84%). NO [C] and NO [H].
+STATE: 61 filed, 52 closed, 9 open (85%). NO [C] and NO [H].
 
 QUEUE — work it in order unless redirected:
-  1. AUDIT-B10 + B11. B10 NEEDS A MEASUREMENT FIRST: PageController.listPages
-     forwards the caller's ?sort= into Spring Data unvalidated while its two
-     sibling endpoints carefully allowlist theirs. Hit the LIVE endpoint with
-     ?sort=bogus and ?sort=id,desc and record what actually happens before
-     fixing — the expected 500 via GlobalExceptionHandler's catch-all is
-     UNVERIFIED and the @WebMvcTests cannot tell you. B11 is one line of
-     application.yml (spring.data.web.pageable.max-page-size; today ?size=2000
-     works). Closing AUDIT-T3's remaining third bullet means a @SpringBootTest
-     + Testcontainers test that proves Spring Data actually applied the Sort.
+  1. AUDIT-B10 (B11 is DONE). B10 NEEDS A MEASUREMENT FIRST and it is the one
+     thing last sitting could not do — it needs the stack up.
+     PageController.listPages forwards the caller's ?sort= into Spring Data
+     unvalidated while its two sibling endpoints carefully allowlist theirs.
+     Hit the LIVE endpoint with ?sort=bogus and ?sort=id,desc and record what
+     actually happens before fixing — the expected 500 via
+     GlobalExceptionHandler's catch-all is UNVERIFIED. Closing AUDIT-T3's
+     remaining third bullet means a @SpringBootTest + Testcontainers test that
+     proves Spring Data actually applied the Sort. NOTE the line B11 drew: a
+     @WebMvcTest CAN prove max-page-size (the resolver caps the Pageable before
+     the controller runs) but CANNOT prove B10 (Sort composition is Spring
+     Data's business). The question is which layer owns the behaviour, not
+     which annotation is on the test class.
   2. AUDIT-F9 + the pagination benchmarking pass. NOW genuinely unblocked —
      F11's unbounded request walk was the thing that would have poisoned any
      request-count measurement, and it is fixed.
@@ -324,7 +339,7 @@ artefact, not a safety signal — cross-check with grep. Two separate indexes;
 detect_changes() on the parent cannot see inside worker/, use
 repo: "manga-tl-worker" there.
 
-GATE: mvn -o clean verify (not test) — 424 passing. Frontend: vitest RUN FROM
+GATE: mvn -o clean verify (not test) — 426 passing. Frontend: vitest RUN FROM
 frontend/, 326 passing across 46 files. From the repo root it loads the wrong
 config and every test fails with "document is not defined" — that's a wrong
 cwd, not a regression. Worker gates untouched, still at 315.

@@ -73,6 +73,33 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-07 nineteenth sitting — AUDIT-B11
+
+One line of `application.yml`, but verified rather than assumed.
+`spring.data.web.pageable.max-page-size: 100` under `spring.data.web.pageable`. The finding was
+correct as filed: `@PageableDefault(size = ...)` on `listSeries`/`listChapters`/`listPages` sets
+only the default, so `?size=2000` overrode it and got Spring's own ceiling of 2000 — the
+unbounded list response AUDIT-F8 existed to remove, still one query parameter away. 100 is
+generous against batch sizes of 10/15/25, and a grep confirmed no caller in either
+`backend/src` or `frontend/src` asks for more.
+
+**Proven red before the fix**, by stashing the config and running the new test against the real
+resolver: `expected: <100> but was: <2000>`.
+
+**This is the one pagination question a `@WebMvcTest` can actually answer, and it is worth being
+precise about why** — the standing constraint says a `@WebMvcTest` with a mocked repository
+proves very little, and that remains true for AUDIT-B10. But `max-page-size` is applied by
+`PageableHandlerMethodArgumentResolver` *before the controller method runs*, so the cap is
+already visible in the `Pageable` the mocked repository is handed. Nothing about the assertion
+depends on what Spring Data would subsequently do with that `Pageable`. The distinction is the
+layer the behaviour lives in, not the annotation on the test class. AUDIT-B10's sort validation
+fails that test — whether a `Sort` composes sanely with a derived query's `OrderBy` is Spring
+Data's business — which is why it still needs `@SpringBootTest` + Testcontainers and a live
+measurement first.
+
+Two tests: the cap clamps `?size=2000` to 100, and `?size=50` is still honoured (a cap that
+pinned every request to 100 would also pass the first test alone). Backend 424 → **426**.
+
 ### The 2026-08-07 nineteenth sitting — AUDIT-F10 + F11 + F12
 
 The eighteenth sitting's two `[H]` regressions and the `[M]` next to them, closed as one unit

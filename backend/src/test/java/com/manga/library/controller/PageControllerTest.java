@@ -184,6 +184,58 @@ public class PageControllerTest {
     org.junit.jupiter.api.Assertions.assertEquals(0, captor.getValue().getPageNumber());
   }
 
+  /**
+   * AUDIT-B11. {@code @PageableDefault(size = 25)} sets only the default — a caller passing
+   * {@code ?size=2000} overrode it and got Spring's own ceiling of 2000, which is the unbounded
+   * list response AUDIT-F8 existed to remove, one query parameter away.
+   *
+   * <p>Unlike the sort question in AUDIT-B10, a {@code @WebMvcTest} really can prove this one:
+   * {@code spring.data.web.pageable.max-page-size} is applied by {@code
+   * PageableHandlerMethodArgumentResolver} before the controller runs, so the cap is visible in
+   * the {@code Pageable} the (mocked) repository is handed. Nothing here depends on what Spring
+   * Data would do with it.
+   */
+  @Test
+  public void testListPages_SizeIsCappedAtTheConfiguredMaximum() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(eq(chapterId), captor.capture()))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                Collections.emptyList(),
+                org.springframework.data.domain.PageRequest.of(0, 100),
+                0));
+
+    mockMvc
+        .perform(get("/api/chapters/" + chapterId + "/pages").param("size", "2000"))
+        .andExpect(status().isOk());
+
+    org.junit.jupiter.api.Assertions.assertEquals(100, captor.getValue().getPageSize());
+  }
+
+  /** AUDIT-B11: a size below the ceiling is still honoured — the cap clamps, it doesn't pin. */
+  @Test
+  public void testListPages_SizeBelowTheCeilingIsHonoured() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+
+    when(pageRepository.findByChapterIdOrderByPageNumberAsc(eq(chapterId), captor.capture()))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                Collections.emptyList(),
+                org.springframework.data.domain.PageRequest.of(0, 50),
+                0));
+
+    mockMvc
+        .perform(get("/api/chapters/" + chapterId + "/pages").param("size", "50"))
+        .andExpect(status().isOk());
+
+    org.junit.jupiter.api.Assertions.assertEquals(50, captor.getValue().getPageSize());
+  }
+
   @Test
   public void testListPages_BoundaryPage_PartialFinalPage() throws Exception {
     UUID chapterId = UUID.randomUUID();
