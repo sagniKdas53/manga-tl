@@ -1,0 +1,13 @@
+{
+  "source_image": "examples/sample36/source/GhSomnxbIAEPKVw.jpg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample36/reference/HPCfmSdXoAAbaPf.jpg",
+  "reference_provenance": "human",
+  "reference_translations": {
+    "r1": "WHO~? GUESS",
+    "r2": "TRAI-",
+    "r3": "I CAN KEEP TOUCH FOR LONGER...! IF I JUST TRAINER'S ANSWER, A LITTLE GENIUS!) FEELING ...WAIT, CI'M A DON'T",
+    "r4": "...STILL?? STILL?",
+    "r5": null
+  }
+}

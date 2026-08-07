@@ -1,0 +1,82 @@
+{
+  "case_id": "sample4__untranslated",
+  "sample_id": "sample4",
+  "defect_class": "untranslated",
+  "mutated_region_ids": [
+    "r2"
+  ],
+  "region_count": 8,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "迷路了吗？我带你出去吧°所以永远亭里面那些家伙都警告过啊’正常人别随随便便进竹林°",
+      "ocrScore": 0.95,
+      "translatedText": "EIENTEI WARNED NORMAL FOLKS JUST WANDER OUT. THAT'S WHY THOSE EVERYONE- LOST YOUR SHOULDN'T PEOPLE AT SHOW YOU WAY? I'LL INTO THE BAMBOO GROVE.",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "顺便路上就帮我一起采点竹笋吧’就当是带路的费用了°竹林引路人型",
+      "ocrScore": 0.95,
+      "translatedText": "顺便路上就帮我一起采点竹笋吧’就当是带路的费用了°竹林引路人型",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "形象",
+      "ocrScore": 0.95,
+      "translatedText": "APPEARANCE",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "自己死不掉的同时还能保护好别人想进入迷途竹林的话绕不开她这一关心灵细腻又观察力强的类型我就一个带路的能有什么坏心思？靠谱的大姐姐很少主动挑起话题，但不抗拒聊天度：3量：5词智战首社黑台词量黑幕度",
+      "ocrScore": 0.95,
+      "translatedText": "CONSPIRACY APPEARANCE; LINES LEVEL INTELLIGENCE; 7 SOCIAL; 6 CONSPIRACY COMBAT; 8 LEVEL; 3 LINES; 5 6 COULD I HAVE? RARELY STARTS TOPICS, BUT BAMBOO FOREST, YOU CAN'T GET PAST HER. THE TYPE WHO CAN'T DIE THEMSELVES BUT CAN STILL PROTECT OTHERS WELL, WITH A DELICATE MIND AND STRONG OBSERVATION I'M JUST A GUIDE, WHAT BAD INTENTIONS SKILLS. IF YOU WANT TO ENTER THE LOST DOESN'T MIND CHATTING, A RELIABLE BIG SISTER.",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "智力",
+      "ocrScore": 0.95,
+      "translatedText": "INTELLIGENCE",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "战斗力",
+      "ocrScore": 0.95,
+      "translatedText": "战斗力",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "编绘：裂缝DM",
+      "ocrScore": 0.95,
+      "translatedText": "ILLUSTRATED BY WRITTEN AND",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "社交",
+      "ocrScore": 0.95,
+      "translatedText": "SOCIAL",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample4/source/original.png",
+    "render": "examples/sample4/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "mangatranslator.ai"
+}

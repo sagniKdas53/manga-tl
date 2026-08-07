@@ -1,0 +1,205 @@
+{
+  "seed": 1337,
+  "defect_classes": [
+    "control",
+    "mistranslation",
+    "untranslated",
+    "ocr_garbage",
+    "ocr_unrecoverable",
+    "order_swap",
+    "sfx_translated"
+  ],
+  "samples": [
+    {
+      "sample_id": "sample1",
+      "status": "OK",
+      "detail": "7 cases, 4 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample2",
+      "status": "OK",
+      "detail": "7 cases, 3 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample3",
+      "status": "OK",
+      "detail": "7 cases, 9 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample4",
+      "status": "OK",
+      "detail": "7 cases, 8 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample6",
+      "status": "OK",
+      "detail": "7 cases, 3 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample7",
+      "status": "OK",
+      "detail": "7 cases, 15 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample8",
+      "status": "OK",
+      "detail": "7 cases, 3 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample9",
+      "status": "OK",
+      "detail": "7 cases, 11 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample10",
+      "status": "OK",
+      "detail": "7 cases, 11 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample11",
+      "status": "OK",
+      "detail": "7 cases, 4 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample12",
+      "status": "OK",
+      "detail": "7 cases, 10 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample13",
+      "status": "OK",
+      "detail": "7 cases, 10 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample14",
+      "status": "OK",
+      "detail": "7 cases, 3 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample15",
+      "status": "OK",
+      "detail": "7 cases, 11 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample16",
+      "status": "OK",
+      "detail": "7 cases, 7 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample17",
+      "status": "OK",
+      "detail": "7 cases, 6 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample18",
+      "status": "OK",
+      "detail": "7 cases, 4 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample19",
+      "status": "OK",
+      "detail": "7 cases, 5 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample20",
+      "status": "SKIPPED",
+      "detail": "fewer than 3 regions with an aligned reference translation"
+    },
+    {
+      "sample_id": "sample21",
+      "status": "OK",
+      "detail": "7 cases, 4 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample23",
+      "status": "SKIPPED",
+      "detail": "fewer than 3 regions with an aligned reference translation"
+    },
+    {
+      "sample_id": "sample24",
+      "status": "OK",
+      "detail": "7 cases, 6 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample25",
+      "status": "SKIPPED",
+      "detail": "fewer than 3 regions with an aligned reference translation"
+    },
+    {
+      "sample_id": "sample26",
+      "status": "OK",
+      "detail": "7 cases, 3 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample27",
+      "status": "OK",
+      "detail": "7 cases, 12 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample28",
+      "status": "OK",
+      "detail": "7 cases, 8 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample29",
+      "status": "OK",
+      "detail": "7 cases, 8 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample30",
+      "status": "OK",
+      "detail": "7 cases, 7 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample31",
+      "status": "OK",
+      "detail": "7 cases, 4 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample32",
+      "status": "OK",
+      "detail": "7 cases, 6 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample33",
+      "status": "OK",
+      "detail": "7 cases, 3 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample34",
+      "status": "OK",
+      "detail": "7 cases, 13 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample35",
+      "status": "OK",
+      "detail": "7 cases, 6 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample36",
+      "status": "OK",
+      "detail": "7 cases, 4 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample37",
+      "status": "OK",
+      "detail": "7 cases, 6 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample38",
+      "status": "OK",
+      "detail": "7 cases, 11 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample39",
+      "status": "OK",
+      "detail": "7 cases, 11 regions, no bboxes (LLM arm only), images"
+    },
+    {
+      "sample_id": "sample40",
+      "status": "OK",
+      "detail": "7 cases, 8 regions, no bboxes (LLM arm only), images"
+    }
+  ],
+  "note": "Typesetting/overflow defects are not injected — they require re-rendering the page, not mutating metadata. The VLM arm measures semantic and OCR review only."
+}

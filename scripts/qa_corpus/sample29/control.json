@@ -1,0 +1,80 @@
+{
+  "case_id": "sample29__control",
+  "sample_id": "sample29",
+  "defect_class": "control",
+  "mutated_region_ids": [],
+  "region_count": 8,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "何かしらの事件で2人の…",
+      "ocrScore": 0.95,
+      "translatedText": "INCIDENT, KIND OF DUETO TWO... THESE SOME",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "中身が入れ変わちゃった!",
+      "ocrScore": 0.95,
+      "translatedText": "SWITCHING ENDED UP BODIES! THEIR",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "ホタル!この機会にお願いだ!",
+      "ocrScore": 0.95,
+      "translatedText": "I HAVE THIS A FAVOR TO ASK WHILE FIREFLY! I'VE GOT CHANCE! PLEASE,",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "俺サムに変身したいっ!",
+      "ocrScore": 0.95,
+      "translatedText": "TRANSFORM I WANT TO INTO SAM!",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "いや…それはほら：",
+      "ocrScore": 0.95,
+      "translatedText": "Fidget",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "スッに着替えないといけないし：",
+      "ocrScore": 0.95,
+      "translatedText": "BEFORE YOU PUT ON THE HAVE TO CLOTHES CHANGE SUIT... FIRST YOU UMM, FOR Fidget THAT... NO...",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "わかった!脱いだぞ!",
+      "ocrScore": 0.95,
+      "translatedText": "GOT IT! I TOOK THEM OFF!",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "やめてえええええ之",
+      "ocrScore": 0.95,
+      "translatedText": "00 00 00 00 00 OP ST",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample29/source/original.3.jpeg",
+    "render": "examples/sample29/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

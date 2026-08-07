@@ -4,18 +4,18 @@
     "panel": 1,
     "bubble": 1,
     "speaker": null,
-    "regionType": "sign",
+    "regionType": "speech",
     "conversationGroup": null,
-    "text": "肛門認証エラー"
+    "text": "青いシグラスー"
   },
   {
     "id": "r2",
     "panel": 1,
     "bubble": 2,
     "speaker": null,
-    "regionType": "sign",
+    "regionType": "speech",
     "conversationGroup": null,
-    "text": "シェフィールドに酷似してますが若干の差異が見られます"
+    "text": "そうきれいな青"
   },
   {
     "id": "r3",
@@ -23,8 +23,8 @@
     "bubble": 3,
     "speaker": null,
     "regionType": "speech",
-    "conversationGroup": "rant",
-    "text": "あの　バカ指揮官…"
+    "conversationGroup": null,
+    "text": "そういえば漂流物が好きな"
   },
   {
     "id": "r4",
@@ -32,8 +32,8 @@
     "bubble": 4,
     "speaker": null,
     "regionType": "speech",
-    "conversationGroup": "rant",
-    "text": "やはり殺しておくべきでした…!"
+    "conversationGroup": null,
+    "text": "うん"
   },
   {
     "id": "r5",
@@ -41,8 +41,8 @@
     "bubble": 5,
     "speaker": null,
     "regionType": "speech",
-    "conversationGroup": "rant",
-    "text": "なにが「肛門認証に変えたから♥」ですか…!"
+    "conversationGroup": null,
+    "text": "どこから来たのかわからないものが"
   },
   {
     "id": "r6",
@@ -50,16 +50,34 @@
     "bubble": 6,
     "speaker": null,
     "regionType": "speech",
-    "conversationGroup": "rant",
-    "text": "てか毎晩いじるからエラー出ちゃってるし…!"
+    "conversationGroup": null,
+    "text": "偶然アタシの前に流れ着いてさ"
   },
   {
     "id": "r7",
     "panel": 1,
     "bubble": 7,
     "speaker": null,
-    "regionType": "sfx",
+    "regionType": "speech",
     "conversationGroup": null,
-    "text": "プルプル"
+    "text": "そう聞くとロマンチックかも"
+  },
+  {
+    "id": "r8",
+    "panel": 1,
+    "bubble": 8,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ロマンチツクだよ"
+  },
+  {
+    "id": "r9",
+    "panel": 1,
+    "bubble": 9,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "だうてほら"
   }
 ]

@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample32/121831159-0.jpg",
-  "reference_image": "examples/sample32/en-121831159-0.jpg",
-  "reference_provenance": "en-121831159-0.jpg",
+  "source_image": "examples/sample32/source/121831159-0.jpg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample32/reference/en-121831159-0.jpg",
+  "reference_provenance": "mangatranslator.ai",
   "reference_translations": {
     "r1": "SENSEI. ALONG, NOW... LOVED FROM I... I LOVE UNTIL YOU, PAST I'VE YOU ALL THE",
     "r2": "GUSHIRATTO? YOUR NAME TO CHANGE DON'T YOU EVER PLAN TO OXY- SENSEI,",

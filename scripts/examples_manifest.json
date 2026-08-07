@@ -1,0 +1,864 @@
+{
+  "_comment": "Durable role/provenance map for examples/. examples/ is gitignored and purged from history, so this file is the only committed record of which image plays which role in each sample. examples/sampleN/meta.json is generated from it. NOTE: '(copy 1)' files are mangatranslate.com renders that collided with the source filename on download — they are references, not duplicates. On sample24 and sample25 the roles are inverted (plain name = English).",
+  "provenance_vocabulary": [
+    "human",
+    "mangatranslator.ai",
+    "mangatranslate.com",
+    "mangatranslate.online",
+    "google-lens",
+    "local",
+    "manually-edited"
+  ],
+  "samples": {
+    "sample1": {
+      "sfw": true,
+      "source": {
+        "file": "original.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-google-lens.jpg",
+          "lang": "en",
+          "provenance": "google-lens"
+        },
+        {
+          "file": "en-mangatranslate.com.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        },
+        {
+          "file": "en-mangatranslate.online.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslate.online"
+        },
+        {
+          "file": "en-mangatranslator.ai.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-1-export(3).png",
+        "worker_render": "page-1-rendered(2).png",
+        "project": "page-1-layers(2).zip"
+      },
+      "notes": ""
+    },
+    "sample2": {
+      "sfw": true,
+      "source": {
+        "file": "original.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-local.png",
+          "lang": "en",
+          "provenance": "local"
+        },
+        {
+          "file": "en-mangatranslator.ai.jpg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        },
+        {
+          "file": "manually-edited.png",
+          "lang": "en",
+          "provenance": "manually-edited"
+        },
+        {
+          "file": "original (copy 1).jpg",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-2-export(2).png",
+        "worker_render": "page-2-rendered(2).png",
+        "project": "page-2-layers(2).zip"
+      },
+      "notes": ""
+    },
+    "sample3": {
+      "sfw": true,
+      "source": {
+        "file": "HM8EpisaIAAUhSd.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-HM8EpisaIAAUhSd.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        },
+        {
+          "file": "HNH3MvUXoAAQko3.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-5-export(2).png",
+        "worker_render": "page-5-rendered.png",
+        "project": "page-5-layers(2).zip"
+      },
+      "notes": ""
+    },
+    "sample4": {
+      "sfw": true,
+      "source": {
+        "file": "original.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-mangatranslator.ai.png",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-4-export(2).png",
+        "worker_render": "page-4-rendered.png",
+        "project": "page-4-layers(2).zip"
+      },
+      "notes": "When using with a cloud VLM the image only-detected-the-dialog-boxes-ignored-the-rest"
+    },
+    "sample5": {
+      "sfw": true,
+      "source": {
+        "file": "original.png",
+        "lang": "ja"
+      },
+      "references": [],
+      "output": {
+        "frontend_export": "page-5-export(2).png",
+        "worker_render": "page-5-rendered.png",
+        "project": "page-5-layers(2).zip"
+      },
+      "notes": ""
+    },
+    "sample6": {
+      "sfw": true,
+      "source": {
+        "file": "orginal.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-6-export.png",
+        "worker_render": "page-6-rendered.png",
+        "project": "page-6-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample7": {
+      "sfw": true,
+      "source": {
+        "file": "original.5.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.2.png",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-7-export.png",
+        "worker_render": "page-7-rendered.png",
+        "project": "page-7-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample8": {
+      "sfw": true,
+      "source": {
+        "file": "original.4.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.2.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-8-export.png",
+        "worker_render": "page-8-rendered.png",
+        "project": "page-8-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample9": {
+      "sfw": true,
+      "source": {
+        "file": "orginal.2.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.4.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-9-export.png",
+        "worker_render": "page-9-rendered.png",
+        "project": "page-9-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample10": {
+      "sfw": true,
+      "source": {
+        "file": "orginal.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-orginal.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        },
+        {
+          "file": "human-tl.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-10-export.png",
+        "worker_render": "page-10-rendered.png",
+        "project": "page-10-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample11": {
+      "sfw": true,
+      "source": {
+        "file": "orginal.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl-sloppy.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-11-export.png",
+        "worker_render": "page-11-rendered.png",
+        "project": "page-11-layers.zip"
+      },
+      "notes": "Reference is a sloppy human typeset; expect noisier alignment."
+    },
+    "sample12": {
+      "sfw": true,
+      "source": {
+        "file": "original.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-12-export.png",
+        "worker_render": "page-12-rendered.png",
+        "project": "page-12-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample13": {
+      "sfw": true,
+      "source": {
+        "file": "original.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-13-export.png",
+        "worker_render": "page-13-rendered.png",
+        "project": "page-13-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample14": {
+      "sfw": true,
+      "source": {
+        "file": "orginal.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.png",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-14-export.png",
+        "worker_render": "page-14-rendered.png",
+        "project": "page-14-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample15": {
+      "sfw": true,
+      "source": {
+        "file": "orginal.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.png",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-15-export.png",
+        "worker_render": "page-15-rendered.png",
+        "project": "page-15-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample16": {
+      "sfw": true,
+      "source": {
+        "file": "original.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-16-export.png",
+        "worker_render": "page-16-rendered.png",
+        "project": "page-16-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample17": {
+      "sfw": true,
+      "source": {
+        "file": "0.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "1.jpg",
+          "lang": "en",
+          "provenance": "human",
+          "attribution": "@angrynum"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-3-export.png",
+        "worker_render": "page-3-rendered(2).png",
+        "project": "page-3-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample18": {
+      "sfw": true,
+      "source": {
+        "file": "original.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.png",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-18-export.png",
+        "worker_render": "page-18-rendered.png",
+        "project": "page-18-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample19": {
+      "sfw": true,
+      "source": {
+        "file": "original.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-HOiWQgKbsAAcpMc.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-3-export.png",
+        "worker_render": "page-3-rendered(2).png",
+        "project": "page-3-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample20": {
+      "sfw": true,
+      "source": {
+        "file": "HN5-X5UaoAAOOhE.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "HN7kEItXEAEueWo.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        },
+        {
+          "file": "HN5-X5UaoAAOOhE (copy 1).jpeg",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-4-export(3).png",
+        "worker_render": "page-4-rendered(1).png",
+        "project": "page-4-layers(3).zip"
+      },
+      "notes": ""
+    },
+    "sample21": {
+      "sfw": true,
+      "source": {
+        "file": "3.png",
+        "lang": "zh"
+      },
+      "references": [
+        {
+          "file": "3 (copy 1).png",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-5-export(2).png",
+        "worker_render": "page-5-rendered.png",
+        "project": "page-5-layers(2).zip"
+      },
+      "notes": "Source is Chinese (zh), not Japanese — the only non-ja page in examples/. Exclude from ja-only corpus runs or set --source-lang zh."
+    },
+    "sample22": {
+      "sfw": true,
+      "source": {
+        "file": "original.jpg",
+        "lang": "ja"
+      },
+      "references": [],
+      "output": {
+        "frontend_export": "page-22-export.png",
+        "worker_render": "page-22-rendered(1).png",
+        "project": "page-22-layers.zip"
+      },
+      "notes": "Dated leftover export, no reference render available."
+    },
+    "sample23": {
+      "sfw": true,
+      "source": {
+        "file": "HOGFKkFbMAAMoxu.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-HOGFKkFbMAAMoxu.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        },
+        {
+          "file": "HOGFKkFbMAAMoxu (copy 1).jpeg",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-4-export(2).png",
+        "worker_render": "page-4-rendered.png",
+        "project": "page-4-layers(2).zip"
+      },
+      "notes": ""
+    },
+    "sample24": {
+      "sfw": true,
+      "source": {
+        "file": "532354fb9861565d3a90b1d56fad52549bf5d363 (copy 1).jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "532354fb9861565d3a90b1d56fad52549bf5d363.jpg",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-9-export.png",
+        "worker_render": "page-9-rendered.png",
+        "project": "page-9-layers.zip"
+      },
+      "notes": "Filenames are inverted: the plain filename is the English render and the '(copy 1)' is the Japanese source. Verified visually."
+    },
+    "sample25": {
+      "sfw": true,
+      "source": {
+        "file": "437a87c3634694355b88292dc315597398909b06 (copy 1).jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "437a87c3634694355b88292dc315597398909b06.jpg",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-8-export.png",
+        "worker_render": "page-8-rendered.png",
+        "project": "page-8-layers.zip"
+      },
+      "notes": "Filenames are inverted: the plain filename is the English render and the '(copy 1)' is the Japanese source. Verified visually."
+    },
+    "sample26": {
+      "sfw": true,
+      "source": {
+        "file": "142528201-0.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-142528201-0.jpg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-8-export.png",
+        "worker_render": "page-8-rendered.png",
+        "project": "page-8-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample27": {
+      "sfw": true,
+      "source": {
+        "file": "HNJNqLGbcAA_JBg.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "HONiqFSWkAAVWaI.jpeg",
+          "lang": "en",
+          "provenance": "human",
+          "attribution": "OG @yuyuyuyu9250, TL @Wertyuiop14 & @Player1_Please"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-3-export.png",
+        "worker_render": "page-3-rendered(2).png",
+        "project": "page-3-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample28": {
+      "sfw": true,
+      "source": {
+        "file": "HN5iU6qaEAAAYLo.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "HN7dL-VXgAAqNW_.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-2-export(2).png",
+        "worker_render": "page-2-rendered(2).png",
+        "project": "page-2-layers(2).zip"
+      },
+      "notes": ""
+    },
+    "sample29": {
+      "sfw": true,
+      "source": {
+        "file": "original.3.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-29-export.png",
+        "worker_render": "page-29-rendered.png",
+        "project": "page-29-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample30": {
+      "sfw": true,
+      "source": {
+        "file": "HN_OVsabcAA2-0t.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-HN_OVsabcAA2-0t.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        },
+        {
+          "file": "HOFxwnKWcAA1CH1.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-3-export.png",
+        "worker_render": "page-3-rendered(2).png",
+        "project": "page-3-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample31": {
+      "sfw": true,
+      "source": {
+        "file": "HOD7g4-bMAAXGLG.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "HOE0stWaQAA8a2n.jpeg",
+          "lang": "en",
+          "provenance": "human",
+          "attribution": "TL Adventzx, @nodati53"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-9-export.png",
+        "worker_render": "page-9-rendered.png",
+        "project": "page-9-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample32": {
+      "sfw": true,
+      "source": {
+        "file": "121831159-0.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-121831159-0.jpg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-1-export(3).png",
+        "worker_render": "page-1-rendered(2).png",
+        "project": "page-1-layers(2).zip"
+      },
+      "notes": ""
+    },
+    "sample33": {
+      "sfw": true,
+      "source": {
+        "file": "121213393-0.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-121213393-0.jpg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-2-export(2).png",
+        "worker_render": "page-2-rendered(2).png",
+        "project": "page-2-layers(2).zip"
+      },
+      "notes": ""
+    },
+    "sample34": {
+      "sfw": true,
+      "source": {
+        "file": "GsdYUt8b0AUpzsE.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "HPAP_YkakAAYNwp.jpg",
+          "lang": "en",
+          "provenance": "human",
+          "attribution": "artist @kaede_fortune, TS+TL u/duoblue"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-3-export.png",
+        "worker_render": "page-3-rendered(2).png",
+        "project": "page-3-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample35": {
+      "sfw": true,
+      "source": {
+        "file": "HPAgSMOaQAAPIrS.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "HPA1RGOWoAAslOV.jpg",
+          "lang": "en",
+          "provenance": "human",
+          "attribution": "artist @172cmtese, TL @sparklight553"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-6-export.png",
+        "worker_render": "page-6-rendered.png",
+        "project": "page-6-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample36": {
+      "sfw": true,
+      "source": {
+        "file": "GhSomnxbIAEPKVw.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "HPCfmSdXoAAbaPf.jpg",
+          "lang": "en",
+          "provenance": "human",
+          "attribution": "artist @sasasaikaaa"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-7-export.png",
+        "worker_render": "page-7-rendered.png",
+        "project": "page-7-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample37": {
+      "sfw": true,
+      "source": {
+        "file": "FOiznJ2VQAIIlw0.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "HPCVCYSaIAAAt0l.jpg",
+          "lang": "en",
+          "provenance": "human",
+          "attribution": "credit @mkyk_teapot, TL aceinflame31"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-12-export.png",
+        "worker_render": "page-12-rendered.png",
+        "project": "page-12-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample38": {
+      "sfw": true,
+      "source": {
+        "file": "HO7MBkKbcAA0DhO.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-HO7MBkKbcAA0DhO.jpg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-15-export.png",
+        "worker_render": "page-15-rendered.png",
+        "project": "page-15-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample39": {
+      "sfw": true,
+      "source": {
+        "file": "HPFfGIba4AAMTN4 (1).jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-HPFfGIba4AAMTN4 (1).jpg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-14-export.png",
+        "worker_render": "page-14-rendered.png",
+        "project": "page-14-layers.zip"
+      },
+      "notes": ""
+    },
+    "sample40": {
+      "sfw": true,
+      "source": {
+        "file": "0cb985a2-fa1a-4ab0-8526-2c006c380fe5.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-0cb985a2-fa1a-4ab0-8526-2c006c380fe5.jpg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-16-export.png",
+        "worker_render": "page-16-rendered.png",
+        "project": "page-16-layers.zip"
+      },
+      "notes": ""
+    }
+  }
+}

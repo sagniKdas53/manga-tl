@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -73,22 +74,26 @@ def score(original: Path, render: Path) -> dict[str, float]:
 
 
 def _suite(root: Path) -> int:
-    """Score every examples/sampleN directory that has an original and one of our exports."""
-    ours_globs = ("page-*-export*.png", "page-*-rendered*.png")
-    original_stems = ("original", "orginal")  # the set contains both spellings
+    """Score every examples/sampleN that has a source page and one of our renders.
+
+    Source and render come from the sample's meta.json (written by scripts/organize_examples.py)
+    rather than from filename guessing — the old "original"/"orginal" stem sniffing picked the
+    English page as the source on several samples.
+    """
     rows: list[tuple[str, str, float, float]] = []
 
     for sample in sorted(root.glob("sample*"), key=lambda p: (len(p.name), p.name)):
-        files = [p for p in sample.iterdir() if p.is_file()]
-        originals = [p for p in files if p.stem.split(".")[0] in original_stems]
-        if not originals:
-            # Some samples name the source page after its upload id rather than "original", but
-            # every one of those carries a hand-made `en-<same name>` reference beside it.
-            names = {p.name for p in files}
-            originals = [p for p in files if f"en-{p.name}" in names]
-        if not originals:
+        meta_path = sample / "meta.json"
+        if not meta_path.is_file():
             continue
-        renders = [p for g in ours_globs for p in sorted(sample.glob(g))]
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        source = sample / meta["source"]["file"]
+        if not source.is_file():
+            print(f"{sample.name}: source {source.name} missing", file=sys.stderr)
+            continue
+        renders = [sample / rel for key, rel in meta.get("output", {}).items()
+                   if key in ("frontend_export", "worker_render") and (sample / rel).is_file()]
+        originals = [source]
         for render in renders:
             try:
                 s = score(originals[0], render)

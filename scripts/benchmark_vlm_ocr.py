@@ -1,4 +1,35 @@
+"""
+benchmark_vlm_ocr.py — Repeatable OCR-stage benchmark across every vision model in
+config/providers.json, run against every page in scripts/ocr_corpus/.
+
+Mirrors benchmark_translation.py: corpus-driven rather than single-image, scored against
+ground truth rather than eyeballed, and everything lands under --out-dir with a _summary.json
+instead of scattering demo JPEGs into the working directory.
+
+Two things it measures that the previous version could not:
+  * Accuracy. Mean CER and exact-match rate per model against scripts/ocr_corpus/'s
+    regions.json (gold or multi-engine-consensus text) — previously there was no ground truth
+    at all, so a run only told you a model returned *something*.
+  * Real structured-output support, via bench_common.run_ladder's json_schema -> json_object
+    -> none ladder. The old code hardcoded response_format=json_object with no retry, so a
+    model supporting only json_schema, or only plain prompting, looked like a hard failure.
+
+Usage:
+    # Quick smoke test on the corpus baseline page
+    python scripts/benchmark_vlm_ocr.py --provider openrouter --out-dir /tmp/ocrbench
+
+    # Every free vision model over the whole corpus
+    python scripts/benchmark_vlm_ocr.py --corpus-subset all --out-dir runs/ocr-2026-08
+
+    # One-off page outside the corpus (no accuracy scoring — no ground truth to score against)
+    python scripts/benchmark_vlm_ocr.py --image examples/sample36/source/GhSomnxbIAEPKVw.jpg \
+        --out-dir /tmp/ocrbench
+
+See docs/run_ocr_bench.md for methodology and how to read the output.
+"""
+
 import os
+import re
 import sys
 import cv2
 import json
@@ -19,6 +50,14 @@ from provider_config import (  # noqa: E402
     list_candidate_models,
     list_specialized_models,
 )
+from bench_common import (  # noqa: E402
+    apply_response_format,
+    run_ladder,
+    cer,
+    normalize_text,
+    iou,
+    print_summary_table,
+)
 
 # worker/src is where worker.* actually lives (see scripts/build_translation_corpus.py's
 # same fix) — this previously pointed at a nonexistent ../../unified-workers, which silently
@@ -34,6 +73,12 @@ except ImportError:
 load_env(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env')))
 
 DEFAULT_PROVIDERS_CONFIG = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "config", "providers.json"))
+DEFAULT_CORPUS_DIR = os.path.join(SCRIPT_DIR, "ocr_corpus")
+
+# The corpus baseline page — the smoke-test default, mirroring benchmark_translation.py's
+# QUICK_SUBSET. sample36 is a clean 3-panel layout with well-separated bubbles and an
+# attributed human reference.
+QUICK_SUBSET = ["sample36"]
 
 # nemotron-ocr-v2 (and any future entry under a provider's models.ocr_specialized_non_chat)
 # is a dedicated computer-vision endpoint, not an OpenAI-style chat completion — it takes a
@@ -43,22 +88,22 @@ DEFAULT_PROVIDERS_CONFIG = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "confi
 # special-case it here instead of trying to force it through the generic chat call path.
 NVIDIA_OCR_URL = "https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2"
 
+# The response contract the prompt below asks for. Passed to the json_schema rung of the
+# structured-output ladder; the json_object and none rungs fall back to prompt-only compliance.
+OCR_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "text": {"type": "string"},
+        "language": {"type": "string"},
+        "writing_direction": {"type": "string", "enum": ["horizontal", "vertical"]},
+    },
+    "required": ["text", "language", "writing_direction"],
+    "additionalProperties": False,
+}
 
-def call_vlm_ocr(image_crop, provider_name, provider_cfg, model_id, language):
-    """Call a chat-completion-shaped VLM API with the bubble crop. Models under a provider's
-    models.ocr_specialized_non_chat (e.g. nemotron-ocr-v2) don't go through this — see
-    call_nvidia_ocr_v2() and main()'s specialized-model loop instead."""
-    try:
-        url = resolve_base_url(provider_cfg["baseUrl"])
-        headers = build_headers(provider_cfg)
-    except ValueError as e:
-        return {"error": str(e)}
 
-    # Encode crop
-    _, buffer = cv2.imencode('.jpg', image_crop)
-    base64_image = base64.b64encode(buffer).decode('utf-8')
-
-    prompt = f"""You are an OCR engine processing {language} manga.
+def build_ocr_prompt(language):
+    return f"""You are an OCR engine processing {language} manga.
 Extract every visible character from this speech bubble.
 Return JSON only.
 {{
@@ -70,54 +115,54 @@ Do not translate.
 Do not explain.
 Do not infer missing characters."""
 
-    payload = {
-        "model": model_id,
-        "messages": [
-            {
+
+def call_vlm_ocr(image_crop, provider_name, provider_cfg, model_id, language, retries=1):
+    """Call a chat-completion-shaped VLM API with the bubble crop, walking the structured-output
+    ladder. Models under a provider's models.ocr_specialized_non_chat (e.g. nemotron-ocr-v2)
+    don't go through this — see call_nvidia_ocr_v2() and main()'s specialized-model loop."""
+    try:
+        url = resolve_base_url(provider_cfg["baseUrl"])
+        headers = build_headers(provider_cfg)
+    except ValueError as e:
+        return {"error": str(e)}
+
+    ok, buffer = cv2.imencode('.jpg', image_crop)
+    if not ok:
+        return {"error": "cv2.imencode failed on crop"}
+    base64_image = base64.b64encode(buffer).decode('utf-8')
+    prompt = build_ocr_prompt(language)
+
+    def build_payload(mode):
+        payload = {
+            "model": model_id,
+            "messages": [{
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                ]
-            }
-        ],
-        "response_format": {"type": "json_object"},
-    }
-    if provider_name == "openrouter":
-        payload["plugins"] = [{"id": "response-healing"}]
-
-    start_time = time.time()
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-
-        # Clean markdown formatting if present
-        content = content.strip()
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.startswith("```"):
-            content = content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-
-        parsed = json.loads(content.strip())
-
-        usage = data.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-
-        return {
-            "result": parsed,
-            "time": time.time() - start_time,
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                ],
+            }],
         }
-    except Exception as e:
-        print(f"  [!] API Error ({model_id}): {e}")
-        return {"error": str(e), "time": time.time() - start_time}
+        if provider_name == "openrouter":
+            payload["plugins"] = [{"id": "response-healing"}]
+        return apply_response_format(payload, mode, OCR_JSON_SCHEMA)
+
+    outcome = run_ladder(url, headers, build_payload, retries=retries, timeout=60)
+    if outcome["status"] != "ok":
+        last = outcome["attempts_log"][-1]["error"] if outcome["attempts_log"] else "unknown"
+        return {"error": last, "attempts_log": outcome["attempts_log"]}
+
+    result = outcome["result"]
+    if not isinstance(result, dict):
+        return {"error": f"expected a JSON object, got {type(result).__name__}"}
+    return {
+        "result": result,
+        "time": outcome["elapsed_s"],
+        "mode_used": outcome["mode_used"],
+        "prompt_tokens": outcome["prompt_tokens"],
+        "completion_tokens": outcome["completion_tokens"],
+    }
 
 
 def call_nvidia_ocr_v2(img, regions_list, nvidia_provider_cfg):
@@ -399,147 +444,343 @@ def get_all_text_regions(img, lang_key):
 
     return regions_list
 
+
+# ---------------------------------------------------------------------------
+# Corpus loading (scripts/ocr_corpus/<sampleId>/{page.webp,regions.json,meta.json})
+# ---------------------------------------------------------------------------
+
+def load_corpus_page(corpus_dir, sample_id):
+    base = os.path.join(corpus_dir, sample_id)
+    with open(os.path.join(base, "regions.json"), "r", encoding="utf-8") as f:
+        regions = json.load(f)
+    meta = {}
+    meta_path = os.path.join(base, "meta.json")
+    if os.path.exists(meta_path):
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+    page_path = os.path.join(base, "page.webp")
+    img = cv2.imdecode(np.fromfile(page_path, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        raise RuntimeError(f"could not decode {page_path}")
+    return img, regions, meta
+
+
+def resolve_corpus_pages(corpus_dir, subset, explicit_pages, quick_subset):
+    if explicit_pages:
+        return explicit_pages
+    if not os.path.isdir(corpus_dir):
+        return []
+    all_pages = sorted(
+        (d for d in os.listdir(corpus_dir)
+         if os.path.isdir(os.path.join(corpus_dir, d))
+         and os.path.exists(os.path.join(corpus_dir, d, "regions.json"))),
+        key=lambda d: int(re.sub(r"\D", "", d) or 0),
+    )
+    if subset == "all":
+        return all_pages
+    if subset == "quick":
+        return [p for p in quick_subset if p in all_pages] or all_pages[:1]
+    if subset == "clean":
+        # Pages whose ground truth is entirely gold or consensus — no unresolved regions.
+        clean = []
+        for p in all_pages:
+            _, regions, _ = load_corpus_page(corpus_dir, p)
+            if regions and all(r.get("tier") in ("gold", "consensus") for r in regions):
+                clean.append(p)
+        return clean
+    raise ValueError(f"Unknown --corpus-subset {subset!r}")
+
+
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+
+def score_page(results, ground_truth):
+    """CER / exact-match of per-region OCR output against the corpus ground truth.
+
+    Regions whose ground-truth tier is "unresolved" are excluded — the consensus pass could not
+    agree on them, so scoring against that text would measure noise.
+    """
+    by_id = {g["id"]: g for g in ground_truth}
+    per_region, cers, exact = {}, [], 0
+    scored = 0
+    for res in results:
+        gt = by_id.get(res.get("id"))
+        if gt is None or gt.get("tier") == "unresolved":
+            per_region[res.get("id")] = None
+            continue
+        value = cer(res.get("text", ""), gt.get("text", ""))
+        per_region[res.get("id")] = value
+        if value is None:
+            continue
+        cers.append(value)
+        scored += 1
+        if normalize_text(res.get("text", "")) == normalize_text(gt.get("text", "")):
+            exact += 1
+    return {
+        "per_region_cer": per_region,
+        "mean_cer": round(sum(cers) / len(cers), 4) if cers else None,
+        "exact_match_rate": round(exact / scored, 4) if scored else None,
+        "scored_region_count": scored,
+    }
+
+
+def crop_for_region(img, bbox, pad=10):
+    x, y, w, h = bbox
+    px, py = max(0, x - pad), max(0, y - pad)
+    pw = min(img.shape[1] - px, w + 2 * pad)
+    ph = min(img.shape[0] - py, h + 2 * pad)
+    return img[py:py + ph, px:px + pw], [px, py, pw, ph]
+
+
+def run_model_on_page(img, regions_list, provider_name, provider_cfg, model_id, lang, sleep=0.0):
+    """OCR every region of one page with one chat-VLM model."""
+    results = []
+    total_time = 0.0
+    tokens_in = tokens_out = 0
+    modes = set()
+    errors = []
+
+    for i, item in enumerate(regions_list):
+        crop, padded = crop_for_region(img, item["bbox"])
+        if crop.size == 0:
+            errors.append(f"region {item.get('id', i)}: empty crop")
+            continue
+        res = call_vlm_ocr(crop, provider_name, provider_cfg, model_id, lang)
+        if "error" in res:
+            errors.append(f"region {item.get('id', i)}: {res['error']}")
+            results.append({"id": item.get("id"), "bbox": padded, "text": "",
+                            "language": "", "dir": "", "error": res["error"]})
+        else:
+            payload = res["result"]
+            total_time += res["time"]
+            tokens_in += res["prompt_tokens"]
+            tokens_out += res["completion_tokens"]
+            modes.add(res["mode_used"])
+            results.append({
+                "id": item.get("id"),
+                "bbox": padded,
+                "text": payload.get("text", "") or "",
+                "language": payload.get("language", "") or "",
+                "dir": payload.get("writing_direction", "") or "",
+                "mode_used": res["mode_used"],
+            })
+        if sleep:
+            time.sleep(sleep)
+
+    return {
+        "regions": results,
+        "total_time": round(total_time, 3),
+        "prompt_tokens": tokens_in,
+        "completion_tokens": tokens_out,
+        "modes_used": sorted(modes),
+        "errors": errors,
+    }
+
+
+def score_detection(results, ground_truth, threshold=0.5):
+    """For whole-page engines that do their own detection: IoU coverage of the corpus regions."""
+    matched = 0
+    for gt in ground_truth:
+        if any(iou(gt["bbox"], r["bbox"]) >= threshold for r in results):
+            matched += 1
+    return {
+        "detection_recall": round(matched / len(ground_truth), 4) if ground_truth else None,
+        "matched": matched,
+        "total": len(ground_truth),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
-    parser = argparse.ArgumentParser(description="Benchmark VLM OCR Models — driven by config/providers.json (or scripts/test-providers.json)")
-    parser.add_argument("--image", default="original.jpeg", help="Input image path")
-    parser.add_argument("--lang", default="Japanese", help="Source language (e.g. Japanese, Korean, English)")
+    parser = argparse.ArgumentParser(
+        description="Repeatable OCR benchmark across config/providers.json vision models "
+                    "and scripts/ocr_corpus/ pages")
+    parser.add_argument("--corpus-dir", default=DEFAULT_CORPUS_DIR)
+    parser.add_argument("--corpus-subset", choices=["quick", "clean", "all"], default="quick",
+                        help="quick=the baseline page only (default); clean=pages with no "
+                             "unresolved ground-truth regions; all=every corpus page")
+    parser.add_argument("--pages", help="Comma-separated corpus sample ids, overrides --corpus-subset")
+    parser.add_argument("--image", help="One-off page outside the corpus. Runs detection instead "
+                                        "of using corpus regions, and reports no accuracy scores.")
+    parser.add_argument("--lang", default="Japanese", help="Source language for the OCR prompt")
     parser.add_argument("--providers-config", default=DEFAULT_PROVIDERS_CONFIG,
-                         help="Path to a providers.json-shaped file. config/providers.json is the curated "
-                              "production list; scripts/test-providers.json is the wider, unvetted candidate pool.")
+                        help="Path to a providers.json-shaped file. config/providers.json is the "
+                             "curated production list; scripts/test-providers.json is the wider, "
+                             "unvetted candidate pool.")
     parser.add_argument("--provider", help="Only this provider (openrouter/cloudflare/nvidia)")
     parser.add_argument("--model", help="Only this model id")
     parser.add_argument("--free-only", action="store_true", default=True, help="Default: free models only")
     parser.add_argument("--include-paid", dest="free_only", action="store_false", help="Also test paid models")
     parser.add_argument("--skip-specialized", action="store_true",
-                         help="Skip provider models.ocr_specialized_non_chat entries (e.g. nemotron-ocr-v2)")
+                        help="Skip provider models.ocr_specialized_non_chat entries (e.g. nemotron-ocr-v2)")
+    parser.add_argument("--out-dir", required=True)
+    parser.add_argument("--sleep", type=float, default=0.0, help="Seconds between region requests")
+    parser.add_argument("--overlays", action="store_true", help="Also write annotated demo images")
     args = parser.parse_args()
 
-    img = cv2.imread(args.image)
-    if img is None:
-        print(f"Could not load image: {args.image}")
-        return
-
-    print("Running Consolidated Text Region Detection (Speech Bubbles + Background Direct Text)...")
-    regions_list = get_all_text_regions(img, args.lang)
-    print(f"Detected {len(regions_list)} text regions in total.")
-
-    if not regions_list:
-        return
-
     providers_cfg = load_providers_config(args.providers_config)
-    # models.ocr is pre-filtered to vision-capable models by whoever built the providers
-    # config (see docs/translation_bench.md and scripts/test-providers.json's generation
-    # notes) — this script trusts that filtering rather than re-deriving modality itself.
-    candidates = list(list_candidate_models(providers_cfg, "ocr", args.provider, not args.free_only, args.model))
+    # models.ocr is pre-filtered to vision-capable models by whoever built the providers config
+    # (see docs/translation_bench.md and scripts/test-providers.json's generation notes) — this
+    # script trusts that filtering rather than re-deriving modality itself.
+    candidates = list(list_candidate_models(providers_cfg, "ocr", args.provider,
+                                            not args.free_only, args.model))
     specialized = [] if args.skip_specialized else list(
         list_specialized_models(providers_cfg, "ocr_specialized_non_chat", args.provider, args.model)
     )
-
     if not candidates and not specialized:
         print("[ERROR] No matching OCR (VLM) models found in the providers config for the given filters.")
         print("        config/providers.json's 'ocr' lists are mostly paid — try --providers-config "
               "scripts/test-providers.json --include-paid, or narrow with --provider/--model.")
-        return
+        sys.exit(1)
 
-    print(f"\n[INFO] {len(candidates)} chat-VLM candidate(s), {len(specialized)} specialized non-chat candidate(s)")
+    # --- assemble the pages to run -------------------------------------------------
+    if args.image:
+        img = cv2.imdecode(np.fromfile(args.image, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if img is None:
+            sys.exit(f"[ERROR] Could not load image: {args.image}")
+        print("Running text region detection (speech bubbles + background direct text)...")
+        regions_list = get_all_text_regions(img, args.lang)
+        print(f"Detected {len(regions_list)} text regions.")
+        if not regions_list:
+            sys.exit("[ERROR] No text regions detected.")
+        pages = [("(one-off)", img, regions_list, None)]
+    else:
+        page_ids = args.pages.split(",") if args.pages else None
+        page_ids = resolve_corpus_pages(args.corpus_dir, args.corpus_subset, page_ids, QUICK_SUBSET)
+        if not page_ids:
+            print(f"[ERROR] No corpus pages resolved for subset={args.corpus_subset!r} in "
+                  f"{args.corpus_dir}. Run scripts/build_ocr_corpus.py first.")
+            sys.exit(1)
+        pages = []
+        for sample_id in page_ids:
+            img, regions, _meta = load_corpus_page(args.corpus_dir, sample_id)
+            pages.append((sample_id, img, regions, regions))
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    total_runs = (len(candidates) + len(specialized)) * len(pages)
+    print(f"\n[INFO] {len(candidates)} chat-VLM + {len(specialized)} specialized model(s) "
+          f"x {len(pages)} page(s) = {total_runs} run(s)")
+    print(f"[INFO] pages: {[p[0] for p in pages]}")
+
+    summary = []
+    run_index = 0
 
     for provider_name, provider_cfg, model_id, model_name, free in candidates:
-        free_label = " [FREE]" if free else " [PAID — pricing not tracked here, check the provider's pricing page]"
-        print(f"\n========================================")
-        print(f"Benchmarking Model: {provider_name}/{model_id}{free_label}")
-        if model_name != model_id:
-            print(f"Name: {model_name}")
-        print(f"========================================")
+        model_dir = os.path.join(args.out_dir, provider_name,
+                                 model_id.replace("/", "_").replace(":", "_"))
+        os.makedirs(model_dir, exist_ok=True)
+        page_scores = []
 
-        results = []
-        total_time = 0
-        total_input_tokens = 0
-        total_output_tokens = 0
-
-        for i, r_item in enumerate(regions_list):
-            x, y, w, h = r_item['bbox']
-            px, py = max(0, x - 10), max(0, y - 10)
-            pw, ph = min(img.shape[1] - px, w + 20), min(img.shape[0] - py, h + 20)
-
-            crop = img[py:py+ph, px:px+pw]
-
-            print(f"  -> Processing Region {i+1}/{len(regions_list)} ({r_item['type']}, Size: {pw}x{ph})")
-            res = call_vlm_ocr(crop, provider_name, provider_cfg, model_id, args.lang)
-
-            if "error" in res:
-                print(f"    Error: {res['error']}")
+        for sample_id, img, regions_list, ground_truth in pages:
+            run_index += 1
+            print(f"\n[{run_index}/{total_runs}] {provider_name}/{model_id}  page={sample_id}  "
+                  f"({len(regions_list)} regions)")
+            run = run_model_on_page(img, regions_list, provider_name, provider_cfg,
+                                    model_id, args.lang, sleep=args.sleep)
+            record = {"provider": provider_name, "model": model_id, "sample_id": sample_id, **run}
+            if ground_truth:
+                record["quality"] = score_page(run["regions"], ground_truth)
+                q = record["quality"]["mean_cer"]
+                print(f"  CER={q if q is not None else 'n/a'}  "
+                      f"exact={record['quality']['exact_match_rate']}  "
+                      f"modes={run['modes_used']}  {run['total_time']}s  "
+                      f"errors={len(run['errors'])}")
             else:
-                text = res['result'].get('text', '')
-                print(f"    Text: {text} | Time: {res['time']:.2f}s")
-                total_time += res['time']
-                total_input_tokens += res['prompt_tokens']
-                total_output_tokens += res['completion_tokens']
+                print(f"  modes={run['modes_used']}  {run['total_time']}s  errors={len(run['errors'])}")
 
-                results.append({
-                    "bbox": [px, py, pw, ph],
-                    "text": text,
-                    "language": res['result'].get('language', ''),
-                    "dir": res['result'].get('writing_direction', '')
-                })
+            with open(os.path.join(model_dir, f"{sample_id}.json"), "w", encoding="utf-8") as f:
+                json.dump(record, f, ensure_ascii=False, indent=2)
+            if args.overlays:
+                draw_results(img, run["regions"], os.path.join(model_dir, f"{sample_id}-overlay.jpg"),
+                             f"{provider_name}/{model_id}", {"Total Time": f"{run['total_time']}s"})
+            page_scores.append(record)
 
-        _report_and_save(img, results, regions_list, provider_name, model_id, free,
-                          total_time, total_input_tokens, total_output_tokens, args.image, args.lang)
+        summary.append(_summarize(provider_name, model_id, model_name, free, page_scores, pages))
 
     for provider_name, provider_cfg, model_id, model_name, note in specialized:
-        print(f"\n========================================")
-        print(f"Benchmarking Specialized Model: {provider_name}/{model_id}")
-        if note:
-            print(f"Note: {note}")
-        print(f"========================================")
-
         if model_id != "nvidia/nemotron-ocr-v2":
-            print(f"  [!] No special-case handler wired up for {model_id} yet — skipping. "
-                  f"Add one alongside call_nvidia_ocr_v2() if this is a new non-chat CV endpoint.")
+            print(f"\n[SKIP] No special-case handler wired up for {model_id} — add one alongside "
+                  f"call_nvidia_ocr_v2() if this is a new non-chat CV endpoint.")
             continue
-
         nvidia_cfg = providers_cfg["providers"].get("nvidia", provider_cfg)
-        results, total_time_or_err = call_nvidia_ocr_v2(img, regions_list, nvidia_cfg)
-        if results is None:
-            print(f"    Error: {total_time_or_err}")
-            continue
+        model_dir = os.path.join(args.out_dir, provider_name,
+                                 model_id.replace("/", "_").replace(":", "_"))
+        os.makedirs(model_dir, exist_ok=True)
+        page_scores = []
 
-        _report_and_save(img, results, regions_list, provider_name, model_id, True,
-                          total_time_or_err, 0, 0, args.image, args.lang)
+        for sample_id, img, regions_list, ground_truth in pages:
+            run_index += 1
+            print(f"\n[{run_index}/{total_runs}] {provider_name}/{model_id}  page={sample_id}")
+            results, elapsed_or_err = call_nvidia_ocr_v2(img, regions_list, nvidia_cfg)
+            if results is None:
+                print(f"  FAILED: {elapsed_or_err}")
+                page_scores.append({"provider": provider_name, "model": model_id,
+                                    "sample_id": sample_id, "regions": [], "total_time": 0,
+                                    "prompt_tokens": 0, "completion_tokens": 0,
+                                    "modes_used": [], "errors": [str(elapsed_or_err)]})
+                continue
+            for res, item in zip(results, regions_list):
+                res["id"] = item.get("id")
+            record = {"provider": provider_name, "model": model_id, "sample_id": sample_id,
+                      "regions": results, "total_time": round(elapsed_or_err, 3),
+                      "prompt_tokens": 0, "completion_tokens": 0,
+                      "modes_used": ["cv_endpoint"], "errors": []}
+            if ground_truth:
+                record["quality"] = score_page(results, ground_truth)
+                record["detection"] = score_detection(results, ground_truth)
+                print(f"  CER={record['quality']['mean_cer']}  "
+                      f"detection_recall={record['detection']['detection_recall']}")
+            with open(os.path.join(model_dir, f"{sample_id}.json"), "w", encoding="utf-8") as f:
+                json.dump(record, f, ensure_ascii=False, indent=2)
+            page_scores.append(record)
+
+        summary.append(_summarize(provider_name, model_id, model_name, True, page_scores, pages))
+
+    # Best CER first, then fastest. Models with no scored page sort last.
+    summary.sort(key=lambda s: (s["mean_cer"] if s["mean_cer"] is not None else 9.0,
+                                s["mean_latency_s"] or float("inf")))
+    summary_path = os.path.join(args.out_dir, "_summary.json")
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+
+    print_summary_table(
+        summary,
+        [("cer", "mean_cer", lambda v: f"{v:.3f}"),
+         ("exact", "exact_match_rate", lambda v: f"{v:.3f}"),
+         ("lat", "mean_latency_s", lambda v: f"{v:.1f}s"),
+         ("err", "error_count", lambda v: str(v))],
+        "SUMMARY (sorted by CER asc, then latency asc)",
+    )
+    print(f"\nSaved summary to {summary_path}")
 
 
-def _report_and_save(img, results, regions_list, provider_name, model_id, free,
-                      total_time, total_input_tokens, total_output_tokens, image_path, lang):
-    free_str = "FREE" if free else "PAID"
-    avg_time = total_time / max(1, len(regions_list))
+def _summarize(provider_name, model_id, model_name, free, page_scores, pages):
+    cers = [p["quality"]["mean_cer"] for p in page_scores
+            if p.get("quality") and p["quality"]["mean_cer"] is not None]
+    exacts = [p["quality"]["exact_match_rate"] for p in page_scores
+              if p.get("quality") and p["quality"]["exact_match_rate"] is not None]
+    latencies = [p["total_time"] for p in page_scores if p.get("total_time")]
+    modes = sorted({m for p in page_scores for m in p.get("modes_used", [])})
+    return {
+        "provider": provider_name,
+        "model": model_id,
+        "model_name": model_name,
+        "free": free,
+        "pages_attempted": len(pages),
+        "pages_ok": sum(1 for p in page_scores if p.get("regions")),
+        "mean_cer": round(sum(cers) / len(cers), 4) if cers else None,
+        "exact_match_rate": round(sum(exacts) / len(exacts), 4) if exacts else None,
+        "mean_latency_s": round(sum(latencies) / len(latencies), 2) if latencies else None,
+        "total_prompt_tokens": sum(p.get("prompt_tokens", 0) for p in page_scores),
+        "total_completion_tokens": sum(p.get("completion_tokens", 0) for p in page_scores),
+        "error_count": sum(len(p.get("errors", [])) for p in page_scores),
+        "modes_used": modes,
+    }
 
-    print(f"\nSummary for {provider_name}/{model_id}:")
-    print(f"  Total Time: {total_time:.2f}s")
-    print(f"  Average Time/Region: {avg_time:.2f}s")
-    print(f"  Total Tokens: {total_input_tokens} In, {total_output_tokens} Out")
-    print(f"  Tier: {free_str}")
-
-    safe_name = f"{provider_name}_{model_id}".replace('/', '_').replace(':', '_').replace('@', '')
-    out_path = f"demo_output_{safe_name}.jpg"
-    draw_results(img, results, out_path, f"{provider_name}/{model_id}", {
-        "Total Time": f"{total_time:.2f}s",
-        "Avg Time/Region": f"{avg_time:.2f}s",
-        "Tier": free_str,
-    })
-    print(f"  Saved demo image to: {out_path}")
-
-    json_path = f"ocr_results_{safe_name}.json"
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "provider": provider_name,
-            "engine": model_id,
-            "image": image_path,
-            "lang": lang,
-            "free": free,
-            "total_time": total_time,
-            "avg_time_per_bubble": avg_time,
-            "regions": results
-        }, f, ensure_ascii=False, indent=2)
-    print(f"  Saved OCR JSON to: {json_path}")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,106 @@
+{
+  "case_id": "sample39__ocr_unrecoverable",
+  "sample_id": "sample39",
+  "defect_class": "ocr_unrecoverable",
+  "mutated_region_ids": [
+    "r2"
+  ],
+  "region_count": 11,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "パパ面白いかなぁ?",
+      "ocrScore": 0.95,
+      "translatedText": "WONDER FUNNY? IF DAD FOUND IT",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "てへつるつるうのせめす",
+      "ocrScore": 0.21,
+      "translatedText": "BECAUSE EARLIER, DURING DINNER",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "お姉ちゃんがエビフライ好きだから",
+      "ocrScore": 0.95,
+      "translatedText": "ALL HIS SHRIMP GIVING TRIED DAD HER",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "自分の全部あげようとしてたじん",
+      "ocrScore": 0.95,
+      "translatedText": "SINCE HE CUTLETS KNOWS LOVES THEM. SHE",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "そすがに多いわ!てツコむとこだたもん",
+      "ocrScore": 0.95,
+      "translatedText": "TIME! THAT'S WHAT I WAS THERE WERE MANY THIS SUPPOSED WAY TOO TO SAY!",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "面白いというり過保護なだけなんだよパパは",
+      "ocrScore": 0.95,
+      "translatedText": "OVERPROTECTIVE! HE'S JUST DAD ISN'T FUNNY-",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "でも一番面白かったのは",
+      "ocrScore": 0.95,
+      "translatedText": "FUNNIEST BUT THE PART WAS",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "それを完食したお姉ちんだけど",
+      "ocrScore": 0.95,
+      "translatedText": "ACTUALLY THEN MY SISTER SINGLE EVERY ONE, AND ATE",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    },
+    {
+      "regionId": "r9",
+      "ocrText": "食べるとは",
+      "ocrScore": 0.95,
+      "translatedText": "EVERYTHING... LEAVING REALLY GOING DAD 'SHE ATE",
+      "translationScore": 0.93,
+      "readingOrder": 9
+    },
+    {
+      "regionId": "r10",
+      "ocrText": "さつすが私のお姉ちん!",
+      "ocrScore": 0.95,
+      "translatedText": "COURSE, SISTER MY BIG AFTER SHE'S ALL! OF",
+      "translationScore": 0.93,
+      "readingOrder": 10
+    },
+    {
+      "regionId": "r11",
+      "ocrText": "工が—な",
+      "ocrScore": 0.95,
+      "translatedText": "49キつエビが",
+      "translationScore": 0.93,
+      "readingOrder": 11
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample39/source/HPFfGIba4AAMTN4 (1).jpg",
+    "render": "examples/sample39/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "mangatranslator.ai"
+}

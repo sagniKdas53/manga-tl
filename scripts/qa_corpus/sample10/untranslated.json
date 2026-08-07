@@ -1,0 +1,106 @@
+{
+  "case_id": "sample10__untranslated",
+  "sample_id": "sample10",
+  "defect_class": "untranslated",
+  "mutated_region_ids": [
+    "r2"
+  ],
+  "region_count": 11,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "虚照さん原稿締切時間までのカウントダウンを開始します",
+      "ocrScore": 0.95,
+      "translatedText": "STARTING THE NIHILUX, I AM MANUSCRIPT COUNTDOWN DEADLINE. TO YOUR",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "カウント:",
+      "ocrScore": 0.95,
+      "translatedText": "カウント:",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "72797 172800、 172799、 172798",
+      "ocrScore": 0.95,
+      "translatedText": "172800、 172799、 172798 72797…",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "脱稿しないと出られない部屋",
+      "ocrScore": 0.95,
+      "translatedText": "A ROOM YOU CAN'T LEAVE UNTIL YOU FINISH YOUR MANUSCRIPT",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "待って",
+      "ocrScore": 0.95,
+      "translatedText": "HANG ON!",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "ええですから貴方の作品で返してください",
+      "ocrScore": 0.95,
+      "translatedText": "BACK WITH PAYING IT WHY YOU WILL BE THAT IS WORK. YOUR YES.",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r9",
+      "ocrText": "不死途さん`より良い仕事を期待していますよ",
+      "ocrScore": 0.95,
+      "translatedText": "BETTER WORK EXPECT EVEN FROM YOU. ASHVEIL, I",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r10",
+      "ocrText": "なつ今の",
+      "ocrScore": 0.95,
+      "translatedText": "HEAR THAT JUST NOW, YOU EVEN PEARL... HOW DID EH... !?",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    },
+    {
+      "regionId": "r11",
+      "ocrText": "ninPreupいいでしょうNoNo Al",
+      "ocrScore": 0.95,
+      "translatedText": "No reuploding No Al training @merryyu87",
+      "translationScore": 0.93,
+      "readingOrder": 9
+    },
+    {
+      "regionId": "r12",
+      "ocrText": "0 ！?",
+      "ocrScore": 0.95,
+      "translatedText": "!? 0",
+      "translationScore": 0.93,
+      "readingOrder": 10
+    },
+    {
+      "regionId": "r13",
+      "ocrText": "あたしと態度違いすぎない?なんで?",
+      "ocrScore": 0.95,
+      "translatedText": "COMPLETELY ISN'T YOUR DIFFERENT WITH ME!? WHY!? ATTITUDE",
+      "translationScore": 0.93,
+      "readingOrder": 11
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample10/source/orginal.jpeg",
+    "render": "examples/sample10/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

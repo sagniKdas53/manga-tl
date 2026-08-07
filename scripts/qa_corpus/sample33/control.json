@@ -1,0 +1,40 @@
+{
+  "case_id": "sample33__control",
+  "sample_id": "sample33",
+  "defect_class": "control",
+  "mutated_region_ids": [],
+  "region_count": 3,
+  "regions_metadata": [
+    {
+      "regionId": "r3",
+      "ocrText": "……忘れてたわけじ`ないんですょただ昔の可愛かわいいルデと`今のルデが結びつかなかただけです",
+      "ocrScore": 0.95,
+      "translatedText": "FORGOT. IT'S I COULDN'T RUDY FROM RUDY NOW. BACK THEN JUST THAT ...IT'S NOT THE CUTE BETWEEN AND THE THE GAP BRIDGE THAT I",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "ふふ安心しました意外に歳相応なところもあるんですね",
+      "ocrScore": 0.95,
+      "translatedText": "SURPRISINGLY APPROPRIATE RELIEVED. DON'T SOME SIDES HEHE. YOU? HAVE AGE- YOU, You I'M TO",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "う馬は別に怖くないですょ？",
+      "ocrScore": 0.95,
+      "translatedText": "ACTUALLY HORSES, AFRAID KNOW? I-I'M NOT YOU OF",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample33/source/121213393-0.jpg",
+    "render": "examples/sample33/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "mangatranslator.ai"
+}

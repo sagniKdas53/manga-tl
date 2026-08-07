@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample12/original.jpeg",
-  "reference_image": "examples/sample12/human-tl.jpeg",
-  "reference_provenance": "human-tl.jpeg",
+  "source_image": "examples/sample12/source/original.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample12/reference/human-tl.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "MORNING, OUR BODY WE WOKE SHRUNK UP THIS WHEN HAD",
     "r2": "HAVE FAIRY FIRST, I'LL OUT WHAT THIS, AND W-WELL. CAUSED FIGURE THEN...",

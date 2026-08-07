@@ -1,0 +1,42 @@
+{
+  "case_id": "sample26__untranslated",
+  "sample_id": "sample26",
+  "defect_class": "untranslated",
+  "mutated_region_ids": [
+    "r1"
+  ],
+  "region_count": 3,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "いやあ暑いつすねえ",
+      "ocrScore": 0.95,
+      "translatedText": "いやあ暑いつすねえ",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "先生も一本飲みますか？",
+      "ocrScore": 0.95,
+      "translatedText": "ANNA TEACHER, HAVE DRINK TOO?",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "26.03-19言葉綾",
+      "ocrScore": 0.95,
+      "translatedText": "26.03.19 KOTOBA AYAHIKU",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample26/source/142528201-0.jpg",
+    "render": "examples/sample26/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "mangatranslator.ai"
+}

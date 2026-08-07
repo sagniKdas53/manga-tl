@@ -1,0 +1,74 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "先生"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "K"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "待てよ上福"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "先生……この格好どう思うかな："
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ヒナか!はしゃいててうんしい先生"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "変じないかしら："
+  },
+  {
+    "id": "r7",
+    "panel": 1,
+    "bubble": 7,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "後ろ"
+  },
+  {
+    "id": "r8",
+    "panel": 1,
+    "bubble": 8,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "付なこほしいデカなン"
+  }
+]

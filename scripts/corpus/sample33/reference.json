@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample33/121213393-0.jpg",
-  "reference_image": "examples/sample33/en-121213393-0.jpg",
-  "reference_provenance": "en-121213393-0.jpg",
+  "source_image": "examples/sample33/source/121213393-0.jpg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample33/reference/en-121213393-0.jpg",
+  "reference_provenance": "mangatranslator.ai",
   "reference_translations": {
     "r1": null,
     "r2": null,

@@ -1,0 +1,43 @@
+{
+  "case_id": "sample2__order_swap",
+  "sample_id": "sample2",
+  "defect_class": "order_swap",
+  "mutated_region_ids": [
+    "r2",
+    "r1"
+  ],
+  "region_count": 3,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "生まれた地球にいるはずなのに何故か本当は僕だけが違う星から来たみたいだった",
+      "ocrScore": 0.95,
+      "translatedText": "LIKE I WAS THE ONLYONE WHO ACTUALLYDIFFERENT STAR.REASON, IT FELTCAME FROM AAND YET,FOR SOMEBORN ON,I HATEEARTH ITHEWAS地球にいる",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "@兔猫锚",
+      "ocrScore": 0.95,
+      "translatedText": "@兔猫锚",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "免猫锚",
+      "ocrScore": 0.95,
+      "translatedText": "mao兔猫锚",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample2/source/original.jpg",
+    "render": "examples/sample2/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "manually-edited"
+}

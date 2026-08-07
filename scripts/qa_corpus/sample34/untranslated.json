@@ -1,0 +1,122 @@
+{
+  "case_id": "sample34__untranslated",
+  "sample_id": "sample34",
+  "defect_class": "untranslated",
+  "mutated_region_ids": [
+    "r6"
+  ],
+  "region_count": 13,
+  "regions_metadata": [
+    {
+      "regionId": "r2",
+      "ocrText": "カツプル割そてのあるじゃ1ん",
+      "ocrScore": 0.95,
+      "translatedText": "STORE HAS A DISCOUNT HEY, THIS COUPLES FOR HUH?",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "これにしよ!",
+      "ocrScore": 0.95,
+      "translatedText": "LET'S USE IT",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "MIENU",
+      "ocrScore": 0.95,
+      "translatedText": "MENU",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "めざといな",
+      "ocrScore": 0.95,
+      "translatedText": "ALWAYS SHARP -EYES AS",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "……えっとなんかオトクになるやつぶあるみたい",
+      "ocrScore": 0.95,
+      "translatedText": "……えっとなんかオトクになるやつぶあるみたい",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "…ああ！ごめん!俺この店の持でないや…",
+      "ocrScore": 0.95,
+      "translatedText": "ANY COUPONS OH! SORRY! I DON'T HAVE FOR THIS PLACE...",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "…え?",
+      "ocrScore": 0.95,
+      "translatedText": "EH?",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r9",
+      "ocrText": "え…?",
+      "ocrScore": 0.95,
+      "translatedText": "HUH",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    },
+    {
+      "regionId": "r10",
+      "ocrText": "あ…そ…そうなんだ：",
+      "ocrScore": 0.95,
+      "translatedText": "THAT'S SHAME OH... OK... A",
+      "translationScore": 0.93,
+      "readingOrder": 9
+    },
+    {
+      "regionId": "r11",
+      "ocrText": "カツプル割でお願いし正規料金をお支払いします",
+      "ocrScore": 0.95,
+      "translatedText": "REGULAR WE WILL PAY THE PRICE",
+      "translationScore": 0.93,
+      "readingOrder": 10
+    },
+    {
+      "regionId": "r12",
+      "ocrText": "…お兄ちや",
+      "ocrScore": 0.95,
+      "translatedText": "-CHAN ...ONII",
+      "translationScore": 0.93,
+      "readingOrder": 11
+    },
+    {
+      "regionId": "r13",
+      "ocrText": "聞きましたよね?我はカツプルではありません",
+      "ocrScore": 0.95,
+      "translatedText": "RIGHT? COUPLE HEARD THAT, NOT A WE'RE YOU",
+      "translationScore": 0.93,
+      "readingOrder": 12
+    },
+    {
+      "regionId": "r14",
+      "ocrText": "兄妹ですから正規料金をきちんとお支払いします",
+      "ocrScore": 0.95,
+      "translatedText": "SIBLINGS, BILL WITH REGULAR SO GIVE US THE WE'RE PRICE THE",
+      "translationScore": 0.93,
+      "readingOrder": 13
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample34/source/GsdYUt8b0AUpzsE.jpg",
+    "render": "examples/sample34/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

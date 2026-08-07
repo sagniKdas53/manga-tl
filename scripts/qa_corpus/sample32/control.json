@@ -1,0 +1,64 @@
+{
+  "case_id": "sample32__control",
+  "sample_id": "sample32",
+  "defect_class": "control",
+  "mutated_region_ids": [],
+  "region_count": 6,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "一俺先生のこと好きです昔から今に至るまでずつと好きでした",
+      "ocrScore": 0.95,
+      "translatedText": "SENSEI. ALONG, NOW... LOVED FROM I... I LOVE UNTIL YOU, PAST I'VE YOU ALL THE",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "一先生もロキシ・グレイラットに名前を変えるつもりはありませんガ?",
+      "ocrScore": 0.95,
+      "translatedText": "GUSHIRATTO? YOUR NAME TO CHANGE DON'T YOU EVER PLAN TO OXY- SENSEI,",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "そうですあと十数年した時に考えが变わらかつたらもう一度言つてください」",
+      "ocrScore": 0.95,
+      "translatedText": "IS THAT SO. IN ANOTHER COME TELL TEN YEARS ME AGAIN. CHANGED FEELINGS IF YOUR HAVEN'T OR SO,",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "一僕先生のこ好きですよ!こ",
+      "ocrScore": 0.95,
+      "translatedText": "SENSEI! I LOVE YOU,",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "甲龍暦四二三年",
+      "ocrScore": 0.95,
+      "translatedText": "KORYU YEAR 423",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "甲龍暦四一年",
+      "ocrScore": 0.95,
+      "translatedText": "KORYU YEAR 410",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample32/source/121831159-0.jpg",
+    "render": "examples/sample32/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "mangatranslator.ai"
+}

@@ -1,20 +1,21 @@
 {
-  "source_image": "examples/sample10/orginal.jpeg",
-  "reference_image": "examples/sample10/en-orginal.jpeg",
-  "reference_provenance": "en-orginal.jpeg",
+  "source_image": "examples/sample10/source/orginal.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample10/reference/human-tl.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
-    "r1": "COUNTDOWN BEGINNING HOSHOU- STARTING NOW. FOR SAN",
-    "r2": null,
-    "r3": "MANUSCRIPT DEADLINE: UNTIL THE 172797... 172800, 172799, 172798,",
-    "r4": "A ROOM YOU CAN'T LEAVE UNTIL YOUR MANUSCRIPT IS FINISHED.",
-    "r5": "WAIT",
-    "r6": "WITH YOUR REPAY ME PLEASE WORK. WELL. VERY THEN I WANT~!! ALREADY! BACK THE JUST LET HOWEVER I'LL PAY I USED MONEY ME GO HOME",
-    "r7": null,
-    "r8": "JUST PUT IT ON MY ABOUT THAT... PEARL, YEAH, TAB...",
-    "r9": "IMMORTALITY- BETTER WORK FROM YOU. EXPECTING SAN, I'M",
-    "r10": "YOU HEAR WHAT... SAN...?! PEARL- COULD NOW, JUST THAT WHY",
-    "r11": "THEN. FINE",
+    "r1": "STARTING THE NIHILUX, I AM MANUSCRIPT COUNTDOWN DEADLINE. TO YOUR",
+    "r2": "COUNT:",
+    "r3": "172800、 172799、 172798 72797…",
+    "r4": "A ROOM YOU CAN'T LEAVE UNTIL YOU FINISH YOUR MANUSCRIPT",
+    "r5": "HANG ON!",
+    "r6": null,
+    "r7": "BACK WITH PAYING IT WHY YOU WILL BE THAT IS WORK. YOUR YES.",
+    "r8": null,
+    "r9": "BETTER WORK EXPECT EVEN FROM YOU. ASHVEIL, I",
+    "r10": "HEAR THAT JUST NOW, YOU EVEN PEARL... HOW DID EH... !?",
+    "r11": "No reuploding No Al training @merryyu87",
     "r12": "!? 0",
-    "r13": "TREATING ME COMPLETELY DIFFERENTLY THAN HER?! YOU'RE WHY?!"
+    "r13": "COMPLETELY ISN'T YOUR DIFFERENT WITH ME!? WHY!? ATTITUDE"
   }
 }

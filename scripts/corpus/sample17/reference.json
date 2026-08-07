@@ -1,14 +1,14 @@
 {
-  "source_image": "examples/sample17/original.png",
-  "reference_image": "examples/sample17/human-tl.png",
-  "reference_provenance": "human-tl.png",
+  "source_image": "examples/sample17/source/0.jpg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample17/reference/1.jpg",
+  "reference_provenance": "human",
   "reference_translations": {
-    "r1": "DENIA",
-    "r2": "HOW ABOUT YOU STAY A LITTLE LONGER? GEEZ,",
-    "r3": "CAN YOU LET GO OF ME NOW?",
-    "r4": "THAT FOR AN HOUR SAYING YOU'VE BEEN NOW",
-    "r5": "JUST DONE NOW THAT WITH ME? WHAT YOU WANTED, ARE YOU GOTTEN YOU'VE DESPERATELY TELLING ME HOUR AGO, YOU LOVED HOW MUCH YOU WERE AND YET, JUST AN ME",
-    "r6": null,
-    "r7": "I JUST TO USE TOILET NEED NO, THE"
+    "r1": "Actually",
+    "r2": "her per- gave me mission, already keeper Shore-",
+    "r3": "so..",
+    "r4": "S-SHE DID..?",
+    "r5": "APPROVED",
+    "r6": "@angrynum"
   }
 }

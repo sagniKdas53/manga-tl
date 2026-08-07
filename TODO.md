@@ -83,9 +83,9 @@
   aren't confident is dialogue.
 
   - See Example 1:
-    - Original: <br/><img src="examples/sample2/original.jpg" alt="original" width="600"/>
-    - mangatranslator.ai: <br/><img src="examples/sample2/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>
-    - Ours: <br/><img src="examples/sample2/page-2-export(2).png" alt="ours" width="600"/>
+    - Original: <br/><img src="examples/sample2/source/original.jpg" alt="original" width="600"/>
+    - mangatranslator.ai: <br/><img src="examples/sample2/reference/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>
+    - Ours: <br/><img src="examples/sample2/output/frontend-export.png" alt="ours" width="600"/>
 - [ ] **Multimodal VLM Quality Benchmarks & Render Tuning** — use VLMs (Kimi K3 or 5.6-Sol) to analyze translation and typesetting output against competitor benchmarks and refine `render.py` text fitting and inpainting algorithms.
 - [ ] **CHECKPOINT — delete the contour fallback.** `BUBBLE_CONTOUR_FALLBACK` is now **default off**,
   because the ~48% recovery it was built on was not real: 171 of the 172 results it accepted over a

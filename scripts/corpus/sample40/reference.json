@@ -1,0 +1,16 @@
+{
+  "source_image": "examples/sample40/source/0cb985a2-fa1a-4ab0-8526-2c006c380fe5.jpg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample40/reference/en-0cb985a2-fa1a-4ab0-8526-2c006c380fe5.jpg",
+  "reference_provenance": "mangatranslator.ai",
+  "reference_translations": {
+    "r1": "TEACHER!",
+    "r2": "大",
+    "r3": "aonwe HINA WAIT FOR ME,",
+    "r4": "OUTFIT...? TEACHER... YOU THINK WHAT DO OF THIS",
+    "r5": "SO EXCITED, SEEING YOU SO HAPPY HINA! I'M TEACHER",
+    "r6": "STRANGE...? ISN'T A BIT THIS",
+    "r7": "BEHIND",
+    "r8": "I WANT THE ATTACHED... DECALIBON"
+  }
+}

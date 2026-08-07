@@ -1,0 +1,82 @@
+{
+  "case_id": "sample28__ocr_unrecoverable",
+  "sample_id": "sample28",
+  "defect_class": "ocr_unrecoverable",
+  "mutated_region_ids": [
+    "r3"
+  ],
+  "region_count": 8,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "青いシグラスー",
+      "ocrScore": 0.95,
+      "translatedText": "glass! sea",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "そうきれいな青",
+      "ocrScore": 0.95,
+      "translatedText": "beautiful Such a blue.",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "むてねえるよりなみおつや",
+      "ocrScore": 0.21,
+      "translatedText": "drift stuffs. always liked think of it, Come to you've",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "うん",
+      "ocrScore": 0.95,
+      "translatedText": "Yeah.",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "偶然アタシの前に流れ着いてさ",
+      "ocrScore": 0.95,
+      "translatedText": "to drift ashore right in front just happens of me. I don't know Something came from where it",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "そう聞くとロマンチックかも",
+      "ocrScore": 0.95,
+      "translatedText": "When you that way, romantic. it does put it sound",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "ロマンチツクだよ",
+      "ocrScore": 0.95,
+      "translatedText": "romantic It is",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r9",
+      "ocrText": "だうてほら",
+      "ocrScore": 0.95,
+      "translatedText": "Because... look.",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample28/source/HN5iU6qaEAAAYLo.jpeg",
+    "render": "examples/sample28/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

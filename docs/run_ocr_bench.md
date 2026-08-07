@@ -80,26 +80,74 @@ docker compose exec worker python benchmark_local_ocr.py --image my_page.png --l
 
 ### 3. Run Cloud VLM OCR Benchmarks
 
-Execute the VLM OCR script. This script detects both speech bubbles (YOLO-detected) and background direct text regions (PaddleOCR-detected + proximity clustered) to feed them as crops to various VLMs.
-
-```bash
-docker compose exec worker python benchmark_vlm_ocr.py --image my_page.png --lang Japanese
-```
-
-Or locally via `.venv` (same pattern as [`benchmarking.md`](benchmarking.md)'s local workflow):
+`benchmark_vlm_ocr.py` is **corpus-driven**: it runs every matching model over the pages in
+`scripts/ocr_corpus/`, scores each against that corpus's ground-truth text, and writes
+everything under `--out-dir`. `--image` remains available for a one-off page, but a one-off page
+has no ground truth, so it reports timing and raw text only — no accuracy.
 
 ```bash
 source .venv/bin/activate
-python scripts/benchmark_vlm_ocr.py --image examples/sample28/original.jpg --lang Japanese
+
+# Smoke test: baseline page, free models
+python scripts/benchmark_vlm_ocr.py --provider openrouter --out-dir runs/ocr
+
+# Whole corpus
+python scripts/benchmark_vlm_ocr.py --corpus-subset all --out-dir runs/ocr-2026-08
+
+# One-off page outside the corpus (no accuracy scoring)
+python scripts/benchmark_vlm_ocr.py --image examples/sample36/source/GhSomnxbIAEPKVw.jpg \
+    --out-dir /tmp/ocrbench
 ```
+
+Region proposals come from the production path — YOLO bubble detection plus PaddleOCR
+background text merged by `worker.services.merge_regions` — and are held constant across chat
+VLMs, so the score isolates *transcription* quality rather than mixing in detection differences.
+Whole-page engines that do their own detection (`nvidia/nemotron-ocr-v2`) additionally report
+`detection_recall` against the corpus polygons.
 
 Model source is `config/providers.json`'s `models.ocr` lists — same file the backend reads,
 same as [`translation_bench.md`](translation_bench.md)'s approach for the translation stage.
 A model is benchmarkable the moment it's added there; no code changes needed.
 
+#### Building the OCR corpus
+
+```bash
+# One sample, PaddleOCR + up to 3 cloud vision models voting on each region
+python scripts/build_ocr_corpus.py --sample sample36 --provider openrouter
+
+# Everything, local engine only (fast; every region ends up tier "unresolved")
+python scripts/build_ocr_corpus.py --local-only
+```
+
+Ground truth comes in two tiers:
+
+* **consensus** — the medoid of all engines' transcriptions wins when at least `--min-agree`
+  (default 3) land within `--tol` CER (default 0.10) of it. Comparison is NFKC-normalised, so
+  full-width/half-width disagreements (`１２３` vs `123`) count as agreement rather than error.
+* **gold** — hand-confirmed. `--gold sampleN` writes a self-contained
+  `scripts/ocr_corpus/_review/sampleN.html` showing each region's crop beside every engine's
+  candidate with the consensus preselected, so review is choose-and-correct rather than
+  transcribe-from-scratch. Save from that page, then
+  `python scripts/build_ocr_corpus.py --apply-review scripts/ocr_corpus/_review/sampleN.json`.
+
+Regions that reach neither tier are marked **unresolved** and are excluded from scoring — the
+engines disagreed, so scoring against that text would measure noise.
+
+> **Pick `--min-agree` against your engine count.** OpenRouter currently exposes only two *free*
+> vision models, so `paddleocr + 2 VLMs` with the default `--min-agree 3` demands **unanimity** —
+> on the sample36 trial that resolved just 1 of 5 regions, with the other 4 sitting at 2-of-3
+> agreement. Either widen the engine pool (`--provider` unset pulls Cloudflare and NVIDIA vision
+> models in too, or add `--include-paid`), or drop to `--min-agree 2` with a tighter `--tol 0.05`
+> and accept a weaker guarantee. The gold review pass exists precisely because consensus alone
+> does not get you to trustworthy ground truth on a small engine pool.
+
 #### Key Arguments for Cloud VLM OCR
 
-* `--image`: Target image path (default: `original.jpeg`).
+* `--corpus-dir` / `--corpus-subset {quick,clean,all}` / `--pages`: which corpus pages to run.
+  `quick` (default) is the baseline page; `clean` is pages with no unresolved regions.
+* `--out-dir` (**required**): everything lands here, including `_summary.json`.
+* `--overlays`: also write annotated demo images next to each result.
+* `--image`: one-off page outside the corpus (skips scoring).
 * `--lang`: Language name (e.g. `Japanese`, `English`, `Korean`).
 * `--providers-config`: Path to a providers.json-shaped file (default: `config/providers.json`).
   Point at `scripts/test-providers.json` for the wider, unvetted candidate pool (§ below).
@@ -116,7 +164,20 @@ A model is benchmarkable the moment it's added there; no code changes needed.
 
 ### 4. Retrieve Annotated Images and Reports
 
-The benchmarking scripts output annotated images containing bounding boxes, transcribed text overlays, and runtime performance statistics to the container's `/app` folder.
+`benchmark_vlm_ocr.py` writes everything under `--out-dir` (it no longer scatters files into the
+working directory):
+
+```
+runs/ocr/
+  _summary.json                                   ranked, CER asc then latency asc
+  <provider>/<model>/<sample>.json                per-region text, CER, mode used, errors
+  <provider>/<model>/<sample>-overlay.jpg         only with --overlays
+```
+
+The summary table is sorted by mean CER, so the top row is the most accurate model, and
+`modes_used` shows which structured-output rung each model actually needed.
+
+`benchmark_local_ocr.py` still outputs annotated images and stats to the container's `/app` folder.
 
 Copy the output assets back to the host system using `docker cp`:
 
@@ -157,7 +218,7 @@ models that would silently fail here. None of the following have been run for re
 (beyond a one-region wiring smoke test — see `scripts/benchmark_vlm_ocr.py`'s commit):
 
 ```bash
-python scripts/benchmark_vlm_ocr.py --image examples/sample28/original.jpg --lang Japanese \
+python scripts/benchmark_vlm_ocr.py --image examples/sample36/source/GhSomnxbIAEPKVw.jpg --lang Japanese \
   --providers-config scripts/test-providers.json
 ```
 

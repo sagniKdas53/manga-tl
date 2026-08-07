@@ -21,7 +21,7 @@ its fallback chain. New models "just work" here once added there; no code change
 to benchmark them.
 
 Usage:
-    # Free OpenRouter models against the hand-verified quick corpus (sample28 only)
+    # Free OpenRouter models against the quick corpus (sample36 only)
     python scripts/benchmark_translation.py --provider openrouter
 
     # Everything free, across the full corpus
@@ -47,7 +47,6 @@ import json
 import time
 import difflib
 import argparse
-import requests
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
@@ -66,17 +65,22 @@ from provider_config import (  # noqa: E402
     build_headers,
     list_candidate_models,
 )
+from bench_common import apply_response_format, run_ladder  # noqa: E402
 
 load_env(os.path.join(REPO_ROOT, ".env"))
 
 DEFAULT_PROVIDERS_CONFIG = os.path.join(REPO_ROOT, "config", "providers.json")
 DEFAULT_CORPUS_DIR = os.path.join(SCRIPT_DIR, "corpus")
 
-# scripts/corpus/sample28 is the hand-verified entry (extraction_method: "manual") and is the
-# default "quick" smoke-test page. Everything else in scripts/corpus/ is auto-extracted via OCR
+# Default "quick" smoke-test page. Was sample28, the hand-verified (extraction_method: "manual")
+# entry — but the SFW re-curation moved that page out of examples/, orphaning its data, so it was
+# dropped. sample36 replaces it: a clean 3-panel layout with well-separated bubbles and an
+# attributed human reference. It is auto-extracted until the gold review pass promotes it
+# (see docs/run_ocr_bench.md § "Building the OCR corpus"), so there is currently no "manual"
+# entry in the corpus. Everything in scripts/corpus/ is auto-extracted via OCR
 # (scripts/build_translation_corpus.py) and carries an over_merge_risk / match-rate signal
 # in its meta.json — see docs/translation_bench.md for how "clean" is chosen.
-QUICK_SUBSET = ["sample28"]
+QUICK_SUBSET = ["sample36"]
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +175,10 @@ def score_against_reference(result, reference_translations):
 
 def check_id_fidelity(result, expected_ids):
     translations = result.get("translations", []) if isinstance(result, dict) else []
-    got_ids = [t.get("id") for t in translations if isinstance(t, dict)]
+    # Coerce to str: a model that omits "id" yields None, and mixing None into the set below
+    # makes sorted() raise TypeError — crashing the benchmark on exactly the malformed output
+    # it exists to measure.
+    got_ids = [str(t.get("id")) for t in translations if isinstance(t, dict)]
     got_set = set(got_ids)
     expected_set = set(expected_ids)
     missing = sorted(expected_set - got_set)
@@ -189,18 +196,6 @@ def check_id_fidelity(result, expected_ids):
 # Request building + the empirical structured-output ladder
 # ---------------------------------------------------------------------------
 
-def strip_fences(content):
-    content = content.strip()
-    if content.startswith("```"):
-        lines = content.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        content = "\n".join(lines).strip()
-    return content
-
-
 def build_payload(model_id, regions, mode, source_lang, target_lang):
     prompt = build_batch_prompt(regions, source_lang=source_lang, target_lang=target_lang)
     payload = {
@@ -210,82 +205,27 @@ def build_payload(model_id, regions, mode, source_lang, target_lang):
             {"role": "user", "content": prompt},
         ],
     }
-    if mode == "json_schema":
-        payload["response_format"] = {
-            "type": "json_schema",
-            "json_schema": {"name": "structured_output", "schema": TRANSLATION_JSON_SCHEMA, "strict": True},
-        }
-    elif mode == "json_object":
-        payload["response_format"] = {"type": "json_object"}
-    return payload
-
-
-def call_provider(url, headers, payload, timeout=90):
-    t0 = time.time()
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
-        return resp, time.time() - t0, None
-    except Exception as e:
-        return None, time.time() - t0, str(e)
+    return apply_response_format(payload, mode, TRANSLATION_JSON_SCHEMA)
 
 
 def try_model_on_page(url, headers, model_id, regions, reference_translations, source_lang, target_lang, retries=2):
     expected_ids = [r["id"] for r in regions]
-    attempts_log = []
 
-    for mode in ("json_schema", "json_object", "none"):
-        payload = build_payload(model_id, regions, mode, source_lang, target_lang)
+    outcome = run_ladder(
+        url, headers,
+        lambda mode: build_payload(model_id, regions, mode, source_lang, target_lang),
+        retries=retries,
+    )
+    if outcome["status"] != "ok":
+        return outcome
 
-        for attempt_num in range(retries + 1):
-            resp, elapsed, net_err = call_provider(url, headers, payload)
-
-            if net_err is not None:
-                attempts_log.append({"mode": mode, "attempt": attempt_num, "error": f"network: {net_err}", "elapsed_s": elapsed})
-                continue
-            if resp.status_code == 429:
-                attempts_log.append({"mode": mode, "attempt": attempt_num, "error": "rate_limited (429)", "elapsed_s": elapsed})
-                time.sleep(5 * (attempt_num + 1))
-                continue
-            if resp.status_code != 200:
-                attempts_log.append({"mode": mode, "attempt": attempt_num, "error": f"http_{resp.status_code}: {resp.text[:500]}", "elapsed_s": elapsed})
-                break  # move to next response_format mode — likely unsupported
-
-            data = resp.json()
-            message = ((data.get("choices") or [{}])[0]).get("message", {}) or {}
-            content = message.get("content", "") or ""
-            usage = data.get("usage", {}) or {}
-
-            if not content.strip():
-                attempts_log.append({"mode": mode, "attempt": attempt_num, "error": "empty_content", "elapsed_s": elapsed})
-                break
-
-            cleaned = strip_fences(content)
-            try:
-                result = json.loads(cleaned)
-            except json.JSONDecodeError as e:
-                attempts_log.append({"mode": mode, "attempt": attempt_num, "error": f"json_decode_error: {e}", "elapsed_s": elapsed, "raw_content": content})
-                break
-
-            valid, reason = validate_response(result)
-            fidelity = check_id_fidelity(result, expected_ids)
-            quality = score_against_reference(result, reference_translations)
-
-            return {
-                "status": "ok",
-                "mode_used": mode,
-                "elapsed_s": round(elapsed, 3),
-                "schema_valid": valid,
-                "schema_reason": reason,
-                "id_fidelity": fidelity,
-                "quality": quality,
-                "prompt_tokens": usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-                "raw_content": content,
-                "result": result,
-                "attempts_log": attempts_log,
-            }
-
-    return {"status": "failed", "mode_used": None, "elapsed_s": None, "attempts_log": attempts_log}
+    result = outcome["result"]
+    valid, reason = validate_response(result)
+    outcome["schema_valid"] = valid
+    outcome["schema_reason"] = reason
+    outcome["id_fidelity"] = check_id_fidelity(result, expected_ids)
+    outcome["quality"] = score_against_reference(result, reference_translations)
+    return outcome
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +241,7 @@ def main():
     parser.add_argument("--free-only", action="store_true", default=True, help="Default: free models only")
     parser.add_argument("--include-paid", dest="free_only", action="store_false", help="Also test paid models (needs credits)")
     parser.add_argument("--corpus-subset", choices=["quick", "clean", "all"], default="quick",
-                         help="quick=sample28 only (default); clean=manual + auto pages that passed the over-merge/match-rate gate; all=every corpus page")
+                         help="quick=sample36 only (default); clean=manual + auto pages that passed the over-merge/match-rate gate; all=every corpus page")
     parser.add_argument("--pages", help="Comma-separated explicit corpus sample ids, overrides --corpus-subset")
     parser.add_argument("--source-lang", default="ja")
     parser.add_argument("--target-lang", default="en")

@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample29/original.3.jpeg",
-  "reference_image": "examples/sample29/human-tl.jpeg",
-  "reference_provenance": "human-tl.jpeg",
+  "source_image": "examples/sample29/source/original.3.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample29/reference/human-tl.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "INCIDENT, KIND OF DUETO TWO... THESE SOME",
     "r2": "SWITCHING ENDED UP BODIES! THEIR",

@@ -1,0 +1,82 @@
+{
+  "case_id": "sample40__ocr_unrecoverable",
+  "sample_id": "sample40",
+  "defect_class": "ocr_unrecoverable",
+  "mutated_region_ids": [
+    "r4"
+  ],
+  "region_count": 8,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "先生",
+      "ocrScore": 0.95,
+      "translatedText": "TEACHER!",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "K",
+      "ocrScore": 0.95,
+      "translatedText": "大",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "待てよ上福",
+      "ocrScore": 0.95,
+      "translatedText": "aonwe HINA WAIT FOR ME,",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "へやみけかこききふほえもはおね",
+      "ocrScore": 0.21,
+      "translatedText": "OUTFIT...? TEACHER... YOU THINK WHAT DO OF THIS",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "ヒナか!はしゃいててうんしい先生",
+      "ocrScore": 0.95,
+      "translatedText": "SO EXCITED, SEEING YOU SO HAPPY HINA! I'M TEACHER",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "変じないかしら：",
+      "ocrScore": 0.95,
+      "translatedText": "STRANGE...? ISN'T A BIT THIS",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "後ろ",
+      "ocrScore": 0.95,
+      "translatedText": "BEHIND",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "付なこほしいデカなン",
+      "ocrScore": 0.95,
+      "translatedText": "I WANT THE ATTACHED... DECALIBON",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample40/source/0cb985a2-fa1a-4ab0-8526-2c006c380fe5.jpg",
+    "render": "examples/sample40/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "mangatranslator.ai"
+}

@@ -6,7 +6,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "ダニ"
+    "text": "実は…"
   },
   {
     "id": "r2",
@@ -15,7 +15,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "もう少しいいじないですか"
+    "text": "ショアキリパリさんからもうお許しをいただいているんです]"
   },
   {
     "id": "r3",
@@ -24,7 +24,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "そろそろ離れてくれないか"
+    "text": "なので…"
   },
   {
     "id": "r4",
@@ -33,7 +33,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "そう言い始めてもう一時間だぞ"
+    "text": "えっ!?ほ本当：?"
   },
   {
     "id": "r5",
@@ -42,7 +42,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "その一時間前は必死に好き好き言ていた癖に"
+    "text": "【承認】"
   },
   {
     "id": "r6",
@@ -51,15 +51,6 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "出すもの出したら用済みですか?"
-  },
-  {
-    "id": "r7",
-    "panel": 1,
-    "bubble": 7,
-    "speaker": null,
-    "regionType": "speech",
-    "conversationGroup": null,
-    "text": "いトイレに…"
+    "text": "@angrynum"
   }
 ]

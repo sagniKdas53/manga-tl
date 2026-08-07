@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample18/original.jpeg",
-  "reference_image": "examples/sample18/human-tl.png",
-  "reference_provenance": "human-tl.png",
+  "source_image": "examples/sample18/source/original.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample18/reference/human-tl.png",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "NERVOUS? FIREFLY, ARE YOU FEELING",
     "r2": "NG作発言/AI学習禁止not use my ant for AI training.",

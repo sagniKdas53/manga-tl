@@ -1,0 +1,42 @@
+{
+  "case_id": "sample14__ocr_garbage",
+  "sample_id": "sample14",
+  "defect_class": "ocr_garbage",
+  "mutated_region_ids": [
+    "r2"
+  ],
+  "region_count": 3,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "俺のこと好きになていいのかい?悪い人かもしれないよ@yuaukano2",
+      "ocrScore": 0.95,
+      "translatedText": "YOU TO FALL OKAY FOR WITH ME? IN LOVE REALLY IS IT",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "不倫している芸能人ちヤ×どれくらい叩いてるだけだよ悪い人う",
+      "ocrScore": 0.55,
+      "translatedText": "SLANDERING I JUST LEAVE CELEBRITIES COMMENTS CHEATING! WHO ARE ONLINE, NASTY",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "それならいい人ね!",
+      "ocrScore": 0.95,
+      "translatedText": "YOU ARE PERSON! A GOOD IN THAT WELL CASE,",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample14/source/orginal.jpeg",
+    "render": "examples/sample14/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

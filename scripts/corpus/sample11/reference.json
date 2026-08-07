@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample11/orginal.jpeg",
-  "reference_image": "examples/sample11/human-tl-sloppy.jpeg",
-  "reference_provenance": "human-tl-sloppy.jpeg",
+  "source_image": "examples/sample11/source/orginal.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample11/reference/human-tl-sloppy.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "INTROVER SOMEONE! USING A EVEN AN TO MEET SCARED, DATING APP... FIRST I'M A WANTS TIME BIT BUT MY",
     "r2": null,

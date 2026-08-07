@@ -1,13 +1,15 @@
 {
-  "source_image": "examples/sample30/4bffaba1-7b8d-4e74-99a6-72dff6b50394.jpg",
-  "reference_image": "examples/sample30/en-4bffaba1-7b8d-4e74-99a6-72dff6b50394.jpg",
-  "reference_provenance": "en-4bffaba1-7b8d-4e74-99a6-72dff6b50394.jpg",
+  "source_image": "examples/sample30/source/HN_OVsabcAA2-0t.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample30/reference/HOFxwnKWcAA1CH1.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
-    "r1": null,
-    "r2": null,
-    "r3": null,
-    "r4": "ふ～っ…",
-    "r5": "1",
-    "r6": "(n)"
+    "r1": "strict Ehh~ is so Your boss ~!!",
+    "r2": "even hiring full-time Apparently they're employees now!! It offer paid leave looks like they benefits too! and other",
+    "r3": "already~ company like that should quita You",
+    "r4": "Come work with us again~ right!! That's",
+    "r5": "more things learn even from you, Senpai~♡ I'd love to",
+    "r6": "be able to hit Senpai, you'd the ground experience, With your running.",
+    "r7": "Is that okay? not"
   }
 }

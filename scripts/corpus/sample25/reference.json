@@ -1,12 +1,12 @@
 {
-  "source_image": "examples/sample25/illust_135833530_20251219_134453.jpg",
-  "reference_image": "examples/sample25/en-illust_135833530_20251219_134453.jpg",
-  "reference_provenance": "en-illust_135833530_20251219_134453.jpg",
+  "source_image": "examples/sample25/source/437a87c3634694355b88292dc315597398909b06 (copy 1).jpg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample25/reference/437a87c3634694355b88292dc315597398909b06.jpg",
+  "reference_provenance": "mangatranslate.com",
   "reference_translations": {
-    "r1": "THIS... NOT NO, NO,",
-    "r2": null,
-    "r3": "OW...",
-    "r4": "TOUCHING ARE YOU ME LIKE THAT? WHY",
-    "r5": "BREATHING'S GETTING HEAVY... MY"
+    "r1": "absolutel disgustin g, isn't How is it? It's it?! y",
+    "r2": "A",
+    "r3": null,
+    "r4": null
   }
 }

@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample9/orginal.2.jpeg",
-  "reference_image": "examples/sample9/human-tl.4.jpeg",
-  "reference_provenance": "human-tl.4.jpeg",
+  "source_image": "examples/sample9/source/orginal.2.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample9/reference/human-tl.4.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "LUNCH BREAK",
     "r2": null,

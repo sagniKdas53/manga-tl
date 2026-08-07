@@ -1,0 +1,104 @@
+{
+  "case_id": "sample9__control",
+  "sample_id": "sample9",
+  "defect_class": "control",
+  "mutated_region_ids": [],
+  "region_count": 11,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "お昼休み",
+      "ocrScore": 0.95,
+      "translatedText": "LUNCH BREAK",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "はっ?",
+      "ocrScore": 0.95,
+      "translatedText": "LIKE SENSEI? WHY WOULD I EVER LIKE SOMEONE HUH ? KEI-CHAN, SENSEI? DO YOU LIKE HEY, HEY",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "まず生活習慣が大人として終わています掃除洗もできしないし自炊すらままならないので代わりにてげるのいつも大変なんですよ",
+      "ocrScore": 0.95,
+      "translatedText": "DAY BEFORE! I'VE TOLD ALSO, WHEN I WENT TO HEALTH, SO WHY WON'T HIM COLUNTLESS TIMES THAT IT'S BAD FOR HIS DRINK CANS THAN THE HAVE TO GO SEE HIM MORE EMPTY ENERGY HE STOP? HAA... I'LL HIM AGAIN... AND THE TOLD HIM BEFORE HE LATER AND LECTURE PAPERWORK, TOO! I SCHALE YESTERDAY, NEEDS TO RELY ON THERE WERE EVEN OTHERS... HIMSELF, SO DOING HE CAN'T CLEAN OR IT FOR HIM INSTEAD IS ALWAYS A HUGE FIRST OF ALL, HIS LIFESTYLE HABITS DO LAUNDRY, AND ARE A DISASTER HE CAN BARELY EVEN COOK FOR FOR AN ADULT. PAIN. ANY LIKABLE EVEN HAVE DOES THAT STARTERS, PERSON TRAITS? FOR",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "あと昨日シレに行たらおとといりもナドリンクの空き缶が増えていて健康に悪いと散々言ているのに何故の人はないんでしう?は…後で直接会てまた言てらないとそれと",
+      "ocrScore": 0.95,
+      "translatedText": "chew",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r9",
+      "ocrText": "ふふっ",
+      "ocrScore": 0.95,
+      "translatedText": "FU FU",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r10",
+      "ocrText": "またくあの人たら",
+      "ocrScore": 0.95,
+      "translatedText": "THAT MAN... HONESTLY,",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r11",
+      "ocrText": "私がいないとダメなんですよ本当!",
+      "ocrScore": 0.95,
+      "translatedText": "IS TOTALLY HE REALLY HOPELESS WITHOUT ME!",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r12",
+      "ocrText": "って何ニヤニヤ笑ってるんですか",
+      "ocrScore": 0.95,
+      "translatedText": "SMIRKING ARE YOU AT ME?! WHY",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    },
+    {
+      "regionId": "r13",
+      "ocrText": "ごめん続けて",
+      "ocrScore": 0.95,
+      "translatedText": "SORRY, GOING. KEEP",
+      "translationScore": 0.93,
+      "readingOrder": 9
+    },
+    {
+      "regionId": "r14",
+      "ocrText": "私イちんの恋バナ聴くの好きなんだ心飯進",
+      "ocrScore": 0.95,
+      "translatedText": "IT MAKES MY FOOD TASTE LISTENING KEI-CHAN. BETTER. TO YOUR STORIES, I LOVE LOVE",
+      "translationScore": 0.93,
+      "readingOrder": 10
+    },
+    {
+      "regionId": "r15",
+      "ocrText": "别恋バナじゃないですッ!",
+      "ocrScore": 0.95,
+      "translatedText": "IT'S NOT STORY!! ALOVE",
+      "translationScore": 0.93,
+      "readingOrder": 11
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample9/source/orginal.2.jpeg",
+    "render": "examples/sample9/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

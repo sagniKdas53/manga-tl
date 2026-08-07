@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample13/original.jpeg",
-  "reference_image": "examples/sample13/human-tl.jpeg",
-  "reference_provenance": "human-tl.jpeg",
+  "source_image": "examples/sample13/source/original.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample13/reference/human-tl.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "SO, HOW HACKING WORK? LUCY'S DOES",
     "r2": "CURIOUS? WANT ME TO HACK YOU?",

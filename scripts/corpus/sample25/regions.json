@@ -6,7 +6,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "ゃやだこ"
+    "text": "でうだいて。とても不快だ3う"
   },
   {
     "id": "r2",
@@ -15,7 +15,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "•"
+    "text": ": h"
   },
   {
     "id": "r3",
@@ -24,7 +24,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "おわ"
+    "text": "O 0"
   },
   {
     "id": "r4",
@@ -33,15 +33,6 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "なんでそんな触り方なの"
-  },
-  {
-    "id": "r5",
-    "panel": 1,
-    "bubble": 5,
-    "speaker": null,
-    "regionType": "speech",
-    "conversationGroup": null,
-    "text": "なんくか息荒なってね?"
+    "text": "二"
   }
 ]

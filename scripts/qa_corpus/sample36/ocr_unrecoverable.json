@@ -1,0 +1,50 @@
+{
+  "case_id": "sample36__ocr_unrecoverable",
+  "sample_id": "sample36",
+  "defect_class": "ocr_unrecoverable",
+  "mutated_region_ids": [
+    "r1"
+  ],
+  "region_count": 4,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "るるいむく",
+      "ocrScore": 0.21,
+      "translatedText": "WHO~? GUESS",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "トッ",
+      "ocrScore": 0.95,
+      "translatedText": "TRAI-",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "…`これ答えなければもう少しトレナさんと触れ合えるのでは：!(天才)",
+      "ocrScore": 0.95,
+      "translatedText": "I CAN KEEP TOUCH FOR LONGER...! IF I JUST TRAINER'S ANSWER, A LITTLE GENIUS!) FEELING ...WAIT, CI'M A DON'T",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "スティル?…ステイル?",
+      "ocrScore": 0.95,
+      "translatedText": "...STILL?? STILL?",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample36/source/GhSomnxbIAEPKVw.jpg",
+    "render": "examples/sample36/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

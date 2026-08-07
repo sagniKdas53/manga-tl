@@ -1,0 +1,101 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "パパ面白いかなぁ?"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "だてとつれの晩ごはんで"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "お姉ちゃんがエビフライ好きだから"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "自分の全部あげようとしてたじん"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "そすがに多いわ!てツコむとこだたもん"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "面白いというり過保護なだけなんだよパパは"
+  },
+  {
+    "id": "r7",
+    "panel": 1,
+    "bubble": 7,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "でも一番面白かったのは"
+  },
+  {
+    "id": "r8",
+    "panel": 1,
+    "bubble": 8,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "それを完食したお姉ちんだけど"
+  },
+  {
+    "id": "r9",
+    "panel": 1,
+    "bubble": 9,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "食べるとは"
+  },
+  {
+    "id": "r10",
+    "panel": 1,
+    "bubble": 10,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "さつすが私のお姉ちん!"
+  },
+  {
+    "id": "r11",
+    "panel": 1,
+    "bubble": 11,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "工が—な"
+  }
+]

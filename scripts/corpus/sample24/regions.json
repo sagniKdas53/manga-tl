@@ -6,7 +6,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "まマジカル☆ナギちやんと参上…です…"
+    "text": "あなたが補習に来てる子?可愛すぎない!?"
   },
   {
     "id": "r2",
@@ -15,7 +15,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "(えつと…なんでしたつけ…あど"
+    "text": "つはじめましてお姉さんたちこんにちは"
   },
   {
     "id": "r3",
@@ -24,7 +24,7 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": "あ悪の怪人センぜーデスん田私…の…てまマシカル☆ロイヤルおまんヒおいつはで退治させていただきますつ田か観念してくださいつ☆"
+    "text": "ごめんねこの子今日も私が借りていくからそれにちょつと具合も悪そうだしちうどうちで休ませるわ°"
   },
   {
     "id": "r4",
@@ -33,6 +33,24 @@
     "speaker": null,
     "regionType": "speech",
     "conversationGroup": null,
-    "text": ". /"
+    "text": "それなら仕方ないね°また今度一緒に見て回ろう"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "テレジアが新しい生徒を取つたて前に聞いたけどそれから全然話してくれなかたのんなに綺麗な子を隠しよねこで一てたなん"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "ねえこの子隣の学校で有名な天才じない?補人違いじや習なんて必要なの?ない?"
   }
 ]

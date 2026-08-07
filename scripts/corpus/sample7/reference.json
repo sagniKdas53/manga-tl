@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample7/original.5.jpeg",
-  "reference_image": "examples/sample7/human-tl.2.png",
-  "reference_provenance": "human-tl.2.png",
+  "source_image": "examples/sample7/source/original.5.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample7/reference/human-tl.2.png",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "TO CARRY ASKED ME HIMEKO OF HER STUFF, SOME MISS",
     "r2": "BUT IT'S JUST SO HEAVY! DAMN",

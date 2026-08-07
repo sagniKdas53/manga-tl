@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample15/orginal.png",
-  "reference_image": "examples/sample15/human-tl.png",
-  "reference_provenance": "human-tl.png",
+  "source_image": "examples/sample15/source/orginal.png",
+  "source_lang": "ja",
+  "reference_image": "examples/sample15/reference/human-tl.png",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "CLASS P.E.",
     "r2": "八",

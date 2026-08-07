@@ -1,0 +1,90 @@
+{
+  "case_id": "sample3__ocr_unrecoverable",
+  "sample_id": "sample3",
+  "defect_class": "ocr_unrecoverable",
+  "mutated_region_ids": [
+    "r1"
+  ],
+  "region_count": 9,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "りにふゆそやうやれとせりしめめめしろえみんよほいめ",
+      "ocrScore": 0.21,
+      "translatedText": "live with me How about you come from now on?",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "なあお前の家会社から遠いんだてな°この会社残業多いのにお前よく朝早くから出勤できるよな絶対大変だろ°",
+      "ocrScore": 0.95,
+      "translatedText": "surprised you can still how much overtime we from the office. With must be exhausting. every morning. That make it in so early place is pretty far Hey, I heard your have here, I'm",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "そこで提案がある",
+      "ocrScore": 0.95,
+      "translatedText": "suggestion. Ihave a So~",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "DOG Cargeration本想長富崎",
+      "ocrScore": 0.95,
+      "translatedText": "本都富崎DCG Corporation",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "生活費?",
+      "ocrScore": 0.95,
+      "translatedText": "expenses Living ??",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "何悩んでんだよ`つべこべ言つてると残業増やすからな?",
+      "ocrScore": 0.95,
+      "translatedText": "about? If you overtime, you just give you What's there keep making excuses, I'll to hesitate even more know?",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r7",
+      "ocrText": "どうせお前そんな稼ぎないんだ`そんくらい私が負担してやるよ。ちんとお前の疲れが取れるようにダブルベッドも買ておいたんだぞどうだ好条件だろう?",
+      "ocrScore": 0.95,
+      "translatedText": "money anyway, so double bed so you night's rest. What pretty good deal, can get a proper make that much It's not like you I'll cover that. I even bought a do you think? Sounds like a doesn't it??",
+      "translationScore": 0.93,
+      "readingOrder": 7
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "私の家はこの会社の近くにあるんだうちにくれば朝早く起きる必要もないし満員電車に苦しむことも無いんだぞ",
+      "ocrScore": 0.95,
+      "translatedText": "or suffer through office. If you stay wake up so early commuter trains My apartment is close to the won't have to those packed with me, you anymore.",
+      "translationScore": 0.93,
+      "readingOrder": 8
+    },
+    {
+      "regionId": "r9",
+      "ocrText": "今から帰って荷造りしてこい!住んでるアパトの解約もして来いよな!",
+      "ocrScore": 0.95,
+      "translatedText": "now, pack your Go home right lease on your while you're things, and apartment cancel the at it!!",
+      "translationScore": 0.93,
+      "readingOrder": 9
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample3/source/HM8EpisaIAAUhSd.jpeg",
+    "render": "examples/sample3/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

@@ -1,0 +1,67 @@
+{
+  "case_id": "sample35__order_swap",
+  "sample_id": "sample35",
+  "defect_class": "order_swap",
+  "mutated_region_ids": [
+    "r3",
+    "r8"
+  ],
+  "region_count": 6,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "おつかれ明日は撮影で来れないから",
+      "ocrScore": 0.95,
+      "translatedText": "tomorrow",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "うん聞いてるよ頑張ってね",
+      "ocrScore": 0.95,
+      "translatedText": "listening. Do your best",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "あそういえばその撮影て水着なんだよね山也アンタt",
+      "ocrScore": 0.95,
+      "translatedText": "is in a",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "1",
+      "ocrScore": 0.95,
+      "translatedText": "really Oh",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "……は?それだけ？",
+      "ocrScore": 0.95,
+      "translatedText": "That's",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r8",
+      "ocrText": "え？",
+      "ocrScore": 0.95,
+      "translatedText": "Eh?",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample35/source/HPAgSMOaQAAPIrS.jpg",
+    "render": "examples/sample35/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

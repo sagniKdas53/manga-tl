@@ -1,14 +1,17 @@
 {
-  "source_image": "examples/sample28/original.jpg",
-  "reference_image": "examples/sample28/en-manga-tl-ai.jpg",
-  "reference_note": "Reference render is watermarked 'mangatranslator.ai / qwen3-235b' — a competitor paid pipeline used as our quality baseline, per docs/render_quality_gap_2026-08-05.md convention.",
+  "source_image": "examples/sample28/source/HN5iU6qaEAAAYLo.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample28/reference/HN7dL-VXgAAqNW_.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
-    "r1": "ANAL AUTHENTICATION ERROR",
-    "r2": "IT LOOKS VERY SIMILAR TO SHEFFIELD, BUT THERE ARE SLIGHT DIFFERENCES.",
-    "r3": "THAT IDIOT COMMANDER...",
-    "r4": "I REALLY SHOULD'VE KILLED HIM AFTER ALL...!",
-    "r5": "WHAT DO YOU MEAN 'SWITCHED TO ANAL AUTHENTICATION❤'...?",
-    "r6": "BESIDES, YOU MESS WITH IT EVERY NIGHT, SO IT'S CAUSING ERRORS...!",
-    "r7": null
+    "r1": "glass! sea",
+    "r2": "beautiful Such a blue.",
+    "r3": "drift stuffs. always liked think of it, Come to you've",
+    "r4": "Yeah.",
+    "r5": null,
+    "r6": "to drift ashore right in front just happens of me. I don't know Something came from where it",
+    "r7": "When you that way, romantic. it does put it sound",
+    "r8": "romantic It is",
+    "r9": "Because... look."
   }
 }

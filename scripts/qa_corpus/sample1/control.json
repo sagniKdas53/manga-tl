@@ -1,0 +1,48 @@
+{
+  "case_id": "sample1__control",
+  "sample_id": "sample1",
+  "defect_class": "control",
+  "mutated_region_ids": [],
+  "region_count": 4,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "お兄ちゃん：本当にやるの?",
+      "ocrScore": 0.95,
+      "translatedText": "BROTHER... GOING TO DO THIS? ARE YOU REALLY BIG",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "ああ着替えたら向こうの岩場に集合な",
+      "ocrScore": 0.95,
+      "translatedText": "YEAH, ONCE CHANGED, MEET ME AT THE ROCKS THERE. YOU'VE OVER",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "こんなチヤンスめつたに無い…楽しみだろ？",
+      "ocrScore": 0.95,
+      "translatedText": "AREN'T YOU A CHANCE EXCITED? LIKE THIS DOESN'T OFTEN... COME",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "母さん達にはテキトーに言つとくから",
+      "ocrScore": 0.95,
+      "translatedText": "TELL MOM I'LL AND DAD EXCUSE. SOME JUST",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample1/source/original.jpeg",
+    "render": "examples/sample1/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "mangatranslator.ai"
+}

@@ -1,0 +1,51 @@
+{
+  "case_id": "sample31__order_swap",
+  "sample_id": "sample31",
+  "defect_class": "order_swap",
+  "mutated_region_ids": [
+    "r3",
+    "r1"
+  ],
+  "region_count": 4,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "暑いのか？ならば滝行をするぞ",
+      "ocrScore": 0.95,
+      "translatedText": "If waterfall perform training It's hot? so, let's",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "私とするのはイヤか?",
+      "ocrScore": 0.95,
+      "translatedText": "it with to do want me?",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "いいや僕は遠慮しておくよ",
+      "ocrScore": 0.95,
+      "translatedText": "thanks, I think I'll N-No",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "Vそそうじやなくて…",
+      "ocrScore": 0.95,
+      "translatedText": "that's what I N-no, not 0",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample31/source/HOD7g4-bMAAXGLG.jpeg",
+    "render": "examples/sample31/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

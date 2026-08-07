@@ -1,0 +1,66 @@
+{
+  "case_id": "sample24__ocr_garbage",
+  "sample_id": "sample24",
+  "defect_class": "ocr_garbage",
+  "mutated_region_ids": [
+    "r6"
+  ],
+  "region_count": 6,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "あなたが補習に来てる子?可愛すぎない!?",
+      "ocrScore": 0.95,
+      "translatedText": "remedi lesson here Are you for s? al",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "つはじめましてお姉さんたちこんにちは",
+      "ocrScore": 0.95,
+      "translatedText": "upperclass Aren't you we're your too cute!? just way there, men~ Hello",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "ごめんねこの子今日も私が借りていくからそれにちょつと具合も悪そうだしちうどうちで休ませるわ°",
+      "ocrScore": 0.95,
+      "translatedText": "she looks a",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "それなら仕方ないね°また今度一緒に見て回ろう",
+      "ocrScore": 0.95,
+      "translatedText": "together another guess it can't be helped. around time. Well, Let's look",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r5",
+      "ocrText": "テレジアが新しい生徒を取つたて前に聞いたけどそれから全然話してくれなかたのんなに綺麗な子を隠しよねこで一てたなん",
+      "ocrScore": 0.95,
+      "translatedText": "to think she was student, but she thing since. And hiding such a beautiful girl! hasn't said a on a new",
+      "translationScore": 0.93,
+      "readingOrder": 5
+    },
+    {
+      "regionId": "r6",
+      "ocrText": "ねえくの子隣の学校で有名な天才じない?補人違いじや習なんて必要なの?なせ?",
+      "ocrScore": 0.55,
+      "translatedText": "this girl that genius from really need the school next door? Does she Hey, isn't remedial classes? famous",
+      "translationScore": 0.93,
+      "readingOrder": 6
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample24/source/532354fb9861565d3a90b1d56fad52549bf5d363 (copy 1).jpg",
+    "render": "examples/sample24/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "mangatranslate.com"
+}

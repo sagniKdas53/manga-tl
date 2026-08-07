@@ -1,0 +1,51 @@
+{
+  "case_id": "sample18__order_swap",
+  "sample_id": "sample18",
+  "defect_class": "order_swap",
+  "mutated_region_ids": [
+    "r4",
+    "r1"
+  ],
+  "region_count": 4,
+  "regions_metadata": [
+    {
+      "regionId": "r1",
+      "ocrText": "ホタル緊張してるのか?",
+      "ocrScore": 0.95,
+      "translatedText": "NERVOUS? FIREFLY, ARE YOU FEELING",
+      "translationScore": 0.93,
+      "readingOrder": 4
+    },
+    {
+      "regionId": "r2",
+      "ocrText": "AI training.1folnot use my ait作発言/AI学習NG",
+      "ocrScore": 0.95,
+      "translatedText": "NG作発言/AI学習禁止not use my ant for AI training.",
+      "translationScore": 0.93,
+      "readingOrder": 2
+    },
+    {
+      "regionId": "r3",
+      "ocrText": "少しだけ……",
+      "ocrScore": 0.95,
+      "translatedText": "LITTLE... JUST JU... A",
+      "translationScore": 0.93,
+      "readingOrder": 3
+    },
+    {
+      "regionId": "r4",
+      "ocrText": "@kimoko-7718",
+      "ocrScore": 0.95,
+      "translatedText": "@kinoko_7718",
+      "translationScore": 0.93,
+      "readingOrder": 1
+    }
+  ],
+  "has_bboxes": false,
+  "images": {
+    "source": "examples/sample18/source/original.jpeg",
+    "render": "examples/sample18/output/worker-render.png"
+  },
+  "vlm_ready": false,
+  "reference_provenance": "human"
+}

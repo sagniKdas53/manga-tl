@@ -1,0 +1,101 @@
+[
+  {
+    "id": "r1",
+    "panel": 1,
+    "bubble": 1,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "あっ…"
+  },
+  {
+    "id": "r2",
+    "panel": 1,
+    "bubble": 2,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "相田くん"
+  },
+  {
+    "id": "r3",
+    "panel": 1,
+    "bubble": 3,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "来て!"
+  },
+  {
+    "id": "r4",
+    "panel": 1,
+    "bubble": 4,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "あ…"
+  },
+  {
+    "id": "r5",
+    "panel": 1,
+    "bubble": 5,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "$2$"
+  },
+  {
+    "id": "r6",
+    "panel": 1,
+    "bubble": 6,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "さい…"
+  },
+  {
+    "id": "r7",
+    "panel": 1,
+    "bubble": 7,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "やるなあ楓ちん"
+  },
+  {
+    "id": "r8",
+    "panel": 1,
+    "bubble": 8,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "しかり相田くんを連れて行くなんて"
+  },
+  {
+    "id": "r9",
+    "panel": 1,
+    "bubble": 9,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "お題はなんだったんだろ?"
+  },
+  {
+    "id": "r10",
+    "panel": 1,
+    "bubble": 10,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "これが漫画なら好きな人とかなんだろうけど"
+  },
+  {
+    "id": "r11",
+    "panel": 1,
+    "bubble": 11,
+    "speaker": null,
+    "regionType": "speech",
+    "conversationGroup": null,
+    "text": "現実的には「男子とか?"
+  }
+]

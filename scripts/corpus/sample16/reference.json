@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample16/original.jpeg",
-  "reference_image": "examples/sample16/human-tl.jpeg",
-  "reference_provenance": "human-tl.jpeg",
+  "source_image": "examples/sample16/source/original.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample16/reference/human-tl.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": null,
     "r2": "EMBARRASSING... IF YOU DON'T FUNNY DANCE OF YOURS TO YOU'RE SUCH A LOSER... WANT THIS GO VIRAL, PROXY? HEY,",

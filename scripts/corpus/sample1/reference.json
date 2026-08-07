@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample1/original.jpeg",
-  "reference_image": "examples/sample1/en-mangatranslator.ai.jpeg",
-  "reference_provenance": "en-mangatranslator.ai.jpeg",
+  "source_image": "examples/sample1/source/original.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample1/reference/en-mangatranslator.ai.jpeg",
+  "reference_provenance": "mangatranslator.ai",
   "reference_translations": {
     "r1": "BROTHER... GOING TO DO THIS? ARE YOU REALLY BIG",
     "r2": "YEAH, ONCE CHANGED, MEET ME AT THE ROCKS THERE. YOU'VE OVER",

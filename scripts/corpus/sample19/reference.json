@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample19/original.png",
-  "reference_image": "examples/sample19/en-HOiWQgKbsAAcpMc.jpeg",
-  "reference_provenance": "en-HOiWQgKbsAAcpMc.jpeg",
+  "source_image": "examples/sample19/source/original.png",
+  "source_lang": "ja",
+  "reference_image": "examples/sample19/reference/en-HOiWQgKbsAAcpMc.jpeg",
+  "reference_provenance": "mangatranslator.ai",
   "reference_translations": {
     "r1": "IMAGE",
     "r2": "SAYING HAHA, WHAT ME? ARE YOU",

@@ -23,3 +23,6 @@ backend/.project
 pytest*
 exported_minio/*
 exported_images/*
+
+# OCR gold-review pages: regenerable, and each embeds base64 crops (~350KB each)
+scripts/ocr_corpus/_review/

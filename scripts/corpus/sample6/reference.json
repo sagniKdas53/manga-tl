@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample6/orginal.jpeg",
-  "reference_image": "examples/sample6/human-tl.jpeg",
-  "reference_provenance": "human-tl.jpeg",
+  "source_image": "examples/sample6/source/orginal.jpeg",
+  "source_lang": "ja",
+  "reference_image": "examples/sample6/reference/human-tl.jpeg",
+  "reference_provenance": "human",
   "reference_translations": {
     "r1": "TOUCH- ARM IS ING MY CHEST UMM, YOUR",
     "r2": "NOTHING THERE'S THERE HMM? BUT",

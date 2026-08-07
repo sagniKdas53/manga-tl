@@ -1,7 +1,8 @@
 {
-  "source_image": "examples/sample4/original.png",
-  "reference_image": "examples/sample4/en-mangatranslator.ai.png",
-  "reference_provenance": "en-mangatranslator.ai.png",
+  "source_image": "examples/sample4/source/original.png",
+  "source_lang": "ja",
+  "reference_image": "examples/sample4/reference/en-mangatranslator.ai.png",
+  "reference_provenance": "mangatranslator.ai",
   "reference_translations": {
     "r1": "EIENTEI WARNED NORMAL FOLKS JUST WANDER OUT. THAT'S WHY THOSE EVERYONE- LOST YOUR SHOULDN'T PEOPLE AT SHOW YOU WAY? I'LL INTO THE BAMBOO GROVE.",
     "r2": "CONSIDER THE WAY. BAMBOO PAYMENT HELP ME SHOOTS GUIDING GATHER BY THE ALONG SOME YOU. WAY, FOR IT",
