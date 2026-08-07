@@ -206,15 +206,6 @@ either:
 `?sort=id,desc` and record what actually comes back, then make it match the siblings (ignore
 caller sort entirely, or allowlist it).
 
-#### AUDIT-B11 **[L]** — no page-size ceiling, so the unbounded response AUDIT-F8 removed is still reachable
-
-None of the three endpoints constrains `size`, and `application.yml` sets no
-`spring.data.web.pageable.max-page-size`, so all three inherit Spring's default of **2000**.
-`@PageableDefault(size = …)` sets the default only; `?size=2000` overrides it. AUDIT-F8's whole
-premise was that unbounded list responses were costing load time, and a caller can still ask for
-2000 pages/chapters/series in one request. One line of config: pin `max-page-size` near the
-intended batch sizes (100 is generous against 10/15/25).
-
 ### Worker
 
 #### AUDIT-W3 **[M]** — cooldowns and lock waits burn a job slot doing nothing
