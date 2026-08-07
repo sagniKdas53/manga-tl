@@ -115,12 +115,33 @@ def downscale(img, max_dim=MAX_DIM):
 # Transcription engines
 # ---------------------------------------------------------------------------
 
-def paddle_transcribe_regions(img, regions, lang):
-    """Per-region PaddleOCR transcription, so it is directly comparable with the VLM crops."""
-    from build_translation_corpus import init_paddle_reader, parse_paddle_ocr_results, SOURCE_LANG_TO_PADDLE
+# Local PaddleOCR variants usable as consensus engines. Both PP-OCR generations are already
+# present in the project's model cache, and running more than one is the cheapest way to get a
+# workable engine pool: with only two *free* cloud vision models available, a paddle-plus-two-VLM
+# pool makes the default --min-agree 3 equivalent to unanimity. Adding v5 alongside v6 gives four
+# independent engines, so a single disagreeing engine no longer sinks the region.
+PADDLE_VARIANTS = {
+    "paddleocr_v6_medium": ("PP-OCRv6_medium_det", "PP-OCRv6_medium_rec"),
+    "paddleocr_v6_small": ("PP-OCRv6_small_det", "PP-OCRv6_small_rec"),
+    "paddleocr_v5_server": ("PP-OCRv5_server_det", "PP-OCRv5_server_rec"),
+    "paddleocr_v5_mobile": ("PP-OCRv5_mobile_det", "PP-OCRv5_mobile_rec"),
+}
+DEFAULT_PADDLE_VARIANTS = ["paddleocr_v6_medium", "paddleocr_v5_server"]
+
+
+def paddle_transcribe_regions(img, regions, lang, variant):
+    """Per-region PaddleOCR transcription with one explicit model pair, so it is directly
+    comparable with the VLM crops and so each variant votes independently."""
+    from build_translation_corpus import parse_paddle_ocr_results, SOURCE_LANG_TO_PADDLE
+    from benchmark_local_ocr import init_paddleocr
 
     paddle_lang = SOURCE_LANG_TO_PADDLE.get(lang, "japan")
-    reader = init_paddle_reader(paddle_lang)
+    det_model, rec_model = PADDLE_VARIANTS[variant]
+    reader = init_paddleocr(paddle_lang, det_model, rec_model)
+    if reader is None:
+        print(f"    [warn] could not initialise {variant}; skipping this engine")
+        return None
+
     out = {}
     for r in regions:
         x, y, w, h = r["bbox"]
@@ -131,7 +152,7 @@ def paddle_transcribe_regions(img, regions, lang):
         try:
             parsed = parse_paddle_ocr_results(reader.predict(crop))
         except Exception as e:  # noqa: BLE001
-            print(f"    [warn] paddle failed on {r['id']}: {e}")
+            print(f"    [warn] {variant} failed on {r['id']}: {e}")
             out[r["id"]] = ""
             continue
         out[r["id"]] = "".join(text for _bbox, text, _conf in parsed).strip()
@@ -304,9 +325,11 @@ def build_sample(sample_id, examples_dir, out_dir, engines_cfg, args):
                 "polygon": p.get("mask_polygon")} for i, p in enumerate(proposals)]
 
     candidates = {}
-    if not args.no_paddle:
-        print(f"  [paddle] transcribing {len(regions)} regions...")
-        candidates["paddleocr"] = paddle_transcribe_regions(img, regions, lang)
+    for variant in args.paddle_variants:
+        print(f"  [{variant}] transcribing {len(regions)} regions...")
+        texts = paddle_transcribe_regions(img, regions, lang, variant)
+        if texts is not None:
+            candidates[variant] = texts
 
     lang_name = LANG_NAME.get(lang, "Japanese")
     for provider_name, provider_cfg, model_id, _model_name, _free in engines_cfg:
@@ -395,10 +418,16 @@ def main():
     parser.add_argument("--model", help="Only use this model as an engine")
     parser.add_argument("--max-engines", type=int, default=3,
                         help="Cap on cloud vision models used for consensus (default 3)")
-    parser.add_argument("--include-paid", action="store_true", help="Allow paid models as engines")
+    parser.add_argument("--include-paid", action="store_true",
+                        help="Allow paid models as engines (default: free models only)")
     parser.add_argument("--local-only", action="store_true",
-                        help="PaddleOCR only, no API calls (everything ends up 'unresolved')")
-    parser.add_argument("--no-paddle", action="store_true", help="Skip the local PaddleOCR engine")
+                        help="PaddleOCR variants only, no API calls")
+    parser.add_argument("--paddle-variants", default=",".join(DEFAULT_PADDLE_VARIANTS),
+                        help="Comma-separated local PaddleOCR engines to vote with. "
+                             f"Available: {', '.join(PADDLE_VARIANTS)}. "
+                             f"Default: {','.join(DEFAULT_PADDLE_VARIANTS)} (two generations, so "
+                             "the pool reaches --min-agree without needing unanimity). "
+                             "Pass an empty string to skip local engines.")
     parser.add_argument("--min-agree", type=int, default=3,
                         help="Engines that must agree within --tol for tier 'consensus'")
     parser.add_argument("--tol", type=float, default=0.10, help="CER tolerance for agreement")
@@ -409,6 +438,10 @@ def main():
     parser.add_argument("--sleep", type=float, default=0.0, help="Seconds between region requests")
     args = parser.parse_args()
     args.gold = {s for s in args.gold.split(",") if s}
+    args.paddle_variants = [v for v in args.paddle_variants.split(",") if v]
+    unknown = [v for v in args.paddle_variants if v not in PADDLE_VARIANTS]
+    if unknown:
+        sys.exit(f"[ERROR] unknown --paddle-variants {unknown}; available: {list(PADDLE_VARIANTS)}")
 
     if args.apply_review:
         apply_review(args.apply_review, args.out_dir)
