@@ -164,42 +164,45 @@ call. Cross-check with grep before trusting a zero.
 
 `manga-tl-worker` untouched, still at its prior index point.
 
-## CI — measured this sitting, and the gap is real and ongoing
+## CI — the gap is explained, and it was never GitHub's fault
 
-**Previous handoffs could not confirm this because they were querying the wrong repo.** The slug
-is `sagniKdas53/manga-tl`, not `Sagnik-Das-53/manga-library`; a guessed URL 404s in a way that
-reads as "no check runs" rather than "no such repo". `commits/<sha>/check-runs` returns nothing
-useful for these commits either — **the workflow-scoped endpoint is the one that answers this**,
-which is exactly the lesson the sixteenth sitting recorded.
+**This was chased to ground this sitting and the standing explanation was wrong.** Three sittings
+carried "CI never triggered despite matching path filters" forward as an unexplained gap, with a
+GitHub-wide outage as the working theory. Neither part holds.
 
-Measured against `actions/workflows/ci-maven.yml/runs`:
+**Two separate mistakes were stacked on top of each other:**
 
-| head | branch | created | conclusion |
-| --- | --- | --- | --- |
-| `5f7f0f6` | main | 2026-08-06T17:51Z | **cancelled** (reported as `failure`) |
-| `b0b4390` | main | 2026-08-06T16:50Z | **cancelled** |
-| `365ad99` | main | 2026-08-06T16:20Z | cancelled |
-| `829a073` | main | 2026-08-06T13:27Z | success |
+1. **The API probes queried a repo that does not exist.** The slug is `sagniKdas53/manga-tl`, not
+   `Sagnik-Das-53/manga-library`. The 404 from a guessed URL reads as "no check runs" rather than
+   "no such repo", so every probe came back looking like confirmation.
+2. **The commits had never been pushed.** `362fa60`, `18d5239` and `8c4c509` were sitting on local
+   `main`. No push, no `push` event, no workflow run — nothing was being filtered out, there was
+   nothing to filter. The "outage" was an unpushed branch.
 
-**`ci-maven.yml` has not been triggered since 2026-08-06T17:51Z.** Three `main` commits landed on
-2026-08-07 — `362fa60`, `18d5239`, `8c4c509` — all matching its path filters, and **none of them
-produced a run at all.** `ci-npm.yml` last ran at `829a073` (2026-08-06T13:27Z) and likewise has
-nothing since.
+**Confirmed by doing it.** Pushing this sitting's work triggered `ci-maven.yml`, `ci-npm.yml` and
+`ci-backend-docker.yml` immediately, on the same path filters that were suspected. `ci-maven.yml`
+and `ci-backend-docker.yml` passed. The older `cancelled` runs from 2026-08-06 are a separate,
+genuinely GitHub-side thing and are not evidence about triggering.
 
-**The two "failures" are not test failures.** Inspecting the jobs of the most recent run: the
-`Build and test backend` job is `cancelled` with no failed step — the same "cancelled with zero
-steps executed" signature the sixteenth sitting saw. So `main` is not red on its merits; the
-symptom is the runner never doing work, which is consistent with (but still does not *prove*) the
-GitHub-side outage the user reported.
+**And CI caught something the local gate did not.** `ci-npm.yml` failed on `95e14d3` at the
+**Format check** step — `prettier --check` on two files this sitting touched. `npm run lint` and
+`vitest run` were both clean; the format gate is a *different* gate and was not being run.
 
-**What would settle it:** push this sitting's commit and re-query the same workflow-scoped
-endpoint. It touches `frontend/**`, so `ci-npm.yml` should fire; if it does not, the path filters
-are not the explanation and the workflow triggers themselves need reading. Registered workflows
-are `ci-maven.yml`, `ci-npm.yml`, `ci-backend-docker.yml`, plus dependabot and CodeQL — note the
-frontend workflow is **`ci-npm.yml`**, not `ci-node.yml`.
+**Use the CI-equivalent gate for frontend work, not `vitest` alone.** `ci-npm.yml` runs four steps
+in order and this sitting only ran two of them:
 
-The strongest available evidence for `main`'s health remains the local gate: backend 426,
-frontend 326.
+```
+cd frontend
+npm run format:check   # prettier --check .   <- the one that failed
+npm run lint           # eslint --max-warnings 0
+npm run test:coverage  # not plain `vitest run`
+npm run build          # tsc + vite, the only typecheck in the pipeline
+```
+
+All four are green as of `9b8a86d`. Note the frontend workflow is **`ci-npm.yml`**, not
+`ci-node.yml`. Registered workflows: `ci-maven.yml`, `ci-npm.yml`, `ci-backend-docker.yml`, plus
+dependabot and CodeQL. Query `actions/workflows/<file>/runs` — `commits/<sha>/check-runs` does not
+answer "did this workflow run at all".
 
 ## Not mine — left alone deliberately
 
@@ -253,6 +256,9 @@ Unchanged — the free-model benchmarking thread (`docs/benchmarking.md`, `docs/
 - **Run `vitest` from `frontend/`, not the repo root.** From the root it picks up a different
   config, jsdom never loads, and every test fails with `document is not defined` — which looks
   like a catastrophic regression and is a wrong working directory.
+- **The frontend gate is four commands, not one.** `format:check`, `lint`, `test:coverage`,
+  `build` — see § CI. `vitest` alone passed over a `prettier --check` failure this sitting and CI
+  caught it.
 - **A `@WebMvcTest` with a mocked repository proves very little.** If the behaviour under test
   belongs to Spring Data or Hibernate, a mocked repository cannot see it. Use `@SpringBootTest` +
   Testcontainers (`PipelineFlowIntegrationTest` is the working example). **This is AUDIT-T3's one
@@ -344,18 +350,21 @@ frontend/, 326 passing across 46 files. From the repo root it loads the wrong
 config and every test fails with "document is not defined" — that's a wrong
 cwd, not a regression. Worker gates untouched, still at 315.
 
-CI: MEASURED last sitting, gap is real and ongoing. ci-maven.yml has not been
-triggered since 2026-08-06T17:51Z; three main commits on 2026-08-07 (362fa60,
-18d5239, 8c4c509) all match its path filters and produced NO run at all.
-ci-npm.yml likewise nothing since 829a073. The last two ci-maven runs report
-"failure" but the job is CANCELLED with no failed step — main is not red on
-its merits. THE REPO SLUG IS sagniKdas53/manga-tl (older handoffs queried a
-nonexistent repo and read the 404 as "no check runs"), and the FRONTEND
-workflow is ci-npm.yml, not ci-node.yml. Use the workflow-scoped endpoint
-actions/workflows/<file>/runs — commits/<sha>/check-runs does not answer this.
-NEXT PROBE: push last sitting's commit (it touches frontend/**, so ci-npm.yml
-should fire) and re-query. If it still doesn't fire, path filters are not the
-explanation and the workflow triggers need reading.
+CI: RESOLVED, and the old explanation was wrong on both counts. The "CI never
+triggers despite matching path filters" gap that three sittings carried forward
+was (a) probed against a repo that doesn't exist — the slug is
+sagniKdas53/manga-tl, and the 404 reads like "no check runs" — and (b) the
+commits had simply never been PUSHED. No push event, no run. Not an outage.
+Pushing fired ci-maven.yml, ci-npm.yml and ci-backend-docker.yml immediately.
+CI is working; push and it runs.
+BUT: ci-npm.yml caught a Format check failure that the local gate missed. Run
+ALL FOUR CI steps for frontend work, from frontend/:
+  npm run format:check   # prettier --check . — this is the one that failed
+  npm run lint
+  npm run test:coverage  # not plain `vitest run`
+  npm run build          # tsc + vite, the only typecheck in the pipeline
+All four green as of 9b8a86d. Frontend workflow is ci-npm.yml, not ci-node.yml.
+Query actions/workflows/<file>/runs, not commits/<sha>/check-runs.
 
 REMOTES: git fetch --all hangs on origin. Use git fetch github / git push
 github main. Worker submodule's origin is separate and works.

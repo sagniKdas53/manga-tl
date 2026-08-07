@@ -596,7 +596,9 @@ describe("Dashboard Component", () => {
     // Select's entire `onChange` would not have failed it. `Dashboard` owns exactly two
     // things here: telling the parent what was picked, and persisting it. What the parent
     // then *fetches* is the wiring, covered in DashboardSortWiring.test.tsx.
-    await waitFor(() => expect(mockSetSortBy).toHaveBeenCalledWith("createdAt"));
+    await waitFor(() =>
+      expect(mockSetSortBy).toHaveBeenCalledWith("createdAt"),
+    );
     expect(mockSetSortDir).toHaveBeenCalledWith("desc");
     expect(localStorage.getItem("dashboard_sort_by")).toBe("createdAt");
     expect(localStorage.getItem("dashboard_sort_dir")).toBe("desc");

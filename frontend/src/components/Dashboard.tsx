@@ -217,7 +217,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </Box>
 
       {loadError && sortedSeriesList.length === 0 && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2 }}
+        >
           Couldn&apos;t load your series. {loadError}
         </Alert>
       )}
