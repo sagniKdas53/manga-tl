@@ -154,9 +154,11 @@ GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000 GITNEXUS_WORKER_MAX_CUMULATIVE_TIMEO
   analyze --embeddings --force
 ```
 
-188.8 s. Now at **5,532 nodes / 13,635 edges / 300 flows** (was 5,414 / 13,437). `AGENTS.md` and
-`CLAUDE.md` had their stat lines rewritten by `analyze` and those edits are in this sitting's
-commit.
+188.8 s the first time, 143.3 s on the second run at the end of the sitting — so the fix is
+reproducible, not a fluke. **The index was re-run after the last commit and is current with
+`d8b46a0`: 5,534 nodes / 13,641 edges / 248 clusters / 300 flows** (was 5,414 / 13,437). You
+should not need to reindex before starting. `AGENTS.md` and `CLAUDE.md` have their stat lines
+rewritten by `analyze` each time; those edits are committed.
 
 Note `impact()` reports `Dashboard` as having **0 direct callers**, which is an artefact: `App.tsx`
 imports it via `React.lazy(() => import(...))` and the graph does not trace a dynamic import as a
@@ -337,8 +339,9 @@ Track 2 (open-in-view flip-and-remeasure) and Track 3 (the quality gap) are
 NOT in this queue — direction on both undecided, don't start either without
 asking.
 
-GITNEXUS: reindexed last sitting, at 5,532 nodes / 13,635 edges / 300 flows.
-THE COMMAND IN OLDER HANDOFFS DOES NOT WORK — it exits 0 having written
+GITNEXUS: reindexed at the END of last sitting, so it is CURRENT with d8b46a0
+(5,534 nodes / 13,641 edges / 300 flows) — you should not need to reindex
+before starting. THE COMMAND IN OLDER HANDOFFS DOES NOT WORK — it exits 0 having written
 nothing, dying in a native worker on backend/src/main/c/jni/jni.h (a vendored
 JDK header that parses slower than the 30s default idle timeout). Use:
   GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000 \
