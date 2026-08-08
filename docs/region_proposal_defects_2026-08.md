@@ -85,13 +85,52 @@ all passing `(img, bbox)`; the masking goes behind an opt-in parameter that defa
 
 ---
 
+## Measured result of fix B (2026-08-08)
+
+`scripts/polygon_mask_crops.py --min-fill 0.70`, PP-OCRv6_medium, 36 regions:
+
+| outcome | regions |
+|---|---|
+| masked text **shorter** — cross-balloon spill removed | 12 |
+| same length (reordering / character swaps) | 22 |
+| longer | 1 |
+| **masked to empty** — polygon too tight | 1 |
+
+Clear wins where a neighbour's text was bleeding in: `sample10` r7 `121212122待って` → `待って`;
+`sample3` r1 shed a trailing `といずっ私の` belonging to the next balloon; `sample7` r8 dropped a
+`頑不` tail. Genuine recognition gains too, from removing distracting context: `sample6` r1
+`ぶコとばすねよ` → `ぶっとばすねよ`.
+
+The tail risk is real: `sample6` r4 (34% fill) masked to **empty**, i.e. the polygon excluded the
+text. Masking should therefore fall back to the bbox reading when the masked crop yields nothing.
+
+## Fix B does not subsume fix A — they are disjoint
+
+| region type | count | has polygon | masking applies |
+|---|---|---|---|
+| `bubble` | 214 | yes (all) | yes |
+| `direct_text` | 77 | **no (none)** | **no — pass-through** |
+
+Defect A is entirely a `direct_text` phenomenon, and `direct_text` regions carry no polygon at
+all. So masking is a literal no-op on exactly the regions defect A produces — `sample23` r1
+(458x1505) and r2 (417x1223) are untouched by it. Choosing between the two fixes is a false
+choice; they address different regions and neither covers the other.
+
+## Evaluating B properly costs money
+
+Its effect on *consensus* cannot be judged from the local engines alone. The vote compares paddle
+against qwen and gemini, so masking paddle's crops while the cloud candidates still come from
+unmasked ones would recreate precisely the defect fixed earlier today (engines voting on different
+images). A valid measurement needs the cloud engines re-run on masked crops.
+
 ## Order of work
 
-1. **Fix B first** — it is cheap, isolated, and measurable on its own: re-run the local engines on
-   `sample3`/`sample30` with masking on and see whether consensus recovers.
-2. **Then decide on A** from that evidence. If B alone lifts those pages, A stays a known
-   production defect to schedule separately rather than a blocker for the corpus.
+1. **B** — apply masking to *all* engines at once, with the empty-result fallback, and re-tier.
+   Costs one cloud pass.
+2. **A** — decide on production grounds, not corpus coverage. It affects only 5 large regions
+   here, but downstream a merged region is one translation unit with one background colour and
+   one typeset target, so chaining two speakers' balloons corrupts the output, not just the
+   measurement.
 
-Note that either fix changes the *region proposals*, which invalidates every stored `candidate`
-(they were transcribed from the old crops). Establish the clean baseline first, then treat region
-work as its own round.
+Either fix changes region proposals, which invalidates every stored `candidate` (they were
+transcribed from the old crops). Do them together rather than paying for two cloud passes.
