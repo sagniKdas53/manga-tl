@@ -1,6 +1,10 @@
 # Plan: re-run the free-model benchmarks across OpenRouter, NVIDIA and Cloudflare
 
-**Status:** plan only, nothing run yet.
+**Status:** prerequisite 1 (below) done as of 2026-08-07 — `scripts/test-providers.json`
+refreshed from live provider APIs with all four task keys populated. Phase A/B/C runs
+themselves have **not** been executed yet. See
+[`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md) for what was
+collected, config bugs it surfaced, and the exact commands to run Phase A next.
 **Supersedes:** [`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md)
 — one provider, one hand-made page, translation stage only.
 
@@ -10,8 +14,8 @@ The 2026-08-06 report is a single data point in every dimension that matters:
 
 | | 2026-08-06 | Now |
 |---|---|---|
-| Pages | 1 (`sample28`, hand-transcribed) | 38 translation / 40 OCR-eligible |
-| Reference | a paid competitor's machine output (mangatranslator.ai / qwen3-235b) | human translation on 24 of 38 pages |
+| Pages | 1 (`sample28`, hand-transcribed) | 40 translation / 40 OCR / 38 QA |
+| Reference | a paid competitor's machine output (mangatranslator.ai / qwen3-235b) | human translation on 26 of 40 pages |
 | Providers | OpenRouter | OpenRouter, NVIDIA, Cloudflare |
 | Stages | translation | translation, OCR, QA (LLM + VLM) |
 | Runner | one-off prototype | corpus-driven, shared ladder, `_summary.json` |
@@ -47,6 +51,17 @@ committed snapshot — the 2026-08-06 run did this via `GET /api/v1/models` filt
 **Deliverable:** an updated `scripts/test-providers.json` with all four task keys populated per
 provider, dated in a comment.
 
+**Done 2026-08-07** — see [`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md)
+for the full writeup. Actual counts came in smaller than the estimate above once re-verified
+live: OpenRouter's free tier is 17 models (not 14, and not the same 14 — `ling-3.0-flash:free`
+left the free tier entirely), Cloudflare has 25 free-ok + 3 Workers-Paid-gated, NVIDIA has 67
+free `tl`/`qaLLM` + 10 `ocr`/`qaVLM` (3 fewer than the 70 estimated above — 3 models were
+removed from NVIDIA's catalog since 2026-08-06). `qaLLM`/`qaVLM` are now populated for every
+provider per the rule below. The live re-pull also surfaced 3 bugs in the production
+`config/providers.json` (a no-longer-free model, 3 Cloudflare models mismarked free, 2 stale
+Cloudflare model-ID namespaces) — see the handoff §2 before trusting any run that routes through
+those exact entries.
+
 ---
 
 ## 2. Sizing — why this must be phased
@@ -55,9 +70,9 @@ Naive full sweeps are not runnable on free tiers:
 
 | Stage | Models | Unit | Full sweep | Est. wall time |
 |---|---|---|---|---|
-| Translation | 107 | 1 request / page | 107 × 38 = **4,066** | ~19 h at 15 s + 2 s sleep |
+| Translation | 107 | 1 request / page | 107 × 40 = **4,280** | ~20 h at 15 s + 2 s sleep |
 | OCR | 21 | 1 request / **region** | 21 × ~300 regions = **6,300** | ~25 h |
-| QA LLM | ~107 | 1 request / case | 107 × 245 = **26,215** | days |
+| QA LLM | ~107 | 1 request / case | 107 × 265 = **28,355** | days |
 
 OCR is per-region, which is the expensive one people underestimate. So: **screen wide and
 shallow, then measure narrow and deep.**
@@ -174,12 +189,48 @@ because that file is what the backend actually reads.
 
 ## 6. Prerequisites
 
-- [ ] `scripts/test-providers.json` refreshed, with `qaLLM`/`qaVLM` lists added (§1)
-- [ ] OCR corpus built beyond `sample36` — currently 1 of 40 pages, so the OCR bench has almost
-      nothing to score against. Needs the per-sample loop from
-      [`benchmarks_guide.md`](benchmarks_guide.md) §5.
+- [x] `scripts/test-providers.json` refreshed, with `qaLLM`/`qaVLM` lists added (§1) — done
+      2026-08-07, see [`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md)
+- [x] OCR corpus built beyond `sample36` — all 40 pages built 2026-08-08 with the per-sample loop
+      from [`benchmarks_guide.md`](benchmarks_guide.md) §5. Built **local-only** (the four
+      PaddleOCR variants, `--min-agree 3`) so it cost no free-tier quota while the QA-LLM sweep
+      was still running. `sample36` was left on its original VLM-based ground truth so the
+      completed 19-model OCR bench stays comparable.
+- [ ] Re-run the OCR corpus with cloud vision engines added to the four local ones. Local and
+      cloud resolve *different* regions (see [`benchmarks_guide.md`](benchmarks_guide.md) §6), so
+      the combined pool lifts consensus coverage. Do this after the QA-LLM sweep frees the quota.
 - [ ] At least a few OCR pages promoted to `gold` via the review flow, so OCR numbers rest on
-      confirmed text rather than consensus alone
-- [ ] QA VLM arm has 0 runnable cases until the OCR corpus supplies bounding boxes — it is blocked
-      on the item above
-- [ ] `sample21` (Chinese) replaced or excluded, so the translation sweep is single-language
+      confirmed text rather than consensus alone. **Do this after the engine pool is final** —
+      `build_ocr_corpus.py` re-runs YOLO region proposal on every build, so a rebuild can shift
+      bboxes out from under a review.
+- [ ] QA VLM arm — the OCR corpus now supplies bounding boxes, so re-run
+      `build_qa_corpus.py` to pick them up and confirm the `vlm_ready` count is non-zero.
+- [x] `sample21` (Chinese) replaced with a Japanese page 2026-08-08 — the translation sweep is
+      now single-language. All 40 pages are in the translation corpus; `EXCLUDED_SAMPLES` is empty.
+
+---
+
+## 7. Future extension: a second, NSFW corpus
+
+Planned, not started. The current 40 pages are the **SFW** set — `examples/NSFW/` already holds
+pages moved out during the re-curation (it is what orphaned the old `sample28` manual entry).
+The intent is to curate **40 complex NSFW pages** as a parallel corpus, because that is a real
+slice of what users run through the pipeline and none of the numbers above cover it.
+
+What makes it a separate corpus rather than more pages in this one:
+
+- **The translation corpus deliberately commits no images**, precisely so adult source pages stay
+  out of the repo. That property has to hold for the NSFW set too — text-only entries, images
+  read from the gitignored `examples/` tree at build time.
+- **The OCR corpus *does* commit a downscaled WebP per page.** That is the one place the
+  no-pixels rule breaks, so an NSFW OCR corpus needs a decision before it is built: keep its
+  images out of git and accept that the benchmark input is not reproducible from a clean clone,
+  or store them somewhere else. Do not let this get decided implicitly by running the builder.
+- **Provider content policy will produce refusals that look like capability failures.** Several
+  free models will refuse or return empty content on adult pages. Those need their own bucket in
+  the failure taxonomy (alongside "NVIDIA ghost" and "Cloudflare quota") or the rankings will be
+  wrong. "Complex" pages also mean higher region counts, which is the main driver of both latency
+  and id-fidelity risk.
+
+Everything else carries over unchanged — same builders (`--examples-dir` already points wherever
+you want), same three benches, same 60s bar.

@@ -24,5 +24,12 @@ pytest*
 exported_minio/*
 exported_images/*
 
-# OCR gold-review pages: regenerable, and each embeds base64 crops (~350KB each)
-scripts/ocr_corpus/_review/
+# Benchmark corpora and run output. All of it is derived from examples/, which is itself
+# gitignored and purged from history — so none of it has a source git can track, and a corpus
+# committed here would be a snapshot nobody can regenerate or diff meaningfully. Rebuild with
+# scripts/build_{translation,ocr,qa}_corpus.py; see docs/benchmarks_guide.md §5.
+# The durable record is scripts/examples_manifest.json, which stays tracked.
+scripts/corpus/*
+scripts/ocr_corpus/*
+scripts/qa_corpus/*
+runs/*

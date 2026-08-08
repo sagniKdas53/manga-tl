@@ -211,11 +211,12 @@ docker cp manga-worker:/app/demo_output_qwen_qwen3-vl-8b-instruct.jpg ./
 ## 🧪 Exploratory free VLM candidates (untested)
 
 OCR needs a model that actually accepts image input — most of a provider's free-tier chat
-models don't. `scripts/test-providers.json`'s `models.ocr` list per provider is
+models don't. `scripts/test-providers.json`'s `models.ocr`/`models.qaVLM` lists per provider are
 **pre-filtered to vision-capable models only** (checked against each provider's live model
-metadata on 2026-08-06), unlike its `models.tl` list which includes plenty of text-only
-models that would silently fail here. None of the following have been run for real yet
-(beyond a one-region wiring smoke test — see `scripts/benchmark_vlm_ocr.py`'s commit):
+metadata, refreshed 2026-08-07), unlike its `models.tl`/`models.qaLLM` lists which include
+plenty of text-only models that would silently fail here. None of the following have been run
+for real yet (beyond a one-region wiring smoke test — see `scripts/benchmark_vlm_ocr.py`'s
+commit):
 
 ```bash
 python scripts/benchmark_vlm_ocr.py --image examples/sample36/source/GhSomnxbIAEPKVw.jpg --lang Japanese \
@@ -225,7 +226,7 @@ python scripts/benchmark_vlm_ocr.py --image examples/sample36/source/GhSomnxbIAE
 | Provider | Vision-capable free candidates |
 | --- | --- |
 | OpenRouter | `google/gemma-4-26b-a4b-it:free`, `google/gemma-4-31b-it:free`, `nvidia/nemotron-nano-12b-v2-vl:free`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` |
-| Cloudflare | `@cf/moondream/moondream3.1-9B-A2B` (small, purpose-built VLM — already in `config/providers.json`'s production list), `@cf/google/gemma-4-26b-a4b-it`, `@cf/moonshotai/kimi-k2.6`, `@cf/moonshotai/kimi-k2.7-code`, `@cf/meta/llama-3.2-11b-vision-instruct`, `@cf/meta/llama-4-scout-17b-16e-instruct`, `@cf/mistralai/mistral-small-3.1-24b-instruct` |
+| Cloudflare | `@cf/moondream/moondream3.1-9B-A2B` (small, purpose-built VLM — already in `config/providers.json`'s production list), `@cf/google/gemma-4-26b-a4b-it`, `@cf/meta/llama-3.2-11b-vision-instruct`, `@cf/meta/llama-4-scout-17b-16e-instruct` — **`@cf/moonshotai/kimi-k2.6` and `@cf/moonshotai/kimi-k2.7-code` (the current production `qaVLM`/`ocr` default) now require the Workers Paid plan** per live `require_workers_paid: true` metadata, confirmed 2026-08-07 — not reachable on the free 10,000-neurons/day allowance regardless of balance; see [`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md) §2. `@cf/mistralai/mistral-small-3.1-24b-instruct` no longer reports `vision: true` live and was dropped from this list. |
 | NVIDIA | `nvidia/nemotron-nano-12b-v2-vl`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, `nvidia/cosmos-reason2-8b`, `nvidia/neva-22b`, `nvidia/vila`, `meta/llama-3.2-11b-vision-instruct`, `meta/llama-3.2-90b-vision-instruct`, `microsoft/phi-3-vision-128k-instruct`, `adept/fuyu-8b` (base model, not instruction-tuned — likely needs a different prompt style) |
 
 `nvidia/nemotron-ocr-v2` is listed separately in `test-providers.json` under

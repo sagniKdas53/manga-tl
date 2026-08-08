@@ -284,7 +284,7 @@ def run_case(url, headers, model_id, case, arm, retries=1):
         payload = {"model": model_id, "messages": [{"role": "user", "content": content}]}
         return apply_response_format(payload, mode, QA_JSON_SCHEMA)
 
-    return run_ladder(url, headers, build_payload, retries=retries, timeout=180)
+    return run_ladder(url, headers, build_payload, retries=retries, timeout=60)
 
 
 def main():

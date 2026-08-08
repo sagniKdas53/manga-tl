@@ -60,27 +60,51 @@ why it was abandoned.
 
 ## 2. The corpora
 
-### `scripts/corpus/` — translation (text only, 38 pages)
+### `scripts/corpus/` — translation (text only, 40 pages)
 
-No images: source pages can be adult content, so the corpus stays committable without carrying
-them. Per page: `regions.json` (source text in reading order), `reference.json` (id → reference
-translation), `meta.json` (reliability signals).
+No images: source pages can be adult content, so nothing here carries pixels even though the
+corpus is no longer committed at all (see the note under the OCR corpus below). Per page:
+`regions.json` (source text in reading order), `reference.json` (id → reference translation),
+`meta.json` (reliability signals).
 
 The reference translation is the **quality target**, so where it comes from matters. The builder
 prefers a human translation over a competitor's machine output — scoring against `en-<name>`
 (watermarked *mangatranslator.ai / qwen3-235b*) would mean grading models with a model. Current
-split: **24 pages score against a human translation**, 13 against a machine one, 1 against a
-hand-edited render.
+split: **26 pages score against a human translation**, 13 against a machine one (12
+mangatranslator.ai, 1 mangatranslate.com), 1 against a hand-edited render.
 
 > The score is `difflib` similarity — a **repeatable proxy**, not a semantic judgement. A model
 > can translate correctly and score low by choosing different words. Use it to rank and to catch
 > regressions, then read the actual output of the top few.
 
-### `scripts/ocr_corpus/` — OCR (commits its images)
+### `scripts/ocr_corpus/` — OCR (40 pages, 291 regions)
 
-This one *does* commit pixels: a downscaled WebP per page (long edge 1600, matching the
-pipeline's `downscale_for_ocr`), so the benchmark has a stable input that survived the
-`examples/` history purge. ~40 pages lands around 8–14 MB.
+A downscaled WebP per page (long edge 1600, matching the pipeline's `downscale_for_ocr`) plus
+`regions.json` and `meta.json`. All 40 pages come to 7.4 MB.
+
+> **None of the three corpora are in git as of 2026-08-08.** They used to be — the OCR corpus in
+> particular committed its WebPs so the benchmark had a stable input. That is no longer true.
+> Every corpus is derived from `examples/`, which is gitignored *and* purged from history, so a
+> committed corpus is a snapshot with no trackable source: it can't be regenerated from the repo
+> and its diffs mean nothing. Rebuild instead (§5). The durable record is
+> `scripts/examples_manifest.json`, which stays tracked.
+>
+> Practical consequence: **a clean clone has no corpora.** Anyone benchmarking needs the
+> `examples/` tree first, then the three builders.
+
+Built out from 1 page to 40 on 2026-08-08, **local engines only** — the four PaddleOCR variants
+at `--min-agree 3`, no API calls, because the free-tier QA-LLM sweep was still running and a
+cloud pass would have competed with it for the same quota. Current tiers:
+
+| tier | regions | |
+|---|---|---|
+| `consensus` | 178 | 61.2% — scoreable |
+| `unresolved` | 113 | 38.8% — excluded from scoring |
+
+9 of 40 pages resolve every region. The weak ones are SFX-heavy (`sample37` 1/10, `sample36` 1/5,
+`sample6` 1/4): at `--tol 0.10`, a single character's disagreement on a 3-character crop is a CER
+of 0.33, so short regions almost never clear the bar. Adding cloud vision engines is the next
+lever — see §6 for why they resolve regions the local pool can't.
 
 Region proposals come from the production path — YOLO bubble detection plus PaddleOCR background
 text merged by `worker.services.merge_regions` — and are **held constant across chat VLMs**, so
@@ -95,7 +119,7 @@ Ground truth has three tiers:
 - **unresolved** — engines disagreed. **Excluded from scoring**, so disagreement never silently
   becomes a noise target.
 
-### `scripts/qa_corpus/` — QA (245 cases over 35 pages)
+### `scripts/qa_corpus/` — QA (265 cases over 38 pages)
 
 Built by mutating clean pages: each case carries exactly **one** labelled defect plus the list of
 regions that were mutated. That list is what lets the runner separate "caught the planted bug"
@@ -103,7 +127,29 @@ from "flags everything" — untouched regions that get flagged count as false po
 page also gets an undamaged `control` case.
 
 Classes: `control`, `mistranslation`, `untranslated`, `ocr_garbage`, `ocr_unrecoverable`,
-`order_swap`, `sfx_translated`. Mutations use a fixed seed so runs are comparable.
+`order_swap`, `sfx_translated`. The seed is keyed on the sample id, so `--sample X` and a full
+run produce the same cases for X.
+
+**VLM readiness: 29 of 38 pages.** A case needs both a worker render (all 40 have one) and
+bounding boxes from the OCR corpus, which is why the arm had 0 runnable cases until that corpus
+was built out. The 9 that still lack boxes fail one check — `attach_bboxes` requires the OCR
+corpus to have found *at least* as many regions as the translation corpus, then zips the two
+positionally. Detection runs on the downscaled page for the OCR corpus and on the full-resolution
+page for the translation corpus, so small regions drop out of the former:
+
+| page | TL regions | OCR regions |
+|---|---|---|
+| `sample30` | 7 | 4 |
+| `sample3` | 9 | 5 |
+| `sample4` | 8 | 6 |
+| `sample29` | 8 | 7 |
+| `sample38` | 11 | 9 |
+| `sample34` | 15 | 12 |
+| `sample17` | 6 | 5 |
+| `sample1` | 4 | 3 |
+
+`sample36` is the ninth: its cases were deliberately left untouched while a QA-LLM sweep scoped to
+that page was in flight. Rebuild it once that finishes.
 
 Not covered: typesetting/overflow defects. They need the page re-rendered with a broken layout,
 not a metadata mutation, so the VLM arm currently measures semantic and OCR review only.
@@ -137,18 +183,34 @@ Verify the layout any time with:
 python scripts/organize_examples.py --verify
 ```
 
-### Pages with no reference translation
+### Coverage, and which pages fall out where
 
-**`sample5` and `sample22` are the only two of the 40 with no reference at all.** Both are
-excluded from the translation corpus (`EXCLUDED_SAMPLES`) because there is nothing to align
-against. They are still perfectly usable for the **OCR** corpus, which only needs source text.
+As of **2026-08-08 all 40 pages are in the translation corpus** and `EXCLUDED_SAMPLES` is empty.
+`sample5` and `sample22`, the last two with no reference at all, were each given a human, a
+google-lens and a mangatranslate.com render, so there is now something to align against on every
+page. The set is kept only for deliberate exclusions; `pick_reference()` already skips a sample
+whose `references` list is empty, so a page with no reference drops out on its own.
 
-Three more are in the translation corpus but absent from the QA corpus — `sample20`, `sample23`,
-`sample25` — because fewer than 3 of their regions got an aligned reference translation, which is
-the minimum for a meaningful defect case.
+Two pages are in the translation corpus but not the QA corpus, both for the same reason — fewer
+than 3 of their regions got an aligned reference translation, the minimum for a meaningful
+defect case:
 
-`sample21` is the only non-Japanese page (Chinese; `meta.json` records `"lang": "zh"`). If you
-swap in a Japanese replacement, drop `scripts/corpus/sample21/` and re-index that one page.
+| page | why |
+|---|---|
+| `sample21` | only 2 text regions on the whole page |
+| `sample23` | dense text, but alignment matched too few regions |
+
+`sample23` is also the corpus's **stress page**: text everywhere, far denser than a typical
+page. Keep it, but read its scores as a worst case rather than as representative.
+
+**`examples/` is now Japanese-only.** `sample21` used to be the one Chinese page and was swapped
+for a Japanese one on 2026-08-08; the Chinese original is parked under
+`examples/sample21/do-not-use-wrong-language/`. `sample20` was swapped the same day (the previous
+scan was too low-quality) and now carries a *human* reference — a Danbooru screenshot with that
+site's translation notes, cropped to within 4px of the source page, so it aligns fine.
+
+A `"parked"` list in `examples_manifest.json` names sibling directories holding a superseded
+version of a page. They are deliberate, and `--verify` ignores them instead of calling them stray.
 
 ---
 
@@ -247,10 +309,18 @@ python scripts/build_qa_corpus.py
 ### Order of operations after changing an image
 
 1. Update `scripts/examples_manifest.json` (roles/provenance for the new file).
-2. `python scripts/organize_examples.py --apply --sample sampleN` then `--verify`.
+2. Regenerate that sample's `meta.json`, then `--verify`:
+   - files still flat at the top of `examples/sampleN/` → `organize_examples.py --apply --sample sampleN`
+   - files already in `source/ reference/ output/` → `organize_examples.py --refresh-meta --sample sampleN`
 3. `python scripts/build_translation_corpus.py --sample sampleN`
 4. `python scripts/build_ocr_corpus.py --sample sampleN`
 5. `python scripts/build_qa_corpus.py --sample sampleN`
+
+> **`--apply` only reads the pre-migration layout** — everything flat at the top of
+> `examples/sampleN/`. Once files live in the role folders it finds nothing to move and exits
+> with `manifest does not match the tree`. Dropping a replacement page straight into `source/`
+> and `reference/` is the normal way to swap one, so `--refresh-meta` is the usual step 2: it
+> canonicalises the `output/` filenames and rewrites `meta.json`, moving nothing else.
 
 ---
 
@@ -258,8 +328,8 @@ python scripts/build_qa_corpus.py
 
 ### Local OCR engines (consensus voting)
 
-`--paddle-variants` selects which local PaddleOCR generations vote. Both PP-OCR generations are
-already in the model cache:
+`--paddle-variants` selects which local PaddleOCR generations vote. All four are in
+`~/.paddlex/official_models/` as of 2026-08-08:
 
 | variant | det / rec |
 |---|---|
@@ -268,11 +338,28 @@ already in the model cache:
 | `paddleocr_v5_server` | PP-OCRv5_server (default) |
 | `paddleocr_v5_mobile` | PP-OCRv5_mobile |
 
+> Only `v6_medium` and `v5_mobile` were cached originally — `v5_server` and `v6_small` were
+> fetched on 2026-08-08. Worth knowing because `build_ocr_corpus.py` sets
+> `PADDLEX_OFFLINE_MODE=1`, so an uncached variant does not download: `init_paddleocr` returns
+> `None`, the engine is skipped with a one-line `[warn]`, and the pool silently shrinks. If a
+> variant needs fetching once, run it with `PADDLEX_OFFLINE_MODE=0 HF_HUB_OFFLINE=0`. Always
+> check `meta.json`'s `engines` list to see who actually voted.
+
 Default is `paddleocr_v6_medium,paddleocr_v5_server` — two generations, deliberately. **This is
 the fix for a real problem:** only two *free* cloud vision models exist on OpenRouter, so a
 one-paddle-plus-two-VLM pool made the default `--min-agree 3` equivalent to unanimity, and a
 sample36 trial resolved just 1 of 5 regions. Four independent engines means one dissenter no
 longer sinks the region.
+
+**Local and cloud engines resolve different regions, so the best pool has both.** On sample36:
+
+- the four paddle variants agree on long dialogue that the VLMs "disagree" on only because they
+  concatenate vertical lines in a different order;
+- the VLMs agree on short SFX crops (`トッ`) where the *mobile* and *small* recognisers garble
+  a 2–3 character image.
+
+With `--min-agree 3` and four variants, no single generation can carry a region on its own —
+reaching 3 always needs agreement across the v5/v6 line, which is the point.
 
 Free vision models currently available per provider: OpenRouter 2, Cloudflare 3, NVIDIA 2.
 

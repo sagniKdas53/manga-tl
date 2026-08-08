@@ -28,9 +28,13 @@ For every `(provider, model, corpus page)` combination:
 
 ## 2. Corpus format (`scripts/corpus/`)
 
-Each `scripts/corpus/<sampleId>/` is **text only** — no images are stored, per the instruction that
-started this (source pages can be adult content; the corpus should be committable without
-carrying that).
+Each `scripts/corpus/<sampleId>/` is **text only** — no images are stored, per the instruction
+that started this (source pages can be adult content, so the corpus must not carry them).
+
+> As of 2026-08-08 the corpus is **not in git** either — `scripts/corpus/`, `scripts/ocr_corpus/`
+> and `scripts/qa_corpus/` are all gitignored. They derive from `examples/`, which is itself
+> gitignored and purged from history, so a committed corpus has no trackable source. Rebuild it;
+> don't expect it in a fresh clone.
 
 ```
 scripts/corpus/
@@ -53,9 +57,11 @@ scripts/corpus/
 > missed every sample whose human translation is saved under its own Twitter id, and picked the
 > *English* page as the source on `sample31`, `sample24` and `sample25`.
 
-> **`sample21` is Chinese.** It is the only non-Japanese page in the set; its `meta.json` records
-> `"lang": "zh"` and the builder loads a Chinese PaddleOCR model for it. Pass `--source-lang zh`
-> if you benchmark it explicitly.
+> **The corpus is Japanese-only as of 2026-08-08.** `sample21` used to be the one Chinese page
+> and was swapped for a Japanese one; the Chinese original is parked under
+> `examples/sample21/do-not-use-wrong-language/`. `SOURCE_LANG_TO_PADDLE` still maps `zh` and
+> `ko`, so a non-Japanese page would work if one were added — set `"lang"` in its `meta.json`
+> and the builder loads the matching PaddleOCR model.
 
 **`regions.json`** — matches exactly what `worker/services/translation.py`'s
 `translate_batch_llm()` receives, and what `test_translation.py`'s `build_batch_prompt()`
@@ -237,11 +243,18 @@ at request time — no other provider needs this, but the substitution is generi
 
 `config/providers.json` is the curated, production `tl` list — what the backend's fallback
 chain actually uses. `scripts/test-providers.json` is deliberately wider: every chat/instruct/
-vision-language-capable model each provider currently exposes, pulled 2026-08-06 from
-OpenRouter's live `GET /api/v1/models` (free-tier only), Cloudflare's
-[models catalog](https://developers.cloudflare.com/workers-ai/models/), and NVIDIA's live
-`GET /v1/models` on `integrate.api.nvidia.com` — 107 candidates total, most never benchmarked.
-Point `--providers-config` at it to test beyond what's already promoted:
+vision-language-capable model each provider currently exposes, refreshed 2026-08-07 from
+OpenRouter's live `GET /api/v1/models` (free-tier only, plus a handful of cheap paid models for
+comparison), Cloudflare's live `GET /accounts/{id}/ai/models/search`, and NVIDIA's live
+`GET /v1/models` on `integrate.api.nvidia.com` — 109 `tl`/`qaLLM` candidates + 23 `ocr`/`qaVLM`
+candidates, most never benchmarked. `qaLLM`/`qaVLM` lists are now populated too (mechanical
+duplicates of `tl`/`ocr` per provider, except OpenRouter which curates all four separately) —
+see [`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md) for the
+full pull methodology and what changed since the 2026-08-06 snapshot (OpenRouter's free tier
+membership shifted, 3 Cloudflare models turned out to require the Workers Paid plan despite
+being marked free in production config, 2 Cloudflare model IDs changed org namespace, and NVIDIA
+dropped 3 models from its catalog). Point `--providers-config` at it to test beyond what's
+already promoted:
 
 ```bash
 python scripts/benchmark_translation.py --providers-config scripts/test-providers.json --provider nvidia

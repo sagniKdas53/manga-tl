@@ -81,8 +81,11 @@ REFERENCE_PREFERENCE = (
 # examples/, so its data is orphaned and was dropped. sample36 is the intended replacement
 # baseline and is auto-extracted until the gold review pass promotes it — see docs/ocr_bench.md.
 MANUAL_SAMPLES = set()
-# sample5 and sample22 have no reference render at all, so there is nothing to align against.
-EXCLUDED_SAMPLES = {"sample5", "sample22"}
+# Samples with no reference render at all, so there is nothing to align against. Empty since
+# 2026-08-08: sample5 and sample22, the last two holdouts, were each given a human, a google-lens
+# and a mangatranslate.com reference, so all 40 pages are now eligible. pick_reference() still
+# skips any sample whose references list is empty, so this set is only for deliberate exclusions.
+EXCLUDED_SAMPLES = set()
 
 # PaddleOCR language codes per meta.json source lang. Only "japan" gets the project's tuned
 # PP-OCR model names (see init_paddle_reader).

@@ -29,6 +29,7 @@ Usage:
     python scripts/organize_examples.py --apply
     python scripts/organize_examples.py --apply --sample sample34
     python scripts/organize_examples.py --verify         # check an already-migrated tree
+    python scripts/organize_examples.py --refresh-meta --sample sample20   # after a hand swap
 """
 
 import os
@@ -184,6 +185,50 @@ def apply_plan(plan, spec):
         json.dump(build_meta(plan["sample_id"], spec), f, ensure_ascii=False, indent=2)
 
 
+def refresh_meta(specs, examples_dir):
+    """Rewrite meta.json for a tree that is already in the role-subfolder layout.
+
+    --apply reads the *pre*-migration layout, where everything sits flat at the top of
+    examples/sampleN/, so it cannot be re-run once the files live in source/ reference/ output/.
+    When a page is swapped by hand the replacement usually lands in the role folders already —
+    all that is left is to canonicalise the output filenames and regenerate meta.json from the
+    manifest. That is what this does.
+    """
+    ok = True
+    for sample_id in sorted(specs, key=lambda s: int(s[6:])):
+        spec = specs[sample_id]
+        sample_dir = os.path.join(examples_dir, sample_id)
+        problems, renames = [], []
+
+        for rel in [os.path.join("source", spec["source"]["file"])] + \
+                   [os.path.join("reference", r["file"]) for r in spec["references"]]:
+            if not os.path.exists(os.path.join(sample_dir, rel)):
+                problems.append(f"missing {rel}")
+
+        for role, name in spec["output"].items():
+            target = os.path.join("output", OUTPUT_TARGETS[role])
+            if os.path.exists(os.path.join(sample_dir, target)):
+                continue
+            current = os.path.join("output", name)
+            if os.path.exists(os.path.join(sample_dir, current)):
+                renames.append((current, target))
+            else:
+                problems.append(f"missing {role}: neither {target} nor {current}")
+
+        if problems:
+            print(f"  SKIPPED  {sample_id}: {'; '.join(problems)}")
+            ok = False
+            continue
+
+        for current, target in renames:
+            shutil.move(os.path.join(sample_dir, current), os.path.join(sample_dir, target))
+        with open(os.path.join(sample_dir, "meta.json"), "w", encoding="utf-8") as f:
+            json.dump(build_meta(sample_id, spec), f, ensure_ascii=False, indent=2)
+        renamed = f", {len(renames)} output file(s) renamed" if renames else ""
+        print(f"  OK       {sample_id}: meta.json written{renamed}")
+    return ok
+
+
 def verify(manifest, examples_dir):
     """Check an already-migrated tree: every meta.json path resolves, nothing stray at top level."""
     ok = True
@@ -202,8 +247,10 @@ def verify(manifest, examples_dir):
             if not os.path.exists(os.path.join(sample_dir, rel)):
                 print(f"  BROKEN   {sample_id}/{rel}")
                 ok = False
-        stray = [f for f in os.listdir(sample_dir)
-                 if f not in {"source", "reference", "output", "meta.json"}]
+        # "parked" names sibling dirs holding a superseded version of the page — kept on purpose
+        # when a sample is swapped out, so they are expected rather than stray.
+        allowed = {"source", "reference", "output", "meta.json"} | set(spec.get("parked", []))
+        stray = [f for f in os.listdir(sample_dir) if f not in allowed]
         if stray:
             print(f"  STRAY    {sample_id}: {stray}")
             ok = False
@@ -217,6 +264,9 @@ def main():
     parser.add_argument("--sample", help="Only this sample id")
     parser.add_argument("--apply", action="store_true", help="Actually move files (default: dry run)")
     parser.add_argument("--verify", action="store_true", help="Verify an already-migrated tree and exit")
+    parser.add_argument("--refresh-meta", action="store_true",
+                        help="Regenerate meta.json for an already-migrated tree (use after "
+                             "hand-swapping a page, where --apply cannot run)")
     args = parser.parse_args()
 
     with open(args.manifest, encoding="utf-8") as f:
@@ -231,6 +281,11 @@ def main():
         if args.sample not in specs:
             sys.exit(f"[ERROR] {args.sample} not in manifest")
         specs = {args.sample: specs[args.sample]}
+
+    if args.refresh_meta:
+        print(f"Refreshing meta.json in {args.examples_dir} "
+              f"from {os.path.basename(args.manifest)}...")
+        sys.exit(0 if refresh_meta(specs, args.examples_dir) else 1)
 
     plans, problems = [], []
     for sample_id in sorted(specs, key=lambda s: int(s[6:])):

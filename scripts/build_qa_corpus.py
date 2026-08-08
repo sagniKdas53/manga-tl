@@ -37,6 +37,7 @@ import re
 import sys
 import json
 import random
+import shutil
 import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -232,6 +233,15 @@ def build_sample(sample_id, args, rng):
             json.dump(case, f, ensure_ascii=False, indent=2)
         written.append(defect_class)
 
+    # A class that yielded no mutation this time may still have a file from an earlier build —
+    # e.g. sample40's ocr_garbage survived a rebuild that skipped it. Left alone it would be
+    # scored as a current case against page metadata that has since changed.
+    for defect_class in set(DEFECT_CLASSES) - set(written):
+        orphan = os.path.join(dest, f"{defect_class}.json")
+        if os.path.exists(orphan):
+            os.remove(orphan)
+            print(f"{'':10s} dropped stale {defect_class} case for {sample_id}")
+
     return dest, (f"{len(written)} cases, {len(metadata)} regions"
                   f"{', bboxes' if has_bboxes else ', no bboxes (LLM arm only)'}"
                   f"{', images' if images else ''}")
@@ -263,10 +273,14 @@ def main():
             sys.exit(f"[ERROR] {args.sample} not in {args.tl_corpus}")
 
     os.makedirs(args.out_dir, exist_ok=True)
-    rng = random.Random(args.seed)
     results, total_cases, vlm_ready = [], 0, 0
 
     for sample_id in samples:
+        # Seed per sample, not once for the loop. A single shared RNG makes a page's mutations
+        # depend on how many pages were drawn before it, so `--sample X` and a full run produce
+        # different cases for X — which quietly breaks the incremental workflow the docs
+        # recommend. Keying the seed on the sample id makes the two agree.
+        rng = random.Random(f"{args.seed}:{sample_id}")
         dest, msg = build_sample(sample_id, args, rng)
         status = "OK" if dest else "SKIPPED"
         print(f"{sample_id:10s} {status}: {msg}")
@@ -277,21 +291,49 @@ def main():
             with open(control, "r", encoding="utf-8") as f:
                 if json.load(f)["vlm_ready"]:
                     vlm_ready += 1
+        else:
+            # A page can stop being eligible — swapped out, or dropped below the 3-aligned-region
+            # floor. Without this its cases from the previous build would linger and be scored:
+            # sample21's Chinese cases outlived the page itself that way.
+            stale = os.path.join(args.out_dir, sample_id)
+            if os.path.isdir(stale):
+                shutil.rmtree(stale)
+                print(f"{'':10s} removed stale cases from a previous build")
+
+    # Merge into the manifest rather than replacing it, so `--sample X` records X without
+    # discarding every other page (it used to leave a one-entry manifest behind), and drop
+    # entries whose directory is gone.
+    manifest_path = os.path.join(args.out_dir, "_manifest.json")
+    by_id = {}
+    if os.path.exists(manifest_path):
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            try:
+                by_id = {m["sample_id"]: m for m in json.load(f).get("samples", [])}
+            except (json.JSONDecodeError, AttributeError):
+                by_id = {}
+    for r in results:
+        by_id[r["sample_id"]] = r
+    for sid in [s for s in by_id
+                if not os.path.isdir(os.path.join(args.out_dir, s))
+                and by_id[s]["status"] == "OK"]:
+        del by_id[sid]
+    entries = sorted(by_id.values(), key=lambda m: int(re.sub(r"\D", "", m["sample_id"]) or 0))
 
     manifest = {
         "seed": args.seed,
         "defect_classes": DEFECT_CLASSES,
-        "samples": results,
+        "samples": entries,
         "note": "Typesetting/overflow defects are not injected — they require re-rendering the "
                 "page, not mutating metadata. The VLM arm measures semantic and OCR review only.",
     }
-    with open(os.path.join(args.out_dir, "_manifest.json"), "w", encoding="utf-8") as f:
+    with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
     ok = sum(1 for r in results if r["status"] == "OK")
-    print(f"\n{ok}/{len(results)} samples, ~{total_cases} cases, {vlm_ready} VLM-ready "
-          f"(need both OCR-corpus bboxes and a worker render)")
-    print(f"Manifest written to {os.path.join(args.out_dir, '_manifest.json')}")
+    print(f"\n{ok}/{len(results)} samples this run, ~{total_cases} cases; "
+          f"{sum(1 for e in entries if e['status'] == 'OK')} pages in the corpus, "
+          f"{vlm_ready} VLM-ready (need both OCR-corpus bboxes and a worker render)")
+    print(f"Manifest written to {manifest_path}")
 
 
 if __name__ == "__main__":

@@ -23,8 +23,11 @@ import re
 import json
 import time
 import unicodedata
+import concurrent.futures
 
 import requests
+
+_CALL_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="bench-call")
 
 
 # ---------------------------------------------------------------------------
@@ -49,11 +52,24 @@ def strip_fences(content):
 # ---------------------------------------------------------------------------
 
 def call_provider(url, headers, payload, timeout=90):
-    """POST and time it. Returns (response|None, elapsed_seconds, network_error|None)."""
+    """POST and time it. Returns (response|None, elapsed_seconds, network_error|None).
+
+    `requests`' own `timeout=` is a socket-idle timeout, not a wall-clock deadline — a model
+    that dribbles keep-alive bytes while "thinking" resets it on every chunk and can run far
+    past the nominal cap (observed: a 60s timeout letting real calls run 130s+). Enforced here
+    with a hard deadline via a worker thread instead: if `future.result(timeout=...)` doesn't
+    return in time we give up waiting and record a timeout, even though the abandoned thread
+    (and its socket) may still be running in the background — acceptable for a benchmark run
+    where "didn't answer within the cap" should count as a fail regardless of what's still
+    happening on the wire.
+    """
     t0 = time.time()
+    future = _CALL_EXECUTOR.submit(requests.post, url, headers=headers, json=payload, timeout=timeout)
     try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        resp = future.result(timeout=timeout)
         return resp, time.time() - t0, None
+    except concurrent.futures.TimeoutError:
+        return None, time.time() - t0, f"hard_timeout: no response within {timeout}s"
     except Exception as e:  # noqa: BLE001 - any transport failure is just "network error"
         return None, time.time() - t0, str(e)
 
@@ -75,7 +91,7 @@ def apply_response_format(payload, mode, schema, schema_name="structured_output"
     return payload
 
 
-def run_ladder(url, headers, build_payload, retries=2, timeout=90, backoff=5.0, modes=MODES):
+def run_ladder(url, headers, build_payload, retries=1, timeout=60, backoff=5.0, modes=MODES):
     """Walk the structured-output ladder until one mode returns parseable JSON.
 
     `build_payload(mode)` must return a fresh request payload for that mode.
@@ -87,9 +103,12 @@ def run_ladder(url, headers, build_payload, retries=2, timeout=90, backoff=5.0, 
         {status: "failed", mode_used: None, elapsed_s: None, attempts_log}
 
     Retry policy matches what benchmark_translation.py established: retry the same mode on a
-    network error or a 429 (with linear backoff), but fall through to the next mode on any other
-    HTTP error, empty content, or unparseable JSON — those indicate the mode is unsupported
-    rather than a transient failure.
+    transient network error or a 429 (with linear backoff), but fall through to the next mode
+    on any other HTTP error, empty content, or unparseable JSON — those indicate the mode is
+    unsupported rather than a transient failure. A hard timeout (no response within `timeout`
+    seconds — see call_provider) is deliberately excluded from the retry-same-mode path: a
+    model that's too slow once is going to be too slow again, so retrying just doubles the wait
+    for no benefit. It falls straight through to the next mode instead, same as an HTTP error.
     """
     attempts_log = []
 
@@ -102,6 +121,8 @@ def run_ladder(url, headers, build_payload, retries=2, timeout=90, backoff=5.0, 
             if resp is None:
                 attempts_log.append({"mode": mode, "attempt": attempt_num,
                                      "error": f"network: {net_err}", "elapsed_s": elapsed})
+                if net_err and net_err.startswith("hard_timeout"):
+                    break  # too slow once = too slow again; don't burn another `timeout`s
                 continue
             if resp.status_code == 429:
                 attempts_log.append({"mode": mode, "attempt": attempt_num,

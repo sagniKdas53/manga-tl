@@ -208,13 +208,14 @@ def build_payload(model_id, regions, mode, source_lang, target_lang):
     return apply_response_format(payload, mode, TRANSLATION_JSON_SCHEMA)
 
 
-def try_model_on_page(url, headers, model_id, regions, reference_translations, source_lang, target_lang, retries=2):
+def try_model_on_page(url, headers, model_id, regions, reference_translations, source_lang, target_lang, retries=1, timeout=60):
     expected_ids = [r["id"] for r in regions]
 
     outcome = run_ladder(
         url, headers,
         lambda mode: build_payload(model_id, regions, mode, source_lang, target_lang),
         retries=retries,
+        timeout=timeout,
     )
     if outcome["status"] != "ok":
         return outcome

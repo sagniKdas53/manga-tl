@@ -1,5 +1,5 @@
 {
-  "_comment": "Durable role/provenance map for examples/. examples/ is gitignored and purged from history, so this file is the only committed record of which image plays which role in each sample. examples/sampleN/meta.json is generated from it. NOTE: '(copy 1)' files are mangatranslate.com renders that collided with the source filename on download — they are references, not duplicates. On sample24 and sample25 the roles are inverted (plain name = English).",
+  "_comment": "Durable role/provenance map for examples/. examples/ is gitignored and purged from history, so this file is the only committed record of which image plays which role in each sample. examples/sampleN/meta.json is generated from it. NOTE: '(copy 1)' files are mangatranslate.com renders that collided with the source filename on download — they are references, not duplicates. On sample24 the roles are inverted (plain name = English). A 'parked' list names sibling directories holding superseded versions of a page; they are ignored by --verify.",
   "provenance_vocabulary": [
     "human",
     "mangatranslator.ai",
@@ -131,13 +131,29 @@
         "file": "original.png",
         "lang": "ja"
       },
-      "references": [],
+      "references": [
+        {
+          "file": "human-tl.jpeg",
+          "lang": "en",
+          "provenance": "human"
+        },
+        {
+          "file": "google-lens.jpeg",
+          "lang": "en",
+          "provenance": "google-lens"
+        },
+        {
+          "file": "mangatranslate.com.png",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
       "output": {
         "frontend_export": "page-5-export(2).png",
         "worker_render": "page-5-rendered.png",
         "project": "page-5-layers(2).zip"
       },
-      "notes": ""
+      "notes": "References added 2026-08-08; previously the page had none and was in EXCLUDED_SAMPLES."
     },
     "sample6": {
       "sfw": true,
@@ -428,37 +444,45 @@
     "sample20": {
       "sfw": true,
       "source": {
-        "file": "HN5-X5UaoAAOOhE.jpeg",
+        "file": "__alice_margatroid_shinki_hourai_doll_and_yumeko_touhou_drawn_by_morino_hon__1b2346acb9ad9809ec1e24a4217fc870.jpg",
         "lang": "ja"
       },
       "references": [
         {
-          "file": "HN7kEItXEAEueWo.jpeg",
+          "file": "Screenshot 2026-08-07 at 23-47-58 alice margatroid shinki hourai doll and yumeko (touhou) drawn by morino_hon Danbooru.png",
           "lang": "en",
           "provenance": "human"
         },
         {
-          "file": "HN5-X5UaoAAOOhE (copy 1).jpeg",
+          "file": "en-__alice_margatroid_shinki_hourai_doll_and_yumeko_touhou_drawn_by_morino_hon__1b2346acb9ad9809ec1e24a4217fc870.jpg",
           "lang": "en",
-          "provenance": "mangatranslate.com"
+          "provenance": "mangatranslator.ai"
         }
       ],
       "output": {
-        "frontend_export": "page-4-export(3).png",
-        "worker_render": "page-4-rendered(1).png",
-        "project": "page-4-layers(3).zip"
+        "frontend_export": "page-17-export(1).png",
+        "worker_render": "page-17-rendered(1).png",
+        "project": "page-17-layers(1).zip"
       },
-      "notes": ""
+      "parked": [
+        "do-not-use-poor-quailty"
+      ],
+      "notes": "Page replaced 2026-08-08 — the previous scan was too low-quality to benchmark on and is parked under do-not-use-poor-quailty/. The human reference is a Danbooru screenshot carrying that site's translation notes; it is the page cropped to +4px, so it aligns with the source in normalised coordinates."
     },
     "sample21": {
       "sfw": true,
       "source": {
-        "file": "3.png",
-        "lang": "zh"
+        "file": "134187587_p6.png",
+        "lang": "ja"
       },
       "references": [
         {
-          "file": "3 (copy 1).png",
+          "file": "en-134187587_p6.png",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        },
+        {
+          "file": "134187587_p6.png",
           "lang": "en",
           "provenance": "mangatranslate.com"
         }
@@ -468,7 +492,10 @@
         "worker_render": "page-5-rendered.png",
         "project": "page-5-layers(2).zip"
       },
-      "notes": "Source is Chinese (zh), not Japanese — the only non-ja page in examples/. Exclude from ja-only corpus runs or set --source-lang zh."
+      "parked": [
+        "do-not-use-wrong-language"
+      ],
+      "notes": "Page replaced 2026-08-08 — this used to be the only non-Japanese (zh) page; the Chinese one is parked under do-not-use-wrong-language/. examples/ is now ja-only. Only two text regions, so it is below the QA corpus's 3-region threshold. The source and the mangatranslate.com reference share a filename and are told apart by role dir."
     },
     "sample22": {
       "sfw": true,
@@ -476,13 +503,29 @@
         "file": "original.jpg",
         "lang": "ja"
       },
-      "references": [],
+      "references": [
+        {
+          "file": "human-tl.png",
+          "lang": "en",
+          "provenance": "human"
+        },
+        {
+          "file": "google-lens.jpeg",
+          "lang": "en",
+          "provenance": "google-lens"
+        },
+        {
+          "file": "mangatranslate.com.jpg",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
       "output": {
         "frontend_export": "page-22-export.png",
         "worker_render": "page-22-rendered(1).png",
         "project": "page-22-layers.zip"
       },
-      "notes": "Dated leftover export, no reference render available."
+      "notes": "References added 2026-08-08; previously the page had none and was in EXCLUDED_SAMPLES."
     },
     "sample23": {
       "sfw": true,
@@ -507,7 +550,7 @@
         "worker_render": "page-4-rendered.png",
         "project": "page-4-layers(2).zip"
       },
-      "notes": ""
+      "notes": "Edge case: unusually dense text over the whole page. Keep it in the corpora, but read its scores as a stress test rather than as typical-page performance."
     },
     "sample24": {
       "sfw": true,
@@ -532,22 +575,30 @@
     "sample25": {
       "sfw": true,
       "source": {
-        "file": "437a87c3634694355b88292dc315597398909b06 (copy 1).jpg",
+        "file": "HOSMFm-bEAExK_Z.jpeg",
         "lang": "ja"
       },
       "references": [
         {
-          "file": "437a87c3634694355b88292dc315597398909b06.jpg",
+          "file": "en-HOSMFm-bEAExK_Z.jpeg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        },
+        {
+          "file": "HOSMFm-bEAExK_Z.jpeg",
           "lang": "en",
           "provenance": "mangatranslate.com"
         }
       ],
       "output": {
-        "frontend_export": "page-8-export.png",
-        "worker_render": "page-8-rendered.png",
-        "project": "page-8-layers.zip"
+        "frontend_export": "page-18-export(1).png",
+        "worker_render": "page-18-rendered(1).png",
+        "project": "page-18-layers(1).zip"
       },
-      "notes": "Filenames are inverted: the plain filename is the English render and the '(copy 1)' is the Japanese source. Verified visually."
+      "parked": [
+        "v1"
+      ],
+      "notes": "Page replaced 2026-08-08. v1/ is empty — the previous page (437a87c3...jpg) is not in examples/ any more, so the two cannot be compared. No human reference: the best target is the mangatranslator.ai render. Source and the mangatranslate.com reference share a filename and are told apart by role dir."
     },
     "sample26": {
       "sfw": true,
