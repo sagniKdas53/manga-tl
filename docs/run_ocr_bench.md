@@ -95,7 +95,7 @@ python scripts/benchmark_vlm_ocr.py --provider openrouter --out-dir runs/ocr
 python scripts/benchmark_vlm_ocr.py --corpus-subset all --out-dir runs/ocr-2026-08
 
 # One-off page outside the corpus (no accuracy scoring)
-python scripts/benchmark_vlm_ocr.py --image examples/sample36/source/GhSomnxbIAEPKVw.jpg \
+python scripts/benchmark_vlm_ocr.py --image corpus/samples/sample36/source.jpg \
     --out-dir /tmp/ocrbench
 ```
 
@@ -219,7 +219,7 @@ for real yet (beyond a one-region wiring smoke test — see `scripts/benchmark_v
 commit):
 
 ```bash
-python scripts/benchmark_vlm_ocr.py --image examples/sample36/source/GhSomnxbIAEPKVw.jpg --lang Japanese \
+python scripts/benchmark_vlm_ocr.py --image corpus/samples/sample36/source.jpg --lang Japanese \
   --providers-config scripts/test-providers.json
 ```
 

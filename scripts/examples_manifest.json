@@ -1,5 +1,5 @@
 {
-  "_comment": "Durable role/provenance map for examples/. examples/ is gitignored and purged from history, so this file is the only committed record of which image plays which role in each sample. examples/sampleN/meta.json is generated from it. NOTE: '(copy 1)' files are mangatranslate.com renders that collided with the source filename on download — they are references, not duplicates. On sample24 the roles are inverted (plain name = English). A 'parked' list names sibling directories holding superseded versions of a page; they are ignored by --verify.",
+  "_comment": "Durable role/provenance map for corpus/samples/. Every sample directory is FLAT: the source page is source.<ext>, references are ref-<provenance>.<ext> (ref-unknown-<n>.<ext> where the provenance could not be recovered), outputs are export.<ext> / render.<ext> / project.zip, and project.zip is also unpacked to project/. This file records which original file plays which role, since the names no longer say. corpus/samples/<id>/meta.json is generated from it. Keys are sample ids; NSFW samples are keyed 'NSFW/sampleN' and carry sfw: false. NOTE: '(copy 1)' files were mangatranslate.com renders that collided with the source filename on download - they are references, not duplicates, and none were byte-identical to their namesake. On sample24 the roles are inverted (plain name = English). NSFW source lang is assumed 'ja' - it was never recorded and no NSFW page has been through a builder yet. 'parked' names directories under samples/ holding superseded versions of a page; they are ignored by --verify.",
   "provenance_vocabulary": [
     "human",
     "mangatranslator.ai",
@@ -7,7 +7,8 @@
     "mangatranslate.online",
     "google-lens",
     "local",
-    "manually-edited"
+    "manually-edited",
+    "unknown"
   ],
   "samples": {
     "sample1": {
@@ -910,6 +911,316 @@
         "project": "page-16-layers.zip"
       },
       "notes": ""
+    },
+    "NSFW/sample1": {
+      "sfw": false,
+      "source": {
+        "file": "HO_9DU3bYAAEuf5.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-HO_9DU3bYAAEuf5.jpeg",
+          "lang": "en",
+          "provenance": "unknown"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-1-export(4).png",
+        "project": "page-1-layers(2).zip",
+        "worker_render": "page-1-rendered(2).png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample2": {
+      "sfw": false,
+      "source": {
+        "file": "147324054-0.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-147324054-0.jpg",
+          "lang": "en",
+          "provenance": "unknown"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-2-export(2).png",
+        "project": "page-2-layers(2).zip",
+        "worker_render": "page-2-rendered(2).png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample3": {
+      "sfw": false,
+      "source": {
+        "file": "90494173-0.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "mangatranslate.com-90494173-0.jpg",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-4-export(2).png",
+        "project": "page-4-layers(2).zip",
+        "worker_render": "page-4-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample5": {
+      "sfw": false,
+      "source": {
+        "file": "original.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-local.png",
+          "lang": "en",
+          "provenance": "local"
+        },
+        {
+          "file": "en-mangatranslator.ai.jpg",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {},
+      "notes": ""
+    },
+    "NSFW/sample17": {
+      "sfw": false,
+      "source": {
+        "file": "original.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "human-tl.png",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-17-export.png",
+        "project": "page-17-layers.zip",
+        "worker_render": "page-17-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample20": {
+      "sfw": false,
+      "source": {
+        "file": "original.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-mangatranslate.com.png",
+          "lang": "en",
+          "provenance": "mangatranslate.com"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-20-export.png",
+        "project": "page-20-layers.zip",
+        "worker_render": "page-20-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample21": {
+      "sfw": false,
+      "source": {
+        "file": "original.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-mangatranslator.ai.png",
+          "lang": "en",
+          "provenance": "mangatranslator.ai"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-21-export.png",
+        "project": "page-21-layers.zip",
+        "worker_render": "page-21-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample23": {
+      "sfw": false,
+      "source": {
+        "file": "2ce88433-7999-4756-a63a-899d085c1de8.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-2ce88433-7999-4756-a63a-899d085c1de8.png",
+          "lang": "en",
+          "provenance": "unknown"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-23-export.png",
+        "project": "page-23-layers.zip",
+        "worker_render": "page-23-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample24": {
+      "sfw": false,
+      "source": {
+        "file": "4bfff20f-92cf-4c2b-8031-42a73b59d04e.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-4bfff20f-92cf-4c2b-8031-42a73b59d04e.png",
+          "lang": "en",
+          "provenance": "unknown"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-24-export.png",
+        "project": "page-24-layers.zip",
+        "worker_render": "page-24-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample25": {
+      "sfw": false,
+      "source": {
+        "file": "illust_135833530_20251219_134453.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-illust_135833530_20251219_134453.jpg",
+          "lang": "en",
+          "provenance": "unknown"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-25-export.png",
+        "project": "page-25-layers.zip",
+        "worker_render": "page-25-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample26": {
+      "sfw": false,
+      "source": {
+        "file": "62ebb833a0221b09959c91d88313505a.jpeg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-62ebb833a0221b09959c91d88313505a.jpeg",
+          "lang": "en",
+          "provenance": "unknown"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-26-export.png",
+        "project": "page-26-layers.zip",
+        "worker_render": "page-26-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample27": {
+      "sfw": false,
+      "source": {
+        "file": "original.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "manga-tl.jpg",
+          "lang": "en",
+          "provenance": "local"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-27-export.png",
+        "project": "page-27-layers.zip",
+        "worker_render": "page-27-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample28": {
+      "sfw": false,
+      "source": {
+        "file": "original.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-manga-tl-ai.jpg",
+          "lang": "en",
+          "provenance": "local"
+        },
+        {
+          "file": "human-tl.png",
+          "lang": "en",
+          "provenance": "human"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-28-export.png",
+        "project": "page-28-layers.zip",
+        "worker_render": "page-28-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample30": {
+      "sfw": false,
+      "source": {
+        "file": "4bffaba1-7b8d-4e74-99a6-72dff6b50394.jpg",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-4bffaba1-7b8d-4e74-99a6-72dff6b50394.jpg",
+          "lang": "en",
+          "provenance": "unknown"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-30-export.png",
+        "project": "page-30-layers.zip",
+        "worker_render": "page-30-rendered.png"
+      },
+      "notes": ""
+    },
+    "NSFW/sample31": {
+      "sfw": false,
+      "source": {
+        "file": "112948298-0.png",
+        "lang": "ja"
+      },
+      "references": [
+        {
+          "file": "en-112948298-0.png",
+          "lang": "en",
+          "provenance": "unknown"
+        }
+      ],
+      "output": {
+        "frontend_export": "page-1-export(3).png",
+        "project": "page-1-layers(2).zip",
+        "worker_render": "page-1-rendered(2).png"
+      },
+      "notes": ""
     }
-  }
+  },
+  "parked": [
+    "_parked/sample20-do-not-use-poor-quailty",
+    "_parked/sample21-do-not-use-wrong-language"
+  ]
 }

@@ -9,8 +9,8 @@
 
 ## ~~If the sort is det to descending, the new chapter still gets added to the bottom of the list instead of the top.~~ — CLOSED
 
-![alt text](<Screenshot 2026-08-08 at 21-01-08 tl-hub - Openrouter.png>)
-![alt text](<Screenshot 2026-08-08 at 17-44-39 tl-hub - Openrouter.png>)
+![alt text](<../logs/Screenshot 2026-08-08 at 21-01-08 tl-hub - Openrouter.png>)
+![alt text](<../logs/Screenshot 2026-08-08 at 17-44-39 tl-hub - Openrouter.png>)
 
 `SeriesDetails` appended with `setChapters((prev) => [...prev, data])` in both the create and the
 import path — unconditionally, at the end, regardless of the active sort. The backend was never at
@@ -21,8 +21,8 @@ Red first: `[17, 16, 15, 18]` — the new chapter at the bottom of a descending 
 
 ## ~~Completed jobs linger in the queue manager~~ — CLOSED
 
-![alt text](<Screenshot 2026-08-08 at 18-02-41 tl-hub - Openrouter.png>)
-![alt text](<Screenshot 2026-08-08 at 18-02-35 tl-hub - Openrouter.png>)
+![alt text](<../logs/Screenshot 2026-08-08 at 18-02-41 tl-hub - Openrouter.png>)
+![alt text](<../logs/Screenshot 2026-08-08 at 18-02-35 tl-hub - Openrouter.png>)
 
 **This was a regression from AUDIT-F5, not a missing feature.** The 10s eviction rule for finished
 jobs existed all along — but it lived *inside* `fetchJobs`, and AUDIT-F5 removed the 30s poll that
@@ -37,7 +37,7 @@ than dropping it.
 
 ## ~~If there are more than 15 chapters the UI doesn't know about them~~ — CLOSED
 
-![alt text](<Screenshot 2026-08-08 at 09-39-19 tl-hub - user 3491065 series 258015.png>) ![alt text](<Screenshot 2026-08-08 at 09-30-57 tl-hub - user 3491065 series 258015.png>) ![alt text](<Screenshot 2026-08-08 at 09-30-44 tl-hub - user 3491065 series 258015.png>)
+![alt text](<../logs/Screenshot 2026-08-08 at 09-39-19 tl-hub - user 3491065 series 258015.png>) ![alt text](<../logs/Screenshot 2026-08-08 at 09-30-57 tl-hub - user 3491065 series 258015.png>) ![alt text](<../logs/Screenshot 2026-08-08 at 09-30-44 tl-hub - user 3491065 series 258015.png>)
 
 Exactly right, and the page size is literally 15. The next number came from `Math.max` over the
 **loaded prefix** in two places, so on a longer series it suggested a number that already existed.

@@ -428,7 +428,7 @@ def build_sample(sample_id, examples_dir, out_dir, engines_cfg, args):
     sample_dir = os.path.join(examples_dir, sample_id)
     meta = load_sample_meta(sample_dir)
     if meta is None:
-        return None, "no meta.json — run scripts/organize_examples.py first"
+        return None, "no meta.json — run scripts/flatten_samples.py first"
 
     lang = meta["source"].get("lang", "ja")
     src_path = os.path.join(sample_dir, meta["source"]["file"])

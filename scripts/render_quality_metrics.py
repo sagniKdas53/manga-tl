@@ -76,7 +76,7 @@ def score(original: Path, render: Path) -> dict[str, float]:
 def _suite(root: Path) -> int:
     """Score every corpus/samples/sampleN that has a source page and one of our renders.
 
-    Source and render come from the sample's meta.json (written by scripts/organize_examples.py)
+    Source and render come from the sample's meta.json (written by scripts/flatten_samples.py)
     rather than from filename guessing — the old "original"/"orginal" stem sniffing picked the
     English page as the source on several samples.
     """

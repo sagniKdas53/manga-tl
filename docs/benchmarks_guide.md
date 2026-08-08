@@ -259,29 +259,43 @@ not a metadata mutation, so the VLM arm currently measures semantic and OCR revi
 
 ## 3. Where the pages come from
 
-`examples/sampleN/` after `scripts/organize_examples.py`:
+`corpus/samples/sampleN/` after `scripts/flatten_samples.py` — one flat directory per sample,
+every name derivable from the role:
 
 ```
-examples/sampleN/
-  source/<original filename>       the source-language page
-  reference/<original filename>    0..n human / competitor renders
-  output/frontend-export.png
-  output/worker-render.png
-  output/project.zip
+corpus/samples/sampleN/
+  source.<ext>                     the source-language page
+  ref-<provenance>.<ext>           0..n human / competitor renders
+  ref-unknown-<n>.<ext>            ...where the provenance was never recorded
+  export.<ext>                     the frontend export
+  render.<ext>                     the worker render
+  project.zip                      the layer bundle the frontend emits
+  project/                         project.zip unpacked, so the layers are greppable
+  legacy-bench/                    sample5 and sample18 only — stale ad-hoc run output
   meta.json                        names the above, with provenance per reference
 ```
 
+Extensions are **not** normalised — `source.jpeg` and `source.png` both occur. Making them
+uniform would mean re-encoding, which changes bytes and silently invalidates every OCR result
+derived from them.
+
+The 15 NSFW pages live under `corpus/samples/NSFW/sampleN/` in the same shape, kept separate so
+the whole NSFW half can be excluded wholesale. Their sample ids are `NSFW/sampleN` — page numbers
+collide with the SFW ones. Their source language is recorded as `ja` but was never actually
+confirmed; no NSFW page has been through a builder yet.
+
 `meta.json` is generated from **`scripts/examples_manifest.json`**, which is committed. That
-matters because `examples/` is gitignored *and* purged from history — the manifest is the only
-durable record of which file plays which role. Roles were established by inspecting all 40 pages,
+matters because the filenames no longer say what a file is — the manifest is the durable record
+of which original file plays which role. Roles were established by inspecting all 40 SFW pages,
 which corrected things filename heuristics got wrong (11 samples keep their human TL under its
 own Twitter id; sample24/25 have the English render under the *plain* filename and the Japanese
-source under `(copy 1)`).
+source under `(copy 1)`). None of the `(copy 1)` files were duplicates — every one differs from
+its namesake; they are mangatranslate.com renders that collided on download.
 
 Verify the layout any time with:
 
 ```bash
-python scripts/organize_examples.py --verify
+python scripts/flatten_samples.py --verify
 ```
 
 ### Coverage, and which pages fall out where
@@ -304,14 +318,16 @@ defect case:
 `sample23` is also the corpus's **stress page**: text everywhere, far denser than a typical
 page. Keep it, but read its scores as a worst case rather than as representative.
 
-**`examples/` is now Japanese-only.** `sample21` used to be the one Chinese page and was swapped
+**The SFW set is now Japanese-only.** `sample21` used to be the one Chinese page and was swapped
 for a Japanese one on 2026-08-08; the Chinese original is parked under
-`examples/sample21/do-not-use-wrong-language/`. `sample20` was swapped the same day (the previous
+`corpus/samples/_parked/sample21-do-not-use-wrong-language/`. `sample20` was swapped the same day (the previous
 scan was too low-quality) and now carries a *human* reference — a Danbooru screenshot with that
 site's translation notes, cropped to within 4px of the source page, so it aligns fine.
 
-A `"parked"` list in `examples_manifest.json` names sibling directories holding a superseded
-version of a page. They are deliberate, and `--verify` ignores them instead of calling them stray.
+A `"parked"` list in `examples_manifest.json` names the directories under `corpus/samples/_parked/`
+holding a superseded version of a page. They are deliberate, and `--verify` ignores them instead
+of calling them stray. Their contents were left in the old role-subfolder shape — they are
+retired, not worth restructuring.
 
 ---
 
@@ -434,19 +450,23 @@ python scripts/build_qa_corpus.py
 
 ### Order of operations after changing an image
 
-1. Update `scripts/examples_manifest.json` (roles/provenance for the new file).
-2. Regenerate that sample's `meta.json`, then `--verify`:
-   - files still flat at the top of `examples/sampleN/` → `organize_examples.py --apply --sample sampleN`
-   - files already in `source/ reference/ output/` → `organize_examples.py --refresh-meta --sample sampleN`
-3. `python scripts/build_translation_corpus.py --sample sampleN`
-4. `python scripts/build_ocr_corpus.py --sample sampleN`
-5. `python scripts/build_qa_corpus.py --sample sampleN`
+1. Drop the new file into `corpus/samples/sampleN/` under any name.
+2. Update `scripts/examples_manifest.json` (roles/provenance for the new file).
+3. `python scripts/flatten_samples.py --apply --sample sampleN` — renames it to its role name
+   and rewrites `meta.json`.
+4. `python scripts/build_translation_corpus.py --sample sampleN`
+5. `python scripts/build_ocr_corpus.py --sample sampleN`
+6. `python scripts/build_qa_corpus.py --sample sampleN`
 
-> **`--apply` only reads the pre-migration layout** — everything flat at the top of
-> `examples/sampleN/`. Once files live in the role folders it finds nothing to move and exits
-> with `manifest does not match the tree`. Dropping a replacement page straight into `source/`
-> and `reference/` is the normal way to swap one, so `--refresh-meta` is the usual step 2: it
-> canonicalises the `output/` filenames and rewrites `meta.json`, moving nothing else.
+> **`--apply` is idempotent**, so step 3 is the same command whether the file you dropped in is
+> still under its download name or you already named it `source.png` yourself: a name that is
+> already correct is simply not moved. Run it with no `--apply` first to see the plan. It refuses
+> to run at all if `corpus/samples/` has uncommitted changes, so a half-applied run can always be
+> told apart from unrelated edits.
+>
+> Note the builders never join the role paths themselves — they read `meta.json` and join what it
+> says. That is why flattening the tree needed no builder change, and why step 3 is the only
+> thing standing between a renamed file and a correct rebuild.
 
 ---
 

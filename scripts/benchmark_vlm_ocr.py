@@ -22,7 +22,7 @@ Usage:
     python scripts/benchmark_vlm_ocr.py --corpus-subset all --out-dir runs/ocr-2026-08
 
     # One-off page outside the corpus (no accuracy scoring — no ground truth to score against)
-    python scripts/benchmark_vlm_ocr.py --image corpus/samples/sample36/source/GhSomnxbIAEPKVw.jpg \
+    python scripts/benchmark_vlm_ocr.py --image corpus/samples/sample36/source.jpg \
         --out-dir /tmp/ocrbench
 
 See docs/run_ocr_bench.md for methodology and how to read the output.

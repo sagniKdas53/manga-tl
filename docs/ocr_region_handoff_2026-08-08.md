@@ -277,7 +277,7 @@ quality. Enforced by wall-clock timeout, not socket-idle timeout.
 | Push the corpus repo? | ~700MB first push. **Confirm the GitHub repo exists and is private first.** |
 | Apply BUG-2 to production? | §4.1 validation **done** — 7 pages, value is `0.35` not `0.5`. Still needs worker tests and a go-ahead. |
 | Apply BUG-6 to production? | Found 2026-08-08, LOW blast radius. Needs tests + a vertical-page check. Not yet raised with the user. |
-| Organise the 16 NSFW samples? | Still flat (`page-1-layers(2).zip` etc.); needs an `organize_examples.py` pass and manifest entries before any builder can use them. |
+| Organise the NSFW samples? | **Done 2026-08-08.** 15 samples (not 16 — sample1's second set was a re-render of the same page, dropped). Flattened, given manifest entries and `meta.json`, so a builder can now reach them. |
 | Second (NSFW) corpus | Planned, not started. See `docs/free_model_bench_plan_2026-08.md` §7. |
 
 ## 7. Related docs

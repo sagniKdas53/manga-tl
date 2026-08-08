@@ -40,7 +40,7 @@ source .venv/bin/activate
 This evaluates local text detection and recognition engines and produces an OCR JSON file.
 
 ```bash
-python scripts/benchmark_local_ocr.py --image examples/sample18/source/original.jpeg --lang ja --export-components
+python scripts/benchmark_local_ocr.py --image corpus/samples/sample18/source.jpeg --lang ja --export-components
 ```
 
 **Options**:
@@ -55,7 +55,7 @@ python scripts/benchmark_local_ocr.py --image examples/sample18/source/original.
 This benchmark evaluates various Vision-Language Models for OCR capability.
 
 ```bash
-python scripts/benchmark_vlm_ocr.py --image examples/sample18/source/original.jpeg --lang Japanese --free-only
+python scripts/benchmark_vlm_ocr.py --image corpus/samples/sample18/source.jpeg --lang Japanese --free-only
 ```
 
 ### 3. Run the Translation Test
@@ -79,7 +79,7 @@ Finally, use the standalone `render.py` script to draw the translated text back 
 
 ```bash
 python scripts/render.py \
-  --image examples/sample18/source/original.jpeg \
+  --image corpus/samples/sample18/source.jpeg \
   --ocr examples/sample18/ocr_results_paddleocr_v6_server.json \
   --tl examples/sample18/tl_output_openrouter_google_gemma-4-26b-a4b-it_free.json \
   --output examples/sample18/final_rendered_page.jpg
@@ -90,7 +90,7 @@ python scripts/render.py \
 
 ## 📊 Latest Benchmark Results (Sample 18)
 
-Below are the latest OCR benchmarking results run on `examples/sample18/source/original.jpeg` (Japanese manga page).
+Below are the latest OCR benchmarking results run on `corpus/samples/sample18/source.jpeg` (Japanese manga page).
 
 ### Local OCR Engine (`paddleocr_v6_server`)
 

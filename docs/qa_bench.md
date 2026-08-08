@@ -89,7 +89,7 @@ Models come from `config/providers.json` → `models.qaLLM`.
 
 **`--arm vlm`** — the same metadata plus the side-by-side `original | rendered` composite that
 `_process_qa_vlm()` builds. Models come from `models.qaVLM`. A case is only VLM-eligible if it
-has both OCR-corpus bounding boxes and a worker render in `examples/sampleN/output/`; others are
+has both OCR-corpus bounding boxes and a worker render (`corpus/samples/sampleN/render.<ext>`); others are
 skipped, and `build_qa_corpus.py` reports how many are `vlm_ready`.
 
 > The composite's long edge is capped at 1400 px (`VLM_MAX_EDGE`). Production does not downscale;
