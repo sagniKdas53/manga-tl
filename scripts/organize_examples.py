@@ -44,7 +44,7 @@ import argparse
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 DEFAULT_MANIFEST = os.path.join(SCRIPT_DIR, "examples_manifest.json")
-DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "examples")
+DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "corpus", "examples")
 
 OUTPUT_TARGETS = {
     "frontend_export": "frontend-export.png",

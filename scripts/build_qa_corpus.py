@@ -45,7 +45,7 @@ REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 
 DEFAULT_TL_CORPUS = os.path.join(REPO_ROOT, "corpus", "translation")
 DEFAULT_OCR_CORPUS = os.path.join(REPO_ROOT, "corpus", "ocr")
-DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "examples")
+DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "corpus", "examples")
 DEFAULT_OUT = os.path.join(REPO_ROOT, "corpus", "qa")
 
 # Fluent, in-domain English that is simply not what the panel says. Swapping in unrelated-but-
@@ -205,8 +205,8 @@ def build_sample(sample_id, args, rng):
         render_rel = (sample_meta.get("output") or {}).get("worker_render")
         if render_rel and os.path.exists(os.path.join(sample_dir, render_rel)):
             images = {
-                "source": os.path.join("examples", sample_id, source_rel),
-                "render": os.path.join("examples", sample_id, render_rel),
+                "source": os.path.join("corpus", "examples", sample_id, source_rel),
+                "render": os.path.join("corpus", "examples", sample_id, render_rel),
             }
 
     dest = os.path.join(args.out_dir, sample_id)

@@ -15,7 +15,9 @@ logs/
 .antigravitycli/*
 secrets/
 frontend/coverage
-examples/
+# examples/ moved to corpus/examples (in the manga-tl-corpus submodule) — it is the source
+# every corpus is derived from, so it now lives beside them. Gitignored there too, and it
+# must stay that way: third-party copyrighted scans, some of it adult content.
 .coverage
 backend/.settings/
 backend/.classpath

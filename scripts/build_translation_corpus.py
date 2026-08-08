@@ -362,7 +362,7 @@ def build_sample(sample_dir, sample_id, meta, src_reader, en_reader, out_dir, mi
 
 def main():
     parser = argparse.ArgumentParser(description="Build a text-only translation corpus from examples/")
-    parser.add_argument("--examples-dir", default=os.path.join(SCRIPT_DIR, "..", "examples"))
+    parser.add_argument("--examples-dir", default=os.path.abspath(os.path.join(SCRIPT_DIR, "..", "corpus", "examples")))
     parser.add_argument(
         "--out-dir",
         default=os.path.abspath(os.path.join(SCRIPT_DIR, "..", "corpus", "translation")))

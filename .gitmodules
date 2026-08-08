@@ -3,4 +3,4 @@
 	url = https://github.com/sagniKdas53/manga-tl-worker.git
 [submodule "corpus"]
 	path = corpus
-	url = /home/sagnik/Projects/manga-tl-corpus
+	url = https://github.com/sagniKdas53/manga-tl-corpus.git

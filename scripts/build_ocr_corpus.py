@@ -78,7 +78,7 @@ from bench_common import cer, normalize_text  # noqa: E402
 
 load_env(os.path.join(REPO_ROOT, ".env"))
 
-DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "examples")
+DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "corpus", "examples")
 DEFAULT_OUT = os.path.join(REPO_ROOT, "corpus", "ocr")
 DEFAULT_PROVIDERS_CONFIG = os.path.join(REPO_ROOT, "config", "providers.json")
 
