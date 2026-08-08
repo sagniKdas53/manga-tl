@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-organize_examples.py — Migrate examples/sampleN/ into role subfolders driven by
+organize_examples.py — Migrate corpus/samples/sampleN/ into role subfolders driven by
 scripts/examples_manifest.json, and generate each sample's meta.json.
 
 Target layout (original filenames preserved inside each role folder):
 
-    examples/sampleN/
+    corpus/samples/sampleN/
       source/<original filename>          exactly one, the source-language page
       reference/<original filename>       0..n human / competitor renders
       output/frontend-export.png          was page-N-export*.png
@@ -44,7 +44,7 @@ import argparse
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 DEFAULT_MANIFEST = os.path.join(SCRIPT_DIR, "examples_manifest.json")
-DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "corpus", "examples")
+DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "corpus", "samples")
 
 OUTPUT_TARGETS = {
     "frontend_export": "frontend-export.png",
@@ -189,7 +189,7 @@ def refresh_meta(specs, examples_dir):
     """Rewrite meta.json for a tree that is already in the role-subfolder layout.
 
     --apply reads the *pre*-migration layout, where everything sits flat at the top of
-    examples/sampleN/, so it cannot be re-run once the files live in source/ reference/ output/.
+    corpus/samples/sampleN/, so it cannot be re-run once the files live in source/ reference/ output/.
     When a page is swapped by hand the replacement usually lands in the role folders already —
     all that is left is to canonicalise the output filenames and regenerate meta.json from the
     manifest. That is what this does.

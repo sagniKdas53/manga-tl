@@ -4,9 +4,9 @@ render.py — Renders translated text onto a manga page based on OCR bounding bo
 
 Usage:
     python scripts/render.py \
-      --image examples/sample18/source/original.jpeg \
-      --ocr examples/sample18/output/legacy-bench/ocr_results_paddleocr_v6_server.json \
-      --tl examples/sample18/output/legacy-bench/tl_output_openrouter_google_gemma-4-26b-a4b-it_free.json
+      --image corpus/samples/sample18/source/original.jpeg \
+      --ocr corpus/samples/sample18/output/legacy-bench/ocr_results_paddleocr_v6_server.json \
+      --tl corpus/samples/sample18/output/legacy-bench/tl_output_openrouter_google_gemma-4-26b-a4b-it_free.json
 
 Paths follow the role-subfolder layout written by scripts/organize_examples.py; each sample's
 meta.json names its source image and outputs.

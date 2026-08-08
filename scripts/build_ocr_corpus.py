@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 build_ocr_corpus.py — Build a committable, ground-truthed OCR benchmark corpus from
-examples/sampleN/ pages.
+corpus/samples/sampleN/ pages.
 
 This corpus keeps a downscaled WebP of each page, so benchmark_vlm_ocr.py has a stable input that
 survives the examples/ history purge. ~40 pages at long-edge 1600 / WebP q80 is roughly 8-14 MB.
@@ -78,7 +78,7 @@ from bench_common import cer, normalize_text  # noqa: E402
 
 load_env(os.path.join(REPO_ROOT, ".env"))
 
-DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "corpus", "examples")
+DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "corpus", "samples")
 DEFAULT_OUT = os.path.join(REPO_ROOT, "corpus", "ocr")
 DEFAULT_PROVIDERS_CONFIG = os.path.join(REPO_ROOT, "config", "providers.json")
 
@@ -476,7 +476,7 @@ def build_sample(sample_id, examples_dir, out_dir, engines_cfg, args):
     with open(os.path.join(dest, "meta.json"), "w", encoding="utf-8") as f:
         json.dump({
             "sample_id": sample_id,
-            "source_image": f"examples/{sample_id}/{meta['source']['file']}",
+            "source_image": f"corpus/samples/{sample_id}/{meta['source']['file']}",
             "source_lang": lang,
             "page_size": [img.shape[1], img.shape[0]],
             "region_count": len(regions),
