@@ -2793,14 +2793,40 @@ Specification for provider configuration restructuring and model inheritance:
 ## The 2026-08-08 twentieth sitting — the loaded-prefix family
 
 Five bugs, one root cause: **code that reasons about a paginated list from the prefix it happens
-to have loaded.** Three were reported in `new_bugs.md`; two more were found while fixing them and
-had never been noticed. Every fix was written test-first, and every one was re-verified by
-disabling the fix and confirming the test went red again for the stated reason — two of the reds
-during this sitting turned out to be wrong fixtures rather than regressions, so the check earned
-its keep.
+to have loaded.** Three were reported by the user; two more were found while fixing them and had
+never been noticed. Every fix was written test-first, and every one was re-verified by disabling
+the fix and confirming the test went red again for the stated reason — two of the reds during this
+sitting turned out to be wrong fixtures rather than regressions, so the check earned its keep.
 
 Gate: `format:check` clean, `lint` clean, **332 tests across 47 files** (up from 326/46), `build`
 green. All four CI-equivalent frontend steps, not `vitest` alone.
+
+> `docs/new_bugs.md` held the three reports and was **retired on 2026-08-08** — everything in it,
+> including the red-first evidence and the screenshots, is folded into this section. There is no
+> longer a separate scratch file for incoming bugs; file them in `issues.md`.
+
+### What was reported, and what each turned out to be
+
+| # | reported as | actual cause | red-first evidence |
+| --- | --- | --- | --- |
+| 1 | New chapter is appended to the bottom even when the sort is descending | `SeriesDetails` did `setChapters((prev) => [...prev, data])` in **both** the create and the import path — unconditional append, sort ignored. Backend was never at fault. | `[17, 16, 15, 18]` — the new chapter last in a descending list |
+| 2 | Completed jobs linger in the Queue Manager | A regression from AUDIT-F5: the 10s eviction rule lived *inside* the 30s poll that F5 removed | see § AUDIT-F5 below |
+| 3 | With more than 15 chapters the UI doesn't know about them | Next chapter number came from `Math.max` over the **loaded prefix** (page size is literally 15), in two places | `expected 18, Received: 15` |
+| 3b | "the sort order bug also exists here" | Same cause as #1; fixed by the same `insertChapterInOrder` call | — |
+| 4 | *not reported* — found while fixing | `ChapterGallery` numbered new uploads `pages.length + 1`, so past one 25-page batch the numbering restarted mid-chapter and collided | `expected '2' to be '101'` |
+| 5 | *not reported* — found while fixing | `AUDIT-F13`, far bigger than filed: `handleMovePage` sent the loaded prefix to an endpoint that rejects anything but the complete list | `['p2','p1']` against the expected `['p2','p1','p3','p4']` |
+
+#1 and #3 are complementary halves of the same defect: **ascending order broke the numbering,
+descending broke the placement.** Both are now in `components/chapterNumbering.ts`.
+
+Screenshots, in `logs/`:
+
++ `Screenshot 2026-08-08 at 21-01-08 tl-hub - Openrouter.png`,
+  `Screenshot 2026-08-08 at 17-44-39 tl-hub - Openrouter.png` — the sort-order append (#1)
++ `Screenshot 2026-08-08 at 18-02-41 tl-hub - Openrouter.png`,
+  `Screenshot 2026-08-08 at 18-02-35 tl-hub - Openrouter.png` — the lingering jobs (#2)
++ `Screenshot 2026-08-08 at 09-39-19`, `09-30-57`, `09-30-44 tl-hub - user 3491065 series
+  258015.png` — the 15-chapter ceiling (#3)
 
 ### AUDIT-F5 took a reaper with it when it removed the poll
 

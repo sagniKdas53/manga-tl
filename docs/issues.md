@@ -1,6 +1,17 @@
 # Issues and What I want for them
 
 > Resolved items are verified and moved to [archive.md](./archive.md) rather than kept here with a `(done)` tag.
+>
+> **`docs/new_bugs.md` was retired on 2026-08-08.** All three bugs it carried are closed, along
+> with two more of the same family found while fixing them; the reports, the red-first evidence and
+> the screenshots are in
+> [archive.md § the twentieth sitting](./archive.md#the-2026-08-08-twentieth-sitting--the-loaded-prefix-family).
+> **File new bugs here**, not in a separate scratch file — that file existed for one batch and
+> having two open-bug lists is how AUDIT-F13 sat filed as `[L]` while the same defect was breaking
+> every page reorder on a long chapter.
+>
+> **Standing as of 2026-08-08: 66 filed, 58 closed, 8 open (88%).** No `[C]`, no `[H]` — two `[M]`
+> (W3, B10), three `[L]` (F9, D5, Q2) and three unranked (T1, Q1, T3).
 
 ## The queue management has become absolute shit (in progress — partial fix applied)
 
@@ -73,6 +84,16 @@ per-chapter GC churn (2.93 s of major GC per 55 s window).
 core** where it cost 27.8%, with **zero** `CSS animation iteration` markers and `RefreshDriverTick`
 down from 59.68/s to 2.24/s.
 
+**Update 2026-08-08 — one more Queue Manager complaint, and it was ours.** "Completed jobs linger
+in the queue manager" was a **regression from AUDIT-F5**, not a missing feature: the 10s eviction
+rule for finished jobs already existed, but it lived *inside* `fetchJobs`, and AUDIT-F5 removed the
+30s poll that called it. Now `isExpiredCompletion` on its own 2s sweep — local state and a clock,
+no network. Reasoning in
+[archive.md](./archive.md#audit-f5-took-a-reaper-with-it-when-it-removed-the-poll). **The general
+lesson is worth more than the fix: when you delete a periodic call, check what else was riding on
+its periodicity.** A behaviour implemented as a filter inside a polled fetch is not a behaviour,
+it is a coincidence — and this codebase has had two SSE-for-polling swaps now.
+
 The two remaining complaints are measured, and neither is fixable in frontend code:
 
 + **"Noticeable lag when background jobs are running"** — app CPU is only 4.9% of a core; **71% of
@@ -130,6 +151,18 @@ lost-invalidation race in `Reader.tsx` — see [archive.md](./archive.md#reader-
 The lesson generalises past that one test: **a flaky test is a hypothesis about a race, and
 relaxing its timing discards the hypothesis.** Worth grepping for other assertions that were widened
 rather than diagnosed before trusting the frontend suite as a regression guard.
+
+**Update 2026-08-08 — the sharper version of this complaint is fixtures, not mocks.** Two sittings
+running, every pre-existing test that went red under a new fix turned out to be a **bad fixture
+encoding the bug as the expectation**, not a regression. Nineteenth: two fixtures declared
+`size: 25, totalElements: 2` — a one-page resource — then expected a page 1 to exist; they passed
+only because nothing bounded the walk. Twentieth: `ChapterGallery.test.tsx` declared
+`pagesTotalCount={1}` while passing **two** loaded pages, which is a chapter containing fewer pages
+than are loaded from it — that incoherence is exactly what hid the reorder bound. **An incoherent
+fixture is a green test that cannot fail for the right reason**, and it is a cheaper thing to audit
+than the mock ratio: fixtures are local, self-contained, and a contradiction in one is visible by
+reading it. Worth a pass over the frontend fixtures asking only "could this state exist in
+production?"
 
 **Correction 2026-08-01 (audit):** the "nothing verifies the request we put on the wire" half of
 that claim is wrong — `tests/test_llm_client.py` *does* assert on `mock_post.call_args.kwargs["json"]`
@@ -246,6 +279,18 @@ experimentation-heavy work, not a quick pass. Picked up only after everything ah
 > **every** reorder on a chapter over 25 pages failed and silently snapped back. No data was ever
 > corrupted — the backend guard rejects before writing. The fix is unit-tested but **not
 > live-verified**, because it is a write path behind an ADMIN/TRANSLATOR role.
+>
+> **The whole loaded-prefix family closed with it** — five bugs, one root cause: code that reasons
+> about a paginated list from the prefix it happens to have loaded. Three were user-reported (the
+> retired `new_bugs.md`), two were never noticed by anyone. **This is AUDIT-F8's pagination work
+> leaving a class of latent bug behind it**, so it is worth one directed sweep rather than waiting
+> for the next report: grep for `.length`, `Math.max` and index arithmetic over any array that
+> comes from `usePaginatedResource`, and check each against `totalCount` instead. `pages.length`
+> and `chapters.length` are prefix lengths now, and neither name says so.
+>
+> Note `totalCount` is not universally the right substitute either — it worked for page numbers
+> (contiguous from 1) and was **wrong** for chapter numbers (fractional; a `0.5` interlude is
+> normal, so an 18-chapter series tops out at 17). Ask the server when the answer must be exact.
 
 #### AUDIT-F9 **[L]** — responsive behaviour is never verified
 

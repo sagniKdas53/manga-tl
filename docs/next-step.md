@@ -1,151 +1,236 @@
-# Handoff — 2026-08-07 (nineteenth sitting)
+# Handoff — 2026-08-08 (twenty-first sitting)
 
-> **AUDIT-F10 + F11 + F12 closed, plus AUDIT-T3's frontend half.** Both `[H]` regressions from
-> `8c4c509` are gone. Both were reproduced as failing tests against the real hook *before* any
-> fix, and PROBE B reproduced the eighteenth sitting's number verbatim
-> (`expected 15 to be less than or equal to 3`) — neither finding was stale.
+> **The loaded-prefix family is closed — five bugs, one root cause.** Three were reported by the
+> user, two were found while fixing them and had never been noticed. Full reasoning in
+> [archive.md § the twentieth sitting](./archive.md#the-2026-08-08-twentieth-sitting--the-loaded-prefix-family).
 >
-> **Gates: `mvn -o clean verify` → `BUILD SUCCESS`, **426** backend tests. `vitest` →
-> 326/326 across 46 files**, up from 316/45. `npx eslint` clean on every changed file — with the
-> `react-hooks/exhaustive-deps` suppression *deleted*, not moved.
+> **Gate re-run and verified today, not quoted from the last handoff:** `format:check` clean,
+> `eslint` clean, **332 tests across 47 files, all passing** (105 s). Matches what the archive
+> claims, so those numbers are trustworthy.
 >
-> **AUDIT-B11 closed too** — `spring.data.web.pageable.max-page-size: 100`, proven red first
-> (`expected: <100> but was: <2000>`). Backend 424 → **426**.
+> **61 → 66 filed, 58 closed, 8 open (88%).** No `[C]`, no `[H]`.
 >
-> **61 filed, 52 closed, 9 open (85%).** No `[C]`, and **no `[H]`** — the board is two `[M]`,
-> four `[L]` and three unranked. See [§ Where issues.md stands](#where-issuesmd-stands).
->
-> **The reindex command in the last handoff does not work on this box. The fixed one is in
-> [§ GitNexus](#gitnexus)** — it needs two env vars, and without them `analyze` exits 0 having
-> written nothing.
+> **Three things changed underneath this project that no previous handoff knows about. Read
+> [§ Read this before you trust any SHA](#read-this-before-you-trust-any-sha) and
+> [§ Where the work actually is](#where-the-work-actually-is) before doing anything else.** Skipping
+> them costs a sitting: every commit hash in every doc is dead, the work is not on `main`, and
+> nothing has been pushed for 10 commits.
+
+## Read this before you trust any SHA
+
+**`git filter-repo` has been run on this repository. Every commit hash cited in `issues.md`,
+`archive.md` and previous handoffs no longer exists — all 79 of them, verified one by one.**
+
+```
+$ git cat-file -t d8b46a0
+fatal: Not a valid object name d8b46a0        # the last handoff's "index is current with" commit
+$ git cat-file -t 8c4c509
+fatal: Not a valid object name 8c4c509        # AUDIT-F8's commit, cited throughout issues.md
+```
+
+This is why the corpus was untracked from this repo's history (`samples/` is third-party
+copyrighted scans; a plain delete leaves them in history). It was the right call. The cost is that
+every archaeological reference in the docs is now a dangling pointer, and a `git show` on one reads
+as "that work never happened" rather than "that hash was rewritten".
+
+**They are all recoverable — `filter-repo` left a commit map (769 entries):**
+
+```bash
+grep -E "^<old-sha>" .git/filter-repo/commit-map | awk '{print $2}'
+```
+
+Verified working on five of them:
+
+| doc says | actually | subject |
+| --- | --- | --- |
+| `d8b46a0` | `3a21ae4` | docs: record the confirmed CI result |
+| `8c4c509` | `ed54098` | feat(AUDIT-F1,F2,F8): server-side pagination |
+| `9d82db4` | `8dbf5aa` | fix: satisfy prettier, close out the CI gap |
+| `bcc86e0` | `9efdec0` | perf: optimize queue animation |
+| `92f9284` | `41c42c6` | perf: restore worker poll interval to 2s |
+
+**The old hashes were deliberately left in place in `issues.md` and `archive.md` rather than
+rewritten.** Rewriting 79 references across 3,000 lines of prose is a large mechanical diff with
+real transcription risk, for a benefit one `grep` already provides. If you find yourself editing
+them, do it with a script driven by the commit map, not by hand — and do it in its own commit.
+
+**`.git/filter-repo/` is local and not in the repo. If it is ever deleted, the mapping is gone for
+good** and the doc history becomes genuinely unrecoverable. Worth copying somewhere safe if that
+matters to you.
+
+## Where the work actually is
+
+**Not on `main`, and not pushed.** The last handoff's constraint said "commit straight to `main`,
+no feature branches" — that is not what is happening now, and the next sitting should know which
+before committing.
+
+```
+* region-threshold-validation   aa02ea1   <- HEAD, all recent work
+  main                          8a7ea9b   <- 3 commits behind this branch
+  remotes/github/main           2a45c06   <- 10 commits behind HEAD
+```
+
+`git rev-list --left-right --count github/main...HEAD` → `0  10`. Nothing is pushed, nothing is
+behind — it is a clean fast-forward whenever someone decides to push.
+
+**The three commits on this branch beyond `main`:**
+
+| commit | thread |
+| --- | --- |
+| `dbb47a0` | the loaded-prefix fix — five bugs, frontend |
+| `9c5bb7b` | region-merge prior art + research brief |
+| `aa02ea1` | corpus/samples restructure |
+
+**Two unrelated threads are interleaved on one branch**, which is worth untangling before pushing:
+the frontend bug work and the OCR/corpus work have nothing to do with each other, and the branch is
+named after neither. **Ask the user** whether they want this merged to `main` and pushed, kept as a
+branch, or split — do not decide it unilaterally, and do not push without asking. There is also a
+`worktree-untrack-corpus` worktree at `.claude/worktrees/untrack-corpus` (`196bdca`) still on disk.
 
 ## What this sitting did
 
-1. **Reindexed GitNexus first**, as the last handoff insisted — and it took two attempts, see
-   § GitNexus. `impact()` on `usePaginatedResource` then returned `LOW`, one direct caller
-   (`AppContent`, 7 flows). Before the reindex the same call returned "symbol not found", which
-   reads like a safety signal and is actually blindness.
-2. **Reproduced both probes as permanent tests** in
-   `frontend/src/__tests__/hooks/usePaginatedResource.test.ts`, red against the unfixed hook.
-   Eight new red tests total, covering F10, F11's three parts, and F12's two.
-3. **Fixed all three findings in one pass** over `usePaginatedResource.ts`, as the queue specified.
-4. **Closed AUDIT-T3's two frontend bullets**, including a new integration test at the seam.
-5. **Landed AUDIT-B11** — one line of `application.yml`, proven red first by stashing the
-   config and rerunning the new test (`expected: <100> but was: <2000>`).
-6. Docs: F10/F11/F12/B11 removed from `issues.md`, T3 amended, reasoning into `archive.md`.
+Documentation consolidation only — no code changed.
 
-## The fixes
+1. **Folded `new_bugs.md` into `archive.md` and deleted it.** Everything it held survives: the
+   three reports as reported, the red-first evidence for each, the screenshot filenames, and the
+   two bugs found while fixing. See the new *What was reported* table in the twentieth-sitting
+   section.
+2. **`issues.md` updated** — the Queue Manager regression and its general lesson, the loaded-prefix
+   family under the frontend section with the directed sweep it suggests, and a sharpened version
+   of the standing "is the testing real?" complaint (see below).
+3. **Re-ran the full frontend gate** rather than trusting the recorded numbers. Green, and matching.
+4. **Verified the SHA and branch situation above**, neither of which any prior handoff knows.
 
-Full reasoning is in
-[archive.md](./archive.md#the-2026-08-07-nineteenth-sitting--audit-f10--f11--f12); this is the
-shape.
+### One new observation worth acting on
 
-**F10** — `fetchPage` depends on `paramsKey` (`new URLSearchParams(params ?? {}).toString()`) and
-rebuilds its query *from that string*, so the dependency and the request cannot drift. The
-`eslint-disable` is gone and lint is clean without it. `sortKey` — the one thing the rule would
-still have demanded — moved to a ref assigned in an effect (assigning during render trips
-`react-hooks/refs`), same pattern `LoadMoreSentinel` already uses.
+**The "is the testing real?" issue has a cheaper target than the mock ratio: incoherent fixtures.**
+Two sittings running, every pre-existing test that went red under a new fix was a *bad fixture*,
+not a regression:
 
-**F11** — all three changes the finding specified: `loadMore` seeks the lowest *unloaded* index;
-`hasMore` is `loadedPageCount < totalPages`; `fetchPage` refuses `pageIndex >= totalPages` once
-known. `totalPages` is kept in state (for `hasMore`) and a ref (for the synchronous guard).
++ nineteenth: fixtures declaring `size: 25, totalElements: 2` — a one-page resource — that then
+  expected a page 1 to exist. They passed only because nothing bounded the walk.
++ twentieth: `ChapterGallery.test.tsx` declaring `pagesTotalCount={1}` while passing **two** loaded
+  pages — a chapter containing fewer pages than are loaded from it. That contradiction is exactly
+  what hid the reorder bound.
 
-**F12** — `isLoading` is `inFlightCount > 0`. On reset the count is deliberately *not* zeroed;
-the in-flight requests each still decrement once. A dedupe hole was closed in passing:
-`fetchPage`'s `finally` deletes from the Set it captured, not from a `inFlightRef.current` a reset
-may have replaced.
-
-### Two things worth knowing before you touch this again
-
-**Two pre-existing tests went red on F11's backstop, and their fixtures were the bug.** Both
-declared `size: 25, totalElements: 2` — a *one-page* resource — then expected a page 1 to exist.
-They passed only because nothing bounded the walk. Rewritten at page size 1. The old fixtures
-encoded the defect as the expectation, which is the same failure mode AUDIT-T3 is about.
-
-**AUDIT-F12's error bullet was filed slightly too strongly, and this is corrected in the
-archive.** It said failures are "invisible" and go "only to `console.error`". Not quite:
-`safeFetch` dispatches a global `api-error` event and `App.tsx`'s `GlobalErrorListener` toasts it,
-so a failure was never silent. What *was* true is that the list surface couldn't distinguish a
-failed page-0 fetch from an empty library. The hook now exposes `error: string | null`
-(generation-guarded), `App.tsx` passes it as `loadError`, and `Dashboard` renders an `Alert`.
+An incoherent fixture is a green test that cannot fail for the right reason. Unlike AUDIT-T1's
+mock-ratio problem, this is auditable by reading: ask of each fixture only *"could this state exist
+in production?"*. Filed as an update under the standing testing issue, not as a new AUDIT item.
 
 ## Where `issues.md` stands
 
-**61 filed. 9 open. 52 closed — 85%.** (Was 61/13/48 = 79%.)
+**66 filed. 8 open. 58 closed — 88%.** (Was 61/9/52 = 85%.)
 
 | sev | open | which |
 | --- | --- | --- |
 | **[C]** | 0 | — |
 | **[H]** | 0 | — |
 | **[M]** | 2 | W3, B10 |
-| **[L]** | 4 | F9, D5, F13, Q2 |
+| **[L]** | 3 | F9, D5, Q2 |
 | unranked | 3 | T1, Q1, T3 |
 
-`AUDIT-T3` stays open on its **third bullet only** (`@WebMvcTest` cannot prove a pagination fix)
-— that one is backend and belongs with AUDIT-B10.
+The five new entries are the loaded-prefix family — filed and closed in the same sitting. `AUDIT-F13`
+moved from `[L]` open to closed, and was much larger than its severity suggested.
+
+`AUDIT-T3` remains open on its **third bullet only** (`@WebMvcTest` cannot prove a pagination fix);
+that one is backend and belongs with AUDIT-B10.
 
 ## Roadmap
 
-Unchanged from the last handoff apart from step 1 being done. The user's 2026-08-07 ordering
-still governs.
+The user's 2026-08-07 ordering still governs. Step 1 is unchanged and still blocked on the same
+thing.
 
-### 1. Next up — AUDIT-B10 (AUDIT-B11 is done)
+### 1. Next up — AUDIT-B10
 
-**B10 needs a measurement before a fix, and this is the one thing this sitting could not do** —
-it needs the stack up, which was out of scope by the user's call. `PageController.listPages`
-forwards the caller's `?sort=` into Spring Data unvalidated while its two siblings allowlist
-theirs. Hit the **live** endpoint with `?sort=bogus` and `?sort=id,desc` and record what actually
-comes back before changing anything — the expected 500 via `GlobalExceptionHandler`'s catch-all is
-**unverified**, and the `@WebMvcTest`s cannot tell you. Then make `listPages` match its siblings.
+**Still needs a live measurement, and still nobody has done it** — it needs the stack up, which has
+been out of scope for two sittings running. `PageController.listPages` (`:746-763`) forwards the
+caller's `?sort=` into Spring Data unvalidated while its two siblings (`listSeries`, `listChapters`)
+allowlist theirs.
 
-Closing AUDIT-T3's remaining third bullet means a `@SpringBootTest` + Testcontainers test that
-proves Spring Data actually applied the `Sort` — `PipelineFlowIntegrationTest` is the working
-example. **Note the line the B11 work drew, because it sharpens T3's bullet rather than
-contradicting it:** a `@WebMvcTest` *can* prove `max-page-size`, because
-`PageableHandlerMethodArgumentResolver` applies the cap before the controller runs and the result
-is visible in the `Pageable` a mocked repository is handed. It cannot prove B10, because whether a
-caller `Sort` composes sanely with a derived query's `OrderBy` is Spring Data's business. The test
-that matters is which *layer* owns the behaviour, not which annotation is on the test class.
+**Do the measurement before the fix.** Hit the live endpoint with `?sort=bogus` and `?sort=id,desc`
+and record what actually comes back. The expected 500 via `GlobalExceptionHandler`'s catch-all is
+**unverified**, and the `@WebMvcTest`s cannot tell you — that is AUDIT-T3's remaining bullet, and it
+blocks a real fix here. Then make `listPages` match its siblings.
 
-### 2. Then — AUDIT-F9 paired with pagination benchmarking
+**The line AUDIT-B11 drew, because it sharpens T3's bullet rather than contradicting it:** a
+`@WebMvcTest` *can* prove `max-page-size`, because `PageableHandlerMethodArgumentResolver` applies
+the cap before the controller runs and the result is visible in the `Pageable` a mocked repository
+is handed. It *cannot* prove B10, because whether a caller `Sort` composes with a derived query's
+`OrderBy` is Spring Data's business. **The question is which layer owns the behaviour, not which
+annotation is on the test class.** Closing T3's bullet means `@SpringBootTest` + Testcontainers —
+`PipelineFlowIntegrationTest` is the working example.
 
-**Now genuinely unblocked**: F11's unbounded request walk was the thing that would have poisoned
-any request-count measurement, and it is fixed. F9 is the dual-viewport `vitest projects` /
-Playwright question; the benchmark is request count, payload size and perceived load time against
-the old fetch-everything baseline.
+### 2. Then — the loaded-prefix sweep (new, small, recommended before F9)
 
-### 3. Then — AUDIT-Q1, with AUDIT-Q2 folded in
+Five instances of one defect class were found by chasing three symptoms; the sixth has not been
+looked for. AUDIT-F8's pagination left this class behind it, so do one directed pass rather than
+waiting for the next report: **grep for `.length`, `Math.max` and index arithmetic over any array
+sourced from `usePaginatedResource`, and check each against `totalCount`.** `pages.length` and
+`chapters.length` are prefix lengths now and neither name says so.
 
-`Objects.requireNonNull` sweep, 249 calls, plus Q2's inline fully-qualified class names — same
-mechanical pass over the same controllers (`SeriesController`, `PageController` are in both).
-Backend-only; fills slack while step 2's benchmarks run.
+**`totalCount` is not automatically the right substitute.** It was correct for page numbers
+(contiguous from 1, verified across all 42 chapters) and **wrong** for chapter numbers (fractional
+— a `0.5` interlude is normal, so an 18-chapter series tops out at 17). When the answer must be
+exact, ask the server for one row.
 
-### 4. Then — AUDIT-F13
+### 3. Then — AUDIT-F9 paired with pagination benchmarking
 
-`ChapterPageGrid.tsx:159` disables "move page right" on `idx === pages.length - 1`, and since
-AUDIT-F8 `pages.length` is the *loaded* count, not the chapter's length. Left alone deliberately
-this sitting: it is `[L]`, it is in a different file from F10–F12, and bundling it would have
-widened a contained change. It is small and self-contained whenever it comes up.
+Genuinely unblocked since F11's unbounded request walk was fixed — that was the thing that would
+have poisoned any request-count measurement. F9 is the dual-viewport `vitest projects` / Playwright
+question; the benchmark is request count, payload size and perceived load time against the old
+fetch-everything baseline. Primary device is an Android tablet and nothing checks that today.
+
+### 4. Then — AUDIT-Q1 with AUDIT-Q2 folded in
+
+`Objects.requireNonNull` sweep (249 calls) plus Q2's inline fully-qualified class names — one
+mechanical backend pass over the same controllers (`SeriesController`, `PageController` are in
+both). Fills slack while step 3's benchmarks run.
 
 ### 5. Last, deliberately — AUDIT-T1, AUDIT-D5, AUDIT-W3
 
 Unchanged in reasoning: each needs real experimentation (a wire-protocol test double, a sampled
-memory peak, concurrency testing), not a mechanical pass.
+memory peak, concurrency testing), not a mechanical pass. User's explicit call on 2026-08-07.
 
-### Not in the queue
+## The OCR / region thread — parallel, and now on this branch
 
-- **Track 2 — the `open-in-view` flip-and-remeasure.** Unblocked since the sixteenth sitting,
-  still unscheduled, direction still undecided. Don't start without asking.
-- **Track 3 — the quality gap** (6.85% vs 1.92% flattening, `BUBBLE_CONTOUR_FALLBACK` removal
-  checkpoint, VLM benchmarking). Unchanged; see the fourteenth sitting's handoff in git history.
+**This is no longer "not mine".** Two of the three commits beyond `main` are this thread, so it is
+in the same tree as the frontend work. It has **its own handoff** and that one is authoritative for
+it — do not duplicate its state here:
 
-## GitNexus
++ **[`ocr_region_handoff_2026-08-08.md`](./ocr_region_handoff_2026-08-08.md)** — read §1 for state,
+  §3 for the six open bugs, §4 for what to test, §5 for the command crib.
++ [`region_threshold_validation_2026-08-08.md`](./region_threshold_validation_2026-08-08.md) — the
+  7-page validation; the fix direction holds everywhere and the value tightens from `0.5` to `0.35`.
++ [`region_merge_prior_art_2026-08-08.md`](./region_merge_prior_art_2026-08-08.md),
+  [`research_brief_region_merging.md`](./research_brief_region_merging.md).
 
-**Reindexed, and the documented command needed fixing.** The command in the last handoff aborted
-in a native worker (`Analysis aborted in a native worker or native binding path`), **exit code 0
-with no index written** — it burned its whole retry budget on `backend/src/main/c/jni/jni.h`, a
-74 KB vendored Oracle JDK header. It is *not* a broken install and reinstalling does not help; the
-parse is just slower than the default 30 s idle timeout. **Use this instead:**
+Its shape in one paragraph: **six region bugs open, none applied to production.** Work order is
+BUG-1 (benchmark-only, biggest corpus win) → BUG-6 (orientation, prerequisite for judging BUG-4) →
+BUG-3 (masking) → BUG-2 (`2.0` → `0.35`) → the `OCR_MERGE_THRESHOLD` compose default → BUG-4.
+**Bundle the re-run** — four of those change region proposals, which invalidates every stored
+candidate; one cloud pass, not four. Budget ~85 min plus the paid-model cost of a 40-page build.
+
+**Two open decisions there need the user, not an agent:** whether to push the ~700 MB corpus repo
+(**confirm it exists and is private first** — it contains copyrighted SFW and NSFW scans), and
+whether BUG-2 and BUG-6 get applied to production.
+
+## GitNexus — the index is stale, and its anchor commit no longer exists
+
+```json
+"lastCommit": "d8b46a0c20d5f2783d58618ae958b5bf6b6e0309",   // .gitnexus/meta.json
+"indexedAt":  "2026-08-07T03:53:43.519Z"
+```
+
+That commit was destroyed by the `filter-repo` run. The index predates the entire loaded-prefix fix
+(`dbb47a0` touched 13 files including 5 components) **and** every SHA in it is from the old history.
+`impact()` on anything in `ChapterGallery`, `SeriesDetails`, `QueueManager`, `ChapterPageGrid` or
+the new `chapterNumbering.ts` is answering about code that no longer exists. **Reindex before
+relying on it.** `CLAUDE.md` still advertises the pre-rewrite stats (5,534 symbols / 13,641
+relationships / 300 flows) — `analyze` rewrites those stat lines itself.
+
+**The documented command does not work; this one does.** Plain `analyze` dies in a native worker on
+`backend/src/main/c/jni/jni.h` (a 74 KB vendored Oracle JDK header that parses slower than the 30 s
+default idle timeout) and **exits 0 having written nothing**, which reads like success:
 
 ```
 GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000 GITNEXUS_WORKER_MAX_CUMULATIVE_TIMEOUT_MS=600000 \
@@ -154,77 +239,51 @@ GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000 GITNEXUS_WORKER_MAX_CUMULATIVE_TIMEO
   analyze --embeddings --force
 ```
 
-188.8 s the first time, 143.3 s on the second run at the end of the sitting — so the fix is
-reproducible, not a fluke. **The index was re-run after the last commit and is current with
-`d8b46a0`: 5,534 nodes / 13,641 edges / 248 clusters / 300 flows** (was 5,414 / 13,437). You
-should not need to reindex before starting. `AGENTS.md` and `CLAUDE.md` have their stat lines
-rewritten by `analyze` each time; those edits are committed.
+~145–190 s. It is not a broken install and reinstalling does not help.
 
-Note `impact()` reports `Dashboard` as having **0 direct callers**, which is an artefact: `App.tsx`
-imports it via `React.lazy(() => import(...))` and the graph does not trace a dynamic import as a
-call. Cross-check with grep before trusting a zero.
+**Cross-check any zero with grep.** `impact()` reports 0 direct callers for `React.lazy`-imported
+components — an artefact, not a safety signal. It is broader than lazy imports: last sitting a plain
+grep found `CreateChapterDialog` had a **second** call site the graph never surfaced, and that
+second site is where the upload-numbering bug was found.
 
-`manga-tl-worker` untouched, still at its prior index point.
+**Two indexes.** `manga-library` (parent) and `manga-tl-worker` (the `worker/` submodule).
+`detect_changes()` on the parent cannot see inside `worker/` — it sees a pointer and reports
+`changed_count: 0`. Use `repo: "manga-tl-worker"`. Reindex each from its own root.
 
-## CI — the gap is explained, and it was never GitHub's fault
+## CI
 
-**This was chased to ground this sitting and the standing explanation was wrong.** Three sittings
-carried "CI never triggered despite matching path filters" forward as an unexplained gap, with a
-GitHub-wide outage as the working theory. Neither part holds.
+**Working, and the long-standing "CI never triggers" theory was wrong on both counts** — the probes
+queried a repo that does not exist (the slug is `sagniKdas53/manga-tl`, and a 404 from a guessed URL
+reads as "no check runs"), and the commits had simply never been pushed. No push event, no run.
 
-**Two separate mistakes were stacked on top of each other:**
+**Nothing has been pushed for 10 commits, so nothing has run since.** Expect all three workflows
+(`ci-maven.yml`, `ci-npm.yml`, `ci-backend-docker.yml`) to fire on the next push — but see
+§ Where the work actually is first, because pushing this branch is a decision, not a formality.
 
-1. **The API probes queried a repo that does not exist.** The slug is `sagniKdas53/manga-tl`, not
-   `Sagnik-Das-53/manga-library`. The 404 from a guessed URL reads as "no check runs" rather than
-   "no such repo", so every probe came back looking like confirmation.
-2. **The commits had never been pushed.** `362fa60`, `18d5239` and `8c4c509` were sitting on local
-   `main`. No push, no `push` event, no workflow run — nothing was being filtered out, there was
-   nothing to filter. The "outage" was an unpushed branch.
-
-**Confirmed by doing it, and green.** Pushing this sitting's work triggered `ci-maven.yml`,
-`ci-npm.yml` and `ci-backend-docker.yml` immediately, on the same path filters that were
-suspected. Final state on `main`: `ci-maven.yml` **success** (`8f4ce67`), `ci-npm.yml` **success**
-(`9d82db4`), `ci-backend-docker.yml` **success** (`9d82db4`). The older `cancelled` runs from
-2026-08-06 are a separate, genuinely GitHub-side thing and are not evidence about triggering.
-
-The path filters demonstrably work in both directions: `9d82db4` touches only `frontend/**` and
-`docs/`, and correctly did **not** trigger `ci-maven.yml` — which is why that workflow's latest
-run is still `8f4ce67`. A backend workflow not running on a frontend-only commit is the filter
-doing its job, not a repeat of the gap.
-
-**And CI caught something the local gate did not.** `ci-npm.yml` failed on `95e14d3` at the
-**Format check** step — `prettier --check` on two files this sitting touched. `npm run lint` and
-`vitest run` were both clean; the format gate is a *different* gate and was not being run.
-
-**Use the CI-equivalent gate for frontend work, not `vitest` alone.** `ci-npm.yml` runs four steps
-in order and this sitting only ran two of them:
+**Use the four-command CI-equivalent gate for frontend work, from `frontend/`.** `vitest` alone once
+passed over a `prettier --check` failure that CI caught:
 
 ```
-cd frontend
-npm run format:check   # prettier --check .   <- the one that failed
+npm run format:check   # prettier --check .
 npm run lint           # eslint --max-warnings 0
 npm run test:coverage  # not plain `vitest run`
 npm run build          # tsc + vite, the only typecheck in the pipeline
 ```
 
-All four are green as of `9d82db4`. Note the frontend workflow is **`ci-npm.yml`**, not
-`ci-node.yml`. Registered workflows: `ci-maven.yml`, `ci-npm.yml`, `ci-backend-docker.yml`, plus
-dependabot and CodeQL. Query `actions/workflows/<file>/runs` — `commits/<sha>/check-runs` does not
-answer "did this workflow run at all".
-
-## Not mine — left alone deliberately
-
-Unchanged — the free-model benchmarking thread (`docs/benchmarking.md`, `docs/run_ocr_bench.md`,
-`docs/free_openrouter_translation_benchmark_2026-08-06.md`, `docs/translation_bench.md`,
-`scripts/benchmark_translation.py`, `scripts/build_translation_corpus.py`,
-`scripts/test-providers.json`) commits concurrently. Explicit pathspec on every commit, `-F
-<file>` before the `--`.
+All four verified green this sitting. Frontend workflow is **`ci-npm.yml`**, not `ci-node.yml`.
+Query `actions/workflows/<file>/runs` — `commits/<sha>/check-runs` does not answer "did this
+workflow run at all". **And note the SHAs in the last handoff's CI section are all dead**, so don't
+try to look those runs up by hash.
 
 ## Carried forward — deliberately not done
 
-- **AUDIT-F13**, see roadmap step 4.
-- **The `open-in-view` flip-and-remeasure.** Unblocked, unscheduled, Track 2's direction undecided.
-- **CI - Backend / CI - Frontend not triggering.** See § CI above.
+- **The `open-in-view` flip-and-remeasure (Track 2).** Unblocked since the sixteenth sitting, still
+  unscheduled, direction undecided. Don't start without asking.
+- **Track 3 — the quality gap** (6.85% vs 1.92% flattening, `BUBBLE_CONTOUR_FALLBACK` removal
+  checkpoint, VLM benchmarking).
+- **AUDIT-F13's fix is unit-tested but never live-verified** — it is a write path behind
+  `@PreAuthorize("hasAnyRole('ADMIN','TRANSLATOR')")`, and proving it means reordering pages in the
+  real library. Worth exercising once in the UI. **The most likely thing on this list to bite.**
 - **Five confirmed-dead tables** (`queue_job`, `search_index`, `translations`,
   `translation_regions`, `volumes`). Baselining isn't cleanup.
 - **`updateJobStatus` has no state-machine validation**, only vocabulary validation.
@@ -237,14 +296,14 @@ Unchanged — the free-model benchmarking thread (`docs/benchmarking.md`, `docs/
 - **The exported ZIP's pixel content is unverified.** jsdom has no canvas; needs a real browser.
 - **The `neurometric` key in `secrets/api_keys.json` is still dead.**
 - **A scan for other `@Transactional` self-invocations has not been done.**
-- **`NotificationController.currentUser` throws `RuntimeException("Unauthorized")`** — a 500, not
-  a 401/403.
+- **`NotificationController.currentUser` throws `RuntimeException("Unauthorized")`** — a 500, not a
+  401/403.
 - **`Reader.tsx`'s dead canvas-pan guards** on `.delete-page-btn`/`.reorder-controls`.
 - **`PageService`'s "variant not smaller" branch is uncovered.** Needs a contrived incompressible
   fixture.
 - **`JobController` still lists `queue:region-redo`** in its queue-clear `delete`.
-- **Only `Dashboard` consumes the hook's new `error`.** The chapters and pages surfaces still
-  render an empty list on a failed fetch. Cheap to extend if it ever matters; not filed.
+- **Only `Dashboard` consumes the hook's `error`.** The chapters and pages surfaces still render an
+  empty list on a failed fetch. Cheap to extend; not filed.
 
 ## Out of scope unless deliberately reopened
 
@@ -253,42 +312,41 @@ Unchanged — the free-model benchmarking thread (`docs/benchmarking.md`, `docs/
 - **A reader downscale cap.** Real but secondary.
 - **`AUDIT-W5`**, the queue-wait share re-derivation. Settled; see `archive.md`.
 - **The "should the worker split exist at all" architecture question.** Answered narrowly for B5.
-- **Migrating off hand-maintained schema management (Flyway or otherwise).** Explicitly rejected
-  by the user in the fifteenth sitting. Do not reopen without asking.
+- **Migrating off hand-maintained schema management (Flyway or otherwise).** Explicitly rejected by
+  the user in the fifteenth sitting. Do not reopen without asking.
 
 ## Working constraints
 
 - **`CLAUDE.md` is binding.** `impact()` before editing any symbol, `detect_changes()` before
-  committing — including config-only commits.
+  committing — including config-only commits. **But reindex first**, see § GitNexus; the index is
+  stale and anchored to a destroyed commit.
+- **Every commit SHA in the docs is dead.** Translate via `.git/filter-repo/commit-map`.
+- **Check which branch you are on before committing.** Work is on `region-threshold-validation`,
+  not `main`, and 10 commits are unpushed. The old "commit straight to main" rule no longer
+  describes reality — confirm with the user.
 - **The pre-commit gate is `mvn -o clean verify`, not `test`.** `test` skips PMD and jacoco.
-- **Run `vitest` from `frontend/`, not the repo root.** From the root it picks up a different
-  config, jsdom never loads, and every test fails with `document is not defined` — which looks
-  like a catastrophic regression and is a wrong working directory.
-- **The frontend gate is four commands, not one.** `format:check`, `lint`, `test:coverage`,
-  `build` — see § CI. `vitest` alone passed over a `prettier --check` failure this sitting and CI
-  caught it.
-- **A `@WebMvcTest` with a mocked repository proves very little.** If the behaviour under test
-  belongs to Spring Data or Hibernate, a mocked repository cannot see it. Use `@SpringBootTest` +
-  Testcontainers (`PipelineFlowIntegrationTest` is the working example). **This is AUDIT-T3's one
-  remaining bullet and it blocks a real AUDIT-B10 fix.**
-- **Verify red-green.** Worked again this sitting: both probes were red first, and the F11 probe
-  reproducing the prior sitting's exact number is what proved the finding hadn't gone stale.
-- **A green suite is not the same as covered behaviour**, and **check what a red test is telling
-  you before you fix the code** — two of this sitting's red tests were wrong fixtures, not
-  regressions.
+- **The frontend gate is four commands, not one**, and **run `vitest` from `frontend/`**. From the
+  repo root it loads a different config, jsdom never loads, and every test fails with
+  `document is not defined` — a wrong working directory, not a regression.
+- **A `@WebMvcTest` with a mocked repository proves very little.** If the behaviour belongs to
+  Spring Data or Hibernate, a mocked repository cannot see it. This is AUDIT-T3's remaining bullet
+  and it blocks a real AUDIT-B10 fix.
+- **Verify red-green.** Write the failing test against the real code before writing a word about a
+  suspected defect. It has caught a stale finding and several bad fixtures.
+- **But check what a red test is telling you before you fix the code.** Two sittings running, the
+  pre-existing reds were incoherent fixtures rather than regressions.
+- **A green suite is not the same as covered behaviour.**
 - **Read the whole `issues.md` entry, not the headline.**
 - **Close the entry in the SAME commit as the fix** — remove from `issues.md`, reasoning into
-  `archive.md`.
-- **Commit straight to `main`, no feature branches, always a pathspec.** `-F <msgfile>` goes
-  *before* the `--`. The free-model benchmarking thread still commits concurrently.
+  `archive.md`. **File new bugs in `issues.md`** — `new_bugs.md` is retired, and having two
+  open-bug lists is how AUDIT-F13 sat as `[L]` while it was breaking every long-chapter reorder.
 - **`git fetch --all` hangs on `origin`.** Use `git fetch github` / `git push github main`.
 - **The GitHub repo slug is `sagniKdas53/manga-tl`.** Don't guess it.
 - **Worker source lives at `worker/src/worker/`**, not `worker/`. Fixture is
-  `worker/tests/test_providers.json`, forced by `conftest.py`.
-- **`worker/` is a git submodule.** Its own commit plus a pointer bump; push the submodule first.
+  `worker/tests/test_providers.json`, forced by `conftest.py`. Worker baseline: **315 passing**.
+- **`worker/` and `corpus/` are git submodules.** Each needs its own commit plus a pointer bump;
+  push the submodule first. **`corpus/` is private and must stay private** — copyrighted scans.
 - **The `postgres` MCP tools query the live database directly.** Cheap, read-only.
-- **GitNexus: two indexes.** `manga-library` (parent) and `manga-tl-worker` (submodule).
-  `detect_changes()` on the parent cannot see inside `worker/` — use `repo: "manga-tl-worker"`.
 - **Say plainly if a finding turns out stale, wrong or incomplete.**
 
 ## Prompt for the next chat
@@ -297,111 +355,92 @@ Unchanged — the free-model benchmarking thread (`docs/benchmarking.md`, `docs/
 
 ```
 Continuing manga-library. Read docs/next-step.md first — it is written to make
-this sitting startable cold. docs/archive.md has a "2026-08-07 nineteenth
-sitting" section with the full reasoning for the AUDIT-F10/F11/F12 fix. Don't
-re-audit that hook — it was just rewritten, is covered by 13 tests, and what
+this sitting startable cold. docs/archive.md's "2026-08-08 twentieth sitting"
+section has the full reasoning for the loaded-prefix family (5 bugs, 1 root
+cause). Don't re-audit that work — it is covered by 332 passing tests and what
 survived is written down.
 
-LAST SITTING CLOSED BOTH [H]s. AUDIT-F10 + F11 + F12 fixed as one unit in
-frontend/src/hooks/usePaginatedResource.ts, plus AUDIT-T3's two frontend
-bullets, and AUDIT-B11 (max-page-size). Gates green: mvn -o clean verify =
-BUILD SUCCESS, 426 backend tests; vitest = 326/326 across 46 files (up from
-316/45). eslint clean with the
-exhaustive-deps suppression DELETED, not moved.
+THREE THINGS NO OLDER HANDOFF KNOWS. Check these before anything else:
+  1. git filter-repo HAS BEEN RUN. Every commit SHA in issues.md, archive.md
+     and older handoffs is DEAD — all 79, verified. `git show <sha>` will say
+     the work never happened; it was rewritten. Translate with:
+       grep -E "^<old-sha>" .git/filter-repo/commit-map | awk '{print $2}'
+     The old hashes were left in the docs deliberately — rewriting 79 refs by
+     hand is a big risky diff for what one grep already gives you.
+  2. THE WORK IS NOT ON main AND IS NOT PUSHED. HEAD is
+     region-threshold-validation, 3 ahead of main, 10 ahead of github/main.
+     Two unrelated threads are interleaved on it (the frontend bug fix and the
+     OCR/corpus work) and it's named after neither. ASK the user whether to
+     merge/push/split. Do not push unilaterally.
+  3. THE GITNEXUS INDEX IS STALE and its anchor commit (d8b46a0) was destroyed
+     by the rewrite. It predates the whole loaded-prefix fix. REINDEX before
+     trusting impact() — command is in the handoff's GitNexus section; plain
+     `analyze` exits 0 having written NOTHING.
 
-STATE: 61 filed, 52 closed, 9 open (85%). NO [C] and NO [H].
+STATE: 66 filed, 58 closed, 8 open (88%). NO [C], NO [H]. Gate verified this
+sitting, not quoted: format:check + lint clean, 332 tests / 47 files passing.
 
 QUEUE — work it in order unless redirected:
-  1. AUDIT-B10 (B11 is DONE). B10 NEEDS A MEASUREMENT FIRST and it is the one
-     thing last sitting could not do — it needs the stack up.
-     PageController.listPages forwards the caller's ?sort= into Spring Data
-     unvalidated while its two sibling endpoints carefully allowlist theirs.
-     Hit the LIVE endpoint with ?sort=bogus and ?sort=id,desc and record what
-     actually happens before fixing — the expected 500 via
-     GlobalExceptionHandler's catch-all is UNVERIFIED. Closing AUDIT-T3's
-     remaining third bullet means a @SpringBootTest + Testcontainers test that
-     proves Spring Data actually applied the Sort. NOTE the line B11 drew: a
-     @WebMvcTest CAN prove max-page-size (the resolver caps the Pageable before
-     the controller runs) but CANNOT prove B10 (Sort composition is Spring
-     Data's business). The question is which layer owns the behaviour, not
-     which annotation is on the test class.
-  2. AUDIT-F9 + the pagination benchmarking pass. NOW genuinely unblocked —
-     F11's unbounded request walk was the thing that would have poisoned any
-     request-count measurement, and it is fixed.
-  3. AUDIT-Q1 with AUDIT-Q2 folded in — same mechanical pass over the same
-     controllers (SeriesController, PageController are in both).
-  4. AUDIT-F13 [L] — ChapterPageGrid's "move page right" disables on
-     idx === pages.length - 1, and pages.length is now the LOADED count.
-     Deliberately not bundled into last sitting's hook change.
+  1. AUDIT-B10. NEEDS A LIVE MEASUREMENT FIRST and two sittings have now failed
+     to do it because it needs the stack up. PageController.listPages forwards
+     the caller's ?sort= into Spring Data unvalidated while its two siblings
+     allowlist theirs. Hit the LIVE endpoint with ?sort=bogus and ?sort=id,desc
+     and record what actually happens BEFORE fixing — the expected 500 via
+     GlobalExceptionHandler's catch-all is UNVERIFIED and @WebMvcTest cannot
+     tell you. That's AUDIT-T3's remaining bullet; closing it means
+     @SpringBootTest + Testcontainers (PipelineFlowIntegrationTest is the
+     working example).
+  2. THE LOADED-PREFIX SWEEP (new, small). Five instances of one defect class
+     were found by chasing three symptoms; nobody has looked for the sixth.
+     Grep for .length / Math.max / index arithmetic over anything sourced from
+     usePaginatedResource and check it against totalCount. BUT totalCount is
+     not always right: correct for page numbers (contiguous from 1), WRONG for
+     chapter numbers (fractional — a 0.5 interlude means an 18-chapter series
+     tops out at 17). Ask the server when it must be exact.
+  3. AUDIT-F9 + pagination benchmarking. Now genuinely unblocked.
+  4. AUDIT-Q1 with AUDIT-Q2 folded in — one mechanical backend pass.
   5. AUDIT-T1, AUDIT-D5, AUDIT-W3 last, deliberately — each needs real
-     experimentation, not a mechanical pass.
-Track 2 (open-in-view flip-and-remeasure) and Track 3 (the quality gap) are
-NOT in this queue — direction on both undecided, don't start either without
-asking.
+     experimentation, user's explicit call.
+Track 2 (open-in-view) and Track 3 (the quality gap) are NOT in this queue —
+direction undecided, don't start either without asking.
 
-GITNEXUS: reindexed at the END of last sitting, so it is CURRENT with d8b46a0
-(5,534 nodes / 13,641 edges / 300 flows) — you should not need to reindex
-before starting. THE COMMAND IN OLDER HANDOFFS DOES NOT WORK — it exits 0 having written
-nothing, dying in a native worker on backend/src/main/c/jni/jni.h (a vendored
-JDK header that parses slower than the 30s default idle timeout). Use:
-  GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000 \
-  GITNEXUS_WORKER_MAX_CUMULATIVE_TIMEOUT_MS=600000 \
-    ~/.nvm/versions/node/v22.14.0/bin/node \
-    ~/.nvm/versions/node/v26.1.0/lib/node_modules/gitnexus/dist/cli/index.js \
-    analyze --embeddings --force
-impact() reporting 0 callers for a React.lazy-imported component is an
-artefact, not a safety signal — cross-check with grep. Two separate indexes;
-detect_changes() on the parent cannot see inside worker/, use
-repo: "manga-tl-worker" there.
+THE OCR/REGION THREAD is parallel, is now ON THIS BRANCH, and has its OWN
+handoff: docs/ocr_region_handoff_2026-08-08.md is authoritative for it. Six
+region bugs open, NONE applied. Order: BUG-1, BUG-6, BUG-3, BUG-2 (2.0 -> 0.35,
+validated on 7 pages), the compose default, then BUG-4. BUNDLE THE RE-RUN —
+four of them invalidate every stored candidate, so it's one cloud pass, not
+four (~85 min + paid-model cost). Two decisions there need the USER: pushing
+the ~700MB corpus repo (confirm it exists and is PRIVATE — copyrighted scans)
+and whether BUG-2/BUG-6 go to production.
 
-GATE: mvn -o clean verify (not test) — 426 passing. Frontend: vitest RUN FROM
-frontend/, 326 passing across 46 files. From the repo root it loads the wrong
-config and every test fails with "document is not defined" — that's a wrong
-cwd, not a regression. Worker gates untouched, still at 315.
+GATES: backend `mvn -o clean verify` (not test). Frontend = FOUR commands from
+frontend/: format:check, lint, test:coverage, build — vitest alone once passed
+over a prettier failure CI caught. Run vitest FROM frontend/; from the repo
+root every test fails with "document is not defined" and that's a wrong cwd,
+not a regression. Worker baseline 315.
 
-CI: RESOLVED, and the old explanation was wrong on both counts. The "CI never
-triggers despite matching path filters" gap that three sittings carried forward
-was (a) probed against a repo that doesn't exist — the slug is
-sagniKdas53/manga-tl, and the 404 reads like "no check runs" — and (b) the
-commits had simply never been PUSHED. No push event, no run. Not an outage.
-Pushing fired ci-maven.yml, ci-npm.yml and ci-backend-docker.yml immediately.
-CI is working; push and it runs.
-BUT: ci-npm.yml caught a Format check failure that the local gate missed. Run
-ALL FOUR CI steps for frontend work, from frontend/:
-  npm run format:check   # prettier --check . — this is the one that failed
-  npm run lint
-  npm run test:coverage  # not plain `vitest run`
-  npm run build          # tsc + vite, the only typecheck in the pipeline
-All four green as of 9d82db4. Frontend workflow is ci-npm.yml, not ci-node.yml.
-Query actions/workflows/<file>/runs, not commits/<sha>/check-runs.
+CI works — the old "never triggers" theory was wrong twice over (probes hit a
+repo that doesn't exist; the slug is sagniKdas53/manga-tl, and the commits had
+never been pushed). Nothing has run for 10 commits because nothing was pushed.
+Don't look up the CI SHAs in old handoffs — they're dead too.
 
 REMOTES: git fetch --all hangs on origin. Use git fetch github / git push
-github main. Worker submodule's origin is separate and works.
-
-NOT MINE: the free-model benchmarking thread commits concurrently. Explicit
-pathspec on every commit, -F <msgfile> BEFORE the --.
-
-Say plainly if a finding turns out stale, wrong or incomplete.
+github main. worker/ and corpus/ are submodules; corpus/ is private and must
+stay private.
 
 CONSTRAINTS
-- CLAUDE.md is binding: impact() before edits, detect_changes() before
-  commits, even config-only ones.
-- A @WebMvcTest with a mocked repository proves very little. If the behaviour
-  under test belongs to Spring Data or Hibernate, a mocked repository cannot
-  see it — use @SpringBootTest + Testcontainers (PipelineFlowIntegrationTest
-  is the working example). This is AUDIT-T3's remaining bullet and it BLOCKS a
-  real AUDIT-B10 fix.
-- Verify red-green. Write the failing test against the real code before
-  writing a word about a suspected defect.
-- But check what a red test is telling you before you fix the code — two of
-  last sitting's reds were wrong fixtures, not regressions. A fixture that
-  says size:25/totalElements:2 and then expects a page 1 encodes the bug as
-  the expectation.
+- CLAUDE.md is binding: impact() before edits, detect_changes() before commits.
+  But REINDEX FIRST — the index is stale and anchored to a destroyed commit.
+- Verify red-green. Write the failing test against the real code first.
+- But check what a red test is telling you before fixing the code. TWO sittings
+  running, every pre-existing red was an INCOHERENT FIXTURE, not a regression
+  (size:25/totalElements:2 then expecting a page 1; pagesTotalCount:1 with two
+  loaded pages). An incoherent fixture is a green test that cannot fail for the
+  right reason — and unlike the mock-ratio problem it's auditable by reading.
 - Close the issues.md entry in the SAME commit as the fix; reasoning into
-  archive.md.
+  archive.md. FILE NEW BUGS IN issues.md — new_bugs.md is retired.
 - Read the whole issues.md entry, not the headline.
-- Commit to main directly, with a pathspec; worker/ is a submodule and needs
-  its own commit plus a pointer bump, pushed before the parent.
+- Say plainly if a finding turns out stale, wrong or incomplete.
 - If the user redirects mid-sitting, revert the discarded approach cleanly and
   record what was tried and undone.
 ```
