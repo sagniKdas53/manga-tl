@@ -88,6 +88,10 @@ product change and brings the corpus to parity.
 
 ### BUG-2 · `threshold_ratio=2.0` under-splits touching balloons (product change)
 
+> **Validated on 7 pages, 2026-08-08 — see `region_threshold_validation_2026-08-08.md`.**
+> The direction of the fix holds everywhere; the recommended value tightened from ≤0.5 to
+> **0.35**, because `sample30` needs ≤0.35 and `sample3`'s band merely happened to reach 0.50.
+
 Measured on `sample3` against its human reference (**9 balloons**):
 
 | `threshold_ratio` | regions | giant |
@@ -101,9 +105,12 @@ At ≤0.5 each region maps to one balloon and the name badge separates from the 
 `0.50` is already the module default (`OCR_MERGE_THRESHOLD`), so the `2.0` override is the
 outlier.
 
+*Fix:* `2.0` → **`0.35`** at `ocr.py:605`. Keep the override — 0.35 is not the module default.
+
 *Risk:* shipped worker code on the live translation path. A merged region is **one translation
 unit with one background colour and one typeset target**, so mis-splitting corrupts output, not
-just measurements. Needs tests and a go-ahead.
+just measurements. Needs tests and a go-ahead. Blast radius measured: `merge_ocr_regions` is
+**LOW** — 1 direct caller (`process_ocr`), 1 process, 1 module.
 
 ### BUG-3 · Irregular balloons crop as their axis-aligned bbox
 
@@ -130,43 +137,72 @@ those carry no polygon, so BUG-3's masking is a literal no-op on them.
 > constraint has to come from elsewhere: panel membership (panels are already detected in that
 > handler) or a cap on component extent.
 
+> **Superseded as to its headline evidence, 2026-08-08 (later).** `sample23` r1 is a
+> **reading-direction bug**, not chaining — see BUG-6. All 61 fragments on that page are
+> horizontal, and merging them with `ltr` yields exactly the hand count of 17 across a wide
+> stable threshold band. No membership rule and no extent cap is needed for this page. The
+> transitive-chaining argument may still hold on a genuinely vertical page, but BUG-4 must be
+> re-assessed after BUG-6 and on different evidence.
+
 ### BUG-5 · Junk region proposals (not triaged)
 
 12 regions (4.1%) are `<45×45` — screentone/art false positives with no text. Retire them by
 blanking in gold review; they're then excluded from scoring rather than counted as misses.
 
+### BUG-6 · `reading_direction` is used as a proxy for text orientation (product change)
+
+Found 2026-08-08 while running the `sample23` control. `merge_regions.py:103-107` treats
+`reading_direction == "rtl"` as "the text is vertical" and sizes the vertical gap budget from
+`avg_width`. But `reading_direction` comes from `job_data["readingDirection"]` (`ocr.py:339`,
+default `"rtl"`) — a **binding / page-order** setting, not a text-orientation one.
+
+On a horizontally-set Japanese page `avg_width` is a whole line, so the vertical budget becomes
+~107px at the code default and ~214px at the deployed `1.0`, and every paragraph chains into its
+neighbour. `sample23` collapses from 17 correct regions to 2 page-sized ones.
+
+*Fix:* derive orientation from the fragments (on `sample23`, 61 of 61 are wider than tall — not
+a close call) rather than from the binding direction.
+
+*Risk:* LOW blast radius (`merge_ocr_regions`: 1 caller, 1 process), but it is shipped worker
+code. Needs tests, and a check against a genuinely vertical page to confirm the common case does
+not flip. Full evidence in `region_threshold_validation_2026-08-08.md` §4.
+
+**Related, still unapplied:** `docker-compose.yml:220` deploys `OCR_MERGE_THRESHOLD=1.0`, double
+the `0.50` code default — `render_quality_gap_2026-08-05.md` §D4 fix #1.
+
 ---
 
 ## 4. Testing handoff
 
-### 4.1 Validate the threshold beyond one page
+### 4.1 Validate the threshold beyond one page — **DONE, 2026-08-08**
 
-**The 9-balloon ground truth for `sample3` was read off the reference image by eye, and the sweep
-is tuned to that single count.** Suggestive, not established. Before changing production:
+Ran on `sample1`, `sample9`, `sample16`, `sample27`, `sample30` plus `sample3`, with `sample23`
+as the control. Full results: **`region_threshold_validation_2026-08-08.md`**. Summary:
 
-1. Count balloons by hand in `corpus/samples/<id>/reference/` for ~6 pages. Prioritise `sample30`
-   (same giant-bubble shape), `sample1`, `sample9`, `sample16`, `sample27`.
-2. Run the sweep per page and check ≤0.5 holds; note where it over-splits.
-3. `sample23` is the control — it exercises the *unmatched* path, so BUG-2 should **not** govern
-   it. If the threshold changes sample23's count, the model of the bug is wrong.
+- **The fix direction holds on all 7 pages** — `2.0` is the worst or joint-worst value everywhere.
+- **The value tightens to 0.35.** `sample30` needs ≤0.35; `sample3`'s band merely reached 0.50.
+- **`sample30` confirms `sample3` exactly** — 7 regions mapping 1:1 onto 7 balloons, checked
+  against the art rather than by count.
+- **One page over-splits** (`sample27`, +1 genuine region). Outweighed by 11 recovered elsewhere.
+- **Control passed** — `sample23` is constant across the whole in-bubble sweep.
+- **New: BUG-6**, found via the control. It relocates BUG-4's headline evidence.
 
-The sweep script is at `/home/sagnik/.claude/jobs/90d33800/tmp/threshold_sweep.py` (scratchpad,
-not committed). Promote it to `scripts/` if this becomes routine.
-
-```bash
-.venv/bin/python <sweep>.py sample30 <hand-counted-balloon-count>
-```
+Note for anyone re-running: the *first* sweep script swept one value into both merge paths, which
+conflates BUG-2 with BUG-4 and makes the `sample23` control meaningless. Sweep only the in-bubble
+threshold and pin the unmatched path.
 
 ### 4.2 Order of work, and why
 
 1. **BUG-1** — benchmark-only, no product risk, biggest corpus win.
-2. **BUG-3** — apply masking to *all* engines with the empty-result fallback.
-3. **BUG-2** — only after §4.1; needs worker tests.
-4. **BUG-4** — decide on production grounds, not corpus coverage.
+2. **BUG-6** — orientation from fragments, not binding direction. Prerequisite for judging BUG-4.
+3. **BUG-3** — apply masking to *all* engines with the empty-result fallback.
+4. **BUG-2** — `2.0` → `0.35`; validated by §4.1, needs worker tests.
+5. **`OCR_MERGE_THRESHOLD`** `1.0` → `0.50` in `docker-compose.yml`, matching the code default.
+6. **BUG-4** — re-assess after BUG-6, on a vertical page and on production grounds.
 
-**Bundle the re-run.** BUG-1, BUG-2 and BUG-3 all change region proposals, which invalidates every
-stored `candidate` (transcribed from the old crops). One cloud pass covering all three, not three
-passes. Budget ~85 min and the paid-model cost of a full 40-page build.
+**Bundle the re-run.** BUG-1, BUG-2, BUG-3 and BUG-6 all change region proposals, which
+invalidates every stored `candidate` (transcribed from the old crops). One cloud pass covering
+all four, not four passes. Budget ~85 min and the paid-model cost of a full 40-page build.
 
 ### 4.3 What must not regress
 
@@ -233,13 +269,15 @@ quality. Enforced by wall-clock timeout, not socket-idle timeout.
 | decision | notes |
 |---|---|
 | Push the corpus repo? | ~700MB first push. **Confirm the GitHub repo exists and is private first.** |
-| Apply BUG-2 to production? | Needs §4.1 validation and worker tests. User was still considering it. |
+| Apply BUG-2 to production? | §4.1 validation **done** — 7 pages, value is `0.35` not `0.5`. Still needs worker tests and a go-ahead. |
+| Apply BUG-6 to production? | Found 2026-08-08, LOW blast radius. Needs tests + a vertical-page check. Not yet raised with the user. |
 | Organise the 16 NSFW samples? | Still flat (`page-1-layers(2).zip` etc.); needs an `organize_examples.py` pass and manifest entries before any builder can use them. |
 | Second (NSFW) corpus | Planned, not started. See `docs/free_model_bench_plan_2026-08.md` §7. |
 
 ## 7. Related docs
 
 - `docs/benchmarks_guide.md` — the map; §2 covers all three corpora and the voting rules
+- `docs/region_threshold_validation_2026-08-08.md` — the 7-page threshold validation and BUG-6
 - `docs/region_proposal_defects_2026-08.md` — full evidence for BUG-2/3/4, with the superseded
   framing marked at the top
 - `corpus/README.md` — why the corpora are versioned separately and what to look at in a diff

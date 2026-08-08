@@ -7,6 +7,11 @@
 > split threshold. See "What sample3 actually showed" at the end. Defect A as described (chaining
 > in `merge_ocr_regions` over *unmatched* fragments) is real but marginal: on sample3 only 2 of 29
 > fragments ever reach that path.
+>
+> **Superseded further, 2026-08-08 (later still).** Validated on 7 pages: the threshold finding
+> holds, but the value is **0.35**, not ≤0.5. And defect A's flagship example (`sample23` r1) is
+> a **reading-direction bug**, not chaining. Read the last two sections of this file, and
+> `region_threshold_validation_2026-08-08.md`.
 
 Two independent defects in how OCR regions are proposed. They surfaced while building the OCR
 corpus out to 40 pages, but **both are production bugs**: the corpus takes its regions from the
@@ -200,9 +205,31 @@ text line.
 Note the ordering consequence: fixing (1) alone lifts the corpus to production parity; fixing (2)
 changes shipped behaviour and needs tests. They are separable, and (1) is free of product risk.
 
-### Still open
+### Still open — **resolved 2026-08-08 (later still)**
 
-- Validate the threshold on more pages before changing production — one page is one page, and
-  `sample23` exercises the *unmatched* path instead, so it will not be governed by this at all.
+- ~~Validate the threshold on more pages~~ — **done on 7 pages**, see
+  `region_threshold_validation_2026-08-08.md`. The finding holds in direction on all of them, but
+  the value tightens: **0.35**, not ≤0.5. `sample30` breaks at exactly 0.50; `sample3`'s band
+  happened to reach it. `sample30` otherwise reproduces `sample3` exactly — 7 regions, 1:1 onto
+  7 balloons.
+- `sample23` behaved as predicted: constant across the in-bubble sweep, so defect A's path is
+  correctly separated from the split threshold. But its giant regions turned out to be a
+  **reading-direction bug**, not chaining — see below.
 - Both fixes change region proposals, invalidating every stored `candidate`. Bundle them with the
   polygon-masking work (fix B) so the cloud engines are re-run once, not three times.
+
+### Defect A's headline evidence does not survive (2026-08-08, later still)
+
+`sample23` r1 (458×1505) was defect A's flagship example. It is not connected-components
+chaining. All 61 fragments on that page are horizontal (avg 214×33; 61/61 wider than tall), and
+`merge_ocr_regions` treats `reading_direction == "rtl"` as "text is vertical", sizing the
+vertical gap budget from `avg_width` — a whole line. Merging the same fragments with `ltr` gives
+exactly the hand count of 17, stably across `threshold_ratio` 0.25–1.0.
+
+`reading_direction` is a binding / page-order setting (`ocr.py:339`), not a text-orientation one.
+The two coincide for typical manga, which is why the comment at `merge_regions.py:103` says
+"typically" — but every Japanese job is `rtl`, so every horizontally-set Japanese page gets
+vertical geometry.
+
+Defect A's transitive-chaining argument may still hold on a genuinely vertical page. It needs
+different evidence, and it should be re-assessed only after the direction bug is fixed.
