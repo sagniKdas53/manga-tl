@@ -134,22 +134,33 @@ In payoff order. None of these is the cloud re-run; they are worker changes.
 5. **Then consider Rigaud.** It operates on the *bubble crop image* and connected components, not
    on OCR fragment boxes, so it is not a drop-in — it would sit **before** OCR and replace the
    merge heuristic rather than tune it. Highest ceiling, largest change.
+   **Downgraded 2026-08-09:** the cheap version of this — porting the dilation stopping rule onto
+   our fragment boxes — is off the table. Persistence rules need dozens of primitives to show a
+   plateau; our fragments number 2–6 per balloon and the count falls from N to 1 in one step.
+   Rigaud-on-pixels survives the argument, but nothing cheaper does. See
+   `region_grouping_plan_2026-08-09.md` §1(b), and experiment E5 there, which settles it by
+   measurement rather than by argument.
 
 Note that 1–4 make `threshold_ratio` progressively less load-bearing. If they land, expect the
 right value to move back up toward 1.5–2.0, and expect it to matter less. **`0.35` is correct for
 the algorithm we have today and should not outlive it.**
 
-## 5. Open questions
+## 5. Open questions — answered 2026-08-09
 
-Handed to research agents in `docs/research_brief_region_merging.md`.
+Handed to research agents in `docs/research_brief_region_merging.md`; the answers are worked
+through in `region_grouping_plan_2026-08-09.md`.
 
-- Is our edge-gap distance metric comparable to their box distance, or is the 1.5-vs-0.35 gap
-  partly a units artefact? This must be settled before porting any constant.
-- Does Rigaud's dilation stopping rule work on *OCR line boxes* rather than character-level
-  connected components? Our fragments are already line-level, which may be too coarse for the
-  plateau to appear.
-- Is there a post-2020 successor — the paper is five years old and asks for the dataset that
-  would enable quantitative work. Did anyone build it?
+- ~~Is our edge-gap distance metric comparable to their box distance?~~ **Both use minimum edge
+  gap — we had the metric right.** The gap is entirely the *denominator*: they normalise by
+  `max(width)` of the pair, we normalise by the mean over every fragment on the page. Under local
+  normalisation the ratio reads as "characters of white space", which is why `1.5` is sayable in
+  words and `0.35` is not. Expect the value to rise to ~1.0–1.5 once normalisation is local.
+- ~~Does Rigaud's stopping rule work on OCR line boxes?~~ **No** — see the note in §4.5 above.
+- ~~Is there a post-2020 successor, and did anyone build the dataset?~~ **Yes, and it is the most
+  useful thing we found.** Manga109-v2026 (arXiv:2605.21182) re-annotated Manga109; its largest
+  fix category is *under-segmented speech balloons* — connected balloons in one box, split per
+  balloon — at ~14,900 cases. That is BUG-2 with ground truth. Manga109-s permits commercial use
+  of results; neither may be redistributed.
 - How do Docstrum-style per-page estimates behave on a manga page, where a bubble holds far fewer
   words than a document page? Rigaud explicitly warns that comic bubbles contain too few words for
   thresholds to be learned from them — which is why he dilates instead.

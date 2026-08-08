@@ -282,6 +282,9 @@ quality. Enforced by wall-clock timeout, not socket-idle timeout.
 
 ## 7. Related docs
 
+- `docs/region_grouping_plan_2026-08-09.md` — **start here.** What to change in the worker, how to
+  rebuild the benchmark so it can actually score regions, and the Manga109-v2026 dataset that
+  annotates BUG-2 ~14,900 times. Supersedes the fix order below.
 - `docs/benchmarks_guide.md` — the map; §2 covers all three corpora and the voting rules
 - `docs/region_threshold_validation_2026-08-08.md` — the 7-page threshold validation and BUG-6
 - `docs/region_merge_prior_art_2026-08-08.md` — how everyone else does this, and why `0.35`
