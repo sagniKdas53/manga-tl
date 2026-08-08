@@ -107,6 +107,12 @@ outlier.
 
 *Fix:* `2.0` → **`0.35`** at `ocr.py:605`. Keep the override — 0.35 is not the module default.
 
+> **`0.35` is a workaround, not a tuned parameter.** Every comparable implementation uses a
+> distance budget of 1.5–4× character size, but pairs it with an alignment gate, a size-similarity
+> gate, an adaptive per-page cut, and an MST instead of connected components. We have none of
+> those, so distance is doing all four jobs. Expect the right value to move back up — and to
+> matter less — once those land. See `region_merge_prior_art_2026-08-08.md`.
+
 *Risk:* shipped worker code on the live translation path. A merged region is **one translation
 unit with one background colour and one typeset target**, so mis-splitting corrupts output, not
 just measurements. Needs tests and a go-ahead. Blast radius measured: `merge_ocr_regions` is
@@ -278,6 +284,9 @@ quality. Enforced by wall-clock timeout, not socket-idle timeout.
 
 - `docs/benchmarks_guide.md` — the map; §2 covers all three corpora and the voting rules
 - `docs/region_threshold_validation_2026-08-08.md` — the 7-page threshold validation and BUG-6
+- `docs/region_merge_prior_art_2026-08-08.md` — how everyone else does this, and why `0.35`
+  should not outlive the current algorithm
+- `docs/research_brief_region_merging.md` — paste-able brief for deep-research agents
 - `docs/region_proposal_defects_2026-08.md` — full evidence for BUG-2/3/4, with the superseded
   framing marked at the top
 - `corpus/README.md` — why the corpora are versioned separately and what to look at in a diff
