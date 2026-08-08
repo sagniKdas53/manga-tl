@@ -1,5 +1,13 @@
 # Region proposal defects — 2026-08-08
 
+> **Superseded in part, 2026-08-08 (later).** Testing on `sample3` against its human reference
+> showed the framing below is wrong for the pages that motivated it. The reference translator
+> treats **every balloon separately** — 9 balloons, 9 text areas, no cross-balloon grouping — and
+> reproducing that turns out to need no detector change and no new merge rule, only the right
+> split threshold. See "What sample3 actually showed" at the end. Defect A as described (chaining
+> in `merge_ocr_regions` over *unmatched* fragments) is real but marginal: on sample3 only 2 of 29
+> fragments ever reach that path.
+
 Two independent defects in how OCR regions are proposed. They surfaced while building the OCR
 corpus out to 40 pages, but **both are production bugs**: the corpus takes its regions from the
 production path (`detect_bubbles_yolo` + PaddleOCR background text through
@@ -134,3 +142,67 @@ images). A valid measurement needs the cloud engines re-run on masked crops.
 
 Either fix changes region proposals, which invalidates every stored `candidate` (they were
 transcribed from the old crops). Do them together rather than paying for two cloud passes.
+
+---
+
+## What sample3 actually showed (2026-08-08, later)
+
+**Hypothesis under test:** professional translators identify each balloon separately and never
+guess which connects to which. Detection is the crucial step; merging can always happen later.
+Under-segmenting is recoverable, over-segmenting is not.
+
+**Confirmed.** The human reference for `sample3` has 9 balloons and treats each as its own text
+area. Reproducing that needs no change to YOLO and no new merge rule — only the split threshold.
+
+### The measurements
+
+`sample3`: YOLO returns **4** bubbles for **9** balloons, because the balloons visually touch and
+a single-class segmenter fuses them into blobs. 27 of 29 PaddleOCR fragments land inside those 4
+blobs; only **2** are unmatched. So on this page the unmatched-fragment merge — defect A above —
+governs 2 fragments and is nearly irrelevant.
+
+Three proposal strategies, and then a sweep of the in-bubble split threshold:
+
+| strategy | regions | giant (>½ a page dimension) |
+|---|---|---|
+| A — current benchmark: YOLO bubbles as-is | 5 | 3 |
+| B — split each bubble by its internal fragment clusters, `threshold_ratio=2.0` (production) | 6 | 1 |
+| C — no merging at all, one region per raw fragment | 29 | 0 |
+| **B at `threshold_ratio` ≤ 0.5** | **9** | **0** |
+
+| `threshold_ratio` | regions |
+|---|---|
+| 0.15 – 0.50 | **9** — matches the reference |
+| 0.75 – 1.0 | 8 |
+| 1.5 – 2.0 | 6 |
+
+At ≤0.5 each region maps to one balloon, and the DCG Corporation name badge separates from the
+dialogue on its own — the "identify separately, merge later" behaviour, for free.
+
+Strategy C (no merging) over-segments: a fragment is one *vertical column*, so a balloon becomes
+3–4 regions. The hypothesis is right about the principle but the unit is the balloon, not the
+text line.
+
+### The two real defects
+
+1. **`get_all_text_regions` in `scripts/benchmark_vlm_ocr.py` never splits a bubble.** It emits
+   each YOLO detection as one region. Production (`worker/handlers/ocr.py:605`) *does* split, via
+   `merge_ocr_regions(assigned_frags, threshold_ratio=2.0)`. **So the corpus is built from worse
+   region proposals than the pipeline it is meant to measure** — the benchmark has been scoring
+   engines on crops the product would never hand them. This is a benchmark bug, not a product one,
+   and it is the direct cause of the giant regions in `corpus/ocr/`.
+
+2. **`threshold_ratio=2.0` at that production call site is too permissive.** It under-splits
+   touching balloons: 6 regions where the reference has 9. The evidence says ≤0.5, and 0.50 is
+   already the module-wide default (`OCR_MERGE_THRESHOLD`) — so the 2.0 override is the outlier,
+   and dropping it is a smaller change than it looks.
+
+Note the ordering consequence: fixing (1) alone lifts the corpus to production parity; fixing (2)
+changes shipped behaviour and needs tests. They are separable, and (1) is free of product risk.
+
+### Still open
+
+- Validate the threshold on more pages before changing production — one page is one page, and
+  `sample23` exercises the *unmatched* path instead, so it will not be governed by this at all.
+- Both fixes change region proposals, invalidating every stored `candidate`. Bundle them with the
+  polygon-masking work (fix B) so the cloud engines are re-run once, not three times.
