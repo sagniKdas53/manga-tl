@@ -32,3 +32,6 @@ exported_images/*
 # expensive and a silent change to it is exactly the kind of regression that is otherwise
 # invisible. Hence: versioned, separately. See corpus/README.md and docs/benchmarks_guide.md §5.
 # The durable role/provenance record stays here: scripts/examples_manifest.json.
+# Papers and research reports live in docs/ for reading, but are not tracked: this repo is
+# public, and third-party papers are not ours to redistribute. Cite the DOI in the doc instead.
+docs/*.pdf

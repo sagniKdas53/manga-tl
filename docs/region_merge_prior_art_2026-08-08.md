@@ -37,7 +37,8 @@ an attempt to supply, by hand and globally, a number the page already contains.
 ## 2. Rigaud, Nguyen & Burie 2020 — the closest published match
 
 *"Text block segmentation in comic speech bubbles"*, MANPU @ ICPR 2020
-(doi:10.1007/978-3-030-68780-9_22). PDF at `docs/MANPU_2020__text_bloc_segmentation_in_comic_speech_bubbles.pdf`.
+(doi:10.1007/978-3-030-68780-9_22). The PDF is gitignored — this repo is public and the paper is
+Springer's; keep a local copy at `docs/MANPU_2020__text_bloc_segmentation_in_comic_speech_bubbles.pdf`.
 
 This is our BUG-2, stated as a research problem: **multiple text blocks inside a single speech
 bubble**, caused by balloons drawn connected to each other. Their Fig. 2 is our `sample3`.
@@ -156,7 +157,7 @@ Handed to research agents in `docs/research_brief_region_merging.md`.
 ## 6. Sources
 
 - Rigaud, Nguyen, Burie. *Text block segmentation in comic speech bubbles.* MANPU@ICPR 2020.
-  [doi](https://doi.org/10.1007/978-3-030-68780-9_22) · local PDF in `docs/`
+  [doi](https://doi.org/10.1007/978-3-030-68780-9_22) · local PDF in `docs/`, gitignored
 - O'Gorman. *The Document Spectrum for Page Layout Analysis.* IEEE TPAMI 15(11), 1993.
   [doi](https://doi.org/10.1109/34.244677)
 - Wahl, Wong, Casey. *Block segmentation and text extraction in mixed text/image documents.* 1982.
