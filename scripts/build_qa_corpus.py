@@ -5,7 +5,7 @@ corpus pages, so scripts/benchmark_qa.py can measure which models actually catch
 
 The QA stage's job is to notice that something upstream went wrong. You cannot measure that
 against real pipeline output without hand-labelling every defect, so instead we start from a
-clean page (source text from scripts/corpus/<sample>/regions.json, translations from its
+clean page (source text from corpus/translation/<sample>/regions.json, translations from its
 reference.json) and inject exactly one labelled defect per case. Every case also names the
 region that was mutated, which is what lets the runner separate "caught the planted bug" from
 "flags everything indiscriminately" — a model that fails everything scores 100% recall and is
@@ -43,10 +43,10 @@ import argparse
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 
-DEFAULT_TL_CORPUS = os.path.join(SCRIPT_DIR, "corpus")
-DEFAULT_OCR_CORPUS = os.path.join(SCRIPT_DIR, "ocr_corpus")
+DEFAULT_TL_CORPUS = os.path.join(REPO_ROOT, "corpus", "translation")
+DEFAULT_OCR_CORPUS = os.path.join(REPO_ROOT, "corpus", "ocr")
 DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "examples")
-DEFAULT_OUT = os.path.join(SCRIPT_DIR, "qa_corpus")
+DEFAULT_OUT = os.path.join(REPO_ROOT, "corpus", "qa")
 
 # Fluent, in-domain English that is simply not what the panel says. Swapping in unrelated-but-
 # natural text is the hard case: a model keying on "does this read like English" passes it, only

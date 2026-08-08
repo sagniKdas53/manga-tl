@@ -3,14 +3,17 @@
 build_ocr_corpus.py — Build a committable, ground-truthed OCR benchmark corpus from
 examples/sampleN/ pages.
 
-Unlike scripts/corpus/ (translation, text-only, images deliberately excluded), this corpus
-*does* commit its images: a downscaled WebP of each page, so scripts/benchmark_vlm_ocr.py has a
-stable, reproducible input that survives the examples/ history purge. ~40 pages at long-edge
-1600 / WebP q80 is roughly 8-14 MB.
+This corpus keeps a downscaled WebP of each page, so benchmark_vlm_ocr.py has a stable input that
+survives the examples/ history purge. ~40 pages at long-edge 1600 / WebP q80 is roughly 8-14 MB.
+
+None of it lives in this repo. All three corpora and the run output are versioned in the
+**manga-tl-corpus** submodule, mounted at `corpus/` — separately, because they are derived from
+examples/ (gitignored and purged here) and so have no source this repo can track, while still
+being worth diffing to catch ground-truth regressions. See corpus/README.md.
 
 Output layout:
 
-    scripts/ocr_corpus/
+    corpus/ocr/
       _manifest.json
       sampleN/
         page.webp       long edge 1600 (matches the pipeline's downscale_for_ocr max_dim)
@@ -41,7 +44,7 @@ Usage:
     python scripts/build_ocr_corpus.py --gold sample36 --review-only
 
     # Fold reviewed text back in
-    python scripts/build_ocr_corpus.py --apply-review scripts/ocr_corpus/_review/sample36.json
+    python scripts/build_ocr_corpus.py --apply-review corpus/ocr/_review/sample36.json
 """
 
 import os
@@ -76,7 +79,7 @@ from bench_common import cer, normalize_text  # noqa: E402
 load_env(os.path.join(REPO_ROOT, ".env"))
 
 DEFAULT_EXAMPLES = os.path.join(REPO_ROOT, "examples")
-DEFAULT_OUT = os.path.join(SCRIPT_DIR, "ocr_corpus")
+DEFAULT_OUT = os.path.join(REPO_ROOT, "corpus", "ocr")
 DEFAULT_PROVIDERS_CONFIG = os.path.join(REPO_ROOT, "config", "providers.json")
 
 MAX_DIM = 1600
@@ -142,10 +145,15 @@ def paddle_transcribe_regions(img, regions, lang, variant):
         print(f"    [warn] could not initialise {variant}; skipping this engine")
         return None
 
+    # Same padded crop the cloud VLMs get (crop_for_region, pad=10). These engines used to be
+    # fed the raw bbox while the VLMs got the padded one, so the two families were transcribing
+    # different images — any box that clipped a glyph penalised paddle alone, and their
+    # "disagreement" partly measured the crop rather than the engine.
+    from benchmark_vlm_ocr import crop_for_region
+
     out = {}
     for r in regions:
-        x, y, w, h = r["bbox"]
-        crop = img[y:y + h, x:x + w]
+        crop, _ = crop_for_region(img, r["bbox"])
         if crop.size == 0:
             out[r["id"]] = ""
             continue
@@ -237,24 +245,113 @@ p.lead{margin:0 0 24px;opacity:.75}
 .cand b{flex:0 0 150px;font-weight:600;opacity:.7;font-size:12px}
 .cand code{font-size:15px;word-break:break-all}
 .pick{cursor:pointer;background:#8882;border:0;border-radius:4px;padding:1px 7px;font-size:11px}
+.cand.sel{background:#2563eb26;border-radius:6px;padding:2px 4px;margin:1px -4px}
+.cand.sel code{font-weight:600}
+.cand.sel .pick{background:#2563eb;color:#fff}
+.cand.rejected code{opacity:.35;text-decoration:line-through}
+.acts{display:flex;gap:8px;margin:10px 0 6px}
+.act{cursor:pointer;background:transparent;border:1px solid #8886;border-radius:4px;
+  padding:2px 9px;font-size:11px;color:inherit;opacity:.8}
+.act:hover{opacity:1;border-color:#888c}
 textarea{width:100%;font-size:16px;padding:8px;box-sizing:border-box;min-height:56px;
   border-radius:6px;border:1px solid #8886;background:transparent;color:inherit}
 .tier{font-size:11px;padding:2px 8px;border-radius:99px;margin-left:8px}
-.consensus{background:#2a7a2a33;color:#2a7a2a}
+.consensus,.resolved{background:#2a7a2a33;color:#2a7a2a}
 .unresolved{background:#a8341433;color:#c2410c}
+.gold{background:#b4880033;color:#a16207}
 #save{position:sticky;bottom:20px;padding:12px 20px;font-size:15px;border-radius:8px;
   border:0;background:#2563eb;color:#fff;cursor:pointer;margin-top:24px}
+#save.warn{background:#c2410c}
 """
 
 REVIEW_JS = """
-function pick(id,text){document.getElementById('t-'+id).value=text}
-function save(){
-  const out=REGIONS.map(r=>({id:r.id,text:document.getElementById('t-'+r.id).value}));
-  const blob=new Blob([JSON.stringify({sample_id:SAMPLE,regions:out},null,2)],
-                      {type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download=SAMPLE+'.json';a.click();
+// A region is 'resolved' once the reviewer has actually decided something about it: picked a
+// candidate, declared it blank, or typed text. Regions that arrived as consensus/gold start
+// resolved; 'unresolved' ones start pending. Export warns on anything still pending, because
+// --apply-review marks every region on the page gold and would promote unreviewed text.
+const state = {};
+const ta = id => document.getElementById('t-' + id);
+const badge = id => document.getElementById('b-' + id);
+const block = id => document.getElementById('r-' + id);
+const cands = id => block(id).querySelectorAll('.cand');
+
+function setState(id, s, label){
+  state[id] = s;
+  const b = badge(id);
+  b.className = 'tier ' + (s === 'resolved' ? 'resolved' : 'unresolved');
+  b.textContent = label || s;
+  updateCount();
 }
+
+function updateCount(){
+  const pend = REGIONS.filter(r => state[r.id] !== 'resolved');
+  const btn = document.getElementById('save');
+  const done = REGIONS.length - pend.length;
+  btn.textContent = 'Save ' + SAMPLE + '.json  ·  ' + done + '/' + REGIONS.length + ' resolved';
+  btn.classList.toggle('warn', pend.length > 0);
+}
+
+document.addEventListener('click', function(e){
+  const p = e.target.closest('.pick');
+  if (p){
+    const id = p.dataset.region;
+    ta(id).value = p.dataset.text;
+    cands(id).forEach(c => c.classList.remove('sel', 'rejected'));
+    p.closest('.cand').classList.add('sel');
+    setState(id, 'resolved');
+    return;
+  }
+  const a = e.target.closest('.act');
+  if (!a) return;
+  const id = a.dataset.region;
+  cands(id).forEach(c => c.classList.remove('sel'));
+  if (a.dataset.action === 'blank'){
+    // "no text here" — a detection false positive. cer() returns None against an empty
+    // reference, so a blank region is excluded from scoring rather than scored as a total miss.
+    ta(id).value = '';
+    cands(id).forEach(c => c.classList.remove('rejected'));
+    setState(id, 'resolved', 'resolved · blank');
+  } else {
+    // "none of these are right" — strike the candidates out and wait for a typed answer.
+    ta(id).value = '';
+    cands(id).forEach(c => c.classList.add('rejected'));
+    setState(id, 'pending', 'needs typing');
+    ta(id).focus();
+  }
+});
+
+document.addEventListener('input', function(e){
+  const t = e.target;
+  if (!t.matches('textarea')) return;
+  const id = t.dataset.region;
+  cands(id).forEach(c => c.classList.remove('sel'));
+  // Manually emptying the box is not the same as declaring it blank — use the button for that.
+  setState(id, t.value.trim() ? 'resolved' : 'pending',
+           t.value.trim() ? 'resolved · edited' : 'unresolved');
+});
+
+function save(){
+  const pend = REGIONS.filter(r => state[r.id] !== 'resolved').map(r => r.id);
+  if (pend.length){
+    const ok = confirm(
+      pend.length + ' of ' + REGIONS.length + ' regions are still unresolved:\\n\\n  ' +
+      pend.join(', ') + '\\n\\n--apply-review marks EVERY region on this page as gold, ' +
+      'including these — their current text would be promoted to hand-confirmed ground truth ' +
+      'without review.\\n\\nExport anyway?');
+    if (!ok){
+      block(pend[0]).scrollIntoView({behavior: 'smooth', block: 'center'});
+      return;
+    }
+  }
+  const out = REGIONS.map(r => ({id: r.id, text: ta(r.id).value}));
+  const blob = new Blob([JSON.stringify({sample_id: SAMPLE, regions: out}, null, 2)],
+                        {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = SAMPLE + '.json'; a.click();
+}
+
+REGIONS.forEach(r => { state[r.id] = r.tier === 'unresolved' ? 'pending' : 'resolved'; });
+updateCount();
 """
 
 
@@ -262,36 +359,60 @@ def write_review_html(out_dir, sample_id, img, regions):
     review_dir = os.path.join(out_dir, "_review")
     os.makedirs(review_dir, exist_ok=True)
 
+    from benchmark_vlm_ocr import crop_for_region
+
     blocks = []
     for r in regions:
-        x, y, w, h = r["bbox"]
-        crop = img[y:y + h, x:x + w]
+        _x, _y, w, h = r["bbox"]
+        # Show the *same* padded crop the engines were given. Rendering the raw bbox made
+        # regions look clipped in review when the engines had actually seen the surrounding 10px.
+        crop, _ = crop_for_region(img, r["bbox"])
         ok, buf = cv2.imencode(".png", crop)
         b64 = base64.b64encode(buf).decode() if ok else ""
+        # The candidate text rides in data-* attributes, not in an inline onclick. json.dumps
+        # emits a leading `"`, which closed the onclick="..." attribute at the first character
+        # and silently broke every `use` button on the page.
+        rid = html.escape(r["id"])
         cands = "".join(
             f'<div class="cand"><b>{html.escape(engine)}</b>'
-            f'<button class="pick" onclick="pick(\'{r["id"]}\',{json.dumps(text)})">use</button>'
+            f'<button class="pick" data-region="{rid}" '
+            f'data-text="{html.escape(text, quote=True)}">use</button>'
             f'<code>{html.escape(text) or "<i>(empty)</i>"}</code></div>'
             for engine, text in (r.get("candidates") or {}).items()
         )
+        acts = (
+            f'<div class="acts">'
+            f'<button class="act" data-region="{rid}" data-action="blank" '
+            f'title="No text in this region — excluded from scoring">blank (no text)</button>'
+            f'<button class="act" data-region="{rid}" data-action="reject" '
+            f'title="No candidate is correct — clears the box so you can type it">'
+            f'reject all</button></div>'
+        )
         blocks.append(
-            f'<div class="region"><div><img class="crop" src="data:image/png;base64,{b64}">'
-            f'<div style="font-size:12px;opacity:.6;margin-top:6px">{r["id"]} · {w}x{h}'
-            f'<span class="tier {r["tier"]}">{r["tier"]}</span></div></div>'
-            f'<div>{cands}<textarea id="t-{r["id"]}">{html.escape(r["text"])}</textarea></div></div>'
+            f'<div class="region" id="r-{rid}">'
+            f'<div><img class="crop" src="data:image/png;base64,{b64}">'
+            f'<div style="font-size:12px;opacity:.6;margin-top:6px">{rid} · {w}x{h}'
+            f'<span class="tier {r["tier"]}" id="b-{rid}">{r["tier"]}</span></div></div>'
+            f'<div>{cands}{acts}'
+            f'<textarea id="t-{rid}" data-region="{rid}">{html.escape(r["text"])}</textarea>'
+            f'</div></div>'
         )
 
     doc = (f'<!doctype html><meta charset="utf-8"><title>OCR gold review — {sample_id}</title>'
            f"<style>{REVIEW_CSS}</style>"
            f"<h1>OCR gold review — {sample_id}</h1>"
            f'<p class="lead">Compare each crop against the engine candidates. Click <b>use</b> to '
-           f'take one, or edit freely. Then <b>Save</b> and run:<br>'
+           f'take one (it highlights, and the region flips to <i>resolved</i>), '
+           f'<b>blank</b> if the box holds no text, <b>reject all</b> if no candidate is right, '
+           f'or just type. The Save button tracks how many regions are resolved and warns before '
+           f'exporting an incomplete page. Then run:<br>'
            f'<code>python scripts/build_ocr_corpus.py --apply-review '
-           f'scripts/ocr_corpus/_review/{sample_id}.json</code></p>'
+           f'corpus/ocr/_review/{sample_id}.json</code></p>'
            + "".join(blocks) +
            f'<button id="save" onclick="save()">Save {sample_id}.json</button>'
            f"<script>const SAMPLE={json.dumps(sample_id)};"
-           f"const REGIONS={json.dumps([{'id': r['id']} for r in regions])};{REVIEW_JS}</script>")
+           f"const REGIONS={json.dumps([{'id': r['id'], 'tier': r['tier']} for r in regions])};"
+           f"{REVIEW_JS}</script>")
 
     path = os.path.join(review_dir, f"{sample_id}.html")
     with open(path, "w", encoding="utf-8") as f:

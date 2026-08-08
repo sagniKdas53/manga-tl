@@ -30,7 +30,7 @@ page for a high-stakes comparison; sample28 in this corpus is hand-verified inst
 extraction_method: "manual") and should be treated as the reliability baseline.
 
 Usage:
-    python scripts/build_translation_corpus.py --examples-dir examples --out-dir scripts/corpus
+    python scripts/build_translation_corpus.py --examples-dir examples --out-dir corpus/translation
     python scripts/build_translation_corpus.py --sample sample4
     python scripts/build_translation_corpus.py --list-eligible
 """
@@ -363,7 +363,9 @@ def build_sample(sample_dir, sample_id, meta, src_reader, en_reader, out_dir, mi
 def main():
     parser = argparse.ArgumentParser(description="Build a text-only translation corpus from examples/")
     parser.add_argument("--examples-dir", default=os.path.join(SCRIPT_DIR, "..", "examples"))
-    parser.add_argument("--out-dir", default=os.path.join(SCRIPT_DIR, "corpus"))
+    parser.add_argument(
+        "--out-dir",
+        default=os.path.abspath(os.path.join(SCRIPT_DIR, "..", "corpus", "translation")))
     parser.add_argument("--sample", help="Only build this one sample (e.g. sample4)")
     parser.add_argument("--min-confidence", type=float, default=0.5)
     parser.add_argument("--list-eligible", action="store_true", help="List eligible samples and exit, no OCR run")

@@ -5,9 +5,9 @@ share the same shape, so learning one teaches you the others.
 
 | Stage | Runner | Corpus | Headline metric |
 |---|---|---|---|
-| Translation | `scripts/benchmark_translation.py` | `scripts/corpus/` | mean lexical similarity to a reference translation |
-| OCR | `scripts/benchmark_vlm_ocr.py` | `scripts/ocr_corpus/` | mean CER against ground-truth text |
-| QA | `scripts/benchmark_qa.py` | `scripts/qa_corpus/` | macro-F1 over injected defect classes |
+| Translation | `scripts/benchmark_translation.py` | `corpus/translation/` | mean lexical similarity to a reference translation |
+| OCR | `scripts/benchmark_vlm_ocr.py` | `corpus/ocr/` | mean CER against ground-truth text |
+| QA | `scripts/benchmark_qa.py` | `corpus/qa/` | macro-F1 over injected defect classes |
 
 Deep dives: [`translation_bench.md`](translation_bench.md), [`run_ocr_bench.md`](run_ocr_bench.md),
 [`qa_bench.md`](qa_bench.md). This document is the map.
@@ -60,7 +60,7 @@ why it was abandoned.
 
 ## 2. The corpora
 
-### `scripts/corpus/` — translation (text only, 40 pages)
+### `corpus/translation/` — translation (text only, 40 pages)
 
 No images: source pages can be adult content, so nothing here carries pixels even though the
 corpus is no longer committed at all (see the note under the OCR corpus below). Per page:
@@ -77,34 +77,135 @@ mangatranslator.ai, 1 mangatranslate.com), 1 against a hand-edited render.
 > can translate correctly and score low by choosing different words. Use it to rank and to catch
 > regressions, then read the actual output of the top few.
 
-### `scripts/ocr_corpus/` — OCR (40 pages, 291 regions)
+### `corpus/ocr/` — OCR (40 pages, 291 regions)
 
 A downscaled WebP per page (long edge 1600, matching the pipeline's `downscale_for_ocr`) plus
 `regions.json` and `meta.json`. All 40 pages come to 7.4 MB.
 
-> **None of the three corpora are in git as of 2026-08-08.** They used to be — the OCR corpus in
-> particular committed its WebPs so the benchmark had a stable input. That is no longer true.
-> Every corpus is derived from `examples/`, which is gitignored *and* purged from history, so a
-> committed corpus is a snapshot with no trackable source: it can't be regenerated from the repo
-> and its diffs mean nothing. Rebuild instead (§5). The durable record is
-> `scripts/examples_manifest.json`, which stays tracked.
+> **The corpora live in a submodule, not in this repo.** `corpus/` is `manga-tl-corpus`, holding
+> all three corpora plus `runs/`. They are derived from `examples/` — gitignored *and* purged from
+> this repo's history — so they have no source this repo can track and don't belong in its
+> history. But they are not disposable: ground truth is expensive, partly hand-confirmed, and a
+> silent change to it is exactly the regression that is otherwise invisible. Hence versioned,
+> separately. See `corpus/README.md`.
 >
-> Practical consequence: **a clean clone has no corpora.** Anyone benchmarking needs the
-> `examples/` tree first, then the three builders.
+> Practical consequences: a clean clone needs `git submodule update --init`, and **rebuilding a
+> corpus produces a reviewable diff** — that is the point. `ocr/_review/` is not committed
+> (regenerable, ~19 MB); rebuild it with `--review-only`.
 
-Built out from 1 page to 40 on 2026-08-08, **local engines only** — the four PaddleOCR variants
-at `--min-agree 3`, no API calls, because the free-tier QA-LLM sweep was still running and a
-cloud pass would have competed with it for the same quota. Current tiers:
+Built out from 1 page to 40 on 2026-08-08: **291 regions**, voted by two PaddleOCR generations
+(`v6_medium`, `v5_server`) plus two paid cloud VLMs (`qwen3-vl-32b`, `gemini-3.1-flash-lite`).
 
 | tier | regions | |
 |---|---|---|
-| `consensus` | 178 | 61.2% — scoreable |
-| `unresolved` | 113 | 38.8% — excluded from scoring |
+| `gold` | 20 | hand-confirmed (`sample7`) |
+| `consensus` | 199 | voted |
+| `unresolved` | 72 | 24.7% — excluded from scoring |
 
-9 of 40 pages resolve every region. The weak ones are SFX-heavy (`sample37` 1/10, `sample36` 1/5,
-`sample6` 1/4): at `--tol 0.10`, a single character's disagreement on a 3-character crop is a CER
-of 0.33, so short regions almost never clear the bar. Adding cloud vision engines is the next
-lever — see §6 for why they resolve regions the local pool can't.
+**213 of 291 (73.2%) carry non-empty scoreable ground truth.** The gap between that and the
+219 gold+consensus is 6 regions deliberately blanked in review: detection false positives with no
+text in them, excluded from scoring rather than counted as misses.
+
+Two earlier figures should **not** be cited. *61.2%* came from treating the four PaddleOCR
+variants as four independent votes when they are one (see below), so part of that "consensus" was
+a shared bug outvoting the truth. *72.5%* came before the crop fix, when paddle was fed a tighter
+image than the VLMs. False consensus is worse than `unresolved`: unresolved is excluded from
+scoring, while wrong ground truth silently penalises engines that got the region right.
+
+The remaining 72 unresolved concentrate in SFX-heavy and dense pages (`sample7` 6/20, `sample27`
+5/16, `sample3` 4/5) and are the queue for gold review (§4) — `_review/*.html` is generated for
+all 31 pages that still have unresolved regions.
+
+#### Engines are not independent, and the vote must know it
+
+The naive rule — every engine gets one vote — assumes engines fail independently. PaddleOCR
+variants don't: they share a vertical-column ordering bug on Japanese text, so **every** variant
+reverses the reading order of the same region, identically. Four variants at `--min-agree 3` is
+then not a robust majority but one wrong answer with three seconds. Observed on `sample1` r1:
+
+```
+paddleocr_v6_medium    本当にやるの？お兄ちゃん…      <- reversed
+paddleocr_v5_server    本当にやるの？お兄ちゃん…      <- reversed, same bug
+qwen3-vl-32b           お兄ちゃん…\n本当にやるの？     <- correct
+gemini-3.1-flash-lite  お兄ちゃん…\n本当にやるの？     <- correct
+```
+
+So `scripts/retier_ocr_corpus.py` collapses each **engine family** to a single vote (its own
+medoid) before voting across families, leaving three real opinions: paddle, qwen, gemini. Paddle
+keeps the strength it genuinely has — it beats both VLMs on short SFX crops they hallucinate over
+(`めざといなー`, which qwen read as `めんこいなー`) — without being able to outvote them on
+reading order. Auditing the accepted regions: paddle never won alone, and no reversal was
+accepted. The 6 regions where paddle beat a dissenting qwen were short SFX that qwen hallucinated
+(`これにしよ！` read as `りょじゅうもー！`) — exactly the complementarity the rule preserves.
+
+Because `tier` is a pure function of the stored `candidates` plus the voting rule, **the
+threshold is free to revisit and expensive to get wrong up front.** Re-tier offline, never re-run
+engines:
+
+```bash
+python scripts/retier_ocr_corpus.py --dry-run --min-agree 2 --tol 0.10   # report
+python scripts/retier_ocr_corpus.py           --min-agree 2 --tol 0.10   # apply
+```
+
+`--min-agree 2` (of 3 families) is the operating point; 3 is unanimity and collapses coverage to
+18%. `--tol` was swept and left at **0.10** deliberately, even though loosening buys regions:
+
+| `--tol` | scoreable |
+|---|---|
+| 0.05 | 70.1% |
+| **0.10** | **75.3%** |
+| 0.15 | 78.0% |
+| 0.20 | 81.1% |
+| 0.30 | 83.5% |
+
+The 17 regions gained between 0.10 and 0.20 are mostly cases where the two VLMs differ by one
+character (`だろっ？` vs `だろう？`, `…はずなの` vs `…はすなの`). The vote resolves, but picks
+arbitrarily between a right and a wrong reading — putting a ~0.1 CER floor under every engine on
+that region. Coverage bought that way costs the discrimination the benchmark exists to provide;
+those regions belong in gold review instead.
+
+#### Every engine must see the same crop
+
+`crop_for_region(img, bbox, pad=10)` is the one cropping function. It was not always used
+everywhere, and that was a real bug: `paddle_transcribe_regions` passed the raw bbox while the
+cloud VLMs got the padded crop, so **the two families were transcribing different images.** Any
+box that clipped a glyph penalised paddle alone, which inflated the apparent disagreement between
+local and cloud engines and made the vote partly a measurement of the crop. Measured on sample7,
+switching paddle to the padded crop changed **8 of 20 regions**, consistently toward the truth
+(`*これもmD7*` → `*これもヨロジり*` against gold `これもヨロシク`); on sample3 it changed all 5.
+
+The review page had the same bug in the other direction — it rendered the raw bbox, so regions
+looked clipped in review when the engines had actually seen 10px more. All three sites now share
+`crop_for_region`.
+
+When only the *local* half of the candidates needs recomputing, don't re-run the build — the
+cloud calls cost money and would return identical answers, having already seen the padded crop:
+
+```bash
+for s in $(ls -d corpus/ocr/sample*/ | xargs -n1 basename); do
+    python scripts/refresh_local_candidates.py --sample "$s"     # ~2GB/page, so one process each
+done
+python scripts/retier_ocr_corpus.py --min-agree 2 --tol 0.10
+```
+
+#### Region proposals are not clean, and that caps what the corpus can measure
+
+Regions come from the production path, so its detection failures are in the corpus. Of 291:
+
+| pathology | count | what it is |
+|---|---|---|
+| tiny (`<45x45`) | 12 (4.1%) | screentone/art false positives — no text at all |
+| over-merged (`>50%` of a page dimension) | 11 (3.8%) | one box swallowing several bubbles |
+
+Over-merging is the damaging one, because the ground truth becomes genuinely ambiguous rather
+than merely hard: `sample3` r2/r3/r4 are ~900px column-height boxes containing multiple bubbles,
+so engines disagree on the order they should be concatenated in and no threshold can resolve
+that. `sample23` has a 458x1505 box on a 1200x1600 page. Those pages are weak OCR-corpus members
+regardless of engine quality.
+
+**To retire a bad region, blank its text in gold review.** `cer()` returns `None` against an
+empty reference and `score_page` skips it, so a blank region is excluded from scoring rather than
+counted as a total miss — the right outcome for a box that never contained text.
 
 Region proposals come from the production path — YOLO bubble detection plus PaddleOCR background
 text merged by `worker.services.merge_regions` — and are **held constant across chat VLMs**, so
@@ -119,7 +220,7 @@ Ground truth has three tiers:
 - **unresolved** — engines disagreed. **Excluded from scoring**, so disagreement never silently
   becomes a noise target.
 
-### `scripts/qa_corpus/` — QA (265 cases over 38 pages)
+### `corpus/qa/` — QA (265 cases over 38 pages)
 
 Built by mutating clean pages: each case carries exactly **one** labelled defect plus the list of
 regions that were mutated. That list is what lets the runner separate "caught the planted bug"
@@ -130,9 +231,9 @@ Classes: `control`, `mistranslation`, `untranslated`, `ocr_garbage`, `ocr_unreco
 `order_swap`, `sfx_translated`. The seed is keyed on the sample id, so `--sample X` and a full
 run produce the same cases for X.
 
-**VLM readiness: 29 of 38 pages.** A case needs both a worker render (all 40 have one) and
+**VLM readiness: 30 of 38 pages.** A case needs both a worker render (all 40 have one) and
 bounding boxes from the OCR corpus, which is why the arm had 0 runnable cases until that corpus
-was built out. The 9 that still lack boxes fail one check — `attach_bboxes` requires the OCR
+was built out. The 8 that still lack boxes fail one check — `attach_bboxes` requires the OCR
 corpus to have found *at least* as many regions as the translation corpus, then zips the two
 positionally. Detection runs on the downscaled page for the OCR corpus and on the full-resolution
 page for the translation corpus, so small regions drop out of the former:
@@ -148,8 +249,8 @@ page for the translation corpus, so small regions drop out of the former:
 | `sample17` | 6 | 5 |
 | `sample1` | 4 | 3 |
 
-`sample36` is the ninth: its cases were deliberately left untouched while a QA-LLM sweep scoped to
-that page was in flight. Rebuild it once that finishes.
+(`sample36` was previously a ninth, held back while a QA-LLM sweep scoped to that page was in
+flight. That sweep is done and the page is rebuilt — it now has boxes and is VLM-ready.)
 
 Not covered: typesetting/overflow defects. They need the page re-rendered with a broken layout,
 not a metadata mutation, so the VLM arm currently measures semantic and OCR review only.
@@ -241,13 +342,38 @@ For pages you want as ground truth rather than consensus:
 python scripts/build_ocr_corpus.py --sample sample36 --gold sample36
 ```
 
-That writes `scripts/ocr_corpus/_review/sample36.html` — a self-contained page showing each
-region's crop next to every engine's candidate, with the consensus preselected. You pick or edit
-(you are confirming, not transcribing — no Japanese needed), hit **Save**, then:
+That writes `corpus/ocr/_review/sample36.html` — a self-contained page showing each
+region's crop next to every engine's candidate. Regenerate the HTML for pages already in the
+corpus without calling a single engine:
 
 ```bash
-python scripts/build_ocr_corpus.py --apply-review scripts/ocr_corpus/_review/sample36.json
+python scripts/build_ocr_corpus.py --review-only --gold sample3,sample7,sample9
 ```
+
+Per region you can:
+
+| control | effect |
+|---|---|
+| **use** | takes that candidate — the row highlights and the badge flips to `resolved` |
+| **blank (no text)** | declares the box empty; it is then *excluded from scoring*, the right outcome for a detection false positive |
+| **reject all** | strikes every candidate through and clears the box for you to type; stays unresolved until you do |
+| typing | resolves the region as `resolved · edited` |
+
+The work is mostly confirming reading order and truncation against the crop — comparing shapes,
+not reading Japanese. The Save button tracks progress (`4/5 resolved`) and turns orange while
+anything is outstanding. Then:
+
+```bash
+python scripts/build_ocr_corpus.py --apply-review corpus/ocr/_review/sample36.json
+```
+
+> **`--apply-review` marks every region on the page `gold`, not just the ones you edited.** So a
+> half-reviewed page promotes unreviewed consensus text to hand-confirmed ground truth — and
+> `gold` is exactly what re-tiering will never revisit. Export warns and names the outstanding
+> regions if any are unresolved; take the warning seriously rather than clicking through it.
+>
+> Manually emptying a textarea does **not** count as resolved — use **blank** to say "no text
+> here" deliberately, so an untouched box is never mistaken for a decision.
 
 Those regions become tier `gold`. The review pages are gitignored — they embed base64 crops and
 are ~350 KB each.
@@ -345,21 +471,35 @@ python scripts/build_qa_corpus.py
 > variant needs fetching once, run it with `PADDLEX_OFFLINE_MODE=0 HF_HUB_OFFLINE=0`. Always
 > check `meta.json`'s `engines` list to see who actually voted.
 
-Default is `paddleocr_v6_medium,paddleocr_v5_server` — two generations, deliberately. **This is
-the fix for a real problem:** only two *free* cloud vision models exist on OpenRouter, so a
-one-paddle-plus-two-VLM pool made the default `--min-agree 3` equivalent to unanimity, and a
-sample36 trial resolved just 1 of 5 regions. Four independent engines means one dissenter no
-longer sinks the region.
+Default is `paddleocr_v6_medium,paddleocr_v5_server` — two generations, for *cross-checking within
+the family*, not for two votes. Adding variants does not make the local pool more independent:
+they share failure modes, so under the family-collapsed rule (§3) all of them together still cast
+one vote. Running more than two mostly buys runtime.
 
-**Local and cloud engines resolve different regions, so the best pool has both.** On sample36:
+> **Do not raise `--min-agree` to compensate for a large paddle pool.** That was the original
+> mistake: four variants at `--min-agree 3` looks like a strict rule but is satisfied by three
+> copies of one bug, while genuinely independent engines that outnumber nothing get discarded.
+> Count *families*, not processes.
 
-- the four paddle variants agree on long dialogue that the VLMs "disagree" on only because they
-  concatenate vertical lines in a different order;
-- the VLMs agree on short SFX crops (`トッ`) where the *mobile* and *small* recognisers garble
-  a 2–3 character image.
+**Local and cloud engines resolve different regions, so the best pool has both:**
 
-With `--min-agree 3` and four variants, no single generation can carry a region on its own —
-reaching 3 always needs agreement across the v5/v6 line, which is the point.
+- paddle recovers short SFX crops (`トッ`, `だーれだ`) where the VLMs hallucinate plausible-looking
+  wrong text — it won 6 regions over a dissenting qwen;
+- the VLMs carry multi-line dialogue, where paddle's column ordering reverses the reading.
+
+A pool of two paddle variants + two independent cloud VLMs gives three families, which makes
+`--min-agree 2` a real two-of-three majority. That is the configuration behind the 72.5% figure:
+
+```bash
+python scripts/build_ocr_corpus.py --sample sampleN \
+  --providers-config scripts/test-providers.json --include-paid --max-engines 2 \
+  --paddle-variants paddleocr_v6_medium,paddleocr_v5_server --min-agree 2 --tol 0.10
+```
+
+Cost note: `gemini-3.1-flash-lite` is cheap and fast but **truncates long regions** — on
+`sample3` r3 it stops early where qwen continues. On dense pages that leaves one strong opinion
+and the region won't resolve at any threshold. It is a reasonable third family for speed; it is
+not a substitute for a second strong VLM if unresolved coverage is the thing you're fixing.
 
 Free vision models currently available per provider: OpenRouter 2, Cloudflare 3, NVIDIA 2.
 

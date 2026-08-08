@@ -26,18 +26,18 @@ For every `(provider, model, corpus page)` combination:
 
 ---
 
-## 2. Corpus format (`scripts/corpus/`)
+## 2. Corpus format (`corpus/translation/`)
 
-Each `scripts/corpus/<sampleId>/` is **text only** — no images are stored, per the instruction
+Each `corpus/translation/<sampleId>/` is **text only** — no images are stored, per the instruction
 that started this (source pages can be adult content, so the corpus must not carry them).
 
-> As of 2026-08-08 the corpus is **not in git** either — `scripts/corpus/`, `scripts/ocr_corpus/`
-> and `scripts/qa_corpus/` are all gitignored. They derive from `examples/`, which is itself
+> As of 2026-08-08 the corpus is **not in git** either — `corpus/translation/`, `corpus/ocr/`
+> and `corpus/qa/` are all gitignored. They derive from `examples/`, which is itself
 > gitignored and purged from history, so a committed corpus has no trackable source. Rebuild it;
 > don't expect it in a fresh clone.
 
 ```
-scripts/corpus/
+corpus/translation/
   sample36/
     regions.json      # source-language text regions, in reading order
     reference.json     # id -> reference (ground-truth) translation, or null if unmatched

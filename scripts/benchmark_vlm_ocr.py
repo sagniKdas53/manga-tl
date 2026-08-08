@@ -1,13 +1,13 @@
 """
 benchmark_vlm_ocr.py — Repeatable OCR-stage benchmark across every vision model in
-config/providers.json, run against every page in scripts/ocr_corpus/.
+config/providers.json, run against every page in corpus/ocr/.
 
 Mirrors benchmark_translation.py: corpus-driven rather than single-image, scored against
 ground truth rather than eyeballed, and everything lands under --out-dir with a _summary.json
 instead of scattering demo JPEGs into the working directory.
 
 Two things it measures that the previous version could not:
-  * Accuracy. Mean CER and exact-match rate per model against scripts/ocr_corpus/'s
+  * Accuracy. Mean CER and exact-match rate per model against corpus/ocr/'s
     regions.json (gold or multi-engine-consensus text) — previously there was no ground truth
     at all, so a run only told you a model returned *something*.
   * Real structured-output support, via bench_common.run_ladder's json_schema -> json_object
@@ -73,7 +73,7 @@ except ImportError:
 load_env(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env')))
 
 DEFAULT_PROVIDERS_CONFIG = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "config", "providers.json"))
-DEFAULT_CORPUS_DIR = os.path.join(SCRIPT_DIR, "ocr_corpus")
+DEFAULT_CORPUS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "corpus", "ocr"))
 
 # The corpus baseline page — the smoke-test default, mirroring benchmark_translation.py's
 # QUICK_SUBSET. sample36 is a clean 3-panel layout with well-separated bubbles and an
@@ -446,7 +446,7 @@ def get_all_text_regions(img, lang_key):
 
 
 # ---------------------------------------------------------------------------
-# Corpus loading (scripts/ocr_corpus/<sampleId>/{page.webp,regions.json,meta.json})
+# Corpus loading (corpus/ocr/<sampleId>/{page.webp,regions.json,meta.json})
 # ---------------------------------------------------------------------------
 
 def load_corpus_page(corpus_dir, sample_id):
@@ -598,7 +598,7 @@ def score_detection(results, ground_truth, threshold=0.5):
 def main():
     parser = argparse.ArgumentParser(
         description="Repeatable OCR benchmark across config/providers.json vision models "
-                    "and scripts/ocr_corpus/ pages")
+                    "and corpus/ocr/ pages")
     parser.add_argument("--corpus-dir", default=DEFAULT_CORPUS_DIR)
     parser.add_argument("--corpus-subset", choices=["quick", "clean", "all"], default="quick",
                         help="quick=the baseline page only (default); clean=pages with no "

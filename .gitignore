@@ -24,12 +24,9 @@ pytest*
 exported_minio/*
 exported_images/*
 
-# Benchmark corpora and run output. All of it is derived from examples/, which is itself
-# gitignored and purged from history — so none of it has a source git can track, and a corpus
-# committed here would be a snapshot nobody can regenerate or diff meaningfully. Rebuild with
-# scripts/build_{translation,ocr,qa}_corpus.py; see docs/benchmarks_guide.md §5.
-# The durable record is scripts/examples_manifest.json, which stays tracked.
-scripts/corpus/*
-scripts/ocr_corpus/*
-scripts/qa_corpus/*
-runs/*
+# Benchmark corpora and run output now live in the manga-tl-corpus submodule at corpus/.
+# They are derived from examples/ (gitignored and purged from history here), so they have no
+# source this repo can track — but they are still worth versioning, because ground truth is
+# expensive and a silent change to it is exactly the kind of regression that is otherwise
+# invisible. Hence: versioned, separately. See corpus/README.md and docs/benchmarks_guide.md §5.
+# The durable role/provenance record stays here: scripts/examples_manifest.json.

@@ -41,7 +41,7 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from bench_common import cer, normalize_text  # noqa: E402
 
-DEFAULT_CORPUS = os.path.join(SCRIPT_DIR, "ocr_corpus")
+DEFAULT_CORPUS = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "corpus", "ocr"))
 
 
 def family_of(engine):
@@ -125,6 +125,10 @@ def main():
     after = collections.Counter()
     changed_text = 0
     total = 0
+    # sample_id -> the "N regions, N consensus, N unresolved" line the manifest advertises.
+    # Retiering makes the manifest written by build_ocr_corpus.py stale, and a stale manifest
+    # is worse than none: it is the file anything downstream reads to size the corpus.
+    new_detail = {}
 
     for sample_id in samples:
         rpath = os.path.join(args.corpus, sample_id, "regions.json")
@@ -152,6 +156,11 @@ def main():
             r.update({"text": text, "tier": tier, "agreement": agree})
             tier_counts[tier] += 1
 
+        new_detail[sample_id] = ", ".join(
+            [f"{len(regions)} regions"]
+            + [f"{tier_counts[t]} {t}" for t in ("gold", "consensus", "unresolved") if tier_counts[t]]
+        )
+
         if not args.dry_run:
             with open(rpath, "w", encoding="utf-8") as f:
                 json.dump(regions, f, ensure_ascii=False, indent=2)
@@ -166,6 +175,17 @@ def main():
                                   "one), then medoid across families — see retier_ocr_corpus.py")
                 with open(mpath, "w", encoding="utf-8") as f:
                     json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    manifest_path = os.path.join(args.corpus, "_manifest.json")
+    if not args.dry_run and os.path.exists(manifest_path):
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+        for entry in manifest:
+            detail = new_detail.get(entry.get("sample_id"))
+            if detail:
+                entry["detail"] = detail
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
 
     def line(label, counter):
         parts = ", ".join(f"{counter[t]} {t}" for t in ("gold", "consensus", "unresolved") if counter[t])

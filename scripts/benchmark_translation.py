@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 benchmark_translation.py — Repeatable translation-stage benchmark across every provider
-and model in config/providers.json, run against every page in scripts/corpus/. Supersedes
+and model in config/providers.json, run against every page in corpus/translation/. Supersedes
 benchmark_free_translation.py (single-provider, single-page, hardcoded model list).
 
 Reuses build_batch_prompt / MANGA_TRANSLATION_JSON_SYSTEM_PROMPT / TRANSLATION_JSON_SCHEMA
@@ -77,14 +77,14 @@ DEFAULT_CORPUS_DIR = os.path.join(SCRIPT_DIR, "corpus")
 # dropped. sample36 replaces it: a clean 3-panel layout with well-separated bubbles and an
 # attributed human reference. It is auto-extracted until the gold review pass promotes it
 # (see docs/run_ocr_bench.md § "Building the OCR corpus"), so there is currently no "manual"
-# entry in the corpus. Everything in scripts/corpus/ is auto-extracted via OCR
+# entry in the corpus. Everything in corpus/translation/ is auto-extracted via OCR
 # (scripts/build_translation_corpus.py) and carries an over_merge_risk / match-rate signal
 # in its meta.json — see docs/translation_bench.md for how "clean" is chosen.
 QUICK_SUBSET = ["sample36"]
 
 
 # ---------------------------------------------------------------------------
-# Corpus loading (scripts/corpus/<sampleId>/{regions.json,reference.json,meta.json})
+# Corpus loading (corpus/translation/<sampleId>/{regions.json,reference.json,meta.json})
 # ---------------------------------------------------------------------------
 
 def load_corpus_page(corpus_dir, sample_id):
@@ -234,7 +234,7 @@ def try_model_on_page(url, headers, model_id, regions, reference_translations, s
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Repeatable translation benchmark across config/providers.json models and scripts/corpus/ pages")
+    parser = argparse.ArgumentParser(description="Repeatable translation benchmark across config/providers.json models and corpus/translation/ pages")
     parser.add_argument("--providers-config", default=DEFAULT_PROVIDERS_CONFIG)
     parser.add_argument("--corpus-dir", default=DEFAULT_CORPUS_DIR)
     parser.add_argument("--provider", help="Only this provider (openrouter/cloudflare/nvidia/neurometric). Default: all.")
