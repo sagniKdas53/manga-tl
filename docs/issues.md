@@ -237,17 +237,15 @@ experimentation-heavy work, not a quick pass. Picked up only after everything ah
 
 > **AUDIT-F10, F11 and F12 were closed 2026-08-07 (nineteenth sitting)** — see
 > [archive.md](./archive.md#the-2026-08-07-nineteenth-sitting--audit-f10--f11--f12). Both probes
-> were reproduced as permanent tests before the fix, then went green. **AUDIT-F13 remains open**;
-> it was filed alongside them but lives in `ChapterPageGrid`, not the hook.
-
-#### AUDIT-F13 **[L]** — index-based reorder controls now reason about the loaded prefix
-
-`ChapterPageGrid.tsx:159` disables "move page right" on `idx === pages.length - 1`. Since
-AUDIT-F8, `pages.length` is the number of pages **fetched so far**, not the chapter's length. On
-the 177-page chapter the sixteenth sitting live-tested against, page 25 cannot be moved right
-until more batches load, even though 152 pages follow it. The same class of problem applies to any
-index-derived reorder across a batch boundary, and to `onMovePage`'s notion of "the next page".
-Not addressed by the pagination commit and not mentioned in its handoff.
+> were reproduced as permanent tests before the fix, then went green.
+>
+> **AUDIT-F13 was closed 2026-08-08 (twentieth sitting)**, and it was **much larger than filed** —
+> see [archive.md](./archive.md#the-2026-08-08-twentieth-sitting--the-loaded-prefix-family). The
+> disabled "move right" button was the visible corner of a broken write path: `handleMovePage` sent
+> the *loaded prefix* to an endpoint that rejects anything but the chapter's complete page list, so
+> **every** reorder on a chapter over 25 pages failed and silently snapped back. No data was ever
+> corrupted — the backend guard rejects before writing. The fix is unit-tested but **not
+> live-verified**, because it is a write path behind an ADMIN/TRANSLATOR role.
 
 #### AUDIT-F9 **[L]** — responsive behaviour is never verified
 

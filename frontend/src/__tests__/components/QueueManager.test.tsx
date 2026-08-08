@@ -1,5 +1,11 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import type { Mock } from "vitest";
@@ -595,5 +601,77 @@ describe("QueueManager", () => {
     // The summary chips group on the coarse label, so the six in-flight rows fold into one.
     expect(screen.getByText("6 Transitioning")).toBeInTheDocument();
     expect(screen.getByText("2 Completed")).toBeInTheDocument();
+  });
+
+  // AUDIT-F5 removed the 30s poll, and the 10s eviction of finished jobs was living inside
+  // the polled `fetchJobs` — so nothing reaped them any more. A job that completes over SSE
+  // has to age out on its own, with no second fetch, or the drawer fills up with finished
+  // work until the user clears the queue by hand.
+  it("evicts a job that completes over SSE once its grace period elapses, without refetching", async () => {
+    vi.useFakeTimers();
+    try {
+      let emit: ((event: { type: string; data: string }) => void) | null = null;
+      (useNotifications as Mock).mockReturnValue({
+        subscribe: vi.fn((cb) => {
+          emit = cb;
+          return () => {};
+        }),
+      });
+
+      const processing = {
+        ...mockJobs[0],
+        id: "job-live",
+        imageId: "img-live",
+        status: "PROCESSING",
+      };
+      (safeFetch as Mock).mockImplementation((url: string) => {
+        if (url === "/api/jobs") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ isPaused: false, jobs: [processing] }),
+          });
+        }
+        return Promise.reject(new Error("Unknown URL"));
+      });
+
+      render(<QueueManagerWrapper />);
+      fireEvent.click(screen.getByTitle("Queue Manager"));
+      await vi.waitFor(() => {
+        expect(screen.getByText(/Page 3/i)).toBeInTheDocument();
+      });
+
+      const fetchCallsBefore = (safeFetch as Mock).mock.calls.length;
+
+      // The pipeline finishes. This is the only signal the drawer gets — there is no
+      // second /api/jobs fetch behind it.
+      act(() => {
+        emit!({
+          type: "job_update",
+          data: JSON.stringify({
+            ...processing,
+            jobId: processing.id,
+            status: "COMPLETED",
+            updatedAt: new Date().toISOString(),
+          }),
+        });
+      });
+
+      // Still on screen during the grace period — the eviction is deliberately not instant.
+      expect(screen.getByText(/Page 3/i)).toBeInTheDocument();
+
+      // Past the 10s grace the row must be gone on its own.
+      await act(async () => {
+        vi.advanceTimersByTime(20000);
+      });
+
+      await vi.waitFor(() => {
+        expect(screen.queryByText(/Page 3/i)).toBeNull();
+      });
+
+      // And it must not have cost a network round-trip to get there.
+      expect((safeFetch as Mock).mock.calls.length).toBe(fetchCallsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

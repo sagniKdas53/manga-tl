@@ -168,7 +168,11 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
       addItems(newItems);
 
-      let nextNum = pages.length + 1;
+      // `pages` is the loaded prefix (25 per batch), so numbering from its length restarts
+      // at 26 on any chapter longer than one batch and collides with pages that already
+      // exist. `pagesTotalCount` is the chapter's real length; page numbers are contiguous
+      // from 1, so the count is also the highest number in use.
+      let nextNum = pagesTotalCount + 1;
       let successCount = 0;
       let failCount = 0;
 
@@ -226,7 +230,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     },
     [
       selectedChapter,
-      pages.length,
+      pagesTotalCount,
       reloadPages,
       uploadFileWithProgress,
       showToast,
@@ -547,10 +551,34 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   const handleMovePage = async (index: number, direction: "left" | "right") => {
     if (!selectedChapter) return;
     const newIndex = direction === "left" ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= pages.length) return;
+    const total = pagesTotalCount || pages.length;
+    if (newIndex < 0 || newIndex >= total) return;
+
+    // The reorder endpoint takes the chapter's COMPLETE ordered page list and rejects
+    // anything else (`pageIds.size() != pages.size()` → 400). `pages` is one 25-page batch,
+    // so on a longer chapter the old code PUT a truncated list and every move failed and
+    // snapped back — the disabled "move right" on the last loaded page was the visible
+    // corner of that, not the whole of it. Pull the full ordering first when short.
+    let ordered = pages;
+    if (pages.length < total) {
+      try {
+        const res = await safeFetch(
+          `/api/chapters/${selectedChapter.id}/pages?page=0&size=${total}`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
+        );
+        if (!res.ok) throw new Error("Failed to load full page order");
+        const data = (await res.json()) as { content?: Page[] };
+        ordered = data.content ?? [];
+      } catch (err) {
+        console.error("Error loading pages for reorder:", err);
+        showToast("Could not reorder pages", "error");
+        return;
+      }
+    }
+    if (newIndex >= ordered.length) return;
 
     // Swap locally for instant feedback using splice to avoid dynamic bracket notation lint warning
-    const updatedPages = [...pages];
+    const updatedPages = [...ordered];
     const [moved] = updatedPages.splice(index, 1);
     updatedPages.splice(newIndex, 0, moved);
 

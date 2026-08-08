@@ -2789,3 +2789,122 @@ Specification for provider configuration restructuring and model inheritance:
 - Replaced `api_keys.json` with `secrets/llm_config.json` defining provider defaults, priority, rate limits, free-tier flags, supported model lists (TL, QA LLM, QA VLM, OCR), and per-task cost structures.
 - Formalized 6-tier model resolution fallback hierarchy (`P0` chapter overrides -> `P1` series inherited -> `P2` series overrides -> `P3` global inherited -> `P4` global overrides -> `P5` system settings defaults).
 - Documented API reference curl payloads for Cloudflare Workers AI, Neurometric, Nvidia Nemotron, and Google AI Studio.
+
+## The 2026-08-08 twentieth sitting — the loaded-prefix family
+
+Five bugs, one root cause: **code that reasons about a paginated list from the prefix it happens
+to have loaded.** Three were reported in `new_bugs.md`; two more were found while fixing them and
+had never been noticed. Every fix was written test-first, and every one was re-verified by
+disabling the fix and confirming the test went red again for the stated reason — two of the reds
+during this sitting turned out to be wrong fixtures rather than regressions, so the check earned
+its keep.
+
+Gate: `format:check` clean, `lint` clean, **332 tests across 47 files** (up from 326/46), `build`
+green. All four CI-equivalent frontend steps, not `vitest` alone.
+
+### AUDIT-F5 took a reaper with it when it removed the poll
+
+The lingering-completed-jobs complaint was a **regression we caused**, and the causal story is
+worth keeping. The 10s eviction rule for finished jobs was never missing — it lived *inside*
+`fetchJobs`:
+
+```js
+if (p.status === "COMPLETED") {
+  const updatedAt = new Date(p.updatedAt).getTime();
+  if (now - updatedAt > 10000) return false;
+}
+```
+
+AUDIT-F5 then removed the 30s poll, correctly, because SSE had made it redundant. But the reaping
+was an *accidental side effect* of that poll. `fetchJobs` now runs exactly once at mount, there is
+no `setInterval` in the file, and the SSE `job_update` handler sets `COMPLETED` without ever
+dropping the row. The only eviction that survived matches a literal string —
+`data.title === "Page Processing Complete"` — which is precisely why the jobs appeared in the
+Notification Center and stayed in the queue: the notification arrived, but anything titled
+differently never cleared.
+
+**The general lesson:** when you delete a periodic call, check what else was riding on its
+periodicity. A behaviour implemented as a filter inside a polled fetch is not a behaviour, it is a
+coincidence.
+
+The rule is now `isExpiredCompletion` with its own 2s sweep — local state and a clock, no network.
+`FAILED`/`PAUSED` never expire (they need user action), and an unparseable `updatedAt` yields
+`NaN`, which fails the comparison and *keeps* the job; dropping a row because its timestamp was
+malformed would lose it from the display for the wrong reason.
+
+### `totalElements` is not a maximum
+
+The next-chapter-number bug has an obvious-looking fix that is wrong. The hook already exposes
+`totalCount`, so `totalCount + 1` is tempting — and it does not work, because **chapter numbers are
+fractional**. A `0.5` interlude is normal, so a series of 18 chapters tops out at 17. Verified on
+live data:
+
+| sort | first 15 loaded | max seen | suggested | reality |
+| --- | --- | --- | --- | --- |
+| `asc` | `0.5, 1…14` | 14 | **15** | 15, 16, 17 exist → collision |
+| `desc` | `17…3` | 17 | 18 | correct |
+
+The two reported chapter bugs are complementary and share one cause: ascending order broke the
+*numbering* (the prefix max is too low), descending broke the *placement* (an unconditional append
+puts the newest chapter last). `fetchHighestChapterNumber` asks the server for a single row,
+`?page=0&size=1&sortDir=desc`; `insertChapterInOrder` places by number honouring the direction and
+replaces by id so an edit cannot duplicate a row. Both live in `components/chapterNumbering.ts`.
+
+The backend was never at fault — `listChapters` honours `sortDir` and sorts by `chapterNumber`
+correctly, confirmed against the running stack.
+
+### AUDIT-F13 was the visible corner of a broken write path
+
+Filed as `[L]`: a "move page right" button disabled on `idx === pages.length - 1`. Chasing it
+found something much worse. `handleMovePage` built its payload from the loaded prefix:
+
+```js
+body: JSON.stringify(finalPages.map((p) => p.id))
+```
+
+and `PageController.reorderPages` rejects anything that is not the chapter's **complete** list:
+
+```java
+if (pageIds.size() != pages.size() || !pageMap.keySet().containsAll(pageIds)) {
+  return ResponseEntity.badRequest().body("Invalid list of page IDs for reordering");
+}
+```
+
+So on any chapter longer than one 25-page batch, *every* reorder sent a truncated list, got a 400,
+and the catch reverted via `reloadPages()` — the page snapped back with only a `console.error`.
+Page reordering had been broken on long chapters, and the disabled button was the only part
+anyone saw.
+
+**No data was ever corrupted.** The guard returns before the first `save()`, so the truncated
+requests were rejected whole. That is the guard doing its job, and it is why this was a usability
+failure rather than a data-loss incident.
+
+`handleMovePage` now fetches the full ordering when the loaded prefix is short, and the grid bounds
+its control on `totalCount` rather than `pages.length`. **This fix is unit-tested but not
+live-verified** — the endpoint is behind `@PreAuthorize("hasAnyRole('ADMIN', 'TRANSLATOR')")` and
+proving it for real means reordering pages in the actual library. Worth exercising once in the UI.
+
+The same family produced the fifth bug: uploads were numbered `pages.length + 1`, so past one batch
+the numbering restarted inside the chapter. `pagesTotalCount + 1` is correct here — unlike chapter
+numbers, page numbers are contiguous from 1, verified across all 42 chapters
+(`count == max(page_number)` for every one).
+
+### Two red tests were bad fixtures, again
+
+Both pre-existing failures during this sitting were fixture defects, not regressions — the same
+shape the nineteenth sitting recorded:
+
++ `CreateChapterDialog.test.tsx` used `mockResolvedValueOnce`, assuming the first non-settings
+  request would be the submit. The dialog now legitimately makes a lookup on open, which consumed
+  it. The new request is routed in the mock the way `/api/settings` already was.
++ `ChapterGallery.test.tsx`'s move-page test declared `pagesTotalCount={mockPages.length}` (**1**)
+  while passing **two** loaded pages. A chapter cannot contain fewer pages than are loaded from it;
+  that incoherence was what hid the reorder bound. Corrected to match its own data.
+
+### A note on the dependency graph
+
+`impact()` reported **LOW / 0 direct callers** for the symbols touched here, and the handoff's
+standing warning about `React.lazy` artefacts applies more broadly than to lazy imports: a plain
+grep found that `CreateChapterDialog` has a **second** call site in `ChapterGallery.tsx` that the
+graph did not surface. That second site is where the fifth bug (upload numbering) was found. Cross-
+check a zero with grep before trusting it.

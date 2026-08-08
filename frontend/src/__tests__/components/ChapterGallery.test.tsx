@@ -336,7 +336,9 @@ describe("ChapterGallery Component", () => {
         setSelectedChapter={mockSetSelectedChapter}
         pages={twoPages}
         setPages={mockSetPages}
-        pagesTotalCount={mockPages.length}
+        // Must match the pages actually supplied: a chapter cannot have fewer pages in
+        // total than are loaded from it, and claiming otherwise hid the reorder bound.
+        pagesTotalCount={twoPages.length}
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
@@ -579,6 +581,129 @@ describe("ChapterGallery Component", () => {
       expect.stringContaining("Successfully uploaded"),
       "success",
     );
+  });
+
+  // Pages arrive 25 at a time, so on any chapter longer than one batch `pages.length` is the
+  // size of the loaded prefix, not the chapter. Numbering an upload from it restarts inside
+  // the chapter and collides with pages that already exist.
+  it("numbers an upload from the chapter's total, not the loaded prefix", async () => {
+    interface MockXHR {
+      open: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
+      setRequestHeader: ReturnType<typeof vi.fn>;
+      status: number;
+      onload: (() => void) | null;
+      upload: { onprogress: ((e: ProgressEvent) => void) | null };
+    }
+
+    const sentBodies: FormData[] = [];
+    const sendMock = vi.fn(function (this: MockXHR, body: FormData) {
+      sentBodies.push(body);
+      this.status = 200;
+      if (this.onload) this.onload();
+    });
+
+    const XHRMock = vi.fn().mockImplementation(function (this: MockXHR) {
+      this.open = vi.fn();
+      this.send = sendMock;
+      this.setRequestHeader = vi.fn();
+      Object.defineProperty(this, "upload", {
+        value: { onprogress: null },
+        writable: true,
+      });
+      this.status = 200;
+      this.onload = null;
+    });
+    vi.stubGlobal("XMLHttpRequest", XHRMock);
+
+    // One page loaded out of a 100-page chapter.
+    render(
+      <ChapterGallery
+        mode="dark"
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        setSelectedChapter={mockSetSelectedChapter}
+        pages={mockPages}
+        setPages={mockSetPages}
+        pagesTotalCount={100}
+        hasMorePages={true}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
+        onSelectPage={mockOnSelectPage}
+        isLoadingDetails={false}
+      />,
+    );
+
+    const fileInput = document.querySelector(
+      "#file-upload",
+    ) as HTMLInputElement;
+    const files = [
+      new File(["1"], "page101.jpg", { type: "image/jpeg" }),
+    ] as unknown as FileList;
+    files.item = (i: number) => files[i];
+    fireEvent.change(fileInput, { target: { files } });
+
+    await waitFor(() => expect(sendMock).toHaveBeenCalled());
+
+    // Numbering from the single loaded page would ask for page 2, which already exists.
+    expect(sentBodies[0].get("pageNumber")).toBe("101");
+  });
+
+  // The reorder endpoint rejects anything that is not the chapter's complete page list, so
+  // sending the loaded prefix made every move on a long chapter fail and snap back.
+  it("reorders against the chapter's full page list, not the loaded prefix", async () => {
+    const loaded = [1, 2].map((n) => ({
+      ...mockPages[0],
+      id: `p${n}`,
+      pageNumber: n,
+    }));
+    const all = [1, 2, 3, 4].map((n) => ({
+      ...mockPages[0],
+      id: `p${n}`,
+      pageNumber: n,
+    }));
+
+    let reorderBody: string[] | null = null;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/pages/reorder")) {
+        reorderBody = JSON.parse(String(init?.body)) as string[];
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      if (url.includes("/pages?page=0&size=4")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ content: all }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    render(
+      <ChapterGallery
+        mode="dark"
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        setSelectedChapter={mockSetSelectedChapter}
+        pages={loaded}
+        setPages={mockSetPages}
+        pagesTotalCount={4}
+        hasMorePages={true}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        reloadPages={mockReloadPages}
+        onSelectPage={mockOnSelectPage}
+        isLoadingDetails={false}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByLabelText("Move page right")[0]);
+
+    await waitFor(() => expect(reorderBody).not.toBeNull());
+    // All four ids, with the first two swapped — not the two that happened to be loaded.
+    expect(reorderBody).toEqual(["p2", "p1", "p3", "p4"]);
   });
 
   it("handles edit chapter failure", async () => {

@@ -5,6 +5,15 @@ import CreateChapterDialog from "../../components/CreateChapterDialog";
 const mockSafeFetch = vi.fn();
 vi.mock("../../utils", () => ({
   safeFetch: (url: string, ...args: unknown[]) => {
+    // On open the dialog asks the server for the highest chapter number, because the
+    // `chapters` prop is only one page of a paginated list. Routed here like /api/settings
+    // so it does not consume the per-test `mockResolvedValueOnce` meant for the submit.
+    if (typeof url === "string" && url.includes("sortDir=desc")) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ content: [{ chapterNumber: 1 }] }),
+      });
+    }
     if (typeof url === "string" && url.includes("/api/settings")) {
       return Promise.resolve({
         ok: true,

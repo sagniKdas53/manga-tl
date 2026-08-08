@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -9,6 +9,10 @@ import type { User, Series, Chapter } from "../types";
 import { safeFetch } from "../utils";
 import ConfirmModal from "./ConfirmModal";
 import CreateChapterDialog from "./CreateChapterDialog";
+import {
+  fetchHighestChapterNumber,
+  insertChapterInOrder,
+} from "./chapterNumbering";
 import EditSeriesDialog from "./EditSeriesDialog";
 import ImportChapterDialog from "./ImportChapterDialog";
 import SeriesHeader from "./SeriesHeader";
@@ -56,6 +60,31 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
   const { showToast } = useToast();
 
   const [showImportModal, setShowImportModal] = useState(false);
+
+  // Same reasoning as `CreateChapterDialog`: the loaded `chapters` array is one page, so its
+  // maximum is not the series maximum. Falls back to the prefix guess until the server answers.
+  const [highestChapterNumber, setHighestChapterNumber] = useState<
+    number | null
+  >(null);
+  useEffect(() => {
+    if (!showImportModal || !selectedSeries) return;
+    let cancelled = false;
+    void fetchHighestChapterNumber(selectedSeries.id, user.token)
+      .then((highest) => {
+        if (!cancelled) setHighestChapterNumber(highest);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [showImportModal, selectedSeries, user.token]);
+
+  const importNextNum =
+    (highestChapterNumber ??
+      chapters.reduce(
+        (max, c) => (c.chapterNumber > max ? c.chapterNumber : max),
+        0,
+      )) + 1;
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -156,7 +185,9 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
     if (editingChapter) {
       setChapters((prev) => prev.map((c) => (c.id === data.id ? data : c)));
     } else {
-      setChapters((prev) => [...prev, data]);
+      // The list is ordered by the server, so a new chapter belongs at its number — not
+      // at the end, which put it below everything on a descending sort.
+      setChapters((prev) => insertChapterInOrder(prev, data, sortAsc));
     }
   };
 
@@ -269,16 +300,11 @@ export const SeriesDetails: React.FC<SeriesDetailsProps> = ({
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
         onSuccess={(chapter) => {
-          setChapters((prev) => [...prev, chapter]);
+          setChapters((prev) => insertChapterInOrder(prev, chapter, sortAsc));
         }}
         user={user}
         series={selectedSeries!}
-        nextNum={
-          chapters.reduce(
-            (max, c) => (c.chapterNumber > max ? c.chapterNumber : max),
-            0,
-          ) + 1
-        }
+        nextNum={importNextNum}
       />
       <ConfirmModal
         isOpen={confirmModal.isOpen}

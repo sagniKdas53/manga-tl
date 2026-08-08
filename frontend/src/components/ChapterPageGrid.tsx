@@ -156,7 +156,10 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
                 </IconButton>
                 <IconButton
                   onClick={() => onMovePage(idx, "right")}
-                  disabled={idx === pages.length - 1}
+                  // `pages` is the loaded prefix, so this used to disable the control on the
+                  // last *fetched* page — page 25 of 177 could not be moved right even though
+                  // 152 followed it. The chapter's real length is the bound.
+                  disabled={idx === (totalCount || pages.length) - 1}
                   size="small"
                   aria-label="Move page right"
                   title="Move page right"

@@ -70,6 +70,24 @@ const statusColor: Record<string, string> = {
   PAUSED: "#ffc107",
 };
 
+/** How long a finished job stays visible before it is swept out of the drawer. */
+const COMPLETED_GRACE_MS = 10000;
+
+/** How often the sweep runs. Local state and a clock — deliberately not a fetch. */
+const COMPLETED_SWEEP_MS = 2000;
+
+/**
+ * A finished job that has outlived its grace period.
+ *
+ * Only COMPLETED expires: FAILED and PAUSED are states the user has to act on, so they stay
+ * until they are retried or cleared. An unparseable `updatedAt` yields `NaN`, which fails the
+ * comparison and keeps the job — dropping a row because its timestamp was malformed would
+ * lose work from the display for the wrong reason.
+ */
+const isExpiredCompletion = (job: Pick<Job, "status" | "updatedAt">): boolean =>
+  job.status === "COMPLETED" &&
+  Date.now() - new Date(job.updatedAt).getTime() > COMPLETED_GRACE_MS;
+
 const pipelineStages = [
   "panel-detection",
   "ocr",
@@ -633,17 +651,9 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
           });
 
           const activeImageIds = new Set(newJobsList.map((j) => j.imageId));
-          const now = Date.now();
 
           const finalPipelines = Array.from(pipelinesMap.values()).filter(
-            (p) => {
-              if (!activeImageIds.has(p.imageId)) return false;
-              if (p.status === "COMPLETED") {
-                const updatedAt = new Date(p.updatedAt).getTime();
-                if (now - updatedAt > 10000) return false;
-              }
-              return true;
-            },
+            (p) => activeImageIds.has(p.imageId) && !isExpiredCompletion(p),
           );
 
           return sortJobs(finalPipelines);
@@ -665,6 +675,24 @@ export const QueueManager: React.FC<QueueManagerProps> = ({
     const timeout = setTimeout(() => fetchJobs(), 0);
     return () => clearTimeout(timeout);
   }, [token, fetchJobs]);
+
+  // Finished jobs age out of the drawer on a timer, not on a fetch.
+  //
+  // The grace rule above used to live *only* inside `fetchJobs`, so removing AUDIT-F5's 30s
+  // poll silently removed the reaper with it: SSE marks a job COMPLETED but never drops it,
+  // and the one eviction that survived keys off a literal notification title, so anything
+  // titled differently stayed until the user cleared the queue by hand. This is local state
+  // and a clock — no network — so it costs nothing to run while the drawer is open.
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      setJobs((prev) => {
+        const kept = prev.filter((p) => !isExpiredCompletion(p));
+        return kept.length === prev.length ? prev : kept;
+      });
+    }, COMPLETED_SWEEP_MS);
+    return () => clearInterval(interval);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;

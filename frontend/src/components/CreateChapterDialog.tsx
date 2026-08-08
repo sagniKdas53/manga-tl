@@ -9,6 +9,7 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import TextField from "@mui/material/TextField";
 import type { User, Chapter, Series, SystemSettingsDto } from "../types";
 import { safeFetch } from "../utils";
+import { fetchHighestChapterNumber } from "./chapterNumbering";
 import ModelOverridesAccordion, {
   type ModelOverridesValue,
 } from "./ModelOverridesAccordion";
@@ -34,10 +35,11 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
   onSuccess,
   onError,
 }) => {
+  // A max over `chapters` is a max over the *loaded page*, so this is only a starting guess;
+  // the effect below replaces it with the series-wide maximum from the server.
   const defaultNum = editingChapter
     ? editingChapter.chapterNumber
-    : chapters.reduce((m, c) => Math.max(m, c.chapterNumber), 0) +
-      (chapters.length > 0 ? 1 : 1);
+    : chapters.reduce((m, c) => Math.max(m, c.chapterNumber), 0) + 1;
   const [number, setNumber] = useState(defaultNum);
   const [title, setTitle] = useState(editingChapter?.title || "");
   const [useContextMemory, setUseContextMemory] = useState(
@@ -132,6 +134,30 @@ const CreateChapterDialog: React.FC<CreateChapterDialogProps> = ({
     selectedSeries?.useFallbackModels,
     user.token,
   ]);
+
+  // Ask the server for the highest chapter number when creating.
+  //
+  // The `chapters` prop is one page of 15, so on a longer series its maximum is not the
+  // series maximum and the suggested number collides with one that already exists. Only
+  // for creation — an edit keeps the number the chapter already has.
+  useEffect(() => {
+    if (!open || editingChapter || !selectedSeries) return;
+    let cancelled = false;
+
+    void fetchHighestChapterNumber(selectedSeries.id, user.token)
+      .then((highest) => {
+        // A stale response must not overwrite a number the user has since typed.
+        if (cancelled || highest === null) return;
+        setNumber(highest + 1);
+      })
+      .catch(() => {
+        // Leave the local guess in place; the server rejects a duplicate anyway.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, editingChapter, selectedSeries, user.token]);
 
   const overridesValue: ModelOverridesValue = {
     ocrProvider,
