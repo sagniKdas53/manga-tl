@@ -43,6 +43,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import region_proposal_probe as probe
+from worker.handlers.ocr import grouping_config as _worker_grouping_config
 from worker.services.fragment_grouping import (
     GroupingConfig,
     _should_merge,
@@ -51,11 +52,16 @@ from worker.services.fragment_grouping import (
     resolve_vertical,
 )
 
-# What handlers/ocr.py actually deploys: 2.0 is hardcoded at the in-bubble call site (:605), and
-# the unmatched call (:663) takes OCR_MERGE_THRESHOLD, which docker-compose.yml:220 sets to 1.0.
-# Defaulting to these means the walkthrough shows production unless you ask it not to.
-PRODUCTION_IN_THRESHOLD = 2.0
-PRODUCTION_UNMATCHED_THRESHOLD = 1.0
+# What handlers/ocr.py actually deploys -- read from the handler rather than restated here, so
+# this page cannot quietly describe a configuration that stopped shipping. It used to hardcode
+# 2.0/1.0, which was true while the in-bubble call site hardcoded its threshold and the unmatched
+# one read OCR_MERGE_THRESHOLD; all three call sites now take one GroupingConfig, and the
+# walkthrough's "production" label has to follow it.
+_DEPLOYED = _worker_grouping_config("rtl")
+PRODUCTION_IN_THRESHOLD = _DEPLOYED.threshold_ratio
+PRODUCTION_UNMATCHED_THRESHOLD = _DEPLOYED.threshold_ratio
+PRODUCTION_WAIST_GATE = _DEPLOYED.waist_gate
+PRODUCTION_ORIENTATION = _DEPLOYED.orientation
 
 # Distinguishable at 2px stroke on both dark art and white balloons. Index 0 is reserved for the
 # unmatched path so "orange means nobody claimed it" stays true across every page.
@@ -199,8 +205,8 @@ class Cfg:
                 "waist_gate": self.waist_gate, "orientation": self.orientation,
                 "is_production": (self.in_threshold == PRODUCTION_IN_THRESHOLD
                                   and self.unmatched_threshold == PRODUCTION_UNMATCHED_THRESHOLD
-                                  and self.waist_gate is None
-                                  and self.orientation == "reading_direction")}
+                                  and self.waist_gate == PRODUCTION_WAIST_GATE
+                                  and self.orientation == PRODUCTION_ORIENTATION)}
 
 
 def find_run(repo_root, explicit=None):
@@ -294,7 +300,7 @@ def build(args, sample=None, reader_cache=None):
     else:
         run_meta, per_page, recorded = None, {}, {}
         configs = [Cfg("production", PRODUCTION_IN_THRESHOLD, PRODUCTION_UNMATCHED_THRESHOLD,
-                       None, "reading_direction")]
+                       PRODUCTION_WAIST_GATE, PRODUCTION_ORIENTATION)]
 
     # An explicit threshold flag means "show me this instead", so it becomes its own configuration
     # alongside the run's, and the one the page opens on.
@@ -325,7 +331,12 @@ def build(args, sample=None, reader_cache=None):
                       "verified": verify(regions, rec)})
 
     gold_boxes, gold_texts, gold_tiers = probe.load_gold(args.sample, args.corpus)
-    active = args.config or (custom.name if custom else "production")
+    # Open on whatever the handler currently deploys, found by its settings rather than by name.
+    # A run's configurations are named for the experiment that produced them, and the one called
+    # "production" is only production until the next thing ships -- as of the wiring commit it is
+    # a historical row and `proposed` is what the pipeline runs.
+    deployed = next((c["name"] for c in built if c["is_production"]), None)
+    active = args.config or (custom.name if custom else deployed) or built[0]["name"]
     if not any(c["name"] == active for c in built):
         raise SystemExit(f"no configuration {active!r} in this run; "
                          f"have {', '.join(c['name'] for c in built)}")

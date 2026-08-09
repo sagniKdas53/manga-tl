@@ -424,6 +424,64 @@ def write_review_html(out_dir, sample_id, img, regions):
 # Build
 # ---------------------------------------------------------------------------
 
+def _iou(a, b):
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    ix = max(0, min(ax + aw, bx + bw) - max(ax, bx))
+    iy = max(0, min(ay + ah, by + bh) - max(ay, by))
+    inter = ix * iy
+    union = aw * ah + bw * bh - inter
+    return inter / union if union > 0 else 0.0
+
+
+def carry_over_ground_truth(regions, previous, min_iou):
+    """Re-attach the old text to any new region whose box did not really move.
+
+    A grouping change renumbers and reshapes regions, and `build_sample` rewrites regions.json
+    whole, so a naive rebuild discards every consensus and gold string on the page -- including
+    ones whose crop is pixel-identical to what those engines actually read. That is not a rebuild,
+    it is a reset: the local-only pool cannot reach --min-agree, so all 199 consensus regions come
+    back 'unresolved' and sample7's 20 hand-reviewed gold regions are simply gone.
+
+    So a new region that matches an old one at >= min_iou inherits its text, tier, agreement and
+    candidates. Matching is greedy from the best pair down and one-to-one: an old region cannot
+    donate to two new ones, which is exactly the split case, and there the *pair* must be
+    re-transcribed rather than both halves claiming the whole sentence.
+
+    Returns the number of regions that inherited.
+    """
+    if not previous:
+        return 0
+
+    pairs = sorted(
+        ((_iou(n["bbox"], o["bbox"]), ni, oi) for ni, n in enumerate(regions) for oi, o in enumerate(previous)),
+        key=lambda t: -t[0],
+    )
+    taken_new, taken_old, carried = set(), set(), 0
+    for score, ni, oi in pairs:
+        if score < min_iou:
+            break
+        if ni in taken_new or oi in taken_old:
+            continue
+        old = previous[oi]
+        if not (old.get("text") or "").strip():
+            continue
+        regions[ni].update(
+            {
+                "text": old["text"],
+                "tier": old.get("tier", "unresolved"),
+                "agreement": old.get("agreement", 0),
+                "candidates": dict(old.get("candidates", {})),
+                "carried_from": old.get("id"),
+                "carried_iou": round(score, 4),
+            }
+        )
+        taken_new.add(ni)
+        taken_old.add(oi)
+        carried += 1
+    return carried
+
+
 def build_sample(sample_id, examples_dir, out_dir, engines_cfg, args):
     sample_dir = os.path.join(examples_dir, sample_id)
     meta = load_sample_meta(sample_dir)
@@ -445,26 +503,49 @@ def build_sample(sample_id, examples_dir, out_dir, engines_cfg, args):
     regions = [{"id": f"r{i + 1}", "bbox": p["bbox"], "type": p.get("type", "bubble"),
                 "polygon": p.get("mask_polygon")} for i, p in enumerate(proposals)]
 
+    # Rescue the previous ground truth for boxes this rebuild did not really move, before any
+    # engine runs. Regions that inherit are excluded from transcription below: re-running an
+    # engine over an identical crop cannot improve on a consensus that already survived review,
+    # and on gold it can only overwrite a human.
+    previous = []
+    prev_path = os.path.join(out_dir, sample_id, "regions.json")
+    if args.carry_over and os.path.exists(prev_path):
+        with open(prev_path, "r", encoding="utf-8") as f:
+            previous = json.load(f)
+    carried = carry_over_ground_truth(regions, previous, args.carry_over_iou)
+    fresh = [r for r in regions if "carried_from" not in r]
+    if previous:
+        print(f"  carried {carried}/{len(regions)} regions from the previous build "
+              f"(IoU >= {args.carry_over_iou}); {len(fresh)} need transcription")
+
     candidates = {}
     for variant in args.paddle_variants:
-        print(f"  [{variant}] transcribing {len(regions)} regions...")
-        texts = paddle_transcribe_regions(img, regions, lang, variant)
+        if not fresh:
+            break
+        print(f"  [{variant}] transcribing {len(fresh)} regions...")
+        texts = paddle_transcribe_regions(img, fresh, lang, variant)
         if texts is not None:
             candidates[variant] = texts
 
     lang_name = LANG_NAME.get(lang, "Japanese")
     for provider_name, provider_cfg, model_id, _model_name, _free in engines_cfg:
-        print(f"  [{provider_name}/{model_id}] transcribing {len(regions)} regions...")
-        texts, _extra = vlm_transcribe_regions(img, regions, provider_name, provider_cfg,
+        if not fresh:
+            break
+        print(f"  [{provider_name}/{model_id}] transcribing {len(fresh)} regions...")
+        texts, _extra = vlm_transcribe_regions(img, fresh, provider_name, provider_cfg,
                                                model_id, lang_name, sleep=args.sleep)
         candidates[f"{provider_name}/{model_id}"] = texts
 
     tier_counts = {}
     for r in regions:
+        r.setdefault("lang", lang)
+        r.setdefault("direction", "vertical" if lang in ("ja", "zh") else "horizontal")
+        if "carried_from" in r:
+            tier_counts[r["tier"]] = tier_counts.get(r["tier"], 0) + 1
+            continue
         per_engine = {engine: texts.get(r["id"], "") for engine, texts in candidates.items()}
         text, tier, agree = pick_consensus(per_engine, min_agree=args.min_agree, tol=args.tol)
-        r.update({"text": text, "lang": lang, "direction": "vertical" if lang in ("ja", "zh") else "horizontal",
-                  "tier": tier, "agreement": agree, "candidates": per_engine})
+        r.update({"text": text, "tier": tier, "agreement": agree, "candidates": per_engine})
         tier_counts[tier] = tier_counts.get(tier, 0) + 1
 
     dest = os.path.join(out_dir, sample_id)
@@ -557,6 +638,12 @@ def main():
                         help="Regenerate review pages from existing regions.json, no transcription")
     parser.add_argument("--apply-review", help="Fold a reviewed JSON back in and promote to gold")
     parser.add_argument("--sleep", type=float, default=0.0, help="Seconds between region requests")
+    parser.add_argument("--no-carry-over", dest="carry_over", action="store_false",
+                        help="Re-transcribe every region from scratch instead of inheriting the "
+                             "previous build's text where a box did not move. Discards gold.")
+    parser.add_argument("--carry-over-iou", type=float, default=0.9,
+                        help="How closely a new box must match an old one to inherit its text "
+                             "(default 0.9 — near-identical crop, not merely the same balloon)")
     args = parser.parse_args()
     args.gold = {s for s in args.gold.split(",") if s}
     args.paddle_variants = [v for v in args.paddle_variants.split(",") if v]

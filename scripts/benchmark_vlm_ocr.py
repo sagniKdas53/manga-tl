@@ -419,10 +419,42 @@ def get_all_text_regions(img, lang_key):
                             best_b_idx = b_idx
                 frag["bubble_idx"] = best_b_idx
 
+            # Split each bubble's fragments the way handlers/ocr.py:605 does.
+            #
+            # This used to be skipped entirely: every YOLO bubble was emitted as one region and
+            # only the *unmatched* fragments were merged. One blob holding two touching balloons
+            # therefore became a single corpus region by construction, so the corpus could not
+            # represent the failure the pipeline actually has, and rebuilding it could never show
+            # a grouping change. The bubble's own mask is passed too, which is what lets the
+            # clearance veto separate balloons a distance rule cannot.
+            from worker.handlers.ocr import grouping_config
+            from worker.services.bubble_geometry import bubble_grouping_context
+
+            config = grouping_config("rtl")  # manga; matches the deployed reading direction
+            split_bubbles = []
+            for b_idx, region in enumerate(regions_list):
+                assigned = [f for f in raw_fragments if f.get("bubble_idx", -1) == b_idx]
+                if not assigned:
+                    split_bubbles.append(region)
+                    continue
+                context = bubble_grouping_context(bubble_masks[b_idx], region.get("mask_polygon"))
+                merged = merge_ocr_regions(assigned, grouping=config, context=context)
+                for sub_idx, r_sub in enumerate(merged):
+                    split_bubbles.append({
+                        "bbox": [r_sub["x"], r_sub["y"], r_sub["width"], r_sub["height"]],
+                        "type": "bubble",
+                        "id": region["id"] if len(merged) == 1 else f"{region['id']}_{sub_idx}",
+                        # Only an unsplit bubble still owns the whole mask. Handing every piece of
+                        # a split bubble the same polygon would tell the renderer to paint the
+                        # entire balloon for each of them.
+                        "mask_polygon": region.get("mask_polygon") if len(merged) == 1 else None,
+                    })
+            regions_list = split_bubbles
+
             # Merge unmatched fragments (direct text)
             unmatched_frags = [f for f in raw_fragments if f.get("bubble_idx", -1) == -1]
             if unmatched_frags:
-                merged_unmatched = merge_ocr_regions(unmatched_frags, "rtl") # default to rtl for manga
+                merged_unmatched = merge_ocr_regions(unmatched_frags, grouping=config)
                 for idx, r_sub in enumerate(merged_unmatched):
                     regions_list.append({
                         "bbox": [r_sub["x"], r_sub["y"], r_sub["width"], r_sub["height"]],
