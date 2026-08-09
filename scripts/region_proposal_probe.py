@@ -3,7 +3,7 @@
 region_proposal_probe.py — the tooling behind docs/region_threshold_validation_2026-08-08.md.
 
 Reproduces the region proposals a page would get under a given merge configuration, without
-running any engine. Six modes:
+running any engine. Seven modes:
 
     sweep       vary the *in-bubble* split threshold (ocr.py:605) and count regions
     overlay     draw one configuration's regions on the page so a count can be checked
@@ -15,6 +15,8 @@ running any engine. Six modes:
     waist       compare the mask-clearance signal against the text-gap signal at separating
                 same-balloon from cross-balloon fragment pairs
     ablate      run the configuration matrix over every annotated page and report the metrics
+    rdcl        mergers vs splits against the annotations -- the metric that carries the product
+                cost, since a merger is unrecoverable downstream and a split usually is not
 
 The YOLO + PaddleOCR stage is cached to disk (~19s -> ~0.5s per page); the fragment-to-bubble
 assignment is deliberately NOT cached, since that rule is itself a change candidate.
@@ -830,6 +832,64 @@ def cmd_waist(args, reader_cache):
     print("           splitting before assignment) is closed and P1-P5 carry the plan alone.")
 
 
+def cmd_rdcl(args, reader_cache):
+    """Mergers and splits against the hand-annotated balloon partitions.
+
+    The metric that actually encodes the product cost. A *merger* -- one proposed region spanning
+    two annotated balloons -- fuses two speakers into one translation request and one flat fill,
+    and is unrecoverable downstream. A *split* sends two strings that usually typeset back into the
+    same balloon acceptably. They are not worth the same, so they are never summed into one number
+    here; the weighted cost is printed separately and its lambda is a product decision, not a
+    tunable.
+    """
+    hand = load_hand_labels(args.labels, quiet=True)
+    if not hand:
+        raise SystemExit(f"no annotations in {args.labels} — run 'label' first")
+
+    configs = [("today (thr 2.0)", 2.0, None, "reading_direction"),
+               ("thr 0.35", 0.35, None, "reading_direction"),
+               ("waist+orient (2.0)", 2.0, args.waist_gate or 1.0, "vote"),
+               ("waist+orient (0.35)", 0.35, args.waist_gate or 1.0, "vote")]
+
+    def inside(box, f):
+        x, y, w, h = box
+        return (x <= f["x"] + f["width"] / 2 <= x + w) and (y <= f["y"] + f["height"] / 2 <= y + h)
+
+    cached = {}
+    for sample in sorted(hand, key=lambda s: int(s[6:])):
+        img, bubbles, frags = load_proposals(args, sample, reader_cache, quiet=True)
+        if len(hand[sample]) != len(frags):
+            print(f"!!! {sample}: annotation is stale, skipping")
+            continue
+        for i, f in enumerate(frags):
+            f["_idx"] = i
+        cached[sample] = (img.shape[:2], bubbles, frags)
+
+    print(f"{'configuration':<22}{'mergers':>9}{'splits':>8}{'regions':>9}{f'cost (M*{args.merger_cost}+S)':>18}")
+    for label, thr, gate, orient in configs:
+        mergers = splits = total = 0
+        for sample, ((h, w), bubbles, frags) in cached.items():
+            regs = build_regions(bubbles, frags, thr, args.unmatched_threshold, args.direction,
+                                 waist_gate=gate, waist_max_solidity=args.waist_max_solidity,
+                                 page_shape=(h, w), orientation=orient)
+            total += len(regs)
+            spans = []
+            for box, _, _ in regs:
+                groups = {hand[sample][f["_idx"]] for f in frags
+                          if hand[sample][f["_idx"]] >= 0 and inside(box, f)}
+                spans.append(groups)
+                if len(groups) > 1:
+                    mergers += 1
+            for g in {x for x in hand[sample] if x >= 0}:
+                if sum(1 for s in spans if g in s) > 1:
+                    splits += 1
+        cost = mergers * args.merger_cost + splits
+        print(f"{label:<22}{mergers:>9}{splits:>8}{total:>9}{cost:>18}")
+    print("\n  A merger is one region spanning two annotated balloons; a split is one balloon")
+    print(f"  spread over two regions. Mergers are weighted {args.merger_cost}x because they are")
+    print("  unrecoverable downstream, splits usually typeset back together.")
+
+
 def _metrics(regs, frags, truth, page_w, page_h):
     """Ground-truth-free health signals, plus the count error where truth is known."""
     n = len(regs)
@@ -980,7 +1040,8 @@ def cmd_ablate(args, reader_cache):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("sweep", "overlay", "direction", "waist", "ablate", "label"))
+    ap.add_argument("mode", choices=("sweep", "overlay", "direction", "waist", "ablate",
+                                    "label", "rdcl"))
     ap.add_argument("sample", nargs="?", help="corpus/ocr sample id, e.g. sample30 (ablate: all)")
     ap.add_argument("--truth", type=int, default=0,
                     help="hand-counted text areas; defaults to scripts/region_truth.json")
@@ -996,6 +1057,9 @@ def main():
                     help=f"directory of annotation JSON written by 'label' mode (default "
                          f"{os.path.relpath(DEFAULT_LABELS, REPO_ROOT)}). Hand labels override "
                          f"the derived ones, per sample")
+    ap.add_argument("--merger-cost", type=int, default=5,
+                    help="rdcl mode: how many splits one merger is worth. A product\n"
+                         "decision, not a parameter to tune (default 5)")
     ap.add_argument("--orientation-vote", action="store_true",
                     help="ablate mode: also run configurations deriving text orientation from "
                          "fragment aspect ratios instead of the binding direction (BUG-6)")
@@ -1017,14 +1081,15 @@ def main():
     ap.add_argument("--json", help="sweep mode: also write the table here")
     args = ap.parse_args()
 
-    if args.mode not in ("ablate", "waist", "label") and not args.sample:
+    if args.mode not in ("ablate", "waist", "label", "rdcl") and not args.sample:
         ap.error(f"{args.mode} needs a sample id")
     if not args.truth and args.sample:
         args.truth = load_truth().get(args.sample, {}).get("count", 0)
 
     reader_cache = {}
     {"sweep": cmd_sweep, "overlay": cmd_overlay, "direction": cmd_direction,
-     "waist": cmd_waist, "ablate": cmd_ablate, "label": cmd_label}[args.mode](args, reader_cache)
+     "waist": cmd_waist, "ablate": cmd_ablate, "label": cmd_label,
+     "rdcl": cmd_rdcl}[args.mode](args, reader_cache)
 
 
 if __name__ == "__main__":
