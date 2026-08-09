@@ -283,11 +283,13 @@ def bubble_context(mask, bubble, samples=32):
 
 
 def build_regions(bubbles, frags, in_thr, un_thr, direction="rtl",
-                  waist_gate=None, waist_max_solidity=0.90, page_shape=None):
+                  waist_gate=None, waist_max_solidity=0.90, page_shape=None,
+                  orientation="reading_direction"):
     """Region proposals for one configuration, tagged by which merge path produced them.
 
-    `waist_gate` enables the clearance veto on the in-bubble path only. The unmatched path has no
-    balloon mask at all, so it cannot use the veto and is left on distance alone.
+    `waist_gate` enables the clearance veto on the in-bubble path only: the unmatched path has no
+    balloon mask to measure, so it stays on distance alone. `orientation` applies to both, and it
+    is the *only* lever that reaches a page with no detected bubbles.
     """
     from worker.services.fragment_grouping import GroupingConfig
     from worker.services.merge_regions import merge_ocr_regions
@@ -301,14 +303,17 @@ def build_regions(bubbles, frags, in_thr, un_thr, direction="rtl",
             regs.append((tuple(bub["bbox"]), "bubble", ""))
             continue
         cfg = GroupingConfig(threshold_ratio=in_thr, reading_direction=direction,
-                             waist_gate=waist_gate, waist_max_solidity=waist_max_solidity)
+                             orientation=orientation, waist_gate=waist_gate,
+                             waist_max_solidity=waist_max_solidity)
         ctx = bubble_context(masks[i], bub) if masks is not None else None
         for s in merge_ocr_regions(inside, grouping=cfg, context=ctx):
             regs.append(((s["x"], s["y"], s["width"], s["height"]), "bubble", s.get("text", "")))
 
     unmatched = [f for f in frags if f["bubble_idx"] == -1]
     if unmatched:
-        for s in merge_ocr_regions(unmatched, direction, threshold_ratio=un_thr):
+        cfg = GroupingConfig(threshold_ratio=un_thr, reading_direction=direction,
+                             orientation=orientation)
+        for s in merge_ocr_regions(unmatched, grouping=cfg):
             regs.append(((s["x"], s["y"], s["width"], s["height"]), "direct", s.get("text", "")))
     return regs
 
@@ -876,9 +881,13 @@ def cmd_ablate(args, reader_cache):
     samples = [args.sample] if args.sample else sorted(truth_all, key=lambda s: int(s[6:]))
     out = {}
 
-    configs = [("baseline", None)]
+    configs = [("baseline", None, "reading_direction")]
     if args.waist_gate is not None:
-        configs.append((f"waist@{args.waist_gate}", args.waist_gate))
+        configs.append((f"waist@{args.waist_gate}", args.waist_gate, "reading_direction"))
+    if args.orientation_vote:
+        configs.append(("orient", None, "vote"))
+        if args.waist_gate is not None:
+            configs.append((f"waist@{args.waist_gate}+orient", args.waist_gate, "vote"))
 
     for sample in samples:
         truth = truth_all.get(sample, {}).get("count", 0)
@@ -887,12 +896,12 @@ def cmd_ablate(args, reader_cache):
         print(f"\n{sample}  truth={truth or '?'}  {len(bubbles)} bubbles, {len(frags)} frags")
         out[sample] = {"truth": truth, "bubbles": len(bubbles), "frags": len(frags), "configs": {}}
 
-        for label, gate in configs:
+        for label, gate, orient in configs:
             rows = []
             for thr in SWEEP_VALUES:
                 regs = build_regions(bubbles, frags, thr, args.unmatched_threshold, args.direction,
                                      waist_gate=gate, waist_max_solidity=args.waist_max_solidity,
-                                     page_shape=(h, w))
+                                     page_shape=(h, w), orientation=orient)
                 m = _metrics(regs, frags, truth, w, h)
                 m["thr"] = thr
                 rows.append(m)
@@ -987,6 +996,9 @@ def main():
                     help=f"directory of annotation JSON written by 'label' mode (default "
                          f"{os.path.relpath(DEFAULT_LABELS, REPO_ROOT)}). Hand labels override "
                          f"the derived ones, per sample")
+    ap.add_argument("--orientation-vote", action="store_true",
+                    help="ablate mode: also run configurations deriving text orientation from "
+                         "fragment aspect ratios instead of the binding direction (BUG-6)")
     ap.add_argument("--waist-gate", type=float, default=None,
                     help="ablate mode: also run a configuration with the clearance veto at this "
                          "many characters (try 1.0). Off by default, matching production")
