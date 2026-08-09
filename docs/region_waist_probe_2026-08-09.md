@@ -238,6 +238,61 @@ to what ships today. That is what makes `sample27` safe — its borderless shout
   same as better region proposals; `ablate` is what closes that gap, and it needs the gate
   implemented first.
 
+---
+
+## The gate implemented, and what it does to region counts (2026-08-09)
+
+Pair separation and region counts are different claims. This is the second one.
+
+Implemented as `GroupingConfig.waist_gate` + `GroupingContext` in
+`worker/src/worker/services/fragment_grouping.py`, off by default. Region counts per page, gate at
+1.0 characters, applied only below solidity 0.90:
+
+| sample | truth | today `2.0` | threshold fix `0.35` | **gate only `2.0`** | **both `0.35`** |
+|---|---|---|---|---|---|
+| `sample3` | 9 | 6 (−3) | 9 (0) | 6 (−3) | **9 (0)** |
+| `sample30` | 7 | 4 (−3) | 7 (0) | **7 (0)** | **7 (0)** |
+| `sample1` | 4 | 3 (−1) | 4 (0) | **4 (0)** | **4 (0)** |
+| `sample16` | 10 | 8 (−2) | 9 (−1) | 8 (−2) | 9 (−1) |
+| `sample9` | 18 | 11 (−7) | 15 (−3) | 13 (−5) | **17 (−1)** |
+| `sample27` | 18 | 15 (−3) | 20 (+2) | 16 (−2) | 21 (+3) |
+| `sample23` | 17 | 2 (−15) | 2 (−15) | 2 (−15) | 2 (−15) |
+| **Σ\|err\|** | | **34** | 21 | 27 | **20** |
+| **Σ\|err\| excl. `sample23`** | | **19** | 6 | 12 | **5** |
+
+`sample23` has zero YOLO bubbles, so no configuration here can touch it — it is the orientation
+bug (BUG-6), and it alone accounts for 15 of today's 34.
+
+**Four things this establishes.**
+
+1. **The gate and the threshold are complementary, not alternatives.** The gate alone fixes
+   `sample30` and `sample1` completely; the threshold alone fixes `sample3`; only together do they
+   get `sample9` from 11 to 17 against a truth of 18. Neither substitutes for the other.
+
+2. **The gate fixes `sample30` at production's current `2.0`, changing no threshold at all.**
+   4 → 7 regions, exactly the hand count, purely from the mask geometry. That is BUG-2 fixed
+   without touching a tuned constant.
+
+3. **It makes the threshold stop mattering, which was the whole point.** `sample30`'s exact-match
+   band widens from 3 grid steps to **all 8**; `sample1`'s from 6 to 8. A page that hits its hand
+   count at every threshold from 0.15 to 2.0 is no longer being held together by a constant.
+
+4. **The errors change character, and that matters more than the totals.** Today every page is
+   under-segmented — six pages, −19 in total, all *mergers*, which fuse two speakers into one
+   translation unit and one flat fill. Under "both" that becomes −2 of merger error plus +3 of
+   split error on `sample27`. Splits usually typeset back into the same balloon acceptably;
+   mergers are unrecoverable. **Converting 19 units of merger into 2 merger + 3 split is a larger
+   win than the Σ|err| 21 → 20 makes it look**, and it is the trade the asymmetric cost function
+   was written to express.
+
+**The cost, stated plainly:** `sample27` gets worse, 20 → 21 against a truth of 18. It was already
+the only over-splitting page, part of it is the borderless shout no configuration can join, and
+the gate adds one more split on top. That is the price, it is in the cheap direction, and it should
+not be hidden in a total.
+
+**Still not established:** whether better region proposals produce better *transcriptions*. That
+needs the bundled cloud re-run, and nothing here anticipates it.
+
 ## Reproduce
 
 ```bash

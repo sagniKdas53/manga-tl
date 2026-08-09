@@ -256,9 +256,43 @@ def proposals(sample, corpus_dir, reader_cache, use_cache=True, cache_dir=None, 
     return img, bubbles, frags
 
 
-def build_regions(bubbles, frags, in_thr, un_thr, direction="rtl"):
-    """Region proposals for one configuration, tagged by which merge path produced them."""
+def mask_solidity(bubble):
+    """Polygon area / convex hull area. 1.0 = convex; a pinched two-balloon blob scores lower."""
+    poly = bubble.get("mask_polygon")
+    if not poly or len(poly) < 3:
+        return 1.0
+    pts = np.array(poly, dtype=np.int32)
+    hull = cv2.contourArea(cv2.convexHull(pts))
+    return float(cv2.contourArea(pts) / hull) if hull > 0 else 1.0
+
+
+def bubble_context(mask, bubble, samples=32):
+    """A GroupingContext for one bubble: clearance-to-outline along a segment, plus solidity.
+
+    The distance transform is computed once per bubble here and closed over, so the grouping code
+    stays free of OpenCV and a sweep does not recompute it per configuration.
+    """
+    from worker.services.fragment_grouping import GroupingContext
+
+    dt = cv2.distanceTransform(mask, cv2.DIST_L2, 3)
+
+    def clearance(p, q):
+        return _sample_min(dt, p, q, k=samples)
+
+    return GroupingContext(clearance=clearance, solidity=mask_solidity(bubble))
+
+
+def build_regions(bubbles, frags, in_thr, un_thr, direction="rtl",
+                  waist_gate=None, waist_max_solidity=0.90, page_shape=None):
+    """Region proposals for one configuration, tagged by which merge path produced them.
+
+    `waist_gate` enables the clearance veto on the in-bubble path only. The unmatched path has no
+    balloon mask at all, so it cannot use the veto and is left on distance alone.
+    """
+    from worker.services.fragment_grouping import GroupingConfig
     from worker.services.merge_regions import merge_ocr_regions
+
+    masks = bubble_masks(bubbles, *page_shape) if (waist_gate is not None and page_shape) else None
 
     regs = []
     for i, bub in enumerate(bubbles):
@@ -266,7 +300,10 @@ def build_regions(bubbles, frags, in_thr, un_thr, direction="rtl"):
         if not inside:
             regs.append((tuple(bub["bbox"]), "bubble", ""))
             continue
-        for s in merge_ocr_regions(inside, direction, threshold_ratio=in_thr):
+        cfg = GroupingConfig(threshold_ratio=in_thr, reading_direction=direction,
+                             waist_gate=waist_gate, waist_max_solidity=waist_max_solidity)
+        ctx = bubble_context(masks[i], bub) if masks is not None else None
+        for s in merge_ocr_regions(inside, grouping=cfg, context=ctx):
             regs.append(((s["x"], s["y"], s["width"], s["height"]), "bubble", s.get("text", "")))
 
     unmatched = [f for f in frags if f["bubble_idx"] == -1]
@@ -839,34 +876,59 @@ def cmd_ablate(args, reader_cache):
     samples = [args.sample] if args.sample else sorted(truth_all, key=lambda s: int(s[6:]))
     out = {}
 
+    configs = [("baseline", None)]
+    if args.waist_gate is not None:
+        configs.append((f"waist@{args.waist_gate}", args.waist_gate))
+
     for sample in samples:
         truth = truth_all.get(sample, {}).get("count", 0)
         img, bubbles, frags = load_proposals(args, sample, reader_cache, quiet=True)
         h, w = img.shape[:2]
-        rows = []
-        for thr in SWEEP_VALUES:
-            regs = build_regions(bubbles, frags, thr, args.unmatched_threshold, args.direction)
-            m = _metrics(regs, frags, truth, w, h)
-            m["thr"] = thr
-            rows.append(m)
-        out[sample] = {"truth": truth, "bubbles": len(bubbles), "frags": len(frags), "rows": rows}
-
-        counts = [r["total"] for r in rows]
-        plen, pstart, pval = _plateaus(counts)
-        exact = [r["thr"] for r in rows if truth and r["total"] == truth]
         print(f"\n{sample}  truth={truth or '?'}  {len(bubbles)} bubbles, {len(frags)} frags")
-        print(f"  {'thr':>5} {'n':>4} {'bub':>4} {'dir':>4} {'err':>5} "
-              f"{'giant':>6} {'maxfrag':>8} {'contained':>10}")
-        for r in rows:
-            err = f"{r['err']:+d}" if r["err"] is not None else "  ?"
-            star = " *" if truth and r["total"] == truth else ""
-            print(f"  {r['thr']:>5} {r['total']:>4} {r['bubble']:>4} {r['direct']:>4} {err:>5} "
-                  f"{r['giant']:>6} {r['max_frags']:>8} {r['contained']:>10}{star}")
-        print(f"  plateau: {plen} grid steps at n={pval}, from thr={SWEEP_VALUES[pstart]}"
-              f"{'  (contains truth)' if pval == truth else ''}")
-        print(f"  exact-match band: {exact if exact else 'none — this page never reaches truth'}")
-        out[sample]["plateau"] = {"len": plen, "start": SWEEP_VALUES[pstart], "value": pval}
-        out[sample]["exact_band"] = exact
+        out[sample] = {"truth": truth, "bubbles": len(bubbles), "frags": len(frags), "configs": {}}
+
+        for label, gate in configs:
+            rows = []
+            for thr in SWEEP_VALUES:
+                regs = build_regions(bubbles, frags, thr, args.unmatched_threshold, args.direction,
+                                     waist_gate=gate, waist_max_solidity=args.waist_max_solidity,
+                                     page_shape=(h, w))
+                m = _metrics(regs, frags, truth, w, h)
+                m["thr"] = thr
+                rows.append(m)
+
+            plen, pstart, pval = _plateaus([r["total"] for r in rows])
+            exact = [r["thr"] for r in rows if truth and r["total"] == truth]
+            pad = " " * (len(label) + 4)
+            print(f"  [{label}] {'thr':>5} {'n':>4} {'bub':>4} {'dir':>4} {'err':>5} "
+                  f"{'giant':>6} {'maxfrag':>8}")
+            for r in rows:
+                err = f"{r['err']:+d}" if r["err"] is not None else "  ?"
+                star = " *" if truth and r["total"] == truth else ""
+                print(f"  {pad}{r['thr']:>5} {r['total']:>4} {r['bubble']:>4} {r['direct']:>4} "
+                      f"{err:>5} {r['giant']:>6} {r['max_frags']:>8}{star}")
+            print(f"  {pad}plateau {plen} steps at n={pval} from {SWEEP_VALUES[pstart]}"
+                  f"{' (contains truth)' if pval == truth else ''};  "
+                  f"exact band {exact if exact else 'never reaches truth'}")
+            out[sample]["configs"][label] = {
+                "rows": rows, "exact_band": exact,
+                "plateau": {"len": plen, "start": SWEEP_VALUES[pstart], "value": pval},
+            }
+
+        if len(configs) > 1:
+            base = out[sample]["configs"]["baseline"]["rows"]
+            gated = out[sample]["configs"][configs[1][0]]["rows"]
+            deltas = [g["total"] - b["total"] for b, g in zip(base, gated, strict=True)]
+            better = sum(1 for b, g in zip(base, gated, strict=True)
+                         if truth and abs(g["err"]) < abs(b["err"]))
+            worse = sum(1 for b, g in zip(base, gated, strict=True)
+                        if truth and abs(g["err"]) > abs(b["err"]))
+            print(f"  --> gate moved the count at {sum(1 for d in deltas if d)}/{len(deltas)} "
+                  f"thresholds {deltas}; closer to truth at {better}, further at {worse}")
+
+        # The transfer summary below reads the last configuration run.
+        out[sample]["exact_band"] = out[sample]["configs"][configs[-1][0]]["exact_band"]
+        out[sample]["rows"] = out[sample]["configs"][configs[-1][0]]["rows"]
 
     # Does one value serve every page? This is the quantified transfer question.
     print("\n" + "=" * 78)
@@ -925,6 +987,11 @@ def main():
                     help=f"directory of annotation JSON written by 'label' mode (default "
                          f"{os.path.relpath(DEFAULT_LABELS, REPO_ROOT)}). Hand labels override "
                          f"the derived ones, per sample")
+    ap.add_argument("--waist-gate", type=float, default=None,
+                    help="ablate mode: also run a configuration with the clearance veto at this "
+                         "many characters (try 1.0). Off by default, matching production")
+    ap.add_argument("--waist-max-solidity", type=float, default=0.90,
+                    help="only veto inside masks below this solidity (default 0.90)")
     ap.add_argument("--label-threshold", type=float, default=0.35,
                     help="waist mode: threshold whose grouping labels pairs same/cross-balloon. "
                          "Only trusted on pages where it reproduces the hand count (default 0.35)")
