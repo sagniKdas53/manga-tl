@@ -526,6 +526,31 @@ def score_page(results, ground_truth):
 
 
 def crop_for_region(img, bbox, pad=10):
+    """The padded crop every engine transcribes. Returns (crop, [x, y, w, h] of the crop).
+
+    The 10px margin is load-bearing, not a courtesy: PaddleOCR's detection boxes are tight enough
+    to clip glyph edges, and the cloud VLMs see the crop with no page context. Production does not
+    pad at all (handlers/ocr.py:686 uses pad=0) — this is a corpus/benchmark concern only.
+
+    Do not add sibling-aware clipping here without re-reading this. Stopping the margin reaching
+    into the next region is a real defect — on sample10's countdown, four ~25px lines whose boxes
+    already overlap, the pad pulls each neighbour wholly into the crop and the same digits are
+    transcribed two and three times (character precision 0.791 against 0.916 with it clipped).
+    But five variants were measured on 2026-08-09 and **every one that clipped cost more recall
+    than it bought precision**, on `production` boxes as well as split ones:
+
+        A  pad 10, no clipping (this)          P 0.937  R 0.919
+        B  clip at the midpoint to a sibling   P 0.953  R 0.845
+        C  B + margin capped at 15% of the box P 0.948  R 0.842
+        D  B but never clipping into the bbox  P 0.953  R 0.910
+        E  D + neighbour must share >=50%      P 0.955  R 0.909
+
+    D and E are the sound versions and still lose recall, because a region whose box genuinely
+    overlaps its neighbour's cannot be padded without either duplicating text or dropping it —
+    the two cases have the same geometry and no threshold separates them. Recall is the gate, so
+    A wins. A fix has to work on the *text* (drop characters the neighbouring crop also produced)
+    rather than on the box. See docs/region_waist_probe_2026-08-09.md.
+    """
     x, y, w, h = bbox
     px, py = max(0, x - pad), max(0, y - pad)
     pw = min(img.shape[1] - px, w + 2 * pad)

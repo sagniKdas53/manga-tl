@@ -293,6 +293,54 @@ not be hidden in a total.
 **Still not established:** whether better region proposals produce better *transcriptions*. That
 needs the bundled cloud re-run, and nothing here anticipates it.
 
+## The local bench, 2026-08-09 — the regrouping is character-neutral
+
+`region_proposal_probe.py bench` scores a configuration on an *order-invariant multiset of
+normalised characters* against the corpus text, because the configurations produce different
+numbers of regions and any metric keyed to the existing boxes measures the regrouping rather than
+the transcription. `--transcribe` re-OCRs each proposed crop, which is what the corpus and the
+cloud VLMs consume; without it the metric is insensitive by construction, since regrouping the
+same fragments cannot change the joined character bag.
+
+Forty pages, each region's crop re-read with PP-OCRv6_medium
+(`corpus/runs/2026-08-09/region-grouping/`):
+
+| config | regions | Σ\|err\| | M | S | cost | cover | charP | charR |
+|---|---|---|---|---|---|---|---|---|
+| production | 282 | 34 | 17 | 2 | 87 | 0.591 | 0.953 | **0.928** |
+| threshold | 339 | 21 | 5 | 5 | 30 | 0.512 | 0.954 | **0.928** |
+| geometry | 321 | 12 | 11 | 5 | 60 | 0.557 | 0.948 | **0.928** |
+| proposed | 364 | 5 | 2 | 7 | 17 | 0.495 | 0.949 | **0.928** |
+
+**Character recall is identical across all four.** 29 of 40 pages are byte-identical in text; of
+the 11 that move, 7 gain recall and 2 lose it. So the regrouping costs nothing in characters while
+taking mergers 17 → 2 — which is the deploy gate, and it passes. `cover` is agreement with the
+*existing* boxes and necessarily falls when a configuration splits more; it measures how much of
+the corpus a deploy invalidates, not quality.
+
+### A negative result worth not repeating: crop padding
+
+`sample10` (a countdown timer, four ~25px lines whose boxes already overlap) loses precision under
+`proposed`, 0.903 → 0.791, because `crop_for_region`'s fixed 10px pad pulls each neighbour into the
+crop and the digits are transcribed two and three times. Five ways of clipping that margin were
+measured; **every one cost more recall than it bought precision**, including on `production` boxes:
+
+| variant | production P / R | proposed P / R |
+|---|---|---|
+| A — fixed 10px, no clipping (shipped) | 0.957 / **0.917** | 0.937 / **0.919** |
+| B — clip at midpoint to a sibling | 0.953 / 0.822 | 0.953 / 0.845 |
+| C — B + margin capped at 15% of the box | 0.948 / 0.819 | 0.948 / 0.842 |
+| D — B but never clipping into the bbox | 0.956 / 0.909 | 0.953 / 0.910 |
+| E — D + neighbour must share ≥50% | 0.956 / 0.910 | 0.955 / 0.909 |
+
+The 10px margin turns out to be load-bearing: PaddleOCR's detection boxes are tight enough to clip
+glyph edges, and B removing it costs ~0.10 recall on pages of narrow vertical columns. D and E are
+the geometrically sound versions and *still* lose recall, because a region whose box genuinely
+overlaps its neighbour's cannot be padded without either duplicating text or dropping it — the two
+cases have the same geometry and no threshold separates them (`sample6`, two balloons overlapping
+24×113px). Recall is the gate, so A stands. **A real fix has to work on the text — drop characters
+the neighbouring crop also produced — not on the box.**
+
 ## Reproduce
 
 ```bash
@@ -300,7 +348,14 @@ needs the bundled cloud re-run, and nothing here anticipates it.
 .venv/bin/python scripts/region_proposal_probe.py waist            # the experiment
 .venv/bin/python scripts/region_proposal_probe.py ablate           # metric baseline
 .venv/bin/python scripts/region_proposal_probe.py sweep sample30   # reproduction check
+.venv/bin/python scripts/region_proposal_probe.py rdcl             # mergers vs splits
+.venv/bin/python scripts/region_proposal_probe.py bench --transcribe   # the deploy gate (~40 min)
 ```
+
+`bench` writes its run to `corpus/runs/<today>/region-grouping/` — `_summary.json` carries the
+config matrix and the HEAD of all three repos, and each configuration gets a per-page file with
+every proposed box and both its joined and re-OCR'd text. Pass `--no-save` to print without
+recording, or `--bench-configs production proposed` to run a subset.
 
 `waist` reads `corpus/ocr/_region_probe/` by default, keying each file on the `sample_id` inside it
 rather than its filename. A sample annotated twice must induce the same partition or it is dropped —
