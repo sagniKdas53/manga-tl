@@ -217,7 +217,13 @@ services:
       - MINIO_SECRET_KEY_FILE=/run/secrets/minio_password
       - BACKEND_CALLBACK_URL=${BACKEND_CALLBACK_URL:-http://backend:8080}${CONTEXT_PATH:-/tlhub}/api/internal/jobs/callback
       - INTERNAL_API_TOKEN_FILE=/run/secrets/internal_api_token
-      - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-1.0}
+      # Fragment grouping. The default was 1.0 here against a code default of 0.50, so the
+      # deployment ran at double the tested value; both are now 0.35, measured over 40 corpus
+      # pages (docs/region_waist_probe_2026-08-09.md). Leave the waist gate on unless a page's
+      # balloon masks are known bad — it is what stops two touching balloons becoming one region.
+      - OCR_MERGE_THRESHOLD=${OCR_MERGE_THRESHOLD:-0.35}
+      - OCR_WAIST_GATE=${OCR_WAIST_GATE:-1.0}
+      - OCR_ORIENTATION=${OCR_ORIENTATION:-vote}
       # API Keys are loaded via DOCKER_SECRETS_JSON
       - DOCKER_SECRETS_JSON=/run/secrets/api_keys
       - PROVIDERS_CONFIG=/app/config/providers.json
