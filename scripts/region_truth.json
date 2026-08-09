@@ -1,0 +1,65 @@
+{
+  "_readme": [
+    "Hand-counted text areas per bench page. Promoted out of the prose table in",
+    "docs/region_threshold_validation_2026-08-08.md §2-3 so tooling can assert on it.",
+    "",
+    "'count' is a by-eye count of text areas, taken from the human reference translation where",
+    "one exists and from the source page otherwise. It is NOT an annotated box set -- 'boxes'",
+    "is the slot for that and is null everywhere today.",
+    "",
+    "Two counts are +/-1 judgement calls (see 'caveat'). No metric derived from this file should",
+    "be read to better than +/-1 per page, and no threshold should be chosen on a 1-region margin."
+  ],
+  "_schema": {
+    "count": "int -- hand-counted text areas on the page",
+    "source": "'human' (counted off the reference translation) | 'source-page' (counted off the raw page)",
+    "notes": "why the count is what it is",
+    "caveat": "present only where the count is a judgement call; explains the ambiguity",
+    "boxes": "null, or a list of [x, y, w, h] in page.webp pixel space once annotated"
+  },
+
+  "sample3": {
+    "count": 9,
+    "source": "human",
+    "notes": "8 balloons + the DCG Corporation name badge. YOLO returns 4 bubbles for these 9 balloons because they visually touch.",
+    "boxes": null
+  },
+  "sample1": {
+    "count": 4,
+    "source": "source-page",
+    "notes": "Machine TL only, no human reference. Unambiguous.",
+    "boxes": null
+  },
+  "sample30": {
+    "count": 7,
+    "source": "human",
+    "notes": "Strongest confirmation page: at <=0.35 the 7 regions map 1:1 onto the 7 balloons, verified against the art rather than by count. 4 YOLO bubbles, 0 unmatched fragments.",
+    "boxes": null
+  },
+  "sample16": {
+    "count": 10,
+    "source": "human",
+    "notes": "Never reaches truth at any threshold -- plateaus at 9. The gap is a detector miss, not a merge effect.",
+    "boxes": null
+  },
+  "sample9": {
+    "count": 18,
+    "source": "human",
+    "notes": "Dense 4-panel page. Never reaches truth; plateaus at 15. Gap is one undetected SFX plus two balloons whose text merges with an adjacent sub-caption inside a single YOLO bubble.",
+    "caveat": "+/-1: whether the sub-caption inside a balloon counts as its own text area. Affects two balloons.",
+    "boxes": null
+  },
+  "sample27": {
+    "count": 18,
+    "source": "human",
+    "notes": "Dense 4-panel page, and the only page that over-splits (20 at <=0.5).",
+    "caveat": "+/-1: whether panel 3's two column groups sit in one balloon. Separately, the panel-2 borderless shout is split across the bubble path and the unmatched path, so its two halves never meet in the same merge call -- NO grouping configuration can join them. Exclude that region from any ship-gate arithmetic or the gate is unsatisfiable.",
+    "boxes": null
+  },
+  "sample23": {
+    "count": 17,
+    "source": "source-page",
+    "notes": "Control page: 0 YOLO bubbles, so the in-bubble threshold never executes and the count must stay constant across an in-bubble sweep. All 61 fragments are horizontal (avg 214x33, 61/61 wider than tall); merging as 'ltr' gives exactly 17 stably across ratio 0.25-1.0, while the 'rtl' vertical assumption collapses it to 2.",
+    "boxes": null
+  }
+}

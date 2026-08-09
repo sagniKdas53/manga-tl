@@ -26,13 +26,18 @@ makes sample23 a valid control: it has no bubbles, so its count must not move.
 """
 
 import argparse
+import hashlib
 import json
+import logging
 import os
 import sys
 import tempfile
 
 import cv2
 import numpy as np
+
+# merge_ocr_regions logs one INFO line per call; a sweep makes hundreds and buries the table.
+logging.getLogger("translation").setLevel(logging.WARNING)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
@@ -44,11 +49,27 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("FLAGS_use_mkldnn", "0")
 
 DEFAULT_CORPUS = os.path.join(REPO_ROOT, "corpus", "ocr")
+TRUTH_PATH = os.path.join(SCRIPT_DIR, "region_truth.json")
 SWEEP_VALUES = (0.15, 0.25, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 # The value merge_ocr_regions falls back to when given no threshold. Note docker-compose.yml
 # deploys OCR_MERGE_THRESHOLD=1.0, i.e. double this — see render_quality_gap_2026-08-05.md §D4.
 CODE_DEFAULT_THRESHOLD = 0.50
+
+DET_MODEL = "PP-OCRv6_medium_det"
+REC_MODEL = "PP-OCRv6_medium_rec"
+OCR_MAX_DIM = 1024
+
+# Bump when the *detection* stage changes shape or semantics (model call, coordinate mapping,
+# what gets stored). Deliberately not keyed on this file's hash: the merge/metric code below
+# changes constantly and must not invalidate a cache of model output it never touched.
+CACHE_SCHEMA_VERSION = 1
+
+
+def load_truth(path=TRUTH_PATH):
+    """Hand-counted text areas per sample. Keys starting with '_' are documentation."""
+    with open(path) as fh:
+        return {k: v for k, v in json.load(fh).items() if not k.startswith("_")}
 
 
 def load_page(sample, corpus_dir):
@@ -59,24 +80,81 @@ def load_page(sample, corpus_dir):
     return img
 
 
-def proposals(sample, corpus_dir, reader_cache):
-    """YOLO bubbles plus PaddleOCR fragments, each fragment assigned to a bubble or to -1.
+def default_cache_dir():
+    env = os.environ.get("REGION_PROBE_CACHE")
+    if env:
+        return env
+    xdg = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return os.path.join(xdg, "manga-library", "region_probe")
 
-    Mirrors the assignment rule the benchmark and the handler both use: best mask overlap wins,
-    and a fragment overlapping no mask is 'unmatched'.
-    """
+
+def _sha1_file(path):
+    h = hashlib.sha1()
+    with open(path, "rb") as fh:
+        while chunk := fh.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+_model_id_cache = {}
+
+
+def _model_identity():
+    """Everything about the models that could change their output, as a dict."""
+    if "id" not in _model_id_cache:
+        from worker.config import (
+            YOLO_CONF_THRESHOLD,
+            YOLO_INPUT_SIZE,
+            YOLO_MASK_EROSION,
+            YOLO_MODEL_PATH,
+        )
+        from worker.services.bubble_detector import get_sha256
+
+        _model_id_cache["id"] = {
+            "yolo_model_sha256": get_sha256(YOLO_MODEL_PATH),
+            "yolo_conf": YOLO_CONF_THRESHOLD,
+            "yolo_input_size": YOLO_INPUT_SIZE,
+            "yolo_mask_erosion": YOLO_MASK_EROSION,
+            "det_model": DET_MODEL,
+            "rec_model": REC_MODEL,
+            "ocr_max_dim": OCR_MAX_DIM,
+        }
+    return _model_id_cache["id"]
+
+
+def _cache_key(sample, page_path):
+    """Hash the page BYTES, not its path — corpus/ is a submodule whose pointer moves under us."""
+    payload = {
+        "schema": CACHE_SCHEMA_VERSION,
+        "sample": sample,
+        "page_sha1": _sha1_file(page_path),
+        "models": _model_identity(),
+    }
+    blob = json.dumps(payload, sort_keys=True).encode()
+    return hashlib.sha1(blob).hexdigest(), payload
+
+
+def _detect(img, reader_cache):
+    """Run YOLO + PaddleOCR. Returns (bubbles, frags) with no bubble assignment."""
     from benchmark_local_ocr import init_paddleocr
     from worker.services.bubble_detector import detect_bubbles_yolo
     from worker.services.ocr import parse_paddle_ocr_results
     from worker.utils.image import downscale_for_ocr
 
-    img = load_page(sample, corpus_dir)
-    h, w = img.shape[:2]
-    bubbles = detect_bubbles_yolo(img) or []
+    raw_bubbles = detect_bubbles_yolo(img) or []
+    bubbles = [
+        {
+            "bbox": [int(v) for v in b["bbox"]],
+            "confidence": float(b.get("confidence", 0.0)),
+            "mask_polygon": [[int(p[0]), int(p[1])] for p in (b.get("mask_polygon") or [])] or None,
+            "safe_rect": [int(v) for v in b["safe_rect"]] if b.get("safe_rect") else None,
+        }
+        for b in raw_bubbles
+    ]
 
     if "reader" not in reader_cache:
-        reader_cache["reader"] = init_paddleocr("japan", "PP-OCRv6_medium_det", "PP-OCRv6_medium_rec")
-    scaled, upscale = downscale_for_ocr(img, max_dim=1024)
+        reader_cache["reader"] = init_paddleocr("japan", DET_MODEL, REC_MODEL)
+    scaled, upscale = downscale_for_ocr(img, max_dim=OCR_MAX_DIM)
 
     frags = []
     for bbox, text, conf in parse_paddle_ocr_results(reader_cache["reader"].predict(scaled)):
@@ -86,6 +164,14 @@ def proposals(sample, corpus_dir, reader_cache):
         frags.append({"text": text, "detectedLanguage": "ja", "confidence": float(conf),
                       "x": x, "y": y, "width": int(max(xs) - x), "height": int(max(ys) - y)})
 
+    return bubbles, frags
+
+
+def bubble_masks(bubbles, h, w):
+    """Rasterise each bubble's polygon (or its bbox, if it has none) to a full-page uint8 mask.
+
+    Kept out of the cache: rasters are enormous and rebuild from the polygon in milliseconds.
+    """
     masks = []
     for b in bubbles:
         m = np.zeros((h, w), dtype=np.uint8)
@@ -96,7 +182,15 @@ def proposals(sample, corpus_dir, reader_cache):
             bx, by, bw, bh = b["bbox"]
             m[by:by + bh, bx:bx + bw] = 255
         masks.append(m)
+    return masks
 
+
+def assign_fragments(frags, masks, h, w):
+    """Best-mask-overlap wins; a fragment overlapping no mask is 'unmatched' (-1).
+
+    Mirrors handlers/ocr.py:551-574. Deliberately recomputed on every run rather than cached —
+    the assignment rule is itself a change candidate.
+    """
     for f in frags:
         best, best_ov = -1, 0
         x1, y1 = max(0, f["x"]), max(0, f["y"])
@@ -107,7 +201,47 @@ def proposals(sample, corpus_dir, reader_cache):
                 if ov > best_ov:
                     best, best_ov = i, ov
         f["bubble_idx"] = best
+    return frags
 
+
+def proposals(sample, corpus_dir, reader_cache, use_cache=True, cache_dir=None, quiet=False):
+    """YOLO bubbles plus PaddleOCR fragments, each fragment assigned to a bubble or to -1.
+
+    The model stage is cached to disk; the assignment stage is not.
+    """
+    img = load_page(sample, corpus_dir)
+    h, w = img.shape[:2]
+    page_path = os.path.join(corpus_dir, sample, "page.webp")
+
+    bubbles: list | None = None
+    frags: list = []
+    cache_file = key = provenance = None
+    if use_cache:
+        key, provenance = _cache_key(sample, page_path)
+        cache_dir = cache_dir or default_cache_dir()
+        cache_file = os.path.join(cache_dir, f"{sample}.{key[:16]}.json")
+        if os.path.exists(cache_file):
+            with open(cache_file) as fh:
+                payload = json.load(fh)
+            if payload.get("key") == key:
+                bubbles, frags = payload["bubbles"], payload["frags"]
+                if not quiet:
+                    print(f"  [cache HIT ] {os.path.basename(cache_file)}")
+
+    if bubbles is None:
+        if use_cache and not quiet:
+            print(f"  [cache MISS] {sample} — running YOLO + PaddleOCR")
+        bubbles, frags = _detect(img, reader_cache)
+        if use_cache and cache_file:
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            tmp = cache_file + ".tmp"
+            with open(tmp, "w") as fh:
+                json.dump({"schema_version": CACHE_SCHEMA_VERSION, "key": key,
+                           "provenance": provenance, "page_wh": [w, h],
+                           "bubbles": bubbles, "frags": frags}, fh)
+            os.replace(tmp, cache_file)
+
+    assign_fragments(frags, bubble_masks(bubbles, h, w), h, w)
     return img, bubbles, frags
 
 
@@ -131,8 +265,14 @@ def build_regions(bubbles, frags, in_thr, un_thr, direction="rtl"):
     return regs
 
 
+def load_proposals(args, sample, reader_cache, quiet=False):
+    """proposals() with the CLI's cache flags applied."""
+    return proposals(sample, args.corpus, reader_cache,
+                     use_cache=not args.no_cache, cache_dir=args.cache_dir, quiet=quiet)
+
+
 def cmd_sweep(args, reader_cache):
-    img, bubbles, frags = proposals(args.sample, args.corpus, reader_cache)
+    img, bubbles, frags = load_proposals(args, args.sample, reader_cache)
     h, w = img.shape[:2]
     unmatched = sum(1 for f in frags if f["bubble_idx"] == -1)
 
@@ -164,7 +304,7 @@ def cmd_sweep(args, reader_cache):
 
 
 def cmd_overlay(args, reader_cache):
-    img, bubbles, frags = proposals(args.sample, args.corpus, reader_cache)
+    img, bubbles, frags = load_proposals(args, args.sample, reader_cache)
     regs = build_regions(bubbles, frags, args.in_threshold, args.unmatched_threshold, args.direction)
 
     vis = img.copy()
@@ -191,7 +331,7 @@ def cmd_direction(args, reader_cache):
     """
     from worker.services.merge_regions import merge_ocr_regions
 
-    _, bubbles, frags = proposals(args.sample, args.corpus, reader_cache)
+    _, bubbles, frags = load_proposals(args, args.sample, reader_cache)
     if not frags:
         raise SystemExit("no fragments on this page")
 
@@ -212,15 +352,485 @@ def cmd_direction(args, reader_cache):
         print(f"{thr:>6} | {n_rtl:>10} regions{m_rtl:<13} | {n_ltr:>10} regions{m_ltr:<13}")
 
 
+def _box(f):
+    return f["x"], f["y"], f["x"] + f["width"], f["y"] + f["height"]
+
+
+def _nearest_points(a, b):
+    """The two closest points on the boundaries of two axis-aligned boxes."""
+    ax1, ay1, ax2, ay2 = _box(a)
+    bx1, by1, bx2, by2 = _box(b)
+    if ax2 < bx1:
+        px, qx = ax2, bx1
+    elif bx2 < ax1:
+        px, qx = ax1, bx2
+    else:
+        px = qx = (max(ax1, bx1) + min(ax2, bx2)) / 2.0
+    if ay2 < by1:
+        py, qy = ay2, by1
+    elif by2 < ay1:
+        py, qy = ay1, by2
+    else:
+        py = qy = (max(ay1, by1) + min(ay2, by2)) / 2.0
+    return (px, py), (qx, qy)
+
+
+def _sample_min(dt, p, q, k=32):
+    """Minimum of the distance transform along the segment p->q. Zero means it left the mask."""
+    h, w = dt.shape
+    lo = None
+    for i in range(k + 1):
+        t = i / k
+        x = round(p[0] + (q[0] - p[0]) * t)
+        y = round(p[1] + (q[1] - p[1]) * t)
+        if not (0 <= x < w and 0 <= y < h):
+            return 0.0
+        v = float(dt[y, x])
+        lo = v if lo is None else min(lo, v)
+    return lo if lo is not None else 0.0
+
+
+def _is_vertical(frags):
+    """Aspect-ratio majority vote, weighted by the longer side. Ties fall back to vertical."""
+    vert = horiz = 0.0
+    for f in frags:
+        w, h = max(1, f["width"]), max(1, f["height"])
+        weight = max(w, h)
+        if h / w >= 1.2:
+            vert += weight
+        elif w / h >= 1.2:
+            horiz += weight
+    return vert >= horiz
+
+
+def _best_separation(same, cross, same_is_low):
+    """Best achievable error rate separating two 1-D samples with a single cut.
+
+    Returns (error_rate, cut, n_same, n_cross). Chance level is min(n)/ (n_same+n_cross).
+    """
+    if not same or not cross:
+        return None
+    vals = sorted(set(same + cross))
+    cuts = [(vals[i] + vals[i + 1]) / 2 for i in range(len(vals) - 1)] or [vals[0]]
+    best = None
+    for c in cuts:
+        if same_is_low:
+            err = sum(1 for v in same if v > c) + sum(1 for v in cross if v <= c)
+        else:
+            err = sum(1 for v in same if v <= c) + sum(1 for v in cross if v > c)
+        if best is None or err < best[0]:
+            best = (err, c)
+    if best is None:
+        return None
+    total = len(same) + len(cross)
+    return best[0] / total, best[1], len(same), len(cross)
+
+
+LABEL_HTML = """<!doctype html><meta charset="utf-8"><title>balloon groups — {sample}</title>
+<style>
+ body{{font:13px system-ui,sans-serif;margin:0;background:#1a1a1a;color:#eee}}
+ header{{position:sticky;top:0;background:#222;padding:10px 14px;z-index:10;
+   box-shadow:0 2px 8px #0008;display:flex;gap:8px;align-items:center;flex-wrap:wrap}}
+ button{{font:inherit;padding:5px 11px;border-radius:5px;border:1px solid #555;
+   background:#333;color:#eee;cursor:pointer}}
+ button:hover{{background:#444}}
+ .swatch{{width:26px;height:26px;border-radius:5px;border:2px solid transparent;cursor:pointer}}
+ .swatch.active{{border-color:#fff}}
+ #wrap{{position:relative;margin:14px auto;width:min(96vw,900px)}}
+ #wrap img{{width:100%;display:block}}
+ .f{{position:absolute;border:2px solid #888;background:#8884;cursor:pointer;
+   box-sizing:border-box;font:11px monospace;color:#fff;text-shadow:0 0 3px #000}}
+ .f span{{position:absolute;top:-1px;left:1px}}
+ #status{{margin-left:auto;opacity:.8}}
+</style>
+<header>
+ <b>{sample}</b>
+ <span>click a fragment to put it in the active group</span>
+ <span id="pal"></span>
+ <button onclick="newGroup()">+ new group (n)</button>
+ <button onclick="clearAll()">reset</button>
+ <button onclick="save()">save JSON</button>
+ <span id="status"></span>
+</header>
+<div id="wrap"><img src="data:image/webp;base64,{img_b64}"><div id="boxes"></div></div>
+<script>
+const SAMPLE={sample_json}, FRAGS={frags_json}, PW={pw}, PH={ph};
+const COLORS=["#e6194b","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6",
+              "#bcf60c","#fabebe","#008080","#e6beff","#9a6324","#800000","#aaffc3","#808000"];
+let groups=FRAGS.map(()=>-1), active=0, nGroups=1;
+
+function render(){{
+  const box=document.getElementById("boxes"); box.innerHTML="";
+  FRAGS.forEach((f,i)=>{{
+    const d=document.createElement("div"); d.className="f";
+    d.style.left=(100*f.x/PW)+"%"; d.style.top=(100*f.y/PH)+"%";
+    d.style.width=(100*f.width/PW)+"%"; d.style.height=(100*f.height/PH)+"%";
+    const g=groups[i];
+    if(g>=0){{ const c=COLORS[g%COLORS.length]; d.style.borderColor=c; d.style.background=c+"55"; }}
+    d.innerHTML="<span>"+i+(g>=0?":"+g:"")+"</span>";
+    d.onclick=()=>{{ groups[i]= groups[i]===active ? -1 : active; render(); }};
+    box.appendChild(d);
+  }});
+  let pal=""; for(let g=0;g<nGroups;g++)
+    pal+='<span class="swatch'+(g===active?' active':'')+'" style="display:inline-block;'+
+         'background:'+COLORS[g%COLORS.length]+'" onclick="active='+g+';render()"></span>';
+  document.getElementById("pal").innerHTML=pal;
+  const done=groups.filter(g=>g>=0).length;
+  document.getElementById("status").textContent=done+"/"+FRAGS.length+" assigned, "+
+    nGroups+" group(s)"+(done<FRAGS.length?"  — unassigned fragments are EXCLUDED, not a group":"");
+}}
+function newGroup(){{ active=nGroups++; render(); }}
+function clearAll(){{ groups=FRAGS.map(()=>-1); active=0; nGroups=1; render(); }}
+document.addEventListener("keydown",e=>{{
+  if(e.key==="n") newGroup();
+  else if(/^[0-9]$/.test(e.key) && +e.key<nGroups){{ active=+e.key; render(); }}
+}});
+function save(){{
+  const blob=new Blob([JSON.stringify({{sample_id:SAMPLE,groups:groups}},null,1)],
+                      {{type:"application/json"}});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=SAMPLE+".groups.json"; a.click();
+}}
+render();
+</script>
+"""
+
+
+def cmd_label(args, reader_cache):
+    """Emit a page where fragments are clicked into balloon groups.
+
+    Deliberately NOT a box-drawing tool, and deliberately not built from corpus/ocr/*/regions.json
+    -- those regions are the output of the algorithm under test, so annotating them would be
+    circular. What the experiment needs is a partition of the OCR fragments, which is independent
+    of any region proposal and far quicker to produce by hand.
+
+    Unassigned fragments are excluded from scoring rather than treated as one group, so junk
+    detections and SFX can simply be left grey.
+    """
+    import base64
+
+    truth_all = load_truth()
+    samples = [args.sample] if args.sample else sorted(truth_all, key=lambda s: int(s[6:]))
+    os.makedirs(args.out, exist_ok=True)
+
+    for sample in samples:
+        img, _, frags = load_proposals(args, sample, reader_cache)
+        h, w = img.shape[:2]
+        with open(os.path.join(args.corpus, sample, "page.webp"), "rb") as fh:
+            b64 = base64.b64encode(fh.read()).decode()
+        slim = [{"x": f["x"], "y": f["y"], "width": f["width"], "height": f["height"]} for f in frags]
+        html = LABEL_HTML.format(sample=sample, sample_json=json.dumps(sample),
+                                 frags_json=json.dumps(slim), pw=w, ph=h, img_b64=b64)
+        path = os.path.join(args.out, f"{sample}.label.html")
+        with open(path, "w") as fh:
+            fh.write(html)
+        print(f"{sample}: {len(frags)} fragments, truth={truth_all.get(sample, {}).get('count', '?')} "
+              f"balloons -> {path}")
+
+    print("\nOpen each file, click fragments into groups, save the JSON next to them, then:")
+    print(f"  .venv/bin/python scripts/region_proposal_probe.py waist --labels {args.out}")
+
+
+def load_hand_labels(labels_dir):
+    """{sample: [group_id per fragment]} from the saved annotation files. -1 = excluded."""
+    out = {}
+    if not labels_dir or not os.path.isdir(labels_dir):
+        return out
+    for name in sorted(os.listdir(labels_dir)):
+        if not name.endswith(".groups.json"):
+            continue
+        with open(os.path.join(labels_dir, name)) as fh:
+            payload = json.load(fh)
+        out[payload["sample_id"]] = payload["groups"]
+    return out
+
+
+def cmd_waist(args, reader_cache):
+    """Does the bubble mask's geometric waist separate touching balloons better than distance?
+
+    Inside one balloon every point between two fragments clears the outline by a good fraction of
+    a character (balloons have margins). Where two balloons touch, that clearance collapses to the
+    outline stroke width. If the waist ratio separates same-balloon from cross-balloon pairs more
+    cleanly than the gap ratio does, the mask is the non-distance signal the merge has been missing.
+
+    Pairs are labelled automatically from the merge grouping at --label-threshold, but ONLY on
+    pages where that grouping's region count equals the hand count -- i.e. where it is corroborated.
+    Elsewhere pairs are printed unlabelled and excluded from the scoring.
+    """
+    from worker.services.merge_regions import merge_ocr_regions
+
+    truth_all = load_truth()
+    samples = [args.sample] if args.sample else sorted(truth_all, key=lambda s: int(s[6:]))
+
+    pooled = {"gap": {"same": [], "cross": []}, "waist": {"same": [], "cross": []},
+              "waist_c": {"same": [], "cross": []}}
+
+    hand = load_hand_labels(args.labels)
+
+    for sample in samples:
+        truth = truth_all.get(sample, {}).get("count", 0)
+        img, bubbles, frags = load_proposals(args, sample, reader_cache)
+        h, w = img.shape[:2]
+        masks = bubble_masks(bubbles, h, w)
+        for gi, f in enumerate(frags):
+            f["_idx"] = gi
+
+        # Hand labels beat derived ones: they are independent of the algorithm under test, and
+        # they work on the pages where it is WRONG -- which the derived labelling cannot reach.
+        hand_groups = hand.get(sample)
+        if hand_groups is not None and len(hand_groups) != len(frags):
+            print(f"\n!!! {sample}: hand labels cover {len(hand_groups)} fragments but the page has "
+                  f"{len(frags)}. Stale annotation — re-run 'label' for this sample. Skipping it.")
+            hand_groups = None
+
+        regs = build_regions(bubbles, frags, args.label_threshold, args.unmatched_threshold, args.direction)
+        labelled = hand_groups is not None or (bool(truth) and len(regs) == truth)
+
+        print(f"\n=== {sample}: page {w}x{h}, {len(bubbles)} bubbles, {len(frags)} fragments, truth={truth}")
+        if hand_groups is not None:
+            n_excl = sum(1 for g in hand_groups if g < 0)
+            print(f"    HAND labels: {len({g for g in hand_groups if g >= 0})} balloon groups, "
+                  f"{n_excl} fragment(s) excluded")
+        elif labelled:
+            print(f"    labels derived from the grouping at {args.label_threshold} "
+                  f"({len(regs)} regions == truth, so it is corroborated)")
+        else:
+            print(f"    NOT labelled: grouping at {args.label_threshold} gives {len(regs)} regions "
+                  f"vs truth {truth}. Pairs shown for inspection only, excluded from scoring. "
+                  f"Run 'label {sample}' to annotate it.")
+
+        any_pairs = False
+        for b_idx in range(len(bubbles)):
+            inside = [f for f in frags if f["bubble_idx"] == b_idx]
+            if len(inside) < 2:
+                continue
+            any_pairs = True
+            vertical = _is_vertical(inside)
+            dt = cv2.distanceTransform(masks[b_idx], cv2.DIST_L2, 3)
+
+            # Balloon partition within this bubble, at the labelling threshold.
+            groups = merge_ocr_regions([dict(f) for f in inside], args.direction,
+                                       threshold_ratio=args.label_threshold)
+
+            def group_of(f, groups=groups):
+                """Smallest group whose union bbox contains the fragment.
+
+                A merged group's bbox is the union of its members, so every member is contained.
+                Non-members can be contained too (that IS the containment-violation signal), so
+                take the smallest container rather than the first.
+                """
+                best, best_area = -1, None
+                for gi, g in enumerate(groups):
+                    if (g["x"] <= f["x"] and g["y"] <= f["y"]
+                            and g["x"] + g["width"] >= f["x"] + f["width"]
+                            and g["y"] + g["height"] >= f["y"] + f["height"]):
+                        area = g["width"] * g["height"]
+                        if best_area is None or area < best_area:
+                            best, best_area = gi, area
+                return best
+
+            print(f"  bubble {b_idx} bbox={bubbles[b_idx]['bbox']} "
+                  f"{len(inside)} frags, {'vertical' if vertical else 'horizontal'}, "
+                  f"{len(groups)} balloon group(s) @ {args.label_threshold}")
+            print(f"    {'pair':>9} {'fs':>5} {'gap':>6} {'gap/fs':>7} "
+                  f"{'waist':>6} {'waist/fs':>9} {'waistC/fs':>10}  label")
+
+            for i in range(len(inside)):
+                for j in range(i + 1, len(inside)):
+                    a, b = inside[i], inside[j]
+                    fs = max(a["width"], b["width"]) if vertical else max(a["height"], b["height"])
+                    fs = max(1, fs)
+                    p, q = _nearest_points(a, b)
+                    gap = ((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5
+                    waist = _sample_min(dt, p, q)
+                    ca = (a["x"] + a["width"] / 2, a["y"] + a["height"] / 2)
+                    cb = (b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+                    waist_c = _sample_min(dt, ca, cb)
+
+                    if hand_groups is not None:
+                        ga, gb = hand_groups[a["_idx"]], hand_groups[b["_idx"]]
+                        usable = ga >= 0 and gb >= 0          # excluded fragments score nothing
+                        same = usable and ga == gb
+                    else:
+                        usable = labelled
+                        same = group_of(a) == group_of(b) and group_of(a) != -1
+                    label = ("same " if same else "cross") if usable else "  -  "
+                    print(f"    {i:>4}-{j:<4} {fs:>5} {gap:>6.1f} {gap / fs:>7.3f} "
+                          f"{waist:>6.1f} {waist / fs:>9.3f} {waist_c / fs:>10.3f}  {label}")
+
+                    if usable:
+                        k = "same" if same else "cross"
+                        pooled["gap"][k].append(gap / fs)
+                        pooled["waist"][k].append(waist / fs)
+                        pooled["waist_c"][k].append(waist_c / fs)
+
+        if not any_pairs:
+            print("    no bubble holds 2+ fragments — nothing to compare on this page")
+
+    print("\n" + "=" * 78)
+    print("POOLED SEPARATION (labelled pages only)")
+    print("=" * 78)
+    n_same, n_cross = len(pooled["gap"]["same"]), len(pooled["gap"]["cross"])
+    if not n_same or not n_cross:
+        print(f"  insufficient labelled data: {n_same} same-balloon, {n_cross} cross-balloon pairs.")
+        print("  Nothing can be concluded. Label more pages, or check --label-threshold.")
+        return
+    chance = min(n_same, n_cross) / (n_same + n_cross)
+    print(f"  {n_same} same-balloon pairs, {n_cross} cross-balloon pairs. "
+          f"Chance error rate = {chance:.3f}\n")
+    print(f"  {'signal':<12} {'best err':>9} {'best cut':>9}   same range          cross range")
+    for name, low in (("gap/fs", True), ("waist/fs", False), ("waistC/fs", False)):
+        key = {"gap/fs": "gap", "waist/fs": "waist", "waistC/fs": "waist_c"}[name]
+        s, c = pooled[key]["same"], pooled[key]["cross"]
+        res = _best_separation(s, c, same_is_low=low)
+        if res is None:
+            continue
+        print(f"  {name:<12} {res[0]:>9.3f} {res[1]:>9.3f}   "
+              f"[{min(s):.2f}, {max(s):.2f}]{'':<8} [{min(c):.2f}, {max(c):.2f}]")
+    print("\n  VERDICT: the waist is worth pursuing only if its best error rate is clearly below")
+    print("           gap/fs's. If it is not, the non-distance track (including geometric mask")
+    print("           splitting before assignment) is closed and P1-P5 carry the plan alone.")
+
+
+def _metrics(regs, frags, truth, page_w, page_h):
+    """Ground-truth-free health signals, plus the count error where truth is known."""
+    n = len(regs)
+    n_bubble = sum(1 for _, kind, _ in regs if kind == "bubble")
+    giant = sum(1 for (_, _, rw, rh), _, _ in regs if rh > 0.5 * page_h or rw > 0.5 * page_w)
+
+    max_frags = 0
+    for (x, y, w, h), _, _ in regs:
+        c = sum(1 for f in frags
+                if x <= f["x"] and y <= f["y"]
+                and x + w >= f["x"] + f["width"] and y + h >= f["y"] + f["height"])
+        max_frags = max(max_frags, c)
+
+    # A region whose bbox swallows another region's centre: the fused-region failure a raw
+    # count is blind to, and it needs no ground truth.
+    violations = 0
+    for i, ((x, y, w, h), _, _) in enumerate(regs):
+        for j, ((x2, y2, w2, h2), _, _) in enumerate(regs):
+            if i != j and x <= x2 + w2 / 2 <= x + w and y <= y2 + h2 / 2 <= y + h:
+                violations += 1
+
+    return {"total": n, "bubble": n_bubble, "direct": n - n_bubble, "giant": giant,
+            "max_frags": max_frags, "contained": violations,
+            "err": (n - truth) if truth else None}
+
+
+def _plateaus(counts):
+    """Longest run of a constant count over the sweep grid: (length, start_idx, value)."""
+    best = (0, 0, None)
+    i = 0
+    while i < len(counts):
+        j = i
+        while j + 1 < len(counts) and counts[j + 1] == counts[i]:
+            j += 1
+        if j - i + 1 > best[0]:
+            best = (j - i + 1, i, counts[i])
+        i = j + 1
+    return best
+
+
+def cmd_ablate(args, reader_cache):
+    """Every configuration x every page x the threshold grid, off the cache.
+
+    In this cut the only configuration is the current algorithm, so what this really produces is
+    the *metric* baseline that later phases get compared against — including the two signals a
+    raw region count cannot see (max fragments per region, containment violations).
+    """
+    truth_all = load_truth()
+    samples = [args.sample] if args.sample else sorted(truth_all, key=lambda s: int(s[6:]))
+    out = {}
+
+    for sample in samples:
+        truth = truth_all.get(sample, {}).get("count", 0)
+        img, bubbles, frags = load_proposals(args, sample, reader_cache, quiet=True)
+        h, w = img.shape[:2]
+        rows = []
+        for thr in SWEEP_VALUES:
+            regs = build_regions(bubbles, frags, thr, args.unmatched_threshold, args.direction)
+            m = _metrics(regs, frags, truth, w, h)
+            m["thr"] = thr
+            rows.append(m)
+        out[sample] = {"truth": truth, "bubbles": len(bubbles), "frags": len(frags), "rows": rows}
+
+        counts = [r["total"] for r in rows]
+        plen, pstart, pval = _plateaus(counts)
+        exact = [r["thr"] for r in rows if truth and r["total"] == truth]
+        print(f"\n{sample}  truth={truth or '?'}  {len(bubbles)} bubbles, {len(frags)} frags")
+        print(f"  {'thr':>5} {'n':>4} {'bub':>4} {'dir':>4} {'err':>5} "
+              f"{'giant':>6} {'maxfrag':>8} {'contained':>10}")
+        for r in rows:
+            err = f"{r['err']:+d}" if r["err"] is not None else "  ?"
+            star = " *" if truth and r["total"] == truth else ""
+            print(f"  {r['thr']:>5} {r['total']:>4} {r['bubble']:>4} {r['direct']:>4} {err:>5} "
+                  f"{r['giant']:>6} {r['max_frags']:>8} {r['contained']:>10}{star}")
+        print(f"  plateau: {plen} grid steps at n={pval}, from thr={SWEEP_VALUES[pstart]}"
+              f"{'  (contains truth)' if pval == truth else ''}")
+        print(f"  exact-match band: {exact if exact else 'none — this page never reaches truth'}")
+        out[sample]["plateau"] = {"len": plen, "start": SWEEP_VALUES[pstart], "value": pval}
+        out[sample]["exact_band"] = exact
+
+    # Does one value serve every page? This is the quantified transfer question.
+    print("\n" + "=" * 78)
+    print("CROSS-PAGE TRANSFER")
+    print("=" * 78)
+    bands = {s: d["exact_band"] for s, d in out.items() if d["exact_band"]}
+    never = [s for s, d in out.items() if d["truth"] and not d["exact_band"]]
+    if bands:
+        common = set(bands[next(iter(bands))])
+        for b in bands.values():
+            common &= set(b)
+        print(f"  pages that can match: {len(bands)}/{len(out)}  {sorted(bands)}")
+        print(f"  intersection of their exact-match bands: {sorted(common) if common else 'EMPTY'}")
+    if never:
+        print(f"  pages that never reach truth at any threshold: {never}")
+        print("    (these are detector misses, not merge failures — no threshold fixes them)")
+
+    # Midpoint of the widest run of minimal |err|, NOT the first such threshold: with 8 grid
+    # points and ties everywhere, a plain argmin reports the tie-break order, not the data.
+    best = {}
+    for s, d in out.items():
+        if not d["truth"]:
+            continue
+        lo = min(abs(r["err"]) for r in d["rows"])
+        run = [r["thr"] for r in d["rows"] if abs(r["err"]) == lo]
+        best[s] = (run[0] + run[-1]) / 2
+    if len(best) > 1:
+        vals = list(best.values())
+        mean = sum(vals) / len(vals)
+        sd = (sum((v - mean) ** 2 for v in vals) / len(vals)) ** 0.5
+        print(f"\n  per-page best threshold (midpoint of its best band): "
+              f"{ {k: round(v, 3) for k, v in best.items()} }")
+        print(f"  dispersion (stdev): {sd:.3f}  <- local normalisation must drive this DOWN")
+
+    if args.json:
+        with open(args.json, "w") as fh:
+            json.dump(out, fh, indent=2)
+        print(f"\nwrote {args.json}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("sweep", "overlay", "direction"))
-    ap.add_argument("sample", help="corpus/ocr sample id, e.g. sample30")
-    ap.add_argument("--truth", type=int, default=0, help="hand-counted text areas on the page")
+    ap.add_argument("mode", choices=("sweep", "overlay", "direction", "waist", "ablate", "label"))
+    ap.add_argument("sample", nargs="?", help="corpus/ocr sample id, e.g. sample30 (ablate: all)")
+    ap.add_argument("--truth", type=int, default=0,
+                    help="hand-counted text areas; defaults to scripts/region_truth.json")
     ap.add_argument("--corpus", default=DEFAULT_CORPUS)
+    ap.add_argument("--no-cache", action="store_true",
+                    help="bypass the on-disk (bubbles, fragments) cache and re-run the models")
+    ap.add_argument("--cache-dir", default=None,
+                    help=f"cache location (default $REGION_PROBE_CACHE or {default_cache_dir()})")
     ap.add_argument("--direction", default="rtl", choices=("rtl", "ltr"))
     ap.add_argument("--in-threshold", type=float, default=0.35,
                     help="in-bubble split threshold (overlay mode)")
+    ap.add_argument("--labels", default=None,
+                    help="waist mode: directory of <sample>.groups.json files written by 'label' "
+                         "mode. Hand labels override the derived ones, per sample")
+    ap.add_argument("--label-threshold", type=float, default=0.35,
+                    help="waist mode: threshold whose grouping labels pairs same/cross-balloon. "
+                         "Only trusted on pages where it reproduces the hand count (default 0.35)")
     ap.add_argument("--unmatched-threshold", type=float, default=CODE_DEFAULT_THRESHOLD,
                     help=f"threshold for the unmatched/direct_text path (default {CODE_DEFAULT_THRESHOLD}, "
                          "the code default; production deploys 1.0)")
@@ -231,8 +841,14 @@ def main():
     ap.add_argument("--json", help="sweep mode: also write the table here")
     args = ap.parse_args()
 
+    if args.mode not in ("ablate", "waist", "label") and not args.sample:
+        ap.error(f"{args.mode} needs a sample id")
+    if not args.truth and args.sample:
+        args.truth = load_truth().get(args.sample, {}).get("count", 0)
+
     reader_cache = {}
-    {"sweep": cmd_sweep, "overlay": cmd_overlay, "direction": cmd_direction}[args.mode](args, reader_cache)
+    {"sweep": cmd_sweep, "overlay": cmd_overlay, "direction": cmd_direction,
+     "waist": cmd_waist, "ablate": cmd_ablate, "label": cmd_label}[args.mode](args, reader_cache)
 
 
 if __name__ == "__main__":
