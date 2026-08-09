@@ -17,6 +17,9 @@ running any engine. Seven modes:
     ablate      run the configuration matrix over every annotated page and report the metrics
     rdcl        mergers vs splits against the annotations -- the metric that carries the product
                 cost, since a merger is unrecoverable downstream and a split usually is not
+    bench       the deploy gate: named configurations scored on every corpus page for structure
+                (counts, mergers/splits), content (order-invariant character P/R against the
+                corpus text) and coverage, with the run recorded under corpus/runs/
 
 The YOLO + PaddleOCR stage is cached to disk (~19s -> ~0.5s per page); the fragment-to-bubble
 assignment is deliberately NOT cached, since that rule is itself a change candidate.
@@ -42,6 +45,7 @@ import logging
 import os
 import sys
 import tempfile
+import time
 
 import cv2
 import numpy as np
@@ -832,6 +836,37 @@ def cmd_waist(args, reader_cache):
     print("           splitting before assignment) is closed and P1-P5 carry the plan alone.")
 
 
+def _frag_inside(box, f):
+    """Is a fragment's centre inside a proposed region's bbox?"""
+    x, y, w, h = box
+    return (x <= f["x"] + f["width"] / 2 <= x + w) and (y <= f["y"] + f["height"] / 2 <= y + h)
+
+
+def rdcl_counts(regs, frags, groups):
+    """(mergers, splits) for one page's proposals against its hand-annotated partition.
+
+    `groups` is the per-fragment group id from `load_hand_labels`, -1 meaning excluded, and
+    `frags` must carry the `_idx` written by `tag_fragments`. Shared by `rdcl` and `bench` so the
+    two modes can never drift into reporting different numbers for the same configuration.
+    """
+    mergers = 0
+    spans = []
+    for box, _, _ in regs:
+        spanned = {groups[f["_idx"]] for f in frags if groups[f["_idx"]] >= 0 and _frag_inside(box, f)}
+        spans.append(spanned)
+        if len(spanned) > 1:
+            mergers += 1
+    splits = sum(1 for g in {x for x in groups if x >= 0} if sum(1 for s in spans if g in s) > 1)
+    return mergers, splits
+
+
+def tag_fragments(frags):
+    """Stamp each fragment with its index, so annotations (which are positional) can be joined."""
+    for i, f in enumerate(frags):
+        f["_idx"] = i
+    return frags
+
+
 def cmd_rdcl(args, reader_cache):
     """Mergers and splits against the hand-annotated balloon partitions.
 
@@ -851,19 +886,13 @@ def cmd_rdcl(args, reader_cache):
                ("waist+orient (2.0)", 2.0, args.waist_gate or 1.0, "vote"),
                ("waist+orient (0.35)", 0.35, args.waist_gate or 1.0, "vote")]
 
-    def inside(box, f):
-        x, y, w, h = box
-        return (x <= f["x"] + f["width"] / 2 <= x + w) and (y <= f["y"] + f["height"] / 2 <= y + h)
-
     cached = {}
     for sample in sorted(hand, key=lambda s: int(s[6:])):
         img, bubbles, frags = load_proposals(args, sample, reader_cache, quiet=True)
         if len(hand[sample]) != len(frags):
             print(f"!!! {sample}: annotation is stale, skipping")
             continue
-        for i, f in enumerate(frags):
-            f["_idx"] = i
-        cached[sample] = (img.shape[:2], bubbles, frags)
+        cached[sample] = (img.shape[:2], bubbles, tag_fragments(frags))
 
     print(f"{'configuration':<22}{'mergers':>9}{'splits':>8}{'regions':>9}{f'cost (M*{args.merger_cost}+S)':>18}")
     for label, thr, gate, orient in configs:
@@ -873,16 +902,9 @@ def cmd_rdcl(args, reader_cache):
                                  waist_gate=gate, waist_max_solidity=args.waist_max_solidity,
                                  page_shape=(h, w), orientation=orient)
             total += len(regs)
-            spans = []
-            for box, _, _ in regs:
-                groups = {hand[sample][f["_idx"]] for f in frags
-                          if hand[sample][f["_idx"]] >= 0 and inside(box, f)}
-                spans.append(groups)
-                if len(groups) > 1:
-                    mergers += 1
-            for g in {x for x in hand[sample] if x >= 0}:
-                if sum(1 for s in spans if g in s) > 1:
-                    splits += 1
+            m, s = rdcl_counts(regs, frags, hand[sample])
+            mergers += m
+            splits += s
         cost = mergers * args.merger_cost + splits
         print(f"{label:<22}{mergers:>9}{splits:>8}{total:>9}{cost:>18}")
     print("\n  A merger is one region spanning two annotated balloons; a split is one balloon")
@@ -1038,10 +1060,307 @@ def cmd_ablate(args, reader_cache):
         print(f"\nwrote {args.json}")
 
 
+# ---------------------------------------------------------------------------
+# bench — the deploy gate
+# ---------------------------------------------------------------------------
+
+# Named configurations, as (in-bubble threshold, unmatched threshold, waist gate, orientation).
+# `production` is what is deployed today: the hardcoded 2.0 at handlers/ocr.py:605 and the
+# OCR_MERGE_THRESHOLD=1.0 that docker-compose.yml:220 sets for the unmatched path. The two middle
+# rows exist to attribute the result -- if `proposed` wins, this says which half earned it.
+BENCH_CONFIGS = {
+    "production": (2.0, 1.0, None, "reading_direction"),
+    "threshold": (0.35, 0.35, None, "reading_direction"),
+    "geometry": (2.0, 1.0, 1.0, "vote"),
+    "proposed": (0.35, 0.35, 1.0, "vote"),
+}
+DEFAULT_BENCH_CONFIGS = ("production", "threshold", "geometry", "proposed")
+
+
+def _bag(texts):
+    """Multiset of normalised characters over a whole page.
+
+    Order-invariant *by construction*, which is the entire point: the configurations under test
+    produce different numbers of regions, so any metric that concatenates in some reading order is
+    scoring the grouping's ordering as well as its content, and the two cannot be told apart. This
+    one moves only when characters are actually lost, gained or misread.
+    """
+    from collections import Counter
+
+    from bench_common import normalize_text
+
+    return Counter(normalize_text("".join(texts)))
+
+
+def _bag_prf(hyp, ref):
+    overlap = sum((hyp & ref).values())
+    n_hyp, n_ref = sum(hyp.values()), sum(ref.values())
+    p = overlap / n_hyp if n_hyp else 0.0
+    r = overlap / n_ref if n_ref else 0.0
+    return {"precision": p, "recall": r,
+            "f1": (2 * p * r / (p + r)) if (p + r) else 0.0,
+            "chars_hyp": n_hyp, "chars_ref": n_ref}
+
+
+def load_gold(sample, corpus_dir):
+    """The corpus's per-region ground truth for one page.
+
+    Returns (boxes, texts, tiers). `unresolved` regions are kept: their text is still the best
+    estimate of what is on the page, and dropping them would make a configuration that finds
+    *more* text look like it were hallucinating.
+    """
+    path = os.path.join(corpus_dir, sample, "regions.json")
+    if not os.path.exists(path):
+        return [], [], []
+    with open(path, encoding="utf-8") as fh:
+        gold = json.load(fh)
+    return ([tuple(r["bbox"]) for r in gold],
+            [r.get("text", "") or "" for r in gold],
+            [r.get("tier", "?") for r in gold])
+
+
+def _iou(a, b):
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    ix = max(0, min(ax + aw, bx + bw) - max(ax, bx))
+    iy = max(0, min(ay + ah, by + bh) - max(ay, by))
+    inter = ix * iy
+    union = aw * ah + bw * bh - inter
+    return inter / union if union > 0 else 0.0
+
+
+def transcribe_regions(img, boxes, reader, cache):
+    """Re-OCR each proposed crop, exactly as the corpus builder does.
+
+    This is the measurement that a region change is really about. `build_regions` reports the
+    *joined fragment* text, which is what production sends downstream today; the corpus's gold and
+    candidate strings instead come from re-running an engine on the padded crop. Both are reported,
+    because they can disagree: a box can enclose the right fragments and still crop a glyph.
+
+    `cache` is keyed on the bbox, so the configurations under test only pay for boxes that differ.
+    """
+    from benchmark_vlm_ocr import crop_for_region
+    from worker.services.ocr import parse_paddle_ocr_results
+
+    out = []
+    for box in boxes:
+        if box in cache:
+            out.append(cache[box])
+            continue
+        crop, _ = crop_for_region(img, list(box))
+        text = ""
+        if crop.size:
+            try:
+                text = "".join(t for _b, t, _c in parse_paddle_ocr_results(reader.predict(crop))).strip()
+            except Exception as exc:  # noqa: BLE001
+                print(f"    [warn] transcription failed on {box}: {exc}")
+        cache[box] = text
+        out.append(text)
+    return out
+
+
+def _git_sha(path):
+    import subprocess
+    try:
+        return subprocess.run(["git", "-C", path, "rev-parse", "HEAD"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def cmd_bench(args, reader_cache):
+    """Score every configuration on every corpus page that has ground truth, and record the run.
+
+    Three families of number, deliberately kept apart:
+
+      structure   region count vs the hand count; mergers and splits vs the hand partition
+      content     order-invariant character precision/recall against the corpus text
+      coverage    how much of the corpus's own region set a configuration still finds (IoU>=0.5)
+
+    Content is the one that answers "is this safe to deploy". A grouping change that improves
+    structure while dropping characters is not an improvement, and nothing in the structural
+    metrics can see that.
+    """
+    truth_all = load_truth()
+    hand = load_hand_labels(args.labels, quiet=True)
+    names = args.bench_configs or list(DEFAULT_BENCH_CONFIGS)
+    for name in names:
+        if name not in BENCH_CONFIGS:
+            raise SystemExit(f"unknown configuration {name!r}; have {sorted(BENCH_CONFIGS)}")
+
+    if args.sample:
+        samples = [args.sample]
+    else:
+        samples = sorted((s for s in os.listdir(args.corpus)
+                          if os.path.exists(os.path.join(args.corpus, s, "regions.json"))),
+                         key=lambda s: (len(s), s))
+
+    reader = None
+    if args.transcribe:
+        from benchmark_local_ocr import init_paddleocr
+        if "reader" not in reader_cache:
+            reader_cache["reader"] = init_paddleocr("japan", DET_MODEL, REC_MODEL)
+        reader = reader_cache["reader"]
+        if reader is None:
+            raise SystemExit("--transcribe needs PaddleOCR, which failed to initialise")
+
+    started = time.time()
+    rows = {name: [] for name in names}
+    per_sample_regions = {name: {} for name in names}
+
+    for sample in samples:
+        gold_boxes, gold_texts, gold_tiers = load_gold(sample, args.corpus)
+        if not gold_boxes:
+            continue
+        truth = truth_all.get(sample, {}).get("count")
+        img, bubbles, frags = load_proposals(args, sample, reader_cache, quiet=True)
+        h, w = img.shape[:2]
+        tag_fragments(frags)
+        groups = hand.get(sample)
+        if groups is not None and len(groups) != len(frags):
+            print(f"  {sample}: annotation is stale ({len(groups)} labels, {len(frags)} fragments)"
+                  " — structural scores against it are omitted")
+            groups = None
+
+        gold_bag = _bag(gold_texts)
+        crop_cache: dict = {}
+        print(f"\n{sample}  {len(gold_boxes)} gold regions, {len(frags)} fragments"
+              f"{f', hand count {truth}' if truth else ''}")
+
+        for name in names:
+            in_thr, un_thr, gate, orient = BENCH_CONFIGS[name]
+            regs = build_regions(bubbles, frags, in_thr, un_thr, args.direction,
+                                 waist_gate=gate, waist_max_solidity=args.waist_max_solidity,
+                                 page_shape=(h, w), orientation=orient)
+            boxes = [tuple(int(v) for v in box) for box, _kind, _t in regs]
+            joined = [t for _b, _k, t in regs]
+
+            row = {"sample": sample, "regions": len(regs), "truth": truth,
+                   "count_err": (len(regs) - truth) if truth else None,
+                   "joined": _bag_prf(_bag(joined), gold_bag),
+                   "gold_regions": len(gold_boxes),
+                   "gold_covered": sum(1 for g in gold_boxes
+                                       if any(_iou(g, b) >= args.iou for b in boxes)),
+                   "unresolved_gold": sum(1 for t in gold_tiers if t == "unresolved")}
+            if groups is not None:
+                m, s = rdcl_counts(regs, frags, groups)
+                row["mergers"], row["splits"] = m, s
+
+            texts = joined
+            if args.transcribe:
+                texts = transcribe_regions(img, boxes, reader, crop_cache)
+                row["transcribed"] = _bag_prf(_bag(texts), gold_bag)
+
+            rows[name].append(row)
+            per_sample_regions[name][sample] = [
+                {"bbox": list(b), "path": k, "joined_text": jt, "text": t}
+                for (b, (_bb, k, jt), t) in zip(boxes, regs, texts, strict=True)
+            ]
+
+            score = row.get("transcribed") or row["joined"]
+            print(f"  {name:<11} n={len(regs):<4} err={row['count_err'] if truth else '?':>4}"
+                  f"  cov={row['gold_covered']}/{len(gold_boxes)}"
+                  f"  charP={score['precision']:.3f} charR={score['recall']:.3f}"
+                  f" F1={score['f1']:.3f}"
+                  + (f"  M={row['mergers']} S={row['splits']}" if groups is not None else ""))
+
+    if not any(rows.values()):
+        raise SystemExit("no corpus pages with regions.json were scored")
+
+    summary = []
+    for name in names:
+        rs = rows[name]
+        scored = [r for r in rs if (r.get("transcribed") or r["joined"])["chars_ref"]]
+        with_truth = [r for r in rs if r["count_err"] is not None]
+        with_hand = [r for r in rs if "mergers" in r]
+
+        def _mean(key, sub, src=scored):
+            return round(sum((r.get("transcribed") or r["joined"])[key] for r in src) / len(src), 4) \
+                if src else None
+
+        in_thr, un_thr, gate, orient = BENCH_CONFIGS[name]
+        summary.append({
+            "config": name,
+            "in_threshold": in_thr, "unmatched_threshold": un_thr,
+            "waist_gate": gate, "orientation": orient,
+            "pages": len(rs),
+            "regions": sum(r["regions"] for r in rs),
+            "abs_count_err": sum(abs(r["count_err"]) for r in with_truth) or 0,
+            "pages_with_truth": len(with_truth),
+            "mergers": sum(r["mergers"] for r in with_hand) if with_hand else None,
+            "splits": sum(r["splits"] for r in with_hand) if with_hand else None,
+            "cost": (sum(r["mergers"] for r in with_hand) * args.merger_cost
+                     + sum(r["splits"] for r in with_hand)) if with_hand else None,
+            "gold_coverage": round(sum(r["gold_covered"] for r in rs)
+                                   / max(1, sum(r["gold_regions"] for r in rs)), 4),
+            "char_precision": _mean("precision", scored),
+            "char_recall": _mean("recall", scored),
+            "char_f1": _mean("f1", scored),
+            "scored_by": "transcribed crops" if args.transcribe else "joined fragment text",
+        })
+
+    print("\n" + "=" * 96)
+    print(f"BENCH — {len(rows[names[0]])} pages, scored on "
+          f"{'re-OCR of each proposed crop' if args.transcribe else 'joined fragment text'}")
+    print("=" * 96)
+    head = f"{'config':<12}{'regions':>8}{'|err|':>7}{'M':>5}{'S':>5}{'cost':>6}{'cover':>8}{'charP':>8}{'charR':>8}{'charF1':>8}"
+    print(head)
+    for s in summary:
+        print(f"{s['config']:<12}{s['regions']:>8}{s['abs_count_err']:>7}"
+              f"{s['mergers'] if s['mergers'] is not None else '-':>5}"
+              f"{s['splits'] if s['splits'] is not None else '-':>5}"
+              f"{s['cost'] if s['cost'] is not None else '-':>6}"
+              f"{s['gold_coverage']:>8.3f}{s['char_precision']:>8.3f}"
+              f"{s['char_recall']:>8.3f}{s['char_f1']:>8.3f}")
+    print("\n  charR is the deploy gate: the share of the corpus's characters a configuration still")
+    print("  finds. It cannot be gamed by splitting, so it is the one number that says whether a")
+    print("  regrouping is safe. charP falls when a configuration produces text the corpus lacks,")
+    print("  which here is as often a real untranscribed SFX as a hallucination -- read it with the")
+    print("  overlays, not on its own.")
+    print(f"\n  `cover` is agreement with the corpus's EXISTING boxes at IoU>={args.iou}, and it is")
+    print("  NOT a quality score: those boxes were produced by `production`, so any configuration")
+    print("  that splits more must score lower on it by construction. It is here to quantify how")
+    print("  much of the corpus a deploy would invalidate, which is a cost, not a defect.")
+
+    if args.no_save:
+        return
+
+    run_dir = args.run_dir or os.path.join(
+        REPO_ROOT, "corpus", "runs", time.strftime("%Y-%m-%d"), "region-grouping")
+    os.makedirs(run_dir, exist_ok=True)
+    manifest = {
+        "kind": "region-grouping",
+        "generated": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "duration_s": round(time.time() - started, 1),
+        "scored_by": "transcribed crops" if args.transcribe else "joined fragment text",
+        "detector": {"det_model": DET_MODEL, "rec_model": REC_MODEL, "max_dim": OCR_MAX_DIM},
+        "iou_threshold": args.iou,
+        "merger_cost": args.merger_cost,
+        "commits": {"manga-library": _git_sha(REPO_ROOT),
+                    "manga-tl-worker": _git_sha(os.path.join(REPO_ROOT, "worker")),
+                    "corpus": _git_sha(os.path.join(REPO_ROOT, "corpus"))},
+        "configs": {n: dict(zip(("in_threshold", "unmatched_threshold", "waist_gate",
+                                 "orientation"), BENCH_CONFIGS[n], strict=True)) for n in names},
+        "summary": summary,
+        "pages": {n: rows[n] for n in names},
+    }
+    with open(os.path.join(run_dir, "_summary.json"), "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, ensure_ascii=False, indent=2)
+    for name in names:
+        cdir = os.path.join(run_dir, name)
+        os.makedirs(cdir, exist_ok=True)
+        for sample, regs in per_sample_regions[name].items():
+            with open(os.path.join(cdir, f"{sample}.json"), "w", encoding="utf-8") as fh:
+                json.dump(regs, fh, ensure_ascii=False, indent=2)
+    print(f"\nwrote {os.path.relpath(run_dir, REPO_ROOT)}/  "
+          f"(_summary.json + {len(names)} x {len(per_sample_regions[names[0]])} page files)")
+    print("  corpus/ is a submodule — commit it there, not here.")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=("sweep", "overlay", "direction", "waist", "ablate",
-                                    "label", "rdcl"))
+                                    "label", "rdcl", "bench"))
     ap.add_argument("sample", nargs="?", help="corpus/ocr sample id, e.g. sample30 (ablate: all)")
     ap.add_argument("--truth", type=int, default=0,
                     help="hand-counted text areas; defaults to scripts/region_truth.json")
@@ -1079,9 +1398,23 @@ def main():
     ap.add_argument("--out", default=os.path.join(tempfile.gettempdir(), "region_probe"),
                     help="overlay output directory")
     ap.add_argument("--json", help="sweep mode: also write the table here")
+    ap.add_argument("--bench-configs", nargs="+", metavar="NAME",
+                    help=f"bench mode: which named configurations to run, from "
+                         f"{sorted(BENCH_CONFIGS)} (default: all four)")
+    ap.add_argument("--transcribe", action="store_true",
+                    help="bench mode: re-OCR every proposed crop instead of scoring the joined "
+                         "fragment text. Slower, and the measurement the corpus is built from")
+    ap.add_argument("--iou", type=float, default=0.5,
+                    help="bench mode: IoU at which a proposal counts as covering a corpus "
+                         "region (default 0.5)")
+    ap.add_argument("--run-dir", default=None,
+                    help="bench mode: where to record the run (default "
+                         "corpus/runs/<today>/region-grouping)")
+    ap.add_argument("--no-save", action="store_true",
+                    help="bench mode: print the tables but do not write the run into the corpus")
     args = ap.parse_args()
 
-    if args.mode not in ("ablate", "waist", "label", "rdcl") and not args.sample:
+    if args.mode not in ("ablate", "waist", "label", "rdcl", "bench") and not args.sample:
         ap.error(f"{args.mode} needs a sample id")
     if not args.truth and args.sample:
         args.truth = load_truth().get(args.sample, {}).get("count", 0)
@@ -1089,7 +1422,7 @@ def main():
     reader_cache = {}
     {"sweep": cmd_sweep, "overlay": cmd_overlay, "direction": cmd_direction,
      "waist": cmd_waist, "ablate": cmd_ablate, "label": cmd_label,
-     "rdcl": cmd_rdcl}[args.mode](args, reader_cache)
+     "rdcl": cmd_rdcl, "bench": cmd_bench}[args.mode](args, reader_cache)
 
 
 if __name__ == "__main__":
