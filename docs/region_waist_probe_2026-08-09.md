@@ -309,14 +309,39 @@ Forty pages, each region's crop re-read with PP-OCRv6_medium
 |---|---|---|---|---|---|---|---|---|
 | production | 282 | 34 | 17 | 2 | 87 | 0.591 | 0.953 | **0.928** |
 | threshold | 339 | 21 | 5 | 5 | 30 | 0.512 | 0.954 | **0.928** |
-| geometry | 321 | 12 | 11 | 5 | 60 | 0.557 | 0.948 | **0.928** |
-| proposed | 364 | 5 | 2 | 7 | 17 | 0.495 | 0.949 | **0.928** |
+| geometry | 313 | 14 | 11 | 3 | 58 | 0.564 | 0.953 | **0.928** |
+| proposed | 356 | 5 | 2 | 5 | 15 | 0.502 | 0.954 | **0.928** |
 
-**Character recall is identical across all four.** 29 of 40 pages are byte-identical in text; of
-the 11 that move, 7 gain recall and 2 lose it. So the regrouping costs nothing in characters while
-taking mergers 17 → 2 — which is the deploy gate, and it passes. `cover` is agreement with the
-*existing* boxes and necessarily falls when a configuration splits more; it measures how much of
-the corpus a deploy invalidates, not quality.
+**Character recall is identical across all four**, and `proposed` matches production's precision
+and F1 while cutting mergers 17 → 2 and count error 34 → 5. So the regrouping costs nothing in
+characters — which is the deploy gate, and it passes. `cover` is agreement with the *existing*
+boxes and necessarily falls when a configuration splits more; it measures how much of the corpus a
+deploy invalidates, not quality.
+
+### The veto had to learn what a gap is
+
+The first version of the clearance veto split two pages mid-sentence — `sample9` r13
+(`別に` + `恋バナじゃないですッ！`) and `sample27` r10 (`ご飯` + `できたよ`) — sending the
+translator a fragment with no verb. Both pairs are parallel columns of one sentence whose *boxes
+overlap*, so `_nearest_points` collapsed to a single point and there was no segment to measure.
+The veto measured anyway and got the clearance at that one point: 27.4px and 34.4px against a
+1-character budget of 74px and 37px. That is not a waist, it is how close the overlap centre sits
+to the outline — and inside a tight balloon every column is within a character of the edge.
+
+`_should_merge`'s first rule (`x_overlap > 0 and y_overlap > 0`) is not a proximity judgement; it
+means *one block*. The veto now declines to speak there. Exempting *any* intersection went too far
+and cost a merger on `sample9`, where two fragments in different balloons clip corners; the
+discriminator is share of the shorter side, ≥50% on either axis:
+
+| pair | overlap share | verdict |
+|---|---|---|
+| `sample9` r13, two columns of one sentence | 100% | one block, no veto |
+| `sample27` r10, two columns of one sentence | 97% | one block, no veto |
+| `sample9` groups 12/14, two balloons | 10% | corner clip, veto applies |
+
+Mergers held at 2, splits 7 → 5, cost 17 → 15. Every remaining split is at a sentence or utterance
+boundary. It also removed most of the crop-duplication on `sample10` (precision 0.791 → 0.921)
+without touching `crop_for_region`: overlapping *regions* were what made the padded crops overlap.
 
 ### A negative result worth not repeating: crop padding
 

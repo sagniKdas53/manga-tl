@@ -532,12 +532,16 @@ def crop_for_region(img, bbox, pad=10):
     to clip glyph edges, and the cloud VLMs see the crop with no page context. Production does not
     pad at all (handlers/ocr.py:686 uses pad=0) — this is a corpus/benchmark concern only.
 
-    Do not add sibling-aware clipping here without re-reading this. Stopping the margin reaching
-    into the next region is a real defect — on sample10's countdown, four ~25px lines whose boxes
-    already overlap, the pad pulls each neighbour wholly into the crop and the same digits are
-    transcribed two and three times (character precision 0.791 against 0.916 with it clipped).
-    But five variants were measured on 2026-08-09 and **every one that clipped cost more recall
-    than it bought precision**, on `production` boxes as well as split ones:
+    Do not add sibling-aware clipping here without re-reading this. It looks like the fix for
+    duplicated text — on sample10's countdown the margin pulled each neighbouring line into the
+    crop and the same digits came back two and three times, precision 0.791. But that page was
+    mostly showing a bug *upstream*: the clearance veto was splitting overlapping timer lines into
+    separate regions, and overlapping regions is what made the crops overlap. Fixing the veto took
+    the same page to 0.921 with nothing changed here (see fragment_grouping._boxes_overlap).
+
+    What remains is small, and five ways of clipping the margin were measured on 2026-08-09:
+    **every one cost more recall than it bought precision**, on `production` boxes as well as
+    split ones. Numbers below predate the veto fix, so the precision column overstates the prize:
 
         A  pad 10, no clipping (this)          P 0.937  R 0.919
         B  clip at the midpoint to a sibling   P 0.953  R 0.845
@@ -548,8 +552,8 @@ def crop_for_region(img, bbox, pad=10):
     D and E are the sound versions and still lose recall, because a region whose box genuinely
     overlaps its neighbour's cannot be padded without either duplicating text or dropping it —
     the two cases have the same geometry and no threshold separates them. Recall is the gate, so
-    A wins. A fix has to work on the *text* (drop characters the neighbouring crop also produced)
-    rather than on the box. See docs/region_waist_probe_2026-08-09.md.
+    A wins. If the residue ever matters, work on the *text* (drop characters the neighbouring crop
+    also produced) rather than on the box. See docs/region_waist_probe_2026-08-09.md.
     """
     x, y, w, h = bbox
     px, py = max(0, x - pad), max(0, y - pad)
