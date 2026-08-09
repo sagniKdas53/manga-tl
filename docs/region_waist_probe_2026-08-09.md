@@ -21,6 +21,21 @@ Pairs are labelled same/cross-balloon from the merge grouping at `0.35`, but **o
 that grouping reproduces the hand count** — `sample1`, `sample3`, `sample30`. 129 pairs, 72 same,
 57 cross. Chance error rate 0.442.
 
+> **Final, 2026-08-09 (latest).** `sample9`, `sample23` and `sample27` were re-annotated by hand.
+> The corrected labels **overturn the pooled claim**: page-wide the waist now *loses* to text
+> distance, 0.381 against 0.202. But at the level the gate actually operates — the individual YOLO
+> bubble — the picture is sharp and shippable: **on every bubble whose mask is genuinely pinched
+> (solidity < 0.90) the waist separates balloons with zero errors, 8 bubbles out of 8.** Above that
+> it is unreliable and should not fire. Read "The bubble-level result" at the end; it supersedes
+> both sections below.
+
+> **Revised 2026-08-09 (later), on hand annotations.** The first pass below used labels derived
+> from the algorithm's own output, which only works on pages where it is already right — three easy
+> ones. With hand-annotated balloon partitions on six pages the finding **holds but narrows**: the
+> waist wins on 4 of 5 scorable pages and is *perfect* on both fused-balloon pages, but it **loses
+> badly on `sample27`**. See "What the hand labels changed" at the end. Read that section before
+> acting on the numbers immediately below.
+
 ## The numbers
 
 | signal | best error | best cut | same-balloon range | cross-balloon range |
@@ -98,10 +113,140 @@ annotated boxes.
 2. Extract the `group_fragments` seam with the golden-equivalence test (zero behaviour change).
 3. Implement the waist gate behind an off-by-default flag and re-run `ablate`.
 
+---
+
+## What the hand labels changed (2026-08-09, later)
+
+Balloon partitions were annotated by hand for all seven pages (`corpus/ocr/_region_probe/`, click-to-group
+via `label` mode). Six are usable. Per page:
+
+| sample | same | cross | chance | gap err | **waist err** | waist cut | |
+|---|---|---|---|---|---|---|---|
+| `sample3` | 43 | 35 | 0.449 | 0.192 | **0.000** | 1.393 | waist wins |
+| `sample30` | 19 | 13 | 0.406 | 0.156 | **0.000** | 0.979 | waist wins |
+| `sample9` | 120 | 20 | 0.143 | 0.121 | **0.071** | 0.967 | waist wins — but see below |
+| `sample16` | 32 | 17 | 0.347 | 0.286 | **0.245** | 0.741 | waist wins, both poor |
+| `sample27` | 18 | 21 | 0.462 | **0.077** | 0.308 | 1.854 | **waist loses** |
+| `sample1` | 19 | 0 | — | — | — | — | one class only |
+
+Pooled: gap 0.289, waist 0.171, waistC 0.188, against a chance rate of **0.297**.
+
+**Three things to take from this.**
+
+1. **The waist is perfect on exactly the pages that have the bug.** `sample3` and `sample30` are the
+   fused-touching-balloon pages — BUG-2 itself — and on both the waist separates the classes with
+   **zero errors**. The mechanism is real and it is precisely targeted.
+
+2. **`gap/fs` pooled is 0.289 against a chance rate of 0.297.** Page-wide, the signal the merge
+   currently runs on is **no better than guessing "everything is one balloon"**. That is a stronger
+   statement than the first pass made, and it is the real indictment of tuning `threshold_ratio`.
+
+3. **`sample27` reverses the result and must not be explained away.** There, gap gets 0.077 and the
+   waist 0.308. That page is the *over-splitting* one, and its panel-2 shout is a borderless blob
+   where YOLO drew a bubble around only half the text — so the mask is not a balloon outline and its
+   clearance means nothing. **The waist is only as good as the mask.** Any gate built on it needs an
+   applicability condition, and it should be a *veto* (able to block a merge, never to force one)
+   so that a bad mask degrades toward current behaviour instead of inventing splits.
+
+**Do not pool these numbers.** `sample9` contributes 120 same-pairs against 20 cross — it dominates
+any pooled figure while having the least balanced, least trustworthy labels on the page set.
+
+### Two annotation defects to fix before the next round
+
+- **`sample23` is unusable.** The annotation covers 52 fragments; the page has 61. The loader's
+  staleness guard rejects it. Re-annotate. It is also the one page with zero YOLO bubbles, so it can
+  never contribute to the waist experiment anyway — its value is to the orientation work (BUG-6).
+- **`sample9`'s annotation and its hand count contradict each other** — 11 groups against a hand
+  count of 18, and *fewer* groups than the 15 regions the current buggy algorithm produces. One of
+  the two is wrong. Until that is resolved, `sample9`'s 0.071 should not be quoted.
+- Note also that the two duplicate annotations (`sample1`, `sample3`) are identical **including the
+  arbitrary order of group IDs**, so they are not independent annotations and provide no
+  inter-annotator agreement figure.
+
+---
+
+## The bubble-level result (2026-08-09, final)
+
+`sample9`, `sample23`, `sample27` re-annotated by hand. `sample9` changed most: 11 groups → 16
+(against a hand count of 18), and that alone flipped the page from "waist wins 0.071" to "waist
+loses 0.364". **The earlier 1.6% figure was an artifact of bad labels and is withdrawn.**
+
+Per page, on corrected labels:
+
+| sample | gap err | waist err | |
+|---|---|---|---|
+| `sample3` | 0.192 | **0.000** | waist wins |
+| `sample30` | 0.156 | **0.000** | waist wins |
+| `sample16` | 0.286 | **0.245** | waist wins, both poor |
+| `sample9` | **0.143** | 0.364 | waist loses |
+| `sample27` | **0.077** | 0.308 | waist loses |
+
+Pooled: gap 0.202, waist 0.381, chance 0.473. **Page-wide, the waist is not a replacement for
+distance.** That claim is dead.
+
+### But the gate does not operate page-wide
+
+It operates per bubble. Scored per bubble, and bucketed by **mask solidity** (polygon area ÷ convex
+hull area — a fused pair of balloons is pinched and non-convex; a single balloon is nearly convex):
+
+| solidity | bubbles | mean gap err | **mean waist err** |
+|---|---|---|---|
+| < 0.85 — strongly pinched | 7 | 0.144 | **0.000** |
+| 0.85 – 0.90 | 1 | 0.000 | **0.000** |
+| 0.90 – 0.95 | 5 | 0.107 | 0.120 |
+| ≥ 0.95 — convex | 2 | 0.062 | 0.317 |
+
+**Zero errors on all 8 bubbles below 0.90**, spanning `sample3` (×4), `sample30` (×3) and `sample9`
+(×1). The degradation above it is *monotone* — 0.000 → 0.120 → 0.317 — which is what a real
+mechanism looks like rather than a fitted cut. Two bubbles just above the line (`sample16` at 0.911
+and 0.912) score 0.000 and 0.067, so anywhere in **0.90–0.92** works on this data; the exact value
+is not established by 15 bubbles and should not be treated as a constant yet.
+
+Solidity is also a usable fusion detector on its own: **9 of 12** bubbles below 0.90 genuinely hold
+more than one balloon, against **7 of 21** above it.
+
+That is an applicability condition computable from the mask alone, with no labels, before any
+merge decision — and it is principled rather than fitted: a bubble containing two touching balloons
+is *non-convex by construction*, which is the same geometry the waist measures.
+
+### The rule this yields
+
+```
+if bubble_mask_solidity < 0.90:      # this blob is pinched -> probably >1 balloon
+    veto merges whose waist/fs_pair < ~1.0        # never force a merge, only block one
+else:
+    leave today's distance behaviour untouched
+```
+
+A veto, not a merger: where the mask is poor the gate simply does not fire and behaviour degrades
+to what ships today. That is what makes `sample27` safe — its borderless shout sits at solidity
+0.958 and would be skipped entirely.
+
+### What this does not establish
+
+- **15 scorable bubbles, 8 below the cut, from 3 pages.** Small. The 0.90–0.92 boundary is read off
+  this data and wants confirmation before it becomes a constant.
+- **The rule is deliberately conservative and leaves the single biggest fused bubble unfixed.**
+  `sample9` bubble 0 holds 16 fragments across multiple balloons at solidity **0.977** — genuinely
+  fused but not pinched, so the rule skips it, and it alone is 120 of that page's 140 scored pairs.
+  Skipping is the right failure direction (no change, rather than a wrong split), but it means the
+  waist gate does **not** address most of `sample9`. Whatever fixes that bubble is a different
+  mechanism — most likely the alignment and size gates.
+- **Near-convex fused bubbles are the majority case.** 7 of 21 bubbles above 0.90 are truly fused.
+  The gate as specified will never fire on them.
+- **Nothing here has been run through region counts yet.** Separation of labelled pairs is not the
+  same as better region proposals; `ablate` is what closes that gap, and it needs the gate
+  implemented first.
+
 ## Reproduce
 
 ```bash
+.venv/bin/python scripts/region_proposal_probe.py label            # annotation pages, all samples
 .venv/bin/python scripts/region_proposal_probe.py waist            # the experiment
 .venv/bin/python scripts/region_proposal_probe.py ablate           # metric baseline
 .venv/bin/python scripts/region_proposal_probe.py sweep sample30   # reproduction check
 ```
+
+`waist` reads `corpus/ocr/_region_probe/` by default, keying each file on the `sample_id` inside it
+rather than its filename. A sample annotated twice must induce the same partition or it is dropped —
+a disagreement between annotators is missing ground truth, not a tie to break.

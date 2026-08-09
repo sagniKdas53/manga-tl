@@ -3,13 +3,21 @@
 region_proposal_probe.py — the tooling behind docs/region_threshold_validation_2026-08-08.md.
 
 Reproduces the region proposals a page would get under a given merge configuration, without
-running any engine and without writing to the corpus. Three modes:
+running any engine. Six modes:
 
     sweep       vary the *in-bubble* split threshold (ocr.py:605) and count regions
     overlay     draw one configuration's regions on the page so a count can be checked
                 against the art instead of against another number
     direction   merge the same fragments as vertical (rtl) and horizontal (ltr) text, to
                 separate a threshold problem from an orientation one
+    label       emit a click-to-group annotation page per sample, producing the balloon
+                partition of the OCR fragments that everything below scores against
+    waist       compare the mask-clearance signal against the text-gap signal at separating
+                same-balloon from cross-balloon fragment pairs
+    ablate      run the configuration matrix over every annotated page and report the metrics
+
+The YOLO + PaddleOCR stage is cached to disk (~19s -> ~0.5s per page); the fragment-to-bubble
+assignment is deliberately NOT cached, since that rule is itself a change candidate.
 
 Production applies two different thresholds on two different paths, and conflating them is the
 easy mistake here:
@@ -50,6 +58,9 @@ os.environ.setdefault("FLAGS_use_mkldnn", "0")
 
 DEFAULT_CORPUS = os.path.join(REPO_ROOT, "corpus", "ocr")
 TRUTH_PATH = os.path.join(SCRIPT_DIR, "region_truth.json")
+# Balloon-partition annotations. Versioned in the corpus submodule on purpose: unlike overlays,
+# these are ground truth and are expensive to reproduce.
+DEFAULT_LABELS = os.path.join(DEFAULT_CORPUS, "_region_probe")
 SWEEP_VALUES = (0.15, 0.25, 0.35, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 # The value merge_ocr_regions falls back to when given no threshold. Note docker-compose.yml
@@ -531,17 +542,75 @@ def cmd_label(args, reader_cache):
     print(f"  .venv/bin/python scripts/region_proposal_probe.py waist --labels {args.out}")
 
 
-def load_hand_labels(labels_dir):
-    """{sample: [group_id per fragment]} from the saved annotation files. -1 = excluded."""
-    out = {}
+def _same_partition(a, b):
+    """Do two label vectors induce the same grouping? Group IDs need not match."""
+    if len(a) != len(b):
+        return False
+    n = len(a)
+    return all(((a[i] == a[j] and a[i] >= 0) == (b[i] == b[j] and b[i] >= 0))
+               for i in range(n) for j in range(i + 1, n))
+
+
+def _partition_agreement(a, b):
+    """(agreeing pairs, total pairs) treating each vector as a partition. Group IDs need not match."""
+    n = len(a)
+    agree = total = 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            total += 1
+            if (a[i] == a[j] and a[i] >= 0) == (b[i] == b[j] and b[i] >= 0):
+                agree += 1
+    return agree, total
+
+
+def load_hand_labels(labels_dir, quiet=False):
+    """{sample: [group_id per fragment]} from saved annotation files. -1 = excluded.
+
+    Keyed on the `sample_id` INSIDE each file, not on its filename, because annotation tools save
+    under whatever name they like.
+
+    Precedence when a sample is annotated more than once: a file named exactly
+    `<sample_id>.groups.json` is authoritative and any other file for that sample is treated as a
+    second opinion. Second opinions are never silently merged -- they are reported as an agreement
+    figure, which is the only inter-annotator signal available here. Two *authoritative* files that
+    disagree is unresolvable, so the sample is dropped rather than arbitrated.
+    """
+    primary, secondary = {}, {}
     if not labels_dir or not os.path.isdir(labels_dir):
-        return out
+        return {}
     for name in sorted(os.listdir(labels_dir)):
-        if not name.endswith(".groups.json"):
+        if not name.endswith(".json"):
             continue
         with open(os.path.join(labels_dir, name)) as fh:
             payload = json.load(fh)
-        out[payload["sample_id"]] = payload["groups"]
+        sid, groups = payload.get("sample_id"), payload.get("groups")
+        if not sid or groups is None:
+            continue
+        bucket = primary if name == f"{sid}.groups.json" else secondary
+        if sid in bucket and bucket is primary and not _same_partition(bucket[sid][1], groups):
+            print(f"!!! {sid}: two authoritative annotations disagree. Dropping the sample.")
+            bucket[sid] = (name, None)
+            continue
+        bucket.setdefault(sid, (name, groups))
+
+    out = {}
+    for sid in sorted(set(primary) | set(secondary), key=lambda s: (len(s), s)):
+        pname, pgroups = primary.get(sid, (None, None))
+        sname, sgroups = secondary.get(sid, (None, None))
+        chosen = pgroups if pgroups is not None else sgroups
+        if chosen is None:
+            continue
+        out[sid] = chosen
+        if quiet or pgroups is None or sgroups is None:
+            continue
+        if len(pgroups) != len(sgroups):
+            print(f"  {sid}: second opinion ({sname}) covers {len(sgroups)} fragments, not "
+                  f"{len(pgroups)} — ignored as stale.")
+        else:
+            ag, tot = _partition_agreement(pgroups, sgroups)
+            if ag < tot:
+                print(f"  {sid}: annotators agree on {ag}/{tot} pairs ({100 * ag / tot:.1f}%). "
+                      f"Using {pname}.")
     return out
 
 
@@ -562,9 +631,12 @@ def cmd_waist(args, reader_cache):
     truth_all = load_truth()
     samples = [args.sample] if args.sample else sorted(truth_all, key=lambda s: int(s[6:]))
 
-    pooled = {"gap": {"same": [], "cross": []}, "waist": {"same": [], "cross": []},
-              "waist_c": {"same": [], "cross": []}}
+    def empty():
+        return {"gap": {"same": [], "cross": []}, "waist": {"same": [], "cross": []},
+                "waist_c": {"same": [], "cross": []}}
 
+    pooled = empty()
+    per_page = {}
     hand = load_hand_labels(args.labels)
 
     for sample in samples:
@@ -660,12 +732,36 @@ def cmd_waist(args, reader_cache):
 
                     if usable:
                         k = "same" if same else "cross"
-                        pooled["gap"][k].append(gap / fs)
-                        pooled["waist"][k].append(waist / fs)
-                        pooled["waist_c"][k].append(waist_c / fs)
+                        page_pool = per_page.setdefault(sample, empty())
+                        for store in (pooled, page_pool):
+                            store["gap"][k].append(gap / fs)
+                            store["waist"][k].append(waist / fs)
+                            store["waist_c"][k].append(waist_c / fs)
 
         if not any_pairs:
             print("    no bubble holds 2+ fragments — nothing to compare on this page")
+
+    # Per page first. Pooling across pages averages away the only thing worth knowing here --
+    # WHICH pages the mask signal works on -- and an imbalanced page can dominate the pool.
+    print("\n" + "=" * 78)
+    print("PER-PAGE SEPARATION")
+    print("=" * 78)
+    print(f"  {'sample':<10} {'same':>5} {'cross':>6} {'chance':>7} {'gap err':>8} "
+          f"{'waist err':>10} {'waist cut':>10}  verdict")
+    for sample in sorted(per_page, key=lambda s: int(s[6:])):
+        p = per_page[sample]
+        ns, nc = len(p["gap"]["same"]), len(p["gap"]["cross"])
+        if not ns or not nc:
+            print(f"  {sample:<10} {ns:>5} {nc:>6}   — only one class present, cannot score")
+            continue
+        g = _best_separation(p["gap"]["same"], p["gap"]["cross"], same_is_low=True)
+        wv = _best_separation(p["waist"]["same"], p["waist"]["cross"], same_is_low=False)
+        if g is None or wv is None:
+            continue
+        verdict = "waist WINS" if wv[0] < g[0] - 0.02 else (
+            "waist LOSES" if wv[0] > g[0] + 0.02 else "tie")
+        print(f"  {sample:<10} {ns:>5} {nc:>6} {min(ns, nc) / (ns + nc):>7.3f} {g[0]:>8.3f} "
+              f"{wv[0]:>10.3f} {wv[1]:>10.3f}  {verdict}")
 
     print("\n" + "=" * 78)
     print("POOLED SEPARATION (labelled pages only)")
@@ -825,9 +921,10 @@ def main():
     ap.add_argument("--direction", default="rtl", choices=("rtl", "ltr"))
     ap.add_argument("--in-threshold", type=float, default=0.35,
                     help="in-bubble split threshold (overlay mode)")
-    ap.add_argument("--labels", default=None,
-                    help="waist mode: directory of <sample>.groups.json files written by 'label' "
-                         "mode. Hand labels override the derived ones, per sample")
+    ap.add_argument("--labels", default=DEFAULT_LABELS,
+                    help=f"directory of annotation JSON written by 'label' mode (default "
+                         f"{os.path.relpath(DEFAULT_LABELS, REPO_ROOT)}). Hand labels override "
+                         f"the derived ones, per sample")
     ap.add_argument("--label-threshold", type=float, default=0.35,
                     help="waist mode: threshold whose grouping labels pairs same/cross-balloon. "
                          "Only trusted on pages where it reproduces the hand count (default 0.35)")
