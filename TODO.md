@@ -90,6 +90,15 @@
   §D3/§D7 "Status" notes. Real inpainting (D1), the 72px absolute cap, fill-ratio targeting, and
   everything else in the phased plan are still open.
 
+  **Update 2026-08-10 (later same day):** fixing D7 made text bigger, which surfaced two more bugs
+  while checking the result — `fitText.ts` (the browser twin of `fit_text_in_box_py`) had the same
+  `w/3` cap, silently capping every PNG/ZIP export regardless of what the live reader showed
+  (**D12** is the export canvas's separate wrong-font bug found alongside it: `fillText` never
+  triggers a web font load, so an export run before the page's own DOM text loads "Comic Neue"
+  falls back to `sans-serif`); and `render.py` centred/clamped drawn text against a different box
+  than the one `fit_text_in_box_py` had fit it to, invisible at small sizes but not once text got
+  bigger (**D13**). All three fixed on both branches — see §D12/§D13.
+
   - See Example 1:
     - Original: <br/><img src="examples/sample2/source/original.jpg" alt="original" width="600"/>
     - mangatranslator.ai: <br/><img src="examples/sample2/reference/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>

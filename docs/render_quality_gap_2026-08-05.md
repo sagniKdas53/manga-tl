@@ -297,6 +297,13 @@ overflows the box width or breaks a word, so the pre-cap was redundant with a re
 down and only ever prevented the search from trying sizes that check would have accepted anyway.
 The 72px absolute cap, the fill-ratio target, and dictionary hyphenation are all still open.
 
+**Update:** `fitText.ts` (the browser-side twin of `fit_text_in_box_py`, used by both export
+handlers and by the live reader whenever `element.autoSize` is set) had the identical `maxWidth /
+3` term and was fixed the same way. The live reader mostly avoided the bug in practice — when
+`autoSize` is unset it just displays the `element.size` the backend already computed — but
+`handleExportPng` and `handleExportZip` call `fitTextInBox` unconditionally, so every exported
+PNG/ZIP was silently capped at the old limit regardless of what the on-screen reader showed.
+
 ### D8 — The two renderers disagree.
 
 `page-N-export.png` is the browser canvas (`Reader.tsx:2258`). `page-N-rendered.png` is PIL in
@@ -364,6 +371,39 @@ shape, ours is "WAIT." at 10px in the middle of it.
 This is a genuine feature gap, not a bug, and it is the most visible remaining difference on
 pages where everything else is right. It needs a display-font path with stroke, fill, and
 rotation driven by the source SFX's own geometry and colour.
+
+### D12 — Canvas exports silently fall back to the wrong font.
+
+`Reader.tsx`'s `handleExportPng` and `handleExportZip` set `ctx.font = ...\"Comic Neue\"...` and
+call `fillText` with no check that the face is actually loaded. Canvas text does not trigger a
+web font load the way DOM text does — it just substitutes the fallback (`sans-serif`) if the
+requested face isn't already in `document.fonts` at the moment `fillText` runs. The live reader
+never hits this because it renders text as real DOM nodes (`foreignObject` + `div`), so it always
+rides the browser's normal `@font-face` swap; a freshly built export canvas, especially moments
+after opening a page, has no such guarantee. `grep -rn "document.fonts"` returned nothing anywhere
+in the frontend before this was fixed.
+
+**Fix:** `ensureFontsLoaded` in `fitText.ts` awaits `document.fonts.load(...)` for every distinct
+font/weight/style combination about to be drawn, before either export handler's draw loop.
+No-ops (does not throw) where the Font Loading API isn't available, e.g. in tests.
+
+**Status: fixed** (`ocr-pre-grouping-baseline` and `main`).
+
+### D13 — `render.py` fit and draw geometry disagreed by a few pixels.
+
+`fit_text_in_box_py`'s polygon path computes each line's horizontal span assuming the text is
+centred within an inset box (`ex+4, ey+4, (ew-8)*0.95, (eh-8)*0.95)` — that's what it's passed as
+`box_x`/`box_y`/`max_width`/`max_height`. `render_image_core`'s draw loop instead centred and
+clamped against the raw outer box (`ex, ey, ew, eh`). The few-pixel mismatch was invisible at the
+font sizes the D7 bug produced; once D7 was fixed and text got bigger, a line fit for a bubble's
+wide middle could land a few pixels off from where the fit assumed it would, right where an oval
+mask had already narrowed — visible as text spilling outside the white area onto the art behind
+it (`sample1`'s merged bubble, once D7 stopped undersizing the text enough to hide it).
+
+**Fix:** introduced `text_box_x/y/w/h` as the single source of truth for both the `fit_text_in_box_py`
+call and the draw geometry (centring and the horizontal clamp), so they can no longer drift apart.
+
+**Status: fixed** (`ocr-pre-grouping-baseline` worker `5c2f04f`, `main` worker `6fbf4d3`).
 
 ---
 
