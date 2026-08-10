@@ -202,6 +202,18 @@ vertical column stroke-by-stroke and sets the English in free space over untouch
 (D1) and set the translation over the recovered art with a stroke (D9). If inpainting is
 unavailable, leaving the source text visible is strictly better than destroying the panel.
 
+**Status (2026-08-10): partially fixed, on `ocr-pre-grouping-baseline` and `main` (worker
+`a5ac096`/`232f6ec`).** Independently re-confirmed via `sample21` (the picture-frame slab) while
+validating the pre-grouping baseline — this bug predates the region-grouping work and hit both
+worker histories identically. `detect_background_color`/`_poly` now return `None` instead of
+always returning a colour, gated on a per-channel median-absolute-deviation spread check
+(`BACKGROUND_FILL_MAX_SPREAD`, default 20); `render_image_core` already skipped the fill when
+`backgroundColor` is falsy, so no renderer change was needed. This is the "if inpainting is
+unavailable, leaving the source text visible is strictly better" half of the fix — real glyph-mask
+inpainting (D1) is still not implemented, so a free-floating region over a *uniform* background
+(e.g. a plain wall) still gets a flat fill, correctly, but a region over a textured one now leaves
+the source art untouched underneath the new text rather than painting over it.
+
 ### D4 — Region merging is unconstrained connected components, and the merged mask is a convex hull.
 
 `merge_regions.py:110-146` builds an adjacency graph on pure bbox proximity — no bubble
@@ -274,6 +286,16 @@ no such treatment, and the reshape preserves area rather than targeting a fill r
 **Fix:** target a fill ratio (manga lettering typically fills 70–85% of the balloon interior),
 allow hyphenation with a real dictionary rather than per-character splitting, and let the
 search grow past the current `min(h/2, w/3, 72)` cap — 72px is small on a 6879px page.
+
+**Status (2026-08-10): the width cap is fixed, the rest of this item is not.** Independently
+re-confirmed via `sample1` against mangatranslator.ai (bubble-by-bubble: ours consistently smaller
+and narrower for the same balloon) while validating the pre-grouping baseline — predates the
+region-grouping work, hit both worker histories identically, fixed on both
+(`ocr-pre-grouping-baseline`/`main`, worker `a5ac096`/`232f6ec`). Dropped the `w/3` term from
+`max_start_size` entirely rather than raising it: `fits_clean` already rejects any size that
+overflows the box width or breaks a word, so the pre-cap was redundant with a real check further
+down and only ever prevented the search from trying sizes that check would have accepted anyway.
+The 72px absolute cap, the fill-ratio target, and dictionary hyphenation are all still open.
 
 ### D8 — The two renderers disagree.
 

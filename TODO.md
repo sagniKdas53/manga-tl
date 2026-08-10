@@ -82,6 +82,14 @@
   They also set type at literally 2× our size in the same balloon, and skip anything they
   aren't confident is dialogue.
 
+  **Update 2026-08-10:** D7 (font-size search pre-capped at `w/3`) and D3 (flat rectangle over
+  free-floating text) independently re-confirmed via `sample1`/`sample21` while validating
+  `ocr-pre-grouping-baseline` — both predate the region-grouping work. D7's width cap is dropped
+  and D3 now refuses to fill over a textured background (worker `a5ac096` on the baseline branch,
+  `232f6ec` on `main`) — see [render_quality_gap_2026-08-05.md](docs/render_quality_gap_2026-08-05.md)
+  §D3/§D7 "Status" notes. Real inpainting (D1), the 72px absolute cap, fill-ratio targeting, and
+  everything else in the phased plan are still open.
+
   - See Example 1:
     - Original: <br/><img src="examples/sample2/source/original.jpg" alt="original" width="600"/>
     - mangatranslator.ai: <br/><img src="examples/sample2/reference/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>
