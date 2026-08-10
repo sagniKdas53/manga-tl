@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fitTextInBox } from "../../utils/fitText";
+import { fitTextInBox, ensureFontsLoaded } from "../../utils/fitText";
 
 describe("fitTextInBox", () => {
   let originalCreateElement: typeof document.createElement;
@@ -188,5 +188,71 @@ describe("fitTextInBox sizing against the width of the box", () => {
     );
     expect(widest).toBeGreaterThan(49);
     expect(widest).toBeLessThanOrEqual(163);
+  });
+
+  it("grows past the old width-over-three cap in a narrow tall box", () => {
+    // D7 (docs/render_quality_gap_2026-08-05.md), same bug as render.py's fit_text_in_box_py:
+    // `maxWidth / 3` capped the search before it ever ran. sample1's `safe_text_w=145,
+    // safe_text_h=259` bubble capped the search at 48px under the old rule
+    // (`min(259/2, 145/3, 72)`) regardless of how short the text was; short text in the same box
+    // should now clear that.
+    const result = fitTextInBox(
+      "Big bro",
+      145,
+      259,
+      "Comic Neue",
+      16,
+      "rectangular",
+    );
+
+    expect(result.fontSize).toBeGreaterThan(48);
+    expect(result.overflow).toBe(false);
+    for (const line of result.lines) {
+      expect(line.length * result.fontSize * 0.5).toBeLessThanOrEqual(145);
+    }
+  });
+});
+
+describe("ensureFontsLoaded", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("requests one load per distinct font/weight/style combination", async () => {
+    const load = vi.fn().mockResolvedValue([]);
+    vi.stubGlobal("document", { ...document, fonts: { load } });
+
+    await ensureFontsLoaded([
+      { font: "Comic Neue", fontWeight: "bold", fontStyle: "normal" },
+      { font: "Comic Neue", fontWeight: "bold", fontStyle: "normal" }, // duplicate, one load only
+      { font: "Bangers", fontWeight: "bold", fontStyle: "normal" },
+      { font: "Comic Neue", fontWeight: "normal", fontStyle: "italic" },
+    ]);
+
+    expect(load).toHaveBeenCalledTimes(3);
+    expect(load).toHaveBeenCalledWith('bold 16px "Comic Neue"');
+    expect(load).toHaveBeenCalledWith('bold 16px "Bangers"');
+    expect(load).toHaveBeenCalledWith('normal italic 16px "Comic Neue"');
+  });
+
+  it("does not throw when the Font Loading API is unavailable (e.g. jsdom)", async () => {
+    vi.stubGlobal("document", { ...document, fonts: undefined });
+
+    await expect(
+      ensureFontsLoaded([{ font: "Comic Neue" }]),
+    ).resolves.toBeUndefined();
+  });
+
+  it("does not let one failed face block the others", async () => {
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce([]);
+    vi.stubGlobal("document", { ...document, fonts: { load } });
+
+    await expect(
+      ensureFontsLoaded([{ font: "Broken Font" }, { font: "Comic Neue" }]),
+    ).resolves.toBeUndefined();
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });

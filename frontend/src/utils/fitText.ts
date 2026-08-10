@@ -6,6 +6,45 @@ export interface FitResult {
 }
 
 /**
+ * Wait for every distinct font/weight/style combination an export is about to draw.
+ *
+ * Canvas `fillText` never triggers a web font load the way DOM text does -- it just silently
+ * substitutes the fallback if the requested face isn't already in `document.fonts` at the moment
+ * it's called. On-screen text is fine because some earlier DOM paint has almost always already
+ * triggered the `@font-face` load by the time the user does anything; a freshly built export
+ * canvas has no such guarantee, especially moments after opening a page. `document.fonts.load`
+ * requests the face explicitly and is a no-op if it's already loaded, so this is safe to call
+ * unconditionally before every canvas-based export.
+ */
+export const ensureFontsLoaded = async (
+  elements: Iterable<{
+    font?: string | null;
+    fontWeight?: string | null;
+    fontStyle?: string | null;
+  }>,
+): Promise<void> => {
+  // The CSS Font Loading API isn't implemented in every environment (jsdom, notably) -- fall
+  // back to the old always-fell-back-silently behaviour there rather than throwing.
+  if (typeof document === "undefined" || !document.fonts) return;
+
+  const specs = new Set<string>();
+  for (const el of elements) {
+    const style = (el.fontStyle || "normal").toLowerCase() === "italic" ? "italic " : "";
+    const weight = el.fontWeight || "bold";
+    const family = el.font || "Comic Neue";
+    specs.add(`${weight} ${style}16px "${family}"`);
+  }
+  await Promise.all(
+    [...specs].map((spec) =>
+      document.fonts.load(spec).catch(() => {
+        // A face that fails to load falls back the same way it always did; this is strictly
+        // best-effort and must never block the export.
+      }),
+    ),
+  );
+};
+
+/**
  * Keep a drawn line inside the box it belongs to.
  *
  * A line's centre comes from the shape it was wrapped to and its width from the glyphs, so an
@@ -434,11 +473,13 @@ export const fitTextInBox = (
     };
   };
 
-  const maxStartSize = Math.min(
-    Math.floor(maxHeight / 2),
-    Math.floor(maxWidth / 3),
-    72,
-  );
+  // D7 (docs/render_quality_gap_2026-08-05.md), same bug as render.py's fit_text_in_box_py:
+  // `maxWidth / 3` assumed roughly 3 characters per line and capped the search before it ever
+  // ran. `largestSizeWhere(true)` below already rejects any size that overflows the box or
+  // breaks a word, so the pre-cap added no safety -- it only ever foreclosed sizes the search
+  // would otherwise have accepted, hitting hardest on tall narrow boxes (vertical Japanese
+  // speech bubbles). Dropped the width term, matching the Python fix.
+  const maxStartSize = Math.min(Math.floor(maxHeight / 2), 72);
   const startSize = Math.max(maxStartSize, defaultFontSize);
 
   const minFontSize = 6;

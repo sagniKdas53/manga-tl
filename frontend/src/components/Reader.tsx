@@ -12,7 +12,7 @@ import type {
   Series,
 } from "../types";
 import { safeFetch, toSlug, formatCost } from "../utils";
-import { fitTextInBox, clampLineCenter } from "../utils/fitText";
+import { fitTextInBox, clampLineCenter, ensureFontsLoaded } from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
@@ -2253,6 +2253,11 @@ export const Reader: React.FC<ReaderProps> = ({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
+      // Canvas fillText never triggers a web font load itself -- without this, an export run
+      // before the page's own DOM text has already loaded "Comic Neue" silently falls back to
+      // sans-serif (see ensureFontsLoaded).
+      await ensureFontsLoaded(sortedLayers.flatMap((l) => l.elements));
+
       // Draw the base page image
       ctx.drawImage(img, 0, 0, W, H);
 
@@ -2461,6 +2466,9 @@ export const Reader: React.FC<ReaderProps> = ({
       const img = await loadOriginalImage(selectedPage.url, user.token);
       const W = imageDims.w;
       const H = imageDims.h;
+
+      // See ensureFontsLoaded: canvas fillText does not itself trigger a web font load.
+      await ensureFontsLoaded(layers.flatMap((l) => l.elements));
 
       const zip = new JSZip();
 
