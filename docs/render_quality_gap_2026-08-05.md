@@ -318,6 +318,38 @@ handlers and by the live reader whenever `element.autoSize` is set) had the iden
 `handleExportPng` and `handleExportZip` call `fitTextInBox` unconditionally, so every exported
 PNG/ZIP was silently capped at the old limit regardless of what the on-screen reader showed.
 
+**Status (2026-08-13): fixed in `render.py`** (worker `a9f5c30`), not yet mirrored into
+`fitText.ts` — see D8. Both remaining causes turned out to be measurable rather than a matter of
+taste, once `fit_text_in_box_py` was made to report *which* rule stopped the search (`limitedBy`
+in its return, values `size_cap | height | width | unbreakable_word | mask | none`). Over the
+40-page corpus, post-fix attribution: 123 `unbreakable_word` at median fill 0.43, 85 `height` at
+0.97, 57 `width` at 0.93, 51 `size_cap` at 0.60, 35 `mask` at 0.84.
+
++ **Hyphenation, not a fill-ratio target.** The `unbreakable_word` group is the underfill: one
+  word wider than the line holds the whole balloon at the size that word fits whole. pyphen
+  (Liang dictionaries, `left=2 right=3`, positions computed on the word's alphabetic core so
+  punctuation cannot buy an illegal break) supplies the break; `break_word_to_width` takes the
+  largest legal point that fits and carries the hyphen. Per-character splitting survives only for
+  boxes narrower than the shortest legal head, where the alternative is ink outside the region.
+  `broke_a_word` now reassembles the lines (a hyphen-terminated line joins the next without a
+  space) and compares against the input, so the rejection rule became "no *illegal* split" rather
+  than "no split".
++ **The 72px cap — and `max_height // 2`, which was worse.** One line at `h/2` with a 1.2
+  line-height fills exactly 60% of its box and nothing more; the `size_cap` group's median fill of
+  exactly 0.60 is that arithmetic showing up in the data. `max_start_size` is now the box height.
+  It is only a search *bound*: height, width, the word rule and the mask are all still checked per
+  candidate, so a generous bound costs bisection steps, not correctness.
+
+No fill-ratio target was needed in the end — with the two artificial ceilings gone, the ordinary
+"largest size that fits cleanly" search lands in the references' range on its own. Median fill
+0.591 → **0.866** (references 0.70–0.85), elements under 0.45 fill 126 → 66, median type 23 → 27px,
+mask escapes unchanged at 2.
+
+The cost is that larger type makes the remaining defects more legible: ink outside a *reshaped
+free box* 116 → 138 occurrences (D6's backend half — `freeTextBox` widening — untouched by this),
+and D10's junk regions and D16's tofu glyphs now print bigger. Neither is made more likely; both
+are on the list.
+
 ### D8 — The two renderers disagree.
 
 `page-N-export.png` is the browser canvas (`Reader.tsx:2258`). `page-N-rendered.png` is PIL in
@@ -603,10 +635,13 @@ loudly rather than printing a box.
 
 Order is by measured leverage on these 40 pages, not by section number.
 
-1. **Fill-ratio-targeted sizing** (D7 → Phase 2 item 12) and **largest-inscribed-rectangle text
-   box** (D6 → item 11). These are one piece of work — the fill target is meaningless against the
-   wrong box — and together they are the difference between "readable" and "looks like the
-   references" on every page in the corpus.
+1. ~~**Fill-ratio-targeted sizing** (D7 → Phase 2 item 12) and **largest-inscribed-rectangle text
+   box** (D6 → item 11).~~ **Done in `render.py`, 2026-08-12/13** (worker `4b7c7a4`, `a9f5c30`) —
+   see the status blocks under D6 and D7. Escapes 45 → 2, median fill 0.591 → 0.866. No fill-ratio
+   target was needed: hyphenation plus removing the `min(h/2, 72)` ceiling let the ordinary
+   largest-clean-fit search land in the references' range by itself. Two pieces of this remain
+   open: the mirror into `fitText.ts` (D8), and the backend's `freeTextBox` widening, which is
+   what the surviving "ink outside the box" cases are.
 2. **Gloss strip and junk-region gate** (D10 → Phase 0 item 6, Phase 4 item 18). Cheap, mechanical,
    removes 29 visible defects and ~80 stray typeset fragments.
 3. **Font fallback chain** (D16). Hours, and it removes a class of defect that reads as broken

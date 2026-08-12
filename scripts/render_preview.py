@@ -57,6 +57,14 @@ def render_page(page, branch="main", centre_only=False):
             ex, ey = int(el.get("x") or 0), int(el.get("y") or 0)
             ew, eh = int(el.get("maxWidth") or 50), int(el.get("maxHeight") or 50)
             box_shape = el.get("boxShape") or "rectangular"
+
+            # render_image_core uppercases speech, and an ALL-CAPS line is wider than the same
+            # words in sentence case -- so a preview that skips this measures a different string
+            # than the renderer sets (D9 records the rule itself as inconsistent, but a mirror
+            # mirrors what is there).
+            region_type = el.get("regionType")
+            if region_type == "speech" or (region_type is None and box_shape == "elliptical"):
+                text = text.upper()
             bg = el.get("backgroundColor")
             fg = el.get("textColor") or "#000000"
             bold = "bold" in (el.get("fontWeight") or "").lower()

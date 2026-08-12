@@ -177,6 +177,26 @@ move without hyphenation, because the binding constraint is a single word that w
 the search ceiling. Measure with `scripts/text_fit_probe.py`; look at pages with
 `scripts/render_preview.py`.
 
+**Progress 2026-08-13: D7's half is fixed too** (worker `a9f5c30`). Two causes, found by making
+the fitter report which rule stopped it (`limitedBy`) instead of inferring it from outside:
+
++ *one word that will not fit the width.* The search rejects any layout that splits a word, so a
+  single long word held the whole balloon down to the size at which that word fit whole.
+  Hyphenation (pyphen, Liang dictionaries, minimums 2/3) breaks it at a legal point and carries
+  the hyphen. The contract is no longer "never split a word" but "never split a word *illegally*"
+  — the lines must reassemble into exactly the input.
++ *the size cap*, `min(max_height // 2, 72)`. 72 is an absolute pixel count applied to pages from
+  832px to 6905px wide; and one line at `h/2` with a 1.2 line-height fills exactly 60% of the box
+  and no more, which is why every element this cap bound sat at a median fill of exactly 0.60.
+
+Median fill 0.591 -> **0.866**; elements under 0.45 fill 126 -> 66; median type 23px -> 27px;
+escapes unchanged at 2. `sample1` is now at rough mangatranslator.ai parity. The honest cost is
+that bigger type amplifies the defects that remain: ink outside a *reshaped free box* 116 -> 138
+(the backend's `freeTextBox` widening, a separate defect), and D10's junk regions and D16's tofu
+glyphs are now drawn larger. Neither is made more likely by this — only more visible.
+
+Still unmirrored into `fitText.ts` (D8).
+
 ### Two corrections to what was filed here on 2026-08-12
 
 + **The unfilled balloons are not a D3 threshold bug.** 21 regions across the corpus get no fill,
