@@ -214,6 +214,20 @@ inpainting (D1) is still not implemented, so a free-floating region over a *unif
 (e.g. a plain wall) still gets a flat fill, correctly, but a region over a textured one now leaves
 the source art untouched underneath the new text rather than painting over it.
 
+**Status (2026-08-12): the visible consequence is now measured, and it is not a threshold to
+tune.** Across the 40-page corpus 21 regions get no fill, 7 of them inside a properly detected
+bubble, which means the Japanese stays visible under the English. `sample28` is the worst page —
+five of nine. It is tempting to read that as the spread check over-firing on the very ink the
+fill exists to cover, and that reading is **wrong**: measured over the polygon interiors, the
+declined balloons carry *less* ink than the filled ones (5-8% of pixels against 7-11%). What
+blows the spread is a vertical colour **gradient** — MAD 24-88 against the threshold of 20, with a
+44-74 top-to-bottom drift. There is no single colour that represents those regions, so raising
+`BACKGROUND_FILL_MAX_SPREAD` would paint a flat swatch over every gradient balloon on the page,
+which is the exact defect this check was added to stop. The check is correct and the capability is
+missing: gradient-aware fill (repaint the sampled gradient per scanline) or real inpainting. **This
+half of D3 therefore folds into D1** and should not be worked as a D3 tuning item. Confirmed not
+recoverable by QA — see §8.
+
 ### D4 — Region merging is unconstrained connected components, and the merged mask is a convex hull.
 
 `merge_regions.py:110-146` builds an adjacency graph on pure bbox proximity — no bubble
@@ -604,3 +618,68 @@ Order is by measured leverage on these 40 pages, not by section number.
 
 Re-run the whole corpus after each and diff `corpus/exports/main/` — the region counts, the
 width-starved count, and the gloss count above are the regression bar.
+
+## 8. The QA control (2026-08-12)
+
+§7's run was **single-pass, QA off**, deliberately. That leaves one obvious objection open — that
+the QA phase would have caught the worst of it — so two pages were re-run with QA enabled and
+diffed against their own no-QA output. Artifacts: `corpus/withQA/` (note the page numbers there do
+*not* follow the sample numbers; `page-1` is `sample28`, `page-2` is `sample10`).
+
+Same `imageId` in both runs, same branch, `PaddleOCR(PP-OCRv6_medium_rec)` +
+`deepseek/deepseek-v4-pro` in both, $0.0035 and $0.0031 per page.
+
+### QA rewrites text and touches nothing else
+
+All 25 elements match their no-QA counterparts at **IoU 1.00**, and every `backgroundColor` is
+byte-identical. Regions with no fill: 5 -> 5 on `sample28`, 4 -> 4 on `sample10`. So none of the
+geometry defects in §7 are recoverable by QA — not the box, not the fill, not the region split.
+Everything in D6/D7/D14 has to be fixed in the pipeline or not at all.
+
+### What it did buy, and what it cost
+
+Fixed, on two pages:
+
+- a pronoun error: "I always liked driftwood" -> "*you* always liked things that washed ashore";
+- a garbled number sequence: `72797... 172799. 172798 172800` -> `172,800... 172,799, 172,798,
+  172,797`;
+- one D10 gloss: `Eh (HMM?)` -> `Huh?`;
+- one watermark leak: `@mer It's fine.` -> `Very well.`
+
+Cost, on the same two pages:
+
+- `Mumble mumble...` -> `Say your complaints.` — invented content over an OCR junk region, which is
+  worse than the placeholder it replaced;
+- `Deadline Countdown!` -> **`[Illegible sign]`**, typeset literally onto the page. That is D10's
+  `[REDACTED]` class with a new spelling, and it argues for the render-layer string gate whether or
+  not QA runs.
+
+So QA is worth having for pronouns, numbers and context, and is not a substitute for any of the
+geometry work. It also strips *some* glosses — but see below for why that is the expensive way to
+fix them.
+
+### D10's glosses are prompt-specified, not model disobedience
+
+28 of the 29 parenthetical glosses on the corpus are the exact shape the prompt asks for.
+`MANGA_TRANSLATION_JSON_SYSTEM_PROMPT` (`worker/src/worker/services/translation.py:56`) contains a
+direct self-contradiction:
+
+```
+- "sfx": Transliterate the sound effect AND provide an English equivalent
+         in parentheses (e.g. "DOKAA (WHAM)").
+...
+NEVER include romanized text, pinyin, romaji, or pronunciation guides.
+BAD: "ERUFU (ELF!)"
+GOOD: "ELF!"
+```
+
+`DOKAA (WHAM)` and `ERUFU (ELF!)` are the same string in the same shape, given once as the required
+format and once as the forbidden one, eleven lines apart. `Puru-pun (STRUGGLING SOUND)` and
+`KOROSHI NASAI (KILL HIM)` are the model following the first rule. The references pick the other
+side — the human scanlations letter `Tremble Tremble` and `Ba-dump`, no romaji.
+
+**Fix:** decide which rule survives and delete the other; keep the render-layer strip as defence in
+depth for the residue (the 1 gloss that is genuine drift, `...Just kidding! (PLAYFUL RETRACTION)`,
+came from the model generalising the sfx rule onto dialogue). One prompt edit is cheaper and more
+reliable than a QA pass per page. Same file, minor: `MANGA_TRANSLATION_SYSTEM_PROMPT` has
+`- Do not explain.` twice.

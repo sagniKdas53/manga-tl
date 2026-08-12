@@ -114,9 +114,15 @@ under** — they decide what the gap can and cannot be blamed on.
 ### Read the conditions before quoting the numbers
 
 + **The A/B run in `corpus/exports/` was single-pass, QA off.** No post-processing, no re-OCR, no
-  QA re-translation — the page ships whatever the first pass produced. That is deliberate (it
-  measures the pipeline, not the safety net) but it means every defect below is an *upper* bound on
-  what a user with QA on would see, and the translation-side ones especially.
+  QA re-translation — the page ships whatever the first pass produced. That is deliberate: it
+  measures the pipeline, not the safety net.
+
+  **Tested since, and the safety net does less than expected** (`corpus/withQA/`, two pages
+  re-run with QA on, gap doc §8). QA rewrites text and touches nothing else: all 25 elements come
+  back at IoU 1.00 with byte-identical fills. So **none** of the geometry defects below are
+  recoverable by QA — not the box, not the fill, not the region split. It does fix pronouns,
+  garbled numbers and some glosses; it also invented content over an OCR junk region and typeset
+  the literal string `[Illegible sign]` onto the page.
 + **The competitor comparison is model-matched.** The run used the same model
   mangatranslator.ai uses. So the gap against `ref-mangatranslator.ai` is **not** a model-quality
   gap — it is our region proposals, our prompt contract, and our renderer. That is the whole point
@@ -160,6 +166,33 @@ And the two long-standing ones the run re-measured, which are what I am fixing f
 D6 and D7 are one piece of work — a fill target against the wrong box is meaningless — and they
 are being done together, in `render.py` first (fast rebuild, live-verifiable) then mirrored into
 `fitText.ts`, which is D8's twin-renderer problem and the reason both have to move at once.
+
+**Progress 2026-08-12: D6's half is fixed** (worker `4b7c7a4`). A line's span is now measured
+across the band its glyphs occupy rather than at its centre row, the size search rejects layouts
+that leave the mask, and text that cannot be set whole is kept inside its box instead of grown
+until the height runs out. Lines escaping their balloon over the 40-page corpus: 45 -> 10, in
+34 -> 3 of 256 mask-constrained elements, for 1px of median font size. **D7's underfill half is
+untouched** — median balloon fill is still 0.59 against the references' 0.70-0.85, and it will not
+move without hyphenation, because the binding constraint is a single word that will not fit, not
+the search ceiling. Measure with `scripts/text_fit_probe.py`; look at pages with
+`scripts/render_preview.py`.
+
+### Two corrections to what was filed here on 2026-08-12
+
++ **The unfilled balloons are not a D3 threshold bug.** 21 regions across the corpus get no fill,
+  7 inside properly detected bubbles, which leaves the Japanese visible under the English
+  (`sample28` is five of nine). The tempting reading — that the spread check trips on the very ink
+  the fill exists to cover — is wrong. The declined balloons carry *less* ink than the filled ones
+  (5-8% of pixels against 7-11%); what blows the spread is a vertical colour **gradient**, MAD
+  24-88 against a threshold of 20. No flat colour represents those regions, so raising
+  `BACKGROUND_FILL_MAX_SPREAD` would paint a swatch over every gradient balloon on the page — the
+  exact defect the check was added to stop. **This folds into D1** (gradient-aware fill, or real
+  inpainting) and should not be worked as a D3 tuning item.
++ **D10's glosses are prompt-specified, not model disobedience.** 28 of the 29 parenthetical
+  glosses are the exact shape `MANGA_TRANSLATION_JSON_SYSTEM_PROMPT` asks for: it requires
+  `"DOKAA (WHAM)"` for `sfx` regions and eleven lines later forbids `"ERUFU (ELF!)"`, which is the
+  same string in the same shape. One prompt edit fixes the class; the render-layer strip stays as
+  defence in depth for the residue.
 
 ---
 
