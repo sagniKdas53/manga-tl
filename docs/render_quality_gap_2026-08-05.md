@@ -478,3 +478,120 @@ The structured-outputs mismatch is a provider-config bug worth fixing on its own
 should not be in a chain that requires structured outputs.
 
 ---
+
+## 7. The 2026-08-12 A/B run
+
+All 40 SFW samples run end-to-end on `main` (grouping, `OCR_MERGE_THRESHOLD=0.35`, waist gate and
+orientation vote on) and on `ocr-pre-grouping-baseline` (the pre-2026-08-09 deployed defaults),
+then compared region-by-region against each other, against the voted ground truth in `corpus/ocr/`,
+and against the `human` and `mangatranslator.ai` references in `corpus/samples/`. Artifacts and run
+provenance: `corpus/exports/` (see its README).
+
+### 7.1 Grouping wins, and the baseline branch is retired
+
+| | regions | of 363 GT |
+|---|---|---|
+| `main` | 351 | −12 |
+| `ocr-pre-grouping-baseline` | 278 | −85 |
+
+Checked both directions by bbox overlap: every baseline region has a `main` counterpart, and 73
+`main` regions have none. So the baseline's shortfall is not recall the grouping traded away — it
+is text merged into a neighbouring balloon and then set as one blob across both. `sample23` is the
+extreme (17 regions vs 2, the two rendered as paragraph-blobs over the character's face);
+`sample1`, `sample3`, `sample25`, `sample30` and `sample34` show the same failure smaller.
+
+`ocr-pre-grouping-baseline` was retired on this result (manga-library `69aacdf`), with
+`config/providers.json` — its one unique change — brought onto `main` first.
+
+### 7.2 New defects the run exposed
+
+#### D14 — Grouping shreds vertical multi-column narration.
+
+`sample2`'s narration column becomes five regions, split mid-word (`違う星から来` | `たみたいだった`),
+each translated on its own. The page ships `"KITA (ARRIVED FROM)"` and four blocks of ~4px type.
+The baseline read it correctly as one block, and so does mangatranslator.ai.
+
+The gap budgets in `fragment_grouping.py:100-101` are symmetric in form but not in what they mean:
+for vertical text `max_vertical_gap` scales from `avg_width` (correct — a column's width is the
+font size) while `max_horizontal_gap` scales from `avg_width` too, so the *inter-column* budget is
+one character wide. Column-set narration outside a balloon has no bubble mask to bind it, and
+inter-column leading in vertical Japanese is routinely wider than one character, so adjacent
+columns of the same block never join.
+
+**Fix:** for text resolved as vertical (`resolve_vertical`, `:124`), scale the cross-axis budget
+from the column pitch — the median centre-to-centre distance between neighbouring columns — not
+from `avg_width`. Bind columns that share a baseline range and are consecutive in reading order.
+Gate the whole thing on the region being outside any bubble mask, where D4's waist veto has nothing
+to say.
+
+#### D15 — The translation unit is the region, so a sentence spanning regions is translated as fragments.
+
+`sample9`'s `って` is its own balloon and is translated standalone as **"like"**; the human
+scanlation reads "W-WAIT". The batch prompt (`services/translation.py:58-60`) already sends every
+region of the page in reading order and asks for context to be maintained, but the response
+contract is 1:1 region→string, so a sentence broken across two balloons has to be broken back
+across two strings, and the model has no way to say "these two are one utterance".
+
+This is not caused by grouping — the baseline hits it too, less often because its over-merging
+happens to reunite some of them — but grouping makes more, smaller regions, so it surfaces more.
+
+**Fix:** let the batch response carry an optional continuation group id, translate the group as one
+utterance, then split it back on clause boundaries proportional to each region's capacity. Cheaper
+interim: pass each region's neighbours as context and instruct that a fragment which is not a
+complete utterance should be rendered as its natural English part, not as a standalone gloss.
+
+#### D16 — Unsupported glyphs render as tofu boxes.
+
+`sample30` sets `senpai~♡` and the `♡` comes out as a notdef box; `sample23` carries `帅哥` through
+untranslated (D10) and prints two boxes. Comic Neue has neither, `render.py` loads exactly one face
+and PIL substitutes nothing.
+
+**Fix:** a fallback chain in the render layer — primary lettering face, then a CJK face, then a
+symbol face — resolved per glyph run. Plus a pre-render assertion that every codepoint in the
+string has a glyph in some face in the chain; anything left over is a translation bug worth failing
+loudly rather than printing a box.
+
+### 7.3 Status refresh on existing D-codes
+
+- **D6 (text box is the bbox, not the fillable area) — still open, now measured.** `sample1`'s
+  bottom-left balloon: OCR bbox spans x 43–156, drawn ink spans x 25–168, and the first line
+  visibly crosses the oval's outline. D13 aligned the fit box with the draw box; both are still the
+  *bounding* box, so a line sized for the balloon's wide middle overflows where the oval narrows.
+  Dropping D7's `w/3` pre-cap made this reachable for short strings that previously never got big
+  enough to hit it.
+- **D7 (font-size collapse) — the width cap is fixed, the underfill is worse than before.** Narrower
+  regions mean narrower boxes mean smaller type: measured on `sample27`'s first balloon, same
+  balloon on both branches, `main` draws 12–13px line height against the baseline's 22px. Regions
+  whose longest translated word cannot fit at 12px: 42 on `main`, 26 on the baseline. Against the
+  human references we are roughly half their size on the same balloon. The fill-ratio target is now
+  the single highest-leverage open item on this page.
+- **D8/D12 (two renderers, canvas font fallback) — export/render agreement checked, no fallback
+  seen.** `page-9-export.png` and `page-9-rendered.png` match in face and metrics on both branches.
+  That is observation on the pages inspected, not the E2E rebuild the 2026-08-10 handoff asked for,
+  but nothing in this batch is drawing in the browser default font.
+- **D10 (non-dialogue text typeset) — unchanged in kind, up in volume.** Regions under 60px on a
+  side: 83 on `main`, 59 on the baseline. Parenthetical glosses reaching the page: 29 and 23
+  (`"Puru-pun (STRUGGLING SOUND)"`, `"...Just kidding! (PLAYFUL RETRACTION)"`). Untranslated CJK
+  passed through as a translation on both branches: `迷途竹林`, `帅哥`, and the bare characters
+  `三 小 江 父 心 大`. The Phase 0 gloss strip and the Phase 4 classifier gate both still apply
+  as written.
+
+### 7.4 What to do next
+
+Order is by measured leverage on these 40 pages, not by section number.
+
+1. **Fill-ratio-targeted sizing** (D7 → Phase 2 item 12) and **largest-inscribed-rectangle text
+   box** (D6 → item 11). These are one piece of work — the fill target is meaningless against the
+   wrong box — and together they are the difference between "readable" and "looks like the
+   references" on every page in the corpus.
+2. **Gloss strip and junk-region gate** (D10 → Phase 0 item 6, Phase 4 item 18). Cheap, mechanical,
+   removes 29 visible defects and ~80 stray typeset fragments.
+3. **Font fallback chain** (D16). Hours, and it removes a class of defect that reads as broken
+   software rather than as a bad translation.
+4. **Vertical column-pitch grouping** (D14). Contained to `fragment_grouping.py`, and `sample2`
+   is a ready-made regression test.
+5. **Continuation groups in the translation contract** (D15). The largest of the five and the one
+   that needs a schema change; worth doing after 1–4 have moved the visible baseline.
+
+Re-run the whole corpus after each and diff `corpus/exports/main/` — the region counts, the
+width-starved count, and the gloss count above are the regression bar.
