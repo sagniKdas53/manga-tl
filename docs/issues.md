@@ -104,6 +104,65 @@ The two remaining complaints are measured, and neither is fixable in frontend co
 
 ---
 
+## The rendered page still does not look like the references (open — fixing now)
+
+The full defect list, with `file:line` anchors and the phase plan, is
+[render_quality_gap_2026-08-05.md](./render_quality_gap_2026-08-05.md) (D1–D16). This entry is
+the standing summary and, more importantly, **the conditions the 2026-08-12 numbers were measured
+under** — they decide what the gap can and cannot be blamed on.
+
+### Read the conditions before quoting the numbers
+
++ **The A/B run in `corpus/exports/` was single-pass, QA off.** No post-processing, no re-OCR, no
+  QA re-translation — the page ships whatever the first pass produced. That is deliberate (it
+  measures the pipeline, not the safety net) but it means every defect below is an *upper* bound on
+  what a user with QA on would see, and the translation-side ones especially.
++ **The competitor comparison is model-matched.** The run used the same model
+  mangatranslator.ai uses. So the gap against `ref-mangatranslator.ai` is **not** a model-quality
+  gap — it is our region proposals, our prompt contract, and our renderer. That is the whole point
+  of the measurement, and it is why the rendering items below outrank the translation ones.
++ **Do not compare against `corpus/samples/*/export.png` or `render.png`.** Those are our own
+  older outputs, produced **with QA on and higher-tier models**, so a diff against them measures
+  the QA pass and the model tier, not a change. Compare against the `ref-*` files, which is what
+  the 2026-08-12 analysis did.
+
+### What is open
+
+Three defects were filed new on 2026-08-12 out of the grouping A/B (§7 of the gap doc):
+
++ **D14 — vertical multi-column narration is shredded into per-column regions**, translated one
+  column at a time. `sample2` splits mid-word and ships `"KITA (ARRIVED FROM)"` plus four blocks of
+  ~4px type. Cause is in `worker/src/worker/services/fragment_grouping.py:100-101`: for vertical
+  text the *cross*-axis gap budget is one character wide, so columns of one narration block never
+  join. Contained fix, `sample2` is the regression test.
++ **D15 — the translation unit is the region**, so a sentence spanning two balloons is translated
+  as two fragments. `sample9`'s `って` ships as **"like"** where the human scanlation reads
+  "W-WAIT". The batch already sends the whole page in reading order
+  (`worker/src/worker/services/translation.py:58-60`); what is missing is any way for the response
+  to say "these two regions are one utterance". Needs a schema change.
++ **D16 — no font fallback chain**, so a glyph the lettering face lacks prints as a notdef box:
+  `♡` on `sample30`, `帅哥` on `sample23`. Hours of work, and it is the defect that reads as broken
+  software rather than as a bad translation.
+
+And the two long-standing ones the run re-measured, which are what I am fixing first:
+
++ **D7 — the type is roughly half the size the references set in the same balloon**, and grouping
+  made it worse, not better: finer regions mean narrower boxes mean smaller type. Measured on
+  `sample27`'s first balloon, same balloon both branches, 12–13px line height against the
+  pre-grouping 22px. 42 regions across the corpus cannot fit their longest word at 12px. The width
+  cap is fixed; **fill-ratio-targeted sizing is not**, and it is the single highest-leverage item
+  on the page.
++ **D6 — the text box is the balloon's bounding box, not the area text can occupy**, so a line
+  sized for an oval's wide middle overflows where the oval narrows. `sample1`'s bottom-left
+  balloon: bbox spans x 43–156, drawn ink spans x 25–168, first line crosses the outline. D13
+  aligned the fit box with the draw box; both are still the wrong box.
+
+D6 and D7 are one piece of work — a fill target against the wrong box is meaningless — and they
+are being done together, in `render.py` first (fast rebuild, live-verifiable) then mirrored into
+`fitText.ts`, which is D8's twin-renderer problem and the reason both have to move at once.
+
+---
+
 ## Plan a better backend one that doesn't use java
 
 I am tired of the boilerplate and bug factory that is java, it serves no real purpose and has no

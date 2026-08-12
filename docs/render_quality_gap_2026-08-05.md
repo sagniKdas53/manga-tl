@@ -487,6 +487,15 @@ then compared region-by-region against each other, against the voted ground trut
 and against the `human` and `mangatranslator.ai` references in `corpus/samples/`. Artifacts and run
 provenance: `corpus/exports/` (see its README).
 
+**Two conditions decide how these numbers read.** Both runs were **single-pass with QA off** — no
+re-OCR, no QA re-translation, the page ships what the first pass produced — so every defect here is
+an upper bound on what a user running with QA on would see, the translation-side ones especially.
+And the run used **the same model mangatranslator.ai uses**, so the gap against
+`ref-mangatranslator.ai` is not a model-quality gap: it is our region proposals, our prompt
+contract and our renderer. Note this also means `corpus/samples/*/export.png` and `render.png` are
+*not* a valid comparison point — those were produced with QA on and higher-tier models, so diffing
+against them measures the QA pass, not a change.
+
 ### 7.1 Grouping wins, and the baseline branch is retired
 
 | | regions | of 363 GT |
