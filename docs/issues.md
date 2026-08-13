@@ -76,6 +76,60 @@ classifier did not populate it — so the gate cannot simply read that field and
 Verify with `scripts/render_preview.py`; the bar is `corpus/sample10/page-10-rendered.png` against
 `corpus/samples/sample10/ref-mangatranslator.ai.jpeg`.
 
+##### Done 2026-08-13 (worker `HEAD`), and what it measured
+
+R1 and R2 replayed over `sample10` with `scripts/cover_fill_probe.py` — which calls the real
+`bubble_covers_text` and `cover_fill_for_region`, not copies. Of 29 translation elements: **4 had a
+non-containing balloon rejected**, **8 got a covering fill where we previously drew nothing**, and
+**0 are left with no fill at all**. All three sample10 defects reach parity with
+`ref-mangatranslator.ai`: the burst is yellow with black lettering instead of a white glyph-shaped
+slab; the blanket is a flat yellow balloon with the Japanese gone instead of English over
+unerased Japanese; the dark panel is a dark balloon with white lettering instead of a white slab
+with black-on-white.
+
+Three things were found on the way, each recorded because each was a wrong guess corrected by
+measurement:
+
++ **Sampling the region's dominant colour samples the lettering, not the background.** Unenclosed
+  manga text carries a thick white stroke so it reads against artwork, and on the yellow blanket
+  that stroke was the most common colour in the box — so R2's first output was a *white* slab, the
+  exact defect it exists to remove. The sample is now a band outside the text box
+  (`COVER_FILL_RING_FRACTION`), which is background by construction. Yellow `#fddd54`, correct.
++ **A backdrop sampled from artwork can be dark, and text colour is chosen without reference to
+  it.** The dark panel came back `#33272d` under the default black lettering. `readable_text_color`
+  now overrides below WCAG 3.0 (large-text). It fires only below the floor, so a deliberate
+  low-contrast pairing survives and black-on-black does not.
++ **Right colour, wrong shape.** With no mask, the *border* test still samples cleanly (the burst's
+  yellow comes back that way), and returning a colour with no polygon left the renderer painting
+  the element's own box — which after R1 is the sliver the glyphs occupy, so the source lettering
+  still showed around the edges. No mask in now always means a synthesized shape out.
+
+**R3 is implemented and unit-tested but only half of it can fire today** — see R4. Its
+low-confidence half works off data the export does not carry, so it is not in the probe numbers
+above. This matters: R2 covers a region it cannot read *and cannot skip*, so on this page four of
+the eight new fills are over sound effects (`Wen... yun... yun...`, `?!`), which is a slab on the
+artwork where we previously drew nothing. **R2 without a working R3 is a regression for sfx.**
+Measure over the full corpus before shipping; `COVER_FILL_ENABLED=false` reverts R2 alone.
+
+#### R4 — panel detection returns nothing, so every region is classified "caption"
+
+`detect_panels` returns **0 panels** on `sample10`. `classify_region_type` branches on `in_panel`
+first, so with no panels every region on the page falls through to the same arm and comes back
+`caption` — dialogue, sound effects and captions alike. That is why `regionType` is absent or
+useless on every element in `corpus/exports/`, and it is why R3's sfx gate, which is correct as
+written and tested, cannot fire: nothing is ever labelled `sfx`.
+
+Reproduce:
+
+```
+.venv/bin/python -c "import sys,cv2; sys.path.insert(0,'worker/src'); \
+  from worker.services.panel_detection import detect_panels; \
+  print(detect_panels(cv2.imread('corpus/samples/sample10/source.jpeg')))"
+```
+
+Not yet investigated — filed on discovery, not diagnosed. It gates R3, D10's classifier work, and
+the reading-order logic that also consumes panels.
+
 ### Move the backend off Java
 
 No real technical blocker, just a preference to not maintain a Spring Boot backend long-term.
