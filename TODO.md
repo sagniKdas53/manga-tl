@@ -1,246 +1,138 @@
-# TODO — Manga Library (Master Checklist)
+# TODO — Manga Library
 
-> **Last updated**: 2026-08-04  
-> Audited via Git history & GitNexus analysis, cross-checked against `docs/issues.md` and `docs/archive.md`  
-> Status legend: `[ ]` = not started, `[/]` = in progress, `[x]` = done, `[P]` = planned (in a plan doc), `[D]` = deferred
+> Status legend: `[ ]` not started · `[/]` in progress · `[x]` done · `[D]` deferred
+>
+> Full history of closed work is in [docs/archive.md](./docs/archive.md). Finished planning docs
+> and session handoffs live in [docs/archive/](./docs/archive/).
+
+## Now
+
+### 1. Render quality gap (the paid-product comparison)
+
+We flatten **6.85%** of page artwork on average vs **1.92%** for mangatranslator.ai / human
+scanlation — we lose on every page in the 40-page comparison set. Root cause: there's no real
+inpainting, erasure is a flat colour fill over the balloon's outer contour, and unconstrained
+region merging grows that fill across whole panels. Full writeup, defect list (D1–D16) and phase
+plan: [docs/render_quality_gap_2026-08-05.md](docs/render_quality_gap_2026-08-05.md). Score any
+render with `scripts/render_quality_metrics.py`.
+
+Where it stands, in leverage order:
+
+- [x] **D6/D7 — undersized, overflowing text.** Fixed 2026-08-12/13 (hyphenation + dropping a
+  size cap that pinned every fit to 60% of its box). Median balloon fill went 0.591 → 0.866.
+- [ ] **D8 — mirror the D6/D7 fix into `fitText.ts`.** `render.py` has it; the browser-side
+  renderer doesn't yet, so live reader and export can still disagree.
+- [ ] **`freeTextBox` widening** — the backend's free-floating-text box can still land on top of
+  artwork. Separate from D6/D7.
+- [ ] **D10 — strip glosses and junk regions.** Cheap, mechanical: removes ~29 visible
+  parenthetical glosses (`"DOKAA (WHAM)"`) and ~80 stray typeset fragments that shouldn't have
+  been translated at all.
+- [ ] **D16 — font fallback chain.** Glyphs the lettering face lacks print as a blank box
+  (`♡`, `帅哥`). A few hours of work; reads as broken software, not a bad translation.
+- [ ] **D14 — vertical multi-column narration gets shredded** into separate regions and
+  translated one column at a time. Fix is contained to `fragment_grouping.py`; `sample2` is a
+  ready-made regression test.
+- [ ] **D15 — a sentence spanning two balloons is translated as two disconnected fragments.**
+  Needs a schema change (a way to say "these regions are one utterance"). Biggest item on this
+  list; do it after D10/D16/D14 have moved the visible baseline.
+- [ ] **D1 — actual inpainting.** No flat-fill or gradient-aware approach will fully close the
+  gap; this is the real fix and everything above is stopgap.
+- [ ] **CHECKPOINT — delete the contour-fallback flag.** `BUBBLE_CONTOUR_FALLBACK` defaults off:
+  its ~48% recovery rate on irregular bubbles turned out to be almost entirely the search finding
+  its own crop window, not a real bubble. Drop the flag once a detector exists that finds
+  irregular bubbles directly (a bigger YOLO model isn't it — tested, no additive value).
+- [x] Free-floating text now lays out in a squared-up box instead of the source's narrow
+  vertical column.
+
+**QA does not close any of the geometry gaps above.** Tested 2026-08-12: QA rewrites text and
+touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by the safety net.
+
+### 2. Backend audit backlog
+
+~50 findings from a full-stack read-through, tracked as `AUDIT-*` in
+[docs/issues.md](docs/issues.md). **58 of 66 closed.** 8 open, none critical or high:
+
+- `AUDIT-B10` (medium) — `listPages` doesn't validate `?sort=` like its sibling endpoints do.
+  Needs a live measurement before fixing — see issues.md.
+- `AUDIT-W3` (medium) — provider cooldowns/lock waits block a worker slot instead of releasing it.
+- `AUDIT-F9`, `AUDIT-D5`, `AUDIT-Q2` (low) — responsive-layout tests, backend memory limits,
+  inline fully-qualified class names.
+- `AUDIT-T1`, `AUDIT-Q1`, `AUDIT-T3` (unranked) — the worker test suite over-mocks, 249 dead
+  `Objects.requireNonNull` calls, and one `@WebMvcTest` can't prove a Spring Data sort composes
+  correctly.
+
+The last three (`T1`, `D5`, `W3`) are deliberately last — each needs real experimentation
+(a wire-protocol test double, a measured memory peak, concurrency testing), not a quick pass.
+
+### 3. Housekeeping
+
+- [ ] **Replace the `neurometric` API key** in `secrets/api_keys.json`. Still dead. Since
+  `AUDIT-W11`, a chapter pinned to a provider whose key is rejected now falls back to another
+  provider instead of failing 100% of its translations — so this is cleanup, not an outage.
+
+## Medium priority
+
+### Worker pull model (event-driven job handoff)
+
+Design doc: [docs/worker_pull_model.md](./docs/worker_pull_model.md) — designed, not implemented.
+
+Would replace the backend's fixed-interval dispatcher with worker threads pulling directly off
+Redis (`BRPOP`), plus lease/heartbeat crash recovery and a cancellation tombstone (the tombstone
+gap exists today too — force-clearing a job doesn't stop the worker from finishing it and
+resurrecting a cleared pipeline).
+
+**Measured value is small: 0.83% of total queue wait** (408s of 49,058s), not the ~10–25%
+originally estimated — see
+[docs/perf_analysis_backend_2026-08-02.md](./docs/perf_analysis_backend_2026-08-02.md). Worth
+building for tail latency and multi-worker resilience, not for throughput.
+
+## Low priority / stretch goals
+
+- [ ] CBZ import/export, and ePub **export** (ePub import already works; only export and CBZ are
+  missing).
+- [ ] **OCR/Translation/QA prompt & schema robustness** — tracked in
+  [docs/models_and_prompts.md](./docs/models_and_prompts.md#suggestions-for-improvement):
+  - [ ] Retry with `temperature=0` on JSON parse failures
+  - [ ] Reject refusal/length-anomaly responses from cloud OCR instead of trusting them as text
+  - [ ] Strict schema enforcement for local Ollama VLM OCR (currently falls back to raw text)
+  - [ ] Real per-region OCR confidence from VLMs (currently hardcoded to `0.99`)
+  - [ ] One consistent JSON-only closing instruction across all structured-output prompts
+- [ ] **Rich translation context & character memory** — series/chapter descriptions and a
+  cross-page name/character/place registry, injected into translation context alongside prior
+  page text.
+- [ ] **AI-generated chapter/series summaries.**
+  - [ ] Phase 1: add a manually-editable summary field to series and chapter objects.
+  - [ ] Phase 2: auto-generate via NER, gated behind the existing context-memory toggle.
+- [x] ~~**Pagination & infinite scroll**~~ — shipped as part of the backend audit's `AUDIT-F8`:
+  server-side pagination on series/chapters/pages plus scroll-triggered `loadMore`. Both phases
+  originally planned here are done.
+- [ ] **Standalone NGINX / decoupled topology** — package the frontend as its own container and
+  split out git submodules for remote GPU worker deployments.
+  - [ ] Worth checking first whether this actually helps — the bottleneck has consistently been
+    backend response time, not frontend asset load.
+
+## Testing & QA
+
+- [x] Concurrency defaults raised (`CONCURRENT_JOBS=5`, `MAX_HEAVY_SLOTS=1`,
+  `MAX_LIGHT_SLOTS=4`) and confirmed via a drained capture — see
+  [docs/archive.md](docs/archive.md).
+- [x] Worker container given CPU/memory limits (2 CPUs / 4g, sized from measured peak usage).
+- [ ] **Large-upload performance (100+ images)** — thumbnail generation is serialized behind one
+  global lock (`WEBP_LOCK` in `PageService.java`), so the thumbnail executor's 4 threads still
+  process one at a time. See [docs/webp_thumbnail_encoding.md](./docs/webp_thumbnail_encoding.md).
+- [ ] **`mock-router`** — a deterministic mock LLM provider (speaks the OpenAI/Anthropic wire
+  format) so the pipeline can be tested end-to-end with no API spend and no nondeterminism.
+  Design doc: [docs/mock_router.md](./docs/mock_router.md) — designed, not implemented, phased:
+  - [ ] Phase 0: fix `try_local_ai` dropping its `prompt` argument; route `ocr.py`'s cloud OCR
+    calls through `LLMClient`/`PROVIDER_REGISTRY` instead of hardcoded per-provider URLs.
+  - [ ] Phase 1: Ollama drop-in mock + happy-path response contracts.
+  - [ ] Phase 2: cloud-provider substitution + fault injection (429s, malformed JSON, timeouts).
+  - [ ] Phase 3: record & replay against a real provider, as a prompt-regression baseline.
+  - [ ] Phase 4: wire into CI via the Playwright suite below.
+- [ ] **Playwright end-to-end pipeline test** — upload real pages, run the full
+  OCR/translate/render pipeline, assert on layer correctness. Should run against `mock-router`
+  rather than live providers.
 
 ---
 
-## 🟢 Current Goals
-
-### Do these next (2026-08-06)
-
-> **The board is three tracks now, not a ranked list.** The goal is that these three are the *only*
-> things open; everything else either drains into one of them or gets closed outright. The tracks,
-> with `file:line` anchors and effort estimates, live in **[next-step.md](./docs/next-step.md)**.
->
-> 1. **The UI is fast and good-looking** — AUDIT-F1, F2, F8, F9. Note the measured ceiling: 71% of
->    the reported lag is the main thread *descheduled* (host CPU contention), so "better looking"
->    has far more headroom than "faster".
-> 2. **The backend is complete and clean enough to throw away** — AUDIT-B5 is the gate; no migration
->    to Go or Python can start until the schema has a baseline. Also has to *answer* "do we really
->    need a separate worker?", which has been open since the audit began.
-> 3. **Understand the paid product and close the quality gap** — the render/inpainting work below.
->
-> What was settled and why — including several things dropped *because they were measured* — is in
-> [archive.md](./docs/archive.md). Read that before reopening anything performance-related.
-
-- [x] ~~**Re-run the drained capture to confirm the AUDIT-W10 win.**~~ **Done 2026-08-04** —
-  `20260803-204638` (2 jobs) and `20260803-211221` (30 pages, 204 jobs, all COMPLETED, 24 min,
-  $0.19), both profiled remotely. The headline turned out to be that `layout`'s huge queue wait is
-  an **attribution artefact**, not a stall: those stages sit before the expensive ones and a job
-  accrues its whole wait under the stage it last completed. Scheduling thread closed.
-- [x] ~~**Regenerate `frontend/src/api/schema.d.ts`**~~ — done; the file carries
-  `notifications/ticket`.
-- [x] ~~**AUDIT-T2 — error-branch tests for `LLMClient`.**~~ **Done** (`ffab71d`) — 16 tests, all
-  five named branches covered. The **backend** half of T2 is still open and is now the part that
-  matters: the dispatcher's failure paths (AUDIT-P2, P3) still have no test.
-- [ ] **Replace the `neurometric` API key** in `secrets/api_keys.json`. Still dead, but **AUDIT-W11
-  changed what it costs**: a chapter pinned to a provider whose key is rejected now falls back
-  across the provider boundary instead of failing 100% of its translations. Housekeeping, not an
-  outage.
-- [x] ~~**AUDIT-B1 — scheduler pool size.**~~ **Done 2026-08-05** (`0e5bbd5`) — it was indeed one
-  config line. `spring.task.scheduling.pool.size` is 4, overridable via `SCHEDULING_POOL_SIZE`.
-  This box stayed unticked until 2026-08-06 while the fix had been live for a day.
-- [x] ~~**AUDIT-S1 / S2 / S3 / S4 — the fail-open secrets and the SSE token leak.**~~ **Done
-  2026-08-02**, verified against the code and the running stack **2026-08-06** and removed from
-  `issues.md`. **Nothing `[C]` or `[H]` is open anywhere in this project now.** The security track
-  no longer exists as a separate list — see [next-step.md](./docs/next-step.md).
-
-### Fix recent issues
-
-- [ ] See [issues.md](./docs/issues.md)
-- [/] **Full-stack audit backlog (2026-08-01)** — ~50 findings across backend, worker, frontend and
-  Docker, logged as `AUDIT-*` in [issues.md](./docs/issues.md#full-stack-audit--2026-08-01) with
-  `file:line` anchors and a suggested fix order. **Items 1–5 of that order landed 2026-08-02**
-  (S1/S2/S3/S4 fail-open secrets, D1 backups, W10/W6 slots, P4 duplicate work, P1/W1 provider-key
-  mismatches) — see [§ Status of the fix order](./docs/issues.md#status-of-the-fix-order--2026-08-02).
-  **Re-ordered 2026-08-04** by payoff-per-line, and the ordering now lives in
-  [next-step.md](./docs/next-step.md): **B1** (one config line), `try_local_ai` ignoring its prompt,
-  **B4** (a second browser tab kills the first tab's SSE), **B2** (`@Transactional` bypassed by
-  self-invocation), **B3** (a genuine NPE returns 400 and is never logged), then D3/D4/D2.
-  Closed since the batch: **W11** (cross-provider fallback when the pinned provider is parked),
-  **W12** (confirmed), **W5** (WON'T DO at 1.8%), **W2** (1.2%, inert — only the unlimited-default
-  hardening left), **T2**'s worker half, and the F6/F7/F8 + `/api` 404 correctness sweep.
-
-### Output & Rendering Quality
-
-- [ ] Rendered output quality gap vs mangatranslator.ai — **measured and root-caused
-  2026-08-05, see [render_quality_gap_2026-08-05.md](docs/render_quality_gap_2026-08-05.md)**
-  for the full comparison against all 31 examples, the 11 defects behind it, and the phased plan.
-
-  The short version: the gap is erasure and typesetting, not translation. We flatten **6.85%**
-  of page artwork on average against **1.92%** for mangatranslator.ai / mangatranslate.com /
-  human scanlation, and we lose on every page in the set — worst case `sample24` at 16%, where
-  a whole panel becomes one tan rectangle. Root cause is that there is *no inpainting anywhere*:
-  erasure is a flat colour fill over the region polygon, the polygon is the balloon's outer
-  contour (so the outline goes with it), and unconstrained region merging grows those polygons
-  across whole panels. Score any render with `scripts/render_quality_metrics.py`.
-
-  What they do differently, in one line: **their unit of erasure is the glyph, ours is the
-  region** — so every upstream mistake costs them a few misplaced letters and costs us a panel.
-  They also set type at literally 2× our size in the same balloon, and skip anything they
-  aren't confident is dialogue.
-
-  **Update 2026-08-10:** D7 (font-size search pre-capped at `w/3`) and D3 (flat rectangle over
-  free-floating text) independently re-confirmed via `sample1`/`sample21` while validating
-  `ocr-pre-grouping-baseline` — both predate the region-grouping work. D7's width cap is dropped
-  and D3 now refuses to fill over a textured background (worker `a5ac096` on the baseline branch,
-  `232f6ec` on `main`) — see [render_quality_gap_2026-08-05.md](docs/render_quality_gap_2026-08-05.md)
-  §D3/§D7 "Status" notes. Real inpainting (D1), the 72px absolute cap, fill-ratio targeting, and
-  everything else in the phased plan are still open.
-
-  **Update 2026-08-10 (later same day):** fixing D7 made text bigger, which surfaced two more bugs
-  while checking the result — `fitText.ts` (the browser twin of `fit_text_in_box_py`) had the same
-  `w/3` cap, silently capping every PNG/ZIP export regardless of what the live reader showed
-  (**D12** is the export canvas's separate wrong-font bug found alongside it: `fillText` never
-  triggers a web font load, so an export run before the page's own DOM text loads "Comic Neue"
-  falls back to `sans-serif`); and `render.py` centred/clamped drawn text against a different box
-  than the one `fit_text_in_box_py` had fit it to, invisible at small sizes but not once text got
-  bigger (**D13**). All three fixed on both branches — see §D12/§D13.
-
-  - See Example 1:
-    - Original: <br/><img src="examples/sample2/source/original.jpg" alt="original" width="600"/>
-    - mangatranslator.ai: <br/><img src="examples/sample2/reference/en-mangatranslator.ai.jpg" alt="mangatranslator.ai" width="600"/>
-    - Ours: <br/><img src="examples/sample2/output/frontend-export.png" alt="ours" width="600"/>
-- [ ] **Multimodal VLM Quality Benchmarks & Render Tuning** — use VLMs (Kimi K3 or 5.6-Sol) to analyze translation and typesetting output against competitor benchmarks and refine `render.py` text fitting and inpainting algorithms.
-- [ ] **CHECKPOINT — delete the contour fallback.** `BUBBLE_CONTOUR_FALLBACK` is now **default off**,
-  because the ~48% recovery it was built on was not real: 171 of the 172 results it accepted over a
-  300-region sample were the contour search's own crop window. Free-floating text sits on the page
-  background, the threshold finds the background, and a blob with no boundary inside the crop has
-  `boundingRect` = the crop — which passed every guard, since a window contains its text, sits within
-  `2 * pad` of it, and is a small part of the page. Those windows became "bubbles" (a 49x489 caption
-  read as 129x1271) *and* the region's mask polygon, so a white rectangle got painted over the
-  artwork and over neighbouring bubbles' text. `contour_bubble_for_unmatched` now rejects a blob
-  clipped by its own window, which drops acceptance to 1 in 300. Delete the flag, the function and
-  its tests once a detector lands that finds irregular bubbles directly — there is nothing to lose.
-  - A larger model is **not** that detector. `yolo26s_manga109` (3-class, already in the worker
-    cache from the reverted F.1 attempt) recovers 4/180 at conf 0.25 against yolo11n's 1/180, and
-    every region it recovered was already recovered by the contour search — additive value zero.
-    Both models are trained to find *balloons*; yolo26s classes the irregular clouds as `text`, not
-    `balloon`. This is a training-distribution gap, not a model-size gap.
-- [x] **Free-floating text is laid out in the source's vertical column.** 42% of translated regions
-  have no detected bubble — irregular thought clouds, captions, SFX — and the worker synthesizes
-  `bubble*` from the OCR bbox for these, so their box was the tight vertical Japanese column.
-  `freeTextBox` now squares such a column up: same area, same centre, clamped to the page. Page 22 of
-  Openrouter ch. 11 goes from a 69px ribbon to a 173x203 block, which is roughly what
-  mangatranslator.ai gives that cloud.
-  - Bounded by the page only. It does not know where the artwork or the neighbouring regions are, so
-    a block can still land partly over line art; area preservation and the 2.5x widening ceiling are
-    what keep that small. Collision handling against neighbouring regions is the next increment.
-  - Still worth costing: detect the irregular bubble properly. These clouds are visible to a human
-    and the detector just does not return them (see the checkpoint above — the contour search is not
-    that detector). Real geometry would remove the whole class rather than compensate for it.
-
-## 🟡 Medium Priority
-
-### Worker Pull Model — Event-Driven Job Handoff
-
-Design doc: [worker_pull_model.md](./docs/worker_pull_model.md) (status: design only, not implemented).
-
-- [ ] Implement Option A (recommended): worker slot-consumer threads `BRPOP` Redis queues
-  directly instead of the backend `WorkerDispatcherService` pushing on a fixed poll interval.
-  - [ ] Ship behind a `WORKER_PULL_ENABLED` flag (default off) — dispatcher keeps running
-    until the flag is flipped, so behavior is unchanged during rollout.
-  - [ ] Add lease/heartbeat crash recovery (`lease:{jobId}` key, ~60s TTL, ~30s sweep) to
-    replace reliance on the 5-minute stale-`PROCESSING` sweeper for pulled jobs.
-  - [ ] Implement the cancellation tombstone (`cancelled:{imageId}`, doc §5.4) — **this is a
-    pre-existing gap in the current push model too**: force-clearing a `PROCESSING` job deletes
-    the DB row, but the worker keeps running and its callback can still re-enqueue downstream
-    jobs, resurrecting a pipeline that was just cleared. Worth fixing regardless of push/pull.
-  - [ ] Flip on per-worker, verify queue depths and `PROCESSING` transitions on a small run,
-    then remove `WorkerDispatcherService` and the `WORKER_POLL_MS` knob.
-- **Measured 2026-08-02, and the premise has inverted.** This buys **408 s of 49,058 s of queue
-  wait (0.83%)** — not the "~10-25%" estimated in doc §6, and the single heavy slot is no longer
-  the throughput floor (the light tier is now 4× slower; that is AUDIT-W10, already addressed by
-  config). Build it for sub-second tail latency, resilience and multi-worker scaling — **not** for
-  throughput, and not before the W10 re-capture lands. See
-  [perf_analysis_backend_2026-08-02.md](./docs/perf_analysis_backend_2026-08-02.md).
-
-## 🔵 Low Priority / Stretch Goals
-
-- [ ] CBZ import/export support, and ePub **export** (currently ZIP-only for export). ePub
-  **import** already works — `PageController.java`/`SeriesController.java` accept `.epub`
-  alongside `.zip` uploads, so the previous "ePub / CBZ import and export, currently ZIP only"
-  wording here was stale.
-- [ ] **OCR/Translation/QA Prompt & Schema Robustness** — open items logged in
-  [models_and_prompts.md](./docs/models_and_prompts.md#suggestions-for-improvement) but never
-  carried into this list:
-  - [ ] Retry with `temperature=0` on JSON parse failures (OCR batch, translation, QA paths)
-  - [ ] Refusal/length heuristic validation on cloud OCR text responses (currently trusted at
-    face value — a model reply of "I cannot process this image" is accepted as OCR text)
-  - [ ] Strict schema enforcement for local Ollama VLM OCR crops (currently only sets
-    `format: json` and falls back to raw text on parse failure)
-  - [ ] Per-region confidence from VLM OCR (currently hardcoded `0.99` for every region)
-  - [ ] Normalize the JSON-only closing instruction across all structured-output prompts
-    (OCR/translation/QA currently phrase it inconsistently)
-- [ ] **Rich Translation Context & Character Memory** — maintain series/chapter descriptions (booru-style metadata) and a cross-page character/name/place registry, injecting them alongside previous page text into LLM translation context.
-- [ ] **AI-Generated Chapter & Series Summarization** — auto-generate summaries from translated dialogue.
-  - [ ]  **Phase 1**: Need to add summary filed to both series and chapter objects first so that they can be manually configured
-  - [ ]  **Phase 2**: Add `Named Entity Recognition (NER)` and auto generate these (remember to upgrade/the Inject Context Memory toggle to enable or disable this)
-- [ ] **Pagination & Infinite Scroll** — two-phase approach for series, chapters, and pages:
-  - [ ] **Phase 1**: Add backend & frontend pagination support (e.g. paged navigation).
-  - [ ] **Phase 2**: Implement lazy loading / infinite scroll on top of paginated API endpoints to load more items as user scrolls.
-- [ ] **Standalone NGINX & Decoupled Topology** — package frontend into standalone NGINX Alpine container and extract git submodules for remote GPU worker deployments.
-  - [ ] Analyze if this will be even useful or needed, as we are as always constrained by the how fast the backend can send resources and over not how fast the html or js loads.
-
-## 🧪 Testing & QA
-
-- [/] Test at higher concurrency not just 2 slots. **Defaults raised 2026-08-02** to
-  `CONCURRENT_JOBS=5 / MAX_HEAVY_SLOTS=1 / MAX_LIGHT_SLOTS=4` (AUDIT-W10), with `resolve_slot_config`
-  clamping degenerate combinations (AUDIT-W6). The measurement half is still open — see the drained
-  re-capture under Current Goals.
-- [x] Reserve CPU/memory for ML container (like Immich does for its ML container) — worker capped
-  at 2 CPUs / 4g (`deploy.resources` in `docker-compose.yml`, overridable via `WORKER_CPUS` /
-  `WORKER_MEMORY` / `WORKER_THREADS`). Sized from the 2026-08-01 runs: worker mean 76-93% CPU,
-  peak 216%, peak RSS 2.1 GiB, while all containers together peaked at 279% of a 4-core box.
-  `OMP/MKL/OPENBLAS_NUM_THREADS` are pinned to match the quota — Paddle can't see a cgroup limit
-  and would otherwise start 4 threads to contend for 2 cores. **Not yet benchmarked**: this caps
-  the heavy OCR stage, so re-baseline `stage_summary.csv` before reading any throughput
-  comparison against the 2026-08-01 runs.
-- [ ] Larger upload optimization (100+ images) — noticeable slowdown, need to optimize. Known
-  contributor per [webp_thumbnail_encoding.md](./docs/webp_thumbnail_encoding.md): thumbnail
-  generation is serialized behind one global lock (`WEBP_LOCK` wraps both decode and encode in
-  `PageService.java`), so the 4-thread `thumbnailExecutor` still processes thumbnails one at a
-  time; `getScaledInstance` (slow AWT scaling path) is also flagged there as worth replacing
-  with a `Graphics2D` LANCZOS draw.
-- [ ] **`mock-router` — deterministic LLM provider mock for full-stack testing** — a container
-  speaking the OpenAI/Anthropic chat-completions wire format that returns hardcoded, shape-correct
-  payloads, so the whole pipeline can run end to end with no API spend and no nondeterminism.
-  Modelled on `yt-diff`'s `validation/mock-tube`. Design doc:
-  [mock_router.md](./docs/mock_router.md) (status: design only, not implemented).
-  The mock impersonates **Ollama**, not a new provider: every handler already branches on
-  `provider in ("ollama", "lmstudio")` and routes to a single `LOCAL_LLM_ENDPOINT` env var, and the
-  worker only ever speaks Ollama's OpenAI-compatible shim (no native `/api/*` calls anywhere). So
-  Mode A needs no code and no `providers.json` change. A *new* provider name would not work —
-  `handlers/qa.py` dispatches on a hardcoded `openrouter`/`gemini`/`nvidia` if/elif chain and
-  returns `None` for anything else.
-  - [ ] **Phase 0 (prerequisites)**:
-    - [ ] Fix `try_local_ai` dropping its `prompt` argument — see [issues.md](./docs/issues.md).
-    - [ ] Route `try_cloud_ocr` / `perform_redo_ocr` through `LLMClient` + `PROVIDER_REGISTRY` —
-      `worker/src/worker/services/ocr.py` still hardcodes per-provider URLs (lines 111/140/173/191),
-      so single-crop cloud OCR and the QA re-OCR escalation loop bypass `providers.json` and would
-      hit the real internet even in mock mode.
-  - [ ] **Phase 1 — Mode A (Ollama drop-in) + happy path**: mock service, OpenAI envelope, the four
-    response contracts with region-ID echo (static bodies won't work — the worker matches responses
-    back by `id`/`regionId`, which are per-upload backend values), model-name routing, and
-    `validation/docker-compose.test.yml` on an `internal: true` network as an egress guard.
-  - [ ] **Phase 2 — Mode B (cloud substitution) + fault injection**: `config/providers.mock.json`,
-    then `429` cooldown escalation, `json_schema`→`json_object` degradation, timeouts, malformed
-    JSON, refusal text, ID drift — plus a `/__requests` capture endpoint to assert on the *request*
-    side (OpenRouter `cache_control`, `provider.sort`, `response-healing`, Anthropic auth headers).
-    None of that has over-the-wire coverage today, and Mode A can't reach it: the local path
-    bypasses `LLMClient` entirely.
-  - [ ] **Phase 3 — record & replay baseline**: proxy mode that forwards to a real provider once
-    over a curated page set and writes cassettes, keyed on a canonicalized
-    `(task, model, system prompt, ordered source texts)` hash with IDs and image bytes normalized
-    out. Doubles as a prompt-regression diff: re-record on demand and compare against committed
-    responses.
-  - [ ] **Phase 4**: fold into the Playwright E2E item below; add a CI job (with cassettes committed
-    it needs no secrets).
-- [ ] **Playwright End-to-End Pipeline Integration Test Suite** — create end-to-end Playwright test suite that uploads test manga images, triggers full OCR/TL/Render pipeline, and asserts layer correctness.
-  - Should run against [`mock-router`](./docs/mock_router.md) rather than live providers.
-
----
-
-[Archive](./docs/archive.md)
+[Full archive](./docs/archive.md) · [Archived plans & handoffs](./docs/archive/)

@@ -3,7 +3,7 @@
 **Status:** prerequisite 1 (below) done as of 2026-08-07 — `scripts/test-providers.json`
 refreshed from live provider APIs with all four task keys populated. Phase A/B/C runs
 themselves have **not** been executed yet. See
-[`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md) for what was
+[`free_model_bench_handoff_2026-08-07.md`](archive/free_model_bench_handoff_2026-08-07.md) for what was
 collected, config bugs it surfaced, and the exact commands to run Phase A next.
 **Supersedes:** [`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md)
 — one provider, one hand-made page, translation stage only.

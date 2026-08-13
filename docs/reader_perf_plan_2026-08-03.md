@@ -4,9 +4,8 @@
 > and its consequences are in [§ How other readers do it](#how-other-readers-do-it); the plan at the
 > bottom is the revised one.
 >
-> **The plan below is fully implemented as of 2026-08-03 — items 1–6 all shipped.** For current
-> status see [next-step.md](./next-step.md); for what WebP actually bought and why q90, see
-> [comparison.md](./comparison.md). Item 1's framing changed along the way: a ~1600 px downscale was
+> **The plan below is fully implemented as of 2026-08-03 — items 1–6 all shipped.** For what WebP
+> actually bought and why q90, see [comparison.md](./comparison.md). Item 1's framing changed along the way: a ~1600 px downscale was
 > the wrong lever, because 77% of images are already ≤2000 px, so the win is the WebP re-encode and
 > not the resize. **This file is kept for the measurements and the reader-design research**, which
 > are what the implementation was built from.

@@ -1,577 +1,154 @@
-# Issues and What I want for them
+# Issues
 
-> Resolved items are verified and moved to [archive.md](./archive.md) rather than kept here with a `(done)` tag.
+> Resolved items move to [archive.md](./archive.md) rather than staying here marked done.
+> File new bugs here, not in a separate scratch file.
 >
-> **`docs/new_bugs.md` was retired on 2026-08-08.** All three bugs it carried are closed, along
-> with two more of the same family found while fixing them; the reports, the red-first evidence and
-> the screenshots are in
-> [archive.md § the twentieth sitting](./archive.md#the-2026-08-08-twentieth-sitting--the-loaded-prefix-family).
-> **File new bugs here**, not in a separate scratch file — that file existed for one batch and
-> having two open-bug lists is how AUDIT-F13 sat filed as `[L]` while the same defect was breaking
-> every page reorder on a long chapter.
->
-> **Standing as of 2026-08-08: 66 filed, 58 closed, 8 open (88%).** No `[C]`, no `[H]` — two `[M]`
-> (W3, B10), three `[L]` (F9, D5, Q2) and three unranked (T1, Q1, T3).
+> **Standing: 66 filed, 58 closed, 8 open.** No critical or high-severity items open.
 
-## The queue management has become absolute shit (in progress — partial fix applied)
+## Open, freeform
 
-It used to take 2 hours to process 50 images, check the logs.
+### Queue management was very slow (mostly fixed)
 
-Log in question [run-3-fresh.log](../logs/run-3-fresh.log) for details.
-
-**Update 2026-08-01:** `WORKER_POLL_MS` was restored from the accidentally-regressed 30s back
-down to 2s (commit `92f9284`), which alone removes ~85% of the idle-wait time — see
-[slot_allocation.md](./slot_allocation.md) §5 for the measured before/after (50 pages: ~2h →
-~13min). The remaining ~15% (poll-boundary latency, plus removing the dispatcher as a single
-point of failure) needs the worker-pull model, which is designed but **not yet implemented** —
-see [worker_pull_model.md](./worker_pull_model.md) and the corresponding entry in
-[TODO.md](../TODO.md).
-
-The "OCR should have a dedicated slot and should be prioritized" ask turned out to be a
-misconception, not a bug — see [slot_allocation.md](./slot_allocation.md) §6: OCR shares the
-single Heavy slot with panel-detection/re-OCR jobs, but it's polled first in priority order, so
-in practice it isn't actually starved. Measured queue depth at OCR dispatch time was always 0.
-
-**Update 2026-08-02 — measured, root cause found.** The first fully-drained run
-(`logs/runs/20260802-163445`, 42 pages, 255 jobs, 100% dispatch-log coverage) split queue wait
-from work for the first time. Full analysis:
+50 images used to take ~2 hours. `WORKER_POLL_MS` being accidentally regressed to 30s (should be
+2s) caused most of it — fixing that cut a 50-page run from ~2h to ~13min. The remaining slowness
+was `MAX_LIGHT_SLOTS=1`: four cheap stages (0.2s–110s each) sharing one slot behind LLM calls.
+Raising light slots to 4 addressed the rest — see
 [perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md).
 
-> **90.8% of total job lifetime is queue wait** — 49,073 s of waiting against 4,959 s of work.
-> `layout` has a p50 wait of **591 s** around **0.2 s** of actual work.
-
-The cause is **not** the dispatcher (slots sat idle *with work queued* only 3.2% of samples) and
-**not** the rate limiter (AUDIT-W2, falsified and now closed — see
-[archive.md](./archive.md)). It is `MAX_LIGHT_SLOTS=1`: four light stages
-costing 0.2 s to 110 s each share one slot, so trivial jobs queue behind LLM calls. See
-**AUDIT-W10**. The heavy tier is no longer the floor — the light tier is now 4× slower.
-
-The queue docs were checked and are current as of 2026-08-01:
-[slot_allocation.md](./slot_allocation.md) and
-[translation_pipeline_phases.md](./translation_pipeline_phases.md) reflect the current
-dispatcher behavior. [worker_provider_integration.md](./worker_provider_integration.md) was
-rewritten to describe the `providers.json`-driven architecture — it previously predated that
-file, as suspected.
-
-## The UI is laggy and loads slow (partially fixed)
-
-General observation, will do a proper firefox profile analysis later.
-
-Most probably the backend holding it back, but it's probably just the inheritance and overrides
-
-+ the logic bugs.
-
-The previously described bug where the older chapter content remains visible for a split second
-when loading a new one seems to still exist.
-
-Also when there are too many jobs the queue and notification managers have noticeable lag.
-
-**Update:** the frontend bundle-splitting fix (see [archive.md](./archive.md)) addresses initial
-load weight, but that's load-time, not runtime.
-
-**Update 2026-08-02 — profiling pass done.** See
-[perf_analysis_frontend_2026-08-02.md](./perf_analysis_frontend_2026-08-02.md). The "lag when many
-jobs are running" was largely a permanently-running CSS animation in the Queue Manager: **27.8% of
-one CPU core sustained to display a static list**, via the 60 fps refresh-driver/WebRender loop
-rather than restyle. All custom `@keyframes` have been removed from the frontend (commit `bcc86e0`);
-loading state is MUI `CircularProgress`, and any future motion should use a MUI transition.
-
-"Most probably the backend holding it back" is **falsified**: backend CPU averaged 3.8% across the
-drained run. Two items remain open — per-chapter GC churn (2.93 s of major GC per 55 s window) and
-per-chapter GC churn (2.93 s of major GC per 55 s window).
-
-**Verified 2026-08-02 (run `20260802-210118`).** Post-fix the Queue Manager costs **1.0% of one
-core** where it cost 27.8%, with **zero** `CSS animation iteration` markers and `RefreshDriverTick`
-down from 59.68/s to 2.24/s.
-
-**Update 2026-08-08 — one more Queue Manager complaint, and it was ours.** "Completed jobs linger
-in the queue manager" was a **regression from AUDIT-F5**, not a missing feature: the 10s eviction
-rule for finished jobs already existed, but it lived *inside* `fetchJobs`, and AUDIT-F5 removed the
-30s poll that called it. Now `isExpiredCompletion` on its own 2s sweep — local state and a clock,
-no network. Reasoning in
-[archive.md](./archive.md#audit-f5-took-a-reaper-with-it-when-it-removed-the-poll). **The general
-lesson is worth more than the fix: when you delete a periodic call, check what else was riding on
-its periodicity.** A behaviour implemented as a filter inside a polled fetch is not a behaviour,
-it is a coincidence — and this codebase has had two SSE-for-polling swaps now.
-
-The two remaining complaints are measured, and neither is fixable in frontend code:
-
-+ **"Noticeable lag when background jobs are running"** — app CPU is only 4.9% of a core; **71% of
-  LongTask wall time is the main thread descheduled**, not computing. Containers hit p95 204% of a
-  400% box. Host CPU contention. See AUDIT-W10's interaction note.
-+ **"Reader has some lag"** — 18.9% of a core, 41% descheduled. Of 8.80 s of JS self CPU, **app code
-  is 0.715 s (8%)**; the rest is React reconciliation (2.71 s) and MUI (~2.1 s). See AUDIT-F2.
-
----
-
-## The rendered page still does not look like the references (open — fixing now)
-
-The full defect list, with `file:line` anchors and the phase plan, is
-[render_quality_gap_2026-08-05.md](./render_quality_gap_2026-08-05.md) (D1–D16). This entry is
-the standing summary and, more importantly, **the conditions the 2026-08-12 numbers were measured
-under** — they decide what the gap can and cannot be blamed on.
-
-### Read the conditions before quoting the numbers
-
-+ **The A/B run in `corpus/exports/` was single-pass, QA off.** No post-processing, no re-OCR, no
-  QA re-translation — the page ships whatever the first pass produced. That is deliberate: it
-  measures the pipeline, not the safety net.
-
-  **Tested since, and the safety net does less than expected** (`corpus/withQA/`, two pages
-  re-run with QA on, gap doc §8). QA rewrites text and touches nothing else: all 25 elements come
-  back at IoU 1.00 with byte-identical fills. So **none** of the geometry defects below are
-  recoverable by QA — not the box, not the fill, not the region split. It does fix pronouns,
-  garbled numbers and some glosses; it also invented content over an OCR junk region and typeset
-  the literal string `[Illegible sign]` onto the page.
-+ **The competitor comparison is model-matched.** The run used the same model
-  mangatranslator.ai uses. So the gap against `ref-mangatranslator.ai` is **not** a model-quality
-  gap — it is our region proposals, our prompt contract, and our renderer. That is the whole point
-  of the measurement, and it is why the rendering items below outrank the translation ones.
-+ **Do not compare against `corpus/samples/*/export.png` or `render.png`.** Those are our own
-  older outputs, produced **with QA on and higher-tier models**, so a diff against them measures
-  the QA pass and the model tier, not a change. Compare against the `ref-*` files, which is what
-  the 2026-08-12 analysis did.
-
-### What is open
-
-Three defects were filed new on 2026-08-12 out of the grouping A/B (§7 of the gap doc):
-
-+ **D14 — vertical multi-column narration is shredded into per-column regions**, translated one
-  column at a time. `sample2` splits mid-word and ships `"KITA (ARRIVED FROM)"` plus four blocks of
-  ~4px type. Cause is in `worker/src/worker/services/fragment_grouping.py:100-101`: for vertical
-  text the *cross*-axis gap budget is one character wide, so columns of one narration block never
-  join. Contained fix, `sample2` is the regression test.
-+ **D15 — the translation unit is the region**, so a sentence spanning two balloons is translated
-  as two fragments. `sample9`'s `って` ships as **"like"** where the human scanlation reads
-  "W-WAIT". The batch already sends the whole page in reading order
-  (`worker/src/worker/services/translation.py:58-60`); what is missing is any way for the response
-  to say "these two regions are one utterance". Needs a schema change.
-+ **D16 — no font fallback chain**, so a glyph the lettering face lacks prints as a notdef box:
-  `♡` on `sample30`, `帅哥` on `sample23`. Hours of work, and it is the defect that reads as broken
-  software rather than as a bad translation.
-
-And the two long-standing ones the run re-measured, which are what I am fixing first:
-
-+ **D7 — the type is roughly half the size the references set in the same balloon**, and grouping
-  made it worse, not better: finer regions mean narrower boxes mean smaller type. Measured on
-  `sample27`'s first balloon, same balloon both branches, 12–13px line height against the
-  pre-grouping 22px. 42 regions across the corpus cannot fit their longest word at 12px. The width
-  cap is fixed; **fill-ratio-targeted sizing is not**, and it is the single highest-leverage item
-  on the page.
-+ **D6 — the text box is the balloon's bounding box, not the area text can occupy**, so a line
-  sized for an oval's wide middle overflows where the oval narrows. `sample1`'s bottom-left
-  balloon: bbox spans x 43–156, drawn ink spans x 25–168, first line crosses the outline. D13
-  aligned the fit box with the draw box; both are still the wrong box.
-
-D6 and D7 are one piece of work — a fill target against the wrong box is meaningless — and they
-are being done together, in `render.py` first (fast rebuild, live-verifiable) then mirrored into
-`fitText.ts`, which is D8's twin-renderer problem and the reason both have to move at once.
-
-**Progress 2026-08-12: D6's half is fixed** (worker `4b7c7a4`). A line's span is now measured
-across the band its glyphs occupy rather than at its centre row, the size search rejects layouts
-that leave the mask, and text that cannot be set whole is kept inside its box instead of grown
-until the height runs out. Lines escaping their balloon over the 40-page corpus: 45 -> 10, in
-34 -> 3 of 256 mask-constrained elements, for 1px of median font size. **D7's underfill half is
-untouched** — median balloon fill is still 0.59 against the references' 0.70-0.85, and it will not
-move without hyphenation, because the binding constraint is a single word that will not fit, not
-the search ceiling. Measure with `scripts/text_fit_probe.py`; look at pages with
-`scripts/render_preview.py`.
-
-**Progress 2026-08-13: D7's half is fixed too** (worker `a9f5c30`). Two causes, found by making
-the fitter report which rule stopped it (`limitedBy`) instead of inferring it from outside:
-
-+ *one word that will not fit the width.* The search rejects any layout that splits a word, so a
-  single long word held the whole balloon down to the size at which that word fit whole.
-  Hyphenation (pyphen, Liang dictionaries, minimums 2/3) breaks it at a legal point and carries
-  the hyphen. The contract is no longer "never split a word" but "never split a word *illegally*"
-  — the lines must reassemble into exactly the input.
-+ *the size cap*, `min(max_height // 2, 72)`. 72 is an absolute pixel count applied to pages from
-  832px to 6905px wide; and one line at `h/2` with a 1.2 line-height fills exactly 60% of the box
-  and no more, which is why every element this cap bound sat at a median fill of exactly 0.60.
-
-Median fill 0.591 -> **0.866**; elements under 0.45 fill 126 -> 66; median type 23px -> 27px;
-escapes unchanged at 2. `sample1` is now at rough mangatranslator.ai parity. The honest cost is
-that bigger type amplifies the defects that remain: ink outside a *reshaped free box* 116 -> 138
-(the backend's `freeTextBox` widening, a separate defect), and D10's junk regions and D16's tofu
-glyphs are now drawn larger. Neither is made more likely by this — only more visible.
-
-Still unmirrored into `fitText.ts` (D8).
-
-### Two corrections to what was filed here on 2026-08-12
-
-+ **The unfilled balloons are not a D3 threshold bug.** 21 regions across the corpus get no fill,
-  7 inside properly detected bubbles, which leaves the Japanese visible under the English
-  (`sample28` is five of nine). The tempting reading — that the spread check trips on the very ink
-  the fill exists to cover — is wrong. The declined balloons carry *less* ink than the filled ones
-  (5-8% of pixels against 7-11%); what blows the spread is a vertical colour **gradient**, MAD
-  24-88 against a threshold of 20. No flat colour represents those regions, so raising
-  `BACKGROUND_FILL_MAX_SPREAD` would paint a swatch over every gradient balloon on the page — the
-  exact defect the check was added to stop. **This folds into D1** (gradient-aware fill, or real
-  inpainting) and should not be worked as a D3 tuning item.
-+ **D10's glosses are prompt-specified, not model disobedience.** 28 of the 29 parenthetical
-  glosses are the exact shape `MANGA_TRANSLATION_JSON_SYSTEM_PROMPT` asks for: it requires
-  `"DOKAA (WHAM)"` for `sfx` regions and eleven lines later forbids `"ERUFU (ELF!)"`, which is the
-  same string in the same shape. One prompt edit fixes the class; the render-layer strip stays as
-  defence in depth for the residue.
-
----
-
-## Plan a better backend one that doesn't use java
-
-I am tired of the boilerplate and bug factory that is java, it serves no real purpose and has no
-real benefit other than being looking good in indian resumes, I hoesnly don't want to look at
-java anymore.
-
-For the love of god, do something use go or python idk if the [plan](./migration.md) is still
-upto date or good, so maybe remake it when tackling this issue.
-
-## Do we really need a separate worker?
-
-like what does the backend do that cannot be done by the worker, why do we need this split?
-
-**Update 2026-08-07 (AUDIT-B5):** measured the one narrow slice of this that gated the schema
-baseline — does the worker keep its own view of job state, so the baseline would have to reconcile
-two schemas? No. `docker-compose.yml`'s `worker` service carries no `POSTGRES_*`/`SPRING_DATASOURCE_*`
-env vars at all, and `worker/` has zero `psycopg`/`sqlalchemy`/any-Postgres-client dependency.
-`jobs`, `queue_job` and `job_costs` are owned exclusively by the backend's Postgres schema; the
-worker's only state touchpoints are Redis (the queue) and an HTTP callback
-(`BACKEND_CALLBACK_URL`) back to the backend. So the schema baseline does not depend on this
-question either way — a merged worker would still go through the same repositories, not a second
-schema. The bigger architectural question (should the split exist at all) is untouched and still
-open; this only closes the narrow "does the DB schema need to account for it" sub-question.
-
-## validate if the testing is really testing or just mocking everything and calling it a day
-
-Check the [test-guide](./testing_isolation_guide.md) and make sure the tests are actually
-testing the code and not just mocking everything and calling it a day.
-
-**Note:** `testing_isolation_guide.md` only documents *environment* isolation (H2 in-memory DB,
-Redis logical DB 1, mocked Python Redis client) so tests don't clobber the real stack — it does
-not address whether the assertions themselves are meaningful, which is the actual question this
-issue is asking. Still open.
-
-**Update 2026-08-01:** the provider layer is a concrete instance of exactly this complaint —
-`LLMClient` is only ever tested by monkeypatching `requests.post`, so nothing verifies the
-request we actually put on the wire or the 429/timeout/schema-degradation branches.
-[mock_router.md](./mock_router.md) designs a real over-the-wire mock provider to close that
-specific gap; tracked in [TODO.md](../TODO.md) under Testing & QA.
-
-**Update 2026-08-03 — a concrete instance, on the frontend this time.** The Reader test
-`"reloads layers and shows toast on job_update SSE event"` was de-flaked on 2026-07-28 (`0a5296a`)
-by widening its assertion into a `waitFor`. It flaked again, and the cause turned out to be a real
-lost-invalidation race in `Reader.tsx` — see [archive.md](./archive.md#reader-lost-invalidation-race-2026-08-03).
-The lesson generalises past that one test: **a flaky test is a hypothesis about a race, and
-relaxing its timing discards the hypothesis.** Worth grepping for other assertions that were widened
-rather than diagnosed before trusting the frontend suite as a regression guard.
-
-**Update 2026-08-08 — the sharper version of this complaint is fixtures, not mocks.** Two sittings
-running, every pre-existing test that went red under a new fix turned out to be a **bad fixture
-encoding the bug as the expectation**, not a regression. Nineteenth: two fixtures declared
-`size: 25, totalElements: 2` — a one-page resource — then expected a page 1 to exist; they passed
-only because nothing bounded the walk. Twentieth: `ChapterGallery.test.tsx` declared
-`pagesTotalCount={1}` while passing **two** loaded pages, which is a chapter containing fewer pages
-than are loaded from it — that incoherence is exactly what hid the reorder bound. **An incoherent
-fixture is a green test that cannot fail for the right reason**, and it is a cheaper thing to audit
-than the mock ratio: fixtures are local, self-contained, and a contradiction in one is visible by
-reading it. Worth a pass over the frontend fixtures asking only "could this state exist in
-production?"
-
-**Correction 2026-08-01 (audit):** the "nothing verifies the request we put on the wire" half of
-that claim is wrong — `tests/test_llm_client.py` *does* assert on `mock_post.call_args.kwargs["json"]`
-for the Anthropic `cache_control`, the OpenRouter session/caching injection, and the Cloudflare
-`json_schema` envelope. The half that holds is the branch coverage: all five tests are
-happy-path `200`s. See [AUDIT-T1](#audit-t1--the-e2e-test-is-not-an-e2e-test) below for the real
-shape of the testing gap.
-
-## Full-Stack Audit — 2026-08-01
-
-A read-through of backend (`11.8k` LoC Java), worker (`8.3k` LoC Python), frontend (`26.8k` LoC
-TS/TSX), the Dockerfiles and `docker-compose.yml`, cross-checked against `docs/` and the GitNexus
-graph. Findings are new unless marked otherwise, and are ordered by severity. Every item carries a
-`file:line` anchor so it can be picked up cold.
-
-Conventions: **[C]** critical · **[H]** high · **[M]** medium · **[L]** low/cleanup.
-
-> **Triaged against the code on 2026-08-05.** Every entry below was re-read against the working tree
-> and the closed ones moved to [archive.md](./archive.md). Six were **already fixed while still
-> marked open** — AUDIT-P1, AUDIT-P4, AUDIT-W6, AUDIT-W10, and one bullet each from AUDIT-W8 and
-> AUDIT-B8 — and AUDIT-T2's backend half was re-scoped by fixes that landed elsewhere. Severities
-> and line anchors below have been re-checked; where an anchor had drifted it is corrected inline.
->
-> What survives here is open **as of 2026-08-05**, verified, and nothing in it is stale.
-
-### Security
-
-> **Before filing or fixing anything that "closes an open endpoint": read
-> [security_boundary.md](./security_boundary.md).** The derived image variants
-> (`/api/images/*/thumbnail`, `/api/images/*/reader`) are public **on purpose** and are not a
-> finding. Everything that decides, changes or reveals state stays authenticated.
->
-> **All four `AUDIT-S*` findings are closed** (S1, S2, S3, S4 — fixed 2026-08-02, verified against
-> the code and the running stack on 2026-08-06). They sat here as "open" for four days because the
-> handoff rule *"security is tracked separately, don't fold it in"* was read as *don't triage it
-> either*. Reasoning and the live probes are in
-> [archive.md](./archive.md#the-2026-08-06-thirteenth-sitting--the-whole-security-track-was-already-closed).
->
-> **Security is not exempt from verification.** If a finding lands here again, it gets read against
-> the code like any other entry.
-
-### Pipeline correctness
-
-### Backend (Spring)
-
-*Both entries filed 2026-08-07 (eighteenth sitting) against AUDIT-F8's commit `8c4c509`.*
-
-#### AUDIT-B10 **[M]** — `listPages` forwards the caller's `sort` unvalidated; its two sibling endpoints do not
-
-The same commit added pagination to three endpoints and validated sort input on two of them:
-
-+ `SeriesController.listSeries` (`:288-308`) takes the resolved `Pageable` as `unsortedPageable`,
-  checks `sortBy` against an explicit `SERIES_SORT_FIELDS` allowlist, falls back to `updatedAt` on
-  anything unrecognized, and rebuilds a fresh `PageRequest`. Correct, and tested
-  (`SeriesControllerTest:160` passes `sortBy=title` and asserts the fallback).
-+ `SeriesController.listChapters` (`:420-441`) does the same, hardcoding `chapterNumber`. Correct.
-+ `PageController.listPages` (`:746-763`) does **not**. It takes `@PageableDefault(size = 25)
-  Pageable pageable` and passes it straight into
-  `pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId, pageable)`.
-
-Spring Boot's `SpringDataWebAutoConfiguration` registers `PageableHandlerMethodArgumentResolver`
-unconditionally, so `?sort=` on that endpoint is read into the `Pageable` and reaches Spring Data's
-query derivation as a caller-controlled property name. Two things follow, and **neither is
-currently verified** — see AUDIT-T3, the controller tests mock the repository and cannot observe
-either:
-
-1. An unrecognized property is expected to raise `PropertyReferenceException`, which
-   `GlobalExceptionHandler`'s catch-all `@ExceptionHandler(Exception.class)` (`:142`) would render
-   as a 500 on ordinary user input rather than a 400.
-2. The interaction between the derived query's own `OrderByPageNumberAsc` and a caller-supplied
-   `Sort` is unspecified here — a caller may be able to reorder the reader's pages.
-
-**Do the measurement before the fix**: hit the live endpoint with `?sort=bogus` and with
-`?sort=id,desc` and record what actually comes back, then make it match the siblings (ignore
-caller sort entirely, or allowlist it).
-
-### Worker
-
-#### AUDIT-W3 **[M]** — cooldowns and lock waits burn a job slot doing nothing
-
-*Anchors re-checked 2026-08-05; all three blocking calls confirmed present.*
-
-Three places block a worker thread that is *holding a concurrency slot*:
-
-+ `services/llm_client.py:93-100` `wait_for_cooldown` — `time.sleep` up to 60s.
-+ `utils/lock.py:21-26` `acquire_lock` — spin-waits at `time.sleep(0.5)` up to **600s**.
-+ `services/translation.py:576` `try_local_ai` — `timeout=300` per endpoint × 2 endpoints = 10
-  minutes. Note the second local path (`:990`) already uses a `(10, 45)` connect/read pair, so the
-  fix pattern exists in the file; `try_local_ai` just never got it.
-
-With `MAX_HEAVY_SLOTS=1` a single provider cooldown stalls all heavy work. Slots should be released
-before sleeping, or the job re-queued with a delay.
-
-**Less urgent than when filed, for one tier only.** AUDIT-W10 is closed and light slots now derive
-to 4, so a cooldown on a light job no longer halts the light tier. Heavy is still `MAX_HEAVY_SLOTS=1`
-by design — that tier is local PaddleOCR on CPU and already saturates the container — so the
-original "one cooldown stalls all heavy work" reading is unchanged there.
-
-**Deprioritized 2026-08-07 (user decision): last in the queue, behind Track 1's pagination work,
-F9, and Q1.** Fixing this properly (slot release before sleep, or requeue-with-delay) needs real
-concurrency testing to verify it doesn't just move the deadlock risk elsewhere — that's
-experimentation-heavy work, not a quick pass. Picked up only after everything ahead of it lands.
-
-### Frontend
-
-> **AUDIT-F10, F11 and F12 were closed 2026-08-07 (nineteenth sitting)** — see
-> [archive.md](./archive.md#the-2026-08-07-nineteenth-sitting--audit-f10--f11--f12). Both probes
-> were reproduced as permanent tests before the fix, then went green.
->
-> **AUDIT-F13 was closed 2026-08-08 (twentieth sitting)**, and it was **much larger than filed** —
-> see [archive.md](./archive.md#the-2026-08-08-twentieth-sitting--the-loaded-prefix-family). The
-> disabled "move right" button was the visible corner of a broken write path: `handleMovePage` sent
-> the *loaded prefix* to an endpoint that rejects anything but the chapter's complete page list, so
-> **every** reorder on a chapter over 25 pages failed and silently snapped back. No data was ever
-> corrupted — the backend guard rejects before writing. The fix is unit-tested but **not
-> live-verified**, because it is a write path behind an ADMIN/TRANSLATOR role.
->
-> **The whole loaded-prefix family closed with it** — five bugs, one root cause: code that reasons
-> about a paginated list from the prefix it happens to have loaded. Three were user-reported (the
-> retired `new_bugs.md`), two were never noticed by anyone. **This is AUDIT-F8's pagination work
-> leaving a class of latent bug behind it**, so it is worth one directed sweep rather than waiting
-> for the next report: grep for `.length`, `Math.max` and index arithmetic over any array that
-> comes from `usePaginatedResource`, and check each against `totalCount` instead. `pages.length`
-> and `chapters.length` are prefix lengths now, and neither name says so.
->
-> Note `totalCount` is not universally the right substitute either — it worked for page numbers
-> (contiguous from 1) and was **wrong** for chapter numbers (fractional; a `0.5` interlude is
-> normal, so an 18-chapter series tops out at 17). Ask the server when the answer must be exact.
-
-#### AUDIT-F9 **[L]** — responsive behaviour is never verified
-
-**Zero** uses of `useMediaQuery` or `theme.breakpoints` — all responsiveness is `sx`/CSS.
-`vitest.setup.ts` mocks `localStorage`, `ResizeObserver` and `URL.createObjectURL` but not
-`matchMedia`, and all 43 test files run at one implicit viewport.
-
-yt-diff runs its whole suite twice, at 375×667 and 1280×720, via vitest `projects` with
-per-viewport `matchMedia` shims. **Do not copy that here** — it is load-bearing there because
-yt-diff branches on `useMediaQuery` in 9 places, and there are no such branches here for it to
-exercise. jsdom does not lay out CSS, so the only thing that can actually check this is a real
-browser: a Playwright viewport smoke test over the reader and dashboard. Given the primary device
-is an Android tablet, nothing checks it today.
-
-### Docker & Compose
-
-#### AUDIT-D5 **[L]** — remaining infrastructure items
-
-*Re-verified bullet-by-bullet 2026-08-06. **Three of five are now fixed and archived** (the published
-ports, the `DEBUG` log defaults, the `npm install`). The two below are the memory pair, and both were
-**wrong as filed** — corrected here. They are deliberately deferred: they cannot be sized without a
-measured peak, and this kernel cannot supply one.*
-
-+ `backend/Dockerfile:66` — no `-XX:MaxRAMPercentage`. **The filed reasoning is inverted.** The
-  backend has no `deploy.resources` limit, so "25% of container RAM" is 25% of the *host*: on this
-  19.3 GiB box the JVM already gets a ~4.8 GiB max heap. It is neither starved nor OOM-prone for
-  being too small. Adding `MaxRAMPercentage=75` **on its own makes it strictly worse** — ~14.5 GiB.
-  This bullet is only meaningful landed together with the one below, and only after the pair is
-  sized.
-+ No `deploy.resources` limits on **db, db-backup, redis, minio or backend**. **The filed wording
-  ("any service") is stale** — the worker was capped at 2 CPUs / 4 GiB on 2026-08-01 and `TODO.md`
-  line 163 is checked off. What remains is the other five.
-+ **Why both are deferred, and what unblocks them.** The worker's 4 GiB came from a *measured*
-  2.1 GiB peak. There is no equivalent number for the backend and no cheap way to get one here:
-  kernel 5.15's cgroup v2 has no `memory.peak` (added in 6.8), so there is no high-water mark to
-  read, and instantaneous `docker stats` is not a peak — backend idles at 433 MiB, db 69 MiB,
-  valkey 10 MiB, minio 123 MiB. Sizing a cap from idle numbers on a JVM that is currently allowed
-  4.8 GiB is how you get an OOM-kill under thumbnail load. **Get a peak first:** sample
-  `memory.current` through a thumbnail-heavy run, or run the backend briefly under a generous cap
-  and watch `memory.events`. Then set the cap and `MaxRAMPercentage` together, one variable.
-
-**Deprioritized 2026-08-07 (user decision): last in the queue**, same reasoning as `AUDIT-W3` —
-getting a real peak means a sampled run under thumbnail-heavy load, not a quick measurement, and
-it was already blocked on exactly that. No change to the blocker itself, just where it sits in the
-queue.
-
-### Testing
-
-#### AUDIT-T3 — AUDIT-F8's tests were designed to the seam the bugs fall through
-
-*Filed 2026-08-07 (eighteenth sitting). This is the specific, current instance of the standing
-"is the testing real?" issue above — and it matters more than usual because the sixteenth
-sitting's handoff made "test design is part of the deliverable, not an afterthought" an explicit
-condition of the AUDIT-F8 work.* Sixteen new tests landed with the commit; all pass; AUDIT-F10
-and AUDIT-F11 are both trivially reachable and neither is caught. Three distinct causes:
-
-*Two of the three bullets were closed 2026-08-07 (nineteenth sitting) alongside the AUDIT-F10/F11/F12
-fix. The third is backend and rides with AUDIT-B10.*
-
-+ ~~**A test with no assertion.**~~ **Closed.** `Dashboard.test.tsx`'s `"changes sort order via
-  select"` ended at its click with nothing asserted — deleting the Select's `onChange` entirely
-  would not have failed it. It now asserts the two things `Dashboard` actually owns: that it
-  reports the pick upward (`setSortBy`/`setSortDir`) and that it persists to `localStorage`.
-+ ~~**The seam is drawn around the defect.**~~ **Closed.** `frontend/src/__tests__/components/
-  DashboardSortWiring.test.tsx` renders the real `Dashboard` against the real
-  `usePaginatedResource`, wired as `App.tsx` wires them, and asserts on the query string that
-  goes over the wire. This is the test that would have caught AUDIT-F10, and it was red against
-  the unfixed hook before it was green against the fixed one.
-+ **`@WebMvcTest` cannot prove a pagination fix** — **still open.**, for the same reason the fifteenth sitting
-  recorded that it could not prove a lazy-serialization fix. `PageControllerTest` and
-  `SeriesControllerTest` are `@WebMvcTest` with `@MockitoBean` repositories, so the mock returns
-  whatever `Page` the test hands it and the assertions confirm the controller's envelope shape —
-  never that Spring Data resolved the `Pageable`, applied the `Sort`, or that the derived query's
-  `OrderBy` and a caller `Sort` compose sanely. AUDIT-B10 is invisible from there by construction.
-  **The prior sitting had already written this lesson into its handoff constraints and it was not
-  carried across** — that's the process finding, not just the coverage one.
-
-#### AUDIT-T1 — the "e2e" test is not an e2e test
-
-`worker/tests/test_translation_flow_e2e.py` is the answer to the "is the testing real?" question
-above, and it is not a good one. The test carries **17 `@patch` decorators** and exactly three
-assertions:
-
-```python
-mock_try_llm_qa.assert_called_once()
-mock_try_vlm.assert_called_once()
-assert mock_post.call_count == 7
-assert mock_render_minio.put_object.call_count == 2
-```
-
-Every assertion is about a mock the test itself installed. Nothing checks the *content* of a single
-callback: not the translated text, not the region IDs, not the layer geometry, not the cost. A
-regression that posted `{}` to all seven callbacks would pass. `mock_post.call_count == 7` is also
-brittle in the wrong direction — it breaks on any refactor while proving nothing about correctness.
-
-**Re-counted 2026-08-05 and the trend is the wrong way.** The suite grew and got *more* mocked, not
-less: **342 `@patch` across 49 files**, up from 320 across 46. `test_translation_flow_e2e.py` itself
-is now **19 `@patch` against 4 `assert`s**, so the two tests added since it was filed were the same
-shape as the ones it criticises. Nothing here is stale; it is worse.
-
-The suite-wide numbers say the same thing: **320 `@patch` + 191 `MagicMock` across 46 files**, and
-**217 tests pass in 6.3 seconds** — a full-pipeline suite that touches no real I/O at all. Worst
-mock-to-assert ratios:
-
-| file | mocks | asserts |
-| --- | --- | --- |
-| `test_translation_flow_e2e.py` | 29 | 2 |
-| `test_rq_tasks.py` | 28 | 2 |
-| `test_qa_extra.py` | 31 | 8 |
-| `test_qa_pipeline.py` | 46 | 14 |
-
-This is what `mock_router.md` is for, and it is the strongest argument yet for building it: the
-handlers can only be tested meaningfully against something that speaks the wire protocol.
-
-**Deprioritized 2026-08-07 (user decision): last in the queue, alongside `AUDIT-W3`/`AUDIT-D5`.**
-Building `mock_router.md`'s wire-protocol double and reworking the worst-offender test files is a
-real design-and-experimentation effort (get the mock router's shape right, then re-derive the
-suite against it), not a mechanical pass — same category as the other two last-in-queue items.
-
-### Code quality
-
-#### AUDIT-Q1 — 249 `Objects.requireNonNull` calls, most of them impossible to trigger
-
-*Re-counted 2026-08-05: **249**, up 2 from the filed 247. Nobody has been adding them deliberately;
-they arrive with new code because the surrounding style invites them. That is the argument for doing
-the mechanical pass rather than waiting — the count only moves one way on its own.*
-
-```text
-$ grep -rho "Objects.requireNonNull" backend/src/main | wc -l
-249
-```
+What's left is genuinely small: the [worker pull model](./worker_pull_model.md) would close the
+remaining ~1% (poll-boundary latency) — tracked in [TODO.md](../TODO.md), not worth building for
+throughput alone.
+
+### UI felt laggy (mostly fixed, two items aren't fixable in frontend code)
+
+Root cause of most of the reported lag was a permanent CSS animation in the Queue Manager costing
+27.8% of a CPU core to render a static list. Removed — down to 1.0%. See
+[perf_analysis_frontend_2026-08-02.md](./perf_analysis_frontend_2026-08-02.md).
+
+Two complaints remain, both measured, neither a frontend bug:
+
+- **"Lag when background jobs are running"** — app CPU is 4.9% of a core; 71% of the reported lag
+  is the main thread being descheduled by host CPU contention, not computing.
+- **"Reader has some lag"** — of 8.80s JS CPU time, our code is 0.7s (8%); the rest is React
+  reconciliation and MUI.
+
+### Rendered output doesn't match competitor quality (open, actively being worked)
+
+Tracked in [TODO.md](../TODO.md) under "Render quality gap" — full defect list and plan in
+[render_quality_gap_2026-08-05.md](./render_quality_gap_2026-08-05.md).
+
+### Move the backend off Java
+
+No real technical blocker, just a preference to not maintain a Spring Boot backend long-term.
+[migration.md](./migration.md) has an old plan; treat it as a starting point, not current.
+
+### Do we need a separate worker process?
+
+Narrowly answered for one sub-question: the worker keeps no Postgres state of its own (`jobs`,
+`queue_job`, `job_costs` are backend-owned; the worker only touches Redis and one HTTP callback),
+so a schema baseline never needed to account for a second schema. The bigger "should this split
+exist at all" question is still open.
+
+### Is the test suite actually testing anything, or mostly mocking?
+
+Still open as a general question. Two concrete findings so far:
+
+- The worker suite is heavily mocked: `test_translation_flow_e2e.py`'s "e2e" test has 19 `@patch`
+  decorators and 4 assertions, none of which check the actual translated content — see
+  `AUDIT-T1` below. [mock_router.md](./mock_router.md) is the fix.
+- **A cheaper, more auditable version of this problem: incoherent fixtures.** Twice now, a
+  pre-existing test went red under a real fix not because of a regression, but because its fixture
+  described an impossible state (e.g. `totalElements: 2` while asserting a second page exists).
+  Worth a pass asking of every frontend fixture: "could this state exist in production?"
+
+## AUDIT findings
+
+A full-stack read-through (Java backend, Python worker, TS/TSX frontend, Docker) done 2026-08-01,
+filed as `AUDIT-*` with `file:line` anchors. **58 of 66 closed** — see
+[archive.md](./archive.md) for the reasoning behind each closed item. Security (`AUDIT-S1`–`S4`,
+the fail-open secrets and the SSE token leak) is fully closed; before filing anything new against
+`/api/images/*/thumbnail` or `/api/images/*/reader`, note those are public **on purpose** — see
+[security_boundary.md](./security_boundary.md).
+
+### Open — Backend
+
+#### `AUDIT-B10` (medium) — `listPages` doesn't validate `?sort=`
+
+`SeriesController.listSeries` and `.listChapters` both allowlist their sort field and fall back to
+a safe default on anything unrecognized. `PageController.listPages` (`:746-763`) doesn't — it
+passes `@PageableDefault Pageable` straight into the repository, so `?sort=` reaches Spring Data's
+query derivation as a caller-controlled property name.
+
+**Needs a live measurement before fixing**: hit the real endpoint with `?sort=bogus` and
+`?sort=id,desc` and record what actually comes back — an `@WebMvcTest` with a mocked repository
+can't tell you (that's `AUDIT-T3` below), and the expected 500 is unverified.
+
+### Open — Worker
+
+#### `AUDIT-W3` (medium) — cooldowns and lock waits burn a job slot doing nothing
+
+Three places block a worker thread while it's still holding a concurrency slot: a provider
+cooldown sleep (`llm_client.py:93-100`, up to 60s), a lock spin-wait (`lock.py:21-26`, up to 600s),
+and `try_local_ai`'s per-endpoint timeout (`translation.py:576`, up to 10 min total). With
+`MAX_HEAVY_SLOTS=1`, a single provider cooldown stalls all heavy work — light jobs are no longer
+affected since `AUDIT-W10` raised light slots to 4.
+
+**Deprioritized by user decision**: fixing this needs real concurrency testing to confirm it
+doesn't just relocate the deadlock risk, not a mechanical pass. Last in the queue, alongside
+`AUDIT-T1` and `AUDIT-D5`.
+
+### Open — Frontend
+
+#### `AUDIT-F9` (low) — responsive behaviour is never verified
+
+Zero uses of `useMediaQuery`/`theme.breakpoints`; all 43 test files run at one implicit viewport,
+and `matchMedia` isn't mocked. The primary device is an Android tablet and nothing checks layout
+at that size today. Needs a real-browser (Playwright) viewport smoke test — jsdom doesn't lay out
+CSS.
+
+### Open — Docker & Compose
+
+#### `AUDIT-D5` (low) — no memory limits on db, redis, minio, or backend
+
+The worker is capped (2 CPUs / 4g, sized from a measured 2.1 GiB peak). The other five services
+aren't. Blocked on getting an equivalent peak measurement — this kernel's cgroup v2 has no
+`memory.peak`, so it needs a sampled run under load, not a guess from idle `docker stats` numbers
+(idle is not representative and sizing from it risks an OOM-kill under real load).
+
+**Deprioritized by user decision**, same reasoning as `AUDIT-W3` — last in the queue.
+
+### Open — Testing
+
+#### `AUDIT-T1` (unranked) — the "e2e" test isn't one
+
+`worker/tests/test_translation_flow_e2e.py` has 19 `@patch` decorators and 4 assertions, none of
+which check translated text, region IDs, layer geometry, or cost — a regression that posted `{}`
+to every callback would still pass. Suite-wide: 342 `@patch` across 49 files, 217 tests passing in
+6.3s touching no real I/O.
+
+**Deprioritized by user decision** — needs `mock_router.md` built first (a real wire-protocol
+double), which is design-and-experimentation work, not a mechanical pass.
+
+#### `AUDIT-Q1` (unranked) — 249 `Objects.requireNonNull` calls that can never fire
 
 Concentrated in `JobCoordinatorService` (61), `PageController` (36), `SeriesController` (30),
-`LayerController` (28). A representative sample:
+`LayerController` (28) — almost all guarding freshly-constructed values, literals, or
+already-validated locals. Noise that likely drove `AUDIT-B3`'s NPE→400 mapping. A mechanical pass
+to delete the ones that can't fire would remove several hundred lines. Natural to fold in
+`AUDIT-Q2`'s inline fully-qualified-class-name cleanup — same controllers, one pass.
 
-```java
-Objects.requireNonNull(ocrLayer, "ocrLayer cannot be null");   // :801, one line after `new Layer()`
-Objects.requireNonNull(conv, "conv cannot be null");           // :890, after `new Conversation()`
-Objects.requireNonNull("pipeline:trace:" + imageId)            // :212, a string concatenation
-Objects.requireNonNull(Duration.ofHours(2))                    // :214, a factory result
-Objects.requireNonNull(imageId, "imageId cannot be null")      // :843, after UUID.fromString already threw
-```
+#### `AUDIT-T3` (unranked) — one bullet still open: `@WebMvcTest` can't prove a pagination fix
 
-None of these can fire. They add noise to every call site, and they are almost certainly what drove
-the NPE→400 mapping in AUDIT-B3. A mechanical pass to delete the ones on freshly-constructed values,
-literals and already-validated locals would remove several hundred lines and let `NullPointerException`
-go back to meaning "bug".
+Two of three original findings closed alongside `AUDIT-F10`/`F11`/`F12`. The third: `PageControllerTest`
+and `SeriesControllerTest` are `@WebMvcTest` with mocked repositories, which can confirm the
+controller's response shape but nothing about how Spring Data actually resolves a `Pageable` or
+composes a caller `Sort` with a derived query's `OrderBy`. This is what blocks a real fix for
+`AUDIT-B10` — closing it means `@SpringBootTest` + Testcontainers (`PipelineFlowIntegrationTest` is
+the working pattern already in the codebase).
 
-#### AUDIT-Q2 **[L]** — fully-qualified class names inline instead of imports
+### Open — Code quality
 
-*Filed 2026-08-07 (eighteenth sitting), against AUDIT-F8's commit `8c4c509`.*
+#### `AUDIT-Q2` (low) — fully-qualified class names inline instead of imports
 
-The pagination commit writes types out in full at every use site rather than importing them:
-`org.springframework.data.domain.Pageable`, `org.springframework.data.domain.Page`,
-`org.springframework.data.domain.PageRequest`, `org.springframework.data.domain.Sort.Direction`,
-`org.springframework.data.web.PageableDefault`, `com.manga.library.dto.PagedResponse` and
-`java.util.Set` — across `SeriesController`, `PageController`, `ChapterRepository` and
-`PageRepository`. `SeriesController.listSeries`'s signature is three lines of package prefix, and
-`listChapters`'s `PageRequest.of(...)` call spans four.
-
-Two reasons this is worth a pass rather than a shrug:
-
-+ **It contradicts the same diff.** That commit *removes* a now-unused `import
-  java.util.stream.Collectors` from `SeriesController` while adding a dozen inline FQNs to it.
-+ **It is spreading.** `SeriesController` had exactly one pre-existing instance of the habit
-  (`@org.springframework.transaction.annotation.Transactional` on `listChapters`); the commit
-  multiplied it into the surrounding methods. Same dynamic AUDIT-Q1 describes for
-  `Objects.requireNonNull` — the surrounding style invites more of it, so the count only moves one
-  way on its own.
-
-Mechanical and low-risk: add the imports, delete the prefixes. Natural to fold into AUDIT-Q1's
-sweep, which is already a backend-only mechanical pass over the same controllers.
+`SeriesController`, `PageController`, `ChapterRepository`, `PageRepository` write out full package
+paths at every use site instead of importing. Mechanical, low-risk — fold into `AUDIT-Q1`'s sweep.

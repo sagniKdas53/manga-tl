@@ -2,7 +2,7 @@
 
 How to record a pipeline run with enough fidelity that the next session can do a real
 performance analysis instead of guessing. Written 2026-08-01 alongside the audit in
-[issues.md](./issues.md#full-stack-audit--2026-08-01).
+[issues.md](./issues.md#audit-findings).
 
 The output of a run is a single directory, `logs/runs/<timestamp>/`, holding backend and worker
 logs, a 2-second queue-depth timeline, resource samples, per-job timings straight from the `jobs`
