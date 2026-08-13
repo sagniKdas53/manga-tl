@@ -93,8 +93,10 @@ def apply_r1_r2(project, img):
             box = ocr_box_for(el, ocr_elements)
             rejected = False
 
-            # R1: the polygon we shipped is only this text's balloon if it covers this text.
-            if poly and box:
+            # R1: the polygon we shipped is only this text's balloon if it is a container for it.
+            # A 4-point polygon is the raw OCR rectangle standing in for a balloon, not a detected
+            # one -- it is engulfed by its own text by construction, so it must not be tested.
+            if poly and box and len(poly) > 4:
                 mask = np.zeros((img_h, img_w), dtype=np.uint8)
                 cv2.fillPoly(mask, [np.array(poly, dtype=np.int32)], 255)
                 x1 = max(0, min(img_w - 1, int(box[0])))
