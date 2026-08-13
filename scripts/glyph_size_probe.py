@@ -45,10 +45,27 @@ def glyph_size(width, height, text):
 
 
 def recognise(pages, out_path):
+    """Recognise every page, writing after each one and skipping what is already there.
+
+    Recognition runs ~50s a page on this host, so a full corpus pass is over half an hour, and the
+    first attempt at this was killed at page 15 and lost everything -- it only wrote at the end.
+    Worse, it was run through a pipe, so the shell reported the exit status of `tail` and the run
+    looked like it had succeeded. Write as you go, and resume rather than restart.
+    """
     import warnings
 
     warnings.filterwarnings("ignore")
     from paddleocr import PaddleOCR
+
+    records = []
+    if out_path.exists():
+        records = json.loads(out_path.read_text())
+        done = {r["sample"] for r in records}
+        pages = [p for p in pages if p.parent.name not in done]
+        print(f"resuming: {len(done)} pages already recognised, {len(pages)} to go\n", flush=True)
+    if not pages:
+        print("nothing to do")
+        return
 
     engine = PaddleOCR(
         lang="japan",
@@ -58,7 +75,6 @@ def recognise(pages, out_path):
         enable_mkldnn=False,
     )
 
-    records = []
     for i, path in enumerate(pages, 1):
         started = time.perf_counter()
         try:
@@ -92,12 +108,13 @@ def recognise(pages, out_path):
                     "glyph_frac": glyph_size(w, h, text) / page_w,
                 }
             )
+        out_path.write_text(json.dumps(records, ensure_ascii=False, indent=1))
         print(
-            f"[{i}/{len(pages)}] {path.parent.name}: {len(result['rec_texts'])} fragments in {elapsed:.1f}s",
+            f"[{i}/{len(pages)}] {path.parent.name}: {len(result['rec_texts'])} fragments "
+            f"in {elapsed:.1f}s ({len(records)} total)",
             flush=True,
         )
 
-    out_path.write_text(json.dumps(records, ensure_ascii=False, indent=1))
     print(f"\nwrote {len(records)} fragments to {out_path}")
 
 
