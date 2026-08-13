@@ -111,24 +111,65 @@ the eight new fills are over sound effects (`Wen... yun... yun...`, `?!`), which
 artwork where we previously drew nothing. **R2 without a working R3 is a regression for sfx.**
 Measure over the full corpus before shipping; `COVER_FILL_ENABLED=false` reverts R2 alone.
 
-#### R4 — panel detection returns nothing, so every region is classified "caption"
+#### R4 — why nothing is ever classified `sfx` (investigated 2026-08-13)
 
-`detect_panels` returns **0 panels** on `sample10`. `classify_region_type` branches on `in_panel`
-first, so with no panels every region on the page falls through to the same arm and comes back
-`caption` — dialogue, sound effects and captions alike. That is why `regionType` is absent or
-useless on every element in `corpus/exports/`, and it is why R3's sfx gate, which is correct as
-written and tested, cannot fire: nothing is ever labelled `sfx`.
+**The version of R4 filed earlier today was wrong on both counts and is corrected here.**
 
-Reproduce:
+It claimed `detect_panels` returns 0 panels and that this makes every region a `caption`. Neither
+holds. `detect_panels` takes **encoded bytes** and calls `cv2.imdecode` (`panel_detection.py:14`);
+it was handed a decoded array from `cv2.imread`, so it bailed at the `img is None` guard. Called
+correctly it returns 1 panel, and it can never return an empty list anyway — lines 42-43 fall back
+to a single whole-page panel. And the "everything is caption" result came from that same mistake:
+`panel=None` is the only way to reach the caption arm. With a whole-page panel, `sample10`
+classifies as **13 speech, 3 narration**, which is reasonable.
+
+What *is* true, in order of how much it matters:
+
+**A. `sfx` is unreachable for the regions that are actually sfx.** This is what gates R3, and it is
+a detection problem, not a panel problem. `classify_region_type` recognises sfx two ways
+(`layout.py:53-56`): kana-only text of 5 characters or fewer, or a box more than 3x taller than
+wide holding 6 characters or fewer. Stylised sound effects are exactly what the recogniser
+mangles, and a mangled read matches neither rule. On `sample10`, び ぇぇ ええ comes back as `云え`
+(kanji, so not kana-only) in a 349x211 box (wider than tall), and ギチィ as `cu3ぎチ！` (Latin
+characters, and 2.3x tall, under the 3.0 bar). Both classify as `speech`.
+
+**B. Recogniser confidence cannot be used to catch them either.** R3's second half assumes a
+garbled read reports a low score. Re-running PaddleOCR over the page directly says otherwise —
+**every fragment scores ≥ 0.908, and the `云え` misread scores 0.956.** The recogniser is
+confidently wrong. So `JUNK_REGION_MIN_CONFIDENCE` at 0.55 would never fire here, and raising it
+to 0.96 would take most of the dialogue with it. Consistent with the corpus-engine correlation
+already on file: these engines agree with each other while being wrong.
+
+**Both halves of R3 are therefore inert on this page, and R2's sfx regression is not mitigated by
+anything.** That is the live risk from today's work: four slabs go onto `sample10`'s artwork where
+we previously drew nothing. `COVER_FILL_ENABLED=false` reverts R2 alone.
+
+**What does separate them, on this page's numbers:** glyph size, estimated as
+`sqrt(box_area / character_count)`, against page width. `云え` is 191px on a 1560px page (12.2%);
+the largest dialogue fragment is 41px (2.6%); `待って` — dialogue set large inside a burst, which
+must *not* be dropped — is 87px (5.6%). A clean separation, but one page is not enough to set a
+threshold on and this file has been burned by exactly that before (`BUBBLE_CONTOUR_FALLBACK`'s
+"48%" that was really 0.3%). Measure over the corpus first.
+
+**C. 22 of 40 corpus pages get the whole-page fallback**, i.e. no real panels are found. Cause:
+`RETR_EXTERNAL` over "everything not near-white" returns **one contour covering 100% of the page**,
+which the `width < w * 0.98` guard then rejects. Art bleeding to the page edge and bubbles
+straddling the gutter connect every tier into one blob. On `sample10` there is not one fully-white
+row on the page; the widest gutter is ~4px at y≈1511 and only 89% of its pixels clear 240. This
+degrades reading order and panel-relative classification rather than breaking them, so it ranks
+below A.
+
+Reproduce (note the bytes, and the flag — PaddleOCR segfaults on this host under oneDNN):
 
 ```
-.venv/bin/python -c "import sys,cv2; sys.path.insert(0,'worker/src'); \
+.venv/bin/python -c "import sys; sys.path.insert(0,'worker/src'); \
   from worker.services.panel_detection import detect_panels; \
-  print(detect_panels(cv2.imread('corpus/samples/sample10/source.jpeg')))"
-```
+  print(detect_panels(open('corpus/samples/sample10/source.jpeg','rb').read()))"
 
-Not yet investigated — filed on discovery, not diagnosed. It gates R3, D10's classifier work, and
-the reading-order logic that also consumes panels.
+FLAGS_use_mkldnn=0 .venv/bin/python -c "from paddleocr import PaddleOCR; \
+  r=PaddleOCR(lang='japan', enable_mkldnn=False).predict('corpus/samples/sample10/source.jpeg')[0]; \
+  print(sorted(zip(r['rec_scores'], r['rec_texts']))[:5])"
+```
 
 ### Move the backend off Java
 
