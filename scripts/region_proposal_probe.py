@@ -500,13 +500,18 @@ LABEL_HTML = """<!doctype html><meta charset="utf-8"><title>balloon groups — {
  .f{{position:absolute;border:2px solid #888;background:#8884;cursor:pointer;
    box-sizing:border-box;font:11px monospace;color:#fff;text-shadow:0 0 3px #000}}
  .f span{{position:absolute;top:-1px;left:1px}}
+ .f.sfx{{border-style:dashed;border-color:#ff2bd1;background:#ff2bd133}}
+ .f.sfx::after{{content:"SFX";position:absolute;right:1px;bottom:-1px;font:9px monospace;
+   color:#ff2bd1;text-shadow:0 0 3px #000}}
+ button.on{{background:#ff2bd1;border-color:#ff2bd1;color:#111;font-weight:600}}
  #status{{margin-left:auto;opacity:.8}}
 </style>
 <header>
  <b>{sample}</b>
- <span>click a fragment to put it in the active group</span>
+ <span>click a fragment to put it in the active group; shift-click (or SFX mode) marks it a sound effect</span>
  <span id="pal"></span>
  <button onclick="newGroup()">+ new group (n)</button>
+ <button id="sfxbtn" onclick="toggleSfxMode()">SFX mode (s)</button>
  <button onclick="clearAll()">reset</button>
  <button onclick="save()">save JSON</button>
  <span id="status"></span>
@@ -517,6 +522,11 @@ const SAMPLE={sample_json}, FRAGS={frags_json}, PW={pw}, PH={ph};
 const COLORS=["#e6194b","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6",
               "#bcf60c","#fabebe","#008080","#e6beff","#9a6324","#800000","#aaffc3","#808000"];
 let groups=FRAGS.map(()=>-1), active=0, nGroups=1;
+// Sound effects are a separate axis from grouping, not a group: the policy is that they are never
+// typeset at all, so what is wanted is a flag on the fragment, not a partition it belongs to. Kept
+// independent of `groups` so a fragment can be both grouped and marked, and so older
+// `.groups.json` files that predate this still load.
+let sfx=FRAGS.map(()=>false), sfxMode=false;
 
 function render(){{
   const box=document.getElementById("boxes"); box.innerHTML="";
@@ -526,26 +536,36 @@ function render(){{
     d.style.width=(100*f.width/PW)+"%"; d.style.height=(100*f.height/PH)+"%";
     const g=groups[i];
     if(g>=0){{ const c=COLORS[g%COLORS.length]; d.style.borderColor=c; d.style.background=c+"55"; }}
+    if(sfx[i]) d.classList.add("sfx");
     d.innerHTML="<span>"+i+(g>=0?":"+g:"")+"</span>";
-    d.onclick=()=>{{ groups[i]= groups[i]===active ? -1 : active; render(); }};
+    d.onclick=(e)=>{{
+      if(sfxMode || e.shiftKey) sfx[i]=!sfx[i];
+      else groups[i]= groups[i]===active ? -1 : active;
+      render();
+    }};
     box.appendChild(d);
   }});
   let pal=""; for(let g=0;g<nGroups;g++)
     pal+='<span class="swatch'+(g===active?' active':'')+'" style="display:inline-block;'+
          'background:'+COLORS[g%COLORS.length]+'" onclick="active='+g+';render()"></span>';
   document.getElementById("pal").innerHTML=pal;
-  const done=groups.filter(g=>g>=0).length;
+  document.getElementById("sfxbtn").className = sfxMode ? "on" : "";
+  const done=groups.filter(g=>g>=0).length, nsfx=sfx.filter(Boolean).length;
   document.getElementById("status").textContent=done+"/"+FRAGS.length+" assigned, "+
-    nGroups+" group(s)"+(done<FRAGS.length?"  — unassigned fragments are EXCLUDED, not a group":"");
+    nGroups+" group(s), "+nsfx+" SFX"+
+    (done<FRAGS.length?"  — unassigned fragments are EXCLUDED, not a group":"");
 }}
 function newGroup(){{ active=nGroups++; render(); }}
-function clearAll(){{ groups=FRAGS.map(()=>-1); active=0; nGroups=1; render(); }}
+function toggleSfxMode(){{ sfxMode=!sfxMode; render(); }}
+function clearAll(){{ groups=FRAGS.map(()=>-1); sfx=FRAGS.map(()=>false);
+                    active=0; nGroups=1; sfxMode=false; render(); }}
 document.addEventListener("keydown",e=>{{
   if(e.key==="n") newGroup();
+  else if(e.key==="s") toggleSfxMode();
   else if(/^[0-9]$/.test(e.key) && +e.key<nGroups){{ active=+e.key; render(); }}
 }});
 function save(){{
-  const blob=new Blob([JSON.stringify({{sample_id:SAMPLE,groups:groups}},null,1)],
+  const blob=new Blob([JSON.stringify({{sample_id:SAMPLE,groups:groups,sfx:sfx}},null,1)],
                       {{type:"application/json"}});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download=SAMPLE+".groups.json"; a.click();
@@ -659,6 +679,36 @@ def load_hand_labels(labels_dir, quiet=False):
             if ag < tot:
                 print(f"  {sid}: annotators agree on {ag}/{tot} pairs ({100 * ag / tot:.1f}%). "
                       f"Using {pname}.")
+    return out
+
+
+def load_sfx_labels(labels_dir):
+    """{sample: [is_sfx per fragment]} from saved annotation files.
+
+    Separate from :func:`load_hand_labels` rather than folded into it, because that one's return
+    shape is `{sample: groups}` and several callers unpack it directly. Files saved before the SFX
+    selector existed simply have no `sfx` key and are skipped, so old annotations stay valid for
+    the grouping experiment they were made for.
+
+    These labels are ground truth for measuring a classifier, not the classifier. The policy is
+    that sound effects are never typeset (Sagnik, 2026-08-13), and the intended mechanism is the
+    QA VLM reading the crop -- sfx are too varied for a geometric rule, and R4 established that
+    neither the text-shape rules nor recogniser confidence can see them at all.
+    """
+    out = {}
+    if not labels_dir or not os.path.isdir(labels_dir):
+        return out
+    for name in sorted(os.listdir(labels_dir)):
+        if not name.endswith(".json"):
+            continue
+        with open(os.path.join(labels_dir, name)) as fh:
+            payload = json.load(fh)
+        sid, flags = payload.get("sample_id"), payload.get("sfx")
+        if not sid or flags is None:
+            continue
+        # A file named exactly <sid>.groups.json is authoritative; see load_hand_labels.
+        if sid not in out or name == f"{sid}.groups.json":
+            out[sid] = [bool(f) for f in flags]
     return out
 
 

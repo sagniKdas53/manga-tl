@@ -144,12 +144,49 @@ already on file: these engines agree with each other while being wrong.
 anything.** That is the live risk from today's work: four slabs go onto `sample10`'s artwork where
 we previously drew nothing. `COVER_FILL_ENABLED=false` reverts R2 alone.
 
-**What does separate them, on this page's numbers:** glyph size, estimated as
-`sqrt(box_area / character_count)`, against page width. `云え` is 191px on a 1560px page (12.2%);
-the largest dialogue fragment is 41px (2.6%); `待って` — dialogue set large inside a burst, which
-must *not* be dropped — is 87px (5.6%). A clean separation, but one page is not enough to set a
-threshold on and this file has been burned by exactly that before (`BUBBLE_CONTOUR_FALLBACK`'s
-"48%" that was really 0.3%). Measure over the corpus first.
+**Glyph size looked like it separated them on this page. Measured over all 40, it does not.**
+`sqrt(box_area / character_count)` against page width, 804 fragments, OCR configured to match
+`ModelManager.get_paddle_ocr_reader` exactly. The largest fragments on the corpus are *dialogue* —
+`いい人ね！` at 0.135, `それなら` at 0.105, `されたい` at 0.091 — and genuine sfx (`ドキ` 0.117,
+`ワアル` 0.110, `イメージ` 0.103) interleave with them throughout. Any threshold that catches the
+sfx throws away whole lines of dialogue. Closed; do not retry without new evidence.
+
+**The corpus-wide confidence numbers are worth keeping even though the sfx idea failed.** 4.4% of
+fragments score under 0.55, and that set is uniformly misread garbage — `M`, `江`, `综`, `1`,
+`～ツいいい`, `やっホ`. So R3's junk half has precision without recall: it will not catch a
+confidently-wrong sfx, and it does catch the D10 junk-region class.
+
+##### The answer: `reject_sfx` already exists and nothing consumes it (2026-08-13)
+
+**Policy, from Sagnik, asked directly: sound effects are never typeset.** No quality bar. And the
+mechanism is the QA VLM rather than a rule, because sfx "are quite complex and vary case by case".
+
+That mechanism was already built. `reject_sfx` has been in `QA_JSON_SCHEMA` and all four QA prompts
+from the start — *"If the region is a sound effect (SFX) or gibberish that shouldn't be translated,
+set this status (downstream will hide the element)"* — and **nothing downstream consumed it.**
+`JobCoordinatorService` handled `direct_fix` and `failed`, wrote the status onto the region, and
+never touched the element. Grep for it across the worker, backend and frontend and every hit is the
+worker declaring it.
+
+It was not even a theoretical gap. The 2026-08-12 `corpus/withQA/` run has the VLM flagging both of
+page-2's sfx with correct reasoning:
+
+> *"The region corresponds to the large Japanese scream sound effect in the panel, not a sign or
+> dialogue balloon. It should be removed rather than replaced with the misleading '[Illegible sign]'
+> text."*
+
+Those are the two defects filed from that run in §8 of the gap doc — the literal `[Illegible sign]`
+printed onto the artwork, and `Mumble mumble...` → `Say your complaints.` invented over a scream.
+The reviewer caught both, said hide them, and we typeset them anyway.
+
+**Fixed:** `hideTranslationElements` in `JobCoordinatorService`, wired into both QA callback paths
+(hybrid and LLM). Hides rather than deletes — the element carries the geometry and the reviewer's
+reasoning, an editor may disagree, and the renderer already skips invisible elements. Restricted to
+the latest translation layer on the hybrid path, since older layers are superseded history.
+
+**Caveat that follows from the policy:** a QA-off run has *no* sfx rejection at all. That is what
+`corpus/exports/` is, and it is why R2's covering fill puts slabs on artwork there. Benchmark runs
+should either enable QA or set `COVER_FILL_ENABLED=false`.
 
 **C. 22 of 40 corpus pages get the whole-page fallback**, i.e. no real panels are found. Cause:
 `RETR_EXTERNAL` over "everything not near-white" returns **one contour covering 100% of the page**,

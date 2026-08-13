@@ -1811,6 +1811,8 @@ public class JobCoordinatorService {
                         }
                       }
                       region.setQaStatus("fixed");
+                    } else if ("reject_sfx".equalsIgnoreCase(qaStatus)) {
+                      hideTranslationElements(regionId, finalLatestTranslationLayer);
                     }
                     ocrRegionRepository.save(Objects.requireNonNull(region));
                   });
@@ -1946,6 +1948,8 @@ public class JobCoordinatorService {
                         region.setBubbleReadingOrder(
                             ((Number) escalation.get("suggestedReadingOrderIndex")).intValue());
                       }
+                    } else if ("reject_sfx".equalsIgnoreCase(qaStatus)) {
+                      hideTranslationElements(regionId, null);
                     }
                     ocrRegionRepository.save(Objects.requireNonNull(region));
 
@@ -2137,6 +2141,36 @@ public class JobCoordinatorService {
       redisTemplate.delete(Objects.requireNonNull(retryKey));
       redisTemplate.delete("pipeline:trace:" + imageId);
       return qaUnusable ? "COMPLETED_NO_QA" : "COMPLETED";
+    }
+  }
+
+  /**
+   * Hide the typeset text for a region QA judged to be a sound effect.
+   *
+   * <p>The QA prompt has told the model since it was written that {@code reject_sfx} means
+   * "downstream will hide the element". Nothing downstream did. The status was written onto the
+   * region and no element was ever touched, so a region the reviewer had explicitly asked to be
+   * removed was typeset anyway — on the 2026-08-12 QA run that is both of the page-2 rejections,
+   * one of which became the literal string "[Illegible sign]" printed over the artwork and the
+   * other an invented sentence over a scream.
+   *
+   * <p>Hiding rather than deleting: the element carries the region's geometry and the reviewer's
+   * reasoning, an editor may disagree, and the renderer skips invisible elements anyway.
+   *
+   * @param latestTranslationLayer when non-null, restrict to that layer; older translation layers
+   *     are already invisible and rewriting them would edit superseded history.
+   */
+  private void hideTranslationElements(UUID regionId, Layer latestTranslationLayer) {
+    for (LayerElement el : layerElementRepository.findByRegionId(regionId)) {
+      if (el.getLayer() == null || !"translation".equalsIgnoreCase(el.getLayer().getType())) {
+        continue;
+      }
+      if (latestTranslationLayer != null && !el.getLayer().getId().equals(latestTranslationLayer.getId())) {
+        continue;
+      }
+      el.setVisible(false);
+      layerElementRepository.save(Objects.requireNonNull(el));
+      log.info("QA rejected region {} as SFX — hiding its typeset element {}", regionId, el.getId());
     }
   }
 

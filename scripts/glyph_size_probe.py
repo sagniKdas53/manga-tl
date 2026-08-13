@@ -24,11 +24,15 @@ import argparse
 import glob
 import json
 import math
+import os
 import statistics
+import sys
 import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "worker" / "src"))
+os.environ.setdefault("REDIS_HOST", "localhost")
 
 
 def glyph_size(width, height, text):
@@ -67,31 +71,48 @@ def recognise(pages, out_path):
         print("nothing to do")
         return
 
+    # Mirror `ModelManager.get_paddle_ocr_reader` exactly. The first version of this probe did not,
+    # and a measurement taken under a different configuration than the pipeline runs does not
+    # transfer -- which is the entire point of taking it. Two differences mattered:
+    # `use_textline_orientation` (the worker leaves it off, and it changes how vertical Japanese
+    # columns are recognised) and the 1024px downscale the worker applies before OCR, which changes
+    # which fragments are detected at all.
     engine = PaddleOCR(
         lang="japan",
-        use_doc_orientation_classify=False,
+        device=os.environ.get("PADDLEOCR_DEVICE", "cpu").strip().lower(),
+        text_detection_model_name=os.environ.get("PADDLEOCR_DET_MODEL", "PP-OCRv6_medium_det").strip(),
+        text_recognition_model_name=os.environ.get("PADDLEOCR_REC_MODEL", "PP-OCRv6_medium_rec").strip(),
+        use_textline_orientation=False,
         use_doc_unwarping=False,
-        use_textline_orientation=True,
+        use_doc_orientation_classify=False,
         enable_mkldnn=False,
     )
 
+    import cv2
+
+    from worker.utils.image import downscale_for_ocr
+
     for i, path in enumerate(pages, 1):
+        original = cv2.imread(str(path))
+        if original is None:
+            print(f"[{i}/{len(pages)}] {path.parent.name}: unreadable", flush=True)
+            continue
+        page_h, page_w = original.shape[:2]
+        # The worker OCRs a downscaled copy and scales the boxes back up, so the boxes it acts on
+        # are not the boxes a full-resolution pass would give.
+        small, upscale = downscale_for_ocr(original, max_dim=1024)
+
         started = time.perf_counter()
         try:
-            result = engine.predict(str(path))[0]
+            result = engine.predict(small)[0]
         except Exception as e:
             print(f"[{i}/{len(pages)}] {path.parent.name}: FAILED ({e})", flush=True)
             continue
         elapsed = time.perf_counter() - started
 
-        import cv2
-
-        img = cv2.imread(str(path))
-        page_h, page_w = img.shape[:2]
-
         for text, score, poly in zip(result["rec_texts"], result["rec_scores"], result["rec_polys"]):
-            xs = [float(p[0]) for p in poly]
-            ys = [float(p[1]) for p in poly]
+            xs = [float(p[0]) * upscale for p in poly]
+            ys = [float(p[1]) * upscale for p in poly]
             w, h = max(xs) - min(xs), max(ys) - min(ys)
             records.append(
                 {
