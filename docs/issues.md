@@ -37,6 +37,45 @@ Two complaints remain, both measured, neither a frontend bug:
 Tracked in [TODO.md](../TODO.md) under "Render quality gap" — full defect list and plan in
 [render_quality_gap_2026-08-05.md](./render_quality_gap_2026-08-05.md).
 
+#### Doing now: the three things that make a page look broken (2026-08-13)
+
+Set from `corpus/sample10` against `corpus/samples/sample10/ref-mangatranslator.ai.jpeg`, and
+deliberately *not* from anything typographic. D6 and D7 are fixed and the page still looks wrong,
+because none of what is wrong with it is about type. These three are, in order of how much they
+fix per hour. **All three are being done in one pass — none is being deferred.**
+
+**R1 — a bubble must be bigger than the text inside it, and nothing checks that.**
+`process_ocr` assigns a fragment to whichever YOLO mask it overlaps *most* (`ocr.py:611-626`);
+any overlap at all wins, and the winner's geometry is accepted unconditionally. The
+`contour_bubble_for_unmatched` fallback path has a containment guard (`ocr.py:366`); the YOLO
+path has none. `sample10`'s 待って is dark type with a **white stroke around each glyph** on a
+yellow burst — no balloon exists — and YOLO fired on the stroke. We then painted `#fcfaf9` in the
+shape of the letters onto the yellow and set "WAIT!" in the sliver. Measured over the 40-page
+corpus by pairing each contour with its OCR box: **12 of 239 contours are smaller than their own
+text** (impossible for a container), 26 are under 1.2x, 67 under 1.5x; the median is 1.85x.
+
+**R2 — when we cannot match the background we give up, which is the worst of the options.**
+`detect_background_color`/`_poly` return `None` on anything not near-flat and the caller skips the
+fill (`ocr.py:119-203`), so English lands on top of unerased Japanese: 21 elements across the
+corpus, 14 of them with no bubble either. `sample10`'s yellow region is the case — the Japanese is
+lettered straight onto a character's shaded blanket, there is no balloon and no flat colour, and
+every individual decision we make about it is defensible. mangatranslator.ai does not erase this
+better than us; **it does not attempt to erase it at all.** It draws a new flat-yellow balloon over
+the blanket and sets the English inside. That is a choice, not a capability, and it is copyable
+today. Returning `None` must stop meaning "draw nothing".
+
+**R3 — we typeset sound effects and OCR garbage; the reference leaves them alone.**
+`sample10`'s `cu3ぎチ！` (a misread of the artwork's ギチィ) became the sentence **"Deadline
+countdown activated!"**, and we painted `#edeafe` onto the desk to hold it. `Wen... yun... yun...`
+and `?!` are the same. The reference leaves び ぇぇ ええ and ギチィ untouched. Two parts: the
+prompt contradiction that *requires* `"DOKAA (WHAM)"` eleven lines above forbidding `"ERUFU
+(ELF!)"` (`services/translation.py:65` vs the NEVER line), and no gate stopping an sfx region from
+being typeset at all. Note `regionType` is absent from every element in this run — the layout
+classifier did not populate it — so the gate cannot simply read that field and assume it is there.
+
+Verify with `scripts/render_preview.py`; the bar is `corpus/sample10/page-10-rendered.png` against
+`corpus/samples/sample10/ref-mangatranslator.ai.jpeg`.
+
 ### Move the backend off Java
 
 No real technical blocker, just a preference to not maintain a Spring Boot backend long-term.
