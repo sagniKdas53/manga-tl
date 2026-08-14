@@ -300,13 +300,20 @@ def verify(manifest, samples_dir):
         expected = {"meta.json"}
         paths = [meta["source"]["file"]] + [r["file"] for r in meta["references"]] \
             + list(meta["output"].values())
+        unpacked = os.path.isdir(os.path.join(sample_dir, "project"))
         for rel in paths:
             expected.add(rel)
-            if not os.path.exists(os.path.join(sample_dir, rel)):
-                print(f"  BROKEN   {sample_id}/{rel}")
-                ok = False
+            if os.path.exists(os.path.join(sample_dir, rel)):
+                continue
+            # The bundle is gitignored (see corpus/.gitignore) because project/ already holds
+            # every byte of it. A fresh clone therefore has project/ and no zip, which is the
+            # intended state rather than a broken sample.
+            if rel == meta["output"].get("project") and unpacked:
+                continue
+            print(f"  BROKEN   {sample_id}/{rel}")
+            ok = False
 
-        if os.path.isdir(os.path.join(sample_dir, "project")):
+        if unpacked:
             expected.add("project")
         if os.path.isdir(os.path.join(sample_dir, "legacy-bench")):
             expected.add("legacy-bench")
