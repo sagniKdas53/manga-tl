@@ -8,7 +8,7 @@ Usage:
       --ocr corpus/samples/sample18/legacy-bench/ocr_results_paddleocr_v6_server.json \
       --tl corpus/samples/sample18/legacy-bench/tl_output_openrouter_google_gemma-4-26b-a4b-it_free.json
 
-Paths follow the flat sample layout written by scripts/flatten_samples.py — source.<ext>,
+Paths follow the flat sample layout written by corpus/scripts/flatten_samples.py — source.<ext>,
 ref-<provenance>.<ext>, export/render/project — and each sample's meta.json names them.
 """
 import os

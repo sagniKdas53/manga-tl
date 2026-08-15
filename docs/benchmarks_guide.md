@@ -259,7 +259,7 @@ not a metadata mutation, so the VLM arm currently measures semantic and OCR revi
 
 ## 3. Where the pages come from
 
-`corpus/samples/sampleN/` after `scripts/flatten_samples.py` — one flat directory per sample,
+`corpus/samples/sampleN/` after `corpus/scripts/flatten_samples.py` — one flat directory per sample,
 every name derivable from the role:
 
 ```
@@ -284,7 +284,7 @@ the whole NSFW half can be excluded wholesale. Their sample ids are `NSFW/sample
 collide with the SFW ones. Their source language is recorded as `ja` but was never actually
 confirmed; no NSFW page has been through a builder yet.
 
-`meta.json` is generated from **`scripts/examples_manifest.json`**, which is committed. That
+`meta.json` is generated from **`corpus/scripts/examples_manifest.json`**, which is committed. That
 matters because the filenames no longer say what a file is — the manifest is the durable record
 of which original file plays which role. Roles were established by inspecting all 40 SFW pages,
 which corrected things filename heuristics got wrong (11 samples keep their human TL under its
@@ -295,7 +295,7 @@ its namesake; they are mangatranslate.com renders that collided on download.
 Verify the layout any time with:
 
 ```bash
-python scripts/flatten_samples.py --verify
+python corpus/scripts/flatten_samples.py --verify
 ```
 
 ### Coverage, and which pages fall out where
@@ -451,8 +451,8 @@ python scripts/build_qa_corpus.py
 ### Order of operations after changing an image
 
 1. Drop the new file into `corpus/samples/sampleN/` under any name.
-2. Update `scripts/examples_manifest.json` (roles/provenance for the new file).
-3. `python scripts/flatten_samples.py --apply --sample sampleN` — renames it to its role name
+2. Update `corpus/scripts/examples_manifest.json` (roles/provenance for the new file).
+3. `python corpus/scripts/flatten_samples.py --apply --sample sampleN` — renames it to its role name
    and rewrites `meta.json`.
 4. `python scripts/build_translation_corpus.py --sample sampleN`
 5. `python scripts/build_ocr_corpus.py --sample sampleN`

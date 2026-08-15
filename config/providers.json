@@ -62,6 +62,11 @@
             "free": false
           },
           {
+            "id": "google/gemini-3.7-flash",
+            "name": "Gemini 3.7 Flash",
+            "free": false
+          },
+          {
             "id": "google/gemini-3.1-flash-lite",
             "name": "Gemini 3.1 Flash Lite",
             "free": false
@@ -72,6 +77,11 @@
             "free": false
           },
           {
+            "id": "upstage/solar-pro4",
+            "name": "Solar Pro 4",
+            "free": false
+          },
+          {
             "id": "poolside/laguna-s-2.1:free",
             "name": "Poolside Laguna S 2.1",
             "free": true
@@ -79,6 +89,11 @@
           {
             "id": "openai/gpt-oss-20b:free",
             "name": "GPT-OSS 20B",
+            "free": true
+          },
+          {
+            "id": "dots-studio/dots-3-note-preview:free",
+            "name": "Dots 3 Note Preview",
             "free": true
           },
           {
@@ -124,8 +139,18 @@
             "free": false
           },
           {
+            "id": "google/gemini-3.7-flash",
+            "name": "Gemini 3.7 Flash",
+            "free": false
+          },
+          {
             "id": "google/gemini-3.1-flash-lite",
             "name": "Gemini 3.1 Flash Lite",
+            "free": false
+          },
+          {
+            "id": "upstage/solar-pro4",
+            "name": "Solar Pro 4",
             "free": false
           },
           {
@@ -146,6 +171,11 @@
           {
             "id": "poolside/laguna-s-2.1:free",
             "name": "Poolside Laguna S 2.1",
+            "free": true
+          },
+          {
+            "id": "dots-studio/dots-3-note-preview:free",
+            "name": "Dots 3 Note Preview",
             "free": true
           },
           {
@@ -191,6 +221,11 @@
             "free": false
           },
           {
+            "id": "google/gemini-3.7-flash",
+            "name": "Gemini 3.7 Flash",
+            "free": false
+          },
+          {
             "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
             "name": "Nemotron-3-Nano-Omni-30B-A3B",
             "free": true
@@ -198,6 +233,11 @@
           {
             "id": "google/gemma-4-26b-a4b-it:free",
             "name": "Gemma 4 26B A4B IT",
+            "free": true
+          },
+          {
+            "id": "dots-studio/dots-3-note-preview:free",
+            "name": "Dots 3 Note Preview",
             "free": true
           },
           {
@@ -253,6 +293,11 @@
             "free": false
           },
           {
+            "id": "google/gemini-3.7-flash",
+            "name": "Gemini 3.7 Flash",
+            "free": false
+          },
+          {
             "id": "google/gemini-3.1-flash-lite",
             "name": "Gemini 3.1 Flash Lite",
             "free": false
@@ -265,6 +310,11 @@
           {
             "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
             "name": "Nemotron-3-Nano-Omni-30B-A3B",
+            "free": true
+          },
+          {
+            "id": "dots-studio/dots-3-note-preview:free",
+            "name": "Dots 3 Note Preview",
             "free": true
           },
           {
