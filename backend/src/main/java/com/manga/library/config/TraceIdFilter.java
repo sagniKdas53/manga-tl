@@ -40,10 +40,8 @@ public class TraceIdFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
     String inbound = request.getHeader(TraceContext.TRACE_HEADER);
     String traceId;
-    if (inbound != null && !inbound.isBlank()) {
-      // Cap the length: this is attacker-controlled input that is about to be written into every
-      // log line for the duration of the request. A UUID is 36 characters.
-      traceId = inbound.length() > 64 ? inbound.substring(0, 64) : inbound;
+    if (isWellFormed(inbound)) {
+      traceId = inbound;
       TraceContext.put(traceId);
     } else {
       traceId = TraceContext.putNew();
@@ -55,6 +53,41 @@ public class TraceIdFilter extends OncePerRequestFilter {
     } finally {
       TraceContext.clear();
     }
+  }
+
+  /**
+   * Whether an inbound trace id may be adopted, rather than replaced with a generated one.
+   *
+   * <p>This value is caller-controlled and goes two places that both punish a newline: a response
+   * header, and — via the MDC — every log line the request produces. SpotBugs flags the first as
+   * {@code HRS_REQUEST_PARAMETER_TO_HTTP_HEADER} (HTTP response splitting: a CR/LF lets the caller
+   * end the header block and dictate the rest of the response). The second is the one that matters
+   * more here, because it is aimed at the thing this whole filter exists to provide — a CR/LF in the
+   * id forges log lines, so an attacker could write entries that look like the backend's own and
+   * make the log untrustworthy exactly where it is being trusted most.
+   *
+   * <p>An allowlist rather than an escape or a strip: the only legitimate senders are the worker and
+   * this filter, both of which send a UUID. Anything that does not look like one has nothing to
+   * contribute, so it is dropped and a fresh id issued — the request still gets traced, just not
+   * under a name it chose. The 64-character cap keeps a caller from padding every log line.
+   */
+  private static boolean isWellFormed(String traceId) {
+    if (traceId == null || traceId.isBlank() || traceId.length() > 64) {
+      return false;
+    }
+    for (int i = 0; i < traceId.length(); i++) {
+      char c = traceId.charAt(i);
+      boolean allowed =
+          (c >= 'a' && c <= 'z')
+              || (c >= 'A' && c <= 'Z')
+              || (c >= '0' && c <= '9')
+              || c == '-'
+              || c == '_';
+      if (!allowed) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

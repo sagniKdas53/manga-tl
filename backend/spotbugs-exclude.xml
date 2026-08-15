@@ -14,4 +14,25 @@
             <Bug pattern="UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
         </Or>
     </Match>
+
+    <!--
+        Response splitting on the X-Trace-Id echo. The warning was correct when first raised: the
+        inbound header was length-capped but not character-checked, so a CR/LF in it could end the
+        header block (and, worse here, forge log lines — that value goes into the MDC and onto every
+        line the request writes).
+
+        TraceIdFilter.isWellFormed now rejects anything outside [A-Za-z0-9_-] and anything over 64
+        characters, and a rejected id is replaced with a generated one rather than sanitised, so no
+        caller-chosen bytes reach either sink. SpotBugs cannot see that a boolean-returning validator
+        clears the taint, so it still reports the flow.
+
+        Scoped to this one method and pattern on purpose — the detector stays live for every other
+        class. TraceIdFilterTest covers the rejection cases (CR, LF, spaces, over-length) so this
+        exclusion cannot quietly outlive the validation it depends on.
+    -->
+    <Match>
+        <Class name="com.manga.library.config.TraceIdFilter"/>
+        <Method name="doFilterInternal"/>
+        <Bug pattern="HRS_REQUEST_PARAMETER_TO_HTTP_HEADER"/>
+    </Match>
 </FindBugsFilter>
