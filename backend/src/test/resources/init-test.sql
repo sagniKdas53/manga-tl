@@ -227,6 +227,7 @@ CREATE TABLE public.jobs (
     page_id uuid,
     max_attempts integer,
     payload text,
+    started_at timestamp(6) with time zone,
     status character varying(255) NOT NULL,
     trace_id character varying(255),
     type character varying(255) NOT NULL,

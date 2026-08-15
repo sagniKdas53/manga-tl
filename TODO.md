@@ -64,7 +64,91 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 The last three (`T1`, `D5`, `W3`) are deliberately last — each needs real experimentation
 (a wire-protocol test double, a measured memory peak, concurrency testing), not a quick pass.
 
-### 3. Housekeeping
+### 3. Logging & observability (audit of 2026-08-15)
+
+Full-stack logging audit, measured over one 65-minute window with a live pipeline running.
+Headline: the worker emitted **65,741 lines / 6.2 MB**, of which **50,584 (77%) carried no level
+tag at all**, and the backend emitted **8,259**, of which **23% was stack traces from routine
+403s**. Findings are tracked as `AUDIT-L*`.
+
+Closed:
+
+- [x] **`AUDIT-L1` — the Tomcat access log was enabled and had never been read.** No `directory`
+  was set, so it went to `/tmp/tomcat.8080.<random>/logs/` *inside* the container: absent from
+  `docker logs`, absent from Dozzle, destroyed on every recreate. Now on stdout, with the
+  healthcheck/`/health` probes filtered out via `condition-unless`.
+- [x] **`AUDIT-L2` — `traceId` existed end-to-end but reached no log line.** Minted per pipeline in
+  `JobCoordinatorService`, stored in `jobs.trace_id`, shipped to the worker in the payload, and
+  logged by nobody. Now in the backend's MDC (`TraceContext` / `TraceIdFilter`), in the worker's
+  log format via a `ContextVar` set in `process_job_rq`, and propagated over HTTP as `X-Trace-Id`.
+  Both services print the first 8 characters; the full id is logged once by `startPipeline` and
+  lives in `jobs.trace_id`.
+- [x] **`AUDIT-L3` — routine 403s cost 1,922 lines at ERROR.** 16 denials × ~120 frames.
+  `AuthorizationDenialFilter` now catches them at the chain edge, on async dispatches too.
+- [x] **`AUDIT-L4` — per-job chatter was INFO-only and all-or-nothing.** `InternalJobController`
+  (2,710 lines) and `JobCoordinatorService` (2,528) narrated a state machine the `jobs` table
+  already records. The narration is DEBUG now; outcome lines with counts stay INFO.
+- [x] **`AUDIT-L5` — no runtime level control.** The actuator `loggers` endpoint is exposed, so one
+  package can be turned up live without a restart. `/actuator/**` is ADMIN-only as a result —
+  it was `permitAll`, which was fine for `health` alone but not for `loggers`/`env`/`metrics`.
+- [x] **`AUDIT-L6` — 215 bare `print()` calls in the worker**, which no `LOG_LEVEL_WORKER` setting
+  could suppress. All converted to level-appropriate logger calls (100 error / 63 info / 29 warning
+  / 23 debug); `traceback.print_exc()` became `logger.exception`. Multi-KB payload dumps go through
+  `log_payload()` (`LOG_PAYLOAD_MAX_CHARS`, default 2000, `0` for the full blob). uvicorn's
+  `/health` access line (733 lines/hour) and urllib3's per-request DEBUG output are filtered.
+- [x] **`AUDIT-L7` — no log rotation anywhere.** json-file defaults to unbounded and
+  `/etc/docker/daemon.json` set no `log-opts`; the worker alone wrote ~140 MB/day into
+  `/var/lib/docker`. All six services now cap at 3 × 10 MB.
+- [x] **`jobs.started_at`** — stamped when a worker accepts a job (HTTP 202), cleared on every
+  requeue path. Queue wait and work time were previously inseparable: `updated_at - created_at` was
+  the only duration the table could express, which is why panel-detection measured a 184-second
+  average when most of it was time spent in Redis.
+- [x] **Grafana on the pipeline tables** — `127.0.0.1:3001`, provisioned from
+  `config/grafana/`, reading Postgres through a SELECT-only `grafana_ro` role
+  (`database/grafana_readonly.sql`). Eight panels: queue depth, pages/hour, per-stage wait-vs-work
+  percentiles, failures with trace ids, and model spend. No Prometheus, no Loki, no exporters —
+  every number on it is already a column, and Dozzle still covers live tailing.
+- [x] **`AUDIT-L8` — the access log's duration column was mislabelled by 1000x.** Tomcat 10.1
+  redefined `%D` from milliseconds to microseconds and the pattern kept its `ms` suffix, so a 403
+  that curl timed at 9.8 ms logged as "9974ms". Only visible once `AUDIT-L1` put the log somewhere
+  readable. Now `%Dus`. `%D` is still unreliable on async requests — one SSE line carried
+  2841852471 — which is part of the open SSE item below.
+
+**Reading a pipeline out of the logs.** Both services print the first 8 characters of the trace id
+in a `[........]` column. Grab one from the Grafana failures panel or from
+`select left(trace_id,8) from jobs where image_id = '<uuid>'`, then:
+
+```bash
+{ docker logs manga-backend 2>&1 | grep -F "[$SHORT]" | sed 's/^/BACKEND /'
+  docker logs manga-worker  2>&1 | grep -F "[$SHORT]" | sed 's/^/WORKER  /'; } | sort -k2
+```
+
+That returns all six stages across both containers. To turn one class up without raising
+`LOG_LEVEL` globally:
+
+```bash
+curl -u admin:<pw> -X POST localhost:8080/tlhub/actuator/loggers/com.manga.library.controller.InternalJobController \
+     -H 'Content-Type: application/json' -d '{"configuredLevel":"DEBUG"}'   # null to reset
+```
+
+Open:
+
+- [ ] **The SSE stream terminates with a 500, and clients reconnect rather than close cleanly.**
+  Found via `AUDIT-L1` — the recovered access log's only SSE line is
+  `"GET /tlhub/api/notifications/stream HTTP/1.1" 500`. `JwtAuthFilter.shouldNotFilterAsyncDispatch()`
+  returns `false`, so the auth filters re-run on the async dispatch, where the single-use SSE ticket
+  is spent and an `EventSource` cannot send a header; nothing re-establishes a `SecurityContext` and
+  `AuthorizationFilter` denies. `AUDIT-L3` stopped it being logged as a server fault and made the
+  status agree with the non-async path, but did not change how SSE re-authenticates. **Needs a
+  decision**: whether to skip re-authentication on async dispatch, propagate the security context
+  into it, or leave it. Check how the frontend `EventSource` handles the disconnect first.
+- [ ] **Decide whether Loki is wanted after living with the cleaned-up logs.** Deliberately deferred:
+  shipping 65k unstructured lines/hour into it would have relocated the noise rather than removed
+  it. Revisit once there is a concrete search Dozzle cannot answer.
+- [ ] **Backfill or accept null `started_at` on pre-2026-08-15 rows.** The wait-vs-work panels are
+  empty for them; there is no way to reconstruct a dispatch time after the fact.
+
+### 4. Housekeeping
 
 - [ ] **Replace the `neurometric` API key** in `secrets/api_keys.json`. Still dead. Since
   `AUDIT-W11`, a chapter pinned to a provider whose key is rejected now falls back to another

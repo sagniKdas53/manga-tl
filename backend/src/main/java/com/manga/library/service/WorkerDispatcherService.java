@@ -2,6 +2,7 @@ package com.manga.library.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manga.library.config.TraceContext;
 import com.manga.library.model.Job;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -187,13 +188,17 @@ public class WorkerDispatcherService {
             @SuppressWarnings("unchecked")
             Map<String, Object> jobData = objectMapper.readValue(jobJson, Map.class);
 
-            // Logged on dispatch below. jobs has no dispatch timestamp, so this
-            // line is the only way to tell a stage's queue wait apart from its
-            // actual work: without it, updated_at - created_at is all we have and
-            // it conflates the two. payload "jobId" is the jobs.id primary key
-            // (JobCoordinatorService sets both from the same UUID), so a run's
-            // backend.log joins directly to jobs.csv.
+            // payload "jobId" is the jobs.id primary key (JobCoordinatorService sets both from the
+            // same UUID). This used to be logged at INFO because jobs carried no dispatch
+            // timestamp, which made the log line the only way to tell a stage's queue wait apart
+            // from its actual work. jobs.started_at now records that directly, so the line is DEBUG
+            // and the split is a query rather than a grep.
             String jobId = String.valueOf(jobData.getOrDefault("jobId", "unknown"));
+            // Bind the pipeline's trace to this scheduler thread for the dispatch logs below.
+            // Cleared in the finally block: the scheduling pool is reused, so an id left behind
+            // would label the next unrelated job's dispatch.
+            Object rawTraceId = jobData.get("traceId");
+            TraceContext.put(rawTraceId == null ? null : rawTraceId.toString());
 
             Map<String, Object> payload = new HashMap<>();
             payload.put("queue_name", queue);
@@ -225,7 +230,8 @@ public class WorkerDispatcherService {
               else cap.activeLight++;
               cap.activeTotal++;
               workerConsecutive429s.remove(workerUrl);
-              log.info(
+              markJobStarted(jobId);
+              log.debug(
                   "Dispatched job {} from {} to worker {} (activeHeavy={}, activeLight={}, activeTotal={})",
                   jobId, queue, workerUrl, cap.activeHeavy, cap.activeLight, cap.activeTotal);
               break;
@@ -268,6 +274,8 @@ public class WorkerDispatcherService {
             // interrupt outright would leave a shutting-down application still dispatching.
             Thread.currentThread().interrupt();
             log.debug("Interrupted while dispatching to worker {}", workerUrl);
+          } finally {
+            TraceContext.clear();
           }
         }
 
@@ -285,6 +293,36 @@ public class WorkerDispatcherService {
           break;
         }
       }
+    }
+  }
+
+  /**
+   * Stamps {@code jobs.started_at} at the moment a worker accepted the job (HTTP 202).
+   *
+   * <p>This is the boundary between queue wait and work: everything before it is time the job spent
+   * in Redis, everything after is a worker actually holding it. Without the column the only
+   * available duration was {@code updated_at - created_at}, which merges the two and made queued
+   * stages look slow — panel-detection measured a 184-second average that way, most of it waiting.
+   *
+   * <p>Best-effort and deliberately silent on the miss, exactly like {@link
+   * #markPermanentlyRejected}: the job has already been handed to the worker by the time this runs,
+   * so a DB hiccup here must cost a dashboard datapoint and nothing else. It must never throw back
+   * into the dispatch loop and strand a job the worker has already accepted.
+   */
+  private void markJobStarted(String jobId) {
+    if (jobRepository == null || jobId == null || "unknown".equals(jobId)) {
+      return;
+    }
+    try {
+      jobRepository
+          .findById(jobId)
+          .ifPresent(
+              job -> {
+                job.setStartedAt(OffsetDateTime.now());
+                jobRepository.save(job);
+              });
+    } catch (RuntimeException e) {
+      log.debug("Could not stamp started_at on job {}: {}", jobId, e.getMessage());
     }
   }
 

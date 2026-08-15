@@ -18,6 +18,16 @@ services:
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     secrets:
       - db_password
+    # AUDIT-L7: the json-file driver defaults to unbounded, and nothing in /etc/docker/daemon.json
+    # overrode it. The worker alone wrote ~6 MB/hour, so a long-running stack grew a multi-hundred-MB
+    # log per container in /var/lib/docker with nothing to reclaim it short of recreating the
+    # container. Three 10 MB files keeps roughly the last few hours, which is the window `docker logs`
+    # is actually used over here; anything older belongs in a query against Postgres, not a grep.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - manga-net
     restart: unless-stopped
@@ -53,6 +63,16 @@ services:
       # the image's healthcheck (curl localhost:$HEALTHCHECK_PORT) reported red.
       db:
         condition: service_healthy
+    # AUDIT-L7: the json-file driver defaults to unbounded, and nothing in /etc/docker/daemon.json
+    # overrode it. The worker alone wrote ~6 MB/hour, so a long-running stack grew a multi-hundred-MB
+    # log per container in /var/lib/docker with nothing to reclaim it short of recreating the
+    # container. Three 10 MB files keeps roughly the last few hours, which is the window `docker logs`
+    # is actually used over here; anything older belongs in a query against Postgres, not a grep.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - manga-net
     # The image's built-in healthcheck probes every 5m with no start_period, so a
@@ -77,6 +97,16 @@ services:
       - "127.0.0.1:6379:6379"
     volumes:
       - ./data/redis:/data
+    # AUDIT-L7: the json-file driver defaults to unbounded, and nothing in /etc/docker/daemon.json
+    # overrode it. The worker alone wrote ~6 MB/hour, so a long-running stack grew a multi-hundred-MB
+    # log per container in /var/lib/docker with nothing to reclaim it short of recreating the
+    # container. Three 10 MB files keeps roughly the last few hours, which is the window `docker logs`
+    # is actually used over here; anything older belongs in a query against Postgres, not a grep.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - manga-net
     restart: unless-stopped
@@ -104,6 +134,16 @@ services:
       - ./data/minio:/data
     secrets:
       - minio_password
+    # AUDIT-L7: the json-file driver defaults to unbounded, and nothing in /etc/docker/daemon.json
+    # overrode it. The worker alone wrote ~6 MB/hour, so a long-running stack grew a multi-hundred-MB
+    # log per container in /var/lib/docker with nothing to reclaim it short of recreating the
+    # container. Three 10 MB files keeps roughly the last few hours, which is the window `docker logs`
+    # is actually used over here; anything older belongs in a query against Postgres, not a grep.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - manga-net
     restart: unless-stopped
@@ -178,6 +218,16 @@ services:
       - jwt_secret
       - internal_api_token
       - worker_api_secret
+    # AUDIT-L7: the json-file driver defaults to unbounded, and nothing in /etc/docker/daemon.json
+    # overrode it. The worker alone wrote ~6 MB/hour, so a long-running stack grew a multi-hundred-MB
+    # log per container in /var/lib/docker with nothing to reclaim it short of recreating the
+    # container. Three 10 MB files keeps roughly the last few hours, which is the window `docker logs`
+    # is actually used over here; anything older belongs in a query against Postgres, not a grep.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - manga-net
       - revProxy-net
@@ -308,6 +358,16 @@ services:
       - ./data/worker/rendered_cache:/app/rendered_cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # AUDIT-L7: the json-file driver defaults to unbounded, and nothing in /etc/docker/daemon.json
+    # overrode it. The worker alone wrote ~6 MB/hour, so a long-running stack grew a multi-hundred-MB
+    # log per container in /var/lib/docker with nothing to reclaim it short of recreating the
+    # container. Three 10 MB files keeps roughly the last few hours, which is the window `docker logs`
+    # is actually used over here; anything older belongs in a query against Postgres, not a grep.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - manga-net
     restart: unless-stopped
@@ -339,6 +399,69 @@ services:
           cpus: "0.5"
           memory: 512m
 
+  # The dashboard half of the 2026-08-15 logging audit.
+  #
+  # Reads Postgres directly and nothing else — no Prometheus, no Loki, no exporters. Every number
+  # worth charting here is a pipeline fact the backend already writes as it goes: `jobs` carries
+  # per-stage timings and failures, `job_costs` carries per-model tokens and spend. A metrics
+  # pipeline would mean emitting those same events a second time and keeping two definitions in
+  # step; a log pipeline would mean shipping and re-parsing lines to recover what is already a
+  # column. Live tailing stays with Dozzle in monitor-stack, which is what it is good at.
+  #
+  # Not published on the LAN and not behind Traefik: it is reachable on 127.0.0.1:3001 from this
+  # host only, matching the treatment db/redis/minio get above (AUDIT-D5). Give it a router label
+  # and a real password if it ever needs to be reachable from elsewhere.
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: manga-grafana
+    # The image runs as UID 472, and ./data/grafana is a bind mount owned by the host user, so the
+    # container cannot create its own plugins/ and png/ directories under it — it crash-loops on
+    # "GF_PATHS_DATA is not writable". Same shape as AUDIT-D2 on the worker's cache mounts, solved
+    # the other way round: the worker's host directories are chowned to its UID, while here the
+    # container is told to be the host user. That avoids a root-owned directory inside the repo,
+    # and Grafana keeps no state that needs a dedicated owner.
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_admin_password
+      # Provisioning reads ${POSTGRES_DB}/${GRAFANA_DB_PASSWORD} out of the datasource YAML.
+      - POSTGRES_DB=${POSTGRES_DB:-manga_library}
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      # Nothing here is worth phoning home about, and the instance has no outbound need.
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+      # Panels run operator SQL against a live database; the datasource user is SELECT-only
+      # (database/grafana_readonly.sql), and anonymous access would hand that query surface to
+      # anyone who reaches the port.
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    secrets:
+      - grafana_admin_password
+      - grafana_db_password
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - manga-net
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
 networks:
   manga-net:
     driver: bridge
@@ -358,3 +481,7 @@ secrets:
     file: ./secrets/worker_api_secret.txt
   api_keys:
     file: ./secrets/api_keys.json
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password.txt
+  grafana_db_password:
+    file: ./secrets/grafana_db_password.txt

@@ -1,0 +1,31 @@
+# The only datasource. There is no Prometheus, no Loki and no exporter in this stack on purpose:
+# the numbers worth putting on a dashboard here are pipeline facts — how long each stage took, what
+# it cost, what failed — and the backend already writes all of them to Postgres as it goes. Reading
+# them straight from the tables costs one container and no new plumbing, where a metrics pipeline
+# would mean instrumenting the same events a second time and keeping the two definitions in step.
+#
+# Connects as `grafana_ro`, a role with SELECT and nothing else (database/grafana_readonly.sql).
+# Grafana panels run operator-authored SQL against a production database; a read-only role is what
+# keeps a bad query from being more than a bad query.
+apiVersion: 1
+
+datasources:
+  - name: manga-library
+    uid: manga-library-postgres
+    type: postgres
+    access: proxy
+    url: db:5432
+    user: grafana_ro
+    jsonData:
+      database: ${POSTGRES_DB}
+      sslmode: disable
+      postgresVersion: 1500
+      # Lets $__timeGroupAlias() pick sane buckets instead of every panel hardcoding one.
+      timescaledb: false
+    secureJsonData:
+      # $__file{} is Grafana's own file-secret syntax, so the password stays a docker secret and
+      # never becomes an environment variable visible in `docker inspect`. Matches how every other
+      # credential in this stack is handled.
+      password: $__file{/run/secrets/grafana_db_password}
+    isDefault: true
+    editable: false

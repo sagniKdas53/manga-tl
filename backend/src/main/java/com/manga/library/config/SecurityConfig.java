@@ -77,8 +77,17 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/api/auth/**")
                     .permitAll()
-                    .requestMatchers("/actuator/**")
+                    // Only the liveness probe is public. This used to be `/actuator/**`, which was
+                    // harmless while `management.endpoints.web.exposure.include` was `health` and
+                    // nothing else — but the exposure list now also carries `loggers`, whose POST
+                    // sets a package's log level at runtime, and `env`/`metrics`, which describe the
+                    // deployment. On `permitAll` behind a public Traefik router those would be
+                    // anonymous. The healthcheck in docker-compose.yml hits /actuator/health only,
+                    // so it is unaffected.
+                    .requestMatchers("/actuator/health", "/actuator/health/**")
                     .permitAll()
+                    .requestMatchers("/actuator/**")
+                    .hasRole("ADMIN")
                     .requestMatchers("/api/internal/**")
                     .permitAll()
                     // Public on purpose — read the javadoc on this method before changing.

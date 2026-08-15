@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Replaces Spring Boot's default console pattern for one reason: to make a line greppable by
+  pipeline.
+
+  The default pattern spends about 30 columns on a PID, a separator and the application name (the
+  `1`, the dashes and `[manga-library-backend]` that used to lead every line), none of which
+  distinguishes anything inside a container whose identity is already the container name. Those
+  columns are given to `traceId` instead: the id minted in JobCoordinatorService,
+  persisted to jobs.trace_id, and passed to the worker in the job payload, which until now appeared
+  in no log line in either service.
+
+  traceId is logged as the first 8 characters, not the full UUID: 36 columns on every line wraps in
+  Dozzle and buys nothing at this cardinality. The full id is logged once per pipeline by
+  startPipeline, and bridges back to the database with `where trace_id like '<short>%'`.
+-->
+<configuration>
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+  <!--
+    The max-width is NEGATIVE on purpose: `%8.-8` keeps the FIRST 8 characters, `%8.8` would keep
+    the last 8. Logback truncates from the front by default, which silently made this disagree with
+    the worker — the worker prints tid[:8] of the same id, so one pipeline appeared in the two
+    containers' logs as `661fbe37` and `15dbdc76`, two ends of
+    661fbe37-5dec-4b17-823b-39d915dbdc76. Both agree on the leading 8 now, which is also what
+    `where trace_id like '<short>%'` matches in Postgres and what the Grafana failures panel shows.
+  -->
+  <property name="TRACE_PATTERN" value="%clr([%8.-8X{traceId:---------}]){faint}"/>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%clr(%d{HH:mm:ss.SSS}){faint} %clr(%-5level) ${TRACE_PATTERN} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %msg%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}</pattern>
+      <charset>utf8</charset>
+    </encoder>
+  </appender>
+
+  <!--
+    The Tomcat access log is written by a valve, not through SLF4J, so it does not pass through the
+    appender above; it is pointed at stdout in application.yml instead. See the comment there.
+  -->
+
+  <root level="${LOG_LEVEL:-INFO}">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+</configuration>

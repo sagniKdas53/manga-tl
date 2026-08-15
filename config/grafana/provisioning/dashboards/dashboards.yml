@@ -1,0 +1,15 @@
+apiVersion: 1
+
+providers:
+  - name: manga-library
+    orgId: 1
+    folder: Manga Library
+    type: file
+    # Dashboards are provisioned from disk and version-controlled with the queries they depend on.
+    # `allowUiUpdates: true` so a panel can still be tweaked in the browser while working out what a
+    # dashboard should say — but the file is the source of truth and a container restart restores
+    # it, so anything worth keeping has to be exported back into config/grafana/dashboards/.
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

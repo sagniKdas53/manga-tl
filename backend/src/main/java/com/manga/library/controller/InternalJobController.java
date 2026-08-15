@@ -69,7 +69,15 @@ public class InternalJobController {
   public ResponseEntity<?> updateJobStatus(
       @PathVariable String jobId, @RequestBody Map<String, String> payload) {
     Objects.requireNonNull(jobId, "jobId cannot be null");
-    log.info("Worker updating job {} status to {}", jobId, payload.get("status"));
+    // Every "Worker ..." / "Received ... callback" line in this class is DEBUG rather than INFO.
+    // They were 2,710 lines/hour, a third of the backend's entire output, and none of them said
+    // anything the jobs table does not already hold: the six stages each PATCH a status, fetch the
+    // job, and ask for image metadata, so one page produced 26 backend lines narrating a state
+    // machine that is queryable. What survives at INFO is outcome — JobCoordinatorService's
+    // richer counterpart of each callback, which carries counts ("with 3 regionTypes"), plus
+    // failures and terminal states. Turn these back on for one class at a time through the
+    // actuator loggers endpoint (see application.yml) rather than by raising LOG_LEVEL globally.
+    log.debug("Worker updating job {} status to {}", jobId, payload.get("status"));
     // AUDIT-B8: reject an unknown status word rather than persisting it. A 4xx that is not 408/429
     // is terminal for the worker's retry wrapper (AUDIT-P6), which is what a typo deserves — no
     // number of attempts will fix the spelling, and the old behaviour wrote it to the row and let
@@ -95,6 +103,12 @@ public class InternalJobController {
             job -> {
               if (payload.containsKey("status")) {
                 job.setStatus(payload.get("status"));
+                if ("PENDING".equals(payload.get("status"))) {
+                  // The worker handed this back to the queue, so the attempt it had started is
+                  // over. Clearing the timestamp keeps started_at meaning "this attempt began" —
+                  // otherwise the retry's work time would start counting from the failed attempt.
+                  job.setStartedAt(null);
+                }
               }
               if (payload.containsKey("error")) {
                 job.setError(payload.get("error"));
@@ -137,7 +151,7 @@ public class InternalJobController {
   @GetMapping("/jobs/{jobId}")
   public ResponseEntity<?> getJob(@PathVariable String jobId) {
     Objects.requireNonNull(jobId, "jobId cannot be null");
-    log.info("Worker fetching status for job {}", jobId);
+    log.debug("Worker fetching status for job {}", jobId);
     return jobRepository
         .findById(jobId)
         .map(ResponseEntity::ok)
@@ -167,7 +181,7 @@ public class InternalJobController {
       @RequestParam(required = false) UUID chapterId,
       @RequestParam(required = false) UUID pageId) {
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    log.info("Worker requested metadata for image: {}", imageId);
+    log.debug("Worker requested metadata for image: {}", imageId);
     return imageRepository
         .findById(imageId)
         .map(
@@ -332,7 +346,7 @@ public class InternalJobController {
 
   @PostMapping("/jobs/callback/panel")
   public ResponseEntity<?> panelCallback(@RequestBody PanelCallbackDto dto) {
-    log.info("Received panel callback for image: {}", dto.imageId());
+    log.debug("Received panel callback for image: {}", dto.imageId());
     try {
       jobCoordinatorService.handlePanelCallback(dto);
       return ResponseEntity.ok().build();
@@ -344,7 +358,7 @@ public class InternalJobController {
 
   @PostMapping("/jobs/callback/ocr")
   public ResponseEntity<?> ocrCallback(@RequestBody OcrCallbackDto dto) {
-    log.info("Received OCR callback for image: {}", dto.imageId());
+    log.debug("Received OCR callback for image: {}", dto.imageId());
     try {
       jobCoordinatorService.handleOcrCallback(dto);
       return ResponseEntity.ok().build();
@@ -358,7 +372,7 @@ public class InternalJobController {
   public ResponseEntity<?> layoutCallback(@RequestBody Map<String, Object> payload) {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    log.info("Received layout callback for image: {}", imageId);
+    log.debug("Received layout callback for image: {}", imageId);
     try {
       List<?> rawRegionTypes = (List<?>) payload.get("regionTypes");
       List<Map<String, String>> regionTypes = new ArrayList<>();
@@ -405,7 +419,7 @@ public class InternalJobController {
   public ResponseEntity<?> translationCallback(@RequestBody Map<String, Object> payload) {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    log.info("Received translation callback for image: {}", imageId);
+    log.debug("Received translation callback for image: {}", imageId);
     try {
       List<?> rawTranslations = (List<?>) payload.get("translations");
       List<Map<String, Object>> translations = new ArrayList<>();
@@ -450,7 +464,7 @@ public class InternalJobController {
   public ResponseEntity<?> qaReOcrCallback(@RequestBody Map<String, Object> payload) {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    log.info("Received QA Re-OCR callback for image: {}", imageId);
+    log.debug("Received QA Re-OCR callback for image: {}", imageId);
     try {
       List<?> rawResults = (List<?>) payload.get("results");
       List<Map<String, Object>> results = new ArrayList<>();
@@ -533,7 +547,7 @@ public class InternalJobController {
     UUID pageId = payload.containsKey("pageId") && payload.get("pageId") != null
         ? UUID.fromString(payload.get("pageId"))
         : null;
-    log.info("Received render callback for image: {}", imageId);
+    log.debug("Received render callback for image: {}", imageId);
     try {
       jobCoordinatorService.handleRenderCallback(extractJobId(payload), imageId, pageId);
       imageRepository
@@ -584,7 +598,7 @@ public class InternalJobController {
   public ResponseEntity<?> qaCallback(@RequestBody Map<String, Object> payload) {
     UUID imageId = UUID.fromString((String) payload.get("imageId"));
     Objects.requireNonNull(imageId, "imageId cannot be null");
-    log.info("Received QA callback for image: {}", imageId);
+    log.debug("Received QA callback for image: {}", imageId);
     Map<String, String> ctx = resolveNotificationContext(imageId, extractPageId(payload));
     try {
       List<?> rawResults = (List<?>) payload.get("qaResults");

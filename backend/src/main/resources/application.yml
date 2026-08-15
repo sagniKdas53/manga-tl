@@ -84,7 +84,22 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        # `loggers` is the point of this list. The complaint it answers: backend logs were too
+        # verbose to run at DEBUG, so they ran at INFO and the detail was unavailable exactly when
+        # something needed diagnosing. With this endpoint the level is per-logger and live —
+        #
+        #   curl -u <admin> -X POST localhost:8080/tlhub/actuator/loggers/com.manga.library.service.JobCoordinatorService \
+        #        -H 'Content-Type: application/json' -d '{"configuredLevel":"DEBUG"}'
+        #
+        # — and `{"configuredLevel":null}` puts it back. No restart, no rebuild, and the other 20
+        # loggers stay quiet. That is what makes the DEBUG demotions in InternalJobController and
+        # JobCoordinatorService safe: the detail is not gone, it is off by default.
+        #
+        # ADMIN-only via SecurityConfig; /actuator/health stays public for the container healthcheck.
+        include: health,loggers,metrics,env
+  endpoint:
+    health:
+      show-details: when-authorized
 
 server:
   servlet:
@@ -107,7 +122,36 @@ server:
       enabled: true
       # %U (path only), not %r (full request line) — %r includes the query string, which is how
       # SSE session tokens ended up in the access log in plaintext (AUDIT-S4).
-      pattern: '%h %l %u %t "%m %U %H" %s %b %Dms'
+      #
+      # AUDIT-L1: this was enabled and carefully patterned, and nobody had ever read a line of it.
+      # With no `directory` set, Tomcat resolves the default `logs` relative to its temp dir, so the
+      # output went to /tmp/tomcat.8080.<random>/logs/access_log.<date>.log *inside the container* —
+      # absent from `docker logs`, absent from Dozzle, and destroyed on every recreate. Verified
+      # empty: `docker logs manga-backend | grep -c '"GET '` returned 0 while the file held the
+      # requests. The directory/prefix/suffix trio below is Tomcat's documented way to say stdout,
+      # which is the only destination the container stack actually collects.
+      directory: /dev
+      prefix: stdout
+      suffix: ''
+      # Tomcat appends a date to the filename unless the pattern is empty; with a rotating name it
+      # would write /dev/stdout.2026-08-15 as a regular file instead of the stream.
+      file-date-format: ''
+      # Without this the valve batches writes, so request lines arrive in the container log out of
+      # order relative to the application's own lines and lag behind a live tail.
+      buffered: false
+      # The healthcheck hits /actuator/health every 30s and the worker polls /health; at one line
+      # per probe that is most of the access log on an idle stack, saying nothing.
+      condition-unless: skipAccessLog
+      # The trailing unit is `us`, not `ms`. Tomcat 10.1 redefined %D from milliseconds to
+      # microseconds, and this pattern kept the old suffix — so every duration it wrote was
+      # mislabelled by 1000x. It went unnoticed because the log was landing in a container temp
+      # directory nobody read (see the AUDIT-L1 note above); the first request logged to stdout
+      # after that fix read "9974ms" for a 403 that curl timed at 9.8ms.
+      #
+      # %D is kept rather than switched to %F: %F measures time-to-commit, which for the SSE stream
+      # is the start of the response and not its duration. Note %D is unreliable on async requests
+      # regardless — an SSE line was observed carrying 2841852471.
+      pattern: '%h %l %u %t "%m %U %H" %s %b %Dus'
 
 logging:
   level:

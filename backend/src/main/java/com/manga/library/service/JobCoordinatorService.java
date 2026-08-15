@@ -1,6 +1,7 @@
 package com.manga.library.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.manga.library.config.TraceContext;
 import com.manga.library.dto.OcrCallbackDto;
 import com.manga.library.dto.PanelCallbackDto;
 import com.manga.library.model.*;
@@ -159,6 +160,10 @@ public class JobCoordinatorService {
           log.info("Resetting processing job {} to PENDING on startup (attempt {}/{})",
               job.getId(), attempt, maxAttempts);
           job.setStatus("PENDING");
+          // Back in the queue, so it has not started. Leaving the abandoned attempt's timestamp
+          // would charge its wall-clock — including however long the backend was down — to the
+          // retry's work time.
+          job.setStartedAt(null);
           job.setAttempt(attempt);
           job.setPayload(updatePayloadAttempt(job.getPayload(), attempt));
         }
@@ -188,6 +193,7 @@ public class JobCoordinatorService {
             job.setError("Max attempts exhausted after stale recovery");
           } else {
             job.setStatus("PENDING");
+            job.setStartedAt(null);
             job.setAttempt(attempt);
             job.setPayload(updatePayloadAttempt(job.getPayload(), attempt));
           }
@@ -317,6 +323,10 @@ public class JobCoordinatorService {
               Objects.requireNonNull("pipeline:trace:" + imageId),
               Objects.requireNonNull(traceId),
               Objects.requireNonNull(PIPELINE_TRACE_TTL));
+      TraceContext.put(traceId);
+      // The only place the full id is written. Every other line shows the 8-character prefix the
+      // log pattern renders, so this is what bridges a grep back to jobs.trace_id.
+      log.info("Pipeline trace for image {} is {}", imageId, traceId);
     }
 
     // Panels are a property of the Image, not the Page: panel detection is a purely
@@ -391,6 +401,13 @@ public class JobCoordinatorService {
       } else {
         traceId = UUID.randomUUID().toString();
       }
+
+      // Bind the pipeline's id to this thread so the enqueue logs below, and everything the caller
+      // does after us, are greppable as one pipeline. Deliberately not cleared here: on a worker
+      // callback this thread is already carrying the same id (TraceIdFilter read it off the
+      // X-Trace-Id header), and on an upload path the caller has no id of its own to restore. The
+      // request filter's finally block is what clears it.
+      TraceContext.put(traceId);
 
       String jobId = UUID.randomUUID().toString();
       Job dbJob = new Job();
@@ -535,7 +552,10 @@ public class JobCoordinatorService {
               }
 
               if (!"auto".equalsIgnoreCase(resolvedQaMode)) {
-                log.info(
+                // DEBUG: re-resolved identically on every stage hand-off, so at INFO this printed
+                // three times per page saying the same thing. Useful when model routing is the
+                // thing under investigation, which is what the loggers endpoint is for.
+                log.debug(
                     "QA mode resolved to '{}' for image {} (provider={}, vlmModel='{}', llmModel='{}')",
                     resolvedQaMode,
                     imageId,
@@ -578,7 +598,9 @@ public class JobCoordinatorService {
 
   private void enqueuePersistedJob(Job dbJob) {
     if (TransactionSynchronizationManager.isActualTransactionActive()) {
-      log.info(
+      // DEBUG, not INFO: this is mechanism, not outcome. It fires on every hand-off between the six
+      // pipeline stages and reports only which of two code paths was taken.
+      log.debug(
           "Transaction active. Deferring Redis push of {} job {} until commit",
           dbJob.getType(),
           dbJob.getId());
@@ -613,7 +635,9 @@ public class JobCoordinatorService {
       redisTemplate
           .opsForList()
           .rightPush(Objects.requireNonNull(queueName), Objects.requireNonNull(job.getPayload()));
-      log.info("Enqueued {} job {} onto {}", job.getType(), job.getId(), queueName);
+      // DEBUG: the jobs row carries type, id and status already, and Grafana reads queue depth from
+      // there rather than by counting these lines.
+      log.debug("Enqueued {} job {} onto {}", job.getType(), job.getId(), queueName);
     } catch (Exception e) {
       log.error("Failed to push job {} to Redis", job.getId(), e);
     }

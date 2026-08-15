@@ -1,0 +1,174 @@
+{
+  "uid": "manga-pipeline",
+  "title": "Translation Pipeline",
+  "tags": ["manga-library"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-7d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "stage",
+        "label": "Stage",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+        "query": "SELECT DISTINCT type FROM jobs ORDER BY 1",
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" },
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Throughput and health",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Queue depth now",
+      "description": "PENDING jobs are waiting for a worker slot; PROCESSING are in flight. Both are read live from the jobs table rather than counted out of the log, which is why this stays correct across a backend restart.",
+      "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "background", "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 20 }, { "color": "red", "value": 100 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT status AS metric, count(*) AS value\nFROM jobs\nWHERE status IN ('PENDING', 'PROCESSING')\nGROUP BY status"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pages completed per hour",
+      "description": "One point per distinct image finishing its QA stage — the closest thing to 'pages through the pipeline'. Counting jobs instead would multiply every page by its six stages.",
+      "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+      "gridPos": { "h": 6, "w": 18, "x": 6, "y": 1 },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 60 }, "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(updated_at, '1h'), count(DISTINCT image_id) AS \"pages\"\nFROM jobs\nWHERE $__timeFilter(updated_at) AND type = 'qa' AND status = 'COMPLETED'\nGROUP BY 1\nORDER BY 1"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Stage breakdown — queue wait vs work time",
+      "description": "started_at is stamped when a worker accepts the job, so wait and work are separable. Rows only carry it from 2026-08-15 onward; anything older shows null work time because the column did not exist when those jobs ran. Before it, the only available number was total = updated_at - created_at, which is why panel-detection used to look like a 184-second stage when most of that was queueing.",
+      "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 7 },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "decimals": 1 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "stage" }, "properties": [ { "id": "unit", "value": "string" } ] },
+          { "matcher": { "id": "byName", "options": "runs" }, "properties": [ { "id": "unit", "value": "short" } ] },
+          { "matcher": { "id": "byName", "options": "failed" }, "properties": [ { "id": "unit", "value": "short" } ] }
+        ]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  type AS stage,\n  count(*) AS runs,\n  count(*) FILTER (WHERE status = 'FAILED') AS failed,\n  percentile_cont(0.5)  WITHIN GROUP (ORDER BY extract(epoch FROM (started_at - created_at))) AS \"wait p50\",\n  percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (started_at - created_at))) AS \"wait p95\",\n  percentile_cont(0.5)  WITHIN GROUP (ORDER BY extract(epoch FROM (updated_at - started_at))) AS \"work p50\",\n  percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (updated_at - started_at))) AS \"work p95\",\n  percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (updated_at - created_at))) AS \"total p95\"\nFROM jobs\nWHERE $__timeFilter(created_at) AND type IN ($stage)\nGROUP BY type\nORDER BY \"total p95\" DESC NULLS LAST"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Stage work time p95",
+      "description": "Worker-held time only, excluding queue wait. Flat here with a rising 'total' on the table above means the queue is backing up, not that a stage got slower.",
+      "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 5 } }, "overrides": [] },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(created_at, '1h'), type AS metric,\n  percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM (updated_at - started_at))) AS \"p95\"\nFROM jobs\nWHERE $__timeFilter(created_at) AND started_at IS NOT NULL AND type IN ($stage)\nGROUP BY 1, 2\nORDER BY 1"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Recent failures",
+      "description": "The error column verbatim. trace_id is the same id the backend and worker logs print (first 8 characters) — copy it and grep both containers to get the full story behind a row.",
+      "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT updated_at AS \"when\", type AS stage, attempt, left(trace_id, 8) AS trace, image_id, left(error, 200) AS error\nFROM jobs\nWHERE $__timeFilter(updated_at) AND status = 'FAILED'\nORDER BY updated_at DESC\nLIMIT 100"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Model spend",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 }
+    },
+    {
+      "type": "stat",
+      "title": "Spend in range",
+      "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 25 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 2 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value" },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT coalesce(sum(estimated_cost), 0) AS \"spend\"\nFROM job_costs\nWHERE $__timeFilter(created_at)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cost per day by model",
+      "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+      "gridPos": { "h": 5, "w": 18, "x": 6, "y": 25 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "custom": { "drawStyle": "bars", "fillOpacity": 70, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(created_at, '1d'), model AS metric, sum(estimated_cost) AS \"cost\"\nFROM job_costs\nWHERE $__timeFilter(created_at)\nGROUP BY 1, 2\nORDER BY 1"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Cost and tokens by model",
+      "description": "Cost per page is the number to compare across models — total spend just tracks how much was run through each.",
+      "datasource": { "type": "postgres", "uid": "manga-library-postgres" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "spend" }, "properties": [ { "id": "unit", "value": "currencyUSD" }, { "id": "decimals", "value": 4 } ] },
+          { "matcher": { "id": "byName", "options": "cost per page" }, "properties": [ { "id": "unit", "value": "currencyUSD" }, { "id": "decimals", "value": 5 } ] }
+        ]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  provider,\n  model,\n  count(*) AS calls,\n  count(DISTINCT image_id) AS pages,\n  sum(estimated_cost) AS spend,\n  sum(estimated_cost) / NULLIF(count(DISTINCT image_id), 0) AS \"cost per page\",\n  sum(prompt_tokens) AS \"tokens in\",\n  sum(completion_tokens) AS \"tokens out\"\nFROM job_costs\nWHERE $__timeFilter(created_at)\nGROUP BY provider, model\nORDER BY spend DESC NULLS LAST"
+        }
+      ]
+    }
+  ]
+}

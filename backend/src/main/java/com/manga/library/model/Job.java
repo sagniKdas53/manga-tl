@@ -45,6 +45,23 @@ public class Job {
   @Column(name = "created_at")
   private OffsetDateTime createdAt;
 
+  /**
+   * When {@code WorkerDispatcherService} handed this job to a worker that accepted it (HTTP 202), or
+   * null while it is still queued.
+   *
+   * <p>Exists to make queue wait separable from work time. {@code created_at} is enqueue and {@code
+   * updated_at} is last touch, so {@code updated_at - created_at} is the only duration the table
+   * could previously express and it conflates the two — which is how panel-detection came to look
+   * like a 184-second stage when most of that is time spent sitting in Redis. With this column the
+   * split is {@code started_at - created_at} for the wait and {@code updated_at - started_at} for
+   * the work, which is what the Grafana pipeline dashboard reads.
+   *
+   * <p>Cleared whenever a job goes back to PENDING (boot reset, stale recovery, worker-requested
+   * retry) so the next dispatch times its own attempt rather than inheriting the abandoned one's.
+   */
+  @Column(name = "started_at")
+  private OffsetDateTime startedAt;
+
   @Column(name = "updated_at")
   private OffsetDateTime updatedAt;
 
@@ -164,6 +181,14 @@ public class Job {
 
   public void setMaxAttempts(Integer maxAttempts) {
     this.maxAttempts = maxAttempts;
+  }
+
+  public OffsetDateTime getStartedAt() {
+    return this.startedAt;
+  }
+
+  public void setStartedAt(OffsetDateTime startedAt) {
+    this.startedAt = startedAt;
   }
 
   public OffsetDateTime getCreatedAt() {
