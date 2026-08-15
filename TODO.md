@@ -108,11 +108,32 @@ Closed:
   (`database/grafana_readonly.sql`). Eight panels: queue depth, pages/hour, per-stage wait-vs-work
   percentiles, failures with trace ids, and model spend. No Prometheus, no Loki, no exporters —
   every number on it is already a column, and Dozzle still covers live tailing.
+- [x] **The SSE stream terminated with a 500 on every disconnect.** Found via `AUDIT-L1`. Tomcat
+  re-dispatches the request when the emitter completes — on the 1-hour `EMITTER_TIMEOUT`, or as soon
+  as the client goes away — and the auth filters run again. By then the single-use ticket is spent
+  (`redeem` is a `GETDEL`) and an `EventSource` cannot send a header, so nothing re-established a
+  `SecurityContext` and `AuthorizationFilter` denied a stream that had been properly authenticated
+  an hour earlier. Fixed in two places:
+  - `SseTicketAuthFilter` now keeps the `Authentication` it built on the request and restores it on
+    the `ASYNC` dispatch. The ticket stays single-use — this is the same request being finished, not
+    a second one being admitted — and nothing changes about how a client authenticates.
+  - `AuthorizationDenialFilter` now unwraps the cause chain. Its original
+    `catch (AuthorizationDeniedException)` never fired: on a committed response
+    `ExceptionTranslationFilter` rethrows the denial wrapped in a `ServletException`, so `AUDIT-L3`
+    caught nothing and the traces kept coming. Measured on the running instance before the fix: four
+    SSE terminations, eight ~120-frame ERROR traces, four `500`s.
+
+  Both are covered by tests that were confirmed to fail without the fix
+  (`AuthorizationDenialFilterTest`, `SseTicketTest.streamStaysAuthenticatedAcrossTheAsyncDispatchThatEndsIt`).
+  Frontend impact was nil either way — `useSSE` reconnects on error, `NotificationContext` logs it
+  only in DEV, and notifications raised during the gap queue to Redis and drain on reconnect.
 - [x] **`AUDIT-L8` — the access log's duration column was mislabelled by 1000x.** Tomcat 10.1
   redefined `%D` from milliseconds to microseconds and the pattern kept its `ms` suffix, so a 403
   that curl timed at 9.8 ms logged as "9974ms". Only visible once `AUDIT-L1` put the log somewhere
-  readable. Now `%Dus`. `%D` is still unreliable on async requests — one SSE line carried
-  2841852471 — which is part of the open SSE item below.
+  readable. Now `%Dus`. On async requests `%D` measures the whole request lifetime rather than any
+  server work: SSE lines carry values like `3600693674us`, which is the 1-hour `EMITTER_TIMEOUT` to
+  within a millisecond. That is the number behaving correctly — read those lines as "how long the
+  stream was open", not as latency.
 
 **Reading a pipeline out of the logs.** Both services print the first 8 characters of the trace id
 in a `[........]` column. Grab one from the Grafana failures panel or from
@@ -133,15 +154,20 @@ curl -u admin:<pw> -X POST localhost:8080/tlhub/actuator/loggers/com.manga.libra
 
 Open:
 
-- [ ] **The SSE stream terminates with a 500, and clients reconnect rather than close cleanly.**
-  Found via `AUDIT-L1` — the recovered access log's only SSE line is
-  `"GET /tlhub/api/notifications/stream HTTP/1.1" 500`. `JwtAuthFilter.shouldNotFilterAsyncDispatch()`
-  returns `false`, so the auth filters re-run on the async dispatch, where the single-use SSE ticket
-  is spent and an `EventSource` cannot send a header; nothing re-establishes a `SecurityContext` and
-  `AuthorizationFilter` denies. `AUDIT-L3` stopped it being logged as a server fault and made the
-  status agree with the non-async path, but did not change how SSE re-authenticates. **Needs a
-  decision**: whether to skip re-authentication on async dispatch, propagate the security context
-  into it, or leave it. Check how the frontend `EventSource` handles the disconnect first.
+- [ ] **Move the direct Gemini OCR key out of the query string** (`services/ocr.py`, the
+  `?key=` on the `generativelanguage.googleapis.com` URL) **into the `x-goog-api-key` header.**
+  Every other provider already authenticates by header, including Google's own OpenAI-compatible
+  endpoint in `provider_config.py`; this one call site is the exception. A URL-borne key lands in
+  `requests`' exception text, in urllib3's DEBUG output, and in any proxy log on the path.
+  `redact()` (`config.py`) is the belt — it strips `?key=`/`Bearer` out of anything passed through
+  it, verified against both the `requests` and urllib3 exception shapes — but it is opt-in per call
+  site, and `llm_client.py:216` and ~20 other `logger.error(f"…{e}")` sites do not call it. The
+  header change is the braces and makes the rule unnecessary on this path.
+  **Not urgent:** the path is unreachable in this deployment (the configured `google/gemini-*`
+  models are served through OpenRouter), so it leaks nothing today — it goes live the moment a
+  direct Gemini key is configured. Deferred once already because it changes a provider's wire
+  format and there is no key here to test it against; Google accepts both forms, so any Gemini key
+  is enough to verify it.
 - [ ] **Decide whether Loki is wanted after living with the cleaned-up logs.** Deliberately deferred:
   shipping 65k unstructured lines/hour into it would have relocated the noise rather than removed
   it. Revisit once there is a concrete search Dozzle cannot answer.
