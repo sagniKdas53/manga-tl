@@ -148,8 +148,13 @@ That returns all six stages across both containers. To turn one class up without
 `LOG_LEVEL` globally:
 
 ```bash
-curl -u admin:<pw> -X POST localhost:8080/tlhub/actuator/loggers/com.manga.library.controller.InternalJobController \
-     -H 'Content-Type: application/json' -d '{"configuredLevel":"DEBUG"}'   # null to reset
+# /actuator/** is ADMIN-only, and this deployment carries no Basic auth — the token comes from a login.
+JWT=$(curl -s localhost:8080/tlhub/api/auth/login -H 'Content-Type: application/json' \
+       -d '{"email":"<admin-email>","password":"<pw>"}' | jq -r .token)
+
+curl -X POST localhost:8080/tlhub/actuator/loggers/com.manga.library.controller.InternalJobController \
+     -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+     -d '{"configuredLevel":"DEBUG"}'   # null to reset
 ```
 
 Open:

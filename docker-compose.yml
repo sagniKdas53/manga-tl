@@ -323,6 +323,10 @@ services:
       # both set it to DEBUG deliberately, and that is left alone. Only the default
       # for a deployment carrying no .env changes.
       - LOG_LEVEL=${LOG_LEVEL_WORKER:-INFO}
+      # Compose reads .env only for ${...} interpolation inside this file; nothing here
+      # forwards it to the container on its own. Without this line the knob documented in
+      # .env.example is inert and config.py always falls back to its own 2000.
+      - LOG_PAYLOAD_MAX_CHARS=${LOG_PAYLOAD_MAX_CHARS:-2000}
       - PADDLEOCR_DET_MODEL=${PADDLEOCR_DET_MODEL:-PP-OCRv6_medium_det}
       - PADDLEOCR_REC_MODEL=${PADDLEOCR_REC_MODEL:-PP-OCRv6_medium_rec}
       - PADDLEOCR_DEVICE=${PADDLEOCR_DEVICE:-cpu}

@@ -308,19 +308,19 @@ public class WorkerDispatcherService {
    * #markPermanentlyRejected}: the job has already been handed to the worker by the time this runs,
    * so a DB hiccup here must cost a dashboard datapoint and nothing else. It must never throw back
    * into the dispatch loop and strand a job the worker has already accepted.
+   *
+   * <p>A single targeted UPDATE rather than findById-mutate-save, for the reason spelled out on
+   * {@link com.manga.library.repository.JobRepository#markStarted}: this runs at the exact moment
+   * the worker PATCHes the job to PROCESSING, and merging a detached entity back would rewrite
+   * {@code status} from a snapshot read before that PATCH — reverting the row to PENDING until the
+   * next status update corrected it.
    */
   private void markJobStarted(String jobId) {
     if (jobRepository == null || jobId == null || "unknown".equals(jobId)) {
       return;
     }
     try {
-      jobRepository
-          .findById(jobId)
-          .ifPresent(
-              job -> {
-                job.setStartedAt(OffsetDateTime.now());
-                jobRepository.save(job);
-              });
+      jobRepository.markStarted(jobId, OffsetDateTime.now());
     } catch (RuntimeException e) {
       log.debug("Could not stamp started_at on job {}: {}", jobId, e.getMessage());
     }

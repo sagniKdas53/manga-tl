@@ -88,8 +88,14 @@ management:
         # verbose to run at DEBUG, so they ran at INFO and the detail was unavailable exactly when
         # something needed diagnosing. With this endpoint the level is per-logger and live —
         #
-        #   curl -u <admin> -X POST localhost:8080/tlhub/actuator/loggers/com.manga.library.service.JobCoordinatorService \
-        #        -H 'Content-Type: application/json' -d '{"configuredLevel":"DEBUG"}'
+        #   JWT=$(curl -s localhost:8080/tlhub/api/auth/login -H 'Content-Type: application/json' \
+        #          -d '{"email":"<admin-email>","password":"<pw>"}' | jq -r .token)
+        #   curl -X POST localhost:8080/tlhub/actuator/loggers/com.manga.library.service.JobCoordinatorService \
+        #        -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
+        #        -d '{"configuredLevel":"DEBUG"}'
+        #
+        # The Bearer token is required because SecurityConfig guards /actuator/** with hasRole("ADMIN")
+        # and this deployment enables no Basic auth — JwtAuthFilter reads Bearer only.
         #
         # — and `{"configuredLevel":null}` puts it back. No restart, no rebuild, and the other 20
         # loggers stay quiet. That is what makes the DEBUG demotions in InternalJobController and

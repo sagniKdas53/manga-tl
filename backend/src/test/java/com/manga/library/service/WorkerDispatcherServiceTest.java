@@ -10,9 +10,8 @@ import com.manga.library.repository.JobRepository;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -494,6 +493,40 @@ public class WorkerDispatcherServiceTest {
         .thenReturn(rejected);
 
     assertDoesNotThrow(() -> workerDispatcherService.dispatchJobs());
+    verify(jobRepository, never()).save(any(Job.class));
+  }
+
+  /**
+   * The 202 path must stamp started_at with a targeted UPDATE, never findById-mutate-save.
+   *
+   * <p>The worker PATCHes the row PENDING → PROCESSING the instant it returns 202 — the same instant
+   * this runs. {@code Job} carries no {@code @Version} and no {@code @DynamicUpdate}, so saving a
+   * detached entity here merges every column back, including a {@code status} read before that PATCH
+   * landed. The row silently reverts to PENDING until the next status update corrects it, and a
+   * backend restart inside that window re-dispatches paid LLM work.
+   */
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testDispatchJobs_StampsStartedAtWithoutMergingTheWholeRow() throws Exception {
+    when(valueOps.get("system:queue:paused")).thenReturn("false");
+    String jobId = UUID.randomUUID().toString();
+    when(listOps.leftPop("queue:panel-detection"))
+        .thenReturn("{\"jobId\": \"" + jobId + "\"}")
+        .thenReturn(null);
+
+    HttpResponse<String> accepted = mockGeneric(HttpResponse.class);
+    when(accepted.statusCode()).thenReturn(202);
+    HttpResponse<String> capResponse = mockCapabilitiesResponse();
+    when(httpClient.send(
+        any(HttpRequest.class),
+        org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+        .thenReturn(capResponse)
+        .thenReturn(accepted);
+
+    workerDispatcherService.dispatchJobs();
+
+    verify(jobRepository).markStarted(eq(jobId), any(OffsetDateTime.class));
+    verify(jobRepository, never()).findById(jobId);
     verify(jobRepository, never()).save(any(Job.class));
   }
 

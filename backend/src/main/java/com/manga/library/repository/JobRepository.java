@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface JobRepository extends JpaRepository<Job, String> {
@@ -31,4 +32,25 @@ public interface JobRepository extends JpaRepository<Job, String> {
   @Query(
       "UPDATE Job j SET j.callbackAppliedAt = :now WHERE j.id = :id AND j.callbackAppliedAt IS NULL")
   int claimCallback(@Param("id") String id, @Param("now") OffsetDateTime now);
+
+  /**
+   * Stamps {@code started_at} without touching any other column.
+   *
+   * <p>Same reason as {@link #claimCallback}: a read-then-write here is a lost update. The worker
+   * PATCHes PENDING → PROCESSING the instant it returns 202, which is the same instant the
+   * dispatcher stamps this column. {@code Job} carries no {@code @Version} and no
+   * {@code @DynamicUpdate}, so saving a detached entity merges every column back — including a
+   * {@code status} read before the worker's PATCH landed, silently reverting it.
+   *
+   * <p>Carries its own {@code @Transactional} because the only caller — {@code
+   * WorkerDispatcherService.markJobStarted}, on the scheduler thread — runs outside any transaction,
+   * and a {@code @Modifying} query with no transaction throws {@code TransactionRequiredException}.
+   * That exception would be swallowed by the caller's best-effort catch, leaving the column silently
+   * unstamped. {@link #claimCallback} needs no such annotation: its callers are all
+   * {@code @Transactional} already.
+   */
+  @Modifying
+  @Transactional
+  @Query("UPDATE Job j SET j.startedAt = :now WHERE j.id = :id")
+  int markStarted(@Param("id") String id, @Param("now") OffsetDateTime now);
 }
