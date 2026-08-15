@@ -21,35 +21,38 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * lines of stack trace — 23% of everything the backend logged, at ERROR, where no log level could
  * suppress it and every one of them was a routine 403.
  *
- * <p><b>Why they escape.</b> All 16 came from the SSE stream's <em>async</em> dispatch.
- * {@link JwtAuthFilter#shouldNotFilterAsyncDispatch()} returns false, so the auth filters re-run
- * when Tomcat re-dispatches the async request; by then the single-use SSE ticket is spent and an
- * {@code EventSource} cannot send an {@code Authorization} header, so nothing re-establishes a
- * {@code SecurityContext} and Spring Security's {@code AuthorizationFilter} denies. Two things then
- * conspire: the throw happens inside the filter chain, where {@link GlobalExceptionHandler} — a
- * {@code @RestControllerAdvice}, which only sees exceptions that reach the DispatcherServlet's
- * handler resolution — cannot reach it, and {@code ExceptionTranslationFilter} does not process
- * async dispatches, so nothing converts the denial into a 403 response. It propagates to Tomcat's
- * {@code StandardWrapperValve}, which logs any escaped exception at ERROR with the full trace.
+ * <p><b>Why they escape.</b> All 16 came from the SSE stream's <em>async</em> dispatch, where
+ * nothing re-established a {@code SecurityContext} and Spring Security's {@code AuthorizationFilter}
+ * denied. {@link SseTicketAuthFilter} now restores the context on that dispatch, so the denial
+ * should no longer occur at all — this filter is the net under it, and under any other committed
+ * response that ends the same way.
  *
- * <p><b>What this does.</b> Catches the denial at the outer edge of the chain, on async dispatches
- * too ({@link #shouldNotFilterAsyncDispatch()} is overridden for exactly that reason), and turns it
- * into one DEBUG line. If the response has not been committed it also sends a 403, which is the
- * status the same denial already produces on the non-async path — so this makes the two paths agree
- * rather than inventing a new behaviour. Once an SSE stream has begun streaming the response is
- * committed and there is nothing left to send; the connection simply ends.
+ * <p><b>Why a 403 cannot simply be sent.</b> {@code ExceptionTranslationFilter} does run on the
+ * async dispatch, but by then an SSE response is committed, so it cannot convert the denial into a
+ * 403. What it does instead is rethrow it <em>wrapped in a {@code ServletException}</em> carrying
+ * "Unable to handle the Spring Security Exception because the response is already committed." That
+ * wrapper is the reason this filter's original {@code catch (AuthorizationDeniedException)} never
+ * fired: the exception arriving here is a {@code ServletException}, not the denial itself. It went
+ * on to Tomcat's {@code StandardWrapperValve}, which logs any escaped exception at ERROR with the
+ * full trace and marks the response 500 — verified against a running instance, where four SSE
+ * terminations produced eight ~120-frame ERROR traces and four {@code 500}s in the access log.
  *
- * <p><b>What this does not fix.</b> The denial itself. The access log recorded that SSE stream
- * ending {@code "GET /tlhub/api/notifications/stream HTTP/1.1" 500}, meaning clients are having
- * streams terminated and reconnecting rather than closing cleanly. Silencing the trace makes that
- * legible instead of drowned; deciding whether the async re-authentication should be fixed (and how)
- * is tracked in TODO.md, because it is a change to how SSE authenticates, not to how it logs.
+ * <p><b>What this does.</b> Catches at the outer edge of the chain, on async dispatches too
+ * ({@link #shouldNotFilterAsyncDispatch()} is overridden for exactly that reason), unwraps the cause
+ * chain, and turns a denial into one DEBUG line. Anything that is not a denial is rethrown
+ * untouched. If the response has not been committed it also sends a 403, which is the status the
+ * same denial already produces on the non-async path — so this makes the two paths agree rather than
+ * inventing a new behaviour. Once an SSE stream has begun streaming the response is committed and
+ * there is nothing left to send; the connection simply ends.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
 public class AuthorizationDenialFilter extends OncePerRequestFilter {
 
   private static final Logger log = LoggerFactory.getLogger(AuthorizationDenialFilter.class);
+
+  /** Bounds the cause walk. Nothing legitimate nests this deep; a cycle would otherwise hang. */
+  private static final int MAX_CAUSE_DEPTH = 16;
 
   @Override
   protected void doFilterInternal(
@@ -59,7 +62,10 @@ public class AuthorizationDenialFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
     try {
       filterChain.doFilter(request, response);
-    } catch (AuthorizationDeniedException e) {
+    } catch (ServletException | RuntimeException e) {
+      if (denialWithin(e) == null) {
+        throw e;
+      }
       if (response.isCommitted()) {
         // Typical for SSE: bytes are already on the wire, so the status cannot be changed and the
         // stream just ends. Nothing to do but decline to treat it as a server error.
@@ -73,6 +79,27 @@ public class AuthorizationDenialFilter extends OncePerRequestFilter {
         response.sendError(HttpServletResponse.SC_FORBIDDEN);
       }
     }
+  }
+
+  /**
+   * Finds an {@link AuthorizationDeniedException} anywhere in {@code thrown}'s cause chain, or null
+   * if there is none.
+   *
+   * <p>The chain has to be walked rather than the exception type matched, because the denial does
+   * not always arrive bare: on a committed response {@code ExceptionTranslationFilter} rethrows it
+   * inside a {@code ServletException}, which is exactly the case this filter exists for. Matching on
+   * the outer type alone silently missed every SSE disconnect.
+   */
+  private static AuthorizationDeniedException denialWithin(Throwable thrown) {
+    Throwable current = thrown;
+    for (int depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+      if (current instanceof AuthorizationDeniedException denial) {
+        return denial;
+      }
+      Throwable cause = current.getCause();
+      current = (cause == current) ? null : cause;
+    }
+    return null;
   }
 
   /**

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manga.library.config.JwtUtils;
+import com.manga.library.config.SseTicketAuthFilter;
 import com.manga.library.model.User;
 import com.manga.library.repository.UserRepository;
 import com.manga.library.service.SseTicketService;
@@ -22,6 +23,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockFilterChain;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -40,6 +46,7 @@ public class SseTicketTest {
   @Autowired private JwtUtils jwtUtils;
   @Autowired private UserRepository userRepository;
   @Autowired private SseTicketService sseTicketService;
+  @Autowired private SseTicketAuthFilter sseTicketAuthFilter;
   @Autowired private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
   private UUID userId;
@@ -183,5 +190,61 @@ public class SseTicketTest {
     mockMvc
         .perform(get("/api/notifications/stream").param("token", jwtUtils.generateToken(EMAIL)))
         .andExpect(status().isForbidden());
+  }
+
+  /**
+   * The async dispatch that ends a stream must not be denied.
+   *
+   * <p>Tomcat re-dispatches the request when the emitter completes — on the 1-hour timeout, or as
+   * soon as the client goes away — and the auth filters run again. Nothing re-authenticated it: an
+   * {@code EventSource} cannot send a header, and the ticket was spent on the initial dispatch. So
+   * every disconnect was denied, which put {@code "GET /api/notifications/stream" 500} in the access
+   * log and ~120 frames of stack trace at ERROR beside it, once per disconnect, for a stream that
+   * had done nothing wrong.
+   */
+  @Test
+  void streamStaysAuthenticatedAcrossTheAsyncDispatchThatEndsIt() throws Exception {
+    SecurityContextHolder.clearContext();
+    String ticket = sseTicketService.issue(userId, null);
+
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("GET", "/api/notifications/stream");
+    request.setServletPath("/api/notifications/stream");
+    request.setParameter("ticket", ticket);
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    sseTicketAuthFilter.doFilter(request, response, new MockFilterChain());
+    assertTrue(
+        SecurityContextHolder.getContext().getAuthentication() != null,
+        "the ticket should authenticate the initial dispatch");
+
+    // What the async dispatch actually finds an hour later: a fresh container thread with an empty
+    // holder, and a ticket that redeem() consumed when the connection opened.
+    SecurityContextHolder.clearContext();
+    assertEquals(Optional.empty(), sseTicketService.redeem(ticket));
+
+    request.setDispatcherType(jakarta.servlet.DispatcherType.ASYNC);
+    sseTicketAuthFilter.doFilter(request, response, new MockFilterChain());
+
+    Authentication restored = SecurityContextHolder.getContext().getAuthentication();
+    assertTrue(restored != null, "async dispatch must not be denied — this is what logged the 500");
+    assertEquals(userId, ((User) restored.getPrincipal()).getId());
+    SecurityContextHolder.clearContext();
+  }
+
+  /**
+   * The restore is keyed on an attribute only the ticket path sets, so an async dispatch it never
+   * touched is left exactly as it was — those requests still re-authenticate from their header.
+   */
+  @Test
+  void asyncDispatchOfANonSseRequestIsNotAuthenticatedByThisFilter() throws Exception {
+    SecurityContextHolder.clearContext();
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/series");
+    request.setServletPath("/api/series");
+    request.setDispatcherType(jakarta.servlet.DispatcherType.ASYNC);
+
+    sseTicketAuthFilter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+
+    assertTrue(SecurityContextHolder.getContext().getAuthentication() == null);
   }
 }
