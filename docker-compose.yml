@@ -327,8 +327,14 @@ services:
       # forwards it to the container on its own. Without this line the knob documented in
       # .env.example is inert and config.py always falls back to its own 2000.
       - LOG_PAYLOAD_MAX_CHARS=${LOG_PAYLOAD_MAX_CHARS:-2000}
-      - PADDLEOCR_DET_MODEL=${PADDLEOCR_DET_MODEL:-PP-OCRv6_medium_det}
-      - PADDLEOCR_REC_MODEL=${PADDLEOCR_REC_MODEL:-PP-OCRv6_medium_rec}
+      # Deliberately no default: these two pin one det/rec pair for *every* language, and a value
+      # that is always set cannot express "let the worker choose". Which pair to run now comes from
+      # the `local` provider in config/providers.json, so Korean gets PP-OCRv5 (the only version
+      # with a Hangul recognition model) while everything else stays on PP-OCRv6. Set both only to
+      # force a specific pair; see PADDLEOCR_LOCAL_MODEL for picking a catalog entry by name.
+      - PADDLEOCR_DET_MODEL=${PADDLEOCR_DET_MODEL:-}
+      - PADDLEOCR_REC_MODEL=${PADDLEOCR_REC_MODEL:-}
+      - PADDLEOCR_LOCAL_MODEL=${PADDLEOCR_LOCAL_MODEL:-}
       - PADDLEOCR_DEVICE=${PADDLEOCR_DEVICE:-cpu}
       # Must stay in step with the CPU quota under `deploy` below. Neither Paddle
       # nor OpenMP can see a cgroup quota: they size their thread pools from the

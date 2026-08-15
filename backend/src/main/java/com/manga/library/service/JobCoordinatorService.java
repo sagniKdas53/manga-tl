@@ -484,7 +484,14 @@ public class JobCoordinatorService {
               job.put("ocrProvider", resolvedOcrProvider);
 
               if ("local".equals(resolvedOcrProvider)) {
-                job.put("ocrModel", settings.localOcrModel());
+                // Local OCR now has real, selectable models (PP-OCRv6 / PP-OCRv5), so a chapter or
+                // series override has to survive instead of being flattened to the global default.
+                // The worker treats this as a preference: if the chosen pair has no recognition
+                // model for the page's language it routes to one that does.
+                job.put(
+                    "ocrModel",
+                    resolveModel(
+                        chapter.getOcrModel(), series.getOcrModel(), settings.localOcrModel()));
               } else {
                 job.put(
                     "ocrModel",
@@ -740,7 +747,15 @@ public class JobCoordinatorService {
         chapter.getOcrModel(), series.getOcrModel(), settings.ocrModel(), resolvedOcrProvider, "ocr");
 
     if ("local".equals(resolvedOcrProvider)) {
-      resolvedOcrModel = settings.localOcrModel();
+      // Keep a chapter/series choice of local model (PP-OCRv6 vs PP-OCRv5) rather than collapsing
+      // to the global default — this value feeds the duplicate-page comparison, so flattening it
+      // made two differently-configured chapters look identical.
+      resolvedOcrModel = resolveModelWithCheck(
+          chapter.getOcrModel(),
+          series.getOcrModel(),
+          settings.localOcrModel(),
+          resolvedOcrProvider,
+          "ocr");
     }
 
     // The task keys must match providers.json, which uses tl / qaLLM / qaVLM / ocr — not the

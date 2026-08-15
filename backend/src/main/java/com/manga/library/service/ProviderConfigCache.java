@@ -129,6 +129,13 @@ public class ProviderConfigCache {
     return result;
   }
 
+  /** The provider's own default model for a task, or null when it declares none. */
+  public String getDefaultModel(String provider, String task) {
+    if (provider == null || task == null) return null;
+    ProviderData pData = providerMap.get(provider.toLowerCase().strip());
+    return pData == null ? null : pData.defaults.get(task);
+  }
+
   public Map<String, Map<String, List<ModelEntryDto>>> getProviderModelsMap() {
     Map<String, Map<String, List<ModelEntryDto>>> result = new HashMap<>();
     for (Map.Entry<String, ProviderData> entry : providerMap.entrySet()) {

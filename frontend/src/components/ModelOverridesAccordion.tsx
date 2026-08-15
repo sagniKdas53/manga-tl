@@ -195,16 +195,10 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
     }
 
     if (field === "ocrProvider") {
-      if (value === "local") {
-        onChange("ocrModel", "");
-      } else {
-        const first = getFirstValidModel(
-          value,
-          "ocr",
-          settings?.ocrVlmModelList,
-        );
-        onChange("ocrModel", first || "");
-      }
+      // "local" now publishes real models (PP-OCRv6 / PP-OCRv5), so it picks a first valid model
+      // like any other provider instead of blanking the field.
+      const first = getFirstValidModel(value, "ocr", settings?.ocrVlmModelList);
+      onChange("ocrModel", first || "");
     } else if (field === "tlProvider") {
       const first = getFirstValidModel(value, "tl", settings?.tlLlmModelList);
       onChange("tlModel", first || "");
@@ -258,12 +252,20 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
     (useFallbackModels !== null ? 1 : 0);
   const inheritedCount = overrideFields.length + 1 - overriddenCount;
 
-  const ocrDisabled = (ocrProvider || inherited.ocrProvider) === "local";
   const effOcrProv =
     ocrProvider ||
     inherited.ocrProvider ||
     settings?.ocrProvider ||
     "openrouter";
+  // Local OCR is only locked to a single fixed value when the worker has not published its
+  // det+rec catalog; once it has, PP-OCRv6 / PP-OCRv5 are selectable like any other model.
+  const ocrDisabled =
+    effOcrProv === "local" &&
+    (settings?.providerModelsMap?.["local"]?.ocr || []).length === 0;
+  // Local OCR models are PaddleOCR det+rec pairs, not vision-language models, so the default
+  // "OCR VLM Model" label would be wrong for them.
+  const effectiveOcrModelLabel =
+    effOcrProv === "local" ? localOcrModelLabel : ocrModelLabel;
   const ocrCapabilityMissing =
     effOcrProv !== "local" &&
     isCapabilityMissing(
@@ -365,7 +367,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
             fullWidth
             disabled={ocrDisabled || ocrCapabilityMissing}
           >
-            <InputLabel>{ocrModelLabel}</InputLabel>
+            <InputLabel>{effectiveOcrModelLabel}</InputLabel>
             <Select
               size="small"
               value={
@@ -375,7 +377,7 @@ const ModelOverridesAccordion: React.FC<ModelOverridesAccordionProps> = ({
                     ? "N/A"
                     : ocrModel || inherited.ocrModel || ""
               }
-              label={ocrModelLabel}
+              label={effectiveOcrModelLabel}
               onChange={(e) => onChange("ocrModel", e.target.value)}
             >
               {ocrDisabled ? (
