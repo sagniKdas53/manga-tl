@@ -387,7 +387,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   settings.providerModelsMap?.["local"]?.ocr || [];
                 // Only fall back to the single legacy entry when the worker has not published its
                 // catalog yet — otherwise local behaves like any other provider.
-                const localUnpublished = isLocalOcr && localOcrModels.length === 0;
+                const localUnpublished =
+                  isLocalOcr && localOcrModels.length === 0;
                 const capabilityMissing =
                   !isLocalOcr &&
                   isCapabilityMissing(
