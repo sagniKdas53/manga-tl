@@ -102,7 +102,8 @@ describe("ChapterGallery Component", () => {
   const mockSetSelectedChapter = vi.fn();
   const mockSetPages = vi.fn();
   const mockOnLoadMorePages = vi.fn();
-  const mockReloadPages = vi.fn().mockResolvedValue(undefined);
+  const mockRefreshPages = vi.fn().mockResolvedValue(undefined);
+  const mockOnToggleSort = vi.fn();
   const mockOnSelectPage = vi.fn();
 
   beforeEach(() => {
@@ -125,7 +126,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -152,7 +155,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -187,7 +192,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -249,7 +256,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -299,7 +308,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -342,7 +353,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -384,7 +397,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -452,7 +467,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -475,14 +492,14 @@ describe("ChapterGallery Component", () => {
 
     // Wait for pages refresh
     await waitFor(() => {
-      expect(mockReloadPages).toHaveBeenCalled();
+      expect(mockRefreshPages).toHaveBeenCalled();
     });
   });
 
   it("does not show an upload-success toast for a chapter the user has navigated away from", async () => {
     // Staleness protection for the *data* now lives inside usePaginatedResource's own
     // generation guard (see its test file) — ChapterGallery no longer receives page data
-    // directly from the refresh, it just calls the `reloadPages` prop. What ChapterGallery
+    // directly from the refresh, it just calls the `refreshPages` prop. What ChapterGallery
     // itself still guards, via `selectedChapterIdRef`, is not surfacing an upload-result
     // toast for a chapter that's no longer on screen by the time the refresh lands.
     interface MockXHR {
@@ -516,7 +533,7 @@ describe("ChapterGallery Component", () => {
     const refreshInFlight = new Promise<void>((r) => {
       landRefresh = r;
     });
-    mockReloadPages.mockImplementationOnce(() => refreshInFlight);
+    mockRefreshPages.mockImplementationOnce(() => refreshInFlight);
 
     const props = {
       mode: "dark" as const,
@@ -531,7 +548,9 @@ describe("ChapterGallery Component", () => {
       hasMorePages: false,
       isLoadingMorePages: false,
       onLoadMorePages: mockOnLoadMorePages,
-      reloadPages: mockReloadPages,
+      refreshPages: mockRefreshPages,
+      sortAsc: true,
+      onToggleSort: mockOnToggleSort,
     };
 
     const { rerender } = render(
@@ -574,7 +593,7 @@ describe("ChapterGallery Component", () => {
     );
 
     await waitFor(() => {
-      expect(mockReloadPages).toHaveBeenCalled();
+      expect(mockRefreshPages).toHaveBeenCalled();
     });
     // c1's "upload succeeded" toast must not surface once the user is viewing c2.
     expect(mockShowToast).not.toHaveBeenCalledWith(
@@ -630,7 +649,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={true}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -693,7 +714,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={true}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,
@@ -704,6 +727,53 @@ describe("ChapterGallery Component", () => {
     await waitFor(() => expect(reorderBody).not.toBeNull());
     // All four ids, with the first two swapped — not the two that happened to be loaded.
     expect(reorderBody).toEqual(["p2", "p1", "p3", "p4"]);
+  });
+
+  // Descending, the grid runs 4-3-2-1 while page numbers and the reorder payload still run
+  // 1-2-3-4. Renumbering the displayed order directly would PUT the chapter back to front.
+  it("sends the reorder in page-number order when the grid is sorted descending", async () => {
+    const descending = [4, 3, 2, 1].map((n) => ({
+      ...mockPages[0],
+      id: `p${n}`,
+      pageNumber: n,
+    }));
+
+    let reorderBody: string[] | null = null;
+    mockSafeFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/pages/reorder")) {
+        reorderBody = JSON.parse(String(init?.body)) as string[];
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    render(
+      <ChapterGallery
+        mode="dark"
+        user={mockUser}
+        selectedSeries={mockSeries}
+        selectedChapter={mockChapter}
+        setSelectedChapter={mockSetSelectedChapter}
+        pages={descending}
+        setPages={mockSetPages}
+        pagesTotalCount={4}
+        hasMorePages={false}
+        isLoadingMorePages={false}
+        onLoadMorePages={mockOnLoadMorePages}
+        refreshPages={mockRefreshPages}
+        sortAsc={false}
+        onToggleSort={mockOnToggleSort}
+        onSelectPage={mockOnSelectPage}
+        isLoadingDetails={false}
+      />,
+    );
+
+    // Moving the leftmost tile (page 4) right swaps it with page 3 in the display, which in
+    // page-number order means 1, 2, 4, 3.
+    fireEvent.click(screen.getAllByLabelText("Move page right")[0]);
+
+    await waitFor(() => expect(reorderBody).not.toBeNull());
+    expect(reorderBody).toEqual(["p1", "p2", "p4", "p3"]);
   });
 
   it("handles edit chapter failure", async () => {
@@ -725,7 +795,9 @@ describe("ChapterGallery Component", () => {
         hasMorePages={false}
         isLoadingMorePages={false}
         onLoadMorePages={mockOnLoadMorePages}
-        reloadPages={mockReloadPages}
+        refreshPages={mockRefreshPages}
+        sortAsc={true}
+        onToggleSort={mockOnToggleSort}
         onSelectPage={mockOnSelectPage}
         isLoadingDetails={false}
       />,

@@ -27,7 +27,15 @@ interface ChapterGalleryProps {
   hasMorePages: boolean;
   isLoadingMorePages: boolean;
   onLoadMorePages: () => void;
-  reloadPages: () => Promise<void>;
+  /**
+   * Refetches the loaded page batches in place after a mutation. Deliberately not a "reload":
+   * emptying the list first collapses the grid and drops the user back at the top of a
+   * chapter they were part-way down — the thing that made uploading a page disorienting.
+   */
+  refreshPages: () => Promise<void>;
+  /** Page-number sort direction. Server-side, so it holds for the whole chapter. */
+  sortAsc: boolean;
+  onToggleSort: () => void;
 }
 
 export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
@@ -44,7 +52,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
   hasMorePages,
   isLoadingMorePages,
   onLoadMorePages,
-  reloadPages,
+  refreshPages,
+  sortAsc,
+  onToggleSort,
 }) => {
   const navigate = useNavigate();
 
@@ -216,7 +226,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
 
       // Refresh pages list automatically at the end
       try {
-        await reloadPages();
+        await refreshPages();
         if (selectedChapterIdRef.current !== selectedChapter.id) return;
         if (successCount > 0) {
           showToast(`Successfully uploaded ${successCount} page(s)`, "success");
@@ -231,7 +241,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     [
       selectedChapter,
       pagesTotalCount,
-      reloadPages,
+      refreshPages,
       uploadFileWithProgress,
       showToast,
       addItems,
@@ -321,7 +331,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       if (res.ok) {
         showToast("Project imported successfully!", "success");
         // Refresh pages list
-        await reloadPages();
+        await refreshPages();
       } else {
         const errData = await res.json().catch(() => ({}));
         showToast(errData.message || "Failed to import project", "error");
@@ -530,7 +540,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             showToast("Page deleted successfully", "success");
             // Re-fetch to verify orders
             if (selectedChapter) {
-              await reloadPages();
+              await refreshPages();
             }
           } else if (res.status === 403) {
             showToast(
@@ -563,7 +573,9 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     if (pages.length < total) {
       try {
         const res = await safeFetch(
-          `/api/chapters/${selectedChapter.id}/pages?page=0&size=${total}`,
+          `/api/chapters/${selectedChapter.id}/pages?page=0&size=${total}&sortDir=${
+            sortAsc ? "asc" : "desc"
+          }`,
           { headers: { Authorization: `Bearer ${user.token}` } },
         );
         if (!res.ok) throw new Error("Failed to load full page order");
@@ -582,12 +594,16 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
     const [moved] = updatedPages.splice(index, 1);
     updatedPages.splice(newIndex, 0, moved);
 
-    // Adjust pageNumbers in the updated array
-    const finalPages = updatedPages.map((p, idx) => ({
+    // `index`/`newIndex` are positions in the grid, which is the reverse of page-number order
+    // when the sort is descending — but page numbers, and the id list the reorder endpoint
+    // expects, are always ascending. Renumbering the display order directly would write the
+    // chapter back to front.
+    const ascending = sortAsc ? updatedPages : [...updatedPages].reverse();
+    const renumbered = ascending.map((p, idx) => ({
       ...p,
       pageNumber: idx + 1,
     }));
-    setPages(finalPages);
+    setPages(sortAsc ? renumbered : [...renumbered].reverse());
 
     try {
       const res = await safeFetch(
@@ -598,7 +614,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
             "Content-Type": "application/json",
             Authorization: `Bearer ${user.token}`,
           },
-          body: JSON.stringify(finalPages.map((p) => p.id)),
+          body: JSON.stringify(renumbered.map((p) => p.id)),
         },
       );
       if (!res.ok) {
@@ -608,7 +624,7 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
       console.error("Error saving page order:", err);
       // Revert if error
       if (selectedChapter) {
-        reloadPages().catch((fetchErr) =>
+        refreshPages().catch((fetchErr) =>
           console.error("Error reverting page order:", fetchErr),
         );
       }
@@ -674,6 +690,8 @@ export const ChapterGallery: React.FC<ChapterGalleryProps> = ({
         hasMore={hasMorePages}
         isLoadingMore={isLoadingMorePages}
         onLoadMore={onLoadMorePages}
+        sortAsc={sortAsc}
+        onToggleSort={onToggleSort}
         onDeletePage={handleDeletePage}
         onMovePage={handleMovePage}
         onSelectPage={(p) => {

@@ -97,4 +97,43 @@ describe("ChapterPageGrid", () => {
     fireEvent.click(moveRightBtns[0]);
     expect(mockOnMovePage).toHaveBeenCalledWith(0, "right");
   });
+
+  it("shows the current sort direction and toggles it", () => {
+    const onToggleSort = vi.fn();
+    const { rerender } = render(
+      <ChapterPageGrid
+        pages={mockPages}
+        onDeletePage={mockOnDeletePage}
+        onMovePage={mockOnMovePage}
+        onSelectPage={mockOnSelectPage}
+        totalCount={2}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={vi.fn()}
+        sortAsc={true}
+        onToggleSort={onToggleSort}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Sort: Ascending/ }));
+    expect(onToggleSort).toHaveBeenCalled();
+
+    rerender(
+      <ChapterPageGrid
+        pages={mockPages}
+        onDeletePage={mockOnDeletePage}
+        onMovePage={mockOnMovePage}
+        onSelectPage={mockOnSelectPage}
+        totalCount={2}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={vi.fn()}
+        sortAsc={false}
+        onToggleSort={onToggleSort}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /Sort: Descending/ }),
+    ).toBeInTheDocument();
+  });
 });

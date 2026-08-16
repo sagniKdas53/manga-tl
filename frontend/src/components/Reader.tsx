@@ -51,10 +51,14 @@ interface ReaderProps {
   setPages?: React.Dispatch<React.SetStateAction<Page[]>>;
   /** Total page count on the server — `pages.length` is only what's loaded so far. */
   pagesTotalCount?: number;
-  /** Fetches whichever batch contains the given 0-based page index, if not already loaded. */
-  ensurePageLoaded?: (index: number) => void;
-  /** Drops the accumulated pages and refetches page 0 — used after a mutation. */
-  reloadPages?: () => Promise<void>;
+  /**
+   * Fetches whichever batch holds the given 0-based page *position* (position 41 is page 42
+   * of the chapter), if not already loaded. Which batch that is depends on the gallery's sort
+   * direction; App.tsx owns that translation.
+   */
+  ensurePageLoaded?: (position: number) => void;
+  /** Refetches the loaded page batches in place — used after a mutation. */
+  refreshPages?: () => Promise<void>;
 }
 
 /** A single renderable item in the reader — either a conversation group or a standalone region. */
@@ -175,7 +179,7 @@ export const Reader: React.FC<ReaderProps> = ({
   theme,
   pagesTotalCount = 0,
   ensurePageLoaded,
-  reloadPages,
+  refreshPages,
 }) => {
   const navigate = useNavigate();
   const { pageNumber } = useParams<{ pageNumber: string }>();
@@ -195,13 +199,13 @@ export const Reader: React.FC<ReaderProps> = ({
   }
 
   const fetchPages = useCallback(async () => {
-    if (!setPages || !selectedChapter || !reloadPages) return;
+    if (!setPages || !selectedChapter || !refreshPages) return;
     try {
-      await reloadPages();
+      await refreshPages();
     } catch (e) {
       console.error("Failed to fetch pages:", e);
     }
-  }, [selectedChapter, setPages, reloadPages]);
+  }, [selectedChapter, setPages, refreshPages]);
 
   const curPageNum = parseInt(pageNumber || "1");
   const selectedPage = pages.find((p) => p.pageNumber === curPageNum);

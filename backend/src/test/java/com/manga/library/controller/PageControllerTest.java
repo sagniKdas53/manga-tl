@@ -141,7 +141,7 @@ public class PageControllerTest {
 
     Page page = pageFixture(pageId, 1, imageId, chapterId);
 
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(
+    when(pageRepository.findByChapterId(
             eq(chapterId), any(org.springframework.data.domain.Pageable.class)))
         .thenReturn(
             new org.springframework.data.domain.PageImpl<>(
@@ -169,7 +169,7 @@ public class PageControllerTest {
     org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
         org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
 
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(eq(chapterId), captor.capture()))
+    when(pageRepository.findByChapterId(eq(chapterId), captor.capture()))
         .thenReturn(
             new org.springframework.data.domain.PageImpl<>(
                 Collections.emptyList(),
@@ -182,6 +182,46 @@ public class PageControllerTest {
 
     org.junit.jupiter.api.Assertions.assertEquals(25, captor.getValue().getPageSize());
     org.junit.jupiter.api.Assertions.assertEquals(0, captor.getValue().getPageNumber());
+  }
+
+  /**
+   * The gallery's page sort has to steer the query, not a client-side re-sort: the browser only
+   * holds a 25-page prefix, so sorting there would order the loaded pages rather than the
+   * chapter. The direction is visible in the {@code Pageable} the (mocked) repository is handed,
+   * which is what makes it checkable here.
+   */
+  @Test
+  public void testListPages_SortDirectionSteersTheQuery() throws Exception {
+    UUID chapterId = UUID.randomUUID();
+    org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+
+    when(pageRepository.findByChapterId(eq(chapterId), captor.capture()))
+        .thenReturn(
+            new org.springframework.data.domain.PageImpl<>(
+                Collections.emptyList(),
+                org.springframework.data.domain.PageRequest.of(0, 25),
+                0));
+
+    mockMvc
+        .perform(get("/api/chapters/" + chapterId + "/pages").param("sortDir", "desc"))
+        .andExpect(status().isOk());
+
+    org.junit.jupiter.api.Assertions.assertEquals(
+        org.springframework.data.domain.Sort.by(
+            org.springframework.data.domain.Sort.Direction.DESC, "pageNumber"),
+        captor.getValue().getSort());
+
+    // Ascending stays the default — no query parameter, no behaviour change for every existing
+    // caller (the reader included, which numbers pages from 1 upward).
+    mockMvc
+        .perform(get("/api/chapters/" + chapterId + "/pages"))
+        .andExpect(status().isOk());
+
+    org.junit.jupiter.api.Assertions.assertEquals(
+        org.springframework.data.domain.Sort.by(
+            org.springframework.data.domain.Sort.Direction.ASC, "pageNumber"),
+        captor.getValue().getSort());
   }
 
   /**
@@ -201,7 +241,7 @@ public class PageControllerTest {
     org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
         org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
 
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(eq(chapterId), captor.capture()))
+    when(pageRepository.findByChapterId(eq(chapterId), captor.capture()))
         .thenReturn(
             new org.springframework.data.domain.PageImpl<>(
                 Collections.emptyList(),
@@ -222,7 +262,7 @@ public class PageControllerTest {
     org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
         org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
 
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(eq(chapterId), captor.capture()))
+    when(pageRepository.findByChapterId(eq(chapterId), captor.capture()))
         .thenReturn(
             new org.springframework.data.domain.PageImpl<>(
                 Collections.emptyList(),
@@ -250,7 +290,7 @@ public class PageControllerTest {
       trailingFive.add(pageFixture(UUID.randomUUID(), pageNumber, imageId, chapterId));
     }
 
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(
+    when(pageRepository.findByChapterId(
             eq(chapterId), any(org.springframework.data.domain.Pageable.class)))
         .thenReturn(
             new org.springframework.data.domain.PageImpl<>(
@@ -272,7 +312,7 @@ public class PageControllerTest {
   public void testListPages_EmptyResult() throws Exception {
     UUID chapterId = UUID.randomUUID();
 
-    when(pageRepository.findByChapterIdOrderByPageNumberAsc(
+    when(pageRepository.findByChapterId(
             eq(chapterId), any(org.springframework.data.domain.Pageable.class)))
         .thenReturn(
             new org.springframework.data.domain.PageImpl<>(

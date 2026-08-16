@@ -2947,7 +2947,8 @@ export interface operations {
     listPages: {
         parameters: {
             query: {
-                pageable: components["schemas"]["Pageable"];
+                unsortedPageable: components["schemas"]["Pageable"];
+                sortDir?: string;
             };
             header?: never;
             path: {
