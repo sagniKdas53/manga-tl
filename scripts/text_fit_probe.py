@@ -4,7 +4,7 @@
 D6 and D7 (docs/render_quality_gap_2026-08-05.md) are both claims about geometry -- the type is
 too small for the balloon, and it is fitted to a box that is not the shape it gets drawn into --
 and neither can be settled by looking at pages. This runs the worker's own `fit_text_in_box_py`
-over every translation element in `corpus/exports/<branch>/page-N-project.json` and reports:
+over every translation element in `corpus/samples/<id>/project/project.json` and reports:
 
   fill      total laid-out text height / box height, per element. The references sit around
             0.70-0.85; anything under ~0.45 reads as a lonely sentence in a big balloon.
@@ -15,7 +15,7 @@ over every translation element in `corpus/exports/<branch>/page-N-project.json` 
             forced below legibility no matter how much vertical room there is.
 
 Usage:
-    ../.venv/bin/python scripts/text_fit_probe.py [--branch main] [--json out.json] [--verbose]
+    ../.venv/bin/python scripts/text_fit_probe.py [--samples corpus/samples] [--json out.json] [--verbose]
 
 Run it from the repo root; it imports the worker in place, so it measures the code as deployed
 rather than a copy of it.
@@ -183,12 +183,31 @@ def measure_element(el, font_name="Comic Neue"):
     }
 
 
-def run(branch, verbose=False):
-    root = REPO / "corpus" / "exports" / branch
+def sample_projects(samples_root):
+    """Every flattened sample's project.json, as (sample_id, path), in sample-number order.
+
+    This used to read `corpus/exports/<branch>/page-N-project.json`, a per-branch A/B capture that
+    was deleted on 2026-08-16 (its findings live in corpus/docs/ab_region_grouping_2026-08-12.md).
+    The per-sample layout is the durable one: it is what the app writes, what flatten_samples.py
+    unpacks, and what render_quality_metrics.py and cover_fill_probe.py already read.
+    """
+    out = []
+    for path in samples_root.glob("*/project/project.json"):
+        out.append((path.parent.parent.name, path))
+    for path in samples_root.glob("NSFW/*/project/project.json"):
+        out.append(("NSFW/" + path.parent.parent.name, path))
+
+    def key(item):
+        stem = item[0].rsplit("/", 1)[-1]
+        return (item[0].startswith("NSFW/"), int(stem.removeprefix("sample") or 0))
+
+    return sorted(out, key=key)
+
+
+def run(samples_root, verbose=False):
     rows = []
-    for page in sorted(root.glob("page-*-project.json"), key=lambda p: int(p.stem.split("-")[1])):
+    for sample_id, page in sample_projects(samples_root):
         data = json.loads(page.read_text())
-        n = int(page.stem.split("-")[1])
         for layer in data.get("layers", []):
             if layer.get("type") != "translation":
                 continue
@@ -196,7 +215,7 @@ def run(branch, verbose=False):
                 m = measure_element(el)
                 if m is None:
                     continue
-                m["page"] = n
+                m["sample"] = sample_id
                 rows.append(m)
                 if verbose and (m["fill"] < 0.45 or m["escapes"] or m["starved"]):
                     flags = []
@@ -207,7 +226,7 @@ def run(branch, verbose=False):
                     if m["starved"]:
                         flags.append("starved")
                     print(
-                        f"  p{n:<3} {m['size']:3d}px {'/'.join(flags):28s} {m['text'][:44]!r}",
+                        f"  {sample_id:<16} {m['size']:3d}px {'/'.join(flags):28s} {m['text'][:44]!r}",
                         flush=True,
                     )
     return rows
@@ -231,13 +250,14 @@ def summarise(rows, label):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--branch", default="main")
+    ap.add_argument("--samples", type=Path, default=REPO / "corpus" / "samples",
+                    help="corpus sample root (default: corpus/samples)")
     ap.add_argument("--json", type=Path, help="write the per-element rows here")
     ap.add_argument("--verbose", action="store_true", help="print every flagged element")
     args = ap.parse_args()
 
-    rows = run(args.branch, verbose=args.verbose)
-    summarise(rows, args.branch)
+    rows = run(args.samples, verbose=args.verbose)
+    summarise(rows, str(args.samples))
     if args.json:
         args.json.write_text(json.dumps(rows, indent=1))
         print(f"\nwrote {args.json}")
