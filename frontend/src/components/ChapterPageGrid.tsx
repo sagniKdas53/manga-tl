@@ -1,11 +1,14 @@
 import React from "react";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
 import Grid from "@mui/material/Grid";
 import IconButton from "@mui/material/IconButton";
+import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import CloseIcon from "@mui/icons-material/Close";
+import ImportExportIcon from "@mui/icons-material/ImportExport";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import type { Page } from "../types";
@@ -23,6 +26,9 @@ export interface ChapterPageGridProps {
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore: () => void;
+  /** Page-number sort direction, applied server-side (see App.tsx). */
+  sortAsc: boolean;
+  onToggleSort: () => void;
 }
 
 /**
@@ -45,20 +51,40 @@ const ChapterPageGrid: React.FC<ChapterPageGridProps> = ({
   hasMore,
   isLoadingMore,
   onLoadMore,
+  sortAsc,
+  onToggleSort,
 }) => {
   return (
     <>
-      <Typography
-        variant="h5"
-        sx={{ fontWeight: 600 }}
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        justifyContent="space-between"
+        alignItems={{ xs: "stretch", sm: "center" }}
+        spacing={1}
+        sx={{ mb: 1 }}
       >
-        Pages ({totalCount || pages.length})
-      </Typography>
+        <Typography
+          variant="h5"
+          sx={{ fontWeight: 600 }}
+        >
+          Pages ({totalCount || pages.length})
+        </Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<ImportExportIcon />}
+          onClick={onToggleSort}
+        >
+          Sort: {sortAsc ? "Ascending ↑" : "Descending ↓"}
+        </Button>
+      </Stack>
       <Grid
         container
         spacing={2.5}
         sx={{ mt: 0.5 }}
       >
+        {/* Sorted server-side by pageNumber (see App.tsx) — re-sorting here would only
+            order the loaded prefix, which is not the same list. */}
         {pages.map((p, idx) => (
           <Grid
             key={p.id}

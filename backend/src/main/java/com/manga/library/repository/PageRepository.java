@@ -14,6 +14,14 @@ public interface PageRepository extends JpaRepository<Page, UUID> {
   org.springframework.data.domain.Page<Page> findByChapterIdOrderByPageNumberAsc(
       UUID chapterId, org.springframework.data.domain.Pageable pageable);
 
+  /**
+   * Ordering comes from the {@link org.springframework.data.domain.Pageable} rather than the
+   * method name, so the caller can serve either direction. The {@code OrderByPageNumberAsc}
+   * variant above is fixed ascending and silently wins over any sort a caller supplies.
+   */
+  org.springframework.data.domain.Page<Page> findByChapterId(
+      UUID chapterId, org.springframework.data.domain.Pageable pageable);
+
   List<Page> findByImageId(UUID imageId);
 
   Optional<Page> findByChapterIdAndPageNumber(UUID chapterId, Integer pageNumber);

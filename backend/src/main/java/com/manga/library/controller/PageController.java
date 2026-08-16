@@ -745,9 +745,23 @@ public class PageController {
   @Transactional(readOnly = true)
   public ResponseEntity<com.manga.library.dto.PagedResponse<PageDto>> listPages(
       @PathVariable UUID chapterId,
-      @org.springframework.data.web.PageableDefault(size = 25) org.springframework.data.domain.Pageable pageable) {
+      @org.springframework.data.web.PageableDefault(size = 25) org.springframework.data.domain.Pageable unsortedPageable,
+      @RequestParam(value = "sortDir", defaultValue = "asc") String sortDir) {
+    // Same shape as SeriesController#listChapters: the direction steers the query, not a
+    // client-side re-sort — an infinite-scroll prefix sorted in the browser would show the
+    // *loaded* pages in the chosen order rather than the chapter's.
+    org.springframework.data.domain.Sort.Direction direction =
+        "desc".equalsIgnoreCase(sortDir)
+            ? org.springframework.data.domain.Sort.Direction.DESC
+            : org.springframework.data.domain.Sort.Direction.ASC;
+    org.springframework.data.domain.Pageable pageable =
+        org.springframework.data.domain.PageRequest.of(
+            unsortedPageable.getPageNumber(),
+            unsortedPageable.getPageSize(),
+            org.springframework.data.domain.Sort.by(direction, "pageNumber"));
+
     org.springframework.data.domain.Page<Page> pagePage =
-        pageRepository.findByChapterIdOrderByPageNumberAsc(chapterId, pageable);
+        pageRepository.findByChapterId(chapterId, pageable);
 
     return ResponseEntity.ok(
         com.manga.library.dto.PagedResponse.from(

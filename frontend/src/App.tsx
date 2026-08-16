@@ -316,6 +316,10 @@ function AppContent() {
     const cached = localStorage.getItem("chapters_sort_asc");
     return cached === null ? true : cached === "true";
   });
+  const [pagesSortAsc, setPagesSortAsc] = useState<boolean>(() => {
+    const cached = localStorage.getItem("pages_sort_asc");
+    return cached === null ? true : cached === "true";
+  });
 
   const seriesPagination = usePaginatedResource<Series>(
     user && location.pathname === "/" ? "/api/series" : null,
@@ -341,11 +345,33 @@ function AppContent() {
     user && chapterId ? `/api/chapters/${chapterId}/pages` : null,
     25,
     user?.token,
-    [chapterId],
-    { sortKey: (p) => p.pageNumber },
+    [chapterId, pagesSortAsc],
+    {
+      params: { sortDir: pagesSortAsc ? "asc" : "desc" },
+      // Batches can land out of order (the reader jumps straight to a page nobody scrolled
+      // to), so the merged list is re-sorted here — in whichever direction the server was
+      // asked for, or the two would disagree and the grid would show its own order.
+      sortKey: (p) => (pagesSortAsc ? p.pageNumber : -p.pageNumber),
+    },
   );
   const pages = pagesPagination.items;
   const setPages = pagesPagination.setItems;
+
+  // The reader thinks in ascending page positions — "page 42" is the 42nd page of the
+  // chapter regardless of how the gallery is sorted — but the batch that holds it depends on
+  // the order the list was actually fetched in. Descending, the 42nd page lives in the batch
+  // counted from the *other* end, so the position is mirrored before it is turned into a
+  // batch index.
+  const { ensureLoaded: ensurePageLoaded, totalCount: pagesTotalCount } =
+    pagesPagination;
+  const ensurePagePositionLoaded = useCallback(
+    (position: number) => {
+      ensurePageLoaded(
+        pagesSortAsc ? position : Math.max(0, pagesTotalCount - 1 - position),
+      );
+    },
+    [ensurePageLoaded, pagesSortAsc, pagesTotalCount],
+  );
 
   const { mode } = useColorMode();
 
@@ -656,7 +682,16 @@ function AppContent() {
                                 hasMorePages={pagesPagination.hasMore}
                                 isLoadingMorePages={pagesPagination.isLoading}
                                 onLoadMorePages={pagesPagination.loadMore}
-                                reloadPages={pagesPagination.reload}
+                                refreshPages={pagesPagination.refresh}
+                                sortAsc={pagesSortAsc}
+                                onToggleSort={() => {
+                                  const nextSort = !pagesSortAsc;
+                                  setPagesSortAsc(nextSort);
+                                  localStorage.setItem(
+                                    "pages_sort_asc",
+                                    String(nextSort),
+                                  );
+                                }}
                               />
                             ) : null
                           }
@@ -679,7 +714,16 @@ function AppContent() {
                                 hasMorePages={pagesPagination.hasMore}
                                 isLoadingMorePages={pagesPagination.isLoading}
                                 onLoadMorePages={pagesPagination.loadMore}
-                                reloadPages={pagesPagination.reload}
+                                refreshPages={pagesPagination.refresh}
+                                sortAsc={pagesSortAsc}
+                                onToggleSort={() => {
+                                  const nextSort = !pagesSortAsc;
+                                  setPagesSortAsc(nextSort);
+                                  localStorage.setItem(
+                                    "pages_sort_asc",
+                                    String(nextSort),
+                                  );
+                                }}
                               />
                             ) : null
                           }
@@ -697,8 +741,8 @@ function AppContent() {
                                 setPages={setPages}
                                 theme={mode}
                                 pagesTotalCount={pagesPagination.totalCount}
-                                ensurePageLoaded={pagesPagination.ensureLoaded}
-                                reloadPages={pagesPagination.reload}
+                                ensurePageLoaded={ensurePagePositionLoaded}
+                                refreshPages={pagesPagination.refresh}
                               />
                             ) : null
                           }
@@ -716,8 +760,8 @@ function AppContent() {
                                 setPages={setPages}
                                 theme={mode}
                                 pagesTotalCount={pagesPagination.totalCount}
-                                ensurePageLoaded={pagesPagination.ensureLoaded}
-                                reloadPages={pagesPagination.reload}
+                                ensurePageLoaded={ensurePagePositionLoaded}
+                                refreshPages={pagesPagination.refresh}
                               />
                             ) : null
                           }

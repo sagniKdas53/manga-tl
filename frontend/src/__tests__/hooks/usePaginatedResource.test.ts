@@ -199,6 +199,146 @@ describe("usePaginatedResource", () => {
     expect(result.current.items.map((i) => i.id)).toEqual(["1"]);
   });
 
+  // The scroll-position bug: `reload` empties `items` before page 0 lands, the grid
+  // collapses to zero height, and the browser clamps the scroll to the top. `refresh` is the
+  // post-mutation refetch that keeps the rendered list standing the whole way through.
+  it("refresh never empties items and refetches every loaded batch", async () => {
+    mockSafeFetch.mockResolvedValueOnce(
+      pagedResponse([{ id: "1", pageNumber: 1 }], 0, 1, 2),
+    );
+    const { result } = renderHook(() =>
+      usePaginatedResource<Item>("/api/things", 1, "tok", []),
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    mockSafeFetch.mockResolvedValueOnce(
+      pagedResponse([{ id: "2", pageNumber: 2 }], 1, 1, 2),
+    );
+    act(() => {
+      result.current.loadMore();
+    });
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    // Sampled while the refetches are in flight: an intermediate empty list is exactly the
+    // state that collapsed the grid, so asserting on the final value alone would miss it.
+    const lengthsDuringRefresh: number[] = [];
+
+    mockSafeFetch.mockImplementation((rawUrl: unknown) => {
+      lengthsDuringRefresh.push(result.current.items.length);
+      const requested = String(rawUrl).includes("page=1") ? 1 : 0;
+      return Promise.resolve(
+        pagedResponse(
+          [{ id: String(requested + 1), pageNumber: requested + 1 }],
+          requested,
+          1,
+          2,
+        ),
+      );
+    });
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.items.map((i) => i.id)).toEqual(["1", "2"]);
+    expect(lengthsDuringRefresh).toHaveLength(2);
+    expect(lengthsDuringRefresh.every((n) => n === 2)).toBe(true);
+    // Both loaded batches, not just page 0.
+    const refreshed = mockSafeFetch.mock.calls.map((c) => String(c[0]));
+    expect(refreshed).toContain("/api/things?page=0&size=1");
+    expect(refreshed).toContain("/api/things?page=1&size=1");
+    mockSafeFetch.mockReset();
+  });
+
+  it("refresh prunes rows the mutation deleted", async () => {
+    mockSafeFetch.mockResolvedValueOnce(
+      pagedResponse(
+        [
+          { id: "1", pageNumber: 1 },
+          { id: "2", pageNumber: 2 },
+        ],
+        0,
+        25,
+        2,
+      ),
+    );
+    const { result } = renderHook(() =>
+      usePaginatedResource<Item>("/api/things", 25, "tok", []),
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    // "2" was deleted. A merge-by-id refresh would keep it forever; the rebuild drops it.
+    mockSafeFetch.mockResolvedValueOnce(
+      pagedResponse([{ id: "1", pageNumber: 1 }], 0, 25, 1),
+    );
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.items.map((i) => i.id)).toEqual(["1"]);
+    expect(result.current.totalCount).toBe(1);
+  });
+
+  // The upload case: the user is at the bottom of the chapter, the new page lands past the
+  // end of the last loaded batch, and it has to be on screen without a scroll hunt.
+  it("refresh pulls in batches appended past the end when the list was loaded to the end", async () => {
+    mockSafeFetch.mockResolvedValueOnce(
+      pagedResponse([{ id: "1", pageNumber: 1 }], 0, 1, 1),
+    );
+    const { result } = renderHook(() =>
+      usePaginatedResource<Item>("/api/things", 1, "tok", []),
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(result.current.hasMore).toBe(false);
+
+    mockSafeFetch.mockImplementation((rawUrl: unknown) => {
+      const requested = String(rawUrl).includes("page=1") ? 1 : 0;
+      return Promise.resolve(
+        pagedResponse(
+          [{ id: String(requested + 1), pageNumber: requested + 1 }],
+          requested,
+          1,
+          2,
+        ),
+      );
+    });
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.items.map((i) => i.id)).toEqual(["1", "2"]);
+    expect(result.current.hasMore).toBe(false);
+    mockSafeFetch.mockReset();
+  });
+
+  it("refresh keeps the existing rows when a batch fails to refetch", async () => {
+    mockSafeFetch.mockResolvedValueOnce(
+      pagedResponse(
+        [
+          { id: "1", pageNumber: 1 },
+          { id: "2", pageNumber: 2 },
+        ],
+        0,
+        25,
+        2,
+      ),
+    );
+    const { result } = renderHook(() =>
+      usePaginatedResource<Item>("/api/things", 25, "tok", []),
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    mockSafeFetch.mockResolvedValueOnce({ ok: false, json: () => ({}) });
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    // A failed refetch is not evidence that anything was deleted.
+    expect(result.current.items.map((i) => i.id)).toEqual(["1", "2"]);
+    expect(result.current.error).toBeTruthy();
+  });
+
   // AUDIT-F10: `fetchPage` used to omit `params` from its `useCallback` deps behind an
   // `eslint-disable`, so the object captured at first render was the one every subsequent
   // fetch used. The reset fired correctly on a `deps` change and then re-requested the

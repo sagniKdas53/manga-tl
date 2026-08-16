@@ -54,8 +54,27 @@ export interface UsePaginatedResourceResult<T> {
    * upload batch finishing. Resolves once page 0 has landed. Note this does *not* restore
    * batches beyond page 0 that were previously loaded by scrolling; the caller sees the list
    * "rewound" to the first batch, same as a fresh visit to the page.
+   *
+   * Prefer `refresh` for post-mutation refetches: this empties `items` first, which
+   * collapses the grid to nothing and throws the scroll position away.
    */
   reload: () => Promise<void>;
+  /**
+   * Refetches every batch that is currently loaded and swaps the results in *without* ever
+   * emptying `items`. This is the post-mutation refetch: `reload` sets `items` to `[]`
+   * before page 0 lands, which collapses the rendered grid to zero height, and the browser
+   * clamps the scroll position to the new document height — so uploading a page while
+   * scrolled halfway down a chapter threw the user back to the top and made them scroll
+   * down again to find what they had just added. Rebuilding in place keeps the grid's
+   * height stable across the swap, so the scroll position survives on its own.
+   *
+   * Deletions are pruned (the rebuilt list is exactly what the server just returned) and
+   * items appended past the end are picked up when the loaded batches already reached the
+   * end — the upload case, where the new pages belong right where the user is looking. If
+   * some batch fails to refetch, the successful ones are merged over the existing list
+   * instead of replacing it, so a partial failure cannot delete rows that still exist.
+   */
+  refresh: () => Promise<void>;
 }
 
 export interface UsePaginatedResourceOptions<T> {
@@ -126,23 +145,15 @@ export function usePaginatedResource<T extends { id: string }>(
     sortKeyRef.current = sortKey;
   }, [sortKey]);
 
-  const fetchPage = useCallback(
-    (pageIndex: number): Promise<void> => {
-      if (!url || pageIndex < 0) return Promise.resolve();
-      // AUDIT-F11 backstop: refuse a page index past the end of the resource. This is the
-      // guarantee that holds even if `loadMore`'s seek or `hasMore` regresses later — an
-      // unbounded walk becomes impossible rather than merely unlikely.
-      const knownTotalPages = totalPagesRef.current;
-      if (knownTotalPages !== null && pageIndex >= knownTotalPages) {
-        return Promise.resolve();
-      }
-      if (
-        loadedPagesRef.current.has(pageIndex) ||
-        inFlightRef.current.has(pageIndex)
-      ) {
-        return Promise.resolve();
-      }
-
+  /**
+   * The bare network leg: request one batch, keep the in-flight bookkeeping honest, and hand
+   * back the parsed body — or `null` when the request failed or a reset overtook it. It
+   * deliberately touches neither `items` nor the loaded-page set; `fetchPage` (append) and
+   * `refresh` (rebuild) each apply the result their own way, over one shared idea of how a
+   * batch is fetched.
+   */
+  const requestPage = useCallback(
+    (pageIndex: number): Promise<PagedResponse<T> | null> => {
       // Captured, not re-read in `finally`: a reset swaps `inFlightRef.current` for a fresh
       // Set, and a late `finally` deleting from the *new* set would clear a marker it never
       // set and reopen the dedupe window.
@@ -169,28 +180,17 @@ export function usePaginatedResource<T extends { id: string }>(
         })
         .then((data) => {
           // A reset (url/deps change) fired mid-flight — this response no longer applies.
-          if (generation !== requestGenerationRef.current) return;
-          loadedPagesRef.current.add(pageIndex);
-          setLoadedPageCount(loadedPagesRef.current.size);
-          totalPagesRef.current = data.totalPages;
-          setTotalPages(data.totalPages);
-          setTotalCount(data.totalElements);
-          setError(null);
-          setItems((prev) => {
-            const byId = new Map(prev.map((item) => [item.id, item]));
-            for (const item of data.content) byId.set(item.id, item);
-            const merged = Array.from(byId.values());
-            const orderBy = sortKeyRef.current;
-            if (orderBy) merged.sort((a, b) => orderBy(a) - orderBy(b));
-            return merged;
-          });
+          if (generation !== requestGenerationRef.current) return null;
+          return data;
         })
         .catch((err) => {
           console.error("usePaginatedResource fetch failed:", err);
           // Same generation guard as the success path: a stale failure must not paint an
           // error over a list that has already been replaced.
-          if (generation !== requestGenerationRef.current) return;
-          setError(err instanceof Error ? err.message : String(err));
+          if (generation === requestGenerationRef.current) {
+            setError(err instanceof Error ? err.message : String(err));
+          }
+          return null;
         })
         .finally(() => {
           inFlight.delete(pageIndex);
@@ -198,6 +198,49 @@ export function usePaginatedResource<T extends { id: string }>(
         });
     },
     [url, pageSize, token, paramsKey],
+  );
+
+  /** Merges a batch into `items` by id, re-applying `sortKey` when one was supplied. */
+  const mergeIntoItems = useCallback((incoming: T[], base: T[] | null) => {
+    setItems((prev) => {
+      const byId = new Map((base ?? prev).map((item) => [item.id, item]));
+      for (const item of incoming) byId.set(item.id, item);
+      const merged = Array.from(byId.values());
+      const orderBy = sortKeyRef.current;
+      if (orderBy) merged.sort((a, b) => orderBy(a) - orderBy(b));
+      return merged;
+    });
+  }, []);
+
+  const fetchPage = useCallback(
+    (pageIndex: number): Promise<void> => {
+      if (!url || pageIndex < 0) return Promise.resolve();
+      // AUDIT-F11 backstop: refuse a page index past the end of the resource. This is the
+      // guarantee that holds even if `loadMore`'s seek or `hasMore` regresses later — an
+      // unbounded walk becomes impossible rather than merely unlikely.
+      const knownTotalPages = totalPagesRef.current;
+      if (knownTotalPages !== null && pageIndex >= knownTotalPages) {
+        return Promise.resolve();
+      }
+      if (
+        loadedPagesRef.current.has(pageIndex) ||
+        inFlightRef.current.has(pageIndex)
+      ) {
+        return Promise.resolve();
+      }
+
+      return requestPage(pageIndex).then((data) => {
+        if (!data) return;
+        loadedPagesRef.current.add(pageIndex);
+        setLoadedPageCount(loadedPagesRef.current.size);
+        totalPagesRef.current = data.totalPages;
+        setTotalPages(data.totalPages);
+        setTotalCount(data.totalElements);
+        setError(null);
+        mergeIntoItems(data.content, null);
+      });
+    },
+    [url, requestPage, mergeIntoItems],
   );
 
   // Shared by the reset effect (url/deps changed) and `reload` (caller wants a fresh page 0
@@ -217,6 +260,69 @@ export function usePaginatedResource<T extends { id: string }>(
     // drive the count negative as they settle.
     return url ? fetchPage(0) : Promise.resolve();
   }, [url, fetchPage]);
+
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!url) return;
+    const indices = Array.from(loadedPagesRef.current).sort((a, b) => a - b);
+    // Nothing accumulated yet (the very first fetch is still in flight, or it failed):
+    // there is no in-place swap to make, and page 0 is what a caller wants either way.
+    if (indices.length === 0) {
+      await resetAndFetchFirstPage();
+      return;
+    }
+
+    const generation = requestGenerationRef.current;
+    const previousTotalPages = totalPagesRef.current;
+    // Whether the loaded batches ran all the way to the end *before* the mutation. If they
+    // did, anything the server appended (an upload) belongs on screen right now; if they
+    // didn't, the user is mid-list and the sentinel will reach the new tail in due course.
+    const wasLoadedToEnd =
+      previousTotalPages !== null &&
+      loadedPagesRef.current.has(previousTotalPages - 1);
+
+    const results = await Promise.all(indices.map((i) => requestPage(i)));
+    // A reset (chapter change, sort change) overtook this refresh — its results describe a
+    // list nobody is looking at any more.
+    if (generation !== requestGenerationRef.current) return;
+
+    const landed = results.filter((data): data is PagedResponse<T> => !!data);
+    // Every batch failed: `requestPage` has already recorded the error, and the list the
+    // user is looking at is still the best thing available.
+    if (landed.length === 0) return;
+    const allLanded = landed.length === results.length;
+
+    // Concurrent responses agree on the totals; any of them will do.
+    const totals = landed[landed.length - 1];
+    totalPagesRef.current = totals.totalPages;
+    setTotalPages(totals.totalPages);
+    setTotalCount(totals.totalElements);
+    if (allLanded) setError(null);
+
+    // A mutation can shrink the resource (deleting the only page of the last batch), which
+    // strands loaded indices past the new end — `hasMore` would then read as "more to load"
+    // against batches that no longer exist.
+    const stillLoaded = new Set(indices.filter((i) => i < totals.totalPages));
+    loadedPagesRef.current = stillLoaded;
+    setLoadedPageCount(stillLoaded.size);
+
+    // `base: []` when everything landed — the rebuilt list is exactly what the server just
+    // returned, which is what prunes deleted rows. On a partial failure the successful
+    // batches merge over what is already there instead, so a network blip cannot silently
+    // drop rows that still exist server-side.
+    mergeIntoItems(
+      landed.flatMap((data) => data.content),
+      allLanded ? [] : null,
+    );
+
+    if (wasLoadedToEnd && totals.totalPages > (previousTotalPages ?? 0)) {
+      await Promise.all(
+        Array.from(
+          { length: totals.totalPages - (previousTotalPages ?? 0) },
+          (_, offset) => fetchPage((previousTotalPages ?? 0) + offset),
+        ),
+      );
+    }
+  }, [url, requestPage, resetAndFetchFirstPage, fetchPage, mergeIntoItems]);
 
   useEffect(() => {
     // Deferred to a microtask: this effect's own setState calls (via
@@ -265,5 +371,6 @@ export function usePaginatedResource<T extends { id: string }>(
     ensureLoaded,
     setItems,
     reload: resetAndFetchFirstPage,
+    refresh,
   };
 }
