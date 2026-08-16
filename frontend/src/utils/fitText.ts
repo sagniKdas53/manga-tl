@@ -29,7 +29,8 @@ export const ensureFontsLoaded = async (
 
   const specs = new Set<string>();
   for (const el of elements) {
-    const style = (el.fontStyle || "normal").toLowerCase() === "italic" ? "italic " : "";
+    const style =
+      (el.fontStyle || "normal").toLowerCase() === "italic" ? "italic " : "";
     const weight = el.fontWeight || "bold";
     const family = el.font || "Comic Neue";
     specs.add(`${weight} ${style}16px "${family}"`);

@@ -12,7 +12,11 @@ import type {
   Series,
 } from "../types";
 import { safeFetch, toSlug, formatCost } from "../utils";
-import { fitTextInBox, clampLineCenter, ensureFontsLoaded } from "../utils/fitText";
+import {
+  fitTextInBox,
+  clampLineCenter,
+  ensureFontsLoaded,
+} from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";

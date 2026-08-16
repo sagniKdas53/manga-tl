@@ -11,6 +11,44 @@
     "openRouterRoutingStrategy": "lowest-cost"
   },
   "providers": {
+    "local": {
+      "displayName": "Local (PaddleOCR)",
+      "type": "local-ocr",
+      "freeTier": true,
+      "priority": 0,
+      "models": {
+        "ocr": [
+          {
+            "id": "PP-OCRv6",
+            "name": "PP-OCRv6 Medium",
+            "free": true,
+            "det": "PP-OCRv6_medium_det",
+            "rec": {
+              "ja": "PP-OCRv6_medium_rec",
+              "zh": "PP-OCRv6_medium_rec",
+              "zh-cn": "PP-OCRv6_medium_rec",
+              "zh-tw": "PP-OCRv6_medium_rec",
+              "en": "PP-OCRv6_medium_rec"
+            }
+          },
+          {
+            "id": "PP-OCRv5",
+            "name": "PP-OCRv5 Server",
+            "free": true,
+            "det": "PP-OCRv5_server_det",
+            "rec": {
+              "ja": "PP-OCRv5_server_rec",
+              "zh": "PP-OCRv5_server_rec",
+              "zh-cn": "PP-OCRv5_server_rec",
+              "zh-tw": "PP-OCRv5_server_rec",
+              "ko": "korean_PP-OCRv5_mobile_rec",
+              "en": "en_PP-OCRv5_mobile_rec"
+            }
+          }
+        ]
+      },
+      "defaultOCRModel": "PP-OCRv6"
+    },
     "openrouter": {
       "displayName": "OpenRouter",
       "type": "openai-compatible",

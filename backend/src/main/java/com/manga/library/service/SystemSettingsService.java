@@ -101,14 +101,28 @@ public class SystemSettingsService {
 
     List<String> activeProviders = providerConfigCache.getProvidersForTask("tl");
 
+    // "local" is now a real provider in providers.json (the worker publishes its validated
+    // PaddleOCR det+rec pairs), so it arrives from the cache too. Deduplicate rather than listing it
+    // twice, and keep honouring DISABLE_LOCAL_OCR by dropping it entirely when set.
     List<String> activeOcrProviders = new java.util.ArrayList<>();
     if (!disableLocalOcr) {
       activeOcrProviders.add("local");
     }
-    List<String> cachedOcr = providerConfigCache.getProvidersForTask("ocr");
-    activeOcrProviders.addAll(cachedOcr);
+    for (String provider : providerConfigCache.getProvidersForTask("ocr")) {
+      if (!activeOcrProviders.contains(provider) && !"local".equals(provider)) {
+        activeOcrProviders.add(provider);
+      }
+    }
 
     var providerModelsMap = providerConfigCache.getProviderModelsMap();
+
+    // Which local pair the UI should show as selected. Prefer the worker-published default (a
+    // catalog id such as "PP-OCRv6"); fall back to the legacy PADDLEOCR_REC_MODEL env var for a
+    // deployment whose worker has not published yet.
+    String localOcrModel = providerConfigCache.getDefaultModel("local", "ocr");
+    if (localOcrModel == null || localOcrModel.isBlank()) {
+      localOcrModel = paddleOcrRecModel;
+    }
 
     return new SystemSettingsDto(
         parsedOcrVlmModelList,
@@ -124,7 +138,7 @@ public class SystemSettingsService {
         getSettingValue("qaLlmModel", actQaLlmModel),
         getSettingValue("qaVlmModel", actQaVlmModel),
         disableLocalOcr,
-        paddleOcrRecModel,
+        localOcrModel,
         disableLocalLlm,
         getSettingValue("qaMode", qaMode),
         Boolean.parseBoolean(getSettingValue("useFallbackModels", "true")),

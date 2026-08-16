@@ -266,16 +266,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     handleChange(field, value);
 
     if (field === "ocrProvider") {
-      if (value === "local") {
-        handleChange("ocrModel", "");
-      } else {
-        const first = getFirstValidModel(
-          value,
-          "ocr",
-          settings?.ocrVlmModelList,
-        );
-        handleChange("ocrModel", first || "");
-      }
+      // "local" now publishes real models (PP-OCRv6 / PP-OCRv5), so it picks a first valid model
+      // like any other provider instead of blanking the field.
+      const first = getFirstValidModel(value, "ocr", settings?.ocrVlmModelList);
+      handleChange("ocrModel", first || "");
     } else if (field === "tlProvider") {
       const first = getFirstValidModel(value, "tl", settings?.tlLlmModelList);
       handleChange("tlModel", first || "");
@@ -387,42 +381,59 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </Grid>
 
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl
-                fullWidth
-                size="small"
-                disabled={settings.ocrProvider === "local"}
-              >
-                <InputLabel>Global OCR VLM Model</InputLabel>
-                <Select
-                  value={
-                    settings.ocrProvider === "local"
-                      ? settings.localOcrModel || "local"
-                      : isCapabilityMissing(
-                            settings.providerModelsMap,
-                            settings.ocrProvider,
-                            "ocr",
-                            settings.ocrVlmModelList,
-                          )
-                        ? "N/A"
-                        : settings.ocrModel || ""
-                  }
-                  label="Global OCR VLM Model"
-                  onChange={(e) => handleChange("ocrModel", e.target.value)}
-                >
-                  {settings.ocrProvider === "local" ? (
-                    <MenuItem value={settings.localOcrModel || "local"}>
-                      {settings.localOcrModel || "Local Worker Model"}
-                    </MenuItem>
-                  ) : (
-                    renderModelOptions(
-                      settings.providerModelsMap,
-                      settings.ocrProvider,
-                      "ocr",
-                      settings.ocrVlmModelList,
-                    )
-                  )}
-                </Select>
-              </FormControl>
+              {(() => {
+                const isLocalOcr = settings.ocrProvider === "local";
+                const localOcrModels =
+                  settings.providerModelsMap?.["local"]?.ocr || [];
+                // Only fall back to the single legacy entry when the worker has not published its
+                // catalog yet — otherwise local behaves like any other provider.
+                const localUnpublished =
+                  isLocalOcr && localOcrModels.length === 0;
+                const capabilityMissing =
+                  !isLocalOcr &&
+                  isCapabilityMissing(
+                    settings.providerModelsMap,
+                    settings.ocrProvider,
+                    "ocr",
+                    settings.ocrVlmModelList,
+                  );
+                const label = isLocalOcr
+                  ? "Global Local OCR Model"
+                  : "Global OCR VLM Model";
+                return (
+                  <FormControl
+                    fullWidth
+                    size="small"
+                    disabled={localUnpublished || capabilityMissing}
+                  >
+                    <InputLabel>{label}</InputLabel>
+                    <Select
+                      value={
+                        localUnpublished
+                          ? settings.localOcrModel || "local"
+                          : capabilityMissing
+                            ? "N/A"
+                            : settings.ocrModel || settings.localOcrModel || ""
+                      }
+                      label={label}
+                      onChange={(e) => handleChange("ocrModel", e.target.value)}
+                    >
+                      {localUnpublished ? (
+                        <MenuItem value={settings.localOcrModel || "local"}>
+                          {settings.localOcrModel || "Local Worker Model"}
+                        </MenuItem>
+                      ) : (
+                        renderModelOptions(
+                          settings.providerModelsMap,
+                          settings.ocrProvider,
+                          "ocr",
+                          settings.ocrVlmModelList,
+                        )
+                      )}
+                    </Select>
+                  </FormControl>
+                );
+              })()}
             </Grid>
 
             <Grid size={12}>
