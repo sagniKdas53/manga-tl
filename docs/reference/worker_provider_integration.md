@@ -54,10 +54,10 @@ graph TD
 
 | Module / File | Component | Description |
 | :--- | :--- | :--- |
-| [`llm_client.py`](file:///home/sagnik/Projects/docker-composes/manga-library/worker/src/worker/services/llm_client.py) | `LLMClient` & `LLMResponse` | Thin HTTP client responsible for format translation, sending requests via `requests.post`, executing retries, rate limiting, and response parsing. |
-| [`provider_config.py`](file:///home/sagnik/Projects/docker-composes/manga-library/worker/src/worker/provider_config.py) | `ProviderConfigLoader` | Parses `providers.json`, interpolates environment variables (API keys), filters active providers, and generates `PROVIDER_REGISTRY`. |
-| [`translation.py`](file:///home/sagnik/Projects/docker-composes/manga-library/worker/src/worker/services/translation.py) | Provider Fallback Orchestrator | Iterates over prioritized list of AI providers/models, driving multi-stage translation pipelines. |
-| [`ocr.py`](file:///home/sagnik/Projects/docker-composes/manga-library/worker/src/worker/services/ocr.py) | Vision OCR Service | Prepares base64 image/text payloads and invokes vision-capable provider endpoints. |
+| [`llm_client.py`](../../worker/src/worker/services/llm_client.py) | `LLMClient` & `LLMResponse` | Thin HTTP client responsible for format translation, sending requests via `requests.post`, executing retries, rate limiting, and response parsing. |
+| [`provider_config.py`](../../worker/src/worker/provider_config.py) | `ProviderConfigLoader` | Parses `providers.json`, interpolates environment variables (API keys), filters active providers, and generates `PROVIDER_REGISTRY`. |
+| [`translation.py`](../../worker/src/worker/services/translation.py) | Provider Fallback Orchestrator | Iterates over prioritized list of AI providers/models, driving multi-stage translation pipelines. |
+| [`ocr.py`](../../worker/src/worker/services/ocr.py) | Vision OCR Service | Prepares base64 image/text payloads and invokes vision-capable provider endpoints. |
 
 ---
 

@@ -13,6 +13,11 @@ Everything in here is one of four things, and the folder says which:
 If a document contradicts the code, the code wins and the document is a bug — file it in
 [`issues.md`](issues.md).
 
+> **Open items were re-verified against the code on 2026-08-17.** Most held; four were wrong and
+> have been corrected in place (`D8` and `D10` are part-done, `D16`'s title was misleading, and
+> `mock-router` Phase 0's first half is fixed). Anything marked `[/]` in TODO.md is partly done,
+> with the still-open half named.
+
 ---
 
 ## Start here

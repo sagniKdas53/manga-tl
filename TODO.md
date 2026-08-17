@@ -20,15 +20,28 @@ Where it stands, in leverage order:
 
 - [x] **D6/D7 — undersized, overflowing text.** Fixed 2026-08-12/13 (hyphenation + dropping a
   size cap that pinned every fit to 60% of its box). Median balloon fill went 0.591 → 0.866.
-- [ ] **D8 — mirror the D6/D7 fix into `fitText.ts`.** `render.py` has it; the browser-side
-  renderer doesn't yet, so live reader and export can still disagree.
+- [/] **D8 — mirror the D6/D7 fix into `fitText.ts`.** *Half done (verified 2026-08-17).* The
+  **size-cap half is already there** — `fitText.ts:477-483` drops the `maxWidth / 3` pre-cap with a
+  comment citing D7 and "matching the Python fix". What is **not** mirrored is **hyphenation**:
+  `render.py` has a full pyphen implementation (`hyphen_positions`, `render.py:251-313`) and
+  `fitText.ts` has none, so a long word still forces a smaller size in the browser than in the
+  export. That is the remaining disagreement between live reader and export.
 - [ ] **`freeTextBox` widening** — the backend's free-floating-text box can still land on top of
   artwork. Separate from D6/D7.
-- [ ] **D10 — strip glosses and junk regions.** Cheap, mechanical: removes ~29 visible
-  parenthetical glosses (`"DOKAA (WHAM)"`) and ~80 stray typeset fragments that shouldn't have
-  been translated at all.
-- [ ] **D16 — font fallback chain.** Glyphs the lettering face lacks print as a blank box
-  (`♡`, `帅哥`). A few hours of work; reads as broken software, not a bad translation.
+- [/] **D10 — strip glosses and junk regions.** *Mechanism built, one half inert (verified
+  2026-08-17).* The **gloss half is done**: the prompt contradiction is gone —
+  `translation.py:65` now reads `GOOD: "WHAM". BAD: "DOKAA (WHAM)".`. The **junk half is done**:
+  `JUNK_REGION_MIN_CONFIDENCE` (0.55) is consumed at `translation.py:211`. The **sfx half is
+  built but cannot fire**: the `TYPESET_SFX` gate at `translation.py:202` keys off
+  `region_type == "sfx"`, and `classify_region_type` (`layout.py:50-55`) still recognises sfx only
+  by kana-only-≤5-chars or 3:1-tall-≤6-chars — the two rules a mangled OCR read never matches. See
+  issues.md §R4. Today SFX are suppressed by the QA VLM's `reject_sfx`, not by this gate.
+- [ ] **D16 — glyph-level font fallback.** Glyphs the lettering face lacks print as a blank box
+  (`♡`, `帅哥`). Reads as broken software, not a bad translation. **Note the title was misleading:**
+  a font *fallback chain already exists* (`DEFAULT_FONT_FALLBACK_ORDER`, `render.py:77-120`), but it
+  only fires when a font **file fails to load**. Comic Neue loads fine, so the chain never runs and
+  the tofu still renders. What is missing is **per-glyph coverage detection** — nothing in
+  `render.py` inspects a font's cmap. Verified 2026-08-17.
 - [ ] **D14 — vertical multi-column narration gets shredded** into separate regions and
   translated one column at a time. Fix is contained to `fragment_grouping.py`; `sample2` is a
   ready-made regression test.
@@ -232,14 +245,20 @@ building for tail latency and multi-worker resilience, not for throughput.
   `MAX_LIGHT_SLOTS=4`) and confirmed via a drained capture — see
   [docs/archive/history.md](docs/archive/history.md).
 - [x] Worker container given CPU/memory limits (2 CPUs / 4g, sized from measured peak usage).
-- [ ] **Large-upload performance (100+ images)** — thumbnail generation is serialized behind one
-  global lock (`WEBP_LOCK` in `PageService.java`), so the thumbnail executor's 4 threads still
-  process one at a time. See [docs/reference/webp_thumbnail_encoding.md](docs/reference/webp_thumbnail_encoding.md).
+- [ ] **Large-upload performance (100+ images)** — thumbnail generation still serializes on the
+  global `WEBP_LOCK` in `PageService.java`. *Narrower than this item used to claim (verified
+  2026-08-17):* `AUDIT-B6` already pulled the non-WebP decode out of the lock, so a JPEG/PNG
+  source now decodes in parallel and only genuinely-WebP work is serialized (`PageService.java:260-283`).
+  The encode side (`:355`, `:518`) is still fully serialized, so the 4 executor threads still
+  bottleneck on a WebP-heavy upload. See [docs/reference/webp_thumbnail_encoding.md](docs/reference/webp_thumbnail_encoding.md).
 - [ ] **`mock-router`** — a deterministic mock LLM provider (speaks the OpenAI/Anthropic wire
   format) so the pipeline can be tested end-to-end with no API spend and no nondeterminism.
   Design doc: [docs/design/mock_router.md](docs/design/mock_router.md) — designed, not implemented, phased:
-  - [ ] Phase 0: fix `try_local_ai` dropping its `prompt` argument; route `ocr.py`'s cloud OCR
-    calls through `LLMClient`/`PROVIDER_REGISTRY` instead of hardcoded per-provider URLs.
+  - [/] Phase 0: ~~fix `try_local_ai` dropping its `prompt` argument~~ — **done**; it now takes the
+    caller's prompt as the system message (`translation.py:540-551`), which is what had been
+    silently breaking QA. Still open: route `ocr.py`'s cloud OCR calls through
+    `LLMClient`/`PROVIDER_REGISTRY` instead of hardcoded per-provider URLs (`ocr.py:174` is still a
+    hand-built Gemini URL — same line as the key-in-query-string item above).
   - [ ] Phase 1: Ollama drop-in mock + happy-path response contracts.
   - [ ] Phase 2: cloud-provider substitution + fault injection (429s, malformed JSON, timeouts).
   - [ ] Phase 3: record & replay against a real provider, as a prompt-regression baseline.

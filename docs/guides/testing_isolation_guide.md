@@ -45,7 +45,7 @@ Redis has 16 logical databases (numbered `0` through `15`).
 
 The unified Python workers use `pytest`.
 
-- Inside `unified-workers/tests/__init__.py`, the entire `redis.Redis` client is globally replaced with a `MagicMock`.
+- Inside `worker/tests/__init__.py`, the entire `redis.Redis` client is globally replaced with a `MagicMock`.
 - **Result:** The Python tests never actually establish a network connection to Redis. They simulate the queue in memory, guaranteeing they will never accidentally pull jobs from your real database `0`.
 
 ### 4. Preventing Connection Hangs (MinIO & Workers)

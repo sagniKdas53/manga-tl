@@ -272,8 +272,8 @@ doesn't just relocate the deadlock risk, not a mechanical pass. Last in the queu
 
 #### `AUDIT-F9` (low) — responsive behaviour is never verified
 
-Zero uses of `useMediaQuery`/`theme.breakpoints`; all 43 test files run at one implicit viewport,
-and `matchMedia` isn't mocked. The primary device is an Android tablet and nothing checks layout
+Zero uses of `useMediaQuery`/`theme.breakpoints`; all **47** test files run at one implicit
+viewport, and `matchMedia` isn't mocked. (Re-counted 2026-08-17: still zero uses, 43 -> 47 files.) The primary device is an Android tablet and nothing checks layout
 at that size today. Needs a real-browser (Playwright) viewport smoke test — jsdom doesn't lay out
 CSS.
 
@@ -294,16 +294,17 @@ aren't. Blocked on getting an equivalent peak measurement — this kernel's cgro
 
 `worker/tests/test_translation_flow_e2e.py` has 19 `@patch` decorators and 4 assertions, none of
 which check translated text, region IDs, layer geometry, or cost — a regression that posted `{}`
-to every callback would still pass. Suite-wide: 342 `@patch` across 49 files, 217 tests passing in
-6.3s touching no real I/O.
+to every callback would still pass. **Re-measured 2026-08-17: unchanged at 19/4, and the suite-wide
+ratio got worse — 358 `@patch` across 55 files (was 342/49), 415 tests passing in 6.6s** touching
+no real I/O.
 
 **Deprioritized by user decision** — needs `mock_router.md` built first (a real wire-protocol
 double), which is design-and-experimentation work, not a mechanical pass.
 
-#### `AUDIT-Q1` (unranked) — 249 `Objects.requireNonNull` calls that can never fire
+#### `AUDIT-Q1` (unranked) — 253 `Objects.requireNonNull` calls that can never fire
 
-Concentrated in `JobCoordinatorService` (61), `PageController` (36), `SeriesController` (30),
-`LayerController` (28) — almost all guarding freshly-constructed values, literals, or
+Re-counted 2026-08-17: **253 repo-wide, up from 249.** Concentrated in `JobCoordinatorService`
+(64, was 61), `PageController` (38, was 36), `SeriesController` (30), `LayerController` (28) — almost all guarding freshly-constructed values, literals, or
 already-validated locals. Noise that likely drove `AUDIT-B3`'s NPE→400 mapping. A mechanical pass
 to delete the ones that can't fire would remove several hundred lines. Natural to fold in
 `AUDIT-Q2`'s inline fully-qualified-class-name cleanup — same controllers, one pass.
@@ -321,5 +322,7 @@ the working pattern already in the codebase).
 
 #### `AUDIT-Q2` (low) — fully-qualified class names inline instead of imports
 
-`SeriesController`, `PageController`, `ChapterRepository`, `PageRepository` write out full package
-paths at every use site instead of importing. Mechanical, low-risk — fold into `AUDIT-Q1`'s sweep.
+`SeriesController` (12) and `PageController` (15) write out full package paths at their use sites
+instead of importing. Mechanical, low-risk — fold into `AUDIT-Q1`'s sweep. **Re-counted 2026-08-17:
+`ChapterRepository` and `PageRepository` are down to 1 each and are effectively clean** — the
+controllers are all that is left of this item.

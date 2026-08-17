@@ -95,7 +95,7 @@ The worker supports multiple cloud and local model providers for both textual an
 
 #### 🎛️ Pipeline Bypass Environment Controls
 
-You can enable or disable different fallback layers in [.env](file:///home/sagnik/Projects/docker-composes/manga-library/.env) using the following environment variables:
+You can enable or disable different fallback layers in [.env](.env) using the following environment variables:
 
 | Environment Variable       | Description                                                                                                     |
 |:--------------------------- |:---------------------------------------------------------------------------------------------------------------- |
@@ -193,15 +193,16 @@ docker compose up -d --force-recreate worker
 
 ## 🧪 Running Tests
 
-Verify the backend ML worker services (OCR merging and translation validation validators):
+The worker's suite runs against the repo-root `.venv` (Python 3.13), not one inside `worker/`:
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
-
-# Execute backend validation tests
-python -c "import sys; sys.path.insert(0, 'unified-workers'); from tests.test_merge_regions import *; test_merge_no_regions(); test_merge_single_region(); test_merge_overlapping_regions(); test_merge_rtl_regions(); from tests.test_translation_validation import *; test_valid_translation(); test_cjk_leak_translation(); test_length_ratio_translation(); test_excessive_repetition_translation(); print('ALL TESTS PASSED!')"
+cd worker
+../.venv/bin/python -m pytest -q     # 415 passing, ~7s, no real I/O
 ```
+
+The full gate — backend, frontend and worker — is in
+[docs/guides/quality_gate.md](docs/guides/quality_gate.md). Run its checks **sequentially**; this
+host locks up if they are run in parallel.
 
 ---
 
