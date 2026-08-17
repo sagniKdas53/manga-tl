@@ -104,7 +104,7 @@ Without it those pages would have gotten slower, not faster.
 `Content-Length` — `permitAll` alone does *not* lift Spring Security's blanket `no-store`, so the
 explicit override was required. `/thumbnail` gained the same headers plus a `Content-Length` it
 never had. `/file` still returns **403** unauthenticated, so the boundary recorded in
-[security_boundary.md](./security_boundary.md) is intact.
+[security_boundary.md](../reference/security_boundary.md) is intact.
 
 ## Deliberately not done
 

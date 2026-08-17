@@ -2,8 +2,9 @@
 
 Successor to `region_threshold_validation_2026-08-08.md` (measurement) and
 `region_merge_prior_art_2026-08-08.md` (prior art). Written after reading the deep-research
-report `docs/Manga Translation Unit Research with Visual References.pdf` (untracked; it is the
-answer to `research_brief_region_merging.md`).
+report *"Manga Translation Unit Research with Visual References"* (an untracked local PDF, since
+deleted; it was the answer to `research_brief_region_merging.md`, whose conclusions are carried
+in the body of this document).
 
 This document answers three questions: **should the worker adopt what everyone else does**,
 **how do we change the benchmarks so they can tell us**, and **what maintenance does the worker
@@ -403,5 +404,6 @@ the critical path if T0 succeeds.
   doi:10.1007/978-3-030-68780-9_22
 - `zyddnys/manga-image-translator` — `manga_translator/textline_merge/__init__.py`
 - `dmMaze/comic-text-detector`
-- `docs/Manga Translation Unit Research with Visual References.pdf` — untracked; the research
+- *"Manga Translation Unit Research with Visual References"* — an untracked local PDF, since
+  deleted; the research
   report this document responds to.

@@ -6,7 +6,7 @@ This guide details how to benchmark different manga pages across local OCR engin
 > [`translation_bench.md`](translation_bench.md) — a repeatable, multi-page,
 > multi-provider benchmark driven by `config/providers.json` and a text-only corpus in
 > `scripts/corpus/`, with a worked example in
-> [`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md).
+> [`free_openrouter_translation_benchmark_2026-08-06.md`](../archive/free_openrouter_translation_benchmark_2026-08-06.md).
 > This guide covers the OCR stage only (local engines + VLM-as-OCR).
 
 ---
@@ -226,7 +226,7 @@ python scripts/benchmark_vlm_ocr.py --image corpus/samples/sample36/source.jpg -
 | Provider | Vision-capable free candidates |
 | --- | --- |
 | OpenRouter | `google/gemma-4-26b-a4b-it:free`, `google/gemma-4-31b-it:free`, `nvidia/nemotron-nano-12b-v2-vl:free`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` |
-| Cloudflare | `@cf/moondream/moondream3.1-9B-A2B` (small, purpose-built VLM — already in `config/providers.json`'s production list), `@cf/google/gemma-4-26b-a4b-it`, `@cf/meta/llama-3.2-11b-vision-instruct`, `@cf/meta/llama-4-scout-17b-16e-instruct` — **`@cf/moonshotai/kimi-k2.6` and `@cf/moonshotai/kimi-k2.7-code` (the current production `qaVLM`/`ocr` default) now require the Workers Paid plan** per live `require_workers_paid: true` metadata, confirmed 2026-08-07 — not reachable on the free 10,000-neurons/day allowance regardless of balance; see [`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md) §2. `@cf/mistralai/mistral-small-3.1-24b-instruct` no longer reports `vision: true` live and was dropped from this list. |
+| Cloudflare | `@cf/moondream/moondream3.1-9B-A2B` (small, purpose-built VLM — already in `config/providers.json`'s production list), `@cf/google/gemma-4-26b-a4b-it`, `@cf/meta/llama-3.2-11b-vision-instruct`, `@cf/meta/llama-4-scout-17b-16e-instruct` — **`@cf/moonshotai/kimi-k2.6` and `@cf/moonshotai/kimi-k2.7-code` (the current production `qaVLM`/`ocr` default) now require the Workers Paid plan** per live `require_workers_paid: true` metadata, confirmed 2026-08-07 — not reachable on the free 10,000-neurons/day allowance regardless of balance; see [`free_model_bench_handoff_2026-08-07.md`](../archive/free_model_bench_handoff_2026-08-07.md) §2. `@cf/mistralai/mistral-small-3.1-24b-instruct` no longer reports `vision: true` live and was dropped from this list. |
 | NVIDIA | `nvidia/nemotron-nano-12b-v2-vl`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, `nvidia/cosmos-reason2-8b`, `nvidia/neva-22b`, `nvidia/vila`, `meta/llama-3.2-11b-vision-instruct`, `meta/llama-3.2-90b-vision-instruct`, `microsoft/phi-3-vision-128k-instruct`, `adept/fuyu-8b` (base model, not instruction-tuned — likely needs a different prompt style) |
 
 `nvidia/nemotron-ocr-v2` is listed separately in `test-providers.json` under

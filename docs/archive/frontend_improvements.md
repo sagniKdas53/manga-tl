@@ -1,5 +1,9 @@
 # Frontend Improvements — findings from the yt-diff comparison
 
+> **Archived — never actioned.** None of this was tracked in TODO.md and none of it has been
+> picked up. It is a source of ideas, not a list of commitments. Re-read it before starting
+> frontend work; do not assume any item here is still accurate against the current code.
+
 **Written:** 2026-08-04. **Method:** read this frontend against `yt-diff/frontend`, the other
 React + MUI app in this workspace. yt-diff was built by hand before LLM assistance, so it
 represents an independent solution to a very similar problem shape (auth'd SPA, live server

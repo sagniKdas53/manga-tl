@@ -1,6 +1,12 @@
-# Migrate Backend to a usable language form that bullshit that is Java
+# Backend migration — Java/Spring → Python/FastAPI
 
-## Migration strategy — Java/Spring → Python/FastAPI
+> **Status: sketch only, not a current plan.** Written early, and the issues it cites as
+> motivation have since been fixed in the Java backend. There is no technical blocker to the
+> migration, just a preference not to maintain Spring Boot long-term — tracked in
+> [`../issues.md`](../issues.md) § "Move the backend off Java". Treat everything below as a
+> starting point to re-derive, not as decisions already made.
+
+## Migration strategy
 
 ### Why
 

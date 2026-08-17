@@ -2,7 +2,7 @@
 
 > Status legend: `[ ]` not started · `[/]` in progress · `[x]` done · `[D]` deferred
 >
-> Full history of closed work is in [docs/archive.md](./docs/archive.md). Finished planning docs
+> Full history of closed work is in [docs/archive/history.md](docs/archive/history.md). Finished planning docs
 > and session handoffs live in [docs/archive/](./docs/archive/).
 
 ## Now
@@ -189,7 +189,7 @@ Open:
 
 ### Worker pull model (event-driven job handoff)
 
-Design doc: [docs/worker_pull_model.md](./docs/worker_pull_model.md) — designed, not implemented.
+Design doc: [docs/design/worker_pull_model.md](docs/design/worker_pull_model.md) — designed, not implemented.
 
 Would replace the backend's fixed-interval dispatcher with worker threads pulling directly off
 Redis (`BRPOP`), plus lease/heartbeat crash recovery and a cancellation tombstone (the tombstone
@@ -198,7 +198,7 @@ resurrecting a cleared pipeline).
 
 **Measured value is small: 0.83% of total queue wait** (408s of 49,058s), not the ~10–25%
 originally estimated — see
-[docs/perf_analysis_backend_2026-08-02.md](./docs/perf_analysis_backend_2026-08-02.md). Worth
+[docs/archive/perf_analysis_backend_2026-08-02.md](docs/archive/perf_analysis_backend_2026-08-02.md). Worth
 building for tail latency and multi-worker resilience, not for throughput.
 
 ## Low priority / stretch goals
@@ -206,7 +206,7 @@ building for tail latency and multi-worker resilience, not for throughput.
 - [ ] CBZ import/export, and ePub **export** (ePub import already works; only export and CBZ are
   missing).
 - [ ] **OCR/Translation/QA prompt & schema robustness** — tracked in
-  [docs/models_and_prompts.md](./docs/models_and_prompts.md#suggestions-for-improvement):
+  [docs/reference/models_and_prompts.md](docs/reference/models_and_prompts.md#suggestions-for-improvement):
   - [ ] Retry with `temperature=0` on JSON parse failures
   - [ ] Reject refusal/length-anomaly responses from cloud OCR instead of trusting them as text
   - [ ] Strict schema enforcement for local Ollama VLM OCR (currently falls back to raw text)
@@ -230,14 +230,14 @@ building for tail latency and multi-worker resilience, not for throughput.
 
 - [x] Concurrency defaults raised (`CONCURRENT_JOBS=5`, `MAX_HEAVY_SLOTS=1`,
   `MAX_LIGHT_SLOTS=4`) and confirmed via a drained capture — see
-  [docs/archive.md](docs/archive.md).
+  [docs/archive/history.md](docs/archive/history.md).
 - [x] Worker container given CPU/memory limits (2 CPUs / 4g, sized from measured peak usage).
 - [ ] **Large-upload performance (100+ images)** — thumbnail generation is serialized behind one
   global lock (`WEBP_LOCK` in `PageService.java`), so the thumbnail executor's 4 threads still
-  process one at a time. See [docs/webp_thumbnail_encoding.md](./docs/webp_thumbnail_encoding.md).
+  process one at a time. See [docs/reference/webp_thumbnail_encoding.md](docs/reference/webp_thumbnail_encoding.md).
 - [ ] **`mock-router`** — a deterministic mock LLM provider (speaks the OpenAI/Anthropic wire
   format) so the pipeline can be tested end-to-end with no API spend and no nondeterminism.
-  Design doc: [docs/mock_router.md](./docs/mock_router.md) — designed, not implemented, phased:
+  Design doc: [docs/design/mock_router.md](docs/design/mock_router.md) — designed, not implemented, phased:
   - [ ] Phase 0: fix `try_local_ai` dropping its `prompt` argument; route `ocr.py`'s cloud OCR
     calls through `LLMClient`/`PROVIDER_REGISTRY` instead of hardcoded per-provider URLs.
   - [ ] Phase 1: Ollama drop-in mock + happy-path response contracts.
@@ -250,4 +250,4 @@ building for tail latency and multi-worker resilience, not for throughput.
 
 ---
 
-[Full archive](./docs/archive.md) · [Archived plans & handoffs](./docs/archive/)
+[Full archive](docs/archive/history.md) · [Archived plans & handoffs](./docs/archive/)

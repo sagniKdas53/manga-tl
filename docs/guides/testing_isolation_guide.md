@@ -60,7 +60,7 @@ In `docker-compose.yml`, MinIO only exposes port `9001` (console) to the host. T
 
 This guide covers *unit* test isolation only. For running the **full stack** end to end without
 touching real LLM providers — a container that speaks the OpenAI/Anthropic wire format and
-returns deterministic fixture payloads — see [mock_router.md](./mock_router.md) (design only,
+returns deterministic fixture payloads — see [mock_router.md](../design/mock_router.md) (design only,
 not yet implemented).
 
 ## Summary

@@ -1,6 +1,6 @@
 # mock-router — Deterministic LLM Provider Mock for Full-Stack Testing
 
-> **Status: design only, not implemented.** Tracked in [TODO.md](../TODO.md) under 🧪 Testing & QA.
+> **Status: design only, not implemented.** Tracked in [TODO.md](../../TODO.md) under 🧪 Testing & QA.
 
 ## 1. Motivation
 
@@ -286,7 +286,7 @@ only** — Mode A never reaches that code.
 | `schema-reject` | 400 when `response_format.type == "json_schema"`, 200 on retry | `_degraded_format` degradation | B |
 | `slow` | sleep past the 45s read timeout | `requests.exceptions.Timeout` | B (Mode A timeout is 300s) |
 | `malformed` | 200, truncated/invalid JSON in content | `parse_and_validate_batch` failure + fallback | A + B |
-| `refusal` | 200, `"I cannot process this image"` | the missing refusal heuristic already in [TODO.md](../TODO.md) — makes the gap demonstrable | A + B |
+| `refusal` | 200, `"I cannot process this image"` | the missing refusal heuristic already in [TODO.md](../../TODO.md) — makes the gap demonstrable | A + B |
 | `empty-choices` | 200 with `choices: []` | `content = ""` fallback | A + B |
 | `id-drift` | echo IDs with a suffix | proves ID matching is enforced, not silently ignored | A + B |
 | `partial` | echo only half the requested IDs | unmatched-region fallback | A + B |
@@ -403,25 +403,25 @@ Keep the provider *named* `openrouter` (§3.3).
 - **Phase 2 — Mode B + fault injection.** `providers.mock.json`, `/__control`, `/__requests`, the
   §7.2 matrix, tests asserting on captured request payloads.
 - **Phase 3 — record & replay.** Proxy mode, cassette canonicalization, curated-page baseline (§8).
-- **Phase 4 — E2E suite.** Wire into the Playwright item in [TODO.md](../TODO.md); assert layer
+- **Phase 4 — E2E suite.** Wire into the Playwright item in [TODO.md](../../TODO.md); assert layer
   correctness and QA-loop transitions. Add a CI job — with cassettes committed it needs no secrets.
 
 ## 12. Out of scope
 
 - Simulating model *quality*. Output is fixture or recorded text, so this can't validate
   translation or typesetting quality; that stays on real providers and
-  [benchmarking.md](./benchmarking.md). (§8 recording is the one place the two touch.)
+  [benchmarking.md](../archive/benchmarking.md). (§8 recording is the one place the two touch.)
 - Mocking DeepL / Google Translate wire formats — they're disable-flagged; revisit only if those
   paths need coverage.
 - Replacing the unit tests. `mock-router` covers integration; `worker/tests/` keeps covering logic.
 
 ## 13. Related
 
-- [worker_provider_integration.md](./worker_provider_integration.md) — the provider/registry
+- [worker_provider_integration.md](../reference/worker_provider_integration.md) — the provider/registry
   architecture Mode B plugs into.
-- [ollama.md](./ollama.md) — the real local-runtime setup this mode impersonates.
-- [testing_isolation_guide.md](./testing_isolation_guide.md) — environment isolation for the
+- [ollama.md](../guides/ollama.md) — the real local-runtime setup this mode impersonates.
+- [testing_isolation_guide.md](../guides/testing_isolation_guide.md) — environment isolation for the
   existing unit suites.
-- [models_and_prompts.md](./models_and_prompts.md) — prompt and schema definitions the fixtures
+- [models_and_prompts.md](../reference/models_and_prompts.md) — prompt and schema definitions the fixtures
   must satisfy.
 - `yt-diff` `validation/mock-tube` — prior art.

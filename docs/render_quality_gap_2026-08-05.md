@@ -88,10 +88,14 @@ without any new ML.
 
 ### 3.1 They erase ink. We erase regions.
 
-This is the whole thing, and it is visible directly. Below: the same balloon from `sample21`,
-and for each pipeline, **every pixel it changed** shown as black on white.
+This is the whole thing, and it is visible directly. The comparison was made by taking the same
+balloon from `sample21` and rendering, for each pipeline, **every pixel it changed** as black on
+white.
 
-![what each pipeline touches](img/render-gap-what-each-pipeline-touches.png)
+> The side-by-side figure that used to sit here was a crop of an NSFW corpus page and has been
+> removed from the repo. To regenerate it for a page of your choosing, diff the source against
+> each pipeline's output and threshold the result — `scripts/render_quality_metrics.py` computes
+> the same footprint numerically, which is what the percentages in §2 come from.
 
 mangatranslator.ai's footprint is **the Japanese glyph strokes and nothing else** — you can
 read 「はぁ…中でめっちゃビクビクしてる…」 in the shape of what they deleted, with the new English

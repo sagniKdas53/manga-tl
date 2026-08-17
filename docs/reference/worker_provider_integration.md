@@ -191,12 +191,12 @@ Whichever path runs, OCR is dispatched as a heavy-tier job and is subject to the
 > `url`/`headers`/`payload` with hardcoded provider endpoints (lines 111, 140, 173, 191) and so
 > ignores `providers.json` entirely. `perform_redo_ocr`, and therefore the whole QA re-OCR
 > escalation loop, inherits that. Routing it through `LLMClient` is Phase 0 of
-> [mock_router.md](./mock_router.md).
+> [mock_router.md](../design/mock_router.md).
 
 ## 7. Testing the provider layer
 
 Every test of this layer currently monkeypatches `requests.post`, so the assembled request and
 the HTTP error branches (429 cooldown escalation, `json_schema` → `json_object` degradation,
-timeouts) are never exercised over a socket. [mock_router.md](./mock_router.md) designs a mock
+timeouts) are never exercised over a socket. [mock_router.md](../design/mock_router.md) designs a mock
 provider container to close that gap — it also documents which `baseUrl` entries are
 env-interpolatable and how a test stack redirects egress.

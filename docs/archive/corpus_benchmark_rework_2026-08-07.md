@@ -1,5 +1,12 @@
 # Benchmark corpora rework: SFW curation, OCR corpus, unified runners, QA bench, history purge
 
+> **Archived — executed.** This plan produced the current `corpus/` layout, the unified benchmark
+> runners and the QA bench. For how those work now, see
+> [`../guides/benchmarks_guide.md`](../guides/benchmarks_guide.md). Kept for the reasoning behind
+> the corpus split and the history purge.
+>
+> Filed as `we-already-have-benchmarking-replicated-aurora.md`; renamed on archiving.
+
 ## Context
 
 `examples/` was re-curated: NSFW pages were moved to `examples/NSFW/` and 40 SFW samples

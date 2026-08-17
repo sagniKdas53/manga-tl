@@ -1388,7 +1388,7 @@ The entries below are reproduced **verbatim**, so their heading levels and `+` b
 Fixed in worker `2b37cdd` (pointer bump `e8ccb49`). The caller's prompt now becomes the system
 message; the hardcoded translation prompts remain the default for a caller that supplies none.
 Regression tests assert on the outgoing payload, since the failure mode was silence. Detail in
-[archive.md](./archive.md) under *The 2026-08-05 sitting*.
+[archive.md](history.md) under *The 2026-08-05 sitting*.
 
 ## Update the `configuration_guide.md` once everything is done
 
@@ -1745,7 +1745,7 @@ be less legible than disabled.
 **Re-checked 2026-08-04.** All six still open; line numbers have drifted —
 `App.tsx:287` is the duplicate `manga_theme` writer, `QueueManager.tsx:427` the poll,
 `package.json:21` the `esbuild` dependency. Three more of the same size, from the yt-diff
-comparison (see [frontend_improvements.md](./frontend_improvements.md)):
+comparison (see [frontend_improvements.md](frontend_improvements.md)):
 
 + **No precompressed assets.** `vite.config.ts` has no compression plugin and the MUI vendor chunk
   ships at 380 kB (119 kB gzip). yt-diff emits `.gz` + `.br` at build time via
@@ -1952,7 +1952,7 @@ human and are not code work:
    rate-limit sleep stayed at **0.0 s**, confirming AUDIT-W2 is inert; and `layout` still waits
    **255.5 s per job for 1.9 s of work** (99.2%), with `panel-detection` at 50.1 s for 0.2 s —
    together 97% of all queue wait. It also surfaced the QA silent-pass chain (now fixed, see
-   [archive.md](./archive.md)) and one measurement that reframes the whole exercise: **work totalled
+   [archive.md](history.md)) and one measurement that reframes the whole exercise: **work totalled
    1150.9 s against 1444 s of wall clock, so utilisation was 80% and even perfect scheduling recovers
    at most ~20% of wall.** The baseline's "90.8% queue wait" overstates the recoverable time, because
    most of that wait overlaps other jobs' work. Reducing *work* is the larger lever — and 450 s of
@@ -1969,7 +1969,7 @@ human and are not code work:
 ### Suggested fix order
 
 > **Superseded 2026-08-04.** Everything this list ranked is now either done, measured away, or
-> reduced to housekeeping — see the current ordering in [next-step.md](./next-step.md). Kept below
+> reduced to housekeeping — see the current ordering in [next-step.md](next-step.md). Kept below
 > because the *reasoning* about what was demoted and why is still the record.
 >
 > | was | now |
@@ -1981,7 +1981,7 @@ human and are not code work:
 > | #9 AUDIT-W2 | Second data point: 1.2%. Reading unchanged. |
 
 **Revised 2026-08-02** against measured data from the first drained run
-([perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md)). The previous
+([perf_analysis_backend_2026-08-02.md](perf_analysis_backend_2026-08-02.md)). The previous
 ordering ranked AUDIT-W2 as "likely the single largest throughput win available" — it is inert, and
 the item that actually holds throughput (**AUDIT-W10**) was not in the list at all, because no run
 had ever drained.
@@ -2022,7 +2022,7 @@ had ever drained.
    everything.
 10. Everything else as it is touched.
 
-**Not on this list on purpose:** the [worker pull model](./worker_pull_model.md). Measured, it would
+**Not on this list on purpose:** the [worker pull model](../design/worker_pull_model.md). Measured, it would
 remove **408 s of 49,058 s of queue wait (0.83%)**. Worth building for latency, resilience and
 multi-worker scaling — not for throughput, and not before #3.
 
@@ -2343,7 +2343,7 @@ from the displayed element are `handleExportPng` and `handleExportZip`.
 Each item below was re-verified against current code/docs (not just taken on the word of the original "(done)" tag) before being moved out of `issues.md`.
 
 - [x] **CI failing** — both failures fixed. Backend: `backend/pom.xml` pins `java.version=25` and `.github/workflows/ci-maven.yml` matches (`java-version: "25"`, `distribution: temurin`), resolving the "release version 25 not supported" error. Frontend: the flaky `AssertionError: expected false to be true` test was scoped inside `waitFor` in the Reader component test (commit `0a5296a`). **Correction 2026-08-03:** that did not fix it — the test flaked again in CI, and the cause was a product bug in `Reader.tsx`, not test timing. See "Reader lost-invalidation race" below.
-- [x] **Same-image handling had not worked for a long time** — the full intelligent-cloning architecture is implemented and documented end-to-end in [duplicate_handling.md](./duplicate_handling.md): source-page scoring for cloning candidates, OCR/translation config-matched layer cloning, image-scoped panels vs. page-scoped everything-else, and page-scoped job routing so a shared image backing pages in different chapters no longer resolves the wrong chapter's model config (commits `7f080ea`, `5e2d5ce`, `72d8a4f`).
+- [x] **Same-image handling had not worked for a long time** — the full intelligent-cloning architecture is implemented and documented end-to-end in [duplicate_handling.md](../reference/duplicate_handling.md): source-page scoring for cloning candidates, OCR/translation config-matched layer cloning, image-scoped panels vs. page-scoped everything-else, and page-scoped job routing so a shared image backing pages in different chapters no longer resolves the wrong chapter's model config (commits `7f080ea`, `5e2d5ce`, `72d8a4f`).
 - [x] **`index.js` is still too big** — `frontend/vite.config.ts` now splits the bundle via `manualChunks` (`vendor-react`, `vendor-mui`, `vendor-router`, `lib-jszip`, `lib-zod`); the before/after build logs pasted into the original issue show the single ~375 KB `index-*.js` dropping to a ~23 KB main chunk with the rest cached in stable vendor chunks (commit `849cb81`).
 - [x] **UI fixes needed**:
   - Lazy-loading thumbnails across series/chapter/page surfaces, fixing the earlier bug where the "lazy" loader still fetched full images (commit `6a94e97`).

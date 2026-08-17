@@ -27,7 +27,7 @@
    compete with the visible page), and the HTTP cache. This is not hypothetical: it was done in
    commit `02d9185` to repair the reader after AUDIT-S4 removed `?token=`, and it measurably
    regressed — p50 706 ms per image, 1.5–2.5 s during prefetch, overlays painting over a blank page.
-   See [reader_perf_plan_2026-08-03.md](./reader_perf_plan_2026-08-03.md).
+   See [reader_perf_plan_2026-08-03.md](../archive/reader_perf_plan_2026-08-03.md).
 2. **Authenticated responses cannot be cached usefully.** A public, immutable image can be cached by
    the browser and any intermediary; a per-user one cannot.
 3. **It matches comparable readers.** MangaDex's API documentation instructs clients *not* to send

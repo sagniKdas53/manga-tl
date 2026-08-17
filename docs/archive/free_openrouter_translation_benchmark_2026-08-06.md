@@ -1,5 +1,10 @@
 # Free OpenRouter models for manga translation — measured, ranked
 
+> **Archived — superseded** by [`../free_model_bench_plan_2026-08.md`](../free_model_bench_plan_2026-08.md),
+> which widens this to three providers and a multi-page corpus. Kept because it is the report that
+> motivated building a repeatable benchmark — see [`../guides/translation_bench.md`](../guides/translation_bench.md).
+> One provider, one hand-made page, translation stage only: read the rankings as a single data point.
+
 **Date:** 2026-08-06
 **Input:** `examples/sample28/original.jpg` — 7 text regions (2 system-UI signs, 4 speech
 bubbles forming one continuous rant, 1 repeated SFX), transcribed by hand and run through
@@ -8,7 +13,7 @@ the exact prompt, system message, and `TRANSLATION_JSON_SCHEMA` that
 `scripts/test_translation.py`).
 **Reference/baseline:** `examples/sample28/en-manga-tl-ai.jpg`, watermarked
 `mangatranslator.ai / qwen3-235b` — a paid competitor pipeline, same convention as
-[`render_quality_gap_2026-08-05.md`](render_quality_gap_2026-08-05.md).
+[`render_quality_gap_2026-08-05.md`](../render_quality_gap_2026-08-05.md).
 **Candidates:** all 14 chat-capable models on OpenRouter with `pricing.prompt == 0` as of
 2026-08-06 (queried live from `GET /api/v1/models`, not scraped from the pricing page —
 the screenshot's "Free Models Router," rerank, embed, and audio entries aren't chat
@@ -19,7 +24,7 @@ built for this run). For each model it tries, in order, `response_format: json_s
 real structured-output support rather than trusting OpenRouter's self-reported
 `supported_parameters`. **Superseded by `scripts/benchmark_translation.py`**, which
 generalizes this same ladder to every provider in `config/providers.json` and every page in
-`corpus/` — see [`translation_bench.md`](translation_bench.md) for the durable methodology
+`corpus/` — see [`translation_bench.md`](../guides/translation_bench.md) for the durable methodology
 this run's findings turned into. This doc stays as the dated results snapshot.
 
 ---

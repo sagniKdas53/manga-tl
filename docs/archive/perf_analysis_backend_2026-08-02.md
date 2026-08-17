@@ -1,10 +1,10 @@
 # Backend Performance Analysis — drained run `20260802-163445`
 
-Deliverables #1, #2 and #4 of [perf_run_playbook.md](./perf_run_playbook.md), from the first run
+Deliverables #1, #2 and #4 of [perf_run_playbook.md](../guides/perf_run_playbook.md), from the first run
 that ever **drained to idle**. Supersedes the 2026-08-01 baseline (the worker is now capped at
 2 CPUs / 4 GB, so older stage timings are not comparable).
 
-Frontend half: [perf_analysis_frontend_2026-08-02.md](./perf_analysis_frontend_2026-08-02.md).
+Frontend half: [perf_analysis_frontend_2026-08-02.md](perf_analysis_frontend_2026-08-02.md).
 
 **Run:** 42 pages, 7,924 s (2 h 12 m), 255 job rows, `n_unfinished = 0` on every stage,
 244 COMPLETED / 11 FAILED.
@@ -153,7 +153,7 @@ Unrelated but worth tracking: **`translation` failed 11 of 50 (22%)**, alongside
 
 1. **Raise `MAX_LIGHT_SLOTS`.** §3.2/§3.3. Config-only, attacks 99% of the measured wait.
 2. **Do not prioritise the worker-pull model for throughput** — see
-   [worker_pull_model.md](./worker_pull_model.md) §6.1. Pull removes the poll boundary, which is
+   [worker_pull_model.md](../design/worker_pull_model.md) §6.1. Pull removes the poll boundary, which is
    **408 s of the 49,058 s of queue wait (0.83%)**.
 3. **AUDIT-W2 drops out of the fix order.** It was ranked "likely the single largest throughput win
    available" and is inert with the current `providers.json`.

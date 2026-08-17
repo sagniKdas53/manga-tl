@@ -38,7 +38,7 @@ an attempt to supply, by hand and globally, a number the page already contains.
 
 *"Text block segmentation in comic speech bubbles"*, MANPU @ ICPR 2020
 (doi:10.1007/978-3-030-68780-9_22). The PDF is gitignored — this repo is public and the paper is
-Springer's; keep a local copy at `docs/MANPU_2020__text_bloc_segmentation_in_comic_speech_bubbles.pdf`.
+Springer's. A local copy used to sit in `docs/`; it has since been deleted. Fetch it by title or DOI if needed.
 
 This is our BUG-2, stated as a research problem: **multiple text blocks inside a single speech
 bubble**, caused by balloons drawn connected to each other. Their Fig. 2 is our `sample3`.

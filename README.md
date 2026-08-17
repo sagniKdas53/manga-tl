@@ -205,6 +205,16 @@ python -c "import sys; sys.path.insert(0, 'unified-workers'); from tests.test_me
 
 ---
 
-## 📄 Documentation Index
+## 📄 Documentation
 
-* **Development Roadmap & Status**: [TODO.md](TODO.md)
+**[`docs/README.md`](docs/README.md) is the index** — it groups every document by whether it
+describes current behaviour, tells you how to do something, proposes something unbuilt, or
+records finished work.
+
+The three you most likely want:
+
+| | |
+| --- | --- |
+| What's outstanding | [TODO.md](TODO.md) — roadmap · [docs/issues.md](docs/issues.md) — open bugs and audit findings |
+| How the pipeline works | [docs/reference/translation_pipeline_phases.md](docs/reference/translation_pipeline_phases.md) |
+| Checks to run before committing | [docs/guides/quality_gate.md](docs/guides/quality_gate.md) |

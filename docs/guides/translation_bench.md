@@ -7,7 +7,7 @@ periodically to catch a provider silently degrading a model. Complements
 [`run_ocr_bench.md`](run_ocr_bench.md) (OCR-stage) — this doc covers translation only.
 
 For a worked example of the deeper, manual quality pass this tooling doesn't replace, see
-[`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md)
+[`free_openrouter_translation_benchmark_2026-08-06.md`](../archive/free_openrouter_translation_benchmark_2026-08-06.md)
 — the dated report that motivated building this into a repeatable tool.
 
 ---
@@ -249,7 +249,7 @@ comparison), Cloudflare's live `GET /accounts/{id}/ai/models/search`, and NVIDIA
 `GET /v1/models` on `integrate.api.nvidia.com` — 109 `tl`/`qaLLM` candidates + 23 `ocr`/`qaVLM`
 candidates, most never benchmarked. `qaLLM`/`qaVLM` lists are now populated too (mechanical
 duplicates of `tl`/`ocr` per provider, except OpenRouter which curates all four separately) —
-see [`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md) for the
+see [`free_model_bench_handoff_2026-08-07.md`](../archive/free_model_bench_handoff_2026-08-07.md) for the
 full pull methodology and what changed since the 2026-08-06 snapshot (OpenRouter's free tier
 membership shifted, 3 Cloudflare models turned out to require the Workers Paid plan despite
 being marked free in production config, 2 Cloudflare model IDs changed org namespace, and NVIDIA

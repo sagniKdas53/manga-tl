@@ -5,7 +5,7 @@ refreshed from live provider APIs with all four task keys populated. Phase A/B/C
 themselves have **not** been executed yet. See
 [`free_model_bench_handoff_2026-08-07.md`](archive/free_model_bench_handoff_2026-08-07.md) for what was
 collected, config bugs it surfaced, and the exact commands to run Phase A next.
-**Supersedes:** [`free_openrouter_translation_benchmark_2026-08-06.md`](free_openrouter_translation_benchmark_2026-08-06.md)
+**Supersedes:** [`free_openrouter_translation_benchmark_2026-08-06.md`](archive/free_openrouter_translation_benchmark_2026-08-06.md)
 — one provider, one hand-made page, translation stage only.
 
 ## Why re-run
@@ -51,7 +51,7 @@ committed snapshot — the 2026-08-06 run did this via `GET /api/v1/models` filt
 **Deliverable:** an updated `scripts/test-providers.json` with all four task keys populated per
 provider, dated in a comment.
 
-**Done 2026-08-07** — see [`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md)
+**Done 2026-08-07** — see [`free_model_bench_handoff_2026-08-07.md`](archive/free_model_bench_handoff_2026-08-07.md)
 for the full writeup. Actual counts came in smaller than the estimate above once re-verified
 live: OpenRouter's free tier is 17 models (not 14, and not the same 14 — `ling-3.0-flash:free`
 left the free tier entirely), Cloudflare has 25 free-ok + 3 Workers-Paid-gated, NVIDIA has 67
@@ -190,14 +190,14 @@ because that file is what the backend actually reads.
 ## 6. Prerequisites
 
 - [x] `scripts/test-providers.json` refreshed, with `qaLLM`/`qaVLM` lists added (§1) — done
-      2026-08-07, see [`free_model_bench_handoff_2026-08-07.md`](free_model_bench_handoff_2026-08-07.md)
+      2026-08-07, see [`free_model_bench_handoff_2026-08-07.md`](archive/free_model_bench_handoff_2026-08-07.md)
 - [x] OCR corpus built beyond `sample36` — all 40 pages built 2026-08-08 with the per-sample loop
-      from [`benchmarks_guide.md`](benchmarks_guide.md) §5. Built **local-only** (the four
+      from [`benchmarks_guide.md`](guides/benchmarks_guide.md) §5. Built **local-only** (the four
       PaddleOCR variants, `--min-agree 3`) so it cost no free-tier quota while the QA-LLM sweep
       was still running. `sample36` was left on its original VLM-based ground truth so the
       completed 19-model OCR bench stays comparable.
 - [ ] Re-run the OCR corpus with cloud vision engines added to the four local ones. Local and
-      cloud resolve *different* regions (see [`benchmarks_guide.md`](benchmarks_guide.md) §6), so
+      cloud resolve *different* regions (see [`benchmarks_guide.md`](guides/benchmarks_guide.md) §6), so
       the combined pool lifts consensus coverage. Do this after the QA-LLM sweep frees the quota.
 - [ ] At least a few OCR pages promoted to `gold` via the review flow, so OCR numbers rest on
       confirmed text rather than consensus alone. **Do this after the engine pool is final** —

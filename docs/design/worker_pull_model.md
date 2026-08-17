@@ -12,7 +12,7 @@
 >
 > The first fully-drained run (`logs/runs/20260802-163445`, 42 pages, 255 jobs, 100% dispatch-log
 > coverage) measured what pull would actually recover, and it is **0.83%**. See §6.1 below and
-> [perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md).
+> [perf_analysis_backend_2026-08-02.md](../archive/perf_analysis_backend_2026-08-02.md).
 >
 > The premise in §2 and §6 — that the single **heavy** slot is the throughput floor — has since
 > **inverted**. The light tier is now 4× slower than the heavy tier, and `MAX_LIGHT_SLOTS=1` is
@@ -255,7 +255,7 @@ Notes:
 §6 above was estimated from `run-3-fresh.log`. Run `20260802-163445` is the first run that drained
 to idle with per-job dispatch timestamps, so the poll-boundary cost can now be measured rather than
 bounded. Method and full numbers in
-[perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md).
+[perf_analysis_backend_2026-08-02.md](../archive/perf_analysis_backend_2026-08-02.md).
 
 **The prediction in §6 was correct, and it is small.** For every stage that is not slot-blocked,
 `Enqueue → Dispatch` lands at 1.1–1.8 s p50 — exactly the "up to 2s" poll boundary this document

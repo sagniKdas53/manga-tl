@@ -2,7 +2,7 @@
 
 > **The loaded-prefix family is closed — five bugs, one root cause.** Three were reported by the
 > user, two were found while fixing them and had never been noticed. Full reasoning in
-> [archive.md § the twentieth sitting](./archive.md#the-2026-08-08-twentieth-sitting--the-loaded-prefix-family).
+> [archive.md § the twentieth sitting](history.md#the-2026-08-08-twentieth-sitting--the-loaded-prefix-family).
 >
 > **Gate re-run and verified today, not quoted from the last handoff:** `format:check` clean,
 > `eslint` clean, **332 tests across 47 files, all passing** (105 s). Matches what the archive
@@ -197,12 +197,12 @@ memory peak, concurrency testing), not a mechanical pass. User's explicit call o
 in the same tree as the frontend work. It has **its own handoff** and that one is authoritative for
 it — do not duplicate its state here:
 
-+ **[`ocr_region_handoff_2026-08-08.md`](./ocr_region_handoff_2026-08-08.md)** — read §1 for state,
++ **[`ocr_region_handoff_2026-08-08.md`](ocr_region_handoff_2026-08-08.md)** — read §1 for state,
   §3 for the six open bugs, §4 for what to test, §5 for the command crib.
-+ [`region_threshold_validation_2026-08-08.md`](./region_threshold_validation_2026-08-08.md) — the
++ [`region_threshold_validation_2026-08-08.md`](region_threshold_validation_2026-08-08.md) — the
   7-page validation; the fix direction holds everywhere and the value tightens from `0.5` to `0.35`.
-+ [`region_merge_prior_art_2026-08-08.md`](./region_merge_prior_art_2026-08-08.md),
-  [`research_brief_region_merging.md`](./research_brief_region_merging.md).
++ [`region_merge_prior_art_2026-08-08.md`](region_merge_prior_art_2026-08-08.md),
+  [`research_brief_region_merging.md`](research_brief_region_merging.md).
 
 Its shape in one paragraph: **six region bugs open, none applied to production.** Work order is
 BUG-1 (benchmark-only, biggest corpus win) → BUG-6 (orientation, prerequisite for judging BUG-4) →

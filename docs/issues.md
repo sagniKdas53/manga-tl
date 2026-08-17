@@ -1,6 +1,6 @@
 # Issues
 
-> Resolved items move to [archive.md](./archive.md) rather than staying here marked done.
+> Resolved items move to [archive.md](archive/history.md) rather than staying here marked done.
 > File new bugs here, not in a separate scratch file.
 >
 > **Standing: 66 filed, 58 closed, 8 open.** No critical or high-severity items open.
@@ -13,9 +13,9 @@
 2s) caused most of it — fixing that cut a 50-page run from ~2h to ~13min. The remaining slowness
 was `MAX_LIGHT_SLOTS=1`: four cheap stages (0.2s–110s each) sharing one slot behind LLM calls.
 Raising light slots to 4 addressed the rest — see
-[perf_analysis_backend_2026-08-02.md](./perf_analysis_backend_2026-08-02.md).
+[perf_analysis_backend_2026-08-02.md](archive/perf_analysis_backend_2026-08-02.md).
 
-What's left is genuinely small: the [worker pull model](./worker_pull_model.md) would close the
+What's left is genuinely small: the [worker pull model](design/worker_pull_model.md) would close the
 remaining ~1% (poll-boundary latency) — tracked in [TODO.md](../TODO.md), not worth building for
 throughput alone.
 
@@ -23,7 +23,7 @@ throughput alone.
 
 Root cause of most of the reported lag was a permanent CSS animation in the Queue Manager costing
 27.8% of a CPU core to render a static list. Removed — down to 1.0%. See
-[perf_analysis_frontend_2026-08-02.md](./perf_analysis_frontend_2026-08-02.md).
+[perf_analysis_frontend_2026-08-02.md](archive/perf_analysis_frontend_2026-08-02.md).
 
 Two complaints remain, both measured, neither a frontend bug:
 
@@ -35,7 +35,7 @@ Two complaints remain, both measured, neither a frontend bug:
 ### Rendered output doesn't match competitor quality (open, actively being worked)
 
 Tracked in [TODO.md](../TODO.md) under "Render quality gap" — full defect list and plan in
-[render_quality_gap_2026-08-05.md](./render_quality_gap_2026-08-05.md).
+[render_quality_gap_2026-08-05.md](render_quality_gap_2026-08-05.md).
 
 #### Doing now: the three things that make a page look broken (2026-08-13)
 
@@ -211,7 +211,7 @@ FLAGS_use_mkldnn=0 .venv/bin/python -c "from paddleocr import PaddleOCR; \
 ### Move the backend off Java
 
 No real technical blocker, just a preference to not maintain a Spring Boot backend long-term.
-[migration.md](./migration.md) has an old plan; treat it as a starting point, not current.
+[migration.md](design/migration.md) has an old plan; treat it as a starting point, not current.
 
 ### Do we need a separate worker process?
 
@@ -226,7 +226,7 @@ Still open as a general question. Two concrete findings so far:
 
 - The worker suite is heavily mocked: `test_translation_flow_e2e.py`'s "e2e" test has 19 `@patch`
   decorators and 4 assertions, none of which check the actual translated content — see
-  `AUDIT-T1` below. [mock_router.md](./mock_router.md) is the fix.
+  `AUDIT-T1` below. [mock_router.md](design/mock_router.md) is the fix.
 - **A cheaper, more auditable version of this problem: incoherent fixtures.** Twice now, a
   pre-existing test went red under a real fix not because of a regression, but because its fixture
   described an impossible state (e.g. `totalElements: 2` while asserting a second page exists).
@@ -236,10 +236,10 @@ Still open as a general question. Two concrete findings so far:
 
 A full-stack read-through (Java backend, Python worker, TS/TSX frontend, Docker) done 2026-08-01,
 filed as `AUDIT-*` with `file:line` anchors. **58 of 66 closed** — see
-[archive.md](./archive.md) for the reasoning behind each closed item. Security (`AUDIT-S1`–`S4`,
+[archive.md](archive/history.md) for the reasoning behind each closed item. Security (`AUDIT-S1`–`S4`,
 the fail-open secrets and the SSE token leak) is fully closed; before filing anything new against
 `/api/images/*/thumbnail` or `/api/images/*/reader`, note those are public **on purpose** — see
-[security_boundary.md](./security_boundary.md).
+[security_boundary.md](reference/security_boundary.md).
 
 ### Open — Backend
 

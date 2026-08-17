@@ -1,8 +1,8 @@
 # Frontend Performance Analysis — recorded runs of 2026-08-01
 
-Deliverable #3 of the plan in [perf_run_playbook.md](./perf_run_playbook.md), against the profiles
+Deliverable #3 of the plan in [perf_run_playbook.md](../guides/perf_run_playbook.md), against the profiles
 in `logs/runs/`. Tests the frontend hypotheses from the audit in
-[issues.md](./issues.md#audit-findings).
+[issues.md](../issues.md#audit-findings).
 
 Backend deliverables (#1, #2, #4) are **not** covered here — see
 [Why the backend half is blocked](#why-the-backend-half-is-blocked).
