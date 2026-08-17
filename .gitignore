@@ -35,3 +35,4 @@ exported_images/*
 # Papers and research reports live in docs/ for reading, but are not tracked: this repo is
 # public, and third-party papers are not ours to redistribute. Cite the DOI in the doc instead.
 docs/*.pdf
+corpus/.claude
