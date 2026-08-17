@@ -33,9 +33,9 @@
           },
           {
             "id": "PP-OCRv5",
-            "name": "PP-OCRv5 Server",
+            "name": "PP-OCRv5",
             "free": true,
-            "det": "PP-OCRv5_server_det",
+            "det": "PP-OCRv5_mobile_det",
             "rec": {
               "ja": "PP-OCRv5_server_rec",
               "zh": "PP-OCRv5_server_rec",
