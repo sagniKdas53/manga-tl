@@ -37,7 +37,7 @@ If a document contradicts the code, the code wins and the document is a bug — 
 
 These are the only documents describing work that is **currently open**.
 
-- [`issues.md`](issues.md) — the bug and audit register. 66 filed, 58 closed, **8 open**, none
+- [`issues.md`](issues.md) — the bug and audit register. 66 filed, 59 closed, **7 open**, none
   critical or high. Resolved items move to [`archive/history.md`](archive/history.md) rather than
   staying here marked done.
 - [`render_quality_gap_2026-08-05.md`](render_quality_gap_2026-08-05.md) — the measured gap against

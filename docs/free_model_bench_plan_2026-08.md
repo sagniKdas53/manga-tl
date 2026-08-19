@@ -13,7 +13,7 @@ collected, config bugs it surfaced, and the exact commands to run Phase A next.
 The 2026-08-06 report is a single data point in every dimension that matters:
 
 | | 2026-08-06 | Now |
-|---|---|---|
+| --- | --- | --- |
 | Pages | 1 (`sample28`, hand-transcribed) | 40 translation / 40 OCR / 38 QA |
 | Reference | a paid competitor's machine output (mangatranslator.ai / qwen3-235b) | human translation on 26 of 40 pages |
 | Providers | OpenRouter | OpenRouter, NVIDIA, Cloudflare |
@@ -69,7 +69,7 @@ those exact entries.
 Naive full sweeps are not runnable on free tiers:
 
 | Stage | Models | Unit | Full sweep | Est. wall time |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Translation | 107 | 1 request / page | 107 × 40 = **4,280** | ~20 h at 15 s + 2 s sleep |
 | OCR | 21 | 1 request / **region** | 21 × ~300 regions = **6,300** | ~25 h |
 | QA LLM | ~107 | 1 request / case | 107 × 265 = **28,355** | days |
@@ -99,6 +99,7 @@ python scripts/benchmark_qa.py --arm vlm --providers-config scripts/test-provide
 ```
 
 **Cut rules** (apply from `_summary.json`, no judgement needed):
+
 - `pages_ok == 0` → drop (never returned usable output)
 - `id_fidelity_perfect_rate < 1.0` (translation) → drop; it can't hold the id-keyed batch contract
 - `mean_latency_s > 120` → drop as a production candidate, but **record it** — see the

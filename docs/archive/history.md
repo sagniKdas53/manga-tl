@@ -73,6 +73,30 @@
 
 ## ✅ Completed (Archive)
 
+### The 2026-08-16 sitting — AUDIT-B10 (`listPages` sort validation and in-place refresh)
+
+Closed in commit `94bd792` (`fix/gallery-in-place-refresh-and-page-sort`).
+
+- **Root cause:** `PageController.listPages` previously accepted an unconstrained `@PageableDefault Pageable`, letting arbitrary `?sort=` parameters pass unchecked into Spring Data query derivation.
+- **Fix:** Switched to the same safe pattern used by `SeriesController.listChapters`: `listPages` takes `unsortedPageable` and a `@RequestParam(value = "sortDir", defaultValue = "asc") String sortDir` parameter, constructing a validated `Sort.by(direction, "pageNumber")`. Arbitrary sort fields are impossible; only sort direction (`asc`/`desc`) is accepted.
+- **Accompanied by:** Frontend in-place refresh (`usePaginatedResource.refresh`) to prevent page grid collapse during uploads and maintain scroll position when sorting/refreshing.
+
+### The 2026-08-13 sitting — Render quality gap investigations (R1–R4) & `reject_sfx` wiring
+
+Set from `corpus/sample10` against `corpus/samples/sample10/ref-mangatranslator.ai.jpeg`. Full details in [render_quality_gap_2026-08-05.md](../render_quality_gap_2026-08-05.md).
+
+- **R1 — Bubble containment guard:** `process_ocr` accepted YOLO mask geometry unconditionally, leading to contours smaller than text (12 of 239 contours across 40-page corpus were smaller than their text). Added containment guard in `bubble_covers_text`.
+- **R2 — Synthesized cover fill for flat/unenclosed regions:** `detect_background_color`/`_poly` returning `None` previously meant "draw nothing" (English drawn over unerased Japanese). Implemented `cover_fill_for_region` to sample a ring outside the text box (`COVER_FILL_RING_FRACTION`) and synthesize a flat balloon shape. Added `readable_text_color` WCAG 3.0 contrast override.
+- **R3 & R4 — Sound effects (SFX) classification & suppression:**
+  - Investigated why SFX is never classified by rules: OCR mangles stylized kana into kanji or Latin text, making rule-based heuristics (`layout.py`) fail.
+  - Recognizer confidence (`JUNK_REGION_MIN_CONFIDENCE=0.55`) successfully catches junk regions (`D10`) but PaddleOCR assigns high confidence (≥0.90) to mangled SFX.
+  - Policy & Solution: SFX suppression is driven by QA VLM (`reject_sfx`). Fixed gap where `reject_sfx` was emitted by the worker but ignored downstream: implemented `JobCoordinatorService.hideTranslationElements` wired into both hybrid and LLM QA callback paths.
+
+### Performance optimizations (2026-08-02) — Queue slowness and UI lag
+
+- **Queue slowness (resolved):** A 50-image pipeline run was cut from ~2h to ~13min by fixing `WORKER_POLL_MS` (regressed to 30s, restored to 2s) and raising `MAX_LIGHT_SLOTS` from 1 to 4 (`AUDIT-W10`), unblocking cheap stages (0.2s–10s) from serializing behind LLM calls. Residual ~1% poll boundary latency tracked in [worker_pull_model.md](../design/worker_pull_model.md). Reference: [perf_analysis_backend_2026-08-02.md](perf_analysis_backend_2026-08-02.md).
+- **UI lag (resolved):** Removed permanent CSS animation in Queue Manager that consumed 27.8% of a CPU core for static list rendering (dropped to 1.0%). Residual lag profiled to host CPU contention (71%) and React/MUI reconciliation rather than custom frontend code. Reference: [perf_analysis_frontend_2026-08-02.md](perf_analysis_frontend_2026-08-02.md).
+
 ### The 2026-08-07 nineteenth sitting — the CI gap, explained and closed
 
 Three sittings carried "`CI - Backend` / `CI - Frontend` never triggered despite matching path
@@ -2816,16 +2840,17 @@ green. All four CI-equivalent frontend steps, not `vitest` alone.
 | 4 | *not reported* — found while fixing | `ChapterGallery` numbered new uploads `pages.length + 1`, so past one 25-page batch the numbering restarted mid-chapter and collided | `expected '2' to be '101'` |
 | 5 | *not reported* — found while fixing | `AUDIT-F13`, far bigger than filed: `handleMovePage` sent the loaded prefix to an endpoint that rejects anything but the complete list | `['p2','p1']` against the expected `['p2','p1','p3','p4']` |
 
-#1 and #3 are complementary halves of the same defect: **ascending order broke the numbering,
+# 1 and #3 are complementary halves of the same defect: **ascending order broke the numbering
+
 descending broke the placement.** Both are now in `components/chapterNumbering.ts`.
 
 Screenshots, in `logs/`:
 
-+ `Screenshot 2026-08-08 at 21-01-08 tl-hub - Openrouter.png`,
+- `Screenshot 2026-08-08 at 21-01-08 tl-hub - Openrouter.png`,
   `Screenshot 2026-08-08 at 17-44-39 tl-hub - Openrouter.png` — the sort-order append (#1)
-+ `Screenshot 2026-08-08 at 18-02-41 tl-hub - Openrouter.png`,
+- `Screenshot 2026-08-08 at 18-02-41 tl-hub - Openrouter.png`,
   `Screenshot 2026-08-08 at 18-02-35 tl-hub - Openrouter.png` — the lingering jobs (#2)
-+ `Screenshot 2026-08-08 at 09-39-19`, `09-30-57`, `09-30-44 tl-hub - user 3491065 series
+- `Screenshot 2026-08-08 at 09-39-19`, `09-30-57`, `09-30-44 tl-hub - user 3491065 series
   258015.png` — the 15-chapter ceiling (#3)
 
 ### AUDIT-F5 took a reaper with it when it removed the poll
@@ -2920,10 +2945,10 @@ numbers, page numbers are contiguous from 1, verified across all 42 chapters
 Both pre-existing failures during this sitting were fixture defects, not regressions — the same
 shape the nineteenth sitting recorded:
 
-+ `CreateChapterDialog.test.tsx` used `mockResolvedValueOnce`, assuming the first non-settings
+- `CreateChapterDialog.test.tsx` used `mockResolvedValueOnce`, assuming the first non-settings
   request would be the submit. The dialog now legitimately makes a lookup on open, which consumed
   it. The new request is routed in the mock the way `/api/settings` already was.
-+ `ChapterGallery.test.tsx`'s move-page test declared `pagesTotalCount={mockPages.length}` (**1**)
+- `ChapterGallery.test.tsx`'s move-page test declared `pagesTotalCount={mockPages.length}` (**1**)
   while passing **two** loaded pages. A chapter cannot contain fewer pages than are loaded from it;
   that incoherence was what hid the reorder bound. Corrected to match its own data.
 
