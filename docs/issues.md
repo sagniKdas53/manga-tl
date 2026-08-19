@@ -25,7 +25,7 @@
 
 ## 1. Worker & Concurrency
 
-### `AUDIT-W3` (medium) — Cooldowns and lock waits burn a job slot
+### `AUDIT-W3` (medium): Cooldowns and lock waits burn a job slot
 
 - **Locations:**
   - Provider cooldown sleep: `worker/src/worker/core/llm_client.py:93-100` (up to 60s)
@@ -38,17 +38,17 @@
 
 ## 2. Frontend & UI
 
-### `AUDIT-F9` (low) — Responsive layout is never verified
+### `AUDIT-F9` (low): Responsive layout is never verified
 
 - **Locations:** `frontend/src/` (all 47 test files run at an implicit default viewport; `window.matchMedia` is not mocked).
-- **Problem:** Zero tests utilize `useMediaQuery` or `theme.breakpoints`. The primary reading device is an Android tablet, but no automated test checks responsive rendering or touch drawer behavior at tablet viewport sizes.
+- **Problem:** Zero tests use `useMediaQuery` or `theme.breakpoints`. The primary reading device is an Android tablet, but no automated test checks responsive rendering or touch drawer behavior at tablet viewport sizes.
 - **Next Step / Blocker:** jsdom does not calculate CSS layout. Needs a real-browser smoke test via Playwright.
 
 ---
 
 ## 3. Docker & Infrastructure
 
-### `AUDIT-D5` (low) — No memory limits on auxiliary containers
+### `AUDIT-D5` (low): No memory limits on auxiliary containers
 
 - **Locations:** `docker-compose.yml` (`database`, `redis`, `minio`, `backend`).
 - **Problem:** While the worker container is explicitly capped (2 CPUs / 4 GB based on measured 2.1 GiB peak), the database, cache, storage, and backend containers have no memory ceilings.
@@ -58,13 +58,13 @@
 
 ## 4. Testing & Test Doubles
 
-### `AUDIT-T1` (unranked) — Worker e2e test suite is heavily mocked
+### `AUDIT-T1` (unranked): Worker e2e test suite is heavily mocked
 
 - **Locations:** `worker/tests/test_translation_flow_e2e.py`
 - **Problem:** The supposed "e2e" test carries 19 `@patch` decorators and 4 assertions, none of which inspect translated text, region IDs, layer geometry, or cost calculations. Suite-wide, 358 `@patch` calls exist across 55 test files, running in ~6.6s while touching no real I/O or network contracts.
 - **Next Step / Blocker:** Blocked on building [mock_router.md](design/mock_router.md) (a deterministic OpenAI/Anthropic wire-compatible test double).
 
-### `AUDIT-T3` (unranked) — `@WebMvcTest` cannot verify Spring Data sort composition
+### `AUDIT-T3` (unranked): `@WebMvcTest` cannot verify Spring Data sort composition
 
 - **Locations:** `backend/src/test/java/com/manga/library/controller/PageControllerTest.java`, `SeriesControllerTest.java`
 - **Problem:** `@WebMvcTest` with mocked repositories verifies controller response JSON shapes and argument resolvers (like `max-page-size` from `AUDIT-B11`), but cannot verify how Spring Data derives queries, resolves complex `Pageable` parameters, or composes caller `Sort` with repository `OrderBy` clauses.
@@ -74,7 +74,7 @@
 
 ## 5. Code Hygiene
 
-### `AUDIT-Q1` (unranked) — Redundant `Objects.requireNonNull` calls
+### `AUDIT-Q1` (unranked): Redundant `Objects.requireNonNull` calls
 
 - **Locations:** Concentrated in:
   - `backend/src/main/java/com/manga/library/service/JobCoordinatorService.java` (64 calls)
@@ -84,7 +84,7 @@
 - **Problem:** ~253 `Objects.requireNonNull` checks repo-wide guard freshly instantiated objects, string literals, or already-validated local variables.
 - **Next Step:** Execute a mechanical cleanup pass to delete dead null-checks without altering business logic.
 
-### `AUDIT-Q2` (low) — Inline fully-qualified class names in controllers
+### `AUDIT-Q2` (low): Inline fully-qualified class names in controllers
 
 - **Locations:** `SeriesController.java` (12 instances) and `PageController.java` (15 instances).
 - **Problem:** Controllers write out verbose inline package paths (e.g. `com.manga.library.dto.PagedResponse<...>`) rather than standard imports.
