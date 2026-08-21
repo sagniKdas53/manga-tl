@@ -427,9 +427,11 @@ services:
   # step; a log pipeline would mean shipping and re-parsing lines to recover what is already a
   # column. Live tailing stays with Dozzle in monitor-stack, which is what it is good at.
   #
-  # Not published on the LAN and not behind Traefik: it is reachable on 127.0.0.1:3001 from this
-  # host only, matching the treatment db/redis/minio get above (AUDIT-D5). Give it a router label
-  # and a real password if it ever needs to be reachable from elsewhere.
+  # Also reachable on 127.0.0.1:3001 from this host directly (unchanged from before), matching the
+  # treatment db/redis/minio get above (AUDIT-D5). Now additionally routed through Traefik at
+  # /tlstats — GF_SERVER_ROOT_URL + GF_SERVER_SERVE_FROM_SUB_PATH tell Grafana to generate its own
+  # links under that prefix, so no strip-prefix middleware is needed (compare backend, which uses
+  # CONTEXT_PATH baked into the app instead).
   grafana:
     image: grafana/grafana:11.3.0
     container_name: manga-grafana
@@ -454,6 +456,11 @@ services:
       # (database/grafana_readonly.sql), and anonymous access would hand that query surface to
       # anyone who reaches the port.
       - GF_AUTH_ANONYMOUS_ENABLED=false
+      # Served behind Traefik at PathPrefix(`/tlstats`) — see labels below. Without these two,
+      # Grafana generates absolute links (redirects, asset URLs, share links) rooted at `/`,
+      # which 404 once the proxy strips nothing and forwards the full /tlstats/* path through.
+      - GF_SERVER_ROOT_URL=https://${HOSTNAME}/tlstats
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     ports:
       - "127.0.0.1:3001:3000"
     volumes:
@@ -473,6 +480,17 @@ services:
         max-file: "3"
     networks:
       - manga-net
+      - revProxy-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=revProxy-net"
+      - "traefik.http.routers.manga-grafana.entrypoints=web,websecure"
+      - "traefik.http.routers.manga-grafana.rule=Host(`${HOSTNAME}`) && PathPrefix(`/tlstats`)"
+      - "traefik.http.services.manga-grafana.loadbalancer.server.port=3000"
+      - "traefik.http.routers.manga-grafana.middlewares=http-to-https@docker"
+      - "traefik.http.routers.manga-grafana.tls=true"
+      - "traefik.http.routers.manga-grafana.tls.certresolver=tailsolver"
+      - "traefik.http.routers.manga-grafana.tls.domains[0].main=${HOSTNAME}"
     restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1" ]

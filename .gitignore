@@ -36,3 +36,4 @@ exported_images/*
 # public, and third-party papers are not ours to redistribute. Cite the DOI in the doc instead.
 docs/*.pdf
 corpus/.claude
+scripts/corpus

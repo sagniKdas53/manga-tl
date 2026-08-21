@@ -1,10 +1,10 @@
 # Manga Translation Platform
 
-An automated manga scanlation translation and typesetting dashboard. This platform leverages computer vision (OCR/Layout analysis) and Generative AI (LLMs and Vision-Language Models) to detect, translate, and typeset speech bubbles, providing a full-featured visual editor for manual refinements.
+An automated manga scanlation translation and typesetting dashboard. It uses computer vision (OCR / layout analysis) and generative AI (LLMs and vision-language models) to detect, translate, and typeset speech bubbles. A full-featured visual editor is included for manual refinements.
 
 ---
 
-## 🏗️ Architecture & Stack
+## Architecture & stack
 
 The platform is designed as a distributed service coordinated via a Valkey job queue:
 
@@ -38,7 +38,7 @@ The platform is designed as a distributed service coordinated via a Valkey job q
 4. **Job Pipeline**: Valkey coordinates workers through specialized job queues (panel detection, OCR, layout analysis, translation, and rendering). An optional database-driven queue is supported for brokerless deployments.
 5. **ML Workers**: A unified Python runner executing local OCR (PaddleOCR + YOLO bubble detector) and AI Translation pipelines.
 
-### 🔄 Job Pipeline Flow
+### Job pipeline flow
 
 The translation pipeline flows sequentially from panel detection to final quality checks:
 
@@ -54,9 +54,9 @@ The translation pipeline flows sequentially from panel detection to final qualit
 
 ---
 
-## 🚀 Key Features
+## Key features
 
-### 1. Spatial OCR Region Merging
+### 1. Spatial OCR region merging
 
 * Groups separate text line-level OCR detections into logical speech bubbles before panel mapping.
 * Uses a configurable vertical/horizontal proximity algorithm (`OCR_MERGE_THRESHOLD`) which groups text boxes vertically (or horizontally) relative to the average line size.
@@ -65,20 +65,22 @@ The translation pipeline flows sequentially from panel detection to final qualit
     * **Decrease the value (e.g., to `0.3` or `0.4`)**: If separate bubbles or adjacent columns of text are being merged together incorrectly (over-grouping).
     * **Default value**: Set to `1.0` in `docker-compose.yml`, falling back to `0.5` if unconfigured.
 
-### 1.5. Cloud OCR & Local OCR Engines
+### 2. Cloud OCR & local OCR engines
 
-* By default, the system utilizes local OCR engines (PaddleOCR + YOLO bubble detector) to detect and extract text.
+* By default, the system uses local OCR engines (PaddleOCR + YOLO bubble detector) to detect and extract text.
 * However, you can disable local OCR by setting `DISABLE_LOCAL_OCR=true` in the `.env` file.
 * If local OCR is disabled, the system will use Cloud Vision-Language Models (VLMs) for the OCR path instead.
 * *Note: The VLM translation path has been removed, as VLMs are not recommended for translation work due to their lower BLEU scores compared to text-only LLMs. VLMs are now strictly used for OCR and visual quality assurance.*
 
-### 2. Multi-Tiered Translation Strategy & Fallback Control
+### 3. Multi-tiered translation strategy & fallback control
 
 The worker executes translation tasks sequentially through a tiered hierarchy, attempting higher-quality models first and falling back if errors occur:
 
-$$\text{Cloud LLM} \longrightarrow \text{Local LLM (Ollama/LMStudio)} \longrightarrow \text{DeepL Fallback} \longrightarrow \text{Google Translate (Free API)}$$
+```
+Cloud LLM → Local LLM (Ollama/LMStudio) → DeepL Fallback → Google Translate (Free API)
+```
 
-#### 🔑 Model & Provider Selection
+#### Model & provider selection
 
 The worker supports multiple cloud and local model providers for both textual and visual (multimodal) translation tasks:
 
@@ -93,7 +95,7 @@ The worker supports multiple cloud and local model providers for both textual an
 * **Anthropic**: Configured using `MODEL_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`.
 * **OpenAI**: Configured using `MODEL_PROVIDER=openai` and `API_KEY`.
 
-#### 🎛️ Pipeline Bypass Environment Controls
+#### Pipeline bypass environment controls
 
 You can enable or disable different fallback layers in [.env](.env) using the following environment variables:
 
@@ -106,7 +108,7 @@ You can enable or disable different fallback layers in [.env](.env) using the fo
 
 *Note: If all enabled translation layers fail, the region is marked failed, but the queue job will continue processing.*
 
-#### ⏳ Provider Rate Limiting & Cooldowns
+#### Provider rate limiting & cooldowns
 
 To respect remote API limitations and avoid bombarding servers with request storms, the worker enforces two mechanisms:
 
@@ -116,9 +118,9 @@ To respect remote API limitations and avoid bombarding servers with request stor
     * Subsequent requests within that 60-second window immediately bypass the provider and trigger fallback tiers.
     * This prevents a loop of 10–20 individual region requests from spamming a rate-limited endpoint.
 
-#### 🔍 QA Mode Auto-Detection & Fallbacks
+#### QA mode auto-detection & fallbacks
 
-When `QA_MODE=auto` (default) is configured in your environment, the worker evaluates available capabilities at startup to determine the most suitable QA pipeline. Note that `auto` mode will **never** select `hybrid` by default—if both VLM and LLM capabilities are present, `auto` defaults to `vlm` to save on API costs and processing time. You must explicitly select `hybrid` to use the two-step pipeline:
+When `QA_MODE=auto` (default) is configured in your environment, the worker evaluates available capabilities at startup to determine the most suitable QA pipeline. `auto` mode will **never** select `hybrid` by default. If both VLM and LLM capabilities are present, `auto` defaults to `vlm` to save on API costs and processing time. You must explicitly select `hybrid` to use the two-step pipeline:
 
 * **VLM Mode (`vlm`)**: Activated if `PREFERRED_VLM_MODEL` is set, or if `LOCAL_VLM_MODEL` is set (and `DISABLE_LOCAL_LLM` is false). Performs a single-pass side-by-side visual comparison (original vs typeset image). It does **not** use a text-only LLM.
 * **Hybrid Mode (`hybrid`)**: A two-step pipeline. First, an LLM performs text-only semantic translation review. After applying text fixes, a VLM performs a final visual layout check.
@@ -135,26 +137,26 @@ When `QA_MODE=auto` (default) is configured in your environment, the worker eval
 >
 > This prevents the backend typesetting pipeline from freezing or hanging when AI components fail.
 
-### 3. Typesetting & Layout Fitting
+### 4. Typesetting & layout fitting
 
 * Offscreen canvas engine computes typography wrappers to center text on white masks inside bubbles.
-* **Character Wrapping**: Automatically falls back to character-level splits if a long translated word exceeds the speech bubble width.
-* **Overflow Indicator**: Displays a warning red dashed outline around text boxes that overflow their boundary constraints in edit mode.
+* **Character wrapping**: falls back to character-level splits when a long translated word exceeds the speech bubble width.
+* **Overflow indicator**: a red dashed outline marks text boxes that overflow their boundary constraints in edit mode.
 
-### 4. Interactive Editor & Canvas
+### 5. Interactive editor & canvas
 
-* **Drag & Resize**: Move and resize dialogue layers interactively using mouse drag boundary overlays and 4 corner handles.
-* **Fluid Sync**: Visual boundaries update smoothly during drags, pushing a single original frame to the undo stack upon drop, followed by an alerts-free silent save to the server.
-* **History**: Full undo/redo operations bound to `Ctrl+Z` / `Ctrl+Y` shortcuts.
+* **Drag & resize**: move and resize dialogue layers interactively using mouse drag boundary overlays and 4 corner handles.
+* **Fluid sync**: visual boundaries update smoothly during drags. Dropping pushes a single original frame to the undo stack, then saves silently to the server.
+* **History**: full undo/redo bound to `Ctrl+Z` / `Ctrl+Y`.
 
-### 5. Advanced Exports & Inpainting
+### 6. Advanced exports & inpainting
 
 * **Export PNG**: Renders the cleaned page with typeset dialogue layers.
 * **Export Layer Project (ZIP)**: Generates a project bundle with `original.png`, `mask.png` (transparent background containing white inpainted bubble regions ready for Stable Diffusion/ComfyUI pipelines), `translation.png` (text overlays), and `project.json` for full workspace state portability.
 
 ---
 
-## 📦 Pre-built Images
+## Pre-built images
 
 Both images are published to the GitHub Container Registry on every merge to `main`, and are
 public — no `docker login` is needed to pull them.
@@ -191,9 +193,9 @@ build fails at `pip install`. Running the full stack therefore needs an amd64 ho
 
 ---
 
-## 🛠️ Getting Started
+## Getting started
 
-### 1. Configure Environment Variables
+### 1. Configure environment variables
 
 Create a `.env` file in the root directory (see `.env.example` for details):
 
@@ -210,7 +212,7 @@ VLM_MODEL=nvidia/nemotron-nano-12b-v2-vl
 OCR_MERGE_THRESHOLD=0.50
 ```
 
-### 2. Start Services
+### 2. Start services
 
 Launch the complete stack in detached mode:
 
@@ -218,7 +220,7 @@ Launch the complete stack in detached mode:
 docker compose up -d
 ```
 
-### 3. Rebuild / Restart Workers
+### 3. Rebuild / restart workers
 
 If you make changes to the ML worker or environment configurations:
 
@@ -228,7 +230,7 @@ docker compose up -d --force-recreate worker
 
 ---
 
-## 🧪 Running Tests
+## Running tests
 
 The worker's suite runs against the repo-root `.venv` (Python 3.13), not one inside `worker/`:
 
@@ -237,15 +239,15 @@ cd worker
 ../.venv/bin/python -m pytest -q     # 415 passing, ~7s, no real I/O
 ```
 
-The full gate — backend, frontend and worker — is in
+The full gate (backend, frontend and worker) is in
 [docs/guides/quality_gate.md](docs/guides/quality_gate.md). Run its checks **sequentially**; this
 host locks up if they are run in parallel.
 
 ---
 
-## 📄 Documentation
+## Documentation
 
-**[`docs/README.md`](docs/README.md) is the index** — it groups every document by whether it
+**[`docs/README.md`](docs/README.md) is the index.** It groups every document by whether it
 describes current behaviour, tells you how to do something, proposes something unbuilt, or
 records finished work.
 
@@ -253,6 +255,6 @@ The three you most likely want:
 
 | | |
 | --- | --- |
-| What's outstanding | [TODO.md](TODO.md) — roadmap · [docs/issues.md](docs/issues.md) — open bugs and audit findings |
+| What's outstanding | [TODO.md](TODO.md): roadmap · [docs/issues.md](docs/issues.md): open bugs and audit findings |
 | How the pipeline works | [docs/reference/translation_pipeline_phases.md](docs/reference/translation_pipeline_phases.md) |
 | Checks to run before committing | [docs/guides/quality_gate.md](docs/guides/quality_gate.md) |

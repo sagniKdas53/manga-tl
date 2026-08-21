@@ -63,14 +63,13 @@ touches nothing else, so none of D1/D6/D7/D8/D10/D14/D15/D16 are recoverable by 
 ### 2. Backend audit backlog
 
 ~50 findings from a full-stack read-through, tracked as `AUDIT-*` in
-[docs/issues.md](docs/issues.md). **58 of 66 closed.** 8 open, none critical or high:
+[docs/issues.md](docs/issues.md). **59 of 66 closed.** 7 open, none critical or high:
 
-- `AUDIT-B10` (medium) — `listPages` doesn't validate `?sort=` like its sibling endpoints do.
-  Needs a live measurement before fixing — see issues.md.
+- [x] `AUDIT-B10` (medium) — `listPages` doesn't validate `?sort=`. Closed 2026-08-16 (`commit 94bd792`), using `sortDir` parameter and safe `Sort.by(direction, "pageNumber")`.
 - `AUDIT-W3` (medium) — provider cooldowns/lock waits block a worker slot instead of releasing it.
 - `AUDIT-F9`, `AUDIT-D5`, `AUDIT-Q2` (low) — responsive-layout tests, backend memory limits,
   inline fully-qualified class names.
-- `AUDIT-T1`, `AUDIT-Q1`, `AUDIT-T3` (unranked) — the worker test suite over-mocks, 249 dead
+- `AUDIT-T1`, `AUDIT-Q1`, `AUDIT-T3` (unranked) — the worker test suite over-mocks, ~253 dead
   `Objects.requireNonNull` calls, and one `@WebMvcTest` can't prove a Spring Data sort composes
   correctly.
 
