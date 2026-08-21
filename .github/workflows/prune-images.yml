@@ -17,6 +17,9 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
 jobs:
   prune:
     name: Prune ghcr.io/sagnikdas53/manga-tl
