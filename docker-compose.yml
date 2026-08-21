@@ -243,6 +243,12 @@ services:
       - "traefik.http.routers.manga-backend.tls=true"
       - "traefik.http.routers.manga-backend.tls.certresolver=tailsolver"
       - "traefik.http.routers.manga-backend.tls.domains[0].main=${HOSTNAME}"
+      # Watchtower monitoring. Opt-in, matching yt-diff's convention: Watchtower runs with
+      # WATCHTOWER_LABEL_ENABLE=true in the monitor stack and only touches containers carrying
+      # this label. db, db-backup, redis, minio and grafana deliberately do not have it — they
+      # are pinned to specific upstream versions (postgres:15-alpine, grafana/grafana:11.3.0)
+      # and silently rolling a database forward is not wanted.
+      - "com.centurylinklabs.watchtower.enable=true"
     restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "wget --spider -q http://localhost:8080$${CONTEXT_PATH:-/tlhub}/actuator/health || exit 1" ]
@@ -380,6 +386,9 @@ services:
         max-file: "3"
     networks:
       - manga-net
+    labels:
+      # Watchtower monitoring; see the note on the backend service above.
+      - "com.centurylinklabs.watchtower.enable=true"
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
@@ -471,6 +480,40 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  # Optional, and off by default: `docker compose --profile watchtower up -d`.
+  #
+  # The labels above are the actual contract, and they are all that is needed when a Watchtower
+  # already runs elsewhere on the host (the monitor stack) — two Watchtowers watching the same
+  # containers will fight over restarts, which is why this does not start with the stack. Bring
+  # it up only if this is the only stack on the box.
+  #
+  # It follows the `latest` tag on both images, which CI moves on every merge to main. No
+  # registry credentials: both GHCR packages are public.
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    container_name: manga-watchtower
+    profiles: ["watchtower"]
+    command: --label-enable --cleanup --interval 21600
+    environment:
+      # Belt and braces with --label-enable: without it Watchtower would consider every
+      # container on the host, including the ones this stack pins on purpose.
+      - WATCHTOWER_LABEL_ENABLE=true
+      # Reclaims the superseded image after a successful pull. The worker image is 618 MB
+      # compressed, so a few unreclaimed generations is real disk.
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - TZ=${TZ:-UTC}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - manga-net
+    restart: unless-stopped
 
 networks:
   manga-net:
