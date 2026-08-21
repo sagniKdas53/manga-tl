@@ -1,5 +1,11 @@
 # Stage 1: Build Frontend
-FROM node:26-alpine AS frontend-build
+#
+# --platform=$BUILDPLATFORM pins this stage to the builder's own architecture. The output is a
+# directory of JS/CSS — identical bytes whatever the target arch — so running it once natively
+# rather than once per --platform is what makes the arm64 build of this image affordable.
+# Without it, buildx re-runs `npm ci` and `vite build` under QEMU emulation for arm64, which is
+# where almost all of a multi-arch build's time goes. Same reasoning on the maven stage below.
+FROM --platform=$BUILDPLATFORM node:26-alpine AS frontend-build
 WORKDIR /app
 
 ARG VITE_BASE_PATH=/
@@ -14,7 +20,10 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Backend JAR
-FROM maven:3-eclipse-temurin-25 AS backend-build
+#
+# Native to the builder for the same reason as stage 1: a Spring Boot fat JAR is bytecode plus
+# the static resources copied in below, with nothing architecture-specific in it.
+FROM --platform=$BUILDPLATFORM maven:3-eclipse-temurin-25 AS backend-build
 WORKDIR /app
 
 # Cache Maven dependencies separately so source changes don't re-download deps
@@ -30,6 +39,11 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn clean package -DskipTests -P!frontend
 
 # Stage 3: Build musl libwebp-imageio.so
+#
+# Deliberately NOT pinned to $BUILDPLATFORM: this stage compiles a native shared object that
+# has to match the arch the image will actually run on, so it is the one stage that genuinely
+# needs emulating per target. It is a single small C file, so the cost is minutes, not the
+# tens of minutes an emulated npm/maven build would take.
 # com.github.gotson:webp-imageio ships glibc builds only (native/Linux/<arch>), so on
 # Alpine/musl the JNI lib fails to load with UnsatisfiedLinkError and thumbnails 404.
 # Compile the wrapper (vendored from gotson/webp-imageio) against Alpine's musl libwebp.

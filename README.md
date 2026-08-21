@@ -156,6 +156,43 @@ When `QA_MODE=auto` (default) is configured in your environment, the worker eval
 
 ---
 
+## Pre-built images
+
+Both images are published to the GitHub Container Registry on every merge to `main`, and are
+public — no `docker login` is needed to pull them.
+
+```bash
+docker pull ghcr.io/sagnikdas53/manga-tl:latest         # backend + bundled frontend
+docker pull ghcr.io/sagnikdas53/manga-tl-worker:latest  # Python ML worker
+```
+
+`docker-compose.yml` already references both, so `docker compose up -d` pulls rather than builds.
+
+| Tag | Points at | Use it for |
+| --- | --- | --- |
+| `latest` | current `main` | Deployments. This is the tag Watchtower follows. |
+| `main`, `master` | current `main` | Aliases of `latest`. Both exist so that `:master` — this repo's default branch is `main`, but yt-diff's is `master` — does not fail. |
+| `1.4.0` | that release | Pinning to an exact version. Note there is **no** leading `v`; the git tag is `v1.4.0` but `docker/metadata-action` strips it. |
+| `1.4` / `1` | newest 1.4.x / 1.x | Auto-updating within a minor or major line. |
+| `sha-a1b2c3d` | one commit | Rollback to a specific build. Kept for 7 days. |
+
+Version tags are cut automatically from [Conventional Commits](https://www.conventionalcommits.org/):
+a `feat:` on `main` bumps the minor, a `fix:` bumps the patch, and `BREAKING CHANGE:` bumps the
+major. A merge with no conventional prefix does not cut a release.
+
+### Platform support
+
+| Image | linux/amd64 | linux/arm64 |
+| --- | --- | --- |
+| `manga-tl` | ✅ | ✅ |
+| `manga-tl-worker` | ✅ | ❌ |
+
+The worker is **amd64 only**. It pins `paddlepaddle==3.3.1`, which publishes no `linux_aarch64`
+wheel to PyPI — only `manylinux1_x86_64`, `macosx_11_0_arm64` and `win_amd64` — so an arm64
+build fails at `pip install`. Running the full stack therefore needs an amd64 host.
+
+---
+
 ## Getting started
 
 ### 1. Configure environment variables
