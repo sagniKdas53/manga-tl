@@ -1,0 +1,56 @@
+# Cargo is Rust's build tool AND its package manager (think: Maven + npm combined).
+# This file is the equivalent of pom.xml.
+#
+#   [package]  describes OUR project.
+#   [dependencies] lists crates (libraries) we pull from crates.io — like <dependencies> in Maven,
+#                  except version numbers here mean "this minor version or newer compatible ones"
+#                  (Cargo's equivalent of semver ranges). Exact pins live in Cargo.lock, which is
+#                  committed, so builds are reproducible like npm ci.
+#
+# Useful commands (run inside backend-rust/):
+#   cargo build            compile (debug build, fast)
+#   cargo run              compile + start the server
+#   cargo test             run all tests
+#   cargo clippy           linter (our replacement for SpotBugs/PMD)
+#   cargo fmt              auto-format (our replacement for Spotless)
+
+[package]
+name = "manga-backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Web framework. Axum is built by the tokio team, dominates new Rust web projects,
+# and gives us routing, extractors, SSE and streaming responses out of the box.
+axum = "0.8"
+
+# The async runtime. Rust has no built-in event loop; tokio provides one.
+# Features chosen:
+#   macros          -> #[tokio::main] attribute
+#   rt-multi-thread -> multi-threaded scheduler
+#   signal          -> graceful shutdown on Ctrl-C / SIGTERM (compose sends SIGTERM!)
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+
+# JSON serialization/deserialization. "serde" = SERialize + DEserialize.
+# This is our Jackson replacement. The "derive" feature generates the
+# serialization code automatically from struct definitions (like @Data + Jackson annotations).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Structured logging. tracing : logback :: axum : spring-web.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Loads backend-rust/.env.local during development so `cargo run` works with zero exports.
+# Production containers have no such file; every value comes from real env vars + secrets.
+dotenvy = "0.15"
+
+# Ready-made HTTP middleware for axum/tower. We start with request tracing;
+# compression, CORS, static files etc. get enabled here as we port more of the app.
+tower-http = { version = "0.6", features = ["trace"] }
+
+# --- Test-only dependencies ([dev-dependencies] are NOT compiled into the release binary) ---
+[dev-dependencies]
+# Lets tests drive the router directly (no network port, no real server).
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }

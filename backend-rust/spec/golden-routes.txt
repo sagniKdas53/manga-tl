@@ -1,0 +1,71 @@
+POST    /api/auth/change-password  [] body
+POST    /api/auth/login  [] body
+DELETE  /api/auth/me  [] 
+GET     /api/auth/me  [] 
+PUT     /api/auth/me  [] body
+POST    /api/auth/refresh  [] 
+POST    /api/auth/register  [] body
+GET     /api/auth/setup-required  [] 
+POST    /api/chapters/{chapterId}/import-project  [chapterId] body
+GET     /api/chapters/{chapterId}/pages  [chapterId] 
+PUT     /api/chapters/{chapterId}/pages/reorder  [chapterId] body
+POST    /api/images  [] body
+GET     /api/images/{imageId}  [imageId] 
+GET     /api/images/{imageId}/file  [imageId] 
+POST    /api/images/{imageId}/layers  [imageId] body
+GET     /api/images/{imageId}/reader  [imageId] 
+POST    /api/images/{imageId}/redo  [imageId] 
+GET     /api/images/{imageId}/thumbnail  [imageId] 
+GET     /api/internal/images/{imageId}  [imageId] 
+HEAD    /api/internal/images/{imageId}  [imageId] 
+POST    /api/internal/images/{imageId}/qa-hybrid-prepare  [imageId] body
+POST    /api/internal/jobs/callback/layout  [] body
+POST    /api/internal/jobs/callback/ocr  [] body
+POST    /api/internal/jobs/callback/panel  [] body
+POST    /api/internal/jobs/callback/qa  [] body
+POST    /api/internal/jobs/callback/qa-re-ocr  [] body
+POST    /api/internal/jobs/callback/render  [] body
+POST    /api/internal/jobs/callback/translation  [] body
+GET     /api/internal/jobs/{jobId}  [jobId] 
+PATCH   /api/internal/jobs/{jobId}/status  [jobId] body
+POST    /api/internal/ocr-regions/{id}/callback  [id] body
+GET     /api/jobs  [] 
+DELETE  /api/jobs/clear  [] 
+POST    /api/jobs/pause  [] 
+POST    /api/jobs/resume  [] 
+DELETE  /api/jobs/{id}  [id] 
+POST    /api/jobs/{id}/pause  [id] 
+POST    /api/jobs/{id}/resume  [id] 
+POST    /api/jobs/{id}/retry  [id] 
+DELETE  /api/layer-elements/{id}  [id] 
+PUT     /api/layer-elements/{id}  [id] body
+GET     /api/layer-elements/{id}/history  [id] 
+DELETE  /api/layers/{id}  [id] 
+PUT     /api/layers/{id}  [id] body
+POST    /api/layers/{layerId}/elements  [layerId] body
+GET     /api/notifications/stream  [] 
+POST    /api/notifications/ticket  [] 
+PATCH   /api/ocr-regions/{id}  [id] body
+POST    /api/ocr-regions/{id}/redo  [id] 
+DELETE  /api/pages/{pageId}  [pageId] 
+GET     /api/pages/{pageId}  [pageId] 
+POST    /api/pages/{pageId}/layers  [pageId] body
+PATCH   /api/pages/{pageId}/number  [pageId] body
+GET     /api/pages/{pageId}/rendered  [pageId] 
+GET     /api/series  [] 
+POST    /api/series  [] body
+GET     /api/series/chapters/exports/{exportId}/download  [exportId] 
+DELETE  /api/series/chapters/{chapterId}  [chapterId] 
+GET     /api/series/chapters/{chapterId}  [chapterId] 
+PUT     /api/series/chapters/{chapterId}  [chapterId] body
+GET     /api/series/chapters/{chapterId}/export  [chapterId] 
+DELETE  /api/series/chapters/{chapterId}/exports  [chapterId] 
+DELETE  /api/series/{seriesId}  [seriesId] 
+GET     /api/series/{seriesId}  [seriesId] 
+PUT     /api/series/{seriesId}  [seriesId] body
+GET     /api/series/{seriesId}/chapters  [seriesId] 
+POST    /api/series/{seriesId}/chapters  [seriesId] body
+POST    /api/series/{seriesId}/chapters/import  [seriesId] body
+GET     /api/settings  [] 
+PUT     /api/settings  [] body
+GET     /api/settings/validate  [] 
