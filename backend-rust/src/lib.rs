@@ -13,3 +13,4 @@ pub mod models;
 pub mod redis_service;
 pub mod routes;
 pub mod state;
+pub mod thumbnails;

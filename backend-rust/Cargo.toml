@@ -55,6 +55,8 @@ jsonwebtoken = "9"
 aws-sdk-s3 = "1"
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 futures-util = { version = "0.3", features = ["std"] }
+webp = "0.3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp"] }
 
 # --- Test-only dependencies ([dev-dependencies] are NOT compiled into the release binary) ---
 [dev-dependencies]

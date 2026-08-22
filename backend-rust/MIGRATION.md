@@ -47,7 +47,10 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
       PUBLISH/SUBSCRIBE); dedicated pub/sub connections; startup listener task on
       `provider:config:updated` with resubscribe loop; 4 live-server tests. DEVIATION
       (documented): Redis connect is fail-fast at boot where Spring was silently lazy
-- [ ] WebP thumbnail encode/decode via libwebp bindings (replaces JNI vendored-C story)
+- [x] **WebP thumbnail pipeline** — `thumbnails.rs`: decode JPEG/PNG/WebP/BMP → width-512
+      aspect-preserving resize (Triangle ≈ SCALE_SMOOTH) → RGB → lossy WebP @85 (Java parity:
+      512px width, alpha drop, upscale-small behavior); vendored libwebp builds under cargo —
+      JNI stage + WEBP_LOCK serialization gone; 5 unit tests
 - [ ] Password hashing parity check (verify BCrypt hashes written by Java side)
 
 ## Phase 2 — CRUD APIs (contract-frozen ports)
