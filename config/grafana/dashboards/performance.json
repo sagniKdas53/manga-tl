@@ -1,0 +1,1126 @@
+{
+  "uid": "manga-performance",
+  "title": "Stack Performance",
+  "tags": [
+    "manga-library"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "version": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "label": "Container",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "manga-library-prometheus"
+        },
+        "query": {
+          "query": "label_values(container_last_seen{name!=\"\"}, name)",
+          "refId": "A"
+        },
+        "regex": "",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": [
+            "manga-worker",
+            "manga-backend",
+            "manga-db",
+            "manga-valkey",
+            "manga-minio"
+          ],
+          "value": [
+            "manga-worker",
+            "manga-backend",
+            "manga-db",
+            "manga-valkey",
+            "manga-minio"
+          ]
+        },
+        "refresh": 1,
+        "sort": 1
+      },
+      {
+        "name": "stage",
+        "label": "Stage",
+        "type": "query",
+        "datasource": {
+          "type": "postgres",
+          "uid": "manga-library-postgres"
+        },
+        "query": "SELECT DISTINCT type FROM jobs ORDER BY 1",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Right now",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Machine CPU",
+      "description": "Every cgroup on the box, not just this stack — the root cgroup includes the browser, the editor and anything else running. That is the number the worker's 2.0-CPU cap was set against: the cap exists so this can stay under 100% while a job runs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "manga-library-prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "rate(container_cpu_usage_seconds_total{id=\"/\"}[$__rate_interval]) / scalar(machine_cpu_cores) * 100",
+          "legendFormat": "machine",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "max": 100,
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Worker CPU vs cap",
+      "description": "The worker's own usage as a percentage of the 2.0 CPUs it is allowed, read live from the cgroup rather than hardcoded — change WORKER_CPUS and this follows. 100% here means it is using its whole allowance, which is the point at which the cap starts costing throughput. The ignoring(cpu) is load-bearing: cAdvisor puts a cpu=\"total\" label on the usage counter and none on the quota, so a plain division matches no series and the panel reads No data.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "manga-library-prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 5,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "rate(container_cpu_usage_seconds_total{name=\"manga-worker\"}[$__rate_interval]) / ignoring(cpu) (container_spec_cpu_quota{name=\"manga-worker\"} / container_spec_cpu_period{name=\"manga-worker\"}) * 100",
+          "legendFormat": "worker",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "max": 100,
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Worker memory",
+      "description": "Working set against the 4g limit. Working set, not usage: it excludes reclaimable page cache, so it is the figure that actually decides whether the container gets OOM-killed. The measured peak when that limit was chosen was 2.1 GiB, i.e. about 53% here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "manga-library-prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 10,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "container_memory_working_set_bytes{name=\"manga-worker\"} / container_spec_memory_limit_bytes{name=\"manga-worker\"} * 100",
+          "legendFormat": "worker",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "max": 100,
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Worker throttled",
+      "description": "Share of CPU scheduling periods in which the kernel stopped the worker because it had already spent its 2.0-CPU quota. Zero means the cap is not costing anything. Anything sustained above a few percent means jobs are running slower than the hardware could, and raising WORKER_CPUS would buy throughput — at the desktop's expense.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "manga-library-prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 15,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "rate(container_cpu_cfs_throttled_periods_total{name=\"manga-worker\"}[$__rate_interval]) / rate(container_cpu_cfs_periods_total{name=\"manga-worker\"}[$__rate_interval]) * 100",
+          "legendFormat": "throttled",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 25
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "max": 100,
+          "min": 0,
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Jobs in flight",
+      "description": "Jobs that have started and not yet finished, right now. This is the load the pipeline is putting on the machine; the four panels to the left are what the machine is doing about it.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "manga-library-postgres"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 19,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "manga-library-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS \"in flight\"\nFROM jobs\nWHERE started_at IS NOT NULL\n  AND status NOT IN ('COMPLETED', 'FAILED')",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Machine load",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU by container",
+      "description": "Stacked, so the height of the stack is what this stack costs the machine. The dashed 'machine total' line sits above it — the gap between the two is everything that is not a container (browser, editor, desktop). A run that looks slow with a small gap is the pipeline's fault; a small stack under a full machine is not.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "manga-library-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "rate(container_cpu_usage_seconds_total{name=~\"$container\"}[$__rate_interval])",
+          "legendFormat": "{{name}}",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "rate(container_cpu_usage_seconds_total{id=\"/\"}[$__rate_interval])",
+          "legendFormat": "machine total",
+          "range": true,
+          "refId": "B",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "machine total"
+            },
+            "properties": [
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker: cap, usage, throttling",
+      "description": "The cap question in one panel. 'used' against 'cap' shows headroom; 'throttled %' on the right axis shows whether the kernel is actually enforcing it. Throttling rising while used sits flat at the cap is the signature of a CPU-bound stage — OCR, typically.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "manga-library-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "rate(container_cpu_usage_seconds_total{name=\"manga-worker\"}[$__rate_interval])",
+          "legendFormat": "used (cores)",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "container_spec_cpu_quota{name=\"manga-worker\"} / container_spec_cpu_period{name=\"manga-worker\"}",
+          "legendFormat": "cap (cores)",
+          "range": true,
+          "refId": "B",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "rate(container_cpu_cfs_throttled_periods_total{name=\"manga-worker\"}[$__rate_interval]) / rate(container_cpu_cfs_periods_total{name=\"manga-worker\"}[$__rate_interval]) * 100",
+          "legendFormat": "throttled %",
+          "range": true,
+          "refId": "C",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cap (cores)"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "throttled %"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory working set",
+      "description": "Reclaimable page cache excluded, so this is the number the OOM killer looks at. The worker's 4g limit is drawn as a dashed line; the others are uncapped and shown for context, because on a 19 GB box they compete with each other and with the desktop.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "manga-library-prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "container_memory_working_set_bytes{name=~\"$container\"}",
+          "legendFormat": "{{name}}",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "container_spec_memory_limit_bytes{name=\"manga-worker\"}",
+          "legendFormat": "worker limit",
+          "range": true,
+          "refId": "B",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "worker limit"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk and network",
+      "description": "Summed across the selected containers rather than broken out per container, which keeps this to four readable lines instead of twenty: cAdvisor reports network per interface (eth0 and eth1 both exist here, for manga-net and revProxy-net) and disk per device, so the unaggregated form lists the same container several times under one name. Mostly this is how you tell a stage that is genuinely computing from one that is waiting on MinIO or on a model API — a CPU-flat, network-busy stretch is a provider call, not local work. Drop the sum() to break it out per container.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "manga-library-prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "sum(rate(container_fs_reads_bytes_total{name=~\"$container\"}[$__rate_interval]))",
+          "legendFormat": "disk read",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "sum(rate(container_fs_writes_bytes_total{name=~\"$container\"}[$__rate_interval]))",
+          "legendFormat": "disk write",
+          "range": true,
+          "refId": "B",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "sum(rate(container_network_receive_bytes_total{name=~\"$container\"}[$__rate_interval]))",
+          "legendFormat": "net in",
+          "range": true,
+          "refId": "C",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "sum(rate(container_network_transmit_bytes_total{name=~\"$container\"}[$__rate_interval]))",
+          "legendFormat": "net out",
+          "range": true,
+          "refId": "D",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Pipeline load",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Jobs in flight by stage",
+      "description": "Line this up against 'CPU by container' above — this is the cause and that is the effect. Note that started_at is only populated from 2026-08-15 onward; before that the column is NULL and this panel is legitimately empty rather than reporting zero load.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "manga-library-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "manga-library-postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "-- Concurrency, not throughput: one row per bucket per stage counting the jobs that were\n-- open across that instant. generate_series gives the buckets and the join is an interval\n-- overlap, which is why this is a count of in-flight work rather than of starts.\n-- $__interval is Grafana's own bucket width, so the row count is bounded by maxDataPoints\n-- no matter how wide the time range gets.\nSELECT\n  b.bucket AS time,\n  j.type   AS metric,\n  count(*) AS value\nFROM generate_series(\n       $__timeFrom()::timestamptz,\n       $__timeTo()::timestamptz,\n       '$__interval'::interval\n     ) AS b(bucket)\nJOIN jobs j\n  ON j.started_at <= b.bucket\n AND j.updated_at >  b.bucket\nWHERE j.started_at IS NOT NULL\n  AND j.type IN ($stage)\nGROUP BY 1, 2\nORDER BY 1",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker CPU vs stage work time",
+      "description": "The correlation panel, and the only one drawing on both datasources at once: CPU cores from Prometheus on the left axis, p95 work time from Postgres on the right. Work time climbing while CPU is pinned means the machine is the limit. Work time climbing while CPU is idle means it is waiting on something else, which on this pipeline is almost always a model API.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "manga-library-prometheus"
+          },
+          "expr": "rate(container_cpu_usage_seconds_total{name=\"manga-worker\"}[$__rate_interval])",
+          "legendFormat": "worker CPU (cores)",
+          "range": true,
+          "refId": "A",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "manga-library-postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  $__timeGroupAlias(started_at, $__interval),\n  percentile_cont(0.95) WITHIN GROUP (\n    ORDER BY extract(epoch FROM (updated_at - started_at))\n  ) AS \"work p95 (s)\"\nFROM jobs\nWHERE $__timeFilter(started_at)\n  AND started_at IS NOT NULL\n  AND type IN ($stage)\nGROUP BY 1\nORDER BY 1",
+          "refId": "B",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "work p95 (s)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue wait p95",
+      "description": "How long a job sat between being created and being picked up. This is the backpressure signal: wait climbing while the worker is at its CPU cap means the cap is the bottleneck, whereas wait climbing with CPU idle points at slot configuration (CONCURRENT_JOBS, MAX_HEAVY_SLOTS) rather than at the hardware.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "manga-library-postgres"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "manga-library-postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  $__timeGroupAlias(created_at, $__interval),\n  type AS metric,\n  percentile_cont(0.95) WITHIN GROUP (\n    ORDER BY extract(epoch FROM (started_at - created_at))\n  ) AS \"wait\"\nFROM jobs\nWHERE $__timeFilter(created_at)\n  AND started_at IS NOT NULL\n  AND type IN ($stage)\nGROUP BY 1, 2\nORDER BY 1",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Slowest runs in range",
+      "description": "Somewhere to jump from. Pick a long one, set the dashboard time range around its window, and the panels above show what the machine was doing while it ran.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "manga-library-postgres"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "manga-library-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  started_at AS \"started\",\n  type       AS \"stage\",\n  round(extract(epoch FROM (updated_at - started_at))::numeric, 1) AS \"work (s)\",\n  round(extract(epoch FROM (started_at - created_at))::numeric, 1) AS \"wait (s)\",\n  status,\n  left(trace_id, 8) AS trace\nFROM jobs\nWHERE $__timeFilter(started_at)\n  AND started_at IS NOT NULL\n  AND type IN ($stage)\nORDER BY (updated_at - started_at) DESC NULLS LAST\nLIMIT 50",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "work (s)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-YlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wait (s)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      }
+    }
+  ]
+}

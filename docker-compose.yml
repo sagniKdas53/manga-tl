@@ -420,12 +420,14 @@ services:
 
   # The dashboard half of the 2026-08-15 logging audit.
   #
-  # Reads Postgres directly and nothing else — no Prometheus, no Loki, no exporters. Every number
-  # worth charting here is a pipeline fact the backend already writes as it goes: `jobs` carries
-  # per-stage timings and failures, `job_costs` carries per-model tokens and spend. A metrics
-  # pipeline would mean emitting those same events a second time and keeping two definitions in
-  # step; a log pipeline would mean shipping and re-parsing lines to recover what is already a
-  # column. Live tailing stays with Dozzle in monitor-stack, which is what it is good at.
+  # Two datasources, one per kind of question. Pipeline facts come straight from Postgres: `jobs`
+  # carries per-stage timings and failures, `job_costs` carries per-model tokens and spend, and the
+  # backend already writes both as it goes — emitting them a second time into a metrics pipeline
+  # would mean keeping two definitions in step for no gain. Resource usage is the half that
+  # argument never covered, because how much CPU a job burns is not an event anyone can write to a
+  # table, so cAdvisor and Prometheus below feed the Stack Performance dashboard with that and
+  # nothing else. Still no log pipeline: live tailing stays with Dozzle in monitor-stack, which is
+  # what it is good at.
   #
   # Also reachable on 127.0.0.1:3001 from this host directly (unchanged from before), matching the
   # treatment db/redis/minio get above (AUDIT-D5). Now additionally routed through Traefik at
@@ -494,6 +496,118 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # The resource half of the performance dashboard (config/grafana/dashboards/performance.json).
+  #
+  # The datasource note in config/grafana/provisioning/datasources/postgres.yml says this stack has
+  # no metrics pipeline on purpose, because everything worth charting is a pipeline fact already in
+  # Postgres. That reasoning is about pipeline facts and it still stands. It does not reach resource
+  # usage: how much CPU the worker burns while an OCR job runs is not an event anyone can write to
+  # a table, and on this box it is the number that separates "the model was slow" from "the machine
+  # was saturated". The `deploy:` block on the worker above was written from exactly this data —
+  # sampled by hand into CSVs by scripts/capture-run.sh, one run at a time. This makes it standing.
+  #
+  # cAdvisor is not free, and on a 4-core box that matters, so it is tuned down hard:
+  #   --housekeeping_interval=15s   the default is 1s. This is the single biggest lever; at 1s
+  #                                 cAdvisor alone was a steady chunk of a core, which would have
+  #                                 been self-defeating on the box whose CPU we are trying to
+  #                                 measure. Prometheus scrapes at 15s to match (no point sampling
+  #                                 faster than the data changes).
+  #   --disable_metrics=...         per-CPU breakdowns, scheduler stats, per-connection TCP/UDP
+  #                                 tables, NUMA and hugetlb accounting. None are plotted here and
+  #                                 they are most of cAdvisor's cost and cardinality.
+  #   --store_container_labels      off, so this stack's own labels (traefik.*, watchtower.*) do
+  #                                 not become Prometheus labels on every series.
+  #
+  # `privileged: true` is real and worth naming: cAdvisor reads other containers' cgroups, and on
+  # cgroup v2 the narrower cap-by-cap setups need per-kernel fiddling that breaks on upgrade. It
+  # gets the host's cgroup and docker state read-only, publishes on loopback only, and is not
+  # routed through Traefik. That is the trade accepted here — it is a read-only observer on a
+  # single-tenant laptop, not a service anything else talks to.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: manga-cadvisor
+    command:
+      - --housekeeping_interval=15s
+      - --docker_only=false
+      - --store_container_labels=false
+      - --disable_metrics=percpu,sched,tcp,udp,advtcp,process,hugetlb,referenced_memory,cpu_topology,resctrl,memory_numa
+    privileged: true
+    devices:
+      - /dev/kmsg
+    ports:
+      # 8080 is already taken on the host, hence 8081. Loopback only (AUDIT-D5): Prometheus reaches
+      # it over manga-net, and this mapping is only for "is it actually collecting?" from a shell.
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - manga-net
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Stores what cAdvisor collects, and nothing else — no alerting rules, no remote write, no
+  # exporters beyond the one. Pinned like db and grafana are (see the watchtower note): this is
+  # infrastructure whose upgrades should be a deliberate act, not a `latest` tag moving underneath
+  # a dashboard.
+  prometheus:
+    image: prom/prometheus:v2.53.2
+    container_name: manga-prometheus
+    # Same reasoning as grafana above: the image would run as UID 65534 (nobody) and ./data/
+    # prometheus is a bind mount owned by the host user, so it could not create its own wal/ and
+    # chunks_head/ under it. Telling the container to be the host user avoids a root-owned
+    # directory inside the repo, and Prometheus keeps no state that needs a dedicated owner.
+    user: "${UID:-1000}:${GID:-1000}"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # Two caps, whichever hits first. 15d is about as far back as a "was this run slower than
+      # last week's?" question ever reaches here; the 2 GB is the one that actually protects the
+      # disk, in the same spirit as the 10m/3 log rotation every service in this file carries.
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+      # Note: --web.enable-lifecycle is deliberately NOT passed. It already defaults to off, and
+      # Prometheus's flag parser rejects `--web.enable-lifecycle=false` outright ("unexpected
+      # false") rather than reading it as the no-op it looks like, so spelling out the default
+      # here crash-loops the container.
+    ports:
+      # Loopback only, and deliberately no Traefik router. Grafana is the front door for this data;
+      # the expression browser has no authentication of its own.
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+    depends_on:
+      cadvisor:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - manga-net
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy" ]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -1,8 +1,14 @@
-# The only datasource. There is no Prometheus, no Loki and no exporter in this stack on purpose:
-# the numbers worth putting on a dashboard here are pipeline facts — how long each stage took, what
-# it cost, what failed — and the backend already writes all of them to Postgres as it goes. Reading
-# them straight from the tables costs one container and no new plumbing, where a metrics pipeline
-# would mean instrumenting the same events a second time and keeping the two definitions in step.
+# The pipeline datasource, and the default one. There is no Loki and no application exporter here on
+# purpose: the numbers worth putting on a dashboard are pipeline facts — how long each stage took,
+# what it cost, what failed — and the backend already writes all of them to Postgres as it goes.
+# Reading them straight from the tables costs one container and no new plumbing, where a metrics
+# pipeline would mean instrumenting the same events a second time and keeping the two definitions
+# in step.
+#
+# That reasoning is about pipeline facts and it is unchanged. It never covered resource usage, which
+# is not an event anything can write to a table, so prometheus.yml next door was added alongside it
+# (2026-08-23) to carry CPU, memory and I/O for the Stack Performance dashboard. Two datasources,
+# one per kind of question; nothing is recorded in both.
 #
 # Connects as `grafana_ro`, a role with SELECT and nothing else (database/grafana_readonly.sql).
 # Grafana panels run operator-authored SQL against a production database; a read-only role is what
