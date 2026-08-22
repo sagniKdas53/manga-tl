@@ -4,6 +4,7 @@
 //! `tests/` import everything here — the same reason Spring apps keep logic out
 //! of the application class.
 
+pub mod auth;
 pub mod config;
 pub mod db;
 pub mod jwt;

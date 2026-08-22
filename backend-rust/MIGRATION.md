@@ -33,8 +33,11 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
       rule mirrored (production secret is 64 B ⇒ HS512), zero clock-skew expiry,
       null-on-failure `expiry_from_token` contract; 8 tests incl. AUDIT-B8 regression
       and cross-algorithm rejection
-- [ ] Auth middleware skeleton (Bearer parse/validate → authenticated user in request context)
-- [ ] Internal-token middleware skeleton for `/api/internal/**`
+- [x] **Auth middleware skeleton** — `AuthUser` extractor (Bearer → JWT → DB user → role
+      uppercased) reproducing Spring's surprising 403-shape for missing/invalid/unknown-user
+      tokens; verified live against running backend + real-DB round-trip test
+- [x] **Internal-token guard** — `X-Internal-Token` constant-time check, exact 401 body
+      `{"error": "Unauthorized: Invalid internal token"}`, fail-closed on unconfigured token
 - [ ] MinIO client service (`aws-sdk-s3` against MinIO; putObject/getObject/stat/stream/delete)
 - [ ] Redis client + pub/sub plumbing (job push channel, provider-config invalidation channel)
 - [ ] WebP thumbnail encode/decode via libwebp bindings (replaces JNI vendored-C story)
