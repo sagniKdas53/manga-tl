@@ -46,6 +46,7 @@ async fn test_state() -> Option<AppState> {
             access_key: Some("minioadmin".into()),
             secret_key: Some("minioadmin".into()),
         }),
+        None, // RedisService: auth flow needs no Redis
     ))
 }
 
@@ -65,6 +66,10 @@ fn test_config() -> manga_backend::config::Config {
         jwt_secret: None,
         internal_api_token: None,
         jwt_expiration_ms: 3_600_000,
+        redis: manga_backend::config::RedisConfig {
+            host: "localhost".into(),
+            port: 6379,
+        },
         minio: manga_backend::config::MinioConfig {
             endpoint: "http://localhost:9000".into(),
             external_url: None,

@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 use manga_backend::config::Config;
 use manga_backend::jwt::JwtUtils;
 use manga_backend::minio::MinioService;
+use manga_backend::redis_service::{PROVIDER_CONFIG_CHANNEL, RedisService};
 use manga_backend::state::AppState;
 use manga_backend::{db, routes};
 
@@ -70,7 +71,24 @@ async fn main() {
     let storage = MinioService::new(&config.minio);
     storage.ensure_bucket().await;
 
-    let state = AppState::new(config, pool, jwt, storage);
+    // Deliberate deviation from Java: Spring booted happily with Redis down (lazy template)
+    // and degraded silently. We connect eagerly and refuse to start otherwise — compose
+    // gates this service on healthy Redis anyway, and explicit failure beats quiet rot.
+    let redis_host = config.redis.host.clone();
+    let redis_port = config.redis.port;
+    let redis = match RedisService::connect(&redis_host, redis_port).await {
+        Ok(service) => {
+            tracing::info!("connected to Redis at {redis_host}:{redis_port}");
+            Some(std::sync::Arc::new(service))
+        }
+        Err(err) => {
+            eprintln!("Cannot reach Redis at {redis_host}:{redis_port}: {err}");
+            std::process::exit(1);
+        }
+    };
+    spawn_provider_config_listener(redis.as_ref().map(std::sync::Arc::clone));
+
+    let state = AppState::new(config, pool, jwt, storage, redis);
     let app = routes::build_router(state);
 
     // 0.0.0.0 = listen on all interfaces, same as Tomcat does inside its container.
@@ -148,4 +166,31 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
     tracing::info!("Shutdown signal received, draining connections...");
+}
+
+/// Subscribes to `provider:config:updated`. Phase 3 will invalidate ProviderConfigCache
+/// here; for now receipt is logged so the plumbing is observable end-to-end.
+fn spawn_provider_config_listener(redis: Option<std::sync::Arc<RedisService>>) {
+    let Some(redis) = redis else { return };
+    tokio::spawn(async move {
+        loop {
+            match redis.subscribe(PROVIDER_CONFIG_CHANNEL).await {
+                Ok(mut pubsub) => {
+                    use futures_util::StreamExt;
+                    while let Some(message) = pubsub.on_message().next().await {
+                        let payload: String =
+                            message.get_payload().unwrap_or_else(|_| "<binary>".into());
+                        tracing::info!(
+                            "provider config update received on '{PROVIDER_CONFIG_CHANNEL}': {payload}"
+                        );
+                    }
+                }
+                Err(err) => {
+                    tracing::error!("provider-config subscribe failed, retrying in 5s: {err}");
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                }
+            }
+            tracing::warn!("provider-config subscription ended, resubscribing...");
+        }
+    });
 }

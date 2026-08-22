@@ -66,6 +66,10 @@ mod tests {
             jwt_secret: None,
             internal_api_token: None,
             jwt_expiration_ms: 3_600_000,
+            redis: crate::config::RedisConfig {
+                host: "localhost".into(),
+                port: 6379,
+            },
             minio: minio_config.clone(),
         };
         AppState::new(
@@ -76,6 +80,7 @@ mod tests {
                 3_600_000,
             ),
             crate::minio::MinioService::new(&minio_config),
+            None, // RedisService: router tests need no live Redis
         )
     }
 

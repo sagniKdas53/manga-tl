@@ -48,12 +48,21 @@ pub struct Config {
     pub jwt_expiration_ms: i64,
     /// Object storage connection settings.
     pub minio: MinioConfig,
+    /// Redis/Valkey connection settings (Spring used SPRING_DATA_REDIS_*).
+    pub redis: RedisConfig,
 }
 
 /// MinIO (S3-compatible) object storage. Compose passes:
 ///   MINIO_ENDPOINT=http://minio:9000   (scheme REQUIRED for the Java SDK; we keep it)
 ///   MINIO_EXTERNAL_URL=                (optional public base to rewrite presigned URLs)
 ///   MINIO_ACCESS_KEY / MINIO_SECRET_KEY(_FILE)
+/// Redis/Valkey. Compose passes REDIS_HOST=redis / REDIS_PORT=6379.
+#[derive(Debug, Clone)]
+pub struct RedisConfig {
+    pub host: String,
+    pub port: u16,
+}
+
 #[derive(Debug, Clone)]
 pub struct MinioConfig {
     pub endpoint: String,
@@ -134,6 +143,20 @@ impl Config {
         };
         problems.append(&mut minio_problems);
 
+        let redis = RedisConfig {
+            host: env_var("REDIS_HOST").unwrap_or_else(|| "localhost".into()),
+            port: match env_var("REDIS_PORT") {
+                None => 6379,
+                Some(raw) => match raw.parse::<u16>() {
+                    Ok(p) if p > 0 => p,
+                    _ => {
+                        problems.push(format!("REDIS_PORT ({raw}) is not a valid TCP port."));
+                        6379
+                    }
+                },
+            },
+        };
+
         // --- Port of SecretsStartupValidator.validate() ------------------------------
         problems.extend(check_secret(
             "JWT_SECRET",
@@ -168,6 +191,7 @@ impl Config {
             internal_api_token,
             jwt_expiration_ms,
             minio,
+            redis,
         })
     }
 }

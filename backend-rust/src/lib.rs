@@ -10,5 +10,6 @@ pub mod db;
 pub mod jwt;
 pub mod minio;
 pub mod models;
+pub mod redis_service;
 pub mod routes;
 pub mod state;

@@ -42,7 +42,11 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
       `MinioService` (ensure-bucket @PostConstruct log-don't-crash semantics, upload/stat/
       stream/delete/list/presigned-GET with MINIO_EXTERNAL_URL rewrite); 2 live-server tests
       (throwaway docker or CI service container, skipped when endpoint unset)
-- [ ] Redis client + pub/sub plumbing (job push channel, provider-config invalidation channel)
+- [x] **Redis client + pub/sub plumbing** — `RedisService` over auto-reconnecting
+      ConnectionManager (queue RPUSH/LPOP/LLEN, string get/set/del, pause gate,
+      PUBLISH/SUBSCRIBE); dedicated pub/sub connections; startup listener task on
+      `provider:config:updated` with resubscribe loop; 4 live-server tests. DEVIATION
+      (documented): Redis connect is fail-fast at boot where Spring was silently lazy
 - [ ] WebP thumbnail encode/decode via libwebp bindings (replaces JNI vendored-C story)
 - [ ] Password hashing parity check (verify BCrypt hashes written by Java side)
 

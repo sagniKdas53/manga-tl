@@ -11,6 +11,7 @@ use sqlx::PgPool;
 use crate::config::Config;
 use crate::jwt::JwtUtils;
 use crate::minio::MinioService;
+use crate::redis_service::RedisService;
 
 /// The single state object every handler can reach via `State<AppState>`.
 /// `#[derive(Clone)]` generates `.clone()` for us; axum requires handlers' state to be Clone.
@@ -27,15 +28,25 @@ pub struct AppState {
     /// S3-compatible object storage (port of Java MinioService).
     #[allow(dead_code)]
     pub storage: Arc<MinioService>,
+    /// Redis queues/pub-sub. `None` only in tests; production connects fail-fast at boot.
+    #[allow(dead_code)]
+    pub redis: Option<Arc<RedisService>>,
 }
 
 impl AppState {
-    pub fn new(config: Config, pool: PgPool, jwt: JwtUtils, storage: MinioService) -> Self {
+    pub fn new(
+        config: Config,
+        pool: PgPool,
+        jwt: JwtUtils,
+        storage: MinioService,
+        redis: Option<Arc<RedisService>>,
+    ) -> Self {
         Self {
             config: Arc::new(config),
             pool,
             jwt: Arc::new(jwt),
             storage: Arc::new(storage),
+            redis,
         }
     }
 }
