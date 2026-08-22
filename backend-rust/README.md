@@ -75,6 +75,8 @@ literally the fix. Read the help line first; paste anything confusing into conve
 
 ## Migration phases
 
+Detailed, tickable checkpoint list: [MIGRATION.md](MIGRATION.md).
+
 - **Phase 0 (done)** — contract freeze + scaffold: config/secrets/validation, logging,
   health endpoints, router under `/tlhub`, graceful shutdown, tests.
 - **Phase 1** — sqlx (compile-time-checked SQL) against the existing schema in
