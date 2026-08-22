@@ -22,7 +22,7 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
 - [x] `.env.local.example` zero-export local dev flow
 - [x] Beginner-oriented README (commands, Java↔Rust concept map, phase roadmap)
 
-## Phase 1 — Foundation (no API surface yet) 🔄
+## Phase 1 — Foundation (no API surface yet) ✅ COMPLETE
 
 - [x] `ci-cargo.yml`: fmt --check · clippy `-D warnings` · tests w/ Postgres service container
 - [x] sqlx `PgPool`, eager startup connect (bad DB ⇒ boot fails, verified live)
@@ -51,7 +51,9 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
       aspect-preserving resize (Triangle ≈ SCALE_SMOOTH) → RGB → lossy WebP @85 (Java parity:
       512px width, alpha drop, upscale-small behavior); vendored libwebp builds under cargo —
       JNI stage + WEBP_LOCK serialization gone; 5 unit tests
-- [ ] Password hashing parity check (verify BCrypt hashes written by Java side)
+- [x] **Password hashing parity** — bcrypt cost 10, `$2a$` version pinned (Spring default);
+      committed Java-produced regression hash + env-gated live tests: Rust verifies real
+      Spring hashes AND real Java-minted HS512 JWTs (both proven against the running stack)
 
 ## Phase 2 — CRUD APIs (contract-frozen ports)
 
