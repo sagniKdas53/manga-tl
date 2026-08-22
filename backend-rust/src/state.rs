@@ -6,19 +6,27 @@
 
 use std::sync::Arc;
 
+use sqlx::PgPool;
+
 use crate::config::Config;
 
 /// The single state object every handler can reach via `State<AppState>`.
 /// `#[derive(Clone)]` generates `.clone()` for us; axum requires handlers' state to be Clone.
+/// `Arc<Config>` and `PgPool` are both internally shared, so cloning is a counter bump,
+/// not a deep copy.
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
+    /// Consumed by repositories/handlers as Phase 1 lands them.
+    #[allow(dead_code)]
+    pub pool: PgPool,
 }
 
 impl AppState {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, pool: PgPool) -> Self {
         Self {
             config: Arc::new(config),
+            pool,
         }
     }
 }

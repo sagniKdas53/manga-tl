@@ -1,0 +1,70 @@
+name: CI - Backend (Rust)
+
+# Mirrors ci-maven.yml's gates for backend-rust/: format check, clippy (SpotBugs/PMD
+# equivalent) and the test suite, against a real Postgres so Phase 1+ integration tests work.
+on:
+  push:
+    branches: ["main", "rust-backend"]
+    paths:
+      - "backend-rust/**"
+      - ".github/workflows/ci-cargo.yml"
+  pull_request:
+    paths:
+      - "backend-rust/**"
+      - ".github/workflows/ci-cargo.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test Rust backend
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: manga_library
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # Swatinem/rust-cache caches ~/.cargo and target/ keyed on Cargo.lock,
+      # the same role the maven cache block plays in ci-maven.yml.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend-rust
+
+      - name: Format check
+        working-directory: backend-rust
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: backend-rust
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        working-directory: backend-rust
+        env:
+          APP_PROFILE: test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/manga_library
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
+        run: cargo test

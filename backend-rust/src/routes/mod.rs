@@ -42,20 +42,27 @@ mod tests {
     use tower::ServiceExt; // adds .oneshot() so tests drive the router without a real port
 
     fn test_state(context_path: &str) -> AppState {
-        AppState::new(Config {
-            context_path: context_path.to_string(),
-            port: 0,
-            development: true,
-            database: DatabaseConfig {
-                host: "localhost".to_string(),
-                port: 5432,
-                name: "test".to_string(),
-                user: "postgres".to_string(),
-                password: "pw".to_string(),
+        // connect_lazy_with builds a pool that performs NO I/O until first used —
+        // exactly what router tests want.
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy_with(sqlx::postgres::PgConnectOptions::new().host("localhost"));
+        AppState::new(
+            Config {
+                context_path: context_path.to_string(),
+                port: 0,
+                development: true,
+                database: DatabaseConfig {
+                    host: "localhost".to_string(),
+                    port: 5432,
+                    name: "test".to_string(),
+                    user: "postgres".to_string(),
+                    password: "pw".to_string(),
+                },
+                jwt_secret: None,
+                internal_api_token: None,
             },
-            jwt_secret: None,
-            internal_api_token: None,
-        })
+            pool,
+        )
     }
 
     async fn body_string(response: Response<Body>) -> String {

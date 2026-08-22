@@ -1,22 +1,13 @@
 //! Binary entrypoint of the Rust backend.
 //!
-//! Rust refresher for this file:
-//! - `#[tokio::main]` turns the async `main` into a normal `fn main` that starts the tokio
-//!   runtime and blocks on it. You never write that boilerplate yourself.
-//! - `async fn` / `.await`: like CompletableFuture chains in Java, but with syntax support.
-//! - `match` is a switch expression that must cover every case — no fall-through surprises.
-//! - `?` can't be used here because `main` returns nothing; we handle errors explicitly and
-//!   exit non-zero, which is exactly what Docker's healthcheck expects on misconfiguration.
-
-mod config;
-mod routes;
-mod state;
+//! All application code lives in the library (`src/lib.rs`); this file only wires
+//! startup together: dotenv -> logging -> config -> Postgres pool -> router -> serve.
 
 use std::net::SocketAddr;
-use tokio::net::TcpListener;
 
-use crate::config::Config;
-use crate::state::AppState;
+use manga_backend::config::Config;
+use manga_backend::state::AppState;
+use manga_backend::{db, routes};
 
 #[tokio::main]
 async fn main() {
@@ -39,15 +30,36 @@ async fn main() {
         }
     };
 
+    // Fail fast when Postgres is unreachable — the same contract as Spring failing to
+    // boot its DataSource. No half-alive container for the healthcheck to lie about.
+    let pool = match db::connect(&config.database).await {
+        Ok(pool) => {
+            tracing::info!(
+                "connected to Postgres at {}:{}/{}",
+                config.database.host,
+                config.database.port,
+                config.database.name
+            );
+            pool
+        }
+        Err(err) => {
+            eprintln!(
+                "Cannot reach Postgres at {}:{}/{}: {err}",
+                config.database.host, config.database.port, config.database.name
+            );
+            std::process::exit(1);
+        }
+    };
+
     let port = config.port;
     let context_path = config.context_path.clone();
 
-    let state = AppState::new(config);
+    let state = AppState::new(config, pool);
     let app = routes::build_router(state);
 
     // 0.0.0.0 = listen on all interfaces, same as Tomcat does inside its container.
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    match TcpListener::bind(addr).await {
+    match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => {
             tracing::info!("manga-backend (rust) listening on http://{addr}{context_path}");
             axum::serve(listener, app)

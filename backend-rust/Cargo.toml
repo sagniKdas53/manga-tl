@@ -48,6 +48,9 @@ dotenvy = "0.15"
 # Ready-made HTTP middleware for axum/tower. We start with request tracing;
 # compression, CORS, static files etc. get enabled here as we port more of the app.
 tower-http = { version = "0.6", features = ["trace"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "chrono", "uuid", "json"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v4"] }
 
 # --- Test-only dependencies ([dev-dependencies] are NOT compiled into the release binary) ---
 [dev-dependencies]
