@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 
 use manga_backend::config::Config;
 use manga_backend::jwt::JwtUtils;
+use manga_backend::minio::MinioService;
 use manga_backend::state::AppState;
 use manga_backend::{db, routes};
 
@@ -64,7 +65,12 @@ async fn main() {
         config.jwt_expiration_ms,
     );
 
-    let state = AppState::new(config, pool, jwt);
+    // Same contract as Java's @PostConstruct init(): create the bucket if missing,
+    // log failures without blocking boot.
+    let storage = MinioService::new(&config.minio);
+    storage.ensure_bucket().await;
+
+    let state = AppState::new(config, pool, jwt, storage);
     let app = routes::build_router(state);
 
     // 0.0.0.0 = listen on all interfaces, same as Tomcat does inside its container.

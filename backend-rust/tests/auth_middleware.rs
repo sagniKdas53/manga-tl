@@ -40,6 +40,12 @@ async fn test_state() -> Option<AppState> {
         test_config(),
         pool,
         JwtUtils::new(SECRET.into(), 3_600_000),
+        manga_backend::minio::MinioService::new(&manga_backend::config::MinioConfig {
+            endpoint: "http://localhost:9000".into(),
+            external_url: None,
+            access_key: Some("minioadmin".into()),
+            secret_key: Some("minioadmin".into()),
+        }),
     ))
 }
 
@@ -59,6 +65,12 @@ fn test_config() -> manga_backend::config::Config {
         jwt_secret: None,
         internal_api_token: None,
         jwt_expiration_ms: 3_600_000,
+        minio: manga_backend::config::MinioConfig {
+            endpoint: "http://localhost:9000".into(),
+            external_url: None,
+            access_key: Some("minioadmin".into()),
+            secret_key: Some("minioadmin".into()),
+        },
     }
 }
 

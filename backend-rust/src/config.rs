@@ -46,6 +46,20 @@ pub struct Config {
     pub internal_api_token: Option<String>,
     /// JWT lifetime in milliseconds. Java: `jwt.expirationMs`, application.yml default 24h.
     pub jwt_expiration_ms: i64,
+    /// Object storage connection settings.
+    pub minio: MinioConfig,
+}
+
+/// MinIO (S3-compatible) object storage. Compose passes:
+///   MINIO_ENDPOINT=http://minio:9000   (scheme REQUIRED for the Java SDK; we keep it)
+///   MINIO_EXTERNAL_URL=                (optional public base to rewrite presigned URLs)
+///   MINIO_ACCESS_KEY / MINIO_SECRET_KEY(_FILE)
+#[derive(Debug, Clone)]
+pub struct MinioConfig {
+    pub endpoint: String,
+    pub external_url: Option<String>,
+    pub access_key: Option<String>,
+    pub secret_key: Option<String>,
 }
 
 /// Postgres connection details.
@@ -109,6 +123,17 @@ impl Config {
             },
         };
 
+        // MinIO creds are NOT startup-fatal on the Java side (empty yml defaults), so any
+        // *_FILE problems are surfaced but the client tolerates absence at call time.
+        let mut minio_problems = Vec::new();
+        let minio = MinioConfig {
+            endpoint: env_var("MINIO_ENDPOINT").unwrap_or_else(|| "http://localhost:9000".into()),
+            external_url: env_var("MINIO_EXTERNAL_URL"),
+            access_key: resolve_credential("MINIO_ACCESS_KEY", &mut minio_problems),
+            secret_key: resolve_credential("MINIO_SECRET_KEY", &mut minio_problems),
+        };
+        problems.append(&mut minio_problems);
+
         // --- Port of SecretsStartupValidator.validate() ------------------------------
         problems.extend(check_secret(
             "JWT_SECRET",
@@ -142,6 +167,7 @@ impl Config {
             jwt_secret,
             internal_api_token,
             jwt_expiration_ms,
+            minio,
         })
     }
 }

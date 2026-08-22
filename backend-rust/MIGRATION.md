@@ -38,7 +38,10 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
       tokens; verified live against running backend + real-DB round-trip test
 - [x] **Internal-token guard** — `X-Internal-Token` constant-time check, exact 401 body
       `{"error": "Unauthorized: Invalid internal token"}`, fail-closed on unconfigured token
-- [ ] MinIO client service (`aws-sdk-s3` against MinIO; putObject/getObject/stat/stream/delete)
+- [x] **MinIO client** — `aws-sdk-s3` w/ path-style addressing against MinIO; port of
+      `MinioService` (ensure-bucket @PostConstruct log-don't-crash semantics, upload/stat/
+      stream/delete/list/presigned-GET with MINIO_EXTERNAL_URL rewrite); 2 live-server tests
+      (throwaway docker or CI service container, skipped when endpoint unset)
 - [ ] Redis client + pub/sub plumbing (job push channel, provider-config invalidation channel)
 - [ ] WebP thumbnail encode/decode via libwebp bindings (replaces JNI vendored-C story)
 - [ ] Password hashing parity check (verify BCrypt hashes written by Java side)

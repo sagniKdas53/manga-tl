@@ -36,6 +36,19 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      minio:
+        image: minio/minio
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,4 +80,7 @@ jobs:
           SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/manga_library
           SPRING_DATASOURCE_USERNAME: postgres
           SPRING_DATASOURCE_PASSWORD: postgres
+          MINIO_TEST_ENDPOINT: http://127.0.0.1:9000
+          MINIO_TEST_ACCESS_KEY: minioadmin
+          MINIO_TEST_SECRET_KEY: minioadmin
         run: cargo test

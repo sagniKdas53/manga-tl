@@ -8,6 +8,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod jwt;
+pub mod minio;
 pub mod models;
 pub mod routes;
 pub mod state;

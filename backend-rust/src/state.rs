@@ -10,6 +10,7 @@ use sqlx::PgPool;
 
 use crate::config::Config;
 use crate::jwt::JwtUtils;
+use crate::minio::MinioService;
 
 /// The single state object every handler can reach via `State<AppState>`.
 /// `#[derive(Clone)]` generates `.clone()` for us; axum requires handlers' state to be Clone.
@@ -23,14 +24,18 @@ pub struct AppState {
     /// Issues and verifies the same JWTs as Java `JwtUtils`.
     #[allow(dead_code)]
     pub jwt: Arc<JwtUtils>,
+    /// S3-compatible object storage (port of Java MinioService).
+    #[allow(dead_code)]
+    pub storage: Arc<MinioService>,
 }
 
 impl AppState {
-    pub fn new(config: Config, pool: PgPool, jwt: JwtUtils) -> Self {
+    pub fn new(config: Config, pool: PgPool, jwt: JwtUtils, storage: MinioService) -> Self {
         Self {
             config: Arc::new(config),
             pool,
             jwt: Arc::new(jwt),
+            storage: Arc::new(storage),
         }
     }
 }

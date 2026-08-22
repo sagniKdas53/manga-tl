@@ -46,27 +46,36 @@ mod tests {
         // exactly what router tests want.
         let pool = sqlx::postgres::PgPoolOptions::new()
             .connect_lazy_with(sqlx::postgres::PgConnectOptions::new().host("localhost"));
-        AppState::new(
-            Config {
-                context_path: context_path.to_string(),
-                port: 0,
-                development: true,
-                database: DatabaseConfig {
-                    host: "localhost".to_string(),
-                    port: 5432,
-                    name: "test".to_string(),
-                    user: "postgres".to_string(),
-                    password: "pw".to_string(),
-                },
-                jwt_secret: None,
-                internal_api_token: None,
-                jwt_expiration_ms: 3_600_000,
+        let minio_config = crate::config::MinioConfig {
+            endpoint: "http://localhost:9000".into(),
+            external_url: None,
+            access_key: Some("minioadmin".into()),
+            secret_key: Some("minioadmin".into()),
+        };
+        let config = Config {
+            context_path: context_path.to_string(),
+            port: 0,
+            development: true,
+            database: DatabaseConfig {
+                host: "localhost".to_string(),
+                port: 5432,
+                name: "test".to_string(),
+                user: "postgres".to_string(),
+                password: "pw".to_string(),
             },
+            jwt_secret: None,
+            internal_api_token: None,
+            jwt_expiration_ms: 3_600_000,
+            minio: minio_config.clone(),
+        };
+        AppState::new(
+            config,
             pool,
             crate::jwt::JwtUtils::new(
                 "test-secret-long-enough-for-hmac-signing-1234".into(),
                 3_600_000,
             ),
+            crate::minio::MinioService::new(&minio_config),
         )
     }
 
