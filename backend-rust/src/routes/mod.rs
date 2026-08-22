@@ -60,8 +60,13 @@ mod tests {
                 },
                 jwt_secret: None,
                 internal_api_token: None,
+                jwt_expiration_ms: 3_600_000,
             },
             pool,
+            crate::jwt::JwtUtils::new(
+                "test-secret-long-enough-for-hmac-signing-1234".into(),
+                3_600_000,
+            ),
         )
     }
 

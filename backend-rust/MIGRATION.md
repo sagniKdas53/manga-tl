@@ -29,7 +29,10 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
 - [x] All 17 JPA entities → serde + `FromRow` structs mapped 1:1 from `init.sql`
       (`jobs.id` varchar kept, `"type"` columns renamed via `#[sqlx]`/`#[serde]`)
 - [x] Rolled-back round-trip integration tests vs live schema (uuid/timestamptz/jsonb/f64)
-- [ ] **JWT utils** — port `JwtUtils` w/ `jsonwebtoken` crate; cases mirrored from `JwtUtilsTest`
+- [x] **JWT utils** — port `JwtUtils` w/ `jsonwebtoken` crate; jjwt key-length algorithm
+      rule mirrored (production secret is 64 B ⇒ HS512), zero clock-skew expiry,
+      null-on-failure `expiry_from_token` contract; 8 tests incl. AUDIT-B8 regression
+      and cross-algorithm rejection
 - [ ] Auth middleware skeleton (Bearer parse/validate → authenticated user in request context)
 - [ ] Internal-token middleware skeleton for `/api/internal/**`
 - [ ] MinIO client service (`aws-sdk-s3` against MinIO; putObject/getObject/stat/stream/delete)

@@ -6,6 +6,7 @@
 use std::net::SocketAddr;
 
 use manga_backend::config::Config;
+use manga_backend::jwt::JwtUtils;
 use manga_backend::state::AppState;
 use manga_backend::{db, routes};
 
@@ -54,7 +55,16 @@ async fn main() {
     let port = config.port;
     let context_path = config.context_path.clone();
 
-    let state = AppState::new(config, pool);
+    // Config::load refuses to start without JWT_SECRET, so the secret is guaranteed present.
+    let jwt = JwtUtils::new(
+        config
+            .jwt_secret
+            .clone()
+            .expect("Config::load guarantees JWT_SECRET is set"),
+        config.jwt_expiration_ms,
+    );
+
+    let state = AppState::new(config, pool, jwt);
     let app = routes::build_router(state);
 
     // 0.0.0.0 = listen on all interfaces, same as Tomcat does inside its container.

@@ -36,14 +36,16 @@ pub struct Config {
     /// Postgres connection settings (sqlx will consume these in Phase 1).
     #[allow(dead_code)]
     pub database: DatabaseConfig,
-    /// HS256 signing key for JWTs. Required outside development profiles.
-    /// (Read by the auth middleware added in Phase 1; validated at startup already.)
+    /// HS256/384/512 signing key for JWTs. Required outside development profiles.
+    /// (Consumed by `jwt::JwtUtils`; validated at startup already.)
     #[allow(dead_code)]
     pub jwt_secret: Option<String>,
     /// Shared token between us and the Python worker for `/api/internal/**`.
     /// (Read by the internal-auth filter added in Phase 3.)
     #[allow(dead_code)]
     pub internal_api_token: Option<String>,
+    /// JWT lifetime in milliseconds. Java: `jwt.expirationMs`, application.yml default 24h.
+    pub jwt_expiration_ms: i64,
 }
 
 /// Postgres connection details.
@@ -94,6 +96,19 @@ impl Config {
         let jwt_secret = resolve_credential("JWT_SECRET", &mut problems);
         let internal_api_token = resolve_credential("INTERNAL_API_TOKEN", &mut problems);
 
+        let jwt_expiration_ms = match env_var("JWT_EXPIRATION_MS") {
+            None => 86_400_000, // 24h, same as application.yml
+            Some(raw) => match raw.parse::<i64>() {
+                Ok(ms) if ms > 0 => ms,
+                _ => {
+                    problems.push(format!(
+                        "JWT_EXPIRATION_MS ({raw}) is not a positive integer."
+                    ));
+                    86_400_000
+                }
+            },
+        };
+
         // --- Port of SecretsStartupValidator.validate() ------------------------------
         problems.extend(check_secret(
             "JWT_SECRET",
@@ -126,6 +141,7 @@ impl Config {
             database,
             jwt_secret,
             internal_api_token,
+            jwt_expiration_ms,
         })
     }
 }
