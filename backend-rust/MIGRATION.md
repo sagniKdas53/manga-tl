@@ -101,7 +101,11 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 DONE: error.rs (problem+json) ✅ · routes/auth.rs all 7 endpoints ✅ · scripts/diff_routes.py
 contract gate in CI ✅ (8/71 operations at last count).
 
-NEXT — SeriesController (13 routes in golden spec). SCOPING ALREADY DONE, honor it:
+PHASE 2 COMPLETE ✅ — 49/71 operations served; remaining 22 are exactly the
+job-pipeline surface (internal callbacks ×12, redo ×2, import/export ×5, notifications/SSE ×2)
+plus series chapter import. Phase 3 starts there.
+
+HISTORICAL SCOPING (SeriesController — already done, kept for reference):
 * SystemSettingsService split (source read 2026-08-23): series CRUD needs ONLY
   getSettingValue(key,default)/saveSetting — trivial system_settings upsert pair; put them in
   src/settings.rs. The FULL getSettings() DTO + validateOverrides() depend on
@@ -191,8 +195,9 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
 
 ## Phase 2 — CRUD APIs (contract-frozen ports)
 
-- [~] Contract gate: scripts/diff_routes.py checks ported routes ⊆ golden-routes.txt in CI
-      (11% at auth completion; full utoipa OpenAPI-doc generation deferred to cutover prep)
+- [x] Contract gate: scripts/diff_routes.py checks ported routes ⊆ golden-routes.txt in CI
+      (69% at Phase 2 completion; the remaining 22 ops all need the job pipeline;
+      full utoipa OpenAPI-doc generation deferred to cutover prep)
 - [x] Error handling parity: problem+json family (validation w/ nanosecond timestamp +
       errors map, not-found, bad-request, access-denied, payload-too-large, internal) +
       Boot's no-timestamp unreadable-body shape + plain-text controller errors
@@ -200,14 +205,28 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
       (problem+json validation, text/plain errors, explicit-null token, controller-401 vs
       security-403, blank-name no-op, change-password, account deletion, admin-rejection)
 - [ ] `SeriesController` — series CRUD + nested chapters CRUD + import + export download/cleanup
-- [ ] `PageController` — image upload (multipart ≤50MB), page/image reads, reorder,
-      streaming file/reader/rendered responses, thumbnail generation on upload
-- [ ] `LayerController` + layer-elements CRUD + edit history
-- [ ] OCR-region PATCH + redo triggers
-- [ ] `SettingsController` — get/put/validate system settings
-- [ ] `JobController` — list/pause/resume/retry/clear
-- [ ] `ForwardController` — worker proxy pass-through
-- [ ] Pagination semantics identical (page/size caps: max-page-size 100)
+- [x] `PageController` (Phase-2 scope) — single-image multipart upload w/ magic-byte
+      validation incl BMP->PNG convert + sha256 dedup (already_exists/duplicate), slot
+      clamp + two-phase shift-up, cover refresh; list/get page+image assembly; streaming
+      file/reader/thumbnail/rendered with immutable cache + suffixed ETags; delete/
+      reorder/update-number/ocr PATCH. ZIP branches + duplicate-cloning + redo endpoints
+      + import-project defer to Phase 3 (pipeline); thumbnails generate synchronously
+- [x] `LayerController` — element update with change-detected edit history + metadata
+      bump, history list, layer create (page/image paths) + partial update + delete,
+      element create with Java defaults + delete; all ADMIN/TRANSLATOR gated
+- [x] OCR-region PATCH (text/translatedText/approved/confidence, translated clears
+      translation_failed). Redo triggers -> Phase 3
+- [x] `SettingsController` — GET/PUT via system_settings + env defaults; provider lists/
+      catalog empty until worker publishes (Java cache behaves identically pre-publish);
+      validate -> {"orphaned":[]} while permissive
+- [x] `JobController` — active-jobs + pause flag from Redis; queue pause/resume/clear
+      (status sets + queue:* key sweep); retry/pause/resume/delete per-job incl.
+      re-enqueue when gate open. SSE fan-out + requeuePendingJobs -> Phase 3
+- [x] `ForwardController` — SPA fallback serves index.html for non-API unmatched paths
+      (dist dir via SPA_DIST_DIR; binary embed lands in Phase 4 Dockerfile); unmatched
+      /api/** return Boot-shaped 404 JSON
+- [x] Pagination semantics identical (defaults 10/15/25, clamp at max-page-size 100,
+      sort whitelists, asc/desc steering the SQL)
 
 ## Phase 3 — Jobs & realtime (the hard core)
 

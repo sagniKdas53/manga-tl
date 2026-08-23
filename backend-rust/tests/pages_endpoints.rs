@@ -1,9 +1,9 @@
 //! End-to-end tests for /api/images + /api/pages against REAL Postgres + MinIO.
 //! Requires SPRING_DATASOURCE_URL and MINIO_TEST_ENDPOINT; skips otherwise.
 
+use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use axum::Router;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -60,7 +60,10 @@ async fn app() -> Option<(Router, sqlx::PgPool)> {
         internal_api_token: None,
         jwt_expiration_ms: 3_600_000,
         minio: minio.clone(),
-        redis: RedisConfig { host: "localhost".into(), port: 6379 },
+        redis: RedisConfig {
+            host: "localhost".into(),
+            port: 6379,
+        },
     };
     let state = AppState::new(
         config,
@@ -103,7 +106,8 @@ fn multipart_body(chapter_id: &str, page_number: u32, filename: &str, png: &[u8]
     ] {
         body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
         body.extend_from_slice(
-            format!("Content-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes(),
+            format!("Content-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n")
+                .as_bytes(),
         );
     }
     body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
@@ -126,8 +130,11 @@ async fn upload_stream_delete_lifecycle() {
         return;
     };
     cleanup(&pool).await;
-    let token =
-        probe_user(&pool, &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000)).await;
+    let token = probe_user(
+        &pool,
+        &manga_backend::jwt::JwtUtils::new(SECRET.into(), 3_600_000),
+    )
+    .await;
 
     // Chapter to upload into (series cascade cleans everything at the end).
     let response = send_json(
@@ -168,35 +175,66 @@ async fn upload_stream_delete_lifecycle() {
     assert_eq!(again["status"], "already_exists", "{}", response.2);
 
     // --- list pages ---
-    let response = send_get(app.clone(), &format!("/tlhub/api/chapters/{chapter_id}/pages"), &token).await;
+    let response = send_get(
+        app.clone(),
+        &format!("/tlhub/api/chapters/{chapter_id}/pages"),
+        &token,
+    )
+    .await;
     assert_eq!(response.0, StatusCode::OK);
     let list: serde_json::Value = serde_json::from_str(&response.2).unwrap();
     assert_eq!(list["totalElements"], 1);
     assert_eq!(list["content"][0]["pageNumber"], 1);
-    assert!(list["content"][0]["thumbnailUrl"].as_str().unwrap().contains("/thumbnail"));
+    assert!(
+        list["content"][0]["thumbnailUrl"]
+            .as_str()
+            .unwrap()
+            .contains("/thumbnail")
+    );
 
     // --- thumbnail is a real WebP ---
-    let response =
-        send_get(app.clone(), &format!("/tlhub/api/images/{image_id}/thumbnail"), &token).await;
+    let response = send_get(
+        app.clone(),
+        &format!("/tlhub/api/images/{image_id}/thumbnail"),
+        &token,
+    )
+    .await;
     assert_eq!(response.0, StatusCode::OK);
     assert_eq!(response.1, "image/webp");
     assert!(response.3 > 100, "thumbnail must have real bytes");
 
     // --- original streams back byte-identical with immutable cache headers ---
-    let response = send_get(app.clone(), &format!("/tlhub/api/images/{image_id}/file"), &token).await;
+    let response = send_get(
+        app.clone(),
+        &format!("/tlhub/api/images/{image_id}/file"),
+        &token,
+    )
+    .await;
     assert_eq!(response.0, StatusCode::OK);
     assert_eq!(response.3 as usize, png_bytes().len());
 
     // --- rendered absent -> 404 (nothing rendered yet) ---
-    let response =
-        send_get(app.clone(), &format!("/tlhub/api/pages/{page_id}/rendered"), &token).await;
+    let response = send_get(
+        app.clone(),
+        &format!("/tlhub/api/pages/{page_id}/rendered"),
+        &token,
+    )
+    .await;
     assert_eq!(response.0, StatusCode::NOT_FOUND);
 
     // --- rich page payload keys ---
     let response = send_get(app.clone(), &format!("/tlhub/api/pages/{page_id}"), &token).await;
     assert_eq!(response.0, StatusCode::OK);
     let payload: serde_json::Value = serde_json::from_str(&response.2).unwrap();
-    for key in ["page", "image", "url", "panels", "ocrRegions", "conversations", "layers"] {
+    for key in [
+        "page",
+        "image",
+        "url",
+        "panels",
+        "ocrRegions",
+        "conversations",
+        "layers",
+    ] {
         assert!(payload.get(key).is_some(), "missing {key}");
     }
 
@@ -272,12 +310,16 @@ async fn finalize(response: axum::http::Response<Body>) -> SendResult {
         .to_string();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let len = bytes.len();
-    (status, content_type, String::from_utf8_lossy(&bytes).to_string(), len)
+    (
+        status,
+        content_type,
+        String::from_utf8_lossy(&bytes).to_string(),
+        len,
+    )
 }
 
 fn json_field(body: &str, field: &str) -> String {
-    serde_json::from_str::<serde_json::Value>(body)
-        .expect("json body")[field]
+    serde_json::from_str::<serde_json::Value>(body).expect("json body")[field]
         .as_str()
         .expect(field)
         .to_string()

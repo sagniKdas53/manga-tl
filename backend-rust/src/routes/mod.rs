@@ -5,14 +5,23 @@
 //!   * `nest(prefix, router)` mounts a sub-router under a URL prefix
 //!     (this replaces Spring's `server.servlet.context-path=/tlhub`)
 //!   * `.with_state(state)` attaches the shared AppState to all handlers in the router
-//!   * middleware ("layers") wrap every request; TraceLayer logs method/path/status/duration
+//!   * middleware ("layers") wrap every request; TraceLayer logs, CatchPanic turns panics
+//!     into GlobalExceptionHandler-shaped 500s
+//!
+//! The `fallback` handler ports ForwardController: unmatched non-API paths serve the SPA's
+//! index.html, unmatched `/api/**` paths are real 404s.
 
 pub mod auth;
 pub mod health;
+pub mod jobs;
+pub mod layers;
+pub mod layers_ops;
 pub mod page;
 pub mod series;
+pub mod settings;
 
 use axum::Router;
+use axum::response::{IntoResponse, Response};
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::trace::TraceLayer;
 
@@ -20,15 +29,18 @@ use crate::state::AppState;
 
 /// Builds the complete application router.
 pub fn build_router(state: AppState) -> Router {
-    // Config::load already normalized this to "" | "/" | "/something".
     let context_path = state.config.context_path.clone();
 
-    // The inner router holds everything Spring served relative to its context path.
+    // Everything Spring served relative to its context path.
     let inner = Router::new()
         .merge(health::router())
         .nest("/api/auth", auth::router())
         .nest("/api/series", series::router())
-        .nest("/api", page::router())
+        .nest("/api/jobs", jobs::router())
+        .nest("/api/settings", settings::router())
+        .merge(page::router())
+        .merge(layer_routes())
+        .fallback(spa_fallback)
         .with_state(state);
 
     let app = if context_path == "/" {
@@ -37,30 +49,87 @@ pub fn build_router(state: AppState) -> Router {
         Router::new().nest(&context_path, inner)
     };
 
-    // Java's GlobalExceptionHandler turns any RuntimeException into a 500 problem+json.
-    // A panic in axum would otherwise bypass handlers entirely (empty 500), so we catch
-    // panics and emit the same generic body.
     app.layer(CatchPanicLayer::custom(|_panic| {
         crate::error::internal_error("/unknown")
     }))
     .layer(TraceLayer::new_for_http())
 }
 
+/// All layer-related routes in one table (kept beside their handlers' two modules).
+fn layer_routes() -> Router<AppState> {
+    Router::new()
+        .route(
+            "/layers/{id}",
+            axum::routing::put(layers_ops::update_layer).delete(layers_ops::delete_layer),
+        )
+        .route(
+            "/layers/{layerId}/elements",
+            axum::routing::post(layers_ops::create_layer_element),
+        )
+        .route(
+            "/layer-elements/{id}",
+            axum::routing::put(layers::update_layer_element)
+                .delete(layers_ops::delete_layer_element),
+        )
+        .route(
+            "/layer-elements/{id}/history",
+            axum::routing::get(layers::element_history),
+        )
+        .route(
+            "/pages/{pageId}/layers",
+            axum::routing::post(layers::create_page_layer),
+        )
+        .route(
+            "/images/{imageId}/layers",
+            axum::routing::post(layers::create_image_layer),
+        )
+}
+
+/// ForwardController port. Unmatched paths: `/api/**` -> Boot-style 404 JSON; anything
+/// without a file extension -> the SPA shell so client-side routing works.
+async fn spa_fallback(uri: axum::http::Uri) -> Response {
+    let path = uri.path();
+    if path.starts_with("/api") {
+        return (
+            StatusCode::NOT_FOUND,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            format!(
+                "{{\"timestamp\":\"{}\",\"status\":404,\"error\":\"Not Found\",\"path\":\"{path}\"}}",
+                chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3f+00:00")
+            ),
+        )
+            .into_response();
+    }
+
+    // Phase 4 embeds the frontend dist into the binary; until then read it from disk
+    // (the Dockerfile copies dist next to the binary, matching today's layout).
+    let dist_dir = std::env::var("SPA_DIST_DIR").unwrap_or_else(|_| "../frontend/dist".into());
+    if let Ok(index) = std::fs::read(format!("{dist_dir}/index.html")) {
+        return (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "text/html;charset=UTF-8")],
+            index,
+        )
+            .into_response();
+    }
+    StatusCode::NOT_FOUND.into_response()
+}
+
+use axum::http::StatusCode;
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, DatabaseConfig};
+    use crate::config::{Config, DatabaseConfig, MinioConfig};
     use axum::body::Body;
-    use axum::http::{Request, Response, StatusCode};
+    use axum::http::{Request, StatusCode as Status};
     use http_body_util::BodyExt;
-    use tower::ServiceExt; // adds .oneshot() so tests drive the router without a real port
+    use tower::ServiceExt;
 
     fn test_state(context_path: &str) -> AppState {
-        // connect_lazy_with builds a pool that performs NO I/O until first used —
-        // exactly what router tests want.
         let pool = sqlx::postgres::PgPoolOptions::new()
             .connect_lazy_with(sqlx::postgres::PgConnectOptions::new().host("localhost"));
-        let minio_config = crate::config::MinioConfig {
+        let minio_config = MinioConfig {
             endpoint: "http://localhost:9000".into(),
             external_url: None,
             access_key: Some("minioadmin".into()),
@@ -71,20 +140,20 @@ mod tests {
             port: 0,
             development: true,
             database: DatabaseConfig {
-                host: "localhost".to_string(),
+                host: "localhost".into(),
                 port: 5432,
-                name: "test".to_string(),
-                user: "postgres".to_string(),
-                password: "pw".to_string(),
+                name: "test".into(),
+                user: "postgres".into(),
+                password: "pw".into(),
             },
             jwt_secret: None,
             internal_api_token: None,
             jwt_expiration_ms: 3_600_000,
+            minio: minio_config.clone(),
             redis: crate::config::RedisConfig {
                 host: "localhost".into(),
                 port: 6379,
             },
-            minio: minio_config.clone(),
         };
         AppState::new(
             config,
@@ -94,24 +163,13 @@ mod tests {
                 3_600_000,
             ),
             crate::minio::MinioService::new(&minio_config),
-            None, // RedisService: router tests need no live Redis
+            None,
         )
-    }
-
-    async fn body_string(response: Response<Body>) -> String {
-        let bytes = response
-            .into_body()
-            .collect()
-            .await
-            .expect("body collect")
-            .to_bytes();
-        String::from_utf8(bytes.to_vec()).expect("utf-8 body")
     }
 
     #[tokio::test]
     async fn health_served_under_context_path() {
         let app = build_router(test_state("/tlhub"));
-
         let response = app
             .oneshot(
                 Request::get("/tlhub/actuator/health")
@@ -120,24 +178,26 @@ mod tests {
             )
             .await
             .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(body_string(response).await, r#"{"status":"UP"}"#);
+        assert_eq!(response.status(), Status::OK);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&bytes[..], &br#"{"status":"UP"}"#[..]);
     }
 
     #[tokio::test]
-    async fn health_404_outside_context_path() {
+    async fn unknown_api_paths_are_real_404_json() {
         let app = build_router(test_state("/tlhub"));
-
         let response = app
             .oneshot(
-                Request::get("/actuator/health")
+                Request::get("/tlhub/api/nonexistent")
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), Status::NOT_FOUND);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/json"
+        );
     }
 }

@@ -50,6 +50,26 @@ PORTED = {
     "GET /api/images/{imageId}/thumbnail",
     "GET /api/pages/{pageId}/rendered",
     "PATCH /api/ocr-regions/{id}",
+    # layers + settings + jobs (Phase 2 completion)
+    "PUT /api/layer-elements/{id}",
+    "DELETE /api/layer-elements/{id}",
+    "GET /api/layer-elements/{id}/history",
+    "POST /api/pages/{pageId}/layers",
+    "POST /api/images/{imageId}/layers",
+    "PUT /api/layers/{id}",
+    "DELETE /api/layers/{id}",
+    "POST /api/layers/{layerId}/elements",
+    "GET /api/settings",
+    "PUT /api/settings",
+    "GET /api/settings/validate",
+    "GET /api/jobs",
+    "POST /api/jobs/pause",
+    "POST /api/jobs/resume",
+    "DELETE /api/jobs/clear",
+    "POST /api/jobs/{id}/retry",
+    "POST /api/jobs/{id}/pause",
+    "POST /api/jobs/{id}/resume",
+    "DELETE /api/jobs/{id}",
 }
 
 
