@@ -32,3 +32,16 @@ pub fn spawn_scheduled_tasks(state: &crate::state::AppState) {
 
     dispatcher::spawn(state.clone());
 }
+
+/// Daily export sweeps (Java: ChapterExportService fixedRate 24h + ExportCleanupService
+/// cron 02:00). One loop covers both; their retention windows are near-identical.
+pub fn spawn_export_cleanup(state: &crate::state::AppState) {
+    let sweep_state = state.clone();
+    tokio::spawn(async move {
+        loop {
+            crate::export::cleanup_stale_exports(&sweep_state).await;
+            // 24 hours, like Java's fixedRate = 86400000.
+            tokio::time::sleep(Duration::from_secs(86_400)).await;
+        }
+    });
+}

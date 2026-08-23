@@ -147,6 +147,82 @@ impl MinioService {
         self.stat(object_path).await.is_ok()
     }
 
+    /// Convenience alias used by the export service (Java fileExists).
+    pub async fn file_exists(&self, object_path: &str) -> bool {
+        self.exists(object_path).await
+    }
+
+    /// Downloads an object fully; None when it does not exist or the download fails.
+    pub async fn download_bytes(&self, object_path: &str) -> Option<Vec<u8>> {
+        let mut stream = match self.download(object_path).await {
+            Ok(stream) => stream,
+            Err(err) => {
+                tracing::debug!("download of {object_path} failed: {err}");
+                return None;
+            }
+        };
+        let mut buffer = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(bytes) => buffer.extend_from_slice(&bytes),
+                Err(err) => {
+                    tracing::debug!("download of {object_path} interrupted: {err}");
+                    return None;
+                }
+            }
+        }
+        Some(buffer)
+    }
+
+    /// Deletes every object under a prefix (ChapterExportService.clearChapterExports).
+    pub async fn delete_by_prefix(
+        &self,
+        prefix: &str,
+    ) -> Result<
+        (),
+        aws_sdk_s3::error::SdkError<aws_sdk_s3::operation::delete_object::DeleteObjectError>,
+    > {
+        for key in self.list_keys_under_prefix(prefix).await {
+            self.delete_quietly(&key).await;
+        }
+        Ok(())
+    }
+
+    /// Deletes objects under a prefix whose last-modified time predates `age`
+    /// (the scheduled stale-export sweeps).
+    pub async fn delete_older_than(
+        &self,
+        prefix: &str,
+        age: chrono::Duration,
+    ) -> Result<
+        (),
+        aws_sdk_s3::error::SdkError<aws_sdk_s3::operation::delete_object::DeleteObjectError>,
+    > {
+        let cutoff = chrono::Utc::now() - age;
+        let mut deleted = 0usize;
+        for key in self.list_keys_under_prefix(prefix).await {
+            let last_modified = self
+                .stat(&key)
+                .await
+                .ok()
+                .and_then(|meta| meta.last_modified)
+                .map(|t| {
+                    let system_time: std::time::SystemTime =
+                        t.try_into().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                    chrono::DateTime::<chrono::Utc>::from(system_time)
+                });
+            if last_modified.map(|lm| lm < cutoff).unwrap_or(false) {
+                self.delete_quietly(&key).await;
+                deleted += 1;
+            }
+        }
+        tracing::info!(
+            "Deleted {deleted} stale exports older than {} days.",
+            age.num_days()
+        );
+        Ok(())
+    }
+
     /// Deletes silently on failure, exactly like deleteFile's catch-and-log.
     pub async fn delete_quietly(&self, object_path: &str) {
         match self

@@ -8,10 +8,11 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 
 # SESSION HANDOFF — read this first after any context loss
 
-> STATUS SNAPSHOT (2026-08-23): Phases 0–2 COMPLETE · Phase 3 started: SSE port landed ·
-> 51/71 API operations served (route parity 72%) · CI GREEN on GitHub Actions (ci-cargo.yml) ·
-> branch rust-backend pushed to BOTH remotes (`github` + `pi5`).
-> Next work item: Phase 3 step 2 — JobCoordinator core (see execution order below).
+> STATUS SNAPSHOT (2026-08-23): Phases 0–3 COMPLETE · **71/71 API operations served
+> (route parity 100%)** · CI GREEN on GitHub Actions (ci-cargo.yml) · branch rust-backend
+> pushed to BOTH remotes (`github` + `pi5`).
+> Next work item: Phase 4 — Parity & cutover (scenario coverage, E2E smoke, real worker
+> run, Dockerfile/compose swap, baselines). See execution order below.
 
 ## Mission
 
@@ -29,7 +30,8 @@ a branch, hard cutover at Phase 4.
 - Live stack runs via docker compose on the canonical dir: Postgres (**user is `tladmin`,
   NOT postgres** — see `.env`), Valkey :6379, MinIO (:9000 NOT published to host — tests use a
   throwaway `docker run -p 19000:9000 minio/minio server /data`), backend :8080 under `/tlhub`.
-- Secrets: `/home/sagnik/Projects/docker-composes/manga-library/secrets/*.txt`
+- Secrets live in the CANONICAL checkout only:
+  `/home/sagnik/Projects/docker-composes/manga-library/secrets/*.txt`
   (db_password.txt, jwt_secret.txt [64 bytes ⇒ HS512], internal_api_token.txt…).
 - Rust stable ≥1.98 via rustup; run `source "$HOME/.cargo/env"` in fresh shells.
 
@@ -37,7 +39,7 @@ a branch, hard cutover at Phase 4.
 
 ```bash
 cd /home/sagnik/Projects/docker-composes/manga-library-rust/backend-rust
-DBPW=$(cat ../secrets/db_password.txt)   # NOTE: ../secrets only exists from inside worktree/backend-rust
+DBPW=$(cat /home/sagnik/Projects/docker-composes/manga-library/secrets/db_password.txt)
 export SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5432/manga_library
 export SPRING_DATASOURCE_USERNAME=tladmin SPRING_DATASOURCE_PASSWORD="$DBPW"
 export REDIS_TEST_ADDR=127.0.0.1:6379
@@ -120,52 +122,24 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 | `error.rs` | RFC-7807 problem+json builders + Boot no-timestamp variants |
 | `auth.rs` | AuthUser/MaybeAuthUser extractors, security-403 shape, internal-token guard |
 | `jwt.rs`, `password.rs` | jjwt-parity JWTs (length-based HMAC); bcrypt `$2a$10` |
-| `minio.rs`, `redis_service.rs` | S3 ops (+presign); queues/pub-sub over ConnectionManager |
+| `minio.rs`, `redis_service.rs` | S3 ops (+presign, prefix deletes); queues/pub-sub over ConnectionManager |
 | `sse.rs` | SseService + SseTicketService port: per-user emitters, single-use tickets, replay, heartbeat |
+| `providers.rs` | ProviderConfigCache: Redis catalog blob → validity checks for model resolution |
+| `jobs/` | coordinator (pipeline + callbacks), dispatcher (worker fan-out), recovery (sweeps) |
+| `export.rs`, `clone.rs`, `archive.rs` | chapter export ZIPs, duplicate-image OCR/TL cloning, archive read/write |
 | `thumbnails.rs` | WebP width-512 q85 pipeline (vendored libwebp, no JNI) |
 | `resolve.rs`, `settings.rs` | override chain (pure); system_settings pair + env defaults |
 | `routes/mod.rs` | router assembly, CONTEXT_PATH nest, CatchPanic, SPA fallback |
 | `routes/{auth,series,page,layers,layers_ops,jobs,settings}.rs` | Phase-2 controllers |
-| `routes/notifications.rs` | POST /ticket + GET /stream (Phase 3) |
+| `routes/{notifications,internal}.rs` | SSE handshake + worker-facing internal API (Phase 3) |
 | `spec/golden-openapi.json` | THE frozen contract (71 ops); `golden-routes.txt` inventory |
-| `tests/` | db_entities, auth_middleware, auth_endpoints, series_endpoints, pages_endpoints, minio_service, redis_service, java_compat, sse_endpoints |
+| `tests/` | db_entities, auth_middleware, auth_endpoints, series_endpoints, pages_endpoints, minio_service, redis_service, java_compat, sse_endpoints, internal_endpoints, import_export_endpoints |
 
-## Phase 3 execution order (CURRENT PHASE)
+## Phase 3 execution order (COMPLETE — kept for reference)
 
-The remaining 22 golden-spec operations are exactly the job-pipeline surface:
-
-| Group | Routes | Java source to read first |
-|---|---|---|
-| Internal worker API | GET/HEAD `/api/internal/images/{id}`, POST `qa-hybrid-prepare`, PATCH `jobs/{id}/status`, GET `jobs/{jobId}`, 7 callbacks (`panel` `ocr` `layout` `translation` `qa` `qa-re-ocr` `render`) | `InternalJobController.java` (759 ln) |
-| Redo triggers | POST `/api/images/{imageId}/redo`, POST `/api/ocr-regions/{id}/redo` | JobCoordinatorService L1576–1728 |
-| Import | POST `/api/series/{id}/chapters/import`, POST `/api/chapters/{id}/import-project`, ZIP/ePub branches inside `POST /api/images` | SeriesController L576+, PageController L243–625 |
-| Export | GET `/api/series/chapters/{id}/export`, DELETE `.../exports`, GET `exports/{exportId}/download` | `ChapterExportService.java` (444 ln) |
-| Realtime | GET `/api/notifications/stream` (SSE), POST `/api/notifications/ticket` | `SseService.java` (392 ln), `SseTicketService`, SecurityConfig SSE notes |
-
-Recommended build order (each step compiles+tests+commits before the next):
-
-1. **SseService port** (`src/sse.rs`) — ✅ DONE (see Phase-3 checklist). Everything
-   downstream emits through it, so its two routes are live and `emit_event_for_image`,
-   `emit_notification_for_image`, `emit_event_to_all_users` are ready for the steps below.
-2. **JobCoordinator core** (`src/jobs/coordinator.rs`): startPipeline/enqueueDirectly,
-   payload construction (READ `enqueueJobDirectly` carefully — it is the AUTHORITY for
-   model resolution task keys: ocr/tl/qaLLM/qaVLM), push-to-queue (RedisService exists),
-   trace-key TTL semantics, `claimCallback` idempotency guard (AUDIT-P4/P5).
-   resolveModel/resolveWithCheck already live in `src/resolve.rs`.
-3. **Startup recovery**: `resetProcessingJobsToPending`, `recoverStaleProcessingJobs`
-   (10-min staleness sweep), `requeuePendingJobs` — as tokio interval tasks replacing
-   Spring's @Scheduled pool (compose env SCHEDULING_POOL_SIZE is then obsolete).
-4. **WorkerDispatcherService** port — dispatch loop popping queue:* to worker URLs with
-   health gating + re-push-on-failure (WorkerDispatcherService.java, 425 ln).
-5. **InternalJobController routes** + callback handlers one at a time (panel -> ocr ->
-   layout -> translation -> qa -> qa-re-ocr -> render), each with a live-DB test driving
-   the same JSON the real worker sends. Transaction parity rule: DB writes commit BEFORE
-   Redis/SSE fan-out (Java used afterCommit hooks; sequence explicitly here).
-6. **ProviderConfigCache** (config/providers.json + worker-published Redis blob) ->
-   wire into resolve_model_with_check (currently permissive) + Settings activeProviders.
-7. **Import/export quartet + ZIP upload branches + redo endpoints**, now that pipeline
-   calls exist. DebouncedRenderService + ExportCleanupService + CostEstimationService
-   alongside. Then flip diff_routes.py PORTED set to ALL and require exact equality.
+All seven steps landed across commits `0f0717d` (SSE) → `e7982c0` (pipeline core) →
+Phase-3 completion commit (import/export + provider cache). diff_routes.py PORTED set
+is ALL and requires exact equality going forward.
 
 Transaction-boundary rules for every handler above (from Java audit comments):
 * Publish-to-Redis strictly AFTER the DB tx commits (afterCommit hook parity).
@@ -263,26 +237,40 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
 - [x] Pagination semantics identical (defaults 10/15/25, clamp at max-page-size 100,
       sort whitelists, asc/desc steering the SQL)
 
-## Phase 3 — Jobs & realtime (the hard core)
+## Phase 3 — Jobs & realtime ✅ COMPLETE (71/71 ops)
 
-- [ ] `InternalJobController` — worker-facing callbacks (panel/ocr/layout/translation/qa/
-      qa-re-ocr/render), internal image endpoints, job status PATCH
-- [ ] `JobCoordinatorService` port (~2.3k lines): pipeline orchestration, model resolution
-      (override chain chapter→series→global), callback state machine, cost recording
-- [ ] Transaction-boundary parity: publish-to-Redis strictly after DB commit (Java `afterCommit`)
-- [ ] `WorkerDispatcherService` — dispatch loop, stale-job recovery, startup reset of PROCESSING jobs
-- [ ] Redis pub/sub subscriber → `ProviderConfigCache` invalidation
+- [x] `InternalJobController` — worker-facing callbacks (panel/ocr/layout/translation/qa/
+      qa-re-ocr/render), internal image endpoints (GET + HEAD existence check), job status
+      PATCH with JobStatus vocabulary validation, region callback, qa-hybrid-prepare;
+      X-Internal-Token guard on every route (`routes/internal.rs`)
+- [x] `JobCoordinatorService` port (`jobs/coordinator.rs`): startPipeline/enqueueDirectly
+      payload construction (task keys ocr/tl/qaLLM/qaVLM), QA-mode auto/vlm/llm fallback,
+      useFallbackModels chain, claimCallback idempotency (AUDIT-P4/P5), trace-key 12h TTL
+      refreshed per hand-off (AUDIT-P8), reader-mode short-circuit, translation layer
+      geometry (bubble inset / free-text reshape), QA verdict state machine with per-page
+      retry budget, cost recording, redo triggers w/ reason keys
+- [x] Transaction-boundary parity: SSE inside the "transaction", Redis push strictly after
+      commit (Java afterCommit) — see enqueue_job_directly/push_persisted_job_if_queue_running
+- [x] `WorkerDispatcherService` (`jobs/dispatcher.rs`) — heavy/light slot gating via
+      /capabilities, 429 exponential cooldown (10s base, 60s cap), permanent-rejection
+      FAILED marking (AUDIT-P2), AUDIT-P3 queue-local backoff, started_at stamping
+- [x] Startup recovery (`jobs/recovery.rs`) — PROCESSING→PENDING reset at boot, 10-min
+      stale sweep (5-min cadence), requeuePendingJobs unless paused; DebouncedRenderService
+      as a 5s loop; all replacing Spring's @Scheduled pool
+- [x] `ProviderConfigCache` (`providers.rs`) — Redis blob parse, pub/sub reload listener in
+      main.rs, wired into resolve_model_with_check + Settings activeProviders/
+      providerModelsMap/localOcrModel + real validateOverrides (DEPRECATED entries)
 - [x] `SseService` — per-user emitters, ticket auth (`POST /api/notifications/ticket`),
-      missed-event replay, heartbeat. Ported as `src/sse.rs` + `routes/notifications.rs`:
-      channel-per-connection registry with a lifecycle actor (session-expired push at the
-      JWT's exp, Spring's 1h emitter timeout via sleep, disconnect detection via
-      `Sender::closed()`), RENAME-drain replay with tail-only requeue, 15s keep-alive.
-      Both auth paths kept: `?ticket=` GETDEL redemption AND plain Authorization header;
-      everything else is the security 403 shape. Fixed a latent contract bug found by the
-      new tests: security-403 `path` now reports the FULL request path on nested routes
-      (OriginalUri). 5 unit + 10 env-gated integration tests green.
-- [ ] `DebouncedRenderService`, `ExportCleanupService`, `ChapterExportService`,
-      `CostEstimationService`, `SystemSettingsService` cache semantics
+      missed-event replay, heartbeat (see its own entry above)
+- [x] Import/export: chapter ZIP import (dup-image cloning incl. config comparison +
+      OCR/TL reuse), project restore via POST /api/chapters/{id}/import-project and the
+      ZIP/ePub branches of POST /api/images, export trio (202 build job, GONE download,
+      clear), ChapterExportService port (`export.rs`) + daily cleanup loops.
+      CostEstimationService deliberately NOT ported: it has zero callers in the Java tree
+      (costs arrive from the worker); ModelRate table stays untouched for Grafana.
+
+Route parity: **71/71** (`scripts/diff_routes.py`). New deps: reqwest (dispatcher),
+zip (archives), hex, base64.
 
 ## Phase 4 — Parity & cutover
 

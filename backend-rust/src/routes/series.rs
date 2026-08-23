@@ -17,8 +17,8 @@
 //!   (never coupled to provider choice); local OCR model comes from settings.localOcrModel;
 //!   source label from ANY overridden field at that level.
 
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::extract::{Multipart, Path, Query, State};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -898,4 +898,371 @@ pub fn router() -> Router<AppState> {
             "/chapters/{chapterId}",
             get(get_chapter).put(update_chapter).delete(delete_chapter),
         )
+        .route("/{seriesId}/chapters/import", post(import_chapter))
+        .route("/chapters/{chapterId}/export", get(export_chapter))
+        .route(
+            "/chapters/{chapterId}/exports",
+            axum::routing::delete(clear_exports),
+        )
+        .route(
+            "/chapters/exports/{exportId}/download",
+            get(download_export),
+        )
+}
+
+// ---------------------------------------------------------------------------
+// Chapter import + export (Phase 3)
+// ---------------------------------------------------------------------------
+
+struct ImportFields {
+    chapter_number: Option<f64>,
+    title: Option<String>,
+    ocr_provider: Option<String>,
+    ocr_model: Option<String>,
+    tl_provider: Option<String>,
+    tl_model: Option<String>,
+    qa_provider: Option<String>,
+    qa_llm_model: Option<String>,
+    qa_vlm_model: Option<String>,
+    qa_mode: Option<String>,
+    routing_strategy: Option<String>,
+    use_fallback_models: Option<bool>,
+    file: Option<(String, Vec<u8>)>,
+}
+
+/// POST /api/series/{seriesId}/chapters/import — ZIP of images becomes a new chapter;
+/// duplicates reuse existing images (cloning pipeline data), fresh ones enter the pipeline.
+pub async fn import_chapter(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(series_id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Response {
+    let mut fields = ImportFields {
+        chapter_number: None,
+        title: None,
+        ocr_provider: None,
+        ocr_model: None,
+        tl_provider: None,
+        tl_model: None,
+        qa_provider: None,
+        qa_llm_model: None,
+        qa_vlm_model: None,
+        qa_mode: None,
+        routing_strategy: None,
+        use_fallback_models: None,
+        file: None,
+    };
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "file" => {
+                let filename = field.file_name().unwrap_or("import.zip").to_string();
+                let mut bytes = Vec::new();
+                use futures_util::StreamExt;
+                while let Some(chunk) = field.next().await {
+                    match chunk {
+                        Ok(data) => bytes.extend_from_slice(&data),
+                        Err(_) => break,
+                    }
+                }
+                fields.file = Some((filename, bytes));
+            }
+            "chapterNumber" => {
+                fields.chapter_number = read_text(field).await.and_then(|v| v.parse().ok());
+            }
+            "title" => fields.title = read_text(field).await,
+            "useFallbackModels" => {
+                fields.use_fallback_models = read_text(field).await.map(|v| v == "true");
+            }
+            "ocrProvider" => fields.ocr_provider = read_text(field).await,
+            "ocrModel" => fields.ocr_model = read_text(field).await,
+            "tlProvider" => fields.tl_provider = read_text(field).await,
+            "tlModel" => fields.tl_model = read_text(field).await,
+            "qaProvider" => fields.qa_provider = read_text(field).await,
+            "qaLlmModel" => fields.qa_llm_model = read_text(field).await,
+            "qaVlmModel" => fields.qa_vlm_model = read_text(field).await,
+            "qaMode" => fields.qa_mode = read_text(field).await,
+            "routingStrategy" => fields.routing_strategy = read_text(field).await,
+            _ => {}
+        }
+    }
+
+    let Some(chapter_number) = fields.chapter_number else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"message": "chapterNumber is required"})),
+        )
+            .into_response();
+    };
+    let Some(title) = fields.title.clone() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"message": "title is required"})),
+        )
+            .into_response();
+    };
+    let Some((_, archive_bytes)) = fields.file.take() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"message": "file is required"})),
+        )
+            .into_response();
+    };
+
+    tracing::info!("Importing chapter {title} (num={chapter_number}) for series {series_id}");
+
+    // Series must exist.
+    let Some(_series) = find_series(&state.pool, series_id).await else {
+        return not_found_series(series_id, "/api/series");
+    };
+
+    // Duplicate chapter number → 409 with the exact message shape.
+    let dup_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM chapters WHERE series_id=$1 AND chapter_number=$2)",
+    )
+    .bind(series_id)
+    .bind(chapter_number)
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or(false);
+    if dup_exists {
+        return (
+            axum::http::StatusCode::CONFLICT,
+            Json(json!({ "message": format!("Chapter {chapter_number} already exists in this series.") })),
+        )
+            .into_response();
+    }
+
+    // Read the archive BEFORE creating the chapter row (Java deleted the chapter when
+    // the archive had no images; we simply refuse earlier).
+    let contents = match crate::archive::read_archive(&archive_bytes) {
+        Ok(c) => c,
+        Err(message) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "message": message })),
+            )
+                .into_response();
+        }
+    };
+    if contents.images_sorted.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "message": "Archive contains no valid image files." })),
+        )
+            .into_response();
+    }
+
+    // Create the chapter with resolved overrides.
+    let chapter_id = Uuid::new_v4();
+    let result = sqlx::query(
+        "INSERT INTO chapters (id, chapter_number, title, created_at, updated_at, \
+         ocr_provider, ocr_model, tl_provider, tl_model, qa_provider, qa_llm_model, qa_vlm_model, qa_mode, \
+         routing_strategy, use_fallback_models, use_context_memory, series_id) \
+         VALUES ($1,$2,$3,now(),now(),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,TRUE,$14)",
+    )
+    .bind(chapter_id)
+    .bind(chapter_number)
+    .bind(&title)
+    .bind(resolve_setting(&fields.ocr_provider))
+    .bind(resolve_setting(&fields.ocr_model))
+    .bind(resolve_setting(&fields.tl_provider))
+    .bind(resolve_setting(&fields.tl_model))
+    .bind(resolve_setting(&fields.qa_provider))
+    .bind(resolve_setting(&fields.qa_llm_model))
+    .bind(resolve_setting(&fields.qa_vlm_model))
+    .bind(resolve_setting(&fields.qa_mode))
+    .bind(resolve_setting(&fields.routing_strategy))
+    .bind(fields.use_fallback_models)
+    .bind(series_id)
+    .execute(&state.pool)
+    .await;
+
+    if result.is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "message": "failed to create chapter" })),
+        )
+            .into_response();
+    }
+    let Some(chapter) = find_chapter(&state.pool, chapter_id).await else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "message": "chapter vanished after insert" })),
+        )
+            .into_response();
+    };
+
+    let mut page_number = 1i32;
+    for (entry_name, bytes) in &contents.images_sorted {
+        let file_hash = {
+            use sha2::Digest;
+            let digest = sha2::Sha256::digest(bytes);
+            hex::encode(digest)
+        };
+
+        // Duplicate image? Attach it and clone pipeline data where configs allow.
+        let existing: Option<crate::models::Image> =
+            sqlx::query_as("SELECT * FROM images WHERE hash = $1 LIMIT 1")
+                .bind(&file_hash)
+                .fetch_optional(&state.pool)
+                .await
+                .unwrap_or(None);
+
+        if let Some(existing_image) = existing {
+            let page = crate::clone::create_page_with_existing_image(
+                &state.pool,
+                &chapter,
+                existing_image.id,
+                page_number,
+            )
+            .await;
+            crate::clone::handle_duplicate_image_cloning(
+                &state,
+                page.id,
+                existing_image.id,
+                &chapter,
+            )
+            .await;
+            page_number += 1;
+            continue;
+        }
+
+        let extension = crate::routes::page::file_extension_of(Some(entry_name));
+        let uuid = Uuid::new_v4();
+        let storage_path = format!("originals/{uuid}{extension}");
+        let content_type = crate::routes::page::content_type_by_extension(&storage_path);
+        if state
+            .storage
+            .upload_bytes(&storage_path, bytes.clone(), content_type)
+            .await
+            .is_err()
+        {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "message": format!("upload failed for {entry_name}") })),
+            )
+                .into_response();
+        }
+
+        let image =
+            crate::clone::create_image(&state.pool, entry_name, &storage_path, &file_hash, None)
+                .await;
+        let page = crate::clone::create_page_with_existing_image(
+            &state.pool,
+            &chapter,
+            image.id,
+            page_number,
+        )
+        .await;
+        // Thumbnails generate synchronously here (documented Phase-2 deviation).
+        crate::routes::page::generate_thumbnail_pub(&state.storage, &state.pool, image.id, bytes)
+            .await;
+        crate::jobs::coordinator::start_pipeline(&state, image.id, Some(page.id), Some(chapter.id))
+            .await;
+        page_number += 1;
+    }
+
+    let dto = build_chapter_dto(&state, &chapter).await;
+    Json(dto).into_response()
+}
+
+async fn read_text(field: axum::extract::multipart::Field<'_>) -> Option<String> {
+    let bytes = field.bytes().await.ok()?;
+    String::from_utf8(bytes.to_vec()).ok()
+}
+
+/// GET /api/series/chapters/{chapterId}/export — accepts the job, builds in background.
+pub async fn export_chapter(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(chapter_id): Path<Uuid>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    // Chapter must exist (404 otherwise).
+    if find_chapter(&state.pool, chapter_id).await.is_none() {
+        return error::not_found(
+            &format!("Chapter not found: {chapter_id}"),
+            "/api/series/chapters/{chapterId}/export",
+        );
+    }
+
+    let pages_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pages WHERE chapter_id = $1")
+        .bind(chapter_id)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(0);
+    if pages_count == 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "message": "No pages in chapter" })),
+        )
+            .into_response();
+    }
+
+    let force = params.get("force").map(|v| v == "true").unwrap_or(false);
+    // NOTE: like Java, the response's exportId is a RANDOM id; the real cache key is the
+    // content hash carried in the SSE notification's context.exportId.
+    let export_id = Uuid::new_v4();
+
+    tokio::spawn(async move {
+        crate::export::build_and_upload_export(state, chapter_id, Some(user.id), force).await;
+    });
+
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({
+            "status": "accepted",
+            "exportId": export_id.to_string(),
+            "message": "Export started in the background. You will be notified when it is ready.",
+        })),
+    )
+        .into_response()
+}
+
+/// DELETE /api/series/chapters/{chapterId}/exports
+pub async fn clear_exports(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(chapter_id): Path<Uuid>,
+) -> Response {
+    crate::export::clear_chapter_exports(&state, chapter_id).await;
+    Json(json!({ "message": "Cleared exports for chapter" })).into_response()
+}
+
+/// GET /api/series/chapters/exports/{exportId}/download
+pub async fn download_export(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(export_id): Path<String>,
+) -> Response {
+    let key = format!("exports/{export_id}.zip");
+    if !state.storage.file_exists(&key).await {
+        return (
+            StatusCode::GONE,
+            Json(json!({ "message": "Export expired, please re-export to download." })),
+        )
+            .into_response();
+    }
+
+    match state.storage.download_bytes(&key).await {
+        Some(bytes) => {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                header::CONTENT_DISPOSITION,
+                header::HeaderValue::from_str(&format!(
+                    "attachment; filename=export_{export_id}.zip"
+                ))
+                .unwrap_or(header::HeaderValue::from_static("attachment")),
+            );
+            headers.insert(
+                header::CONTENT_TYPE,
+                header::HeaderValue::from_static("application/zip"),
+            );
+            (StatusCode::OK, headers, bytes).into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }

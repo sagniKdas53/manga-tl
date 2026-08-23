@@ -12,11 +12,9 @@ from pathlib import Path
 GOLDEN = Path(__file__).parent.parent / "backend-rust" / "spec" / "golden-routes.txt"
 
 # "METHOD path" entries the Rust backend serves today (keep in sync with src/routes/).
+# Actuator health endpoints are served too but are NOT part of the OpenAPI contract:
+# GET /actuator/health[/liveness|/readiness] — byte-compatible {"status":"UP"}.
 PORTED = {
-    # health (actuator paths are not part of the OpenAPI spec)
-    "GET /actuator/health",
-    "GET /actuator/health/liveness",
-    "GET /actuator/health/readiness",
     # auth (Phase 2)
     "GET /api/auth/setup-required",
     "POST /api/auth/register",
@@ -81,6 +79,12 @@ PORTED = {
     "POST /api/internal/ocr-regions/{id}/callback",
     "POST /api/images/{imageId}/redo",
     "POST /api/ocr-regions/{id}/redo",
+    # import/export (Phase 3 completion)
+    "POST /api/series/{seriesId}/chapters/import",
+    "POST /api/chapters/{chapterId}/import-project",
+    "GET /api/series/chapters/{chapterId}/export",
+    "DELETE /api/series/chapters/{chapterId}/exports",
+    "GET /api/series/chapters/exports/{exportId}/download",
     "GET /api/jobs",
     "POST /api/jobs/pause",
     "POST /api/jobs/resume",
@@ -102,15 +106,8 @@ def main() -> int:
         path = rest.split()[0] if " " in rest else rest
         golden.add(f"{method} {path}")
 
-    drift = sorted(
-        PORTED
-        - golden
-        - {
-            "GET /actuator/health",
-            "GET /actuator/health/liveness",
-            "GET /actuator/health/readiness",
-        }
-    )
+    # Phase 3 complete: the ported surface must equal the golden contract exactly.
+    drift = sorted(PORTED - golden)
     if drift:
         print("CONTRACT DRIFT — ported routes missing from golden spec:")
         for route in drift:

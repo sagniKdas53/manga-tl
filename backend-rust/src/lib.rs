@@ -4,10 +4,13 @@
 //! `tests/` import everything here — the same reason Spring apps keep logic out
 //! of the application class.
 
+pub mod archive;
 pub mod auth;
+pub mod clone;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod export;
 pub mod jobs;
 pub mod jwt;
 pub mod minio;

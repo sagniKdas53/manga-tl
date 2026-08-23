@@ -96,6 +96,7 @@ async fn main() {
 
     // The @Scheduled pool: stale sweep (5 min), debounced renders (5 s), dispatcher.
     manga_backend::jobs::spawn_scheduled_tasks(&state);
+    manga_backend::jobs::spawn_export_cleanup(&state);
 
     // Initial load of the worker-published provider catalog.
     if let Some(redis) = &state.redis {

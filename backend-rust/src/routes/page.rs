@@ -126,6 +126,10 @@ fn magic_is_bmp(b: &[u8]) -> bool {
 }
 
 /// Extension from filename, lowercased with leading dot; empty when none.
+pub fn file_extension_of(filename: Option<&str>) -> String {
+    file_extension(filename)
+}
+
 fn file_extension(filename: Option<&str>) -> String {
     let Some(name) = filename else {
         return String::new();
@@ -182,7 +186,7 @@ fn validate_and_process_image_bytes(
     })
 }
 
-fn content_type_by_extension(path: &str) -> &'static str {
+pub fn content_type_by_extension(path: &str) -> &'static str {
     let lower = path.to_lowercase();
     if lower.ends_with(".png") {
         "image/png"
@@ -333,6 +337,16 @@ async fn insert_page(
 
 /// Java generated thumbnails on an async executor; we do it inline before responding.
 /// Same end state (thumbnail_storage_path set + object uploaded).
+/// Public wrapper for the import path (chapter ZIP import reuses the pipeline).
+pub async fn generate_thumbnail_pub(
+    storage: &MinioService,
+    pool: &sqlx::PgPool,
+    image_id: Uuid,
+    original_bytes: &[u8],
+) {
+    generate_thumbnail(storage, pool, image_id, original_bytes).await;
+}
+
 async fn generate_thumbnail(
     storage: &MinioService,
     pool: &sqlx::PgPool,
@@ -418,16 +432,16 @@ pub async fn upload_page(
 
     let lower_name = filename.to_lowercase();
     if lower_name.ends_with(".zip") || lower_name.ends_with(".epub") {
-        // Phase 3: ZIP/ePub import branches of uploadPage.
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(UploadResponse {
-                pageId: None,
-                imageId: None,
-                status: "error: zip uploads deferred until the Rust job pipeline lands".into(),
-            }),
+        return upload_zip_archive(
+            &state,
+            &chapter,
+            user.id,
+            page_number,
+            chapter_id,
+            &filename,
+            bytes,
         )
-            .into_response();
+        .await;
     }
 
     // --- standard single image upload ---
@@ -475,7 +489,12 @@ pub async fn upload_page(
         // Append at max+1 (Java's duplicate-upload behavior).
         let safe = max_page_number(&state.pool, chapter.id).await + 1;
         let page = insert_page_no_shift(&state.pool, &chapter, existing_image.id, safe).await;
-        // Phase 3: handleDuplicateImageCloning + sseService.mapImageToUser land here.
+        crate::clone::handle_duplicate_image_cloning(&state, page.id, existing_image.id, &chapter)
+            .await;
+        state
+            .sse
+            .map_image_to_user(existing_image.id, user.id)
+            .await;
 
         return Json(UploadResponse {
             pageId: Some(page.id),
@@ -509,7 +528,10 @@ pub async fn upload_page(
     let page = insert_page(&state.pool, &chapter, image.id, page_number).await;
     generate_thumbnail(&state.storage, &state.pool, image.id, &processed.bytes).await;
 
-    // Phase 3: startPipeline + sse mapImageToUser fire here.
+    // Pipeline entry (Java uploadPage): fresh images go through panel detection.
+    crate::jobs::coordinator::start_pipeline(&state, image.id, Some(page.id), Some(chapter_id))
+        .await;
+    state.sse.map_image_to_user(image.id, user.id).await;
 
     Json(UploadResponse {
         pageId: Some(page.id),
@@ -1314,4 +1336,743 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(redo_ocr_region),
         )
         .route("/images/{imageId}/redo", axum::routing::post(redo_image))
+        .route(
+            "/chapters/{chapterId}/import-project",
+            axum::routing::post(import_project),
+        )
+}
+
+// ---------------------------------------------------------------------------
+// ZIP/ePub upload branches + project import (Phase 3)
+// ---------------------------------------------------------------------------
+
+/// The two archive branches of Java's uploadPage:
+///   * Case A — a page-level project restore (`project.json` present): restores the
+///     original image, layers and elements onto the slot's page.
+///   * Case B — a plain image archive: every image becomes a page in the chapter.
+pub async fn upload_zip_archive(
+    state: &AppState,
+    chapter: &Chapter,
+    user_id: Uuid,
+    page_number: Option<i32>,
+    chapter_id: Uuid,
+    _filename: &str,
+    bytes: Vec<u8>,
+) -> Response {
+    let contents = match crate::archive::read_archive(&bytes) {
+        Ok(c) => c,
+        Err(message) => {
+            return zip_error(format!("error: {message}"));
+        }
+    };
+
+    // pageNumber semantics match the single-image path: default max+1.
+    // pageNumber semantics match the single-image path: default max+1.
+    let requested = match page_number {
+        Some(n) => n,
+        None => max_page_number(&state.pool, chapter_id).await + 1,
+    };
+
+    match contents.project_json {
+        Some(project_bytes) => {
+            // ---- Case A: page-level project ZIP restore ----
+            let Some((original_name, original_bytes)) = contents.original_image.clone() else {
+                return zip_error("error: project.json found but no image found in zip".into());
+            };
+
+            let processed = match validate_and_process_image_bytes(
+                Some(&original_name),
+                original_bytes.clone(),
+            ) {
+                Ok(p) => p,
+                Err(message) => return zip_error(message),
+            };
+            let file_hash = {
+                use sha2::Digest;
+                hex::encode(sha2::Sha256::digest(&processed.bytes))
+            };
+
+            let existing_page = page_at_slot(&state.pool, chapter_id, requested).await;
+            let existing_image_by_hash: Option<Image> =
+                sqlx::query_as("SELECT * FROM images WHERE hash = $1 LIMIT 1")
+                    .bind(&file_hash)
+                    .fetch_optional(&state.pool)
+                    .await
+                    .unwrap_or(None);
+
+            let page = match existing_page {
+                Some(existing_page) => {
+                    // Clear elements (+history) and layers, then maybe swap the image.
+                    clear_page_layers(&state.pool, existing_page.id).await;
+                    let old_image: Option<Image> =
+                        sqlx::query_as("SELECT * FROM images WHERE id = $1")
+                            .bind(existing_page.image_id)
+                            .fetch_optional(&state.pool)
+                            .await
+                            .unwrap_or(None);
+                    if old_image
+                        .map(|i| i.hash.as_deref() != Some(file_hash.as_str()))
+                        .unwrap_or(true)
+                    {
+                        let new_image_id = match existing_image_by_hash {
+                            Some(existing) => existing.id,
+                            None => {
+                                let ext = file_extension_of(Some(&original_name));
+                                let uuid = Uuid::new_v4();
+                                let storage_path = format!("originals/{uuid}{ext}");
+                                let content_type = content_type_by_extension(&storage_path);
+                                if state
+                                    .storage
+                                    .upload_bytes(
+                                        &storage_path,
+                                        processed.bytes.clone(),
+                                        content_type,
+                                    )
+                                    .await
+                                    .is_err()
+                                {
+                                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                                }
+                                let created = insert_image_public(
+                                    &state.pool,
+                                    &original_name,
+                                    &storage_path,
+                                    &file_hash,
+                                    Some(user_id),
+                                )
+                                .await;
+                                generate_thumbnail(
+                                    &state.storage,
+                                    &state.pool,
+                                    created.id,
+                                    &processed.bytes,
+                                )
+                                .await;
+                                created.id
+                            }
+                        };
+                        sqlx::query("UPDATE pages SET image_id=$2 WHERE id=$1")
+                            .bind(existing_page.id)
+                            .bind(new_image_id)
+                            .execute(&state.pool)
+                            .await
+                            .expect("page image swap");
+                        if existing_page.page_number == 1 {
+                            recalculate_chapter_cover(&state.pool, chapter_id).await;
+                        }
+                    }
+                    page_at_slot(&state.pool, chapter_id, existing_page.page_number)
+                        .await
+                        .unwrap_or(existing_page)
+                }
+                None => match existing_image_by_hash {
+                    Some(existing) => {
+                        crate::clone::create_page_with_existing_image(
+                            &state.pool,
+                            chapter,
+                            existing.id,
+                            requested,
+                        )
+                        .await
+                    }
+                    None => {
+                        let ext = file_extension_of(Some(&original_name));
+                        let uuid = Uuid::new_v4();
+                        let storage_path = format!("originals/{uuid}{ext}");
+                        let content_type = content_type_by_extension(&storage_path);
+                        if state
+                            .storage
+                            .upload_bytes(&storage_path, processed.bytes.clone(), content_type)
+                            .await
+                            .is_err()
+                        {
+                            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                        }
+                        let image = insert_image_public(
+                            &state.pool,
+                            &original_name,
+                            &storage_path,
+                            &file_hash,
+                            Some(user_id),
+                        )
+                        .await;
+                        generate_thumbnail(&state.storage, &state.pool, image.id, &processed.bytes)
+                            .await;
+                        crate::clone::create_page_with_existing_image(
+                            &state.pool,
+                            chapter,
+                            image.id,
+                            requested,
+                        )
+                        .await
+                    }
+                },
+            };
+
+            let restored = restore_project_layers(state, page.id, &project_bytes, false).await;
+            if restored.is_err() {
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+
+            Json(UploadResponse {
+                pageId: Some(page.id),
+                imageId: Some(page.image_id),
+                status: "imported".into(),
+            })
+            .into_response()
+        }
+        None => {
+            // ---- Case B: plain image archive ----
+            if contents.images_sorted.is_empty() {
+                return zip_error("error: zip contains no images".into());
+            }
+
+            let mut first_page: Option<Page> = None;
+            for (next_num, (entry_name, entry_bytes)) in
+                (requested..).zip(contents.images_sorted.iter())
+            {
+                let processed =
+                    match validate_and_process_image_bytes(Some(entry_name), entry_bytes.clone()) {
+                        Ok(p) => p,
+                        Err(message) => return zip_error(message),
+                    };
+                let file_hash = {
+                    use sha2::Digest;
+                    hex::encode(sha2::Sha256::digest(&processed.bytes))
+                };
+
+                let existing: Option<Image> =
+                    sqlx::query_as("SELECT * FROM images WHERE hash = $1 LIMIT 1")
+                        .bind(&file_hash)
+                        .fetch_optional(&state.pool)
+                        .await
+                        .unwrap_or(None);
+
+                let page = if let Some(existing_image) = existing {
+                    let pg = crate::clone::create_page_with_existing_image(
+                        &state.pool,
+                        chapter,
+                        existing_image.id,
+                        next_num,
+                    )
+                    .await;
+                    crate::clone::handle_duplicate_image_cloning(
+                        state,
+                        pg.id,
+                        existing_image.id,
+                        chapter,
+                    )
+                    .await;
+                    pg
+                } else {
+                    let uuid = Uuid::new_v4();
+                    let storage_path = format!("originals/{uuid}{}", processed.extension);
+                    let content_type = content_type_by_extension(&storage_path);
+                    if state
+                        .storage
+                        .upload_bytes(&storage_path, processed.bytes.clone(), content_type)
+                        .await
+                        .is_err()
+                    {
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                    let image = insert_image_public(
+                        &state.pool,
+                        &processed.filename,
+                        &storage_path,
+                        &file_hash,
+                        Some(user_id),
+                    )
+                    .await;
+                    generate_thumbnail(&state.storage, &state.pool, image.id, &processed.bytes)
+                        .await;
+                    let pg = crate::clone::create_page_with_existing_image(
+                        &state.pool,
+                        chapter,
+                        image.id,
+                        next_num,
+                    )
+                    .await;
+                    crate::jobs::coordinator::start_pipeline(
+                        state,
+                        image.id,
+                        Some(pg.id),
+                        Some(chapter_id),
+                    )
+                    .await;
+                    pg
+                };
+
+                if first_page.is_none() {
+                    first_page = Some(page);
+                }
+            }
+
+            match first_page {
+                Some(first) => Json(UploadResponse {
+                    pageId: Some(first.id),
+                    imageId: Some(first.image_id),
+                    status: "zip_imported".into(),
+                })
+                .into_response(),
+                None => zip_error("error: no pages were created".into()),
+            }
+        }
+    }
+}
+
+fn zip_error(status: String) -> Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(UploadResponse {
+            pageId: None,
+            imageId: None,
+            status,
+        }),
+    )
+        .into_response()
+}
+
+/// Removes a page's layer elements (+edit history) and layers before a project restore.
+async fn clear_page_layers(pool: &sqlx::PgPool, page_id: Uuid) {
+    sqlx::query(
+        "DELETE FROM layer_edit_history WHERE layer_element_id IN (\
+             SELECT le.id FROM layer_elements le JOIN layers l ON l.id = le.layer_id WHERE l.page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .ok();
+    sqlx::query(
+        "DELETE FROM layer_elements WHERE layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
+    )
+    .bind(page_id)
+    .execute(pool)
+    .await
+    .ok();
+    sqlx::query("DELETE FROM layers WHERE page_id = $1")
+        .bind(page_id)
+        .execute(pool)
+        .await
+        .ok();
+}
+
+pub async fn insert_image_public(
+    pool: &sqlx::PgPool,
+    filename: &str,
+    storage_path: &str,
+    hash: &str,
+    created_by: Option<Uuid>,
+) -> Image {
+    insert_image(pool, filename, storage_path, hash, created_by).await
+}
+
+/// Restores `layers`/`elements` from a project.json; returns counts on success.
+/// `track_manual_edits` stamps the image's last_edited_at when manual edits exist
+/// (the chapters/{id}/import-project behaviour).
+async fn restore_project_layers(
+    state: &AppState,
+    page_id: Uuid,
+    project_json: &[u8],
+    track_manual_edits: bool,
+) -> Result<(usize, usize), ()> {
+    let root: serde_json::Value = serde_json::from_slice(project_json).map_err(|_| ())?;
+    let layers_node = root
+        .get("layers")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut imported_layers = 0usize;
+    let mut imported_elements = 0usize;
+    let mut has_manual_edits = false;
+
+    for layer_node in &layers_node {
+        let ltype = layer_node
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("translation")
+            .to_string();
+        let target_language = layer_node
+            .get("targetLanguage")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let visible = !layer_node
+            .get("visible")
+            .map(|v| v.as_bool() == Some(false))
+            .unwrap_or(false);
+        let z_order = layer_node
+            .get("zOrder")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
+        let metadata_json = layer_node
+            .get("metadataJson")
+            .filter(|v| !v.is_null())
+            .cloned();
+
+        let layer_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,now())",
+        )
+        .bind(layer_id)
+        .bind(&ltype)
+        .bind(&target_language)
+        .bind(visible)
+        .bind(z_order)
+        .bind(&metadata_json)
+        .bind(page_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|_| ())?;
+        imported_layers += 1;
+
+        let elements = layer_node
+            .get("elements")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        for el in &elements {
+            let text = el
+                .get("text")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let font = el
+                .get("font")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Comic Neue")
+                .to_string();
+            let size = el.get("size").and_then(|v| v.as_f64()).unwrap_or(16.0);
+            let auto_size = !(el
+                .get("autoSize")
+                .map(|v| v.as_bool() == Some(false))
+                .unwrap_or(false));
+            let max_width = el.get("maxWidth").and_then(|v| v.as_i64()).unwrap_or(150) as i32;
+            let max_height = el.get("maxHeight").and_then(|v| v.as_i64()).unwrap_or(80) as i32;
+            let word_wrap = !(el
+                .get("wordWrap")
+                .map(|v| v.as_bool() == Some(false))
+                .unwrap_or(false));
+            let rotation = el.get("rotation").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let x = el.get("x").and_then(|v| v.as_f64()).unwrap_or(100.0);
+            let y = el.get("y").and_then(|v| v.as_f64()).unwrap_or(100.0);
+            let el_visible = !(el
+                .get("visible")
+                .map(|v| v.as_bool() == Some(false))
+                .unwrap_or(false));
+            let background_color = el
+                .get("backgroundColor")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let text_color = el
+                .get("textColor")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let font_weight = el
+                .get("fontWeight")
+                .and_then(|v| v.as_str())
+                .unwrap_or("normal")
+                .to_string();
+            let font_style = el
+                .get("fontStyle")
+                .and_then(|v| v.as_str())
+                .unwrap_or("normal")
+                .to_string();
+            let box_shape = el
+                .get("boxShape")
+                .and_then(|v| v.as_str())
+                .unwrap_or("rectangular")
+                .to_string();
+
+            // Only import-project tracks isManuallyEdited (the upload branch ignores it).
+            let is_manually_edited = if track_manual_edits {
+                el.get("isManuallyEdited")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+            if is_manually_edited {
+                has_manual_edits = true;
+            }
+
+            let mask_polygon = el.get("maskPolygon").filter(|v| !v.is_null()).map(|v| {
+                if v.is_object() || v.is_array() {
+                    v.to_string().into()
+                } else {
+                    v.clone()
+                }
+            });
+
+            let region_id = el
+                .get("regionId")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok());
+
+            sqlx::query(
+                "INSERT INTO layer_elements (id, text, font, size, auto_size, max_width, max_height, word_wrap, rotation, \
+                 x, y, visible, background_color, text_color, font_weight, font_style, box_shape, mask_polygon, \
+                 is_manually_edited, layer_id, region_id) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
+            )
+            .bind(Uuid::new_v4())
+            .bind(text)
+            .bind(font)
+            .bind(size)
+            .bind(auto_size)
+            .bind(max_width)
+            .bind(max_height)
+            .bind(word_wrap)
+            .bind(rotation)
+            .bind(x)
+            .bind(y)
+            .bind(el_visible)
+            .bind(background_color)
+            .bind(text_color)
+            .bind(font_weight)
+            .bind(font_style)
+            .bind(box_shape)
+            .bind(mask_polygon)
+            .bind(is_manually_edited)
+            .bind(layer_id)
+            .bind(region_id)
+            .execute(&state.pool)
+            .await
+            .map_err(|_| ())?;
+            imported_elements += 1;
+        }
+    }
+
+    if has_manual_edits && track_manual_edits {
+        let image_id: Option<Uuid> = sqlx::query_scalar("SELECT image_id FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+        if let Some(image_id) = image_id {
+            let _ = sqlx::query("UPDATE images SET last_edited_at = now() WHERE id = $1")
+                .bind(image_id)
+                .execute(&state.pool)
+                .await;
+        }
+    }
+
+    Ok((imported_layers, imported_elements))
+}
+
+/// POST /api/chapters/{chapterId}/import-project — restore a page-level project export
+/// onto the chapter's next slot (or replace the page already occupying it).
+pub async fn import_project(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(chapter_id): Path<Uuid>,
+    multipart: Multipart,
+) -> Response {
+    let mut multipart = multipart;
+
+    let Some(_chapter) = sqlx::query_as::<_, Chapter>("SELECT * FROM chapters WHERE id = $1")
+        .bind(chapter_id)
+        .fetch_optional(&state.pool)
+        .await
+        .unwrap_or(None)
+    else {
+        return error::not_found(
+            &format!("Chapter not found: {chapter_id}"),
+            "/api/chapters/{chapterId}/import-project",
+        );
+    };
+
+    let mut project_json: Option<Vec<u8>> = None;
+    let mut original: Option<(String, Vec<u8>)> = None;
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
+        if name != "file" {
+            continue;
+        }
+        let filename = field.file_name().unwrap_or("").to_string();
+        let mut bytes = Vec::new();
+        use futures_util::StreamExt;
+        while let Some(chunk) = field.next().await {
+            match chunk {
+                Ok(data) => bytes.extend_from_slice(&data),
+                Err(_) => break,
+            }
+        }
+        match crate::archive::read_archive(&bytes) {
+            Ok(contents) => {
+                project_json = contents.project_json;
+                original = contents.original_image;
+                let lower = filename.to_lowercase();
+                if project_json.is_none() && (lower.ends_with(".json")) {
+                    project_json = Some(bytes);
+                }
+            }
+            Err(err) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "message": err })),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    let Some(project_bytes) = project_json else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "message": "Invalid zip: project.json missing" })),
+        )
+            .into_response();
+    };
+
+    let page_count: i32 =
+        sqlx::query_scalar("SELECT COUNT(*)::int FROM pages WHERE chapter_id = $1")
+            .bind(chapter_id)
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or(0);
+    let page_number = page_count + 1;
+
+    // Slot occupied? Replace its contents; otherwise create a fresh page at that slot.
+    let existing_page = page_at_slot(&state.pool, chapter_id, page_number).await;
+    let page = match &existing_page {
+        Some(existing_page) => {
+            clear_page_layers(&state.pool, existing_page.id).await;
+            if let Some((original_name, original_bytes)) = original {
+                let file_hash = hex::encode(sha2::Sha256::digest(&original_bytes));
+                let old_hash_matches = sqlx::query_scalar::<_, Option<String>>(
+                    "SELECT hash FROM images WHERE id = $1",
+                )
+                .bind(existing_page.image_id)
+                .fetch_optional(&state.pool)
+                .await
+                .ok()
+                .flatten()
+                .flatten()
+                .map(|h| h == file_hash)
+                .unwrap_or(false);
+
+                if !old_hash_matches {
+                    let new_image_id = match sqlx::query_as::<_, Image>(
+                        "SELECT * FROM images WHERE hash = $1 LIMIT 1",
+                    )
+                    .bind(&file_hash)
+                    .fetch_optional(&state.pool)
+                    .await
+                    .unwrap_or(None)
+                    {
+                        Some(existing) => existing.id,
+                        None => {
+                            let ext = file_extension_of(Some(original_name.as_str()));
+                            let uuid = Uuid::new_v4();
+                            let storage_path = format!("originals/{uuid}{ext}");
+                            let content_type = content_type_by_extension(&storage_path);
+                            if state
+                                .storage
+                                .upload_bytes(&storage_path, original_bytes.clone(), content_type)
+                                .await
+                                .is_err()
+                            {
+                                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                            }
+                            let created = insert_image_public(
+                                &state.pool,
+                                original_name.as_str(),
+                                &storage_path,
+                                &file_hash,
+                                Some(user.id),
+                            )
+                            .await;
+                            generate_thumbnail(
+                                &state.storage,
+                                &state.pool,
+                                created.id,
+                                &original_bytes,
+                            )
+                            .await;
+                            created.id
+                        }
+                    };
+                    sqlx::query("UPDATE pages SET image_id=$2 WHERE id=$1")
+                        .bind(existing_page.id)
+                        .bind(new_image_id)
+                        .execute(&state.pool)
+                        .await
+                        .expect("image swap");
+                    if existing_page.page_number == 1 {
+                        recalculate_chapter_cover(&state.pool, chapter_id).await;
+                    }
+                }
+            }
+            page_at_slot(&state.pool, chapter_id, existing_page.page_number)
+                .await
+                .unwrap_or_else(|| existing_page.clone())
+        }
+        None => {
+            let Some((original_name, original_bytes)) = original else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "message": "original.png missing in zip" })),
+                )
+                    .into_response();
+            };
+            let file_hash = hex::encode(sha2::Sha256::digest(&original_bytes));
+            let ext = file_extension_of(Some(&original_name));
+            let uuid = Uuid::new_v4();
+            let storage_path = format!("originals/{uuid}{ext}");
+            let content_type = content_type_by_extension(&storage_path);
+            if state
+                .storage
+                .upload_bytes(&storage_path, original_bytes.clone(), content_type)
+                .await
+                .is_err()
+            {
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+            let image = insert_image_public(
+                &state.pool,
+                &original_name,
+                &storage_path,
+                &file_hash,
+                Some(user.id),
+            )
+            .await;
+            generate_thumbnail(&state.storage, &state.pool, image.id, &original_bytes).await;
+
+            // Always create a NEW image row for imports to prevent layer stacking.
+            let chapter: Chapter = sqlx::query_as("SELECT * FROM chapters WHERE id = $1")
+                .bind(chapter_id)
+                .fetch_one(&state.pool)
+                .await
+                .expect("chapter");
+            crate::clone::create_page_with_existing_image(
+                &state.pool,
+                &chapter,
+                image.id,
+                page_number,
+            )
+            .await
+        }
+    };
+
+    match restore_project_layers(&state, page.id, &project_bytes, true).await {
+        Ok((layers_count, elements_count)) => {
+            tracing::info!(
+                "Successfully imported project ZIP to chapter {chapter_id}: {layers_count} layers and {elements_count} elements imported."
+            );
+            Json(json!({
+                "status": "success",
+                "pageId": page.id.to_string(),
+            }))
+            .into_response()
+        }
+        Err(()) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "message": "failed to restore project layers" })),
+        )
+            .into_response(),
+    }
 }
