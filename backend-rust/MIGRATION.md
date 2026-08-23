@@ -88,10 +88,26 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 
 ## Phase 2 execution order (current phase)
 
-error.rs (problem+json) → routes/auth.rs (7 endpoints) → route-table contract test vs
-golden-routes.txt → SeriesController port → PageController (uploads/streaming/thumbnails) →
-Layer/OcrRegion → Settings → Job → Forward. utoipa spec generation lands alongside; CI diff
-against golden spec gates each controller merge.
+DONE: error.rs (problem+json) ✅ · routes/auth.rs all 7 endpoints ✅ · scripts/diff_routes.py
+contract gate in CI ✅ (8/71 operations at last count).
+
+NEXT — SeriesController (13 routes in golden spec). SCOPING ALREADY DONE, honor it:
+* Port FIRST: SystemSettingsService (src/settings.rs — system_settings table + defaults +
+  caching) because createSeries resolves every field via resolveSetting(), defaulting
+  targetLang=en origLang=ja.
+* ChapterDto carries resolvedOcr/resolvedTranslation/resolvedQa slots + resolvedUseFallbackModels
+  — these come from JobCoordinatorService.resolveModelWithCheck/resolveConfigForChapter
+  (override chain chapter→series→global-settings). That resolution logic must be ported as a
+  pure module BEFORE chapter list/create endpoints can match the contract.
+* coverImageUrl on both DTOs = MinIO presigned URL of cover image (10-min TTL, external-url
+  rewrite already implemented in minio.rs).
+* Pagination: Spring Pageable — ?page=&size= (defaults 10 series / 15 chapters), sortBy only
+  createdAt|updatedAt (fallback updatedAt), sortDir asc/desc; max-page-size 100 cap.
+  PagedResponse = {content[], page, size, totalElements, totalPages}.
+* DEFER to Phase 3 (job-pipeline entangled): POST /chapters/import, GET /chapters/{id}/export,
+  DELETE /exports, GET /exports/{id}/download, and handleDuplicateImageCloning.
+Then: PageController (uploads/streaming/thumbnails) → Layer/OcrRegion → Settings → Job →
+Forward. utoipa OpenAPI-doc generation deferred to cutover prep; route-table gate runs now.
 
 ---
 
