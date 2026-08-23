@@ -34,16 +34,31 @@ pub fn resolve_model(chapter: Option<&str>, series: Option<&str>, global: &str) 
     global.to_string()
 }
 
-/// With no provider catalog loaded, validation is permissive (Java parity pre-startup).
-/// Phase 3 will inject a validator here once ProviderConfigCache exists.
+/// resolveModelWithCheck: when the resolution left the global default, the provider
+/// catalog gets a veto — an override naming a model the provider no longer serves
+/// falls back to the global default (with a warning). An EMPTY cache is permissive.
 pub fn resolve_model_with_check(
+    state: &crate::state::AppState,
     chapter: Option<&str>,
     series: Option<&str>,
     global: &str,
-    _provider: &str,
-    _task: &str,
+    provider: &str,
+    task: &str,
 ) -> String {
-    resolve_model(chapter, series, global)
+    let resolved = resolve_model(chapter, series, global);
+    let overrode = resolved != global;
+    if overrode
+        && !provider.is_empty()
+        && !state
+            .providers
+            .is_valid_provider_model(provider, &resolved, task)
+    {
+        tracing::warn!(
+            "Resolved model '{resolved}' for task '{task}' under provider '{provider}' is no longer valid or available — falling back to global default '{global}'"
+        );
+        return global.to_string();
+    }
+    resolved
 }
 
 /// hasOverride(...) over any number of fields at one inheritance level.

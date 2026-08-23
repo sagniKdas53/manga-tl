@@ -85,6 +85,8 @@ pub struct GlobalSettings {
     pub qa_llm_model: String,
     pub qa_vlm_model: String,
     pub qa_mode: String,
+    /// Global routing strategy (system_settings row; env has no default for it).
+    pub routing_strategy: String,
     pub use_fallback_models: bool,
     /// ProviderConfigCache.getDefaultModel("local","ocr") once Phase 3 lands; until then
     /// only the PADDLEOCR_REC_MODEL fallback path exists (documented deviation).
@@ -155,6 +157,7 @@ pub async fn load_global_settings(pool: &PgPool, defaults: &PipelineDefaults) ->
             &effective(&defaults.qa_vlm_model, &defaults.qa_vlm_model_list),
         )
         .await,
+        routing_strategy: setting_value(pool, "routingStrategy", "lowest-cost").await,
         use_fallback_models: setting_value(pool, "useFallbackModels", "true").await == "true",
         local_ocr_model: defaults.paddle_rec_model.clone(),
     }

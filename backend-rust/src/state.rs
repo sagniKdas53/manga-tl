@@ -11,6 +11,7 @@ use sqlx::PgPool;
 use crate::config::Config;
 use crate::jwt::JwtUtils;
 use crate::minio::MinioService;
+use crate::providers::ProviderConfigCache;
 use crate::redis_service::RedisService;
 use crate::sse::SseService;
 
@@ -37,6 +38,9 @@ pub struct AppState {
     /// so call sites don't have to assemble it themselves.
     #[allow(dead_code)]
     pub sse: Arc<SseService>,
+    /// Worker-published provider/model catalog cache (Java ProviderConfigCache).
+    #[allow(dead_code)]
+    pub providers: Arc<ProviderConfigCache>,
 }
 
 impl AppState {
@@ -54,6 +58,7 @@ impl AppState {
             jwt: Arc::new(jwt),
             storage: Arc::new(storage),
             sse,
+            providers: Arc::new(ProviderConfigCache::new()),
             redis,
         }
     }

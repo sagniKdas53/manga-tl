@@ -86,10 +86,25 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    spawn_provider_config_listener(redis.as_ref().map(std::sync::Arc::clone));
 
     let state = AppState::new(config, pool, jwt, storage, redis);
-    let app = routes::build_router(state);
+    let app = routes::build_router(state.clone());
+
+    // ApplicationReadyEvent parity: reset orphaned PROCESSING jobs, then (unless the
+    // global pause gate is closed) requeue everything PENDING.
+    manga_backend::jobs::recovery::run_startup_recovery(state.clone()).await;
+
+    // The @Scheduled pool: stale sweep (5 min), debounced renders (5 s), dispatcher.
+    manga_backend::jobs::spawn_scheduled_tasks(&state);
+
+    // Initial load of the worker-published provider catalog.
+    if let Some(redis) = &state.redis {
+        state.providers.reload(redis).await;
+    }
+    spawn_provider_config_listener(
+        state.redis.as_ref().map(std::sync::Arc::clone),
+        std::sync::Arc::clone(&state.providers),
+    );
 
     // 0.0.0.0 = listen on all interfaces, same as Tomcat does inside its container.
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -168,21 +183,20 @@ async fn shutdown_signal() {
     tracing::info!("Shutdown signal received, draining connections...");
 }
 
-/// Subscribes to `provider:config:updated`. Phase 3 will invalidate ProviderConfigCache
-/// here; for now receipt is logged so the plumbing is observable end-to-end.
-fn spawn_provider_config_listener(redis: Option<std::sync::Arc<RedisService>>) {
+/// Subscribes to `provider:config:updated` and reloads the ProviderConfigCache on every
+/// message (Phase 3: the cache is live and feeds pipeline model resolution + settings).
+fn spawn_provider_config_listener(
+    redis: Option<std::sync::Arc<RedisService>>,
+    providers: std::sync::Arc<manga_backend::providers::ProviderConfigCache>,
+) {
     let Some(redis) = redis else { return };
     tokio::spawn(async move {
         loop {
             match redis.subscribe(PROVIDER_CONFIG_CHANNEL).await {
                 Ok(mut pubsub) => {
                     use futures_util::StreamExt;
-                    while let Some(message) = pubsub.on_message().next().await {
-                        let payload: String =
-                            message.get_payload().unwrap_or_else(|_| "<binary>".into());
-                        tracing::info!(
-                            "provider config update received on '{PROVIDER_CONFIG_CHANNEL}': {payload}"
-                        );
+                    while pubsub.on_message().next().await.is_some() {
+                        providers.reload(&redis).await;
                     }
                 }
                 Err(err) => {

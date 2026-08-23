@@ -8,7 +8,10 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use uuid::Uuid;
 
+use crate::auth::AuthUser;
 use crate::settings::{PipelineDefaults, load_global_settings, save_setting, setting_value};
 use crate::state::AppState;
 
@@ -47,12 +50,27 @@ async fn build_dto(state: &AppState) -> SystemSettingsDto {
         .map(|v| v == "true")
         .unwrap_or(false);
 
-    // activeProviders/activeOcrProviders come from the provider cache (Phase 3). Java
-    // seeds "local" into OCR providers unless disabled; mirror that much.
+    // Provider catalog from the worker-published cache. activeProviders = providers
+    // offering "tl"; OCR providers start with "local" (unless disabled), then every
+    // published ocr provider except local, deduplicated.
+    let active_providers = state.providers.get_providers_for_task("tl");
     let mut active_ocr_providers: Vec<String> = Vec::new();
     if !disable_local_ocr {
         active_ocr_providers.push("local".into());
     }
+    for provider in state.providers.get_providers_for_task("ocr") {
+        if provider != "local" && !active_ocr_providers.contains(&provider) {
+            active_ocr_providers.push(provider);
+        }
+    }
+
+    // Which local pair the UI shows as selected: worker-published default first,
+    // PADDLEOCR_REC_MODEL env fallback second.
+    let local_ocr_model = state
+        .providers
+        .get_default_model("local", "ocr")
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(global.local_ocr_model);
 
     SystemSettingsDto {
         ocrVlmModelList: defaults.ocr_model_list.clone(),
@@ -68,24 +86,25 @@ async fn build_dto(state: &AppState) -> SystemSettingsDto {
         qaLlmModel: global.qa_llm_model,
         qaVlmModel: global.qa_vlm_model,
         disableLocalOcr: disable_local_ocr,
-        localOcrModel: global.local_ocr_model,
+        localOcrModel: local_ocr_model,
         disableLocalLlm: disable_local_llm,
         qaMode: global.qa_mode,
         useFallbackModels: global.use_fallback_models,
-        activeProviders: Vec::new(), // Phase 3: worker-published catalog
-        activeOcrProviders: active_ocr_providers, // Phase 3 adds published providers
-        providerModelsMap: serde_json::json!({}),
+        activeProviders: active_providers,
+        activeOcrProviders: active_ocr_providers,
+        providerModelsMap: state.providers.get_provider_models_map(),
     }
 }
 
 /// GET /api/settings
-pub async fn get_settings(State(state): State<AppState>) -> Response {
+pub async fn get_settings(State(state): State<AppState>, _user: AuthUser) -> Response {
     Json(build_dto(&state).await).into_response()
 }
 
 /// PUT /api/settings — saves every non-null field, returns the refreshed view.
 pub async fn update_settings(
     State(state): State<AppState>,
+    _user: AuthUser,
     body: Result<Json<SystemSettingsDto>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
     let Ok(Json(dto)) = body else {
@@ -112,10 +131,110 @@ pub async fn update_settings(
     Json(build_dto(&state).await).into_response()
 }
 
-/// GET /api/settings/validate — {"orphaned": []} while no provider catalog is loaded.
-pub async fn validate_settings(State(state): State<AppState>) -> Response {
-    let _ = state;
-    Json(serde_json::json!({ "orphaned": [] })).into_response()
+/// GET /api/settings/validate — every chapter/series model override is checked against
+/// the provider catalog; overrides the provider no longer serves are reported DEPRECATED.
+pub async fn validate_settings(State(state): State<AppState>, _user: AuthUser) -> Response {
+    #[derive(sqlx::FromRow)]
+    struct OverrideRow {
+        entity_id: Uuid,
+        title: Option<String>,
+        chapter_number: Option<f64>,
+        ocr_model: Option<String>,
+        ocr_provider: Option<String>,
+        tl_model: Option<String>,
+        tl_provider: Option<String>,
+        qa_llm_model: Option<String>,
+        qa_provider: Option<String>,
+        qa_vlm_model: Option<String>,
+    }
+
+    let mut orphaned: Vec<serde_json::Value> = Vec::new();
+
+    // Java's fallback when an override has no provider of its own: the GLOBAL TL provider.
+    let global_tl_provider = setting_value(&state.pool, "tlProvider", "openrouter").await;
+
+    let mut check_row = |row: &OverrideRow, entity_type: &str, entity_name: String| {
+        let slots = [
+            (
+                "tlModel",
+                row.tl_model.as_deref(),
+                row.tl_provider.as_deref(),
+                "tl",
+            ),
+            (
+                "ocrModel",
+                row.ocr_model.as_deref(),
+                row.ocr_provider.as_deref(),
+                "ocr",
+            ),
+            (
+                "qaLlmModel",
+                row.qa_llm_model.as_deref(),
+                row.qa_provider.as_deref(),
+                "qaLLM",
+            ),
+            (
+                "qaVlmModel",
+                row.qa_vlm_model.as_deref(),
+                row.qa_provider.as_deref(),
+                "qaVLM",
+            ),
+        ];
+        for (field, model, provider, task) in slots {
+            let Some(model_val) = model
+                .map(str::trim)
+                .filter(|m| !m.is_empty() && *m != "inherit" && *m != "default")
+            else {
+                continue;
+            };
+            let prov = provider
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+                .unwrap_or(&global_tl_provider);
+            if !state
+                .providers
+                .is_valid_provider_model(prov, model_val, task)
+            {
+                orphaned.push(json!({
+                    "entityType": entity_type,
+                    "entityId": row.entity_id.to_string(),
+                    "entityName": entity_name.clone(),
+                    "field": field,
+                    "value": model_val,
+                    "status": "DEPRECATED",
+                }));
+            }
+        }
+    };
+
+    let series_rows: Vec<OverrideRow> = sqlx::query_as(
+        "SELECT id AS entity_id, title, NULL AS chapter_number, ocr_model, ocr_provider, \
+         tl_model, tl_provider, qa_llm_model, qa_provider, qa_vlm_model FROM series",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+    for row in &series_rows {
+        let name = row.title.clone().unwrap_or_default();
+        check_row(row, "SERIES", name);
+    }
+
+    let chapter_rows: Vec<OverrideRow> = sqlx::query_as(
+        "SELECT id AS entity_id, title, chapter_number, ocr_model, ocr_provider, \
+         tl_model, tl_provider, qa_llm_model, qa_provider, qa_vlm_model FROM chapters",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+    for row in &chapter_rows {
+        let name = row
+            .title
+            .clone()
+            .unwrap_or_else(|| format!("Chapter {}", row.chapter_number.unwrap_or(0.0)));
+        check_row(row, "CHAPTER", name);
+    }
+
+    Json(json!({ "orphaned": orphaned })).into_response()
 }
 
 /// Sub-router mounted under `/api/settings`.

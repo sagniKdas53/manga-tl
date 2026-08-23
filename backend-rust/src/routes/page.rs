@@ -1209,6 +1209,83 @@ pub async fn update_ocr_region(
 }
 
 // ---------------------------------------------------------------------------
+// Redo triggers (Phase 3)
+// ---------------------------------------------------------------------------
+
+/// POST /api/ocr-regions/{id}/redo?type=ocr|translation — ADMIN/TRANSLATOR.
+/// Enqueues a high-priority region-redo job and maps the image to the caller for SSE.
+pub async fn redo_ocr_region(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if !user.role.eq_ignore_ascii_case("admin") && !user.role.eq_ignore_ascii_case("translator") {
+        return error::access_denied("/api/ocr-regions/{id}");
+    }
+    let Some(redo_type) = params.get("type") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Required parameter 'type' is not present".to_string(),
+        )
+            .into_response();
+    };
+
+    match crate::jobs::coordinator::trigger_redo(&state, id, redo_type).await {
+        Ok(()) => {}
+        Err(err) => {
+            tracing::error!("Failed to trigger region redo: {err}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response();
+        }
+    }
+
+    // Look up image ID to map it to the requesting user (SSE audience).
+    if let Ok(Some((image_id,))) = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT p.image_id FROM ocr_regions r JOIN pages p ON p.id = r.page_id WHERE r.id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.pool)
+    .await
+    {
+        state.sse.map_image_to_user(image_id, user.id).await;
+    }
+    Json(serde_json::json!({ "status": "enqueued" })).into_response()
+}
+
+/// POST /api/images/{imageId}/redo?type=&chapterId= — ADMIN/TRANSLATOR.
+/// Valid types: ocr | translation | layout; anything else → 400 "Invalid redo type".
+pub async fn redo_image(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(image_id): Path<Uuid>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if !user.role.eq_ignore_ascii_case("admin") && !user.role.eq_ignore_ascii_case("translator") {
+        return error::access_denied("/api/images/{imageId}/redo");
+    }
+    let Some(redo_type) = params.get("type").cloned() else {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Required parameter 'type' is not present".to_string(),
+        )
+            .into_response();
+    };
+    let chapter_id = params
+        .get("chapterId")
+        .and_then(|v| Uuid::parse_str(v).ok());
+
+    match redo_type.as_str() {
+        "ocr" | "translation" | "layout" => {
+            crate::jobs::coordinator::trigger_image_redo(&state, image_id, &redo_type, chapter_id)
+                .await;
+            state.sse.map_image_to_user(image_id, user.id).await;
+            Json(serde_json::json!({ "status": "enqueued" })).into_response()
+        }
+        _ => (StatusCode::BAD_REQUEST, "Invalid redo type".to_string()).into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -1232,4 +1309,9 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(reorder_pages),
         )
         .route("/ocr-regions/{id}", axum::routing::patch(update_ocr_region))
+        .route(
+            "/ocr-regions/{id}/redo",
+            axum::routing::post(redo_ocr_region),
+        )
+        .route("/images/{imageId}/redo", axum::routing::post(redo_image))
 }

@@ -8,6 +8,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use serde_json::json;
 
+use crate::auth::AuthUser;
 use crate::models::Job;
 use crate::redis_service::RedisService;
 use crate::state::AppState;
@@ -19,7 +20,7 @@ async fn redis(state: &AppState) -> Option<std::sync::Arc<RedisService>> {
 }
 
 /// GET /api/jobs — active jobs + global pause flag.
-pub async fn get_jobs(State(state): State<AppState>) -> Response {
+pub async fn get_jobs(State(state): State<AppState>, _user: AuthUser) -> Response {
     let jobs: Vec<Job> =
         sqlx::query_as("SELECT * FROM jobs WHERE status = ANY($1) ORDER BY created_at ASC")
             .bind(ACTIVE_STATUSES)
@@ -40,20 +41,26 @@ pub async fn get_jobs(State(state): State<AppState>) -> Response {
 }
 
 /// POST /api/jobs/pause
-pub async fn pause_queue(State(state): State<AppState>) -> Response {
+pub async fn pause_queue(State(state): State<AppState>, _user: AuthUser) -> Response {
     if let Some(r) = redis(&state).await {
         let _ = r.set_queue_paused(true).await;
     }
-    // Phase 3: sseService.emitEventToAllUsers("queue_paused", ...)
+    state
+        .sse
+        .emit_event_to_all_users("queue_paused", r#"{"event":"queue_paused"}"#);
     StatusCode::OK.into_response()
 }
 
 /// POST /api/jobs/resume
-pub async fn resume_queue(State(state): State<AppState>) -> Response {
+pub async fn resume_queue(State(state): State<AppState>, _user: AuthUser) -> Response {
     if let Some(r) = redis(&state).await {
         let _ = r.set_queue_paused(false).await;
     }
-    // Phase 3: jobCoordinatorService.requeuePendingJobs() + SSE event.
+    // Java resumeQueue: requeuePendingJobs() then broadcast queue_resumed.
+    crate::jobs::coordinator::requeue_pending_jobs(&state).await;
+    state
+        .sse
+        .emit_event_to_all_users("queue_resumed", r#"{"event":"queue_resumed"}"#);
     StatusCode::OK.into_response()
 }
 
@@ -73,6 +80,7 @@ const QUEUE_KEYS: [&str; 10] = [
 /// DELETE /api/jobs/clear?force=
 pub async fn clear_queue(
     State(state): State<AppState>,
+    _user: AuthUser,
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
     let force = params.get("force").map(|v| v == "true").unwrap_or(false);
@@ -98,7 +106,11 @@ pub async fn clear_queue(
                 "Cleared queue via API (force={force}): removing {} jobs",
                 res.rows_affected()
             );
-            // Phase 3: SSE queue_cleared event with clearedCount.
+            let cleared = res.rows_affected() as i64;
+            state.sse.emit_event_to_all_users(
+                "queue_cleared",
+                &json!({ "event": "queue_cleared", "clearedCount": cleared }).to_string(),
+            );
             StatusCode::OK.into_response()
         }
         Err(err) => (
@@ -134,11 +146,24 @@ async fn push_if_unpaused(state: &AppState, job: &Job) {
             }
         }
     }
-    // Phase 3: emitJobUpdateEvent(job).
+    if let Some(image_id) = job.image_id {
+        state
+            .sse
+            .emit_event_for_image(
+                image_id,
+                "job_update",
+                &serde_json::to_string(job).unwrap_or_default(),
+            )
+            .await;
+    }
 }
 
 /// POST /api/jobs/{id}/retry — reset to PENDING/error-null/attempt=1.
-pub async fn retry_job(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+pub async fn retry_job(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<String>,
+) -> Response {
     let Some(job) = find_job(&state.pool, &id).await else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -154,7 +179,11 @@ pub async fn retry_job(State(state): State<AppState>, Path(id): Path<String>) ->
 }
 
 /// POST /api/jobs/{id}/pause — only PENDING may pause (400 text otherwise).
-pub async fn pause_job(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+pub async fn pause_job(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<String>,
+) -> Response {
     let Some(job) = find_job(&state.pool, &id).await else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -174,7 +203,11 @@ pub async fn pause_job(State(state): State<AppState>, Path(id): Path<String>) ->
 }
 
 /// POST /api/jobs/{id}/resume — PAUSED back to PENDING and re-enqueued.
-pub async fn resume_job(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+pub async fn resume_job(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<String>,
+) -> Response {
     let Some(job) = find_job(&state.pool, &id).await else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -196,7 +229,11 @@ pub async fn resume_job(State(state): State<AppState>, Path(id): Path<String>) -
 }
 
 /// DELETE /api/jobs/{id}
-pub async fn delete_job(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+pub async fn delete_job(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<String>,
+) -> Response {
     let result = sqlx::query("DELETE FROM jobs WHERE id = $1")
         .bind(&id)
         .execute(&state.pool)

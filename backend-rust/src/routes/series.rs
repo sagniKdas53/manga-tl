@@ -210,6 +210,7 @@ async fn to_chapter_dto(
         &g.tl_provider,
     );
     let tl_mod = resolve_model_with_check(
+        state,
         chapter.tl_model.as_deref(),
         series.and_then(|s| s.tl_model.as_deref()),
         &g.tl_model,
@@ -231,6 +232,7 @@ async fn to_chapter_dto(
         &g.qa_provider,
     );
     let qa_llm = resolve_model_with_check(
+        state,
         chapter.qa_llm_model.as_deref(),
         series.and_then(|s| s.qa_llm_model.as_deref()),
         &g.qa_llm_model,
@@ -238,6 +240,7 @@ async fn to_chapter_dto(
         "qaLLM",
     );
     let qa_vlm = resolve_model_with_check(
+        state,
         chapter.qa_vlm_model.as_deref(),
         series.and_then(|s| s.qa_vlm_model.as_deref()),
         &g.qa_vlm_model,
