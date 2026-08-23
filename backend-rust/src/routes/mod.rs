@@ -9,8 +9,10 @@
 
 pub mod auth;
 pub mod health;
+pub mod series;
 
 use axum::Router;
+use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::state::AppState;
@@ -24,6 +26,7 @@ pub fn build_router(state: AppState) -> Router {
     let inner = Router::new()
         .merge(health::router())
         .nest("/api/auth", auth::router())
+        .nest("/api/series", series::router())
         .with_state(state);
 
     let app = if context_path == "/" {
@@ -32,7 +35,13 @@ pub fn build_router(state: AppState) -> Router {
         Router::new().nest(&context_path, inner)
     };
 
-    app.layer(TraceLayer::new_for_http())
+    // Java's GlobalExceptionHandler turns any RuntimeException into a 500 problem+json.
+    // A panic in axum would otherwise bypass handlers entirely (empty 500), so we catch
+    // panics and emit the same generic body.
+    app.layer(CatchPanicLayer::custom(|_panic| {
+        crate::error::internal_error("/unknown")
+    }))
+    .layer(TraceLayer::new_for_http())
 }
 
 #[cfg(test)]

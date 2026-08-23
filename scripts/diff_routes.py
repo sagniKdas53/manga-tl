@@ -26,6 +26,17 @@ PORTED = {
     "DELETE /api/auth/me",
     "POST /api/auth/refresh",
     "POST /api/auth/change-password",
+    # series + chapters CRUD (Phase 2; import/export quartet defers to Phase 3)
+    "POST /api/series",
+    "GET /api/series",
+    "GET /api/series/{seriesId}",
+    "PUT /api/series/{seriesId}",
+    "DELETE /api/series/{seriesId}",
+    "POST /api/series/{seriesId}/chapters",
+    "GET /api/series/{seriesId}/chapters",
+    "GET /api/series/chapters/{chapterId}",
+    "PUT /api/series/chapters/{chapterId}",
+    "DELETE /api/series/chapters/{chapterId}",
 }
 
 
