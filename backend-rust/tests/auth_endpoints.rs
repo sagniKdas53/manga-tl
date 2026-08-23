@@ -115,6 +115,24 @@ async fn body_string(response: axum::http::Response<Body>) -> (StatusCode, Strin
     )
 }
 
+/// CI's service Postgres starts EMPTY; Java makes the first-ever registrant ADMIN.
+/// Seed one bootstrap user so the lifecycle's role rules behave like any real deployment.
+async fn ensure_users_exist(pool: &sqlx::PgPool) {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(pool)
+        .await
+        .unwrap_or(0);
+    if count == 0 {
+        sqlx::query(
+            "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+             VALUES (uuid_generate_v4(), now(), 'Bootstrap', '__auth-e2e-bootstrap@example.invalid', 'x', 'admin')",
+        )
+        .execute(pool)
+        .await
+        .expect("bootstrap user");
+    }
+}
+
 async fn cleanup(pool: &sqlx::PgPool) {
     sqlx::query("DELETE FROM users WHERE email LIKE '__auth-e2e%'")
         .execute(pool)
@@ -129,6 +147,7 @@ async fn full_account_lifecycle() {
         return;
     };
     cleanup(&pool).await;
+    ensure_users_exist(&pool).await;
 
     // --- setup-required is public JSON ---
     let (status, _, body) = body_string(
