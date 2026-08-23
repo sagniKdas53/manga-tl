@@ -1839,6 +1839,7 @@ version = "0.1.0"
 dependencies = [
  "aws-sdk-s3",
  "axum",
+ "base64",
  "bcrypt",
  "chrono",
  "dotenvy",

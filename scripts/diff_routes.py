@@ -62,6 +62,9 @@ PORTED = {
     "GET /api/settings",
     "PUT /api/settings",
     "GET /api/settings/validate",
+    # notifications/realtime (Phase 3 begins)
+    "GET /api/notifications/stream",
+    "POST /api/notifications/ticket",
     "GET /api/jobs",
     "POST /api/jobs/pause",
     "POST /api/jobs/resume",

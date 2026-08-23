@@ -8,9 +8,10 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 
 # SESSION HANDOFF — read this first after any context loss
 
-> STATUS SNAPSHOT (2026-08-23): Phases 0–2 COMPLETE · 49/71 API operations served ·
-> CI GREEN on GitHub Actions (ci-cargo.yml) · branch rust-backend pushed to BOTH remotes
-> (`github` + `pi5`). Next work item: Phase 3 — see execution order below.
+> STATUS SNAPSHOT (2026-08-23): Phases 0–2 COMPLETE · Phase 3 started: SSE port landed ·
+> 51/71 API operations served (route parity 72%) · CI GREEN on GitHub Actions (ci-cargo.yml) ·
+> branch rust-backend pushed to BOTH remotes (`github` + `pi5`).
+> Next work item: Phase 3 step 2 — JobCoordinator core (see execution order below).
 
 ## Mission
 
@@ -97,6 +98,17 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 - Production manga-minio is unreachable from the host by design (compose maps only the
   9001 console to loopback; 9000 stays inside manga-net), so local test containers on
   port 19000 can never collide with it.
+- axum `nest` strips prefixes AND handlers see stripped URIs, so error payloads built
+  from `parts.uri` lose `/tlhub/api/...`. Fix: axum 0.8 inserts an `OriginalUri`
+  extension for EVERY request holding the URI as received; prefer it verbatim when
+  building Boot-shaped bodies (it already contains CONTEXT_PATH). The auth-middleware
+  probe test must nest its router under /tlhub to simulate this faithfully.
+- axum's sse::Event has no Display; assert on SseMessage fields instead. SSE bodies
+  never EOF while open — bound reads in tests with tokio::time::timeout around
+  body.into_data_stream() (KeepAlive at 15s stays outside a 5s window).
+- redis 0.27: GETDEL is not exposed as a trait method — use cmd("GETDEL"); RENAME
+  errors when the source key vanished, which the pending-notification drain treats
+  as "another tab won" (not a failure).
 
 ## Where things live (backend-rust/src)
 
@@ -109,12 +121,14 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 | `auth.rs` | AuthUser/MaybeAuthUser extractors, security-403 shape, internal-token guard |
 | `jwt.rs`, `password.rs` | jjwt-parity JWTs (length-based HMAC); bcrypt `$2a$10` |
 | `minio.rs`, `redis_service.rs` | S3 ops (+presign); queues/pub-sub over ConnectionManager |
+| `sse.rs` | SseService + SseTicketService port: per-user emitters, single-use tickets, replay, heartbeat |
 | `thumbnails.rs` | WebP width-512 q85 pipeline (vendored libwebp, no JNI) |
 | `resolve.rs`, `settings.rs` | override chain (pure); system_settings pair + env defaults |
 | `routes/mod.rs` | router assembly, CONTEXT_PATH nest, CatchPanic, SPA fallback |
 | `routes/{auth,series,page,layers,layers_ops,jobs,settings}.rs` | Phase-2 controllers |
+| `routes/notifications.rs` | POST /ticket + GET /stream (Phase 3) |
 | `spec/golden-openapi.json` | THE frozen contract (71 ops); `golden-routes.txt` inventory |
-| `tests/` | db_entities, auth_middleware, auth_endpoints, series_endpoints, pages_endpoints, minio_service, redis_service, java_compat |
+| `tests/` | db_entities, auth_middleware, auth_endpoints, series_endpoints, pages_endpoints, minio_service, redis_service, java_compat, sse_endpoints |
 
 ## Phase 3 execution order (CURRENT PHASE)
 
@@ -130,10 +144,9 @@ The remaining 22 golden-spec operations are exactly the job-pipeline surface:
 
 Recommended build order (each step compiles+tests+commits before the next):
 
-1. **SseService port** (`src/sse.rs`) — per-user emitter registry, single-use tickets
-   (`POST /api/notifications/ticket` mints, stream validates), missed-event replay,
-   heartbeat. axum SSE via `axum::response::sse`. Everything downstream emits through it,
-   so land it first even though its two routes come last in the gate.
+1. **SseService port** (`src/sse.rs`) — ✅ DONE (see Phase-3 checklist). Everything
+   downstream emits through it, so its two routes are live and `emit_event_for_image`,
+   `emit_notification_for_image`, `emit_event_to_all_users` are ready for the steps below.
 2. **JobCoordinator core** (`src/jobs/coordinator.rs`): startPipeline/enqueueDirectly,
    payload construction (READ `enqueueJobDirectly` carefully — it is the AUTHORITY for
    model resolution task keys: ocr/tl/qaLLM/qaVLM), push-to-queue (RedisService exists),
@@ -259,8 +272,15 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
 - [ ] Transaction-boundary parity: publish-to-Redis strictly after DB commit (Java `afterCommit`)
 - [ ] `WorkerDispatcherService` — dispatch loop, stale-job recovery, startup reset of PROCESSING jobs
 - [ ] Redis pub/sub subscriber → `ProviderConfigCache` invalidation
-- [ ] `SseService` — per-user emitters, ticket auth (`POST /api/notifications/ticket`),
-      missed-event replay, heartbeat
+- [x] `SseService` — per-user emitters, ticket auth (`POST /api/notifications/ticket`),
+      missed-event replay, heartbeat. Ported as `src/sse.rs` + `routes/notifications.rs`:
+      channel-per-connection registry with a lifecycle actor (session-expired push at the
+      JWT's exp, Spring's 1h emitter timeout via sleep, disconnect detection via
+      `Sender::closed()`), RENAME-drain replay with tail-only requeue, 15s keep-alive.
+      Both auth paths kept: `?ticket=` GETDEL redemption AND plain Authorization header;
+      everything else is the security 403 shape. Fixed a latent contract bug found by the
+      new tests: security-403 `path` now reports the FULL request path on nested routes
+      (OriginalUri). 5 unit + 10 env-gated integration tests green.
 - [ ] `DebouncedRenderService`, `ExportCleanupService`, `ChapterExportService`,
       `CostEstimationService`, `SystemSettingsService` cache semantics
 

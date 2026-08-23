@@ -84,7 +84,15 @@ async fn probe(user: AuthUser) -> Json<String> {
 }
 
 fn router_with_probe(state: AppState) -> Router {
-    Router::new().route("/probe", get(probe)).with_state(state)
+    // Mirror the deployed topology: build_router nests everything under CONTEXT_PATH,
+    // so the handler sees a stripped path while Boot reports the FULL one. Without
+    // this nesting the 403's path assertion below would exercise the wrong branch.
+    Router::new()
+        .nest(
+            "/tlhub",
+            Router::new().route("/probe", get(probe)).with_state(state),
+        )
+        .fallback(|| async { axum::http::StatusCode::NOT_FOUND })
 }
 
 #[tokio::test]
@@ -116,7 +124,7 @@ async fn valid_token_and_existing_user_authenticates() {
     let app = router_with_probe(state.clone());
     let response = app
         .oneshot(
-            Request::get("/probe")
+            Request::get("/tlhub/probe")
                 .header("Authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -146,7 +154,7 @@ async fn missing_token_gets_springs_403_shape() {
     };
 
     let response = router_with_probe(state)
-        .oneshot(Request::get("/probe").body(Body::empty()).unwrap())
+        .oneshot(Request::get("/tlhub/probe").body(Body::empty()).unwrap())
         .await
         .unwrap();
 

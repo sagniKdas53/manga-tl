@@ -16,5 +16,6 @@ pub mod redis_service;
 pub mod resolve;
 pub mod routes;
 pub mod settings;
+pub mod sse;
 pub mod state;
 pub mod thumbnails;

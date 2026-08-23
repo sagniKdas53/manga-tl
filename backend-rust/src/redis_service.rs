@@ -82,6 +82,62 @@ impl RedisService {
         conn.del(key).await
     }
 
+    // ------------------------------------------------- keyed strings with expiry
+    // (SSE tickets + image→owner mapping; Java used opsForValue().set(key, val, Duration))
+
+    /// SET with a TTL in seconds — the SSE ticket write and the 24h owner mapping.
+    pub async fn set_ex(&self, key: &str, value: &str, ttl_secs: u64) -> redis::RedisResult<()> {
+        let mut conn = self.conn.clone();
+        conn.set_ex(key, value, ttl_secs).await.map(|_: ()| ())
+    }
+
+    /// GETDEL — atomically reads and deletes. This atomicity is what makes an SSE ticket
+    /// single-use (a captured-after-connect ticket is already spent).
+    pub async fn get_and_delete(&self, key: &str) -> redis::RedisResult<Option<String>> {
+        redis::cmd("GETDEL")
+            .arg(key)
+            .query_async(&mut self.conn.clone())
+            .await
+    }
+
+    // ---------------------------------------------------------------- list extras
+
+    /// LRANGE 0 -1 helper for draining pending-notification queues.
+    pub async fn list_range(&self, key: &str) -> redis::RedisResult<Vec<String>> {
+        let mut conn = self.conn.clone();
+        conn.lrange(key, 0, -1).await
+    }
+
+    /// LPUSH with several values, inserted one at a time at the head: after
+    /// `lpush_all(k, [a, b])` the list is `[b, a]`. Callers wanting FIFO order must
+    /// therefore pass the batch reversed (same arithmetic as Java's leftPushAll).
+    pub async fn lpush_all(&self, key: &str, values: &[String]) -> redis::RedisResult<()> {
+        let mut cmd = redis::cmd("LPUSH");
+        cmd.arg(key);
+        for value in values {
+            cmd.arg(value);
+        }
+        cmd.query_async(&mut self.conn.clone()).await
+    }
+
+    /// EXPIRE on an existing key (pending-notification queues get a 7-day TTL).
+    pub async fn expire(&self, key: &str, ttl_secs: u64) -> redis::RedisResult<()> {
+        let mut conn = self.conn.clone();
+        conn.expire(key, ttl_secs as i64).await.map(|_: bool| ())
+    }
+
+    // ------------------------------------------------------------------- rename
+
+    /// RENAME from → to. Errors when the source is gone, which the pending-drain treats
+    /// as "another tab won the race" rather than a failure.
+    pub async fn rename(&self, from: &str, to: &str) -> redis::RedisResult<()> {
+        redis::cmd("RENAME")
+            .arg(from)
+            .arg(to)
+            .query_async(&mut self.conn.clone())
+            .await
+    }
+
     /// The global pause gate checked by WorkerDispatcherService each cycle.
     pub async fn queue_paused(&self) -> redis::RedisResult<bool> {
         Ok(self.get(QUEUE_PAUSED_KEY).await?.is_some())

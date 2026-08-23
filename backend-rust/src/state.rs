@@ -12,6 +12,7 @@ use crate::config::Config;
 use crate::jwt::JwtUtils;
 use crate::minio::MinioService;
 use crate::redis_service::RedisService;
+use crate::sse::SseService;
 
 /// The single state object every handler can reach via `State<AppState>`.
 /// `#[derive(Clone)]` generates `.clone()` for us; axum requires handlers' state to be Clone.
@@ -31,6 +32,11 @@ pub struct AppState {
     /// Redis queues/pub-sub. `None` only in tests; production connects fail-fast at boot.
     #[allow(dead_code)]
     pub redis: Option<Arc<RedisService>>,
+    /// Server-Sent Events: emitters, tickets, pending-notification replay
+    /// (port of Java SseService + SseTicketService). Built here from pool + redis
+    /// so call sites don't have to assemble it themselves.
+    #[allow(dead_code)]
+    pub sse: Arc<SseService>,
 }
 
 impl AppState {
@@ -41,11 +47,13 @@ impl AppState {
         storage: MinioService,
         redis: Option<Arc<RedisService>>,
     ) -> Self {
+        let sse = Arc::new(SseService::new(pool.clone(), redis.clone()));
         Self {
             config: Arc::new(config),
             pool,
             jwt: Arc::new(jwt),
             storage: Arc::new(storage),
+            sse,
             redis,
         }
     }

@@ -78,9 +78,42 @@ impl FromRequestParts<AppState> for AuthUser {
     ) -> Result<Self, Self::Rejection> {
         match resolve_auth_user(parts, state).await {
             Some(auth_user) => Ok(auth_user),
-            None => Err(forbidden_like_spring(state, &parts.uri)),
+            None => Err(forbidden_for_parts(state, parts)),
         }
     }
+}
+
+/// Resolves the FULL request path for Boot-shaped denials.
+///
+/// Two nesting layers are in play: `build_router` nests everything under
+/// CONTEXT_PATH, and route groups nest under e.g. `/api/notifications`. axum strips
+/// both before handlers run, so `parts.uri` alone loses prefixes — but the router
+/// stashes the untouched URI as an [`axum::extract::OriginalUri`] extension. Prefer
+/// that verbatim; only when absent (plain routes) rebuild context_path + stripped
+/// path, which is byte-identical to Boot's report either way.
+fn forbidden_for_parts(state: &AppState, parts: &Parts) -> Response {
+    let path = match parts.extensions.get::<axum::extract::OriginalUri>() {
+        Some(original) => original.0.path().to_string(),
+        None => format!("{}{}", state.config.context_path, parts.uri.path()),
+    };
+    forbidden_body(&path)
+}
+
+/// The 403 response Spring Security produces for denied API access, byte-shape identical:
+/// Boot's error attributes with a millisecond ISO timestamp carrying a literal `+00:00`.
+pub fn forbidden_like_spring(state: &AppState, uri: &axum::http::Uri) -> Response {
+    forbidden_body(&format!("{}{}", state.config.context_path, uri.path()))
+}
+
+fn forbidden_body(path: &str) -> Response {
+    let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3f+00:00");
+    let body = json!({
+        "timestamp": timestamp.to_string(),
+        "status": 403,
+        "error": "Forbidden",
+        "path": path,
+    });
+    (StatusCode::FORBIDDEN, Json(body)).into_response()
 }
 
 /// Never-failing variant for endpoints that answer THEMSELVES when unauthenticated
@@ -109,20 +142,6 @@ pub fn bearer_token(headers: &axum::http::HeaderMap) -> Option<String> {
     } else {
         Some(token.to_string())
     }
-}
-
-/// The 403 response Spring Security produces for denied API access, byte-shape identical:
-/// Boot's error attributes with a millisecond ISO timestamp carrying a literal `+00:00`.
-pub fn forbidden_like_spring(state: &AppState, uri: &axum::http::Uri) -> Response {
-    let path = format!("{}{}", state.config.context_path, uri.path());
-    let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3f+00:00");
-    let body = json!({
-        "timestamp": timestamp.to_string(),
-        "status": 403,
-        "error": "Forbidden",
-        "path": path,
-    });
-    (StatusCode::FORBIDDEN, Json(body)).into_response()
 }
 
 // -------------------------------------------------------------------------------------------

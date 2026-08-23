@@ -16,6 +16,7 @@ pub mod health;
 pub mod jobs;
 pub mod layers;
 pub mod layers_ops;
+pub mod notifications;
 pub mod page;
 pub mod series;
 pub mod settings;
@@ -38,6 +39,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api/series", series::router())
         .nest("/api/jobs", jobs::router())
         .nest("/api/settings", settings::router())
+        .nest("/api/notifications", notifications::router())
         .nest("/api", page::router())
         .nest("/api", layer_routes())
         .fallback(spa_fallback)
