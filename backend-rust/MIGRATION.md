@@ -92,6 +92,21 @@ DONE: error.rs (problem+json) ✅ · routes/auth.rs all 7 endpoints ✅ · scrip
 contract gate in CI ✅ (8/71 operations at last count).
 
 NEXT — SeriesController (13 routes in golden spec). SCOPING ALREADY DONE, honor it:
+* SystemSettingsService split (source read 2026-08-23): series CRUD needs ONLY
+  getSettingValue(key,default)/saveSetting — trivial system_settings upsert pair; put them in
+  src/settings.rs. The FULL getSettings() DTO + validateOverrides() depend on
+  ProviderConfigCache (config/providers.json + worker-published Redis config) — defer both to
+  the SettingsController slice, NOT needed for series/chapters.
+* Series create semantics to mirror exactly: resolveSetting() on every field; targetLang
+  fallback "en", original/source fallback "ja"; createdBy = principal user.
+* SeriesDto JSON: {id,title,originalLanguage,sourceLanguage,targetLanguage,readingDirection,
+  coverImageUrl,ocrProvider,ocrModel,tlProvider,tlModel,qaProvider,qaLlmModel,qaVlmModel,
+  qaMode,routingStrategy,useFallbackModels,resolvedUseFallbackModels,createdAt,updatedAt}
+  (camelCase, OffsetDateTime = RFC-3339 with offset — chrono serde gives +00:00 form).
+* ChapterDto adds: chapterNumber(double),useContextMemory(bool),pageCount(int?),
+  resolvedOcr{provider,model,source},resolvedTranslation{...},resolvedQa{provider,llmModel,
+  vlmModel,mode,source}. Resolution source field values come from JobCoordinatorService —
+  read its resolveConfigForChapter + ResolvedPipelineConfig before writing routes/series.rs.
 * Port FIRST: SystemSettingsService (src/settings.rs — system_settings table + defaults +
   caching) because createSeries resolves every field via resolveSetting(), defaulting
   targetLang=en origLang=ja.
