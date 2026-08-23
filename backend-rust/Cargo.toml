@@ -22,7 +22,7 @@ edition = "2024"
 [dependencies]
 # Web framework. Axum is built by the tokio team, dominates new Rust web projects,
 # and gives us routing, extractors, SSE and streaming responses out of the box.
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 
 # The async runtime. Rust has no built-in event loop; tokio provides one.
 # Features chosen:
@@ -59,6 +59,7 @@ webp = "0.3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp"] }
 bcrypt = "0.15"
 getrandom = "0.3"
+sha2 = "0.10"
 
 # --- Test-only dependencies ([dev-dependencies] are NOT compiled into the release binary) ---
 [dev-dependencies]

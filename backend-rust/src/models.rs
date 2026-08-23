@@ -71,6 +71,7 @@ pub struct Series {
 // ---------------------------------------------------------------- chapters
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Chapter {
     pub id: Uuid,
     pub chapter_number: f64,
@@ -97,6 +98,7 @@ pub struct Chapter {
 // ---------------------------------------------------------------- pages
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Page {
     pub id: Uuid,
     pub page_number: i32,
@@ -109,6 +111,7 @@ pub struct Page {
 // ---------------------------------------------------------------- images
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Image {
     pub id: Uuid,
     pub created_at: DateTime<Utc>,
@@ -127,6 +130,7 @@ pub struct Image {
 // ---------------------------------------------------------------- panels
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Panel {
     pub id: Uuid,
     pub bbox_x: i32,
@@ -144,6 +148,7 @@ pub struct Panel {
 /// OCR region: one speech balloon / SFX block detected by the worker.
 /// This is the table the whole translation pipeline revolves around.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct OcrRegion {
     pub id: Uuid,
     pub approved: Option<bool>,
@@ -184,6 +189,7 @@ pub struct OcrRegion {
 // ---------------------------------------------------------------- layers
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Layer {
     pub id: Uuid,
     pub created_at: DateTime<Utc>,
@@ -199,6 +205,7 @@ pub struct Layer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct LayerElement {
     pub id: Uuid,
     pub auto_size: Option<bool>,
@@ -238,6 +245,7 @@ pub struct LayerEditHistory {
 // ---------------------------------------------------------------- conversations
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Conversation {
     pub id: Uuid,
     pub scene_type: String,
@@ -246,6 +254,7 @@ pub struct Conversation {
 
 /// Join table ordering conversations within a scene.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct ConversationRegion {
     pub conversation_id: Uuid,
     pub region_id: Uuid,
@@ -256,6 +265,7 @@ pub struct ConversationRegion {
 
 /// Pipeline job row. Note: `id` is a varchar (worker-assigned), NOT a uuid.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Job {
     pub id: String,
     pub attempt: Option<i32>,
@@ -277,6 +287,7 @@ pub struct Job {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct JobCost {
     pub id: Uuid,
     pub job_id: Option<String>,

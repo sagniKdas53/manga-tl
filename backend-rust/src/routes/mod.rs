@@ -9,6 +9,7 @@
 
 pub mod auth;
 pub mod health;
+pub mod page;
 pub mod series;
 
 use axum::Router;
@@ -27,6 +28,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(health::router())
         .nest("/api/auth", auth::router())
         .nest("/api/series", series::router())
+        .nest("/api", page::router())
         .with_state(state);
 
     let app = if context_path == "/" {

@@ -37,6 +37,19 @@ PORTED = {
     "GET /api/series/chapters/{chapterId}",
     "PUT /api/series/chapters/{chapterId}",
     "DELETE /api/series/chapters/{chapterId}",
+    # pages/images (Phase 2; zip branches + redo + import-project defer to Phase 3)
+    "POST /api/images",
+    "GET /api/chapters/{chapterId}/pages",
+    "GET /api/pages/{pageId}",
+    "DELETE /api/pages/{pageId}",
+    "PATCH /api/pages/{pageId}/number",
+    "PUT /api/chapters/{chapterId}/pages/reorder",
+    "GET /api/images/{imageId}",
+    "GET /api/images/{imageId}/file",
+    "GET /api/images/{imageId}/reader",
+    "GET /api/images/{imageId}/thumbnail",
+    "GET /api/pages/{pageId}/rendered",
+    "PATCH /api/ocr-regions/{id}",
 }
 
 
