@@ -72,6 +72,16 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 - Uncommitted tx rows are invisible to pool connections (auth middleware test bug).
 - aws-sdk SdkError is huge: module-level `allow(clippy::result_large_err)` in minio.rs.
 - redis 0.27 ConnectionManager has NO pub/sub — subscribers open dedicated connections.
+- GitHub Actions SERVICE CONTAINERS cannot take a command: minio/minio exits printing usage
+  unless started as `server /data`. It runs via a docker-run step in ci-cargo.yml instead.
+- CI's Postgres starts EMPTY: ci-cargo.yml applies database/init.sql (sed strips pg_dump
+  \restrict lines and rewrites OWNER TO tladmin -> postgres). Tests must seed a bootstrap
+  user when the users table is empty — Java makes the first-ever registrant ADMIN.
+- Security-denial 403s are application/json (Boot error attributes); @PreAuthorize denials
+  inside controllers are application/problem+json. Both verified live.
+- series.reading_direction is NOT NULL but Java never defaults it: missing field = 500
+  problem+json on BOTH stacks (Rust via CatchPanicLayer -> internal_error). Frontend
+  always sends it; keep test payloads doing the same.
 
 ## Where things live
 
