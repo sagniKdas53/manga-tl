@@ -92,7 +92,9 @@ jobs:
       # artifacts that some psql versions reject, so strip them first.
       - name: Initialize database schema
         run: |
-          sed '/^\\restrict/d; /^\\unrestrict/d' database/init.sql > /tmp/init-cleaned.sql
+          sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' \
+              -e 's/OWNER TO [a-zA-Z_]*;/OWNER TO postgres;/' \
+              database/init.sql > /tmp/init-cleaned.sql
           PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres \
             -d manga_library -v ON_ERROR_STOP=1 -f /tmp/init-cleaned.sql
 
