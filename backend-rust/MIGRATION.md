@@ -82,6 +82,17 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 - series.reading_direction is NOT NULL but Java never defaults it: missing field = 500
   problem+json on BOTH stacks (Rust via CatchPanicLayer -> internal_error). Frontend
   always sends it; keep test payloads doing the same.
+- Route-mount regression lesson: page/layer routers must be nest("/api", ...) — a full
+  mod.rs rewrite silently regressed them to merge-at-root, which unit tests miss and CI's
+  integration tests catch (404 from the SPA fallback). Always run `cargo test` (all
+  targets) before pushing, not just --lib.
+- Integration tests that touch MinIO MUST call storage.ensure_bucket() in their app()
+  setup: fresh test containers (and CI's) start with zero buckets, and PutObject fails
+  with NoSuchBucket -> bare 500. ensure_bucket is create-if-missing, so it is equally
+  safe against an already-populated instance — never wipe container data to "fix" tests.
+- Production manga-minio is unreachable from the host by design (compose maps only the
+  9001 console to loopback; 9000 stays inside manga-net), so local test containers on
+  port 19000 can never collide with it.
 
 ## Where things live
 

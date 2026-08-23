@@ -38,8 +38,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api/series", series::router())
         .nest("/api/jobs", jobs::router())
         .nest("/api/settings", settings::router())
-        .merge(page::router())
-        .merge(layer_routes())
+        .nest("/api", page::router())
+        .nest("/api", layer_routes())
         .fallback(spa_fallback)
         .with_state(state);
 

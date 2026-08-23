@@ -65,11 +65,17 @@ async fn app() -> Option<(Router, sqlx::PgPool)> {
             port: 6379,
         },
     };
+    let storage = MinioService::new(&minio);
+    // Fresh/test MinIO containers start without the bucket (and CI's always does).
+    // ensure_bucket is create-if-missing: safe against an already-populated instance,
+    // required for an empty one. Mirrors main()'s startup behaviour.
+    storage.ensure_bucket().await;
+
     let state = AppState::new(
         config,
         pool.clone(),
         JwtUtils::new(SECRET.into(), 3_600_000),
-        MinioService::new(&minio),
+        storage,
         None,
     );
     Some((manga_backend::routes::build_router(state), pool))
