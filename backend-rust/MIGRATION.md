@@ -8,6 +8,10 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 
 # SESSION HANDOFF — read this first after any context loss
 
+> STATUS SNAPSHOT (2026-08-23): Phases 0–2 COMPLETE · 49/71 API operations served ·
+> CI GREEN on GitHub Actions (ci-cargo.yml) · branch rust-backend pushed to BOTH remotes
+> (`github` + `pi5`). Next work item: Phase 3 — see execution order below.
+
 ## Mission
 
 Replace the Java Spring Boot backend (`backend/`, ~14.3k LOC) with Rust/axum in THIS directory
@@ -94,60 +98,69 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
   9001 console to loopback; 9000 stays inside manga-net), so local test containers on
   port 19000 can never collide with it.
 
-## Where things live
+## Where things live (backend-rust/src)
 
 | Path | Contents |
 |---|---|
-| `src/config.rs` | env+secrets loading, fail-closed validation, JDBC URL translation |
-| `src/db.rs`, `src/models.rs` | PgPool; 17 entity structs mapped from database/init.sql |
-| `src/jwt.rs`, `src/password.rs` | jjwt-parity JWTs; bcrypt `$2a$10` |
-| `src/auth.rs` | AuthUser extractor, 403 shape, internal-token guard |
-| `src/minio.rs`, `src/redis_service.rs`, `src/thumbnails.rs` | storage/queues/pub-sub/WebP |
-| `src/routes/mod.rs` | router assembly under CONTEXT_PATH |
-| `spec/golden-openapi.json` | THE frozen contract (71 ops); `spec/golden-routes.txt` inventory |
-| `tests/*.rs` | db_entities, auth_middleware, minio_service, redis_service, java_compat |
+| `main.rs` / `lib.rs` | thin entrypoint; library root for integration tests |
+| `config.rs` | env + Docker-secrets loading, fail-closed validation, JDBC URL translation |
+| `db.rs`, `models.rs` | PgPool; 17 entity structs (serde camelCase for embedded responses) |
+| `error.rs` | RFC-7807 problem+json builders + Boot no-timestamp variants |
+| `auth.rs` | AuthUser/MaybeAuthUser extractors, security-403 shape, internal-token guard |
+| `jwt.rs`, `password.rs` | jjwt-parity JWTs (length-based HMAC); bcrypt `$2a$10` |
+| `minio.rs`, `redis_service.rs` | S3 ops (+presign); queues/pub-sub over ConnectionManager |
+| `thumbnails.rs` | WebP width-512 q85 pipeline (vendored libwebp, no JNI) |
+| `resolve.rs`, `settings.rs` | override chain (pure); system_settings pair + env defaults |
+| `routes/mod.rs` | router assembly, CONTEXT_PATH nest, CatchPanic, SPA fallback |
+| `routes/{auth,series,page,layers,layers_ops,jobs,settings}.rs` | Phase-2 controllers |
+| `spec/golden-openapi.json` | THE frozen contract (71 ops); `golden-routes.txt` inventory |
+| `tests/` | db_entities, auth_middleware, auth_endpoints, series_endpoints, pages_endpoints, minio_service, redis_service, java_compat |
 
-## Phase 2 execution order (current phase)
+## Phase 3 execution order (CURRENT PHASE)
 
-DONE: error.rs (problem+json) ✅ · routes/auth.rs all 7 endpoints ✅ · scripts/diff_routes.py
-contract gate in CI ✅ (8/71 operations at last count).
+The remaining 22 golden-spec operations are exactly the job-pipeline surface:
 
-PHASE 2 COMPLETE ✅ — 49/71 operations served; remaining 22 are exactly the
-job-pipeline surface (internal callbacks ×12, redo ×2, import/export ×5, notifications/SSE ×2)
-plus series chapter import. Phase 3 starts there.
+| Group | Routes | Java source to read first |
+|---|---|---|
+| Internal worker API | GET/HEAD `/api/internal/images/{id}`, POST `qa-hybrid-prepare`, PATCH `jobs/{id}/status`, GET `jobs/{jobId}`, 7 callbacks (`panel` `ocr` `layout` `translation` `qa` `qa-re-ocr` `render`) | `InternalJobController.java` (759 ln) |
+| Redo triggers | POST `/api/images/{imageId}/redo`, POST `/api/ocr-regions/{id}/redo` | JobCoordinatorService L1576–1728 |
+| Import | POST `/api/series/{id}/chapters/import`, POST `/api/chapters/{id}/import-project`, ZIP/ePub branches inside `POST /api/images` | SeriesController L576+, PageController L243–625 |
+| Export | GET `/api/series/chapters/{id}/export`, DELETE `.../exports`, GET `exports/{exportId}/download` | `ChapterExportService.java` (444 ln) |
+| Realtime | GET `/api/notifications/stream` (SSE), POST `/api/notifications/ticket` | `SseService.java` (392 ln), `SseTicketService`, SecurityConfig SSE notes |
 
-HISTORICAL SCOPING (SeriesController — already done, kept for reference):
-* SystemSettingsService split (source read 2026-08-23): series CRUD needs ONLY
-  getSettingValue(key,default)/saveSetting — trivial system_settings upsert pair; put them in
-  src/settings.rs. The FULL getSettings() DTO + validateOverrides() depend on
-  ProviderConfigCache (config/providers.json + worker-published Redis config) — defer both to
-  the SettingsController slice, NOT needed for series/chapters.
-* Series create semantics to mirror exactly: resolveSetting() on every field; targetLang
-  fallback "en", original/source fallback "ja"; createdBy = principal user.
-* SeriesDto JSON: {id,title,originalLanguage,sourceLanguage,targetLanguage,readingDirection,
-  coverImageUrl,ocrProvider,ocrModel,tlProvider,tlModel,qaProvider,qaLlmModel,qaVlmModel,
-  qaMode,routingStrategy,useFallbackModels,resolvedUseFallbackModels,createdAt,updatedAt}
-  (camelCase, OffsetDateTime = RFC-3339 with offset — chrono serde gives +00:00 form).
-* ChapterDto adds: chapterNumber(double),useContextMemory(bool),pageCount(int?),
-  resolvedOcr{provider,model,source},resolvedTranslation{...},resolvedQa{provider,llmModel,
-  vlmModel,mode,source}. Resolution source field values come from JobCoordinatorService —
-  read its resolveConfigForChapter + ResolvedPipelineConfig before writing routes/series.rs.
-* Port FIRST: SystemSettingsService (src/settings.rs — system_settings table + defaults +
-  caching) because createSeries resolves every field via resolveSetting(), defaulting
-  targetLang=en origLang=ja.
-* ChapterDto carries resolvedOcr/resolvedTranslation/resolvedQa slots + resolvedUseFallbackModels
-  — these come from JobCoordinatorService.resolveModelWithCheck/resolveConfigForChapter
-  (override chain chapter→series→global-settings). That resolution logic must be ported as a
-  pure module BEFORE chapter list/create endpoints can match the contract.
-* coverImageUrl on both DTOs = MinIO presigned URL of cover image (10-min TTL, external-url
-  rewrite already implemented in minio.rs).
-* Pagination: Spring Pageable — ?page=&size= (defaults 10 series / 15 chapters), sortBy only
-  createdAt|updatedAt (fallback updatedAt), sortDir asc/desc; max-page-size 100 cap.
-  PagedResponse = {content[], page, size, totalElements, totalPages}.
-* DEFER to Phase 3 (job-pipeline entangled): POST /chapters/import, GET /chapters/{id}/export,
-  DELETE /exports, GET /exports/{id}/download, and handleDuplicateImageCloning.
-Then: PageController (uploads/streaming/thumbnails) → Layer/OcrRegion → Settings → Job →
-Forward. utoipa OpenAPI-doc generation deferred to cutover prep; route-table gate runs now.
+Recommended build order (each step compiles+tests+commits before the next):
+
+1. **SseService port** (`src/sse.rs`) — per-user emitter registry, single-use tickets
+   (`POST /api/notifications/ticket` mints, stream validates), missed-event replay,
+   heartbeat. axum SSE via `axum::response::sse`. Everything downstream emits through it,
+   so land it first even though its two routes come last in the gate.
+2. **JobCoordinator core** (`src/jobs/coordinator.rs`): startPipeline/enqueueDirectly,
+   payload construction (READ `enqueueJobDirectly` carefully — it is the AUTHORITY for
+   model resolution task keys: ocr/tl/qaLLM/qaVLM), push-to-queue (RedisService exists),
+   trace-key TTL semantics, `claimCallback` idempotency guard (AUDIT-P4/P5).
+   resolveModel/resolveWithCheck already live in `src/resolve.rs`.
+3. **Startup recovery**: `resetProcessingJobsToPending`, `recoverStaleProcessingJobs`
+   (10-min staleness sweep), `requeuePendingJobs` — as tokio interval tasks replacing
+   Spring's @Scheduled pool (compose env SCHEDULING_POOL_SIZE is then obsolete).
+4. **WorkerDispatcherService** port — dispatch loop popping queue:* to worker URLs with
+   health gating + re-push-on-failure (WorkerDispatcherService.java, 425 ln).
+5. **InternalJobController routes** + callback handlers one at a time (panel -> ocr ->
+   layout -> translation -> qa -> qa-re-ocr -> render), each with a live-DB test driving
+   the same JSON the real worker sends. Transaction parity rule: DB writes commit BEFORE
+   Redis/SSE fan-out (Java used afterCommit hooks; sequence explicitly here).
+6. **ProviderConfigCache** (config/providers.json + worker-published Redis blob) ->
+   wire into resolve_model_with_check (currently permissive) + Settings activeProviders.
+7. **Import/export quartet + ZIP upload branches + redo endpoints**, now that pipeline
+   calls exist. DebouncedRenderService + ExportCleanupService + CostEstimationService
+   alongside. Then flip diff_routes.py PORTED set to ALL and require exact equality.
+
+Transaction-boundary rules for every handler above (from Java audit comments):
+* Publish-to-Redis strictly AFTER the DB tx commits (afterCommit hook parity).
+* Callback application is claimed ONCE per job row (`claimCallback`) — duplicate worker
+  callbacks after recovery requeues MUST be dropped, not reapplied.
+* Trace ids: PIPELINE_TRACE_TTL 12h Redis key refreshed on every enqueue.
+
+---
 
 ---
 
