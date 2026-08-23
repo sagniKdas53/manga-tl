@@ -128,8 +128,8 @@ async fn valid_token_and_existing_user_authenticates() {
     let body = response.into_body().collect().await.unwrap().to_bytes();
     assert_eq!(
         &body[..],
-        &br#""__auth-probe@example.invalid:ADMIN""#[..],
-        "role uppercased like Java"
+        &br#""__auth-probe@example.invalid:admin""#[..],
+        "role verbatim like @AuthenticationPrincipal"
     );
 
     sqlx::query("DELETE FROM users WHERE email = '__auth-probe@example.invalid'")

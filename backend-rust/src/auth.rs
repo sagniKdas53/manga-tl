@@ -41,17 +41,32 @@ pub struct AuthUser {
     /// Uppercased role ("ADMIN", "USER", ...), matching the ROLE_ authority Java derives.
     pub role: String,
 }
-
 impl From<User> for AuthUser {
     fn from(user: User) -> Self {
         Self {
             id: user.id,
             email: user.email,
             display_name: user.display_name,
-            // Java uppercases here too (null would fall back to VIEWER; column is NOT NULL).
-            role: user.role.to_uppercase(),
+            // Stored VERBATIM: Java's @AuthenticationPrincipal carries the raw entity
+            // (endpoints like GET /me return it unchanged); only the ROLE_ authority
+            // string was uppercased inside the filter, and nothing consumes that yet.
+            role: user.role,
         }
     }
+}
+
+/// Shared resolution logic: Bearer -> verify -> load user. Used by both the strict
+/// extractor below and MaybeAuthUser.
+async fn resolve_auth_user(parts: &mut Parts, state: &AppState) -> Option<AuthUser> {
+    let token = bearer_token(&parts.headers)?;
+    let email = state.jwt.email_from_token(&token).ok()?;
+    let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE email = $1")
+        .bind(email)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten();
+    user.map(AuthUser::from)
 }
 
 impl FromRequestParts<AppState> for AuthUser {
@@ -61,25 +76,26 @@ impl FromRequestParts<AppState> for AuthUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let Some(token) = bearer_token(&parts.headers) else {
-            return Err(forbidden_like_spring(state, &parts.uri));
-        };
-
-        let Ok(email) = state.jwt.email_from_token(&token) else {
-            return Err(forbidden_like_spring(state, &parts.uri));
-        };
-
-        let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE email = $1")
-            .bind(email)
-            .fetch_optional(&state.pool)
-            .await
-            .ok()
-            .flatten();
-
-        match user {
-            Some(user) => Ok(AuthUser::from(user)),
+        match resolve_auth_user(parts, state).await {
+            Some(auth_user) => Ok(auth_user),
             None => Err(forbidden_like_spring(state, &parts.uri)),
         }
+    }
+}
+
+/// Never-failing variant for endpoints that answer THEMSELVES when unauthenticated
+/// (Java's @AuthenticationPrincipal == null paths, e.g. /api/auth/me returning
+/// 401 {"message":"Not authenticated"} instead of security's 403).
+pub struct MaybeAuthUser(pub Option<AuthUser>);
+
+impl FromRequestParts<AppState> for MaybeAuthUser {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(MaybeAuthUser(resolve_auth_user(parts, state).await))
     }
 }
 

@@ -150,9 +150,14 @@ Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
 
 ## Phase 2 — CRUD APIs (contract-frozen ports)
 
-- [ ] utoipa annotations wired; CI job diffs generated spec vs `golden-openapi.json`
-- [ ] Error handling parity: RFC-7807 `application/problem+json` bodies like `GlobalExceptionHandler`
-- [ ] `AuthController` — register/login/me(PUT/GET/DELETE)/refresh/change-password/setup-required
+- [~] Contract gate: scripts/diff_routes.py checks ported routes ⊆ golden-routes.txt in CI
+      (11% at auth completion; full utoipa OpenAPI-doc generation deferred to cutover prep)
+- [x] Error handling parity: problem+json family (validation w/ nanosecond timestamp +
+      errors map, not-found, bad-request, access-denied, payload-too-large, internal) +
+      Boot's no-timestamp unreadable-body shape + plain-text controller errors
+- [x] `AuthController` — all 7 endpoints; live-DB lifecycle test asserting every wire shape
+      (problem+json validation, text/plain errors, explicit-null token, controller-401 vs
+      security-403, blank-name no-op, change-password, account deletion, admin-rejection)
 - [ ] `SeriesController` — series CRUD + nested chapters CRUD + import + export download/cleanup
 - [ ] `PageController` — image upload (multipart ≤50MB), page/image reads, reorder,
       streaming file/reader/rendered responses, thumbnail generation on upload

@@ -83,6 +83,9 @@ jobs:
         working-directory: backend-rust
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Route contract drift check
+        run: python3 scripts/diff_routes.py
+
       - name: Test
         working-directory: backend-rust
         env:

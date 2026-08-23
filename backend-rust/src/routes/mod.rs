@@ -7,6 +7,7 @@
 //!   * `.with_state(state)` attaches the shared AppState to all handlers in the router
 //!   * middleware ("layers") wrap every request; TraceLayer logs method/path/status/duration
 
+pub mod auth;
 pub mod health;
 
 use axum::Router;
@@ -20,8 +21,10 @@ pub fn build_router(state: AppState) -> Router {
     let context_path = state.config.context_path.clone();
 
     // The inner router holds everything Spring served relative to its context path.
-    // Phase 2 will add `.nest("/api", api::router())` here.
-    let inner = Router::new().merge(health::router()).with_state(state);
+    let inner = Router::new()
+        .merge(health::router())
+        .nest("/api/auth", auth::router())
+        .with_state(state);
 
     let app = if context_path == "/" {
         inner
