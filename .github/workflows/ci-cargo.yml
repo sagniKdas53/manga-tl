@@ -36,18 +36,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      minio:
-        image: minio/minio
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
+      # NOTE: MinIO is NOT a service container on purpose — GitHub Actions cannot pass a
+      # command to services, and minio/minio exits printing usage unless run as
+      # `server /data`. The "Start MinIO" step below runs it via docker run instead.
 
       valkey:
         image: valkey/valkey:8-alpine
@@ -74,6 +65,23 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend-rust
+
+      # MinIO must run with `server /data` (service containers can't take a command),
+      # so it is a plain docker run with an explicit health wait.
+      - name: Start MinIO
+        run: |
+          docker run -d --name ci-minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9000/minio/health/live > /dev/null; then
+              echo "MinIO healthy"; exit 0
+            fi
+            sleep 1
+          done
+          docker logs ci-minio
+          echo "MinIO did not become healthy in 30s" >&2
+          exit 1
 
       - name: Format check
         working-directory: backend-rust
