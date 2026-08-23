@@ -87,6 +87,15 @@ jobs:
         working-directory: backend-rust
         run: cargo fmt --check
 
+      # The service container starts EMPTY; apply the canonical schema so integration
+      # tests see the same tables as production. \restrict/\unrestrict are pg_dump 15
+      # artifacts that some psql versions reject, so strip them first.
+      - name: Initialize database schema
+        run: |
+          sed '/^\\restrict/d; /^\\unrestrict/d' database/init.sql > /tmp/init-cleaned.sql
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres \
+            -d manga_library -v ON_ERROR_STOP=1 -f /tmp/init-cleaned.sql
+
       - name: Clippy
         working-directory: backend-rust
         run: cargo clippy --all-targets -- -D warnings
