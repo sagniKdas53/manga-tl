@@ -4,6 +4,99 @@ Living checklist for the rewrite on branch `rust-backend`. Tick items only when 
 implemented AND verified (build/clippy/test green, live behavior checked where applicable).
 The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schemas).
 
+---
+
+# SESSION HANDOFF — read this first after any context loss
+
+## Mission
+
+Replace the Java Spring Boot backend (`backend/`, ~14.3k LOC) with Rust/axum in THIS directory
+(`backend-rust/`) on branch `rust-backend`. HTTP contract is FROZEN to the golden spec; worker,
+frontend, DB schema, Grafana dashboards must keep working unchanged. Strategy: full rewrite on
+a branch, hard cutover at Phase 4.
+
+## Environment facts
+
+- Worktree: `/home/sagnik/Projects/docker-composes/manga-library-rust` (branch `rust-backend`);
+  canonical checkout `/home/sagnik/Projects/docker-composes/manga-library` stays on `main`.
+- Remotes: `github` = github.com/sagniKdas53/manga-tl.git · `pi5` = ssh://git@pi5.tail9ece4.ts.net:2222/sagnik/manga-library.git
+  → **push BOTH** after every commit (`git push github rust-backend && git push pi5 rust-backend`).
+- Live stack runs via docker compose on the canonical dir: Postgres (**user is `tladmin`,
+  NOT postgres** — see `.env`), Valkey :6379, MinIO (:9000 NOT published to host — tests use a
+  throwaway `docker run -p 19000:9000 minio/minio server /data`), backend :8080 under `/tlhub`.
+- Secrets: `/home/sagnik/Projects/docker-composes/manga-library/secrets/*.txt`
+  (db_password.txt, jwt_secret.txt [64 bytes ⇒ HS512], internal_api_token.txt…).
+- Rust stable ≥1.98 via rustup; run `source "$HOME/.cargo/env"` in fresh shells.
+
+## Verify everything before ticking (full gate)
+
+```bash
+cd /home/sagnik/Projects/docker-composes/manga-library-rust/backend-rust
+DBPW=$(cat ../secrets/db_password.txt)   # NOTE: ../secrets only exists from inside worktree/backend-rust
+export SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5432/manga_library
+export SPRING_DATASOURCE_USERNAME=tladmin SPRING_DATASOURCE_PASSWORD="$DBPW"
+export REDIS_TEST_ADDR=127.0.0.1:6379
+docker run --rm -d --name rust-minio-test -p 19000:9000 \
+  -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio server /data
+export MINIO_TEST_ENDPOINT=http://127.0.0.1:19000
+cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+```
+
+## Key decisions & documented deviations
+
+1. sqlx raw SQL over SeaORM — schema is hand-managed init.sql; compile-time-checked queries fit.
+2. JWT algorithm picked by SECRET LENGTH like jjwt (≥64B HS512 / ≥48B HS384 / else HS256);
+   zero clock skew; production secret is 64 B ⇒ HS512 (verified against live tokens).
+3. Auth errors: missing/invalid token on protected API = **403** Boot-shape JSON
+   `{timestamp(+00:00 ms), status, error:"Forbidden", path:"/tlhub/…"}`; unauthenticated
+   `/api/auth/me|refresh|change-password` = **401** `{"message":"Not authenticated"}` from the
+   controller itself; bad login = 401 **text/plain** "Invalid credentials"; internal API =
+   401 exact bytes `{"error": "Unauthorized: Invalid internal token"}`.
+4. Validation/malformed-JSON errors are RFC-7807 `application/problem+json`:
+   `{type:"about:blank", title, status, detail, instance:"/tlhub/path"[, timestamp][, errors]}` —
+   validation adds nanosecond `timestamp` + `errors` map; malformed JSON has NO timestamp and
+   detail "Failed to read request".
+5. Redis connect is fail-fast at boot (Spring was lazily silent) — deliberate deviation.
+6. WebP thumbnails: width 512, aspect height, RGB, lossy q85, upscale-small allowed.
+7. Passwords: bcrypt cost 10 pinned `$2a$`; committed regression hash from live Java backend;
+   `tests/java_compat.rs` proves bidirectional hash+JWT interop (env-gated).
+
+## Gotchas that already bit once
+
+- `cargo test` does NOT refresh `target/debug/manga-backend` — `cargo build` before smoke runs.
+- Deployment DB user is `tladmin` (from repo `.env`), not compose's default `postgres`.
+- `../secrets/db_password.txt` resolves relative to CWD; use absolute paths when unsure.
+- axum `nest` strips the prefix: handlers see `/api/...`; re-add context_path for Boot-shaped
+  error payloads.
+- Futures do nothing unless `.await`ed (`delete_quietly` test bug).
+- Uncommitted tx rows are invisible to pool connections (auth middleware test bug).
+- aws-sdk SdkError is huge: module-level `allow(clippy::result_large_err)` in minio.rs.
+- redis 0.27 ConnectionManager has NO pub/sub — subscribers open dedicated connections.
+
+## Where things live
+
+| Path | Contents |
+|---|---|
+| `src/config.rs` | env+secrets loading, fail-closed validation, JDBC URL translation |
+| `src/db.rs`, `src/models.rs` | PgPool; 17 entity structs mapped from database/init.sql |
+| `src/jwt.rs`, `src/password.rs` | jjwt-parity JWTs; bcrypt `$2a$10` |
+| `src/auth.rs` | AuthUser extractor, 403 shape, internal-token guard |
+| `src/minio.rs`, `src/redis_service.rs`, `src/thumbnails.rs` | storage/queues/pub-sub/WebP |
+| `src/routes/mod.rs` | router assembly under CONTEXT_PATH |
+| `spec/golden-openapi.json` | THE frozen contract (71 ops); `spec/golden-routes.txt` inventory |
+| `tests/*.rs` | db_entities, auth_middleware, minio_service, redis_service, java_compat |
+
+## Phase 2 execution order (current phase)
+
+error.rs (problem+json) → routes/auth.rs (7 endpoints) → route-table contract test vs
+golden-routes.txt → SeriesController port → PageController (uploads/streaming/thumbnails) →
+Layer/OcrRegion → Settings → Job → Forward. utoipa spec generation lands alongside; CI diff
+against golden spec gates each controller merge.
+
+---
+
+# Checkpoints
+
 Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
 
 ---
