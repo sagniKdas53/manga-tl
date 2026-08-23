@@ -162,8 +162,6 @@ Transaction-boundary rules for every handler above (from Java audit comments):
 
 ---
 
----
-
 # Checkpoints
 
 Legend: `[x]` done+verified · `[~]` partially done · `[ ]` not started
