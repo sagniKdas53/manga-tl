@@ -258,7 +258,7 @@ N/A deliberately not portable (say why).
 | ForwardControllerTest | 🟡 | API-404 covered; ADD SPA index.html served for extension-less non-API path |
 | GlobalExceptionHandlerTest | ✅ | shapes exercised across all endpoint suites |
 | HealthReporterTest | ✅ | health router unit test |
-| OpenApiSpecTest | ⏳ blocked | lands with Phase 4 step 1 (/v3/api-docs + generate-api diff) |
+| OpenApiSpecTest | ✅ | routes/mod.rs: /v3/api-docs serves golden bytes byte-for-byte (include_bytes) + core-path assertions; generate-api diff vs live Java stack is multiset-identical (3058 lines, springdoc emits non-deterministic key order per boot — zero functional drift) |
 | SchemaValidationTest / InitScriptReconciliationTest | ✅ | schema shared verbatim; db_entities round-trips |
 | Repository tests (Chapter/LayerElement/Layer/Page/Series) | ✅ | db_entities.rs rolled-back round-trips (query semantics live in endpoint suites) |
 | Entity tests (PageTest/UserTest/SystemSettingTest) | ✅ | serde/FromRow mappings in db_entities |
@@ -394,8 +394,11 @@ zip (archives), hex, base64.
 
 ## Phase 4 — Parity & cutover (CURRENT — see handoff execution order + matrix above)
 
-- [ ] **Step 1** Serve `/v3/api-docs` (static golden spec bytes); `npm run generate-api`
+- [x] **Step 1** Serve `/v3/api-docs` (static golden spec bytes); `npm run generate-api`
       against the Rust backend produces zero functional diff vs the Java-generated schema.d.ts
+      (VERIFIED 2026-08-24: served bytes cmp-identical to golden; schema.d.ts multiset-equal
+      vs live-Java generation — springdoc key-order only; frontend copy committed as
+      regenerated from the Rust backend so post-cutover regen is stable)
 - [ ] **Step 2** Scenario-parity sweep: every row of the matrix above is ✅ or N/A-with-reason
       (new suites: settings_endpoints, jobs_endpoints, layers_endpoints; unit tests for
       providers parse/validity, textbox geometry, qa retry budget, export metadata,

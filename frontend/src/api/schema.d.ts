@@ -4,55 +4,23 @@
  */
 
 export interface paths {
-    "/api/settings": {
+    "/api/auth/change-password": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getSettings"];
-        put: operations["updateSettings"];
-        post?: never;
+        get?: never;
+        put?: never;
+        post: operations["changePassword"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/series/{seriesId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getSeries"];
-        put: operations["updateSeries"];
-        post?: never;
-        delete: operations["deleteSeries"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/series/chapters/{chapterId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getChapter"];
-        put: operations["updateChapter"];
-        post?: never;
-        delete: operations["deleteChapter"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/layers/{id}": {
+    "/api/auth/login": {
         parameters: {
             query?: never;
             header?: never;
@@ -60,40 +28,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["updateLayer"];
-        post?: never;
-        delete: operations["deleteLayer"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/layer-elements/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["updateLayerElement"];
-        post?: never;
-        delete: operations["deleteLayerElement"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chapters/{chapterId}/pages/reorder": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["reorderPages"];
-        post?: never;
+        put?: never;
+        post: operations["login"];
         delete?: never;
         options?: never;
         head?: never;
@@ -116,39 +52,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/series": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listSeries"];
-        put?: never;
-        post: operations["createSeries"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/series/{seriesId}/chapters": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listChapters"];
-        put?: never;
-        post: operations["createChapter"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/series/{seriesId}/chapters/import": {
+    "/api/auth/refresh": {
         parameters: {
             query?: never;
             header?: never;
@@ -157,14 +61,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["importChapter"];
+        post: operations["refreshToken"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/pages/{pageId}/layers": {
+    "/api/auth/register": {
         parameters: {
             query?: never;
             header?: never;
@@ -173,14 +77,30 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["createPageLayer"];
+        post: operations["register"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/ocr-regions/{id}/redo": {
+    "/api/auth/setup-required": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["isSetupRequired"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chapters/{chapterId}/import-project": {
         parameters: {
             query?: never;
             header?: never;
@@ -189,14 +109,46 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["redoOcrRegion"];
+        post: operations["importProject"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/notifications/ticket": {
+    "/api/chapters/{chapterId}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chapters/{chapterId}/pages/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["reorderPages"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/images": {
         parameters: {
             query?: never;
             header?: never;
@@ -205,14 +157,50 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["issueTicket"];
+        post: operations["uploadPage"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/layers/{layerId}/elements": {
+    "/api/images/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get image details
+         * @description Returns image details including panels
+         */
+        get: operations["getImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/images/{imageId}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getImageFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/images/{imageId}/layers": {
         parameters: {
             query?: never;
             header?: never;
@@ -221,14 +209,34 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["createLayerElement"];
+        post: operations["createLayer"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{id}/retry": {
+    "/api/images/{imageId}/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the reader image variant
+         * @description WebP reading variant at native resolution. Falls back to the original when no variant was stored (already-WebP sources, or encodes that came out no smaller).
+         */
+        get: operations["getImageReader"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/images/{imageId}/redo": {
         parameters: {
             query?: never;
             header?: never;
@@ -237,14 +245,46 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["retryJob"];
+        post: operations["redoImage"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{id}/resume": {
+    "/api/images/{imageId}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getImageThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/images/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getImageInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head: operations["imageExists"];
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/images/{imageId}/qa-hybrid-prepare": {
         parameters: {
             query?: never;
             header?: never;
@@ -253,14 +293,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["resumeJob"];
+        post: operations["qaHybridPrepare"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{id}/pause": {
+    "/api/internal/jobs/callback/layout": {
         parameters: {
             query?: never;
             header?: never;
@@ -269,14 +309,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["pauseJob"];
+        post: operations["layoutCallback"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/resume": {
+    "/api/internal/jobs/callback/ocr": {
         parameters: {
             query?: never;
             header?: never;
@@ -285,14 +325,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["resumeQueue"];
+        post: operations["ocrCallback"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/pause": {
+    "/api/internal/jobs/callback/panel": {
         parameters: {
             query?: never;
             header?: never;
@@ -301,55 +341,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["pauseQueue"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/internal/ocr-regions/{id}/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["regionCallback"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/internal/jobs/callback/translation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["translationCallback"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/internal/jobs/callback/render": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["renderCallback"];
+        post: operations["panelCallback"];
         delete?: never;
         options?: never;
         head?: never;
@@ -388,7 +380,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/internal/jobs/callback/panel": {
+    "/api/internal/jobs/callback/render": {
         parameters: {
             query?: never;
             header?: never;
@@ -397,14 +389,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["panelCallback"];
+        post: operations["renderCallback"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/internal/jobs/callback/ocr": {
+    "/api/internal/jobs/callback/translation": {
         parameters: {
             query?: never;
             header?: never;
@@ -413,174 +405,30 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["ocrCallback"];
+        post: operations["translationCallback"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/internal/jobs/callback/layout": {
+    "/api/internal/jobs/{jobId}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["getJob"];
         put?: never;
-        post: operations["layoutCallback"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/internal/images/{imageId}/qa-hybrid-prepare": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["qaHybridPrepare"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/images": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["uploadPage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/images/{imageId}/redo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["redoImage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/images/{imageId}/layers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["createLayer"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chapters/{chapterId}/import-project": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["importProject"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["refreshToken"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/change-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["changePassword"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pages/{pageId}/number": {
+    "/api/internal/jobs/{jobId}/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -593,11 +441,247 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Update page number
-         * @description Update the number of a specific page
-         */
-        patch: operations["updatePageNumber"];
+        patch: operations["updateJobStatus"];
+        trace?: never;
+    };
+    "/api/internal/ocr-regions/{id}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["regionCallback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["clearQueue"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pauseQueue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resumeQueue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteJob"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pauseJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resumeJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["retryJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layer-elements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateLayerElement"];
+        post?: never;
+        delete: operations["deleteLayerElement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layer-elements/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLayerElementHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateLayer"];
+        post?: never;
+        delete: operations["deleteLayer"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/{layerId}/elements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createLayerElement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["issueTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/ocr-regions/{id}": {
@@ -620,7 +704,7 @@ export interface paths {
         patch: operations["updateOcrRegion"];
         trace?: never;
     };
-    "/api/internal/jobs/{jobId}/status": {
+    "/api/ocr-regions/{id}/redo": {
         parameters: {
             query?: never;
             header?: never;
@@ -629,71 +713,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["updateJobStatus"];
-        trace?: never;
-    };
-    "/api/internal/images/{imageId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getImageInfo"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head: operations["imageExists"];
-        patch?: never;
-        trace?: never;
-    };
-    "/api/settings/validate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["validateSettings"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/series/chapters/{chapterId}/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["exportChapter"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/series/chapters/exports/{exportId}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["downloadExport"];
-        put?: never;
-        post?: never;
+        post: operations["redoOcrRegion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -724,6 +744,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pages/{pageId}/layers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createPageLayer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pages/{pageId}/number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update page number
+         * @description Update the number of a specific page
+         */
+        patch: operations["updatePageNumber"];
+        trace?: never;
+    };
     "/api/pages/{pageId}/rendered": {
         parameters: {
             query?: never;
@@ -740,14 +796,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/notifications/stream": {
+    "/api/series": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["stream"];
+        get: operations["listSeries"];
+        put?: never;
+        post: operations["createSeries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/series/chapters/exports/{exportId}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadExport"];
         put?: never;
         post?: never;
         delete?: never;
@@ -756,150 +828,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/layer-elements/{id}/history": {
+    "/api/series/chapters/{chapterId}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getLayerElementHistory"];
-        put?: never;
+        get: operations["getChapter"];
+        put: operations["updateChapter"];
         post?: never;
-        delete?: never;
+        delete: operations["deleteChapter"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs": {
+    "/api/series/chapters/{chapterId}/export": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getJobs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/internal/jobs/{jobId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getJob"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/images/{imageId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get image details
-         * @description Returns image details including panels
-         */
-        get: operations["getImage"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/images/{imageId}/thumbnail": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getImageThumbnail"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/images/{imageId}/reader": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get the reader image variant
-         * @description WebP reading variant at native resolution. Falls back to the original when no variant was stored (already-WebP sources, or encodes that came out no smaller).
-         */
-        get: operations["getImageReader"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/images/{imageId}/file": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getImageFile"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chapters/{chapterId}/pages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listPages"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/setup-required": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["isSetupRequired"];
+        get: operations["exportChapter"];
         put?: never;
         post?: never;
         delete?: never;
@@ -924,23 +876,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{id}": {
+    "/api/series/{seriesId}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
+        get: operations["getSeries"];
+        put: operations["updateSeries"];
         post?: never;
-        delete: operations["deleteJob"];
+        delete: operations["deleteSeries"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/clear": {
+    "/api/series/{seriesId}/chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listChapters"];
+        put?: never;
+        post: operations["createChapter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/series/{seriesId}/chapters/import": {
         parameters: {
             query?: never;
             header?: never;
@@ -949,8 +917,40 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post: operations["importChapter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSettings"];
+        put: operations["updateSettings"];
         post?: never;
-        delete: operations["clearQueue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["validateSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -960,286 +960,207 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ModelEntryDto: {
-            id?: string;
-            name?: string;
-            free?: boolean;
-        };
-        SystemSettingsDto: {
-            ocrVlmModelList?: string[];
-            tlLlmModelList?: string[];
-            qaLlmModelList?: string[];
-            qaVlmModelList?: string[];
-            routingStrategy?: string;
-            ocrProvider?: string;
-            ocrModel?: string;
-            tlProvider?: string;
-            tlModel?: string;
-            qaProvider?: string;
-            qaLlmModel?: string;
-            qaVlmModel?: string;
-            disableLocalOcr?: boolean;
-            localOcrModel?: string;
-            disableLocalLlm?: boolean;
-            qaMode?: string;
-            useFallbackModels?: boolean;
-            activeProviders?: string[];
-            activeOcrProviders?: string[];
-            providerModelsMap?: {
-                [key: string]: {
-                    [key: string]: components["schemas"]["ModelEntryDto"][];
-                };
-            };
-        };
-        SeriesDto: {
-            /** Format: uuid */
-            id?: string;
-            title?: string;
-            originalLanguage?: string;
-            sourceLanguage?: string;
-            targetLanguage?: string;
-            readingDirection?: string;
-            coverImageUrl?: string;
-            ocrProvider?: string;
-            ocrModel?: string;
-            tlProvider?: string;
-            tlModel?: string;
-            qaProvider?: string;
-            qaLlmModel?: string;
-            qaVlmModel?: string;
-            qaMode?: string;
-            routingStrategy?: string;
-            useFallbackModels?: boolean;
-            resolvedUseFallbackModels?: boolean;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
+        ChangePasswordRequest: {
+            currentPassword: string;
+            newPassword: string;
         };
         ChapterDto: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            seriesId?: string;
             /** Format: double */
             chapterNumber?: number;
-            title?: string;
             coverImageUrl?: string;
-            ocrProvider?: string;
-            ocrModel?: string;
-            tlProvider?: string;
-            tlModel?: string;
-            qaProvider?: string;
-            qaLlmModel?: string;
-            qaVlmModel?: string;
-            qaMode?: string;
-            routingStrategy?: string;
-            useContextMemory?: boolean;
-            useFallbackModels?: boolean;
-            resolvedUseFallbackModels?: boolean;
-            /** Format: int32 */
-            pageCount?: number;
             /** Format: date-time */
             createdAt?: string;
+            /** Format: uuid */
+            id?: string;
+            ocrModel?: string;
+            ocrProvider?: string;
+            /** Format: int32 */
+            pageCount?: number;
+            qaLlmModel?: string;
+            qaMode?: string;
+            qaProvider?: string;
+            qaVlmModel?: string;
+            resolvedOcr?: components["schemas"]["ResolvedModelSlot"];
+            resolvedQa?: components["schemas"]["ResolvedQaSlot"];
+            resolvedTranslation?: components["schemas"]["ResolvedModelSlot"];
+            resolvedUseFallbackModels?: boolean;
+            routingStrategy?: string;
+            /** Format: uuid */
+            seriesId?: string;
+            title?: string;
+            tlModel?: string;
+            tlProvider?: string;
             /** Format: date-time */
             updatedAt?: string;
-            resolvedOcr?: components["schemas"]["ResolvedModelSlot"];
-            resolvedTranslation?: components["schemas"]["ResolvedModelSlot"];
-            resolvedQa?: components["schemas"]["ResolvedQaSlot"];
-        };
-        ResolvedModelSlot: {
-            provider?: string;
-            model?: string;
-            source?: string;
-        };
-        ResolvedQaSlot: {
-            provider?: string;
-            llmModel?: string;
-            vlmModel?: string;
-            mode?: string;
-            source?: string;
+            useContextMemory?: boolean;
+            useFallbackModels?: boolean;
         };
         JsonNode: Record<string, never>;
         Layer: {
-            /** Format: uuid */
-            id?: string;
-            type?: string;
-            targetLanguage?: string;
-            visible?: boolean;
             /** Format: date-time */
             createdAt?: string;
+            /** Format: uuid */
+            id?: string;
             metadataJson?: components["schemas"]["JsonNode"];
+            targetLanguage?: string;
+            type?: string;
+            visible?: boolean;
             /** Format: int32 */
             zorder?: number;
         };
-        LayerElementDto: {
-            text?: string;
-            font?: string;
-            /** Format: double */
-            size?: number;
-            autoSize?: boolean;
-            /** Format: int32 */
-            maxWidth?: number;
-            /** Format: int32 */
-            maxHeight?: number;
-            wordWrap?: boolean;
-            /** Format: double */
-            rotation?: number;
-            /** Format: double */
-            x?: number;
-            /** Format: double */
-            y?: number;
-            visible?: boolean;
-            overflow?: boolean;
-            backgroundColor?: string;
-            textColor?: string;
-            fontWeight?: string;
-            fontStyle?: string;
-            boxShape?: string;
-            maskPolygon?: string;
-            /** Format: uuid */
-            regionId?: string;
-        };
-        LayerElement: {
-            /** Format: uuid */
-            id?: string;
-            text?: string;
-            font?: string;
-            /** Format: double */
-            size?: number;
-            autoSize?: boolean;
-            /** Format: int32 */
-            maxWidth?: number;
-            /** Format: int32 */
-            maxHeight?: number;
-            wordWrap?: boolean;
-            /** Format: double */
-            rotation?: number;
-            /** Format: double */
-            x?: number;
-            /** Format: double */
-            y?: number;
-            visible?: boolean;
-            overflow?: boolean;
-            backgroundColor?: string;
-            textColor?: string;
-            fontWeight?: string;
-            fontStyle?: string;
-            isManuallyEdited?: boolean;
+        LayerEditHistory: {
             /** Format: date-time */
             editedAt?: string;
+            /** Format: uuid */
+            id?: string;
+            newValueJson?: string;
+            previousValueJson?: string;
+        };
+        LayerElement: {
+            autoSize?: boolean;
+            backgroundColor?: string;
             boxShape?: string;
-            maskPolygon?: string;
+            /** Format: date-time */
+            editedAt?: string;
+            font?: string;
+            fontStyle?: string;
+            fontWeight?: string;
+            /** Format: uuid */
+            id?: string;
+            isManuallyEdited?: boolean;
             /** Format: uuid */
             layerId?: string;
             layerType?: string;
             layerVisible?: boolean;
-            regionType?: string;
-            /** Format: uuid */
-            regionId?: string;
-            qaStatus?: string;
-            /** Format: double */
-            qaScore?: number;
-            qaFeedback?: string;
-        };
-        PanelCallbackDto: {
-            jobId?: string;
-            /** Format: uuid */
-            imageId?: string;
-            /** Format: uuid */
-            pageId?: string;
-            panels?: components["schemas"]["PanelData"][];
-        };
-        PanelData: {
-            /** Format: int32 */
-            x?: number;
-            /** Format: int32 */
-            y?: number;
-            /** Format: int32 */
-            width?: number;
-            /** Format: int32 */
-            height?: number;
-            /** Format: int32 */
-            gridRow?: number;
-            /** Format: int32 */
-            gridCol?: number;
-            /** Format: int32 */
-            readingOrder?: number;
-        };
-        OcrCallbackDto: {
-            jobId?: string;
-            /** Format: uuid */
-            imageId?: string;
-            /** Format: uuid */
-            pageId?: string;
-            modelIdentifier?: string;
-            /** Format: double */
-            confidence?: number;
-            cost?: Record<string, never>;
-            regions?: components["schemas"]["OcrRegionData"][];
-        };
-        OcrRegionData: {
-            text?: string;
-            detectedLanguage?: string;
-            /** Format: double */
-            confidence?: number;
-            /** Format: double */
-            rotation?: number;
-            /** Format: int32 */
-            x?: number;
-            /** Format: int32 */
-            y?: number;
-            /** Format: int32 */
-            width?: number;
-            /** Format: int32 */
-            height?: number;
-            /** Format: int32 */
-            panelReadingOrder?: number;
-            /** Format: int32 */
-            bubbleReadingOrder?: number;
-            conversationGroup?: string[];
-            backgroundColor?: string;
-            /** Format: int32 */
-            bubbleX?: number;
-            /** Format: int32 */
-            bubbleY?: number;
-            /** Format: int32 */
-            bubbleWidth?: number;
-            /** Format: int32 */
-            bubbleHeight?: number;
-            bubbleId?: string;
-            /** Format: double */
-            detectionConfidence?: number;
             maskPolygon?: string;
             /** Format: int32 */
-            safeTextX?: number;
+            maxHeight?: number;
             /** Format: int32 */
-            safeTextY?: number;
-            /** Format: int32 */
-            safeTextW?: number;
-            /** Format: int32 */
-            safeTextH?: number;
-        };
-        UploadResponse: {
+            maxWidth?: number;
+            overflow?: boolean;
+            qaFeedback?: string;
+            /** Format: double */
+            qaScore?: number;
+            qaStatus?: string;
             /** Format: uuid */
-            pageId?: string;
-            /** Format: uuid */
-            imageId?: string;
-            status?: string;
+            regionId?: string;
+            regionType?: string;
+            /** Format: double */
+            rotation?: number;
+            /** Format: double */
+            size?: number;
+            text?: string;
+            textColor?: string;
+            visible?: boolean;
+            wordWrap?: boolean;
+            /** Format: double */
+            x?: number;
+            /** Format: double */
+            y?: number;
         };
-        RegisterRequest: {
-            email: string;
-            password: string;
-            displayName: string;
-            role?: string;
+        LayerElementDto: {
+            autoSize?: boolean;
+            backgroundColor?: string;
+            boxShape?: string;
+            font?: string;
+            fontStyle?: string;
+            fontWeight?: string;
+            maskPolygon?: string;
+            /** Format: int32 */
+            maxHeight?: number;
+            /** Format: int32 */
+            maxWidth?: number;
+            overflow?: boolean;
+            /** Format: uuid */
+            regionId?: string;
+            /** Format: double */
+            rotation?: number;
+            /** Format: double */
+            size?: number;
+            text?: string;
+            textColor?: string;
+            visible?: boolean;
+            wordWrap?: boolean;
+            /** Format: double */
+            x?: number;
+            /** Format: double */
+            y?: number;
         };
         LoginRequest: {
             email: string;
             password: string;
         };
-        ChangePasswordRequest: {
-            currentPassword: string;
-            newPassword: string;
+        ModelEntryDto: {
+            free?: boolean;
+            id?: string;
+            name?: string;
+        };
+        OcrCallbackDto: {
+            /** Format: double */
+            confidence?: number;
+            cost?: Record<string, never>;
+            /** Format: uuid */
+            imageId?: string;
+            jobId?: string;
+            modelIdentifier?: string;
+            /** Format: uuid */
+            pageId?: string;
+            regions?: components["schemas"]["OcrRegionData"][];
+        };
+        OcrRegionData: {
+            backgroundColor?: string;
+            /** Format: int32 */
+            bubbleHeight?: number;
+            bubbleId?: string;
+            /** Format: int32 */
+            bubbleReadingOrder?: number;
+            /** Format: int32 */
+            bubbleWidth?: number;
+            /** Format: int32 */
+            bubbleX?: number;
+            /** Format: int32 */
+            bubbleY?: number;
+            /** Format: double */
+            confidence?: number;
+            conversationGroup?: string[];
+            detectedLanguage?: string;
+            /** Format: double */
+            detectionConfidence?: number;
+            /** Format: int32 */
+            height?: number;
+            maskPolygon?: string;
+            /** Format: int32 */
+            panelReadingOrder?: number;
+            /** Format: double */
+            rotation?: number;
+            /** Format: int32 */
+            safeTextH?: number;
+            /** Format: int32 */
+            safeTextW?: number;
+            /** Format: int32 */
+            safeTextX?: number;
+            /** Format: int32 */
+            safeTextY?: number;
+            text?: string;
+            /** Format: int32 */
+            width?: number;
+            /** Format: int32 */
+            x?: number;
+            /** Format: int32 */
+            y?: number;
+        };
+        PageDto: {
+            /** Format: uuid */
+            chapterId?: string;
+            filename?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            imageId?: string;
+            /** Format: int32 */
+            pageNumber?: number;
+            thumbnailUrl?: string;
+            url?: string;
         };
         Pageable: {
             /** Format: int32 */
@@ -1247,17 +1168,6 @@ export interface components {
             /** Format: int32 */
             size?: number;
             sort?: string[];
-        };
-        PagedResponseSeriesDto: {
-            content?: components["schemas"]["SeriesDto"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
         };
         PagedResponseChapterDto: {
             content?: components["schemas"]["ChapterDto"][];
@@ -1270,32 +1180,6 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
-        StreamingResponseBody: Record<string, never>;
-        SseEmitter: {
-            /** Format: int64 */
-            timeout?: number;
-        };
-        LayerEditHistory: {
-            /** Format: uuid */
-            id?: string;
-            previousValueJson?: string;
-            newValueJson?: string;
-            /** Format: date-time */
-            editedAt?: string;
-        };
-        PageDto: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: int32 */
-            pageNumber?: number;
-            /** Format: uuid */
-            imageId?: string;
-            /** Format: uuid */
-            chapterId?: string;
-            filename?: string;
-            url?: string;
-            thumbnailUrl?: string;
-        };
         PagedResponsePageDto: {
             content?: components["schemas"]["PageDto"][];
             /** Format: int32 */
@@ -1307,6 +1191,122 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
+        PagedResponseSeriesDto: {
+            content?: components["schemas"]["SeriesDto"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        PanelCallbackDto: {
+            /** Format: uuid */
+            imageId?: string;
+            jobId?: string;
+            /** Format: uuid */
+            pageId?: string;
+            panels?: components["schemas"]["PanelData"][];
+        };
+        PanelData: {
+            /** Format: int32 */
+            gridCol?: number;
+            /** Format: int32 */
+            gridRow?: number;
+            /** Format: int32 */
+            height?: number;
+            /** Format: int32 */
+            readingOrder?: number;
+            /** Format: int32 */
+            width?: number;
+            /** Format: int32 */
+            x?: number;
+            /** Format: int32 */
+            y?: number;
+        };
+        RegisterRequest: {
+            displayName: string;
+            email: string;
+            password: string;
+            role?: string;
+        };
+        ResolvedModelSlot: {
+            model?: string;
+            provider?: string;
+            source?: string;
+        };
+        ResolvedQaSlot: {
+            llmModel?: string;
+            mode?: string;
+            provider?: string;
+            source?: string;
+            vlmModel?: string;
+        };
+        SeriesDto: {
+            coverImageUrl?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: uuid */
+            id?: string;
+            ocrModel?: string;
+            ocrProvider?: string;
+            originalLanguage?: string;
+            qaLlmModel?: string;
+            qaMode?: string;
+            qaProvider?: string;
+            qaVlmModel?: string;
+            readingDirection?: string;
+            resolvedUseFallbackModels?: boolean;
+            routingStrategy?: string;
+            sourceLanguage?: string;
+            targetLanguage?: string;
+            title?: string;
+            tlModel?: string;
+            tlProvider?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            useFallbackModels?: boolean;
+        };
+        SseEmitter: {
+            /** Format: int64 */
+            timeout?: number;
+        };
+        StreamingResponseBody: Record<string, never>;
+        SystemSettingsDto: {
+            activeOcrProviders?: string[];
+            activeProviders?: string[];
+            disableLocalLlm?: boolean;
+            disableLocalOcr?: boolean;
+            localOcrModel?: string;
+            ocrModel?: string;
+            ocrProvider?: string;
+            ocrVlmModelList?: string[];
+            providerModelsMap?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["ModelEntryDto"][];
+                };
+            };
+            qaLlmModel?: string;
+            qaLlmModelList?: string[];
+            qaMode?: string;
+            qaProvider?: string;
+            qaVlmModel?: string;
+            qaVlmModelList?: string[];
+            routingStrategy?: string;
+            tlLlmModelList?: string[];
+            tlModel?: string;
+            tlProvider?: string;
+            useFallbackModels?: boolean;
+        };
+        UploadResponse: {
+            /** Format: uuid */
+            imageId?: string;
+            /** Format: uuid */
+            pageId?: string;
+            status?: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1316,27 +1316,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SystemSettingsDto"];
-                };
-            };
-        };
-    };
-    updateSettings: {
+    changePassword: {
         parameters: {
             query?: never;
             header?: never;
@@ -1345,123 +1325,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SystemSettingsDto"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SystemSettingsDto"];
-                };
-            };
-        };
-    };
-    getSeries: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                seriesId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SeriesDto"];
-                };
-            };
-        };
-    };
-    updateSeries: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                seriesId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SeriesDto"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SeriesDto"];
-                };
-            };
-        };
-    };
-    deleteSeries: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                seriesId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    getChapter: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chapterId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ChapterDto"];
-                };
-            };
-        };
-    };
-    updateChapter: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chapterId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChapterDto"];
+                "application/json": components["schemas"]["ChangePasswordRequest"];
             };
         };
         responses: {
@@ -1476,136 +1340,16 @@ export interface operations {
             };
         };
     };
-    deleteChapter: {
+    login: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                chapterId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    updateLayer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["Layer"];
-                };
-            };
-        };
-    };
-    deleteLayer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    updateLayerElement: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LayerElementDto"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LayerElement"];
-                };
-            };
-        };
-    };
-    deleteLayerElement: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    reorderPages: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chapterId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": string[];
+                "application/json": components["schemas"]["LoginRequest"];
             };
         };
         responses: {
@@ -1686,6 +1430,1219 @@ export interface operations {
             };
         };
     };
+    refreshToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    isSetupRequired: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    importProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    listPages: {
+        parameters: {
+            query: {
+                unsortedPageable: components["schemas"]["Pageable"];
+                sortDir?: string;
+            };
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PagedResponsePageDto"];
+                };
+            };
+        };
+    };
+    reorderPages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": string[];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    uploadPage: {
+        parameters: {
+            query: {
+                chapterId: string;
+                pageNumber: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UploadResponse"];
+                };
+            };
+        };
+    };
+    getImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image found */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: Record<string, never>;
+                    };
+                };
+            };
+        };
+    };
+    getImageFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StreamingResponseBody"];
+                };
+            };
+        };
+    };
+    createLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Layer"];
+                };
+            };
+        };
+    };
+    getImageReader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StreamingResponseBody"];
+                };
+            };
+        };
+    };
+    redoImage: {
+        parameters: {
+            query: {
+                type: string;
+                chapterId?: string;
+            };
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getImageThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StreamingResponseBody"];
+                };
+            };
+        };
+    };
+    getImageInfo: {
+        parameters: {
+            query?: {
+                chapterId?: string;
+                pageId?: string;
+            };
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    imageExists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    qaHybridPrepare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    layoutCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    ocrCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OcrCallbackDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    panelCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PanelCallbackDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    qaCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    qaReOcrCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    renderCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    translationCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    updateJobStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    regionCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getJobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: Record<string, never>;
+                    };
+                };
+            };
+        };
+    };
+    clearQueue: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    pauseQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    resumeQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    deleteJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    pauseJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    resumeJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    retryJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    updateLayerElement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LayerElementDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LayerElement"];
+                };
+            };
+        };
+    };
+    deleteLayerElement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getLayerElementHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LayerEditHistory"][];
+                };
+            };
+        };
+    };
+    updateLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Layer"];
+                };
+            };
+        };
+    };
+    deleteLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    createLayerElement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                layerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LayerElementDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LayerElement"];
+                };
+            };
+        };
+    };
+    stream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SseEmitter"];
+                };
+            };
+        };
+    };
+    issueTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    updateOcrRegion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OCR region updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    redoOcrRegion: {
+        parameters: {
+            query: {
+                type: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page found */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Page not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: Record<string, never>;
+                    };
+                };
+            };
+        };
+    };
+    deletePage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    createPageLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Layer"];
+                };
+            };
+        };
+    };
+    updatePageNumber: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description Page number updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getPageRenderedFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StreamingResponseBody"];
+                };
+            };
+        };
+    };
     listSeries: {
         parameters: {
             query: {
@@ -1731,6 +2688,211 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["SeriesDto"];
                 };
+            };
+        };
+    };
+    downloadExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                exportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getChapter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ChapterDto"];
+                };
+            };
+        };
+    };
+    updateChapter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChapterDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    deleteChapter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exportChapter: {
+        parameters: {
+            query?: {
+                format?: string;
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    clearExports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chapterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getSeries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                seriesId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SeriesDto"];
+                };
+            };
+        };
+    };
+    updateSeries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                seriesId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SeriesDto"];
+                };
+            };
+        };
+    };
+    deleteSeries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                seriesId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1827,59 +2989,7 @@ export interface operations {
             };
         };
     };
-    createPageLayer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                pageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["Layer"];
-                };
-            };
-        };
-    };
-    redoOcrRegion: {
-        parameters: {
-            query: {
-                type: string;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    issueTicket: {
+    getSettings: {
         parameters: {
             query?: never;
             header?: never;
@@ -1894,174 +3004,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": {
-                        [key: string]: string;
-                    };
+                    "*/*": components["schemas"]["SystemSettingsDto"];
                 };
             };
         };
     };
-    createLayerElement: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                layerId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LayerElementDto"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LayerElement"];
-                };
-            };
-        };
-    };
-    retryJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    resumeJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    pauseJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    resumeQueue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    pauseQueue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    regionCallback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    translationCallback: {
+    updateSettings: {
         parameters: {
             query?: never;
             header?: never;
@@ -2070,9 +3018,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
+                "application/json": components["schemas"]["SystemSettingsDto"];
             };
         };
         responses: {
@@ -2082,521 +3028,8 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["SystemSettingsDto"];
                 };
-            };
-        };
-    };
-    renderCallback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: string;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    qaCallback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    qaReOcrCallback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    panelCallback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PanelCallbackDto"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    ocrCallback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OcrCallbackDto"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    layoutCallback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    qaHybridPrepare: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    uploadPage: {
-        parameters: {
-            query: {
-                chapterId: string;
-                pageNumber: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** Format: binary */
-                    file: string;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["UploadResponse"];
-                };
-            };
-        };
-    };
-    redoImage: {
-        parameters: {
-            query: {
-                type: string;
-                chapterId?: string;
-            };
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    createLayer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["Layer"];
-                };
-            };
-        };
-    };
-    importProject: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chapterId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** Format: binary */
-                    file: string;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    refreshToken: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    changePassword: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChangePasswordRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    updatePageNumber: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                pageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description Page number updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    updateOcrRegion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description OCR region updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    updateJobStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                jobId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: string;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    getImageInfo: {
-        parameters: {
-            query?: {
-                chapterId?: string;
-                pageId?: string;
-            };
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    imageExists: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -2618,439 +3051,6 @@ export interface operations {
                     "*/*": {
                         [key: string]: Record<string, never>;
                     };
-                };
-            };
-        };
-    };
-    exportChapter: {
-        parameters: {
-            query?: {
-                format?: string;
-                force?: boolean;
-            };
-            header?: never;
-            path: {
-                chapterId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    downloadExport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                exportId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    getPage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                pageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Page found */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: Record<string, never>;
-                    };
-                };
-            };
-            /** @description Page not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: Record<string, never>;
-                    };
-                };
-            };
-        };
-    };
-    deletePage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                pageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Page deleted */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    getPageRenderedFile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                pageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["StreamingResponseBody"];
-                };
-            };
-        };
-    };
-    stream: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SseEmitter"];
-                };
-            };
-        };
-    };
-    getLayerElementHistory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["LayerEditHistory"][];
-                };
-            };
-        };
-    };
-    getJobs: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: Record<string, never>;
-                    };
-                };
-            };
-        };
-    };
-    getJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                jobId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    getImage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Image found */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: Record<string, never>;
-                    };
-                };
-            };
-            /** @description Image not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: Record<string, never>;
-                    };
-                };
-            };
-        };
-    };
-    getImageThumbnail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["StreamingResponseBody"];
-                };
-            };
-        };
-    };
-    getImageReader: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["StreamingResponseBody"];
-                };
-            };
-        };
-    };
-    getImageFile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                imageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["StreamingResponseBody"];
-                };
-            };
-        };
-    };
-    listPages: {
-        parameters: {
-            query: {
-                unsortedPageable: components["schemas"]["Pageable"];
-                sortDir?: string;
-            };
-            header?: never;
-            path: {
-                chapterId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["PagedResponsePageDto"];
-                };
-            };
-        };
-    };
-    isSetupRequired: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    clearExports: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chapterId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    deleteJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
-                };
-            };
-        };
-    };
-    clearQueue: {
-        parameters: {
-            query?: {
-                force?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": Record<string, never>;
                 };
             };
         };

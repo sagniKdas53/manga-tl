@@ -29,6 +29,22 @@ use tower_http::trace::TraceLayer;
 
 use crate::state::AppState;
 
+/// The frozen OpenAPI contract, embedded at compile time from `spec/golden-openapi.json`
+/// (Phase 4 step 1). Serving these exact bytes at `/v3/api-docs` replaces springdoc: the
+/// HTTP surface is frozen, so the static copy IS the truth and the frontend's
+/// `npm run generate-api` keeps working unchanged.
+const GOLDEN_OPENAPI: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/spec/golden-openapi.json"
+));
+
+async fn openapi_docs() -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        GOLDEN_OPENAPI,
+    )
+}
+
 /// Builds the complete application router.
 pub fn build_router(state: AppState) -> Router {
     let context_path = state.config.context_path.clone();
@@ -36,6 +52,7 @@ pub fn build_router(state: AppState) -> Router {
     // Everything Spring served relative to its context path.
     let inner = Router::new()
         .merge(health::router())
+        .route("/v3/api-docs", axum::routing::get(openapi_docs))
         .nest("/api/auth", auth::router())
         .nest("/api/series", series::router())
         .nest("/api/jobs", jobs::router())
@@ -203,5 +220,46 @@ mod tests {
             response.headers().get("content-type").unwrap(),
             "application/json"
         );
+    }
+
+    /// OpenApiSpecTest port (Phase 4 step 1): the served spec must be byte-identical to
+    /// the frozen golden contract.
+    #[tokio::test]
+    async fn openapi_docs_served_byte_for_byte() {
+        let app = build_router(test_state("/tlhub"));
+        let response = app
+            .oneshot(
+                Request::get("/tlhub/v3/api-docs")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), Status::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&bytes[..], GOLDEN_OPENAPI);
+    }
+
+    /// The behavioral half of OpenApiSpecTest: valid JSON, and every core path the
+    /// frontend consumes is present under /api.
+    #[tokio::test]
+    async fn openapi_docs_contains_core_contract_paths() {
+        let spec: serde_json::Value = serde_json::from_slice(GOLDEN_OPENAPI).unwrap();
+        assert!(spec.get("openapi").is_some());
+        let paths = spec.get("paths").expect("paths object");
+        for path in [
+            "/api/series",
+            "/api/series/{seriesId}",
+            "/api/series/{seriesId}/chapters",
+            "/api/pages/{pageId}",
+            "/api/jobs",
+            "/api/settings",
+        ] {
+            assert!(paths.get(path).is_some(), "missing contract path {path}");
+        }
     }
 }

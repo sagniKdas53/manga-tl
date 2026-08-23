@@ -12,8 +12,9 @@ from pathlib import Path
 GOLDEN = Path(__file__).parent.parent / "backend-rust" / "spec" / "golden-routes.txt"
 
 # "METHOD path" entries the Rust backend serves today (keep in sync with src/routes/).
-# Actuator health endpoints are served too but are NOT part of the OpenAPI contract:
+# Served too but NOT part of the OpenAPI contract:
 # GET /actuator/health[/liveness|/readiness] — byte-compatible {"status":"UP"}.
+# GET /v3/api-docs — static bytes of spec/golden-openapi.json (Phase 4 step 1).
 PORTED = {
     # auth (Phase 2)
     "GET /api/auth/setup-required",
