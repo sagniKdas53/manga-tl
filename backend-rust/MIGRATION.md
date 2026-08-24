@@ -426,8 +426,15 @@ zip (archives), hex, base64.
       dispatcher_mock_worker.rs drives real Dispatcher::run_cycle() cycles — pause gate,
       202 stamping, 400 permanent FAILED, 429 cooldown skip, slot saturation,
       single-queue stall; run_cycle made pub for tests. Gate: 115 tests green)
-- [ ] **Step 4** Frontend E2E smoke via Playwright against the Rust backend (login → series →
-      upload → reader → SSE notification → settings), SPA served from the Rust process
+- [x] **Step 4** Frontend E2E smoke via Playwright against the Rust backend (VERIFIED
+      2026-08-24: scripts/e2e-smoke.js — register→dashboard, SSE stream 200, series create,
+      chapter create, single-image upload appears in grid, reader renders the page bitmap,
+      settings modal loads + saves. Playwright 1.62.1 headless chromium via
+      NODE_PATH=npx cache. DRIFT FOUND & FIXED: SPA serving — axum nest misses
+      {context}/ exact root (404 where Spring serves its welcome page) and dotted asset
+      paths need real static-file serving from the dist (Spring's resource handler runs
+      BEFORE ForwardController); spa_shell()/asset_mime() added + tests. Gate: 116 tests
+      green, parity 71/71)
 - [ ] **Step 5** REAL Python worker run end-to-end (register → chapter ZIP import → full
       pipeline with real models → export download); contract mismatches are backend bugs
 - [ ] **Step 6** New Dockerfile: cargo-chef caching, BUILDPLATFORM build stages, embedded

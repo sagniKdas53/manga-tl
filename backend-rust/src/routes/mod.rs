@@ -67,7 +67,16 @@ pub fn build_router(state: AppState) -> Router {
     let app = if context_path == "/" {
         inner
     } else {
-        Router::new().nest(&context_path, inner)
+        // Spring serves its static welcome page at the context root itself, but axum's
+        // nest does not match `{context}/` (trailing slash) or route it to the inner
+        // fallback — so both exact spellings get the SPA shell explicitly.
+        Router::new()
+            .nest(&context_path, inner)
+            .route(&context_path, axum::routing::get(|| async { spa_shell() }))
+            .route(
+                &format!("{context_path}/"),
+                axum::routing::get(|| async { spa_shell() }),
+            )
     };
 
     app.layer(CatchPanicLayer::custom(|_panic| {
@@ -125,12 +134,52 @@ async fn spa_fallback(uri: axum::http::Uri) -> Response {
     // Phase 4 embeds the frontend dist into the binary; until then read it from disk
     // (the Dockerfile copies dist next to the binary, matching today's layout).
     //
-    // Java's ForwardController maps ONLY extension-less paths (`/{path:[^\\.]*}`) to the
-    // SPA shell; a dotted path is an asset lookup and must stay a real 404.
+    // Java layers a static-resource handler IN FRONT of ForwardController: dotted paths
+    // are asset lookups served from the SPA dist, while extension-less paths fall
+    // through the `/{path:[^\\.]*}` mapping to index.html.
     let last_segment = path.rsplit('/').next().unwrap_or("");
-    if last_segment.contains('.') {
+    if !last_segment.contains('.') {
+        return spa_shell();
+    }
+
+    // Asset lookup within the dist dir (traversal-guarded).
+    if path.split('/').any(|seg| seg == "..") {
         return StatusCode::NOT_FOUND.into_response();
     }
+    let dist_dir = std::env::var("SPA_DIST_DIR").unwrap_or_else(|_| "../frontend/dist".into());
+    match std::fs::read(format!("{dist_dir}{path}")) {
+        Ok(bytes) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, asset_mime(path))],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Content types for the SPA's built assets (the set Vite actually emits).
+fn asset_mime(path: &str) -> &'static str {
+    match path.rsplit('.').next().unwrap_or("") {
+        "js" | "mjs" => "text/javascript",
+        "css" => "text/css",
+        "html" => "text/html;charset=UTF-8",
+        "json" | "webmanifest" => "application/json",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        "webp" => "image/webp",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "txt" => "text/plain",
+        _ => "application/octet-stream",
+    }
+}
+
+/// The SPA shell (index.html from disk until Phase 4 embeds it), shared by the
+/// fallback and the context-root routes.
+fn spa_shell() -> Response {
     let dist_dir = std::env::var("SPA_DIST_DIR").unwrap_or_else(|_| "../frontend/dist".into());
     if let Ok(index) = std::fs::read(format!("{dist_dir}/index.html")) {
         return (
@@ -270,10 +319,14 @@ mod tests {
         }
     }
 
+    /// Both SPA tests mutate the process-global SPA_DIST_DIR: serialize them.
+    static SPA_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     /// ForwardControllerTest port: extension-less non-API paths get the SPA shell;
     /// paths WITH an extension (assets) do not.
     #[tokio::test]
     async fn spa_fallback_serves_index_for_extension_less_paths() {
+        let _spa_env = SPA_ENV_LOCK.lock().await;
         let dist = std::env::temp_dir().join(format!("spa-e2e-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dist).expect("mkdir");
         std::fs::write(dist.join("index.html"), "<html><body>SPA</body></html>").expect("index");
@@ -300,7 +353,25 @@ mod tests {
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&bytes[..], b"<html><body>SPA</body></html>");
 
-        // An asset-looking path is NOT rewritten to index.html.
+        // A REAL asset file is served with its content type (Spring static-handler parity).
+        std::fs::create_dir_all(dist.join("assets")).expect("assets dir");
+        std::fs::write(dist.join("assets/app-1.js"), b"console.log(1)").expect("asset");
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/tlhub/assets/app-1.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), Status::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/javascript"
+        );
+
+        // A missing asset stays a 404.
         let response = app
             .oneshot(
                 Request::get("/tlhub/assets/nope.js")
@@ -310,6 +381,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), Status::NOT_FOUND);
+
+        unsafe { std::env::remove_var("SPA_DIST_DIR") };
+        let _ = std::fs::remove_dir_all(&dist);
+    }
+
+    /// Spring welcome-page parity: GET /tlhub and /tlhub/ serve the SPA shell.
+    #[tokio::test]
+    async fn context_root_serves_the_spa_shell() {
+        let _spa_env = SPA_ENV_LOCK.lock().await;
+        let dist = std::env::temp_dir().join(format!("spa-root-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dist).expect("mkdir");
+        std::fs::write(dist.join("index.html"), b"<html>root</html>").expect("index");
+        // SAFETY: no other test touches SPA_DIST_DIR; test binaries own their process.
+        unsafe { std::env::set_var("SPA_DIST_DIR", &dist) };
+
+        for path in ["/tlhub", "/tlhub/"] {
+            let app = build_router(test_state("/tlhub"));
+            let response = app
+                .oneshot(Request::get(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), Status::OK, "{path}");
+            let bytes = response.into_body().collect().await.unwrap().to_bytes();
+            assert_eq!(&bytes[..], b"<html>root</html>", "{path}");
+        }
 
         unsafe { std::env::remove_var("SPA_DIST_DIR") };
         let _ = std::fs::remove_dir_all(&dist);
