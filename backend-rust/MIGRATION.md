@@ -256,7 +256,7 @@ N/A deliberately not portable (say why).
 | JobCoordinatorServiceTest | ✅ | claim/dup + redo + qa retry-budget exhaustion (COMPLETED at 2, RETRIED within budget) + hybrid prepare visibility sweep + reader-mode short-circuit (coordinator_flows.rs) |
 | TextBoxForTest | ✅ | all 9 geometry cases as pure unit tests in coordinator.rs textbox_tests (bubble inset, column squaring f3aa160, safeText→bbox fallback, page clamping) |
 | JobCoordinatorStartupTransactionTest | ✅ | reset_processing_jobs_to_pending + max-attempt-exhaustion FAILED branch (jobs_endpoints.rs recovery test, scratch DB) |
-| WorkerDispatcherServiceTest | ❌ | in-test mock worker (axum server): 202 stamping, 400/422 permanent FAILED, 429 exponential cooldown, AUDIT-P3 single-queue stall |
+| WorkerDispatcherServiceTest | ✅ | tests/dispatcher_mock_worker.rs — in-test axum mock worker: 202 started_at stamping + body shape, 400 permanent FAILED w/ error text, 429 cooldown (next cycle zero contact), slot saturation, AUDIT-P3 single-queue stall isolation, pause gate |
 | DebouncedRenderServiceTest | ✅ | recovery::process_pending_renders — threshold query, 5-min recent-failure skip, backdated failure allows re-trigger |
 | ChapterExportServiceTest | ✅ | lifecycle trio + meta-data.json content (model/cost/qa) + hash-id cache hit (deterministic BTree ordering) + EXPORT_SUCCESS/EXPORT_ERROR notifications (export_service.rs vs minio-test) |
 | ExportCleanupServiceTest | ❌ | delete_older_than against minio-test with backdated objects |
@@ -422,8 +422,10 @@ zip (archives), hex, base64.
       export hash nondeterminism (HashMap order broke cache hits), get_image_info ORDER BY
       nonexistent pages.created_at (endpoint silently returned no context). Gate: 114 tests
       green, fmt+clippy clean, parity 71/71)
-- [ ] **Step 3** Dispatcher test with an in-test mock worker (202 stamping / 400+422 permanent
-      FAILED / 429 cooldown / single-queue stall isolation)
+- [x] **Step 3** Dispatcher test with an in-test mock worker (VERIFIED 2026-08-24:
+      dispatcher_mock_worker.rs drives real Dispatcher::run_cycle() cycles — pause gate,
+      202 stamping, 400 permanent FAILED, 429 cooldown skip, slot saturation,
+      single-queue stall; run_cycle made pub for tests. Gate: 115 tests green)
 - [ ] **Step 4** Frontend E2E smoke via Playwright against the Rust backend (login → series →
       upload → reader → SSE notification → settings), SPA served from the Rust process
 - [ ] **Step 5** REAL Python worker run end-to-end (register → chapter ZIP import → full

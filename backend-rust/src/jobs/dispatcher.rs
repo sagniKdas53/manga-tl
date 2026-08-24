@@ -70,7 +70,9 @@ impl Dispatcher {
             .unwrap_or(false)
     }
 
-    async fn run_cycle(&self) {
+    /// One scheduler pass: pause-gate → capabilities → heavy/light dispatch.
+    /// Public so tests can drive exact cycles against a mock worker.
+    pub async fn run_cycle(&self) {
         let Some(redis) = &self.state.redis else {
             return;
         };
