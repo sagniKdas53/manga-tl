@@ -823,3 +823,133 @@ async fn redo_endpoints_enqueue_and_validate() {
         .unwrap();
     cleanup_series(&pool, series_id).await;
 }
+
+/// InternalJobControllerTest additions: GET image-info must serve regions from the
+/// LATEST ocr layer only (all of them when no ocr layer exists) and carry the
+/// context-memory fields the translator assembles its prompt from.
+#[tokio::test]
+async fn image_info_filters_regions_by_latest_ocr_layer_and_carries_context() {
+    let Some((app, pool, _redis, _state)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR not set");
+        return;
+    };
+    let (series_id, chapter_id, page1_id, image_id) = seed_pipeline(&pool).await;
+
+    // Two pages: page 2 is the one whose info request carries previous-page text.
+    let page2_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, 2, $2, $3)")
+        .bind(page2_id)
+        .bind(chapter_id)
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("page 2");
+
+    // Regions on page 1 (previous page for context) and page 2.
+    let _prev_region: Uuid = sqlx::query_scalar(
+        "INSERT INTO ocr_regions (id, bbox_x, bbox_y, bbox_w, bbox_h, detected_language, text, translated_text, page_id) \
+         VALUES (uuid_generate_v4(), 0, 0, 10, 10, 'ja', 'previous page words', 'previous page words', $1) RETURNING id",
+    )
+    .bind(page1_id)
+    .fetch_one(&pool)
+    .await
+    .expect("prev region");
+    let r_old: Uuid = sqlx::query_scalar(
+        "INSERT INTO ocr_regions (id, bbox_x, bbox_y, bbox_w, bbox_h, detected_language, text, translated_text, page_id) \
+         VALUES (uuid_generate_v4(), 0, 0, 10, 10, 'ja', 'old layer text', 'old layer text', $1) RETURNING id",
+    )
+    .bind(page2_id)
+    .fetch_one(&pool)
+    .await
+    .expect("r_old");
+    let r_new: Uuid = sqlx::query_scalar(
+        "INSERT INTO ocr_regions (id, bbox_x, bbox_y, bbox_w, bbox_h, detected_language, text, translated_text, page_id) \
+         VALUES (uuid_generate_v4(), 0, 0, 10, 10, 'ja', 'new layer text', 'new layer text', $1) RETURNING id",
+    )
+    .bind(page2_id)
+    .fetch_one(&pool)
+    .await
+    .expect("r_new");
+
+    // Two OCR layers; the z_order=2 one references only r_new.
+    let ocr1: Uuid =
+        sqlx::query_scalar("INSERT INTO layers (id, created_at, type, visible, z_order, page_id) VALUES (uuid_generate_v4(), now(), 'ocr', TRUE, 1, $1) RETURNING id")
+            .bind(page2_id)
+            .fetch_one(&pool)
+            .await
+            .expect("ocr layer 1");
+    let ocr2: Uuid =
+        sqlx::query_scalar("INSERT INTO layers (id, created_at, type, visible, z_order, page_id) VALUES (uuid_generate_v4(), now(), 'ocr', TRUE, 2, $1) RETURNING id")
+            .bind(page2_id)
+            .fetch_one(&pool)
+            .await
+            .expect("ocr layer 2");
+    for (layer, region_id) in [(ocr1, r_old), (ocr2, r_new)] {
+        sqlx::query(
+            "INSERT INTO layer_elements (id, text, size, font, font_style, font_weight, x, y, auto_size, word_wrap, overflow, visible, is_manually_edited, box_shape, max_width, max_height, rotation, layer_id, region_id) \
+             VALUES (uuid_generate_v4(), '', 16.0, 'f', 'normal', 'normal', 0.0, 0.0, FALSE, FALSE, FALSE, TRUE, FALSE, 'rectangular', 10, 10, 0.0, $1, $2)",
+        )
+        .bind(layer)
+        .bind(region_id)
+        .execute(&pool)
+        .await
+        .expect("element link");
+    }
+
+    // --- latest-layer filtering ---
+    let (status, _, body) = request(
+        &app,
+        "GET",
+        &format!("/tlhub/api/internal/images/{image_id}?chapterId={chapter_id}&pageId={page2_id}"),
+        internal(None),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let info: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let region_ids: Vec<&str> = info["ocrRegions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        region_ids,
+        vec![r_new.to_string().as_str()],
+        "only the newest ocr layer's regions are served"
+    );
+
+    // Without any OCR layer, ALL regions fall through (backwards-compat branch).
+    sqlx::query("DELETE FROM layers WHERE id = ANY($1)")
+        .bind(vec![ocr1, ocr2])
+        .execute(&pool)
+        .await
+        .expect("drop ocr layers");
+    let (_, _, body) = request(
+        &app,
+        "GET",
+        &format!("/tlhub/api/internal/images/{image_id}?chapterId={chapter_id}&pageId={page2_id}"),
+        internal(None),
+        None,
+    )
+    .await;
+    let info: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        info["ocrRegions"].as_array().unwrap().len(),
+        2,
+        "no ocr layer -> every region"
+    );
+
+    // --- context memory fields ---
+    assert!(
+        info.get("seriesMetadata").is_some(),
+        "series metadata present"
+    );
+    assert_eq!(info["seriesMetadata"]["title"], "Pipeline E2E");
+    assert_eq!(
+        info["previousPageText"], "previous page words",
+        "page>1 with context memory carries prior text"
+    );
+
+    cleanup_series(&pool, series_id).await;
+}

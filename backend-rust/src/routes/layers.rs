@@ -114,7 +114,7 @@ pub async fn update_layer_element(
         return StatusCode::NOT_FOUND.into_response();
     };
 
-    let prev_json = serde_json::to_string(&capture_state(&element)).expect("prev json");
+    let prev_json = serde_json::to_value(capture_state(&element)).expect("prev json");
 
     let updated: LayerElement = sqlx::query_as(
         "UPDATE layer_elements SET \
@@ -155,14 +155,14 @@ pub async fn update_layer_element(
     .await
     .expect("layer element update");
 
-    let new_json = serde_json::to_string(&capture_state(&updated)).expect("new json");
+    let new_json = serde_json::to_value(capture_state(&updated)).expect("new json");
     if prev_json != new_json {
         sqlx::query(
             "INSERT INTO layer_edit_history (id, edited_at, previous_value_json, new_value_json, edited_by, layer_element_id) \
              VALUES ($1, now(), $2, $3, $4, $5)",
         )
         .bind(Uuid::new_v4())
-        .bind(prev_json)
+        .bind(&prev_json)
         .bind(&new_json)
         .bind(user.id)
         .bind(id)
@@ -207,6 +207,16 @@ pub async fn element_history(
     Json(history).into_response()
 }
 
+/// Jackson `((Number) raw).intValue()` parity: fractional zOrder values coerce
+/// (2.5 → 2) instead of silently falling back to the default.
+pub(crate) fn z_order_of(value: Option<&serde_json::Value>) -> Option<i32> {
+    value.and_then(|v| {
+        v.as_i64()
+            .map(|i| i as i32)
+            .or_else(|| v.as_f64().map(|f| f as i32))
+    })
+}
+
 async fn insert_layer(pool: &sqlx::PgPool, page_id: Uuid, payload: &serde_json::Value) -> Layer {
     let layer_type = payload
         .get("type")
@@ -217,7 +227,7 @@ async fn insert_layer(pool: &sqlx::PgPool, page_id: Uuid, payload: &serde_json::
         .get("visible")
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
-    let z_order = payload.get("zOrder").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let z_order = z_order_of(payload.get("zOrder")).unwrap_or(0);
     let metadata = payload.get("metadataJson").cloned();
 
     sqlx::query_as(

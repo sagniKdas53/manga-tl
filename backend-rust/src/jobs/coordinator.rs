@@ -1355,44 +1355,72 @@ async fn page_bounds<'a>(pool: &'a PgPool, region: &'a OcrRegion) -> Option<(i32
     image.and_then(|img| img.width.zip(img.height))
 }
 
-/// Text box for a region: inset into a detected bubble, grown outward + squared up
-/// for free-floating columns (Japanese vertical text).
-pub async fn text_box_for(pool: &PgPool, region: &OcrRegion) -> TextBox {
-    let detected_bubble = has_detected_bubble(region);
-
-    let w = region.bubble_w.or(Some(region.bbox_w));
-    let h = region.bubble_h.or(Some(region.bbox_h));
-    let x = region.bubble_w.and(region.bubble_x).or(region.safe_text_x);
-    let y = region.bubble_w.and(region.bubble_y).or(region.safe_text_y);
-
-    let (x, y, w, h) = match (x, y, w, h) {
-        (Some(x), Some(y), Some(w), Some(h)) => (x, y, w, h),
-        _ => (region.bbox_x, region.bbox_y, region.bbox_w, region.bbox_h),
+/// Geometry source selection — textBoxFor's exact chain: bubble extent/origin when the
+/// bubble exists, else safeText, else the bbox (all-or-nothing like Java's null check).
+fn geometry_source(region: &OcrRegion) -> (f64, f64, i32, i32) {
+    let w = region.bubble_w.or(region.safe_text_w);
+    let h = region.bubble_h.or(region.safe_text_h);
+    let x = if region.bubble_w.is_some() {
+        region.bubble_x
+    } else {
+        region.safe_text_x
     };
+    let y = if region.bubble_h.is_some() {
+        region.bubble_y
+    } else {
+        region.safe_text_y
+    };
+    match (x, y, w, h) {
+        (Some(x), Some(y), Some(w), Some(h)) => (x as f64, y as f64, w, h),
+        _ => (
+            region.bbox_x as f64,
+            region.bbox_y as f64,
+            region.bbox_w,
+            region.bbox_h,
+        ),
+    }
+}
 
-    if !detected_bubble {
-        let half_pad = FREE_TEXT_PADDING / 2;
-        let page_bounds_now = page_bounds(pool, region).await;
+/// Pure text-box geometry: everything textBoxFor decides given the page bounds.
+/// Split from [`text_box_for`] so TextBoxForTest ports as database-free unit tests.
+pub fn text_box_geometry(region: &OcrRegion, page: Option<(f64, f64)>) -> TextBox {
+    if !has_detected_bubble(region) {
+        let (x, y, w, h) = geometry_source(region);
+        let half_pad = (FREE_TEXT_PADDING / 2) as f64;
         return free_text_box(
-            (x - half_pad) as f64,
-            (y - half_pad) as f64,
+            x - half_pad,
+            y - half_pad,
             w + FREE_TEXT_PADDING,
             h + FREE_TEXT_PADDING,
-            page_bounds_now.map(|(pw, ph)| (pw as f64, ph as f64)),
+            page,
         );
     }
 
+    let (x, y, w, h) = geometry_source(region);
     // Only inset when there is room; a tiny bubble keeps its full extent.
     let inset_w = w > MIN_TEXT_BOX + TEXT_BOX_PADDING;
     let inset_h = h > MIN_TEXT_BOX + TEXT_BOX_PADDING;
-    let half_pad = TEXT_BOX_PADDING / 2;
+    let half_pad = (TEXT_BOX_PADDING / 2) as f64;
 
     TextBox {
-        x: (x + if inset_w { half_pad } else { 0 }).max(0) as f64,
-        y: (y + if inset_h { half_pad } else { 0 }).max(0) as f64,
+        x: (x + if inset_w { half_pad } else { 0.0 }).max(0.0),
+        y: (y + if inset_h { half_pad } else { 0.0 }).max(0.0),
         w: if inset_w { w - TEXT_BOX_PADDING } else { w },
         h: if inset_h { h - TEXT_BOX_PADDING } else { h },
     }
+}
+
+/// Text box for a region: inset into a detected bubble, grown outward + squared up
+/// for free-floating columns (Japanese vertical text).
+pub async fn text_box_for(pool: &PgPool, region: &OcrRegion) -> TextBox {
+    // Java consults page bounds only on the free-text path.
+    if has_detected_bubble(region) {
+        return text_box_geometry(region, None);
+    }
+    let page = page_bounds(pool, region)
+        .await
+        .map(|(pw, ph)| (pw as f64, ph as f64));
+    text_box_geometry(region, page)
 }
 
 /// Squares a thin vertical column into an English-settable box of equal area,
@@ -2509,5 +2537,214 @@ pub async fn handle_qa_callback(
         } else {
             "COMPLETED"
         })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TextBoxForTest port — pure geometry, no database.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod textbox_tests {
+    use super::*;
+    use uuid::Uuid;
+
+    /// OcrRegion fixtures via JSON (camelCase, same as the wire shape).
+    fn region(value: serde_json::Value) -> OcrRegion {
+        serde_json::from_value(value).expect("region fixture")
+    }
+
+    /// A region with a real detected bubble: the bubble is strictly larger than the bbox.
+    fn bubble_region(bx: i32, by: i32, bw: i32, bh: i32) -> serde_json::Value {
+        serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::new_v4(),
+            "detectedLanguage": "ja",
+            "bubbleId": "bubble_0",
+            "bubbleX": bx, "bubbleY": by, "bubbleW": bw, "bubbleH": bh,
+            // The text sits well inside the bubble, as it does when detection fires.
+            "bboxX": bx + bw / 4, "bboxY": by + bh / 4, "bboxW": bw / 2, "bboxH": bh / 2,
+        })
+    }
+
+    /// A free-floating region: the worker copies bubble* from the text bbox.
+    fn direct_text_region(x: i32, y: i32, w: i32, h: i32) -> serde_json::Value {
+        serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::new_v4(),
+            "detectedLanguage": "ja",
+            "bubbleId": "direct_text_0",
+            "bubbleX": x, "bubbleY": y, "bubbleW": w, "bubbleH": h,
+            "bboxX": x, "bboxY": y, "bboxW": w, "bboxH": h,
+            "safeTextX": x, "safeTextY": y, "safeTextW": w, "safeTextH": h,
+        })
+    }
+
+    #[test]
+    fn insets_inside_the_bubble_rather_than_growing_past_it() {
+        let box_geom = text_box_geometry(&region(bubble_region(100, 200, 300, 400)), None);
+        assert_eq!(box_geom.x, 110.0);
+        assert_eq!(box_geom.y, 210.0);
+        assert_eq!(box_geom.w, 280);
+        assert_eq!(box_geom.h, 380);
+        assert!(box_geom.x >= 100.0, "left edge inside bubble");
+        assert!(box_geom.y >= 200.0, "top edge inside bubble");
+        assert!(
+            box_geom.x + box_geom.w as f64 <= 400.0,
+            "right edge inside bubble"
+        );
+        assert!(
+            box_geom.y + box_geom.h as f64 <= 600.0,
+            "bottom edge inside bubble"
+        );
+    }
+
+    #[test]
+    fn uses_bubble_width_not_the_vertical_japanese_text_extent() {
+        let mut r = bubble_region(0, 0, 300, 200);
+        // safeText traces the source text: tall and narrow — English must not inherit it.
+        r["safeTextX"] = serde_json::json!(120);
+        r["safeTextY"] = serde_json::json!(10);
+        r["safeTextW"] = serde_json::json!(60);
+        r["safeTextH"] = serde_json::json!(180);
+
+        let box_geom = text_box_geometry(&region(r), None);
+        assert_eq!(
+            box_geom.w, 280,
+            "should take the bubble's width, not safeText's 60"
+        );
+        assert!(
+            box_geom.w > box_geom.h,
+            "a wide bubble should yield a wide text box"
+        );
+    }
+
+    #[test]
+    fn tiny_bubble_keeps_its_extent_instead_of_collapsing() {
+        let box_geom = text_box_geometry(&region(bubble_region(5, 5, 30, 18)), None);
+        assert!(
+            box_geom.w > 0 && box_geom.h > 0,
+            "must never invert to zero or negative"
+        );
+        assert_eq!(box_geom.w, 30);
+        assert_eq!(box_geom.h, 18);
+    }
+
+    /// The f3aa160 regression: a 49x489 vertical caption squares up to a settable box
+    /// of equal area and centre instead of setting English one word per line.
+    #[test]
+    fn squares_up_the_source_column_instead_of_setting_english_down_it() {
+        let box_geom = text_box_geometry(&region(direct_text_region(71, 675, 49, 489)), None);
+        assert_eq!(
+            box_geom.w, 173,
+            "2.5x the padded 69px column, the ceiling on widening"
+        );
+        assert_eq!(box_geom.h, 203);
+        assert!(box_geom.w > 3 * 49, "must be several words wide, not one");
+        assert_eq!(
+            box_geom.x + box_geom.w as f64 / 2.0,
+            95.5,
+            "centre preserved"
+        );
+        assert_eq!(
+            box_geom.y + box_geom.h as f64 / 2.0,
+            919.5,
+            "centre preserved"
+        );
+        let expected_area = 69.0 * 509.0;
+        let actual_area = (box_geom.w * box_geom.h) as f64;
+        assert!(
+            (actual_area - expected_area).abs() <= 0.02 * expected_area,
+            "area preserved within 2%: {actual_area} vs {expected_area}"
+        );
+    }
+
+    /// Rows written before bubbleId existed are caught by the geometry, not the tag.
+    #[test]
+    fn treats_bubble_geometry_identical_to_the_bbox_as_no_bubble_at_all() {
+        let mut untagged = direct_text_region(1050, 631, 57, 428);
+        untagged["bubbleId"] = serde_json::Value::Null;
+        assert_eq!(text_box_geometry(&region(untagged), None).w, 186);
+    }
+
+    /// Horizontal text is already a shape English fits; reshaping would only move it.
+    #[test]
+    fn leaves_text_that_is_not_a_vertical_column_alone() {
+        let box_geom = text_box_geometry(&region(direct_text_region(100, 100, 540, 120)), None);
+        assert_eq!(box_geom.w, 560);
+        assert_eq!(box_geom.h, 140);
+        assert_eq!(box_geom.x, 90.0);
+    }
+
+    /// A column near the edge of the page reshapes onto the paper, not off it.
+    #[test]
+    fn keeps_a_reshaped_box_on_the_page() {
+        let box_geom = text_box_geometry(
+            &region(direct_text_region(5, 700, 40, 400)),
+            Some((1200.0, 1600.0)),
+        );
+        assert!(box_geom.x >= 0.0, "left edge on the page");
+        assert!(
+            box_geom.x + box_geom.w as f64 <= 1200.0,
+            "right edge on the page"
+        );
+        assert!(
+            box_geom.y >= 0.0 && box_geom.y + box_geom.h as f64 <= 1600.0,
+            "vertically on the page"
+        );
+        assert!(box_geom.w > 60, "still widened");
+    }
+
+    /// The worker's contour fallback can supply a real container for a region YOLO
+    /// matched to no bubble; the direct_text tag must not decide this.
+    #[test]
+    fn insets_a_contour_recovered_bubble_even_though_it_is_still_tagged_direct_text() {
+        let mut recovered = direct_text_region(71, 675, 49, 489);
+        recovered["bubbleX"] = serde_json::json!(30);
+        recovered["bubbleY"] = serde_json::json!(640);
+        recovered["bubbleW"] = serde_json::json!(127);
+        recovered["bubbleH"] = serde_json::json!(560);
+
+        let box_geom = text_box_geometry(&region(recovered), None);
+        assert_eq!(
+            box_geom.w, 107,
+            "inset into the recovered bubble, not grown past it"
+        );
+        assert_eq!(box_geom.h, 540);
+        assert!(
+            box_geom.x >= 30.0 && box_geom.x + box_geom.w as f64 <= 157.0,
+            "stays within the recovered bubble"
+        );
+    }
+
+    /// Absent bubble == synthetic bubble: safeText then bbox both grow rather than inset.
+    #[test]
+    fn falls_back_to_safe_text_then_bbox_when_bubble_geometry_is_missing() {
+        let no_bubble = serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::new_v4(),
+            "detectedLanguage": "ja",
+            "safeTextX": 50, "safeTextY": 60, "safeTextW": 200, "safeTextH": 100,
+            "bboxX": 0, "bboxY": 0, "bboxW": 999, "bboxH": 999,
+        });
+        let box_geom = text_box_geometry(&region(no_bubble), None);
+        assert_eq!(
+            box_geom.w, 220,
+            "safeText preferred over bbox when bubble is absent"
+        );
+        assert_eq!(box_geom.x, 40.0);
+
+        let bbox_only = serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::new_v4(),
+            "detectedLanguage": "ja",
+            "bboxX": 10, "bboxY": 10, "bboxW": 120, "bboxH": 120,
+        });
+        assert_eq!(text_box_geometry(&region(bbox_only), None).w, 140);
+    }
+
+    #[test]
+    fn never_positions_off_the_top_left_of_the_image() {
+        assert!(text_box_geometry(&region(bubble_region(0, 0, 200, 200)), None).x >= 0.0);
+        assert!(text_box_geometry(&region(bubble_region(0, 0, 200, 200)), None).y >= 0.0);
+        // Free-floating text grows outward — the case that can go negative.
+        assert!(text_box_geometry(&region(direct_text_region(0, 0, 200, 200)), None).x >= 0.0);
+        assert!(text_box_geometry(&region(direct_text_region(0, 0, 200, 200)), None).y >= 0.0);
     }
 }

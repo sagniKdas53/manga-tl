@@ -116,4 +116,7 @@ jobs:
           MINIO_TEST_ACCESS_KEY: minioadmin
           MINIO_TEST_SECRET_KEY: minioadmin
           REDIS_TEST_ADDR: 127.0.0.1:6379
+          # The jobs/recovery suite refuses shared databases by construction; CI's
+          # throwaway postgres is exactly the dedicated DB it wants.
+          JOBS_E2E_DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/manga_library
         run: cargo test

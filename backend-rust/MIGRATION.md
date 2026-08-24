@@ -144,6 +144,20 @@ python3 ../scripts/diff_routes.py   # must print 71/71 AND exit 0
   Vec; calling finish() twice or double-wrapping panics with duplicate-entry errors in tests.
 - The Java `zip_of`-style helpers in tests write entries literally; passing project.json
   both as entry AND param duplicates the name and ZipArchive rejects it.
+- Tests in ONE binary run in PARALLEL against the shared live DB: never give two tests the
+  same probe-email prefix (a sibling's cleanup will delete your user mid-run → mysterious
+  403s/FK violations). Scope every new test's seed+cleanup to its own prefix.
+- tests/settings_endpoints.rs PUTs real global keys (system_settings) — it resets them to
+  factory afterwards; if it CRASHES mid-run, re-run it (self-healing) and note that a
+  crashed run can overwrite the Redis `system:providers:config` blob — restore by
+  `docker restart manga-worker` (republishes at boot).
+- rust-minio-test (:19000) is `--rm`: a live-stack restart or aborted shell kills it.
+  Re-create before any suite needing MINIO_TEST_ENDPOINT.
+- JWT exp has WHOLE-SECOND resolution (jsonwebtoken): a 1500ms token expires ~1s. Time
+  assertions on session-expiry pushes must tolerate second rounding.
+- jobs table has NO created_at-style traps like pages.created_at — but pages has NO
+  created_at AT ALL: ORDER BY created_at on pages errors and unwrap_or_default() hides it
+  (bit get_image_info until Phase 4 step 2). Prefer ORDER BY page_number there.
 
 ## Where things live (backend-rust/src)
 
@@ -236,26 +250,26 @@ N/A deliberately not portable (say why).
 | AuthControllerTest | ✅ | tests/auth_endpoints.rs — full lifecycle wire shapes |
 | JwtTest / JwtUtilsTest / JwtAuthFilterTest | ✅ | jwt.rs unit tests + tests/auth_middleware.rs |
 | SseTicketTest | ✅ | sse_endpoints.rs (single-use, legacy shape, expiry carry) |
-| SseServiceTest / NotificationControllerTest | 🟡 | replay + multi-tab covered; ADD: session-expired push timing test (short expiry), queue-drain race (RENAME lost) |
-| InternalJobControllerTest | 🟡 | internal_endpoints.rs covers guard/status/job/HEAD/pipeline; ADD: GET image-info region filtering by latest OCR layer + context-memory fields |
+| SseServiceTest / NotificationControllerTest | ✅ | replay + multi-tab + session-expired push at the token's own exp (short-expiry test) + concurrent drain race (RENAME lost ⇒ exactly-once) |
+| InternalJobControllerTest | ✅ | guard/status/job/HEAD/pipeline + image-info region filtering by latest OCR layer + context-memory fields (previousPageText/seriesMetadata) |
 | PipelineFlowIntegrationTest | ✅ | internal_endpoints.rs full walk panel→qa |
-| JobCoordinatorServiceTest | 🟡 | claim/dup + redo covered; ADD: qa retry-budget exhaustion, hybrid prepare visibility sweep, reader-mode short-circuit assertion |
-| TextBoxForTest | ❌ | port the geometry edge cases as pure unit tests in coordinator (bubble inset, free-text reshape clamps, MIN_TEXT_BOX floor) |
-| JobCoordinatorStartupTransactionTest | 🟡 | reset_processing_jobs_to_pending tested indirectly; ADD max-attempt-exhaustion FAILED branch test |
+| JobCoordinatorServiceTest | ✅ | claim/dup + redo + qa retry-budget exhaustion (COMPLETED at 2, RETRIED within budget) + hybrid prepare visibility sweep + reader-mode short-circuit (coordinator_flows.rs) |
+| TextBoxForTest | ✅ | all 9 geometry cases as pure unit tests in coordinator.rs textbox_tests (bubble inset, column squaring f3aa160, safeText→bbox fallback, page clamping) |
+| JobCoordinatorStartupTransactionTest | ✅ | reset_processing_jobs_to_pending + max-attempt-exhaustion FAILED branch (jobs_endpoints.rs recovery test, scratch DB) |
 | WorkerDispatcherServiceTest | ❌ | in-test mock worker (axum server): 202 stamping, 400/422 permanent FAILED, 429 exponential cooldown, AUDIT-P3 single-queue stall |
-| DebouncedRenderServiceTest | ❌ | recovery::process_pending_renders — threshold query, 5-min recent-failure skip |
-| ChapterExportServiceTest | 🟡 | lifecycle trio covered; ADD meta-data.json content assertions + hash-id cache hit + EXPORT_SUCCESS notification |
+| DebouncedRenderServiceTest | ✅ | recovery::process_pending_renders — threshold query, 5-min recent-failure skip, backdated failure allows re-trigger |
+| ChapterExportServiceTest | ✅ | lifecycle trio + meta-data.json content (model/cost/qa) + hash-id cache hit (deterministic BTree ordering) + EXPORT_SUCCESS/EXPORT_ERROR notifications (export_service.rs vs minio-test) |
 | ExportCleanupServiceTest | ❌ | delete_older_than against minio-test with backdated objects |
 | MinioServiceTest | ✅ | tests/minio_service.rs |
-| ProviderConfigCacheTest | ❌ | providers.rs parse/validity/free-tier/default-model unit tests (pure, no redis needed — feed parse() directly) |
-| SystemSettingsServiceTest / SettingsControllerTest | ❌ | tests/settings_endpoints.rs — get/put round-trip, validateOverrides DEPRECATED entries with a seeded catalog blob |
-| JobControllerTest | ❌ | tests/jobs_endpoints.rs — active list, pause gate, clear force flag, per-job pause/resume/retry rules (400 texts) |
-| LayerControllerTest | 🟡 | layer flows built in Phase 2 but no dedicated suite; ADD tests/layers_endpoints.rs (create/update/history/delete + ADMIN/TRANSLATOR gating) |
-| SeriesControllerTest | 🟡 | series_endpoints.rs CRUD; ADD import/export interplay already in import_export_endpoints — verify pagination/sort whitelists covered |
-| PageControllerTest | 🟡 | pages_endpoints.rs broad; verify ocr PATCH translated-clears-failed rule has an assertion |
-| SettingsControllerTest (validate) | see SystemSettings row | |
-| SecurityConfigTest / AuthorizationDenialFilterTest | 🟡 | 403 Boot shape + @PreAuthorize problem+json verified live in Phase 2; ADD role-matrix assertions per endpoint group |
-| ForwardControllerTest | 🟡 | API-404 covered; ADD SPA index.html served for extension-less non-API path |
+| ProviderConfigCacheTest | ✅ | providers.rs unit tests — exact catalog blob parse, priority ordering, validity/ORPHANED rules, free-tier flags, empty-cache permissive, unparsable-blob keeps stale |
+| SystemSettingsServiceTest / SettingsControllerTest | ✅ | tests/settings_endpoints.rs — get/put round-trip + persistence, validateOverrides DEPRECATED entries with seeded catalog blob, empty-cache {"orphaned":[]}; global table reset to factory after run |
+| JobControllerTest | ✅ | tests/jobs_endpoints.rs — active list envelope, pause gate + resume requeue, clear force flag (COMPLETED untouched), per-job retry/pause/resume rules with exact 400 texts; runs ONLY against JOBS_E2E_DATABASE_URL scratch DB (global side effects) |
+| LayerControllerTest | ✅ | tests/layers_endpoints.rs — create (page+image paths, fractional zOrder coercion), update, history change-detection, delete, Java element defaults, ADMIN/TRANSLATOR-vs-viewer gating |
+| SeriesControllerTest | ✅ | series_endpoints.rs CRUD + import/export interplay + pagination/sort whitelist test ({createdAt,updatedAt} only, fallback on junk) |
+| PageControllerTest | ✅ | pages_endpoints.rs broad + ocr PATCH translated-clears-failed assertion |
+| SettingsControllerTest (validate) | see SystemSettings row | ✅ |
+| SecurityConfigTest / AuthorizationDenialFilterTest | ✅ | 403 Boot shape + @PreAuthorize problem+json verified live in Phase 2; role-matrix asserted per group (series admin-delete, layers ADMIN/TRANSLATOR, settings/jobs any-auth, internal token) |
+| ForwardControllerTest | ✅ | API-404 + SPA index.html for extension-less non-API path; dotted asset paths stay 404 (Java [^\\.]* mapping parity) |
 | GlobalExceptionHandlerTest | ✅ | shapes exercised across all endpoint suites |
 | HealthReporterTest | ✅ | health router unit test |
 | OpenApiSpecTest | ✅ | routes/mod.rs: /v3/api-docs serves golden bytes byte-for-byte (include_bytes) + core-path assertions; generate-api diff vs live Java stack is multiset-identical (3058 lines, springdoc emits non-deterministic key order per boot — zero functional drift) |
@@ -399,10 +413,15 @@ zip (archives), hex, base64.
       (VERIFIED 2026-08-24: served bytes cmp-identical to golden; schema.d.ts multiset-equal
       vs live-Java generation — springdoc key-order only; frontend copy committed as
       regenerated from the Rust backend so post-cutover regen is stable)
-- [ ] **Step 2** Scenario-parity sweep: every row of the matrix above is ✅ or N/A-with-reason
-      (new suites: settings_endpoints, jobs_endpoints, layers_endpoints; unit tests for
-      providers parse/validity, textbox geometry, qa retry budget, export metadata,
-      recovery branches)
+- [x] **Step 2** Scenario-parity sweep: every row of the matrix above is ✅ or N/A-with-reason
+      (VERIFIED 2026-08-24: new suites settings_endpoints, jobs_endpoints [scratch-DB gated],
+      layers_endpoints, coordinator_flows, export_service; unit tests for providers
+      parse/validity + textbox geometry; recovery branches; SSE expiry/drain-race;
+      image-info filtering. DRIFT FOUND & FIXED: textbox safeText fallback chain,
+      fractional zOrder coercion, edit-history TEXT→jsonb bind (500 on element update),
+      export hash nondeterminism (HashMap order broke cache hits), get_image_info ORDER BY
+      nonexistent pages.created_at (endpoint silently returned no context). Gate: 114 tests
+      green, fmt+clippy clean, parity 71/71)
 - [ ] **Step 3** Dispatcher test with an in-test mock worker (202 stamping / 400+422 permanent
       FAILED / 429 cooldown / single-queue stall isolation)
 - [ ] **Step 4** Frontend E2E smoke via Playwright against the Rust backend (login → series →

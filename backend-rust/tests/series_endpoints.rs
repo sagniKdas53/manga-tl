@@ -361,3 +361,154 @@ async fn series_and_chapter_crud_lifecycle() {
 
     cleanup(&pool).await;
 }
+
+/// SeriesControllerTest addition: pagination/sort whitelists — sortBy accepts only the
+/// allowed columns (anything else falls back), sortDir steers asc/desc.
+#[tokio::test]
+async fn series_list_pagination_and_sort_whitelist() {
+    let Some((app, pool, jwt)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL not set");
+        return;
+    };
+    // Distinct namespace: the sibling test in this binary sweeps __series-e2e-% at
+    // its start/end, which would delete this test's user mid-run when parallel.
+    const NS: &str = "__seriessort-e2e";
+    sqlx::query("DELETE FROM series WHERE title LIKE 'SortProbe %'")
+        .execute(&pool)
+        .await
+        .expect("pre-clean series");
+    let _ = sqlx::query("DELETE FROM users WHERE email LIKE $1 || '%'")
+        .bind(NS)
+        .execute(&pool)
+        .await;
+    let email = format!("{NS}-{}@example.invalid", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'viewer')",
+    )
+    .bind(&email)
+    .execute(&pool)
+    .await
+    .expect("probe user");
+    let token = jwt.generate_token(&email).expect("token");
+
+    // Create three probe series with titles whose alphabetical order differs from
+    // creation order.
+    for title in ["SortProbe Charlie", "SortProbe Alpha", "SortProbe Bravo"] {
+        let (status, _, body) = body_string(
+            send(
+                app.clone(),
+                "POST",
+                "/tlhub/api/series",
+                Some(&token),
+                Some(format!(
+                    r#"{{"title":"{title}","readingDirection":"rightToLeft"}}"#
+                )),
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    let titles_of = |body: String| -> Vec<String> {
+        serde_json::from_str::<serde_json::Value>(&body).unwrap()["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["title"].as_str().unwrap().to_string())
+            .collect()
+    };
+
+    // Shared live database: other users own series too, so scope every assertion to
+    // the probe titles' RELATIVE order instead of absolute windows.
+    let probe_titles = |body: &str| -> Vec<String> {
+        titles_of(body.to_string())
+            .into_iter()
+            .filter(|t| t.starts_with("SortProbe "))
+            .collect()
+    };
+
+    // The series sort whitelist is exactly {createdAt, updatedAt} (Java
+    // SERIES_SORT_FIELDS); alphabetical title sorting is NOT offered.
+    let (_, _, body) = body_string(
+        send(
+            app.clone(),
+            "GET",
+            "/tlhub/api/series?size=100&sortBy=createdAt&sortDir=asc",
+            Some(&token),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(
+        probe_titles(&body),
+        ["SortProbe Charlie", "SortProbe Alpha", "SortProbe Bravo"],
+        "creation order asc"
+    );
+
+    let (_, _, body) = body_string(
+        send(
+            app.clone(),
+            "GET",
+            "/tlhub/api/series?size=100&sortBy=createdAt&sortDir=desc",
+            Some(&token),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(
+        probe_titles(&body),
+        ["SortProbe Bravo", "SortProbe Alpha", "SortProbe Charlie"],
+        "desc flips the creation order"
+    );
+
+    // Non-whitelisted column silently falls back to updatedAt — no error, no leak.
+    let (_, _, body) = body_string(
+        send(
+            app.clone(),
+            "GET",
+            "/tlhub/api/series?size=100&sortBy=DROP_TABLE_series",
+            Some(&token),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(
+        probe_titles(&body).len(),
+        3,
+        "fallback still lists everything"
+    );
+
+    // Pagination math still verifiable through the envelope shape.
+    let (_, _, paged) = body_string(
+        send(
+            app.clone(),
+            "GET",
+            "/tlhub/api/series?page=1&size=2&sortBy=title&sortDir=asc",
+            Some(&token),
+            None,
+        )
+        .await,
+    )
+    .await;
+    let envelope: serde_json::Value = serde_json::from_str(&paged).unwrap();
+    assert_eq!(envelope["size"], 2);
+    assert_eq!(envelope["page"], 1, "second window");
+    assert!(envelope["totalElements"].as_i64().unwrap() >= 3);
+
+    // Scoped cleanup (see NS above).
+    sqlx::query(
+        "DELETE FROM series WHERE created_by IN (SELECT id FROM users WHERE email LIKE '__seriessort-e2e%')",
+    )
+    .execute(&pool)
+    .await
+    .expect("series cleanup");
+    sqlx::query("DELETE FROM users WHERE email LIKE '__seriessort-e2e%'")
+        .execute(&pool)
+        .await
+        .expect("user cleanup");
+}

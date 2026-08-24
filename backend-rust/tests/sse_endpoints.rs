@@ -551,3 +551,114 @@ async fn second_tab_does_not_evict_the_first_and_closes_clean_up() {
         .await
     );
 }
+
+// ---------------------------------------------------------------------------
+// Phase-4 additions: session-expired timing + concurrent drain race
+// ---------------------------------------------------------------------------
+
+/// A connection whose presented JWT expires soon gets ONE session-expired push at
+/// that moment (not at the app's default expiry), then the emitter closes.
+#[tokio::test]
+async fn session_expired_push_fires_at_the_tokens_own_expiry() {
+    let Some(ctx) = setup("shortexp").await else {
+        eprintln!("skipping: env not set");
+        return;
+    };
+
+    // Mint a short-lived token (same secret) — the ticket must carry ITS exp.
+    // JWT exp has whole-second resolution; 2500ms lands as ~2s.
+    let short_jwt = JwtUtils::new(SECRET.into(), 2_500);
+    let short_token = short_jwt.generate_token(&ctx.email).expect("short token");
+    let response = ctx
+        .router
+        .clone()
+        .oneshot(
+            Request::post("/tlhub/api/notifications/ticket")
+                .header("Authorization", format!("Bearer {short_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = http_body_util::BodyExt::collect(response.into_body())
+        .await
+        .unwrap()
+        .to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let ticket = json["ticket"].as_str().expect("ticket").to_string();
+
+    let started = std::time::Instant::now();
+    let response = get_stream(
+        &ctx.router,
+        &format!("/tlhub/api/notifications/stream?ticket={ticket}"),
+    )
+    .await;
+    let (status, _, text) = read_stream_response(response, |t| t.contains("session-expired")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        text.contains("event: session-expired"),
+        "expiry push delivered: {text}"
+    );
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed >= Duration::from_millis(1000) && elapsed <= READ_WINDOW,
+        "push fires at the token's own exp (~2s, second-resolution), took {elapsed:?}"
+    );
+
+    // The connection closed itself after the push (client drops its dead token).
+    assert!(
+        wait_for(
+            || ctx.sse.connection_count(ctx.user_id) == 0,
+            Duration::from_secs(2)
+        )
+        .await,
+        "emitter removed after expiry push"
+    );
+}
+
+/// Two connections draining the same pending list together receive every queued
+/// notification exactly once — the RENAME race loses cleanly instead of
+/// duplicating or panicking.
+#[tokio::test]
+async fn concurrent_streams_drain_pending_without_duplicates() {
+    let Some(ctx) = setup("drainrace").await else {
+        eprintln!("skipping: env not set");
+        return;
+    };
+
+    // Queue four notifications while NO tab is connected.
+    for title in ["race-one", "race-two", "race-three", "race-four"] {
+        ctx.sse
+            .emit_notification_to_user(ctx.user_id, "TEST", title, "body")
+            .await;
+    }
+
+    let t1 = ctx.request_ticket().await;
+    let t2 = ctx.request_ticket().await;
+    let uri1 = format!("/tlhub/api/notifications/stream?ticket={t1}");
+    let uri2 = format!("/tlhub/api/notifications/stream?ticket={t2}");
+    let r1 = get_stream(&ctx.router, &uri1);
+    let r2 = get_stream(&ctx.router, &uri2);
+    let (resp1, resp2) = tokio::join!(r1, r2);
+
+    let want = |needle: &'static str| move |text: &str| text.contains(needle);
+    let ((_, _, text1), (_, _, text2)) = tokio::join!(
+        read_stream_response(resp1, want("race-four")),
+        read_stream_response(resp2, want("race-four"))
+    );
+    let combined = format!("{text1}{text2}");
+
+    for title in ["race-one", "race-two", "race-three", "race-four"] {
+        let hits = combined.matches(title).count();
+        assert_eq!(hits, 1, "{title} delivered exactly once across both tabs");
+    }
+
+    // And the pending list is fully drained.
+    let leftover = ctx
+        .redis
+        .queue_size(&format!("notifications:user:{}", ctx.user_id))
+        .await
+        .unwrap_or(-1);
+    assert!(leftover <= 0, "pending list drained, found {leftover}");
+}

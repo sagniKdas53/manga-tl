@@ -48,10 +48,7 @@ pub async fn update_layer(
         Ok(json) => json,
         Err(_) => return error::unreadable_body("/api/layers/{id}"),
     };
-    let z_order = payload
-        .get("zOrder")
-        .and_then(|v| v.as_i64())
-        .map(|v| v as i32);
+    let z_order = crate::routes::layers::z_order_of(payload.get("zOrder"));
     // Java: Boolean.TRUE.equals(value) — non-true values become false.
     let visible = payload.get("visible").map(|v| v.as_bool().unwrap_or(false));
 

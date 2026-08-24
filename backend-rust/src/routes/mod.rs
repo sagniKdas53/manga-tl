@@ -124,6 +124,13 @@ async fn spa_fallback(uri: axum::http::Uri) -> Response {
 
     // Phase 4 embeds the frontend dist into the binary; until then read it from disk
     // (the Dockerfile copies dist next to the binary, matching today's layout).
+    //
+    // Java's ForwardController maps ONLY extension-less paths (`/{path:[^\\.]*}`) to the
+    // SPA shell; a dotted path is an asset lookup and must stay a real 404.
+    let last_segment = path.rsplit('/').next().unwrap_or("");
+    if last_segment.contains('.') {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     let dist_dir = std::env::var("SPA_DIST_DIR").unwrap_or_else(|_| "../frontend/dist".into());
     if let Ok(index) = std::fs::read(format!("{dist_dir}/index.html")) {
         return (
@@ -261,5 +268,50 @@ mod tests {
         ] {
             assert!(paths.get(path).is_some(), "missing contract path {path}");
         }
+    }
+
+    /// ForwardControllerTest port: extension-less non-API paths get the SPA shell;
+    /// paths WITH an extension (assets) do not.
+    #[tokio::test]
+    async fn spa_fallback_serves_index_for_extension_less_paths() {
+        let dist = std::env::temp_dir().join(format!("spa-e2e-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dist).expect("mkdir");
+        std::fs::write(dist.join("index.html"), "<html><body>SPA</body></html>").expect("index");
+
+        // SAFETY: no other test touches SPA_DIST_DIR; test binaries own their process.
+        unsafe { std::env::set_var("SPA_DIST_DIR", &dist) };
+        let app = build_router(test_state("/tlhub"));
+
+        // Extension-less client-side route -> index.html.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/tlhub/series/some-series")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), Status::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/html;charset=UTF-8"
+        );
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&bytes[..], b"<html><body>SPA</body></html>");
+
+        // An asset-looking path is NOT rewritten to index.html.
+        let response = app
+            .oneshot(
+                Request::get("/tlhub/assets/nope.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), Status::NOT_FOUND);
+
+        unsafe { std::env::remove_var("SPA_DIST_DIR") };
+        let _ = std::fs::remove_dir_all(&dist);
     }
 }

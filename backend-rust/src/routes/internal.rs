@@ -242,12 +242,17 @@ pub async fn get_image_info(
         .and_then(|v| Uuid::parse_str(v).ok());
     let page_id = params.get("pageId").and_then(|v| Uuid::parse_str(v).ok());
 
+    // Java's PageRepository.findByImageId is unordered; note pages has NO created_at
+    // column — ordering by it errors and unwrap_or_default would silently hide that.
     let pages: Vec<Page> =
-        sqlx::query_as("SELECT * FROM pages WHERE image_id = $1 ORDER BY created_at ASC")
+        sqlx::query_as("SELECT * FROM pages WHERE image_id = $1 ORDER BY page_number ASC")
             .bind(image_id)
             .fetch_all(&state.pool)
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                tracing::error!("image-info pages query failed for {image_id}: {e}");
+                Vec::new()
+            });
 
     let page = page_id
         .and_then(|pid| pages.iter().find(|p| p.id == pid))

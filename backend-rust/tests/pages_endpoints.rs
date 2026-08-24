@@ -352,3 +352,173 @@ async fn cleanup(pool: &sqlx::PgPool) {
         .await
         .expect("user cleanup");
 }
+
+/// PageControllerTest addition: PATCH /api/ocr-regions/{id} with translatedText must
+/// clear translation_failed (the editor's "fix the failed region" path).
+#[tokio::test]
+async fn ocr_region_patch_translated_clears_failure_flag() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL not set");
+        return;
+    };
+    // Distinct namespace: this suite runs tests in parallel and the generic
+    // __page-e2e- sweeps would otherwise race this test's rows away mid-run.
+    const NS: &str = "__ocrpatch-e2e";
+    sqlx::query("DELETE FROM series WHERE title LIKE 'OcrPatch Probe%'")
+        .execute(&pool)
+        .await
+        .expect("series pre-clean");
+    sqlx::query(
+        "DELETE FROM images WHERE created_by IN (SELECT id FROM users WHERE email LIKE $1 || '%')",
+    )
+    .bind(NS)
+    .execute(&pool)
+    .await
+    .expect("image pre-clean");
+    sqlx::query("DELETE FROM users WHERE email LIKE $1 || '%'")
+        .bind(NS)
+        .execute(&pool)
+        .await
+        .expect("user pre-clean");
+    let email = format!("{NS}-{}@example.invalid", uuid::Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'admin')",
+    )
+    .bind(&email)
+    .execute(&pool)
+    .await
+    .expect("probe user");
+    let token = JwtUtils::new(SECRET.into(), 3_600_000)
+        .generate_token(&email)
+        .expect("token");
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "POST",
+        "/tlhub/api/series",
+        &token,
+        r#"{"title":"OcrPatch Probe","readingDirection":"rightToLeft"}"#.into(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let series_id = json_field(&body, "id");
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters"),
+        &token,
+        r#"{"chapterNumber":1}"#.into(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let chapter_id = json_field(&body, "id");
+
+    // A page to hang the region on (upload a 1x1 PNG like the lifecycle test).
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let boundary = "__ocrpatch_boundary__";
+    let mut multipart_body: Vec<u8> = Vec::new();
+    for (name, value) in [("chapterId", chapter_id.as_str()), ("pageNumber", "1")] {
+        multipart_body.extend_from_slice(
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n"
+            )
+            .as_bytes(),
+        );
+    }
+    multipart_body.extend_from_slice(
+        format!("--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"p1.png\"\r\nContent-Type: image/png\r\n\r\n")
+            .as_bytes(),
+    );
+    multipart_body.extend_from_slice(png);
+    multipart_body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+    let response = Request::builder()
+        .method("POST")
+        .uri("/tlhub/api/images?chapterId=".to_owned() + &chapter_id + "&pageNumber=1")
+        .header("Authorization", format!("Bearer {token}"))
+        .header(
+            "Content-Type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(multipart_body))
+        .unwrap();
+    let (status, _, upload_body, _) = finalize(app.clone().oneshot(response).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK, "{upload_body}");
+    let page_id = json_field(&upload_body, "pageId");
+
+    // Seed a FAILED-translation region directly.
+    let region_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO ocr_regions (id, bbox_x, bbox_y, bbox_w, bbox_h, detected_language, text, translated_text, translation_failed, page_id) \
+         VALUES (uuid_generate_v4(), 0, 0, 10, 10, 'ja', 'orig', 'bad', TRUE, $1) RETURNING id",
+    )
+    .bind(uuid::Uuid::parse_str(&page_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .expect("region seed");
+    assert!(
+        sqlx::query_scalar::<_, bool>("SELECT translation_failed FROM ocr_regions WHERE id=$1")
+            .bind(region_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        "seed starts failed"
+    );
+
+    // Editor supplies a corrected translation -> failure flag clears.
+    let (status, _, body, _) = finalize(
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/tlhub/api/ocr-regions/{region_id}"))
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(r#"{"translatedText":"fixed"}"#.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let patched: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(patched["translatedText"], "fixed");
+    assert_eq!(
+        patched["translationFailed"], false,
+        "translation clears the failure flag"
+    );
+
+    // Scoped cleanup: this suite runs its tests in parallel, and the generic
+    // __page-e2e- sweeps would delete the other test's user mid-flight.
+    // Order matters: regions -> images (created_by FK) -> series (cascades
+    // chapters/pages) -> users.
+    sqlx::query("DELETE FROM ocr_regions WHERE id=$1")
+        .bind(region_id)
+        .execute(&pool)
+        .await
+        .expect("region cleanup");
+    sqlx::query(
+        "DELETE FROM images WHERE created_by IN (SELECT id FROM users WHERE email LIKE '__ocrpatch-e2e%')",
+    )
+    .execute(&pool)
+    .await
+    .expect("image cleanup");
+    sqlx::query(
+        "DELETE FROM series WHERE created_by IN (SELECT id FROM users WHERE email LIKE '__ocrpatch-e2e%')",
+    )
+    .execute(&pool)
+    .await
+    .expect("series cleanup");
+    sqlx::query("DELETE FROM users WHERE email LIKE '__ocrpatch-e2e%'")
+        .execute(&pool)
+        .await
+        .expect("user cleanup");
+}

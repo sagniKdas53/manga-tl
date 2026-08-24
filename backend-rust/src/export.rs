@@ -5,7 +5,7 @@
 //! The export id is `{chapterId}_{sha256(canonical metadata)}`: identical chapter
 //! content maps to the same object key, so a rebuild is a cache hit unless `force`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -262,9 +262,11 @@ async fn build_chapter_meta(
                     message: format!("layer query failed: {e}"),
                 })?;
 
-        let mut models_used: HashMap<String, HashSet<String>> = HashMap::new();
+        // BTree* not Hash*: the canonical metadata is sha256-hashed for the export id,
+        // so serialization order must be deterministic (Java's LinkedHashMap was).
+        let mut models_used: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for key in ["ocr", "translation", "qa"] {
-            models_used.insert(key.to_string(), HashSet::new());
+            models_used.insert(key.to_string(), BTreeSet::new());
         }
 
         let mut layers_meta_list: Vec<Value> = Vec::with_capacity(layers.len());
@@ -305,7 +307,7 @@ async fn build_chapter_meta(
 
                 let mut accumulated = 0.0f64;
                 let mut cost_found = false;
-                let mut absorb = |cost_node: &Value, target: &mut HashSet<String>| {
+                let mut absorb = |cost_node: &Value, target: &mut BTreeSet<String>| {
                     let Some(obj) = cost_node.as_object() else {
                         return;
                     };
@@ -376,7 +378,7 @@ async fn build_chapter_meta(
             (page_total_cost, "layer-metadata")
         };
         if !db_costs.is_empty() {
-            let recorded: HashSet<String> =
+            let recorded: BTreeSet<String> =
                 db_costs.iter().filter_map(|c| c.model.clone()).collect();
             models_used.insert("recorded".into(), recorded);
         }
@@ -389,7 +391,7 @@ async fn build_chapter_meta(
             "hasRendered": has_rendered,
             "layerCount": layers.len(),
             "layers": layers_meta_list,
-            "modelsUsed": models_used.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<HashMap<String, Value>>(),
+            "modelsUsed": models_used.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<BTreeMap<String, Value>>(),
             "totalCost": { "estimated_cost": total, "display": display, "currency": "USD" },
         });
         page_meta["costSource"] = json!(source);

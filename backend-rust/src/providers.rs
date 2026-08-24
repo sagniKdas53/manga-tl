@@ -245,3 +245,115 @@ impl ProviderConfigCache {
             .any(|m| m.id.eq_ignore_ascii_case(model.trim()) && m.free)
     }
 }
+
+// ---------------------------------------------------------------------------
+// ProviderConfigCacheTest port — pure parse/query, no redis needed.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The exact catalog blob Java's test seeds into system:providers:config.
+    const CATALOG_JSON: &str = r#"{
+      "version": 1,
+      "providers": {
+        "openrouter": {
+          "displayName": "OpenRouter",
+          "type": "openai-compatible",
+          "freeTier": false,
+          "priority": 1,
+          "models": {
+            "tl": [
+              {"id": "deepseek/deepseek-v4-pro", "name": "DeepSeek V4 Pro", "free": false},
+              {"id": "google/gemini-2.5-flash:free", "name": "Gemini Free", "free": true}
+            ]
+          },
+          "defaults": {"tl": "deepseek/deepseek-v4-pro"},
+          "capabilities": ["tl"]
+        },
+        "gemini": {
+          "displayName": "Google AI Studio",
+          "freeTier": true,
+          "priority": 2,
+          "models": {
+            "tl": [{"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "free": false}]
+          },
+          "capabilities": ["tl"]
+        }
+      }
+    }"#;
+
+    fn cache_from(json: &str) -> ProviderConfigCache {
+        let cache = ProviderConfigCache::new();
+        let map = ProviderConfigCache::parse(json).expect("catalog fixture must parse");
+        *cache.inner.write().expect("test cache poisoned") = map;
+        cache
+    }
+
+    #[test]
+    fn reload_with_valid_json_orders_by_priority() {
+        let cache = cache_from(CATALOG_JSON);
+        assert_eq!(
+            cache.get_providers_for_task("tl"),
+            vec!["openrouter".to_string(), "gemini".to_string()],
+            "priority ascending: openrouter(1) then gemini(2)"
+        );
+    }
+
+    #[test]
+    fn model_validation_is_exact_and_orphan_aware() {
+        let cache = cache_from(CATALOG_JSON);
+        assert!(cache.is_valid_provider_model("openrouter", "deepseek/deepseek-v4-pro", "tl"));
+        assert!(!cache.is_valid_provider_model("openrouter", "invalid-model", "tl"));
+        // Provider name matching is exact — "[ORPHANED]" markers are never valid.
+        assert!(!cache.is_valid_provider_model(
+            "openrouter [ORPHANED]",
+            "deepseek/deepseek-v4-pro",
+            "tl"
+        ));
+    }
+
+    #[test]
+    fn free_tier_and_model_free_flags() {
+        let cache = cache_from(CATALOG_JSON);
+        assert!(cache.is_free_tier("gemini"));
+        assert!(!cache.is_free_tier("openrouter"));
+        assert!(cache.is_model_free("openrouter", "google/gemini-2.5-flash:free"));
+        assert!(!cache.is_model_free("openrouter", "deepseek/deepseek-v4-pro"));
+    }
+
+    #[test]
+    fn provider_models_map_contains_every_published_provider() {
+        let cache = cache_from(CATALOG_JSON);
+        let map = cache.get_provider_models_map();
+        assert!(map.get("openrouter").is_some());
+        assert!(map.get("gemini").is_some());
+        assert_eq!(
+            cache.get_default_model("openrouter", "tl").as_deref(),
+            Some("deepseek/deepseek-v4-pro")
+        );
+    }
+
+    /// An empty cache does not fail validation (Java parity: deployments whose worker
+    /// has not published yet keep working).
+    #[test]
+    fn empty_cache_is_permissive_and_lists_nothing() {
+        let cache = ProviderConfigCache::new();
+        assert!(cache.get_providers_for_task("tl").is_empty());
+        assert!(cache.is_valid_provider_model("openrouter", "some-model", "tl"));
+    }
+
+    /// A garbage blob must not replace a previously loaded catalog (parse-then-swap).
+    #[test]
+    fn unparsable_blob_keeps_the_previous_catalog() {
+        let cache = cache_from(CATALOG_JSON);
+        assert!(ProviderConfigCache::parse("not-json{").is_none());
+        // Simulate reload()'s refusal to swap on parse failure: snapshot unchanged.
+        assert_eq!(
+            cache.get_providers_for_task("tl").len(),
+            2,
+            "stale data survives a bad publish"
+        );
+    }
+}
