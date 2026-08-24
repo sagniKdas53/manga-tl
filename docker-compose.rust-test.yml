@@ -5,6 +5,15 @@
 #     -f docker-compose.yml -f docker-compose.rust-test.yml \
 #     up -d db redis minio backend worker
 #
+# Rebuild the Rust image after source/frontend changes (frontend base path MUST be /tlhub
+# or the baked SPA requests assets at / and renders blank under the context path):
+#   docker compose -p ruststack \
+#     -f docker-compose.yml -f docker-compose.rust-test.yml \
+#     build backend
+#
+# First run on a machine without ./secrets: it is a symlink to the canonical checkout's
+# secrets dir; recreate with `ln -s ../manga-library/secrets secrets`.
+#
 # Design:
 #   * Fresh app data by construction — db/minio/redis mount ./data/* of THIS worktree,
 #     which holds no state from the live stack. The live stack keeps its own volumes.
@@ -35,6 +44,12 @@ services:
   backend:
     image: manga-tl-rust:test
     container_name: manga-rust-backend
+    build:
+      context: .
+      dockerfile: backend-rust/Dockerfile
+      args:
+        # The SPA bakes asset URLs at build time; without this the UI is blank under /tlhub.
+        - VITE_BASE_PATH=${CONTEXT_PATH:-/tlhub}
     ports: !override
       - "127.0.0.1:8084:8080"
     labels: []

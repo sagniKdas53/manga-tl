@@ -512,3 +512,66 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 APP_PROFILE=test SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5432/manga_library \
 SPRING_DATASOURCE_USERNAME=<user> SPRING_DATASOURCE_PASSWORD=<pw> cargo test   # integration
 ```
+
+---
+
+## Session handoff — 2026-08-24 (end of Phase 4 steps 4–7 working session)
+
+### State
+
+* Steps 1–6 DONE. Step 7 side-by-side VERIFIED, **hard swap ON HOLD**: the user browsed the
+  Rust instance and saw small/medium issues (details in their test report — do not swap until
+  they are triaged and fixed).
+* Live Java stack untouched and UP throughout; Rust test stack runs alongside it.
+* Commits this session: `8c54a86` (step 4), `25df426` (step 5), `29f923b` (step 6),
+  `58ae6ee` (step 7 fixes) on `rust-backend`, pushed to GitHub. pi5 was unreachable all
+  session — retry `git push pi5 rust-backend` when it's back.
+
+### The test stack (what the user is testing)
+
+```bash
+cd /home/sagnik/Projects/docker-composes/manga-library-rust
+docker compose -p ruststack \
+  -f docker-compose.yml -f docker-compose.rust-test.yml \
+  up -d db redis minio backend worker      # fresh data dirs under ./data/
+docker compose -p ruststack \
+  -f docker-compose.yml -f docker-compose.rust-test.yml \
+  build backend                            # after any source change (VITE_BASE_PATH=/tlhub!)
+```
+
+* UI: http://127.0.0.1:8084/tlhub — admin@test.local / test-password-123 (or register;
+  DB is fresh)
+* Ports renumbered vs live stack: backend 8084, pg 55432, valkey 56379, minio console 19001
+* `./secrets` is a symlink to the canonical checkout's secrets dir (gitignored)
+* Worker model caches bind-mount read-write from the canonical checkout's
+  `data/worker/{huggingface,paddlex}` — caches only, not app data
+* Teardown: `docker compose -p ruststack -f docker-compose.yml -f docker-compose.rust-test.yml down`
+  (data persists under ./data/ — wipe with a root container if you want truly fresh)
+
+### Acceptance already passed on this stack
+
+register → series/chapter create → upload (corpus/samples/sample133 ja page) →
+panel-detection → ocr (PP-OCRv6 + gemini-2.5-flash VLM OCR) → layout → translation
+(real ja→en text persisted) → render → qa → export ZIP download (808 KB via API).
+Route parity 71/71; gate: fmt+clippy clean, 117 tests green.
+
+### Known issues / open items for the next session
+
+1. USER REPORTED: small + medium issues browsing the UI on the Rust instance — collect
+   specifics, triage each against Java behavior (parity bugs are Phase 4 blockers; anything
+   else goes to TODO.md). NO SWAP until cleared.
+2. arm64 image builds left to the CI release workflow (user decision); amd64 verified.
+3. Step 8 Grafana: dashboards read Postgres directly; point them at the ruststack db or
+   run pipelines on the live-shaped stack and confirm panels fill.
+4. Step 9 baselines need BOTH stacks up (they are right now): cold-start, idle RSS,
+   p95 GET /api/series + /api/images/{id}/reader, image sizes. Record numbers HERE above.
+5. Step 10 housekeeping unchanged (delete backend/, merge, tag, retire ci-maven.yml).
+6. Minor: dispatcher capabilities probe now warns on non-200; RedisService::connect fails
+   after 15s instead of retrying forever. If the worker is slow to boot, backend health is
+   fine but dispatch waits for the next cycle — no action needed.
+
+### Rules that still apply
+
+* Golden OpenAPI frozen; diff_routes.py must stay exactly 71 ops.
+* Java stack stays UP until step 9 baselines are recorded from it.
+* Full gate + BOTH remotes on every commit.
