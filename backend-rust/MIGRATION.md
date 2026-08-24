@@ -435,8 +435,23 @@ zip (archives), hex, base64.
       paths need real static-file serving from the dist (Spring's resource handler runs
       BEFORE ForwardController); spa_shell()/asset_mime() added + tests. Gate: 116 tests
       green, parity 71/71)
-- [ ] **Step 5** REAL Python worker run end-to-end (register → chapter ZIP import → full
-      pipeline with real models → export download); contract mismatches are backend bugs
+- [x] **Step 5** REAL Python worker run end-to-end (VERIFIED 2026-08-24: real worker image
+      ghcr.io/sagnikdas53/manga-tl-worker on host network, scratch DB + throwaway MinIO +
+      live Valkey; upload of corpus sample133 (ja, 1254x2000) drove the full chain:
+      panel-detection COMPLETED (YOLO, 1 panel) → ocr COMPLETED (PP-OCRv6 det/rec ja +
+      gemini-2.5-flash VLM OCR via OpenRouter, 9 regions, real ja text in ocr_regions) →
+      layout COMPLETED (conversation grouping) → translation COMPLETED (real en text in
+      translated_text) → render COMPLETED → qa COMPLETED (auto→none: no QA models
+      configured, expected) → chapter export ZIP built+uploaded to MinIO and downloaded
+      through the authenticated API (808 KB, 001.jpg + meta-data.json). Worker auth:
+      WORKER_API_SECRET header; dispatcher HTTP-push verified incl. capabilities probe.
+      ENV NOTE (not a port bug): presigned GET URLs are SigV4-signed for the backend's
+      MINIO_ENDPOINT host — MINIO_EXTERNAL_URL string-rewrite (byte-faithful to Java)
+      cannot cross hostnames without 403, so E2E ran the worker with the SAME endpoint
+      view (host network); production is unaffected (worker resolves the internal
+      endpoint). Callback-driven stage chaining verified once a job is delivered; two
+      transient stuck-PENDING states during multi-restart races were cleared by the
+      startup requeue path (requeue_pending_jobs), no code change needed)
 - [ ] **Step 6** New Dockerfile: cargo-chef caching, BUILDPLATFORM build stages, embedded
       frontend dist (rust-embed w/ SPA_DIST_DIR override), NO JNI/libwebp stage; multi-arch
       amd64+arm64 verified via buildx; healthcheck strategy decided (curl vs baked helper)
