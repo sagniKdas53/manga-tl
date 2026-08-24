@@ -24,10 +24,19 @@ pub mod settings;
 
 use axum::Router;
 use axum::response::{IntoResponse, Response};
+use rust_embed::RustEmbed;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::state::AppState;
+
+/// The built frontend, embedded into the binary (Java copied it into BOOT-INF/classes/static).
+/// build.rs guarantees the folder exists even on clean checkouts; the Dockerfile's frontend
+/// stage always produces real assets before the Rust stage compiles. In debug builds
+/// rust-embed reads from disk at runtime anyway, and `SPA_DIST_DIR` overrides both modes.
+#[derive(RustEmbed)]
+#[folder = "../frontend/dist"]
+struct SpaAssets;
 
 /// The frozen OpenAPI contract, embedded at compile time from `spec/golden-openapi.json`
 /// (Phase 4 step 1). Serving these exact bytes at `/v3/api-docs` replaces springdoc: the
@@ -142,19 +151,19 @@ async fn spa_fallback(uri: axum::http::Uri) -> Response {
         return spa_shell();
     }
 
-    // Asset lookup within the dist dir (traversal-guarded).
+    // Asset lookup within the embedded dist, or the SPA_DIST_DIR dev override
+    // (traversal-guarded — irrelevant for the embed, load-bearing on disk).
     if path.split('/').any(|seg| seg == "..") {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let dist_dir = std::env::var("SPA_DIST_DIR").unwrap_or_else(|_| "../frontend/dist".into());
-    match std::fs::read(format!("{dist_dir}{path}")) {
-        Ok(bytes) => (
+    match spa_asset(path) {
+        Some(bytes) => (
             StatusCode::OK,
             [(axum::http::header::CONTENT_TYPE, asset_mime(path))],
             bytes,
         )
             .into_response(),
-        Err(_) => StatusCode::NOT_FOUND.into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
     }
 }
 
@@ -177,11 +186,13 @@ fn asset_mime(path: &str) -> &'static str {
     }
 }
 
-/// The SPA shell (index.html from disk until Phase 4 embeds it), shared by the
-/// fallback and the context-root routes.
+/// The SPA shell (index.html), shared by the fallback and the context-root routes.
+/// Serves the embedded dist; `SPA_DIST_DIR` overrides it for local dev so a fresh
+/// `npm run build` is visible without recompiling.
 fn spa_shell() -> Response {
-    let dist_dir = std::env::var("SPA_DIST_DIR").unwrap_or_else(|_| "../frontend/dist".into());
-    if let Ok(index) = std::fs::read(format!("{dist_dir}/index.html")) {
+    if let Ok(dist_dir) = std::env::var("SPA_DIST_DIR")
+        && let Ok(index) = std::fs::read(format!("{dist_dir}/index.html"))
+    {
         return (
             StatusCode::OK,
             [(axum::http::header::CONTENT_TYPE, "text/html;charset=UTF-8")],
@@ -189,7 +200,27 @@ fn spa_shell() -> Response {
         )
             .into_response();
     }
-    StatusCode::NOT_FOUND.into_response()
+    match SpaAssets::get("index.html") {
+        Some(content) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "text/html;charset=UTF-8")],
+            content.data.to_vec(),
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// One built asset by its context-relative path (`/assets/index-*.js`), embedded at
+/// compile time unless SPA_DIST_DIR overrides to disk.
+fn spa_asset(path: &str) -> Option<Vec<u8>> {
+    let rel = path.trim_start_matches('/');
+    if let Ok(dist_dir) = std::env::var("SPA_DIST_DIR")
+        && let Ok(bytes) = std::fs::read(format!("{dist_dir}/{rel}"))
+    {
+        return Some(bytes);
+    }
+    SpaAssets::get(rel).map(|content| content.data.to_vec())
 }
 
 use axum::http::StatusCode;
@@ -409,5 +440,37 @@ mod tests {
 
         unsafe { std::env::remove_var("SPA_DIST_DIR") };
         let _ = std::fs::remove_dir_all(&dist);
+    }
+
+    /// Without SPA_DIST_DIR the embedded dist answers: shell and assets both come from
+    /// SpaAssets (this is what the production image runs with).
+    #[tokio::test]
+    async fn embedded_assets_serve_when_no_dist_override_is_set() {
+        let _spa_env = SPA_ENV_LOCK.lock().await;
+        // SAFETY: serialized behind SPA_ENV_LOCK; test binaries own their process.
+        unsafe { std::env::remove_var("SPA_DIST_DIR") };
+
+        let app = build_router(test_state("/tlhub"));
+
+        let response = app
+            .clone()
+            .oneshot(Request::get("/tlhub/login").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), Status::OK);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        assert!(bytes.starts_with(b"<!doctype html>"), "embedded shell");
+
+        // The stub asset only exists when the frontend has not been built; either way
+        // a dotted path must resolve from the embed (200) or 404 — never the shell.
+        let response = app
+            .oneshot(
+                Request::get("/tlhub/assets/definitely-missing.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), Status::NOT_FOUND);
     }
 }

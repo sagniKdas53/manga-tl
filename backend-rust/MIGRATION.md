@@ -452,9 +452,18 @@ zip (archives), hex, base64.
       endpoint). Callback-driven stage chaining verified once a job is delivered; two
       transient stuck-PENDING states during multi-restart races were cleared by the
       startup requeue path (requeue_pending_jobs), no code change needed)
-- [ ] **Step 6** New Dockerfile: cargo-chef caching, BUILDPLATFORM build stages, embedded
-      frontend dist (rust-embed w/ SPA_DIST_DIR override), NO JNI/libwebp stage; multi-arch
-      amd64+arm64 verified via buildx; healthcheck strategy decided (curl vs baked helper)
+- [x] **Step 6** New Dockerfile (VERIFIED 2026-08-24: backend-rust/Dockerfile — frontend
+      stage on BUILDPLATFORM, cargo-chef plan/cook/build with arm64 cross-compiled via
+      gcc-aarch64-linux-gnu (no QEMU for the compile), rust-embed bakes ../frontend/dist
+      at compile time with SPA_DIST_DIR runtime override kept for dev (build.rs seeds a
+      stub dist so clean checkouts still compile), NO JNI/libwebp stage; runtime is
+      debian-slim with ZERO packages — apt under QEMU killed the arm64 build (exit 255),
+      so healthcheck is a ~2KB static C probe (src/main/c/healthcheck.c) cross-built in
+      the builder and CA bundle copied from builder for rustls. amd64 image verified
+      live: health 200, embedded SPA served, login OK, probe exits 0, 119MB.
+      multi-arch buildx left to CI release workflow (user decision). CRITICAL FIX:
+      .dockerignore was missing backend-rust/target — 38GB of cargo artifacts entered
+      every context send (allowlist-style ignore now). Gate: fmt+clippy clean, 117 tests)
 - [ ] **Step 7** Compose swap: REDIS_HOST env gap fixed (config.rs fallback preferred),
       Traefik labels/secrets byte-identical, side-by-side verification on a test hostname,
       then hard swap
