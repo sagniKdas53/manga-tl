@@ -1,0 +1,55 @@
+# Phase 4 step 7 — side-by-side TEST stack for the Rust backend.
+#
+# Usage (from this directory):
+#   docker compose -p ruststack \
+#     -f docker-compose.yml -f docker-compose.rust-test.yml \
+#     up -d db redis minio backend worker
+#
+# Design:
+#   * Fresh app data by construction — db/minio/redis mount ./data/* of THIS worktree,
+#     which holds no state from the live stack. The live stack keeps its own volumes.
+#   * No port collisions with the live stack: every host mapping is renumbered
+#     (8084/55432/56379/19001) and Traefik/Watchtower labels are dropped — the test
+#     stack is reached directly on loopback, not through the proxy.
+#   * The worker's MODEL caches (~GBs of YOLO/Paddle weights) are shared read-write
+#     with the canonical checkout rather than re-downloaded; they are caches, not data.
+#   * The compose-level backend healthcheck is replaced: it shells out to wget, which
+#     the package-free Rust runtime does not carry — use the baked static probe instead.
+
+services:
+  db:
+    container_name: manga-rust-db
+    ports: !override
+      - "127.0.0.1:55432:5432"
+
+  redis:
+    container_name: manga-rust-redis
+    ports: !override
+      - "127.0.0.1:56379:6379"
+
+  minio:
+    container_name: manga-rust-minio
+    ports: !override
+      - "127.0.0.1:19001:9001"
+
+  backend:
+    image: manga-tl-rust:test
+    container_name: manga-rust-backend
+    ports: !override
+      - "127.0.0.1:8084:8080"
+    labels: []
+    healthcheck:
+      test: [ "CMD", "/usr/local/bin/healthcheck" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    container_name: manga-rust-worker
+    labels: []
+    volumes:
+      # Model caches only — shared with the canonical checkout to skip multi-GB
+      # downloads; rendered_cache stays local to this worktree (fresh app data).
+      - /home/sagnik/Projects/docker-composes/manga-library/data/worker/huggingface:/home/worker/.cache/huggingface
+      - /home/sagnik/Projects/docker-composes/manga-library/data/worker/paddlex:/home/worker/.paddlex

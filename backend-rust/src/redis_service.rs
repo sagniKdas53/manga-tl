@@ -39,7 +39,21 @@ impl RedisService {
     /// Opens a connection and fails fast if Redis is unreachable.
     pub async fn connect(host: &str, port: u16) -> Result<Self, redis::RedisError> {
         let client = redis::Client::open((host, port))?;
-        let conn = client.get_connection_manager().await?;
+        // get_connection_manager retries forever with no output — against a wrong host
+        // (bad env spelling, wrong container network) the process would sit here
+        // silently for days. Bound it: compose gates this service on Redis health
+        // anyway, and a loud failure beats an infinite quiet one.
+        let conn = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            client.get_connection_manager(),
+        )
+        .await
+        .map_err(|_| {
+            redis::RedisError::from((
+                redis::ErrorKind::IoError,
+                "Redis connection not established within 15s",
+            ))
+        })??;
         Ok(Self { client, conn })
     }
 

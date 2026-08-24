@@ -144,16 +144,15 @@ impl Config {
         problems.append(&mut minio_problems);
 
         let redis = RedisConfig {
-            host: env_var("REDIS_HOST").unwrap_or_else(|| "localhost".into()),
-            port: match env_var("REDIS_PORT") {
-                None => 6379,
-                Some(raw) => match raw.parse::<u16>() {
-                    Ok(p) if p > 0 => p,
-                    _ => {
-                        problems.push(format!("REDIS_PORT ({raw}) is not a valid TCP port."));
-                        6379
-                    }
-                },
+            host: redis_host(env_var("REDIS_HOST"), env_var("SPRING_DATA_REDIS_HOST")),
+            port: match redis_port(
+                env_var("REDIS_PORT").or_else(|| env_var("SPRING_DATA_REDIS_PORT")),
+            ) {
+                Ok(p) => p,
+                Err(problem) => {
+                    problems.push(problem);
+                    6379
+                }
             },
         };
 
@@ -272,7 +271,9 @@ fn check_secret(name: &str, value: Option<&str>, min_len: usize, development: bo
 ///   2. Otherwise fall back to plain `<NAME>`.
 ///
 /// A missing value simply yields `None`; an unreadable/empty FILE records a problem.
-fn resolve_credential(name: &str, problems: &mut Vec<String>) -> Option<String> {
+/// Public so the job dispatcher can resolve `WORKER_API_SECRET(_FILE)` the same way
+/// Config does — compose only passes the _FILE form.
+pub fn resolve_credential(name: &str, problems: &mut Vec<String>) -> Option<String> {
     match env::var(format!("{name}_FILE")) {
         Ok(path) => match fs::read_to_string(&path) {
             Ok(content) => {
@@ -336,6 +337,25 @@ fn database_from_env(problems: &mut Vec<String>) -> DatabaseConfig {
         name,
         user,
         password,
+    }
+}
+
+/// Redis host resolution: the native `REDIS_HOST` wins (it is also the worker's own
+/// knob, so a shared .env keeps both services in agreement), the Spring property name
+/// that compose passes (`SPRING_DATA_REDIS_HOST`) is the fallback, keeping the compose
+/// file byte-identical across the cutover.
+fn redis_host(native: Option<String>, spring: Option<String>) -> String {
+    native.or(spring).unwrap_or_else(|| "localhost".into())
+}
+
+/// Redis port resolution over either spelling; non-numeric or zero values are problems.
+fn redis_port(raw: Option<String>) -> Result<u16, String> {
+    match raw {
+        None => Ok(6379),
+        Some(raw) => match raw.parse::<u16>() {
+            Ok(p) if p > 0 => Ok(p),
+            _ => Err(format!("REDIS_PORT ({raw}) is not a valid TCP port.")),
+        },
     }
 }
 
@@ -409,6 +429,27 @@ mod tests {
     fn long_unique_secret_accepted_in_production() {
         let good = "x".repeat(MIN_JWT_SECRET_LENGTH);
         assert!(check_secret("JWT_SECRET", Some(&good), MIN_JWT_SECRET_LENGTH, false).is_empty());
+    }
+
+    #[test]
+    fn redis_env_names_fall_back_to_spring_spelling() {
+        // Native knob wins over the Spring property compose passes.
+        assert_eq!(
+            redis_host(Some("native".into()), Some("spring".into())),
+            "native"
+        );
+        // Spring-only deployment (compose as shipped).
+        assert_eq!(
+            redis_host(None, Some("redis-in-compose".into())),
+            "redis-in-compose"
+        );
+        // Neither set -> loopback default.
+        assert_eq!(redis_host(None, None), "localhost");
+
+        assert_eq!(redis_port(None), Ok(6379));
+        assert_eq!(redis_port(Some("6380".into())), Ok(6380));
+        assert!(redis_port(Some("0".into())).is_err());
+        assert!(redis_port(Some("nope".into())).is_err());
     }
 
     #[test]

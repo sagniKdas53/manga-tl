@@ -464,9 +464,24 @@ zip (archives), hex, base64.
       multi-arch buildx left to CI release workflow (user decision). CRITICAL FIX:
       .dockerignore was missing backend-rust/target — 38GB of cargo artifacts entered
       every context send (allowlist-style ignore now). Gate: fmt+clippy clean, 117 tests)
-- [ ] **Step 7** Compose swap: REDIS_HOST env gap fixed (config.rs fallback preferred),
-      Traefik labels/secrets byte-identical, side-by-side verification on a test hostname,
-      then hard swap
+- [~] **Step 7** Compose swap — SIDE-BY-SIDE VERIFIED 2026-08-24, hard swap pending user
+      go-ahead. docker-compose.rust-test.yml (-p ruststack): fresh db/minio/redis under this
+      worktree's data/, renumbered loopback ports (8084/55432/56379/19001), Traefik/Watchtower
+      labels dropped, worker shares model caches with canonical checkout, backend healthcheck
+      swapped to the baked static probe (compose's wget doesn't exist in the slim runtime).
+      Full acceptance on the stack: register -> upload sample133 -> panel/ocr/layout/
+      translation/render/qa ALL COMPLETED with real models -> export ZIP 200 via API.
+      THREE DRIFTS FIXED by this step:
+        1. config.rs read only REDIS_HOST/PORT but compose passes SPRING_DATA_REDIS_* —
+           backend silently retried localhost forever (get_connection_manager has no
+           timeout); now falls back to the Spring spellings and RedisService::connect
+           fails loudly after 15s.
+        2. dispatcher read WORKER_API_SECRET env directly; compose only passes
+           WORKER_API_SECRET_FILE -> secret None -> every capabilities probe 401'd ->
+           treated as "no workers", SILENTLY. Now resolve_credential(_FILE aware) +
+           non-200 probes log a warning.
+        3. database/init.sql carried pg_dump \restrict markers that abort psql 15 imports
+           mid-file (fresh stacks got 1 table) — stripped.
 - [ ] **Step 8** Grafana dashboards verified filling while a pipeline runs on the Rust backend
 - [ ] **Step 9** Baselines measured and recorded HERE:
       - cold-start: Java ____s · Rust ____s

@@ -44,9 +44,16 @@ impl Dispatcher {
             .filter(|url| !url.is_empty())
             .map(|url| url.trim_end_matches('/').to_string())
             .collect();
-        let api_secret = std::env::var("WORKER_API_SECRET")
-            .ok()
-            .filter(|s| !s.is_empty());
+        // Compose passes WORKER_API_SECRET_FILE (Docker secret); the plain env var is
+        // the dev spelling. resolve_credential handles both — reading only the env var
+        // silently dropped the secret in containers, and every capabilities probe then
+        // came back 401, which this loop treated as "no workers" without a word.
+        let mut credential_problems = Vec::new();
+        let api_secret =
+            crate::config::resolve_credential("WORKER_API_SECRET", &mut credential_problems);
+        for problem in credential_problems {
+            tracing::error!("{problem}");
+        }
         Self {
             state,
             http: reqwest::Client::builder()
@@ -98,16 +105,24 @@ impl Dispatcher {
             if let Some(secret) = &self.api_secret {
                 request = request.header("WORKER_API_SECRET", secret);
             }
-            if let Ok(response) = request.send().await
-                && response.status().as_u16() == 200
-                && let Ok(body) = response.json::<serde_json::Value>().await
-            {
-                capacities.insert(url.clone(), Capacity::from_json(&body));
-                self.workers
-                    .lock()
-                    .expect("worker state")
-                    .consecutive_429s
-                    .remove(url);
+            if let Ok(response) = request.send().await {
+                let status = response.status().as_u16();
+                if status != 200 {
+                    // A 401 here (secret mismatch) looks identical to "no workers" from
+                    // the outside: nothing dispatches and nothing logs. Make it loud.
+                    tracing::warn!(
+                        "Worker {url} capabilities probe returned {status}; skipping this cycle"
+                    );
+                } else if let Ok(body) = response.json::<serde_json::Value>().await {
+                    capacities.insert(url.clone(), Capacity::from_json(&body));
+                    self.workers
+                        .lock()
+                        .expect("worker state")
+                        .consecutive_429s
+                        .remove(url);
+                }
+            } else {
+                tracing::debug!("Worker {url} is unreachable for capabilities");
             }
         }
         if capacities.is_empty() {
