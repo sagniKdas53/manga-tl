@@ -16,10 +16,34 @@
 #include <unistd.h>
 
 int main(void) {
-    const char *port = getenv("PORT");
-    if (!port || !*port) port = "8080";
-    const char *ctx = getenv("CONTEXT_PATH");
-    if (!ctx || !*ctx) ctx = "/tlhub";
+    const char *port_env = getenv("PORT");
+    const char *port = "8080";
+    if (port_env && *port_env) {
+        int ok = 1;
+        size_t len = strlen(port_env);
+        if (len == 0 || len >= 6) ok = 0;
+        for (size_t i = 0; ok && port_env[i]; i++) {
+            if (port_env[i] < '0' || port_env[i] > '9') ok = 0;
+        }
+        if (ok) {
+            long v = strtol(port_env, NULL, 10);
+            if (v > 0 && v < 65536) port = port_env;
+        }
+    }
+    const char *ctx_env = getenv("CONTEXT_PATH");
+    const char *ctx = "/tlhub";
+    if (ctx_env && *ctx_env && ctx_env[0] == '/' && strlen(ctx_env) < 200) {
+        int ok = 1;
+        for (size_t i = 0; ctx_env[i]; i++) {
+            char c = ctx_env[i];
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                  || (c >= '0' && c <= '9') || c == '/' || c == '-' || c == '_')) {
+                ok = 0;
+                break;
+            }
+        }
+        if (ok) ctx = ctx_env;
+    }
 
     char path[512];
     snprintf(path, sizeof path, "%.200s/actuator/health", ctx);

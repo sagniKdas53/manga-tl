@@ -3,7 +3,7 @@
 # Usage (from this directory):
 #   docker compose -p ruststack \
 #     -f docker-compose.yml -f docker-compose.rust-test.yml \
-#     up -d db redis minio backend worker
+#     up -d db redis minio backend worker grafana
 #
 # Rebuild the Rust image after source/frontend changes (frontend base path MUST be /tlhub
 # or the baked SPA requests assets at / and renders blank under the context path):
@@ -15,11 +15,17 @@
 # secrets dir; recreate with `ln -s ../manga-library/secrets secrets`.
 #
 # Design:
-#   * Fresh app data by construction — db/minio/redis mount ./data/* of THIS worktree,
+#   * Fresh app data by construction — db/minio/grafana mount ./data/* of THIS worktree,
 #     which holds no state from the live stack. The live stack keeps its own volumes.
-#   * No port collisions with the live stack: every host mapping is renumbered
-#     (8084/55432/56379/19001) and Traefik/Watchtower labels are dropped — the test
-#     stack is reached directly on loopback, not through the proxy.
+#   * Loopback-only direct ports, renumbered to avoid collisions with anything else on
+#     the host (8084/55432/56379/19001/3002).
+#   * TRAEFIK SERVING (2026-08-26): this is now THE stack users hit. Compose MERGES base
+#     service maps, so the backend keeps its canonical traefik.* + watchtower labels and
+#     revProxy-net membership from docker-compose.yml — with HOSTNAME set in .env the
+#     proxy routes Host(${HOSTNAME})/tlhub straight here exactly like the Java stack did,
+#     and grafana keeps /tlstats. Do NOT run the canonical Java stack at the same time:
+#     both would register identical router rules and Traefik would load-balance across them.
+#     Watchtower label is inert unless a label-enabled Watchtower runs on the host.
 #   * The worker's MODEL caches (~GBs of YOLO/Paddle weights) are shared read-write
 #     with the canonical checkout rather than re-downloaded; they are caches, not data.
 #   * The compose-level backend healthcheck is replaced: it shells out to wget, which
@@ -52,7 +58,6 @@ services:
         - VITE_BASE_PATH=${CONTEXT_PATH:-/tlhub}
     ports: !override
       - "127.0.0.1:8084:8080"
-    labels: []
     healthcheck:
       test: [ "CMD", "/usr/local/bin/healthcheck" ]
       interval: 30s
@@ -60,9 +65,17 @@ services:
       retries: 3
       start_period: 10s
 
+  grafana:
+    container_name: manga-rust-grafana
+    # Direct port renumbered vs the canonical stack's 3001; everything else
+    # (provisioning, dashboards, secrets, traefik /tlstats labels, ./data/grafana)
+    # is inherited unchanged — the datasource targets service name `db`, which
+    # resolves to manga-rust-db inside this project's network.
+    ports: !override
+      - "127.0.0.1:3002:3000"
+
   worker:
     container_name: manga-rust-worker
-    labels: []
     volumes:
       # Model caches only — shared with the canonical checkout to skip multi-GB
       # downloads; rendered_cache stays local to this worktree (fresh app data).

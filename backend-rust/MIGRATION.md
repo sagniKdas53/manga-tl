@@ -15,8 +15,9 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 > scenario-parity matrix below. Land steps in order; commit+push both remotes per step.
 > 2026-08-26: user UI test report triaged — 2 confirmed port regressions FIXED (series
 > cover cascade, mask/wordWrap wire parity), 1 environmental (.env for worker keys).
-> Live Java stack TORN DOWN; the ruststack (-p ruststack, loopback :8084) is now THE
-> serving instance. Formal compose swap on the canonical checkout deferred by user.
+> Live Java stack TORN DOWN; the ruststack (-p ruststack) is now THE
+> serving instance, fronted by Traefik at https://ideapad.tail9ece4.ts.net/tlhub.
+> Formal compose swap on the canonical checkout deferred by user.
 
 ## Mission (Phase 4)
 
@@ -72,16 +73,16 @@ merge `rust-backend` → main. The HTTP contract stays frozen throughout.
 
 ```bash
 cd /home/sagnik/Projects/docker-composes/manga-library-rust/backend-rust
-DBPW=$(cat /home/sagnik/Projects/docker-composes/manga-library/secrets/db_password.txt)
-export SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5432/manga_library
-export SPRING_DATASOURCE_USERNAME=tladmin SPRING_DATASOURCE_PASSWORD="$DBPW"
-export REDIS_TEST_ADDR=127.0.0.1:6379
-docker run --rm -d --name rust-minio-test -p 19000:9000 \
-  -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio server /data
-export MINIO_TEST_ENDPOINT=http://127.0.0.1:19000
-cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+scripts/test-env.sh run        # hermetic: throwaway pg :55490 / valkey :56390 / minio :19090
 python3 ../scripts/diff_routes.py   # must print 71/71 AND exit 0
 ```
+
+The harness (`scripts/test-env.sh up|down|run`, deps in `scripts/test-deps.yml`) pins
+every env var to the manga-test-* containers — the serving ruststack (55432/56379/19001)
+is unreachable from a test run by construction. Tests seed users, PUT global settings
+keys and can clobber the provider catalog blob on a crash; all of that lands in tmpfs,
+never in the live stack. Manual env-var invocations of `cargo test` against the live DB
+are FORBIDDEN after 2026-08-26 (they left 16 stray users behind once already).
 
 ## Key decisions & documented deviations
 
@@ -577,32 +578,65 @@ SPRING_DATASOURCE_USERNAME=<user> SPRING_DATASOURCE_PASSWORD=<pw> cargo test   #
    backfill, but their rendered/{id}.png artifacts were produced by the broken filter —
    redo translation/render to regenerate if those exports matter.
 
-### Current stack layout
+### Current stack layout (updated later on 2026-08-26)
 
 * Serving instance: `docker compose -p ruststack -f docker-compose.yml -f
-  docker-compose.rust-test.yml up -d db redis minio backend worker` from THIS worktree.
-* UI: http://127.0.0.1:8084/tlhub — admin@test.local / test-password-123.
-* Ports: backend 8084, pg 55432, valkey 56379, minio console 19001 (all loopback-only).
-* `.env` (gitignored) supplies provider API keys + model lists; `./secrets` symlink to
-  canonical secrets; db/minio identities stay compose-defaults matching ./data bootstrap.
+  docker-compose.rust-test.yml up -d db redis minio backend worker grafana` from THIS
+  worktree.
+* **Traefik serving is LIVE**: compose MERGES base service maps, so the backend kept its
+  canonical traefik.* labels + revProxy-net membership (the old `labels: []` override was
+  a no-op, not a drop). With HOSTNAME restored to .env the proxy routes
+  https://ideapad.tail9ece4.ts.net/tlhub → manga-rust-backend and /tlstats → grafana,
+  exactly like the Java stack did. Plain-HTTP :80 404s for EVERY service on this host
+  (syncthing/dozzle too) — pre-existing traefik quirk, HTTPS via tailsolver is the entry.
+  DO NOT run the canonical Java stack simultaneously: identical router rules would make
+  Traefik load-balance across both backends.
+* Monitoring: there IS NO Prometheus anywhere in this stack BY DESIGN — Grafana reads
+  Postgres directly (config/grafana/provisioning/datasources/postgres.yml says so in its
+  header). manga-rust-grafana (:3002 loopback, /tlstats via traefik) uses unchanged
+  provisioning; datasource targets service name `db` = manga-rust-db; database/
+  grafana_readonly.sql was applied by hand (grafana_ro role) and health reports OK.
+* UI: https://ideapad.tail9ece4.ts.net/tlhub or http://127.0.0.1:8084/tlhub —
+  admin@test.local / test-password-123.
+* Ports: backend 8084, pg 55432, valkey 56379, minio console 19001, grafana 3002
+  (all loopback-only).
+* `.env` (gitignored) supplies provider API keys + model lists + HOSTNAME; `./secrets`
+  symlink to canonical secrets; db/minio identities stay compose-defaults matching
+  ./data bootstrap.
 * Worker model caches bind-mount read-write from the canonical checkout's
   `data/worker/{huggingface,paddlex}` — caches only, not app data.
 * Canonical checkout: containers DOWN, bind-mount data intact, still on `main`.
 
+### Test isolation (added 2026-08-26)
+
+* `backend-rust/scripts/test-env.sh {up|down|run}` + `scripts/test-deps.yml`: throwaway
+  pg :55490 / valkey :56390 / minio :19090, tmpfs data, schema applied with CI's sed
+  treatment incl. a dedicated manga_library_jobs_e2e scratch DB. `run` executes the full
+  gate hermetically. VERIFIED: 118 tests green while the serving stack recorded zero
+  writes during the run.
+* Stray test users/series left in the live ruststack DB by an earlier manual gate run
+  were removed (kept only admin@test.local + user-created content).
+
 ### Known issues / open items for the next session
 
-1. Formal step-7 swap on the CANONICAL checkout deferred by user — when resumed, point
-   its docker-compose.yml backend at the Rust Dockerfile/image (rules below still apply).
+1. Formal step-7 swap on the CANONICAL checkout deferred INDEFINITELY (user: "not now";
+   ruststack serves production through Traefik meanwhile). When revisited: take this
+   stack down first (router-rule collision), then point the canonical compose at the
+   Rust image.
 2. arm64 image builds left to the CI release workflow (user decision); amd64 verified.
-3. Step 8 Grafana: dashboards read Postgres directly; run a pipeline against ruststack's
-   db (55432) or repoint dashboards and confirm panels fill.
+3. Step 8 Grafana: dashboards provisioned and datasource healthy against manga-rust-db;
+   remaining check = watch panels fill while a pipeline runs on the Rust backend.
 4. Step 9 baselines PARTIAL only (Java torn down first): idle RSS 498.6MB vs 6.0MB,
    image 324MB vs 119MB; cold-start/p95 are N/A now unless re-derived another way.
-5. Step 10 housekeeping unchanged (delete backend/, merge, tag, retire ci-maven.yml).
-6. Minor: dispatcher capabilities probe warns on non-200; RedisService::connect fails
+5. Step 10 housekeeping DEFERRED by user (no merge planned until more testing); when it
+   happens: AGENTS.md + READMEs + release.yml, retire ci-maven.yml, delete backend/,
+   merge rust-backend → main, tag.
+6. Frontend hardening proposal written: docs/frontend_hardening_settings_provider_retry.md
+   (empty-catalog retry + alert state; post-migration backlog).
+7. Minor: dispatcher capabilities probe warns on non-200; RedisService::connect fails
    after 15s instead of retrying forever. No action needed.
 
 ### Rules that still apply
 
 * Golden OpenAPI frozen; diff_routes.py must stay exactly 71 ops.
-* Full gate + BOTH remotes on every commit.
+* Full gate (via scripts/test-env.sh run) + BOTH remotes on every commit.

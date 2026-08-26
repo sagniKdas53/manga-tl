@@ -16,9 +16,20 @@ use manga_backend::jwt::JwtUtils;
 use manga_backend::minio::MinioService;
 use manga_backend::state::AppState;
 
-const PROBE_EMAIL: &str = "__auth-e2e@example.invalid";
-const PROBE_PASSWORD: &str = "probe-password-1";
 const SECRET: &str = "test-secret-long-enough-for-hmac-signing-1234567890";
+
+/// Unique per-run probe credentials so parallel test binaries never share an
+/// account (see MIGRATION.md "Tests in ONE binary run in PARALLEL…"). No
+/// literal password is ever committed — the value is generated at runtime so
+/// secret scanners have nothing to flag.
+fn probe_credentials() -> (String, String) {
+    let a = &uuid::Uuid::new_v4().to_string()[..8];
+    let b = &uuid::Uuid::new_v4().to_string()[..4];
+    (
+        format!("__auth-e2e-{a}@example.invalid"),
+        format!("t-{a}-{b}-9A!"),
+    )
+}
 
 fn db_config_from_env() -> Option<DatabaseConfig> {
     let url = std::env::var("SPRING_DATASOURCE_URL").ok()?;
@@ -148,6 +159,12 @@ async fn full_account_lifecycle() {
     };
     cleanup(&pool).await;
     ensure_users_exist(&pool).await;
+    let (probe_email, probe_password) = probe_credentials();
+    let new_password = format!(
+        "{}-n-{}",
+        &probe_password[..6.min(probe_password.len())],
+        &uuid::Uuid::new_v4().to_string()[..4]
+    );
 
     // --- setup-required is public JSON ---
     let (status, _, body) = body_string(
@@ -210,7 +227,7 @@ async fn full_account_lifecycle() {
             "POST",
             "/tlhub/api/auth/register",
             None,
-            Some(format!(r#"{{"email":"{PROBE_EMAIL}","password":"{PROBE_PASSWORD}","displayName":"E2E Probe","role":"admin"}}"#)),
+            Some(format!(r#"{{"email":"{probe_email}","password":"{probe_password}","displayName":"E2E Probe","role":"admin"}}"#)),
         )
         .await,
     )
@@ -229,14 +246,14 @@ async fn full_account_lifecycle() {
             "POST",
             "/tlhub/api/auth/register",
             None,
-            Some(format!(r#"{{"email":"{PROBE_EMAIL}","password":"{PROBE_PASSWORD}","displayName":"E2E Probe","role":"translator"}}"#)),
+            Some(format!(r#"{{"email":"{probe_email}","password":"{probe_password}","displayName":"E2E Probe","role":"translator"}}"#)),
         )
         .await,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(parsed["email"], PROBE_EMAIL);
+    assert_eq!(parsed["email"], probe_email.as_str());
     assert_eq!(parsed["displayName"], "E2E Probe");
     assert_eq!(parsed["role"], "translator");
     assert!(parsed["token"].as_str().unwrap().split('.').count() == 3);
@@ -250,7 +267,7 @@ async fn full_account_lifecycle() {
             "/tlhub/api/auth/register",
             None,
             Some(format!(
-                r#"{{"email":"{PROBE_EMAIL}","password":"{PROBE_PASSWORD}","displayName":"dup"}}"#
+                r#"{{"email":"{probe_email}","password":"{probe_password}","displayName":"dup"}}"#
             )),
         )
         .await,
@@ -268,7 +285,7 @@ async fn full_account_lifecycle() {
             "/tlhub/api/auth/login",
             None,
             Some(format!(
-                r#"{{"email":"{PROBE_EMAIL}","password":"totally-wrong"}}"#
+                r#"{{"email":"{probe_email}","password":"totally-wrong"}}"#
             )),
         )
         .await,
@@ -286,7 +303,7 @@ async fn full_account_lifecycle() {
             "/tlhub/api/auth/login",
             None,
             Some(format!(
-                r#"{{"email":"{PROBE_EMAIL}","password":"{PROBE_PASSWORD}"}}"#
+                r#"{{"email":"{probe_email}","password":"{probe_password}"}}"#
             )),
         )
         .await,
@@ -304,7 +321,7 @@ async fn full_account_lifecycle() {
         serde_json::Value::Null,
         "GET /me token must be explicit null"
     );
-    assert_eq!(me["email"], PROBE_EMAIL);
+    assert_eq!(me["email"], probe_email.as_str());
 
     // --- unauthenticated /me is the CONTROLLER's 401 shape, not security's 403 ---
     let (status, ctype, body) =
@@ -356,7 +373,9 @@ async fn full_account_lifecycle() {
             "POST",
             "/tlhub/api/auth/change-password",
             Some(&token),
-            Some(r#"{"currentPassword":"nope","newPassword":"brand-new-pw"}"#.into()),
+            Some(format!(
+                r#"{{"currentPassword":"nope","newPassword":"{new_password}"}}"#
+            )),
         )
         .await,
     )
@@ -373,7 +392,7 @@ async fn full_account_lifecycle() {
             "/tlhub/api/auth/change-password",
             Some(&token),
             Some(format!(
-                r#"{{"currentPassword":"{PROBE_PASSWORD}","newPassword":"brand-new-pw"}}"#
+                r#"{{"currentPassword":"{probe_password}","newPassword":"{new_password}"}}"#
             )),
         )
         .await,
@@ -393,7 +412,7 @@ async fn full_account_lifecycle() {
             "/tlhub/api/auth/login",
             None,
             Some(format!(
-                r#"{{"email":"{PROBE_EMAIL}","password":"{PROBE_PASSWORD}"}}"#
+                r#"{{"email":"{probe_email}","password":"{probe_password}"}}"#
             )),
         )
         .await,
@@ -406,7 +425,9 @@ async fn full_account_lifecycle() {
             "POST",
             "/tlhub/api/auth/login",
             None,
-            Some(r#"{"email":"__auth-e2e@example.invalid","password":"brand-new-pw"}"#.into()),
+            Some(format!(
+                r#"{{"email":"{probe_email}","password":"{new_password}"}}"#
+            )),
         )
         .await,
     )
@@ -440,7 +461,9 @@ async fn full_account_lifecycle() {
             "POST",
             "/tlhub/api/auth/login",
             None,
-            Some(r#"{"email":"__auth-e2e@example.invalid","password":"brand-new-pw"}"#.into()),
+            Some(format!(
+                r#"{{"email":"{probe_email}","password":"{new_password}"}}"#
+            )),
         )
         .await,
     )
