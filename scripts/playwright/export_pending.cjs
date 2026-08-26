@@ -57,6 +57,14 @@ function parseArgs(argv) {
     password: process.env.TLHUB_PASSWORD || "",
     pendingDir: "",
     out: "",
+    seriesId: "",
+    chapterId: "",
+    ocrProvider: "",
+    ocrModel: "",
+    tlProvider: "",
+    tlModel: "",
+    qaProvider: "",
+    qaMode: "",
     limit: 0,
     force: false,
     headed: false,
@@ -68,6 +76,14 @@ function parseArgs(argv) {
     switch (v) {
       case "--pending-dir": a.pendingDir = nxt(); break;
       case "--out": a.out = nxt(); break;
+      case "--series-id": a.seriesId = nxt(); break;
+      case "--chapter-id": a.chapterId = nxt(); break;
+      case "--ocr-provider": a.ocrProvider = nxt(); break;
+      case "--ocr-model": a.ocrModel = nxt(); break;
+      case "--tl-provider": a.tlProvider = nxt(); break;
+      case "--tl-model": a.tlModel = nxt(); break;
+      case "--qa-provider": a.qaProvider = nxt(); break;
+      case "--qa-mode": a.qaMode = nxt(); break;
       case "--limit": a.limit = Number(nxt()); break;
       case "--base": a.base = nxt(); break;
       case "--email": a.email = nxt(); break;
@@ -113,6 +129,31 @@ function extractProjectJson(zipPath, destPath) {
   fs.writeFileSync(destPath, buf);
 }
 
+async function getAuthToken(page, args) {
+  let token = await page.evaluate(() => {
+    const raw = localStorage.getItem("manga_user");
+    if (raw) {
+      try {
+        const u = JSON.parse(raw);
+        if (u && u.token) return u.token;
+      } catch {}
+    }
+    return localStorage.getItem("token") || sessionStorage.getItem("token");
+  });
+  if (!token && args && args.email && args.password) {
+    try {
+      const res = await page.request.post(`${args.base}/api/auth/login`, {
+        data: { email: args.email, password: args.password },
+      });
+      if (res.ok()) {
+        const j = await res.json().catch(() => ({}));
+        if (j.token) token = j.token;
+      }
+    } catch {}
+  }
+  return token;
+}
+
 async function login(page, args) {
   await page.goto(`${args.base}/login`, { waitUntil: "domcontentloaded" });
   await page.getByLabel("Email Address").fill(args.email);
@@ -124,63 +165,235 @@ async function login(page, args) {
   await page.waitForLoadState("networkidle").catch(()=>{});
 }
 
-async function createChapter(page, args, title) {
-  const token = await page.evaluate(() => localStorage.getItem("token") || sessionStorage.getItem("token"));
-  if (token) {
-    // Ensure we have a series: create one if needed, or use existing
-    let seriesId = args.seriesId;
-    if (!seriesId) {
-      // Try to get or create a test series
-      const seriesRes = await page.request.post(`${args.base}/api/series`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { title: "Pending Exports", originalLanguage: "ja", sourceLanguage: "ja", targetLanguage: "en" },
-      });
-      if (seriesRes.ok()) {
-        const sj = await seriesRes.json().catch(()=> ({}));
-        seriesId = sj.id || sj.seriesId;
-      } else {
-        // fallback: list series and pick first
-        const listRes = await page.request.get(`${args.base}/api/series`, { headers: { Authorization: `Bearer ${token}` } });
-        if (listRes.ok()) {
-          const lj = await listRes.json().catch(()=> []);
-          const arr = Array.isArray(lj) ? lj : (lj.content || lj.series || []);
-          if (arr.length) seriesId = arr[0].id || arr[0].seriesId;
-        }
+function getImageDimensions(buf) {
+  if (!buf || buf.length < 24) return null;
+  // PNG
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) {
+    const width = buf.readUInt32BE(16);
+    const height = buf.readUInt32BE(20);
+    return { width, height, type: "png", aspectRatio: height / (width || 1) };
+  }
+  // JPEG
+  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+    let offset = 2;
+    while (offset < buf.length - 8) {
+      if (buf[offset] !== 0xFF) { offset++; continue; }
+      const marker = buf[offset + 1];
+      if ((marker >= 0xC0 && marker <= 0xC3) || (marker >= 0xC5 && marker <= 0xC7) || (marker >= 0xC9 && marker <= 0xCB) || (marker >= 0xCD && marker <= 0xCF)) {
+        const height = buf.readUInt16BE(offset + 5);
+        const width = buf.readUInt16BE(offset + 7);
+        return { width, height, type: "jpeg", aspectRatio: height / (width || 1) };
       }
-    }
-    if (seriesId) {
-      const res = await page.request.post(`${args.base}/api/series/${seriesId}/chapters`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { title, chapterNumber: Date.now() % 100000 },
-      });
-      if (res.ok()) {
-        const j = await res.json().catch(()=> ({}));
-        if (j.id || j.chapterId) return j.id || j.chapterId;
-      }
+      const len = buf.readUInt16BE(offset + 2);
+      offset += 2 + len;
     }
   }
-  // UI fallback: navigate to new chapter flow (adjust selector to your app)
-  await page.goto(`${args.base}/chapters/new`, { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Title").fill(title).catch(()=>{});
-  await page.getByRole("button", { name: "Create" }).click().catch(()=>{});
-  await page.waitForURL(/\/chapters\/[^/]+\/reader\/1/, { timeout: 30_000 }).catch(()=>{});
-  const m = page.url().match(/\/chapters\/([^/]+)\//);
-  if (!m) throw new Error("could not determine chapter id after create");
-  return m[1];
+  return null;
+}
+
+function deriveSmartConfig(lang, imageInfo, meta, args) {
+  const normLang = (lang || meta?.language || meta?.source?.lang || "ja").toLowerCase();
+  const aspectRatio = imageInfo?.aspectRatio || 1.4;
+  const isWebtoon = aspectRatio >= 2.0;
+  const isSpread = aspectRatio <= 0.8;
+
+  // Reading direction
+  let readingDirection = "rightToLeft";
+  if (args.readingDirection) {
+    readingDirection = args.readingDirection;
+  } else if (isWebtoon) {
+    readingDirection = "leftToRight";
+  } else if (normLang === "ko") {
+    readingDirection = "leftToRight";
+  } else if (normLang.startsWith("zh")) {
+    readingDirection = "leftToRight";
+  } else if (normLang === "ja") {
+    readingDirection = "rightToLeft";
+  } else {
+    readingDirection = "leftToRight";
+  }
+
+  // OCR Model: PP-OCRv5 for Korean (has Hangul rec model), PP-OCRv6 for Japanese/Chinese
+  let ocrProvider = args.ocrProvider || "local";
+  let ocrModel = args.ocrModel;
+  if (!ocrModel) {
+    if (normLang === "ko") {
+      ocrModel = "PP-OCRv5";
+    } else {
+      ocrModel = "PP-OCRv6";
+    }
+  }
+
+  // Translation Model: Torii uses GPT-5.6 Luna via OpenRouter
+  const tlProvider = args.tlProvider || "openrouter";
+  const tlModel = args.tlModel || "openai/gpt-5.6-luna";
+
+  const typeLabel = isWebtoon ? " Webtoon" : (isSpread ? " Spread" : "");
+  const seriesTitle = `Pending Exports (${normLang.toUpperCase()}${typeLabel})`;
+
+  return {
+    lang: normLang,
+    isWebtoon,
+    isSpread,
+    readingDirection,
+    ocrProvider,
+    ocrModel,
+    seriesTitle,
+    tlProvider,
+    tlModel,
+    qaProvider: args.qaProvider || null,
+    qaMode: args.qaMode || null,
+  };
+}
+
+async function getOrCreateSeries(page, args, smartConfig) {
+  const token = await getAuthToken(page, args);
+  if (!token) throw new Error("not authenticated: cannot get token");
+
+  if (args.seriesId) return args.seriesId;
+
+  const lang = smartConfig.lang;
+
+  // List existing series and find one matching language & direction
+  const listRes = await page.request.get(`${args.base}/api/series?size=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (listRes.ok()) {
+    const lj = await listRes.json().catch(() => ({}));
+    const arr = Array.isArray(lj) ? lj : (lj.content || lj.series || []);
+    const match = arr.find(s =>
+      (s.sourceLanguage === lang || s.originalLanguage === lang) &&
+      (s.readingDirection === smartConfig.readingDirection || !s.readingDirection) &&
+      (s.title && s.title.toLowerCase().includes("pending"))
+    ) || arr.find(s => s.sourceLanguage === lang || s.originalLanguage === lang);
+    if (match) {
+      console.log(`Reusing series "${match.title}" (${match.id || match.seriesId}) for lang=${lang}`);
+      return match.id || match.seriesId;
+    }
+  }
+
+  // Create new series with smart defaults
+  const seriesPayload = {
+    title: smartConfig.seriesTitle,
+    originalLanguage: lang,
+    sourceLanguage: lang,
+    targetLanguage: "en",
+    readingDirection: smartConfig.readingDirection,
+    ocrProvider: smartConfig.ocrProvider,
+    ocrModel: smartConfig.ocrModel,
+    tlProvider: smartConfig.tlProvider,
+    tlModel: smartConfig.tlModel,
+    qaProvider: smartConfig.qaProvider,
+    qaMode: smartConfig.qaMode,
+    useFallbackModels: true,
+  };
+
+  const createRes = await page.request.post(`${args.base}/api/series`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: seriesPayload,
+  });
+  if (createRes.ok()) {
+    const sj = await createRes.json().catch(() => ({}));
+    const id = sj.id || sj.seriesId;
+    console.log(`Created series "${smartConfig.seriesTitle}" (${id}) for lang=${lang} [direction=${smartConfig.readingDirection}, ocr=${smartConfig.ocrModel}]`);
+    return id;
+  }
+  throw new Error(`Failed to create series: ${createRes.status()} ${await createRes.text().catch(() => "")}`);
+}
+
+async function getOrCreateChapter(page, args, seriesId, sampleId, smartConfig) {
+  const token = await getAuthToken(page, args);
+  if (!token) throw new Error("not authenticated: cannot get token");
+
+  if (args.chapterId) return args.chapterId;
+
+  const title = `pending-${sampleId}`;
+  const listRes = await page.request.get(`${args.base}/api/series/${seriesId}/chapters?size=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (listRes.ok()) {
+    const cj = await listRes.json().catch(() => ({}));
+    const arr = Array.isArray(cj) ? cj : (cj.content || cj.chapters || []);
+    const match = arr.find(c => c.title === title || c.title === sampleId);
+    if (match) {
+      console.log(`Reusing chapter "${match.title}" (${match.id || match.chapterId})`);
+      return match.id || match.chapterId;
+    }
+  }
+
+  const numMatch = sampleId.match(/\d+/);
+  const chapterNumber = numMatch ? Number(numMatch[0]) : (Date.now() % 100000);
+
+  const chapterPayload = {
+    title,
+    chapterNumber,
+    ocrProvider: smartConfig.ocrProvider,
+    ocrModel: smartConfig.ocrModel,
+    tlProvider: smartConfig.tlProvider,
+    tlModel: smartConfig.tlModel,
+    qaProvider: smartConfig.qaProvider,
+    qaMode: smartConfig.qaMode,
+    useContextMemory: true,
+    useFallbackModels: true,
+  };
+
+  const createRes = await page.request.post(`${args.base}/api/series/${seriesId}/chapters`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: chapterPayload,
+  });
+  if (createRes.ok()) {
+    const cj = await createRes.json().catch(() => ({}));
+    const id = cj.id || cj.chapterId;
+    console.log(`Created chapter "${title}" (${id}) [num=${chapterNumber}]`);
+    return id;
+  }
+  throw new Error(`Failed to create chapter: ${createRes.status()} ${await createRes.text().catch(() => "")}`);
 }
 
 async function uploadSource(page, chapterId, sourcePath, args) {
-  const token = await page.evaluate(() => localStorage.getItem("token") || sessionStorage.getItem("token"));
+  const token = await getAuthToken(page, args);
   const buf = fs.readFileSync(sourcePath);
-  const res = await page.request.post(`${args.base}/api/chapters/${chapterId}/pages`, {
+  const mimeType = sourcePath.endsWith(".png") ? "image/png" : "image/jpeg";
+  const res = await page.request.post(`${args.base}/api/images`, {
     headers: { Authorization: `Bearer ${token}` },
     multipart: {
-      file: { name: path.basename(sourcePath), mimeType: sourcePath.endsWith(".png") ? "image/png" : "image/jpeg", buffer: buf },
+      chapterId: String(chapterId),
+      pageNumber: "1",
+      file: { name: path.basename(sourcePath), mimeType, buffer: buf },
     },
   });
   if (!res.ok()) throw new Error(`upload failed ${res.status()} ${await res.text().catch(()=> "")}`);
   const j = await res.json().catch(()=> ({}));
-  return j.pageNumber || j.pageId || 1;
+  return {
+    pageNumber: 1,
+    pageId: j.pageId,
+    imageId: j.imageId,
+  };
+}
+
+async function waitForPipeline(page, pageId, args, timeoutMs = 180_000) {
+  const token = await getAuthToken(page, args);
+  const start = Date.now();
+  console.log(`Waiting for pipeline to complete on page ${pageId}...`);
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await page.request.get(`${args.base}/api/pages/${pageId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok()) {
+        const data = await res.json().catch(() => ({}));
+        const layers = data.layers || [];
+        const tlLayer = layers.find(l => (l.layer?.type || l.type) === "translation");
+        if (tlLayer && tlLayer.elements && tlLayer.elements.length > 0) {
+          console.log(`Pipeline complete: ${tlLayer.elements.length} translation elements generated`);
+          return true;
+        }
+      }
+    } catch (e) {}
+    await page.waitForTimeout(3000);
+  }
+  console.warn(`Pipeline wait timed out after ${timeoutMs}ms, proceeding to Reader`);
+  return false;
 }
 
 async function waitForReader(page, settleMs) {
@@ -195,9 +408,8 @@ async function captureOnce(page, pendingDir, args, stats) {
   const sourceFile = meta.source.file;
   const sourcePath = path.join(pendingDir, sourceFile);
   const sampleId = meta.sample_id;
-  // out is samples/<lang>/sampleId  — derive lang from pending path or meta.language
-  const lang = meta.language || "ja";
-  const outDir = args.out ? path.join(path.resolve(args.out), lang, sampleId) : path.join(path.dirname(path.dirname(pendingDir)), "samples", lang, sampleId);
+  const lang = meta.language || meta.source?.lang || "ja";
+  const outDir = args.out ? path.join(path.resolve(args.out), lang, sampleId) : pendingDir;
   const exportPng = path.join(outDir, "export.png");
   const renderPng = path.join(outDir, "render.png");
   const zipPath = path.join(outDir, "project.zip");
@@ -214,10 +426,19 @@ async function captureOnce(page, pendingDir, args, stats) {
     return { sampleId, status: "dry-run" };
   }
 
-  // Create a throwaway chapter for this single page (simplest isolation)
-  const chapterId = await createChapter(page, args, `pending-${sampleId}`);
-  const pageNumber = await uploadSource(page, chapterId, sourcePath, args);
-  console.log(`${sampleId}: uploaded as chapter ${chapterId} page ${pageNumber}`);
+  const sourceBuf = fs.readFileSync(sourcePath);
+  const imageInfo = getImageDimensions(sourceBuf);
+  const smartConfig = deriveSmartConfig(lang, imageInfo, meta, args);
+
+  console.log(`${sampleId}: [${lang}] ${imageInfo?.width || '?'}x${imageInfo?.height || '?'} (ratio: ${imageInfo?.aspectRatio ? imageInfo.aspectRatio.toFixed(2) : '?'}) -> dir: ${smartConfig.readingDirection}, ocr: ${smartConfig.ocrModel}`);
+
+  const seriesId = await getOrCreateSeries(page, args, smartConfig);
+  const chapterId = await getOrCreateChapter(page, args, seriesId, sampleId, smartConfig);
+  const { pageNumber, pageId } = await uploadSource(page, chapterId, sourcePath, args);
+  console.log(`${sampleId}: uploaded as chapter ${chapterId} page ${pageNumber} (pageId ${pageId})`);
+
+  // Wait for the backend pipeline to finish OCR + translation + inpainting
+  await waitForPipeline(page, pageId, args);
 
   // Now capture via Reader
   await page.goto(`${args.base}/chapters/${chapterId}/reader/${pageNumber}`, { waitUntil: "domcontentloaded" });
@@ -245,8 +466,8 @@ async function captureOnce(page, pendingDir, args, stats) {
 
   // Also fetch worker render via API for redundancy
   try {
-    const token = await page.evaluate(() => localStorage.getItem("token") || sessionStorage.getItem("token"));
-    const r = await page.request.get(`${args.base}/api/pages/${chapterId}/${pageNumber}/rendered`, { headers: { Authorization: `Bearer ${token}` }});
+    const token = await getAuthToken(page, args);
+    const r = await page.request.get(`${args.base}/api/pages/${pageId}/rendered`, { headers: { Authorization: `Bearer ${token}` }});
     if (r.ok()) fs.writeFileSync(renderPng, await r.body());
   } catch {}
 
@@ -257,26 +478,25 @@ async function captureOnce(page, pendingDir, args, stats) {
     // unpack full zip to project/ for greppability
     execFileSync("unzip", ["-o", zipPath, "-d", projectDir]);
     fs.unlinkSync(zipPath); // keep only project/
-    fs.unlinkSync(projJson);
+    if (fs.existsSync(projJson)) fs.unlinkSync(projJson);
   } catch (e) {
     console.warn(`${sampleId}: could not unpack project.zip: ${e.message}`);
   }
 
-  // Copy meta + refs into place (so the pending dir becomes a complete sample)
-  const destMeta = path.join(outDir, "meta.json");
-  if (!fs.existsSync(destMeta)) {
-    // promote: update origin.previous_path to gaps location, keep sample_id
-    const newMeta = { ...meta, origin: { ...meta.origin, previous_path: path.relative(path.resolve("corpus"), pendingDir) } };
-    fs.writeFileSync(destMeta, JSON.stringify(newMeta, null, 2));
+  // Copy meta + refs into place if outputting to an external directory
+  if (path.resolve(outDir) !== path.resolve(pendingDir)) {
+    const destMeta = path.join(outDir, "meta.json");
+    if (!fs.existsSync(destMeta)) {
+      const newMeta = { ...meta, origin: { ...meta.origin, previous_path: path.relative(path.resolve("corpus"), pendingDir) } };
+      fs.writeFileSync(destMeta, JSON.stringify(newMeta, null, 2));
+    }
+    for (const ref of meta.references || []) {
+      const src = path.join(pendingDir, ref.file);
+      const dst = path.join(outDir, ref.file);
+      if (fs.existsSync(src) && !fs.existsSync(dst)) fs.copyFileSync(src, dst);
+    }
+    if (!fs.existsSync(path.join(outDir, sourceFile))) fs.copyFileSync(sourcePath, path.join(outDir, sourceFile));
   }
-  // copy ref-human if not already
-  for (const ref of meta.references || []) {
-    const src = path.join(pendingDir, ref.file);
-    const dst = path.join(outDir, ref.file);
-    if (fs.existsSync(src) && !fs.existsSync(dst)) fs.copyFileSync(src, dst);
-  }
-  // also copy source
-  if (!fs.existsSync(path.join(outDir, sourceFile))) fs.copyFileSync(sourcePath, path.join(outDir, sourceFile));
 
   console.log(`${sampleId}: ok -> ${outDir}`);
   stats.captured++;
