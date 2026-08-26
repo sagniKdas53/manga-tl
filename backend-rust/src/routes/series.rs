@@ -836,30 +836,33 @@ pub async fn update_chapter(
     .await
     .expect("chapter update");
 
-    // PageService.recalculateSeriesCover parity: cover of lowest-numbered chapter having one.
-    sqlx::query(
-        "UPDATE series SET cover_image_id = COALESCE((\
-             SELECT c.cover_image_id FROM chapters c \
-             WHERE c.series_id = $1 AND c.cover_image_id IS NOT NULL \
-             ORDER BY c.chapter_number ASC LIMIT 1), NULL) \
-         WHERE id = $1",
-    )
-    .bind(updated.series_id)
-    .execute(&state.pool)
-    .await
-    .expect("series cover recalculation");
+    // PageService.recalculateSeriesCover parity via the shared cascade helper.
+    crate::clone::recalculate_series_cover(&state.pool, updated.series_id).await;
 
     respond_with_chapter_dto(&state, updated).await
 }
 
 /// DELETE /api/series/chapters/{chapterId}
 pub async fn delete_chapter(State(state): State<AppState>, Path(id): Path<Uuid>) -> Response {
+    let series_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT series_id FROM chapters WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.pool)
+            .await
+            .unwrap_or(None);
     match sqlx::query("DELETE FROM chapters WHERE id = $1")
         .bind(id)
         .execute(&state.pool)
         .await
     {
-        Ok(res) if res.rows_affected() > 0 => StatusCode::OK.into_response(),
+        // SeriesController.java:563-571 recalculates after a successful delete so
+        // removing the covered chapter cannot leave a dangling cover image id.
+        Ok(res) if res.rows_affected() > 0 => {
+            if let Some(series_id) = series_id {
+                crate::clone::recalculate_series_cover(&state.pool, series_id).await;
+            }
+            StatusCode::OK.into_response()
+        }
         _ => StatusCode::NOT_FOUND.into_response(),
     }
 }

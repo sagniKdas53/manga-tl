@@ -1047,8 +1047,8 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
             .map_err(|e| e.to_string())?;
         let Some(region) = region else { continue };
         sqlx::query(
-            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) \
-             VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8)",
+            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, region_id) \
+             VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,$7,$8)",
         )
         .bind(Uuid::new_v4())
         .bind(&region.text)
@@ -1077,13 +1077,10 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
     Ok(())
 }
 
-/// The worker sends maskPolygon as a JSON string; store it as jsonb either way.
+/// The worker sends maskPolygon as a JSON string; store it as jsonb structure
+/// either way (shared normalization lives in models).
 fn mask_polygon_value(raw: Option<&Value>) -> Option<Value> {
-    match raw? {
-        Value::Null => None,
-        Value::String(s) => Some(serde_json::from_str(s).unwrap_or(Value::String(s.clone()))),
-        other => Some(other.clone()),
-    }
+    crate::models::normalize_mask_polygon(raw?.clone())
 }
 
 pub fn find_matching_panel(rx: i32, ry: i32, rw: i32, rh: i32, panels: &[Panel]) -> Option<&Panel> {
@@ -1747,8 +1744,8 @@ pub async fn handle_translation_callback(
                 let box_geom = text_box_for(&state.pool, region).await;
                 sqlx::query(
                     "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, font, font_weight, \
-                     background_color, text_color, box_shape, mask_polygon, layer_id, region_id) \
-                     VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,'Comic Neue','bold',$7,$8,$9,$10,$11,$12)",
+                     background_color, text_color, box_shape, mask_polygon, word_wrap, layer_id, region_id) \
+                     VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,'Comic Neue','bold',$7,$8,$9,$10,TRUE,$11,$12)",
                 )
                 .bind(Uuid::new_v4())
                 .bind(&translated_text)

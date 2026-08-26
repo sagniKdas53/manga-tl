@@ -33,6 +33,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
+use crate::clone::recalculate_chapter_cover;
 use crate::error;
 use crate::minio::MinioService;
 use crate::models::{
@@ -266,20 +267,6 @@ async fn shift_pages_up(pool: &sqlx::PgPool, chapter_id: Uuid, starting_number: 
         .execute(pool)
         .await
         .expect("shift phase 2");
-}
-
-async fn recalculate_chapter_cover(pool: &sqlx::PgPool, chapter_id: Uuid) {
-    // Cover of the lowest-numbered chapter that HAS one (PageService.recalculateChapterCover).
-    sqlx::query(
-        "UPDATE chapters SET cover_image_id = COALESCE((\
-             SELECT p.image_id FROM pages p WHERE p.chapter_id = $1 \
-             ORDER BY p.page_number ASC LIMIT 1), NULL) \
-         WHERE id = $1",
-    )
-    .bind(chapter_id)
-    .execute(pool)
-    .await
-    .expect("chapter cover recalculation");
 }
 
 async fn insert_image(
@@ -548,7 +535,7 @@ async fn insert_page_no_shift(
     image_id: Uuid,
     number: i32,
 ) -> Page {
-    sqlx::query_as(
+    let page: Page = sqlx::query_as(
         "INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, $2, $3, $4) RETURNING *",
     )
     .bind(Uuid::new_v4())
@@ -557,7 +544,14 @@ async fn insert_page_no_shift(
     .bind(image_id)
     .fetch_one(pool)
     .await
-    .expect("duplicate page insert")
+    .expect("duplicate page insert");
+
+    // Java reaches the cover recalc through createPageWithExistingImage when the
+    // first page of an empty chapter is a content-duplicate (PageService.java:138-141).
+    if number == 1 {
+        recalculate_chapter_cover(pool, chapter.id).await;
+    }
+    page
 }
 
 struct MultipartFile {
@@ -1797,13 +1791,10 @@ async fn restore_project_layers(
                 has_manual_edits = true;
             }
 
-            let mask_polygon = el.get("maskPolygon").filter(|v| !v.is_null()).map(|v| {
-                if v.is_object() || v.is_array() {
-                    v.to_string().into()
-                } else {
-                    v.clone()
-                }
-            });
+            let mask_polygon = el
+                .get("maskPolygon")
+                .filter(|v| !v.is_null())
+                .and_then(|v| crate::models::normalize_mask_polygon(v.clone()));
 
             let region_id = el
                 .get("regionId")

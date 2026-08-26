@@ -73,7 +73,7 @@ fn capture_state(el: &LayerElement) -> serde_json::Value {
         "visible": el.visible, "overflow": el.overflow,
         "backgroundColor": el.background_color, "textColor": el.text_color,
         "fontWeight": el.font_weight, "fontStyle": el.font_style, "boxShape": el.box_shape,
-        "maskPolygon": el.mask_polygon,
+        "maskPolygon": el.mask_polygon.as_ref().map(|v| serde_json::Value::String(v.to_string())),
         "regionId": el.region_id.map(|r| r.to_string()),
     })
 }
@@ -149,7 +149,11 @@ pub async fn update_layer_element(
     .bind(dto.fontWeight.clone())
     .bind(dto.fontStyle.clone())
     .bind(dto.boxShape.clone())
-    .bind(dto.maskPolygon.clone())
+    .bind(
+        dto.maskPolygon
+            .clone()
+            .and_then(crate::models::normalize_mask_polygon),
+    )
     .bind(dto.regionId)
     .fetch_one(&state.pool)
     .await

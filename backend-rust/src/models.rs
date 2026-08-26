@@ -127,6 +127,42 @@ pub struct Image {
     pub created_by: Option<Uuid>,
 }
 
+// ---------------------------------------------------------------- mask polygons
+
+/// Java maps the jsonb `mask_polygon` columns through String entity fields, so its
+/// wire format is the polygon's JSON text re-encoded as a JSON string (every
+/// frontend consumer JSON.parse()s it), while the DB stores the parsed structure.
+/// The port originally emitted raw arrays, which made JSON.parse throw in the
+/// reader and broke polygon masks entirely (Phase-4 drift fix).
+pub(crate) mod mask_polygon_wire {
+    use serde::{Deserialize as _, Deserializer, Serializer};
+    use serde_json::Value;
+
+    pub fn serialize<S: Serializer>(v: &Option<Value>, s: S) -> Result<S::Ok, S::Error> {
+        match v {
+            Some(v) if !v.is_null() => s.serialize_some(&v.to_string()),
+            _ => s.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Value>, D::Error> {
+        Ok(super::normalize_mask_polygon(Value::deserialize(d)?))
+    }
+}
+
+/// Normalizes inbound polygons to the stored jsonb shape: strings that parse as
+/// JSON are unwrapped to their structure, null drops out, everything else passes
+/// through. Apply before binding user/callback input into mask_polygon.
+pub(crate) fn normalize_mask_polygon(raw: serde_json::Value) -> Option<serde_json::Value> {
+    match raw {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(text) => {
+            Some(serde_json::from_str(&text).unwrap_or(serde_json::Value::String(text)))
+        }
+        other => Some(other),
+    }
+}
+
 // ---------------------------------------------------------------- panels
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -166,6 +202,7 @@ pub struct OcrRegion {
     pub confidence: Option<f64>,
     pub detected_language: String,
     pub detection_confidence: Option<f64>,
+    #[serde(with = "mask_polygon_wire", default)]
     pub mask_polygon: Option<serde_json::Value>,
     pub ocr_score: Option<f64>,
     pub panel_reading_order: Option<i32>,
@@ -216,6 +253,7 @@ pub struct LayerElement {
     pub font_style: Option<String>,
     pub font_weight: Option<String>,
     pub is_manually_edited: Option<bool>,
+    #[serde(with = "mask_polygon_wire", default)]
     pub mask_polygon: Option<serde_json::Value>,
     pub max_height: Option<i32>,
     pub max_width: Option<i32>,

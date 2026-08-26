@@ -8,11 +8,15 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 
 # SESSION HANDOFF — read this first after any context loss
 
-> STATUS SNAPSHOT (2026-08-24): Phases 0–3 COMPLETE · **71/71 API operations served
-> (route parity 100%, diff_routes.py enforces exact equality)** · 81 tests green across
-> 14 suites · CI GREEN (ci-cargo.yml) · branch rust-backend pushed to BOTH remotes.
+> STATUS SNAPSHOT (2026-08-26): Phases 0–3 COMPLETE · **71/71 API operations served
+> (route parity 100%, diff_routes.py enforces exact equality)** · 118 tests green
+> · CI GREEN (ci-cargo.yml) · branch rust-backend pushed to BOTH remotes.
 > CURRENT PHASE: **Phase 4 — Parity & cutover** (the last phase). Execution order +
 > scenario-parity matrix below. Land steps in order; commit+push both remotes per step.
+> 2026-08-26: user UI test report triaged — 2 confirmed port regressions FIXED (series
+> cover cascade, mask/wordWrap wire parity), 1 environmental (.env for worker keys).
+> Live Java stack TORN DOWN; the ruststack (-p ruststack, loopback :8084) is now THE
+> serving instance. Formal compose swap on the canonical checkout deferred by user.
 
 ## Mission (Phase 4)
 
@@ -464,9 +468,13 @@ zip (archives), hex, base64.
       multi-arch buildx left to CI release workflow (user decision). CRITICAL FIX:
       .dockerignore was missing backend-rust/target — 38GB of cargo artifacts entered
       every context send (allowlist-style ignore now). Gate: fmt+clippy clean, 117 tests)
-- [~] **Step 7** Compose swap — SIDE-BY-SIDE VERIFIED 2026-08-24, hard swap pending user
-      go-ahead. docker-compose.rust-test.yml (-p ruststack): fresh db/minio/redis under this
-      worktree's data/, renumbered loopback ports (8084/55432/56379/19001), Traefik/Watchtower
+- [~] **Step 7** Compose swap — SIDE-BY-SIDE VERIFIED 2026-08-24. 2026-08-26: user opted
+      to DEFER the formal swap of the canonical checkout's docker-compose.yml; instead the
+      live Java stack was torn down and this worktree's ruststack (-p ruststack, loopback
+      :8084, fresh ./data dirs, .env added for provider API keys) is serving as THE stack.
+      User test report from the side-by-side run triaged & fixed (see handoff below).
+      Original side-by-side setup: fresh db/minio/redis under this worktree's data/,
+      renumbered loopback ports (8084/55432/56379/19001), Traefik/Watchtower
       labels dropped, worker shares model caches with canonical checkout, backend healthcheck
       swapped to the baked static probe (compose's wget doesn't exist in the slim runtime).
       Full acceptance on the stack: register -> upload sample133 -> panel/ocr/layout/
@@ -483,12 +491,15 @@ zip (archives), hex, base64.
         3. database/init.sql carried pg_dump \restrict markers that abort psql 15 imports
            mid-file (fresh stacks got 1 table) — stripped.
 - [ ] **Step 8** Grafana dashboards verified filling while a pipeline runs on the Rust backend
-- [ ] **Step 9** Baselines measured and recorded HERE:
-      - cold-start: Java ____s · Rust ____s
-      - idle RSS: Java ____MB · Rust ____MB
+- [ ] **Step 9** Baselines measured and recorded HERE (partial 2026-08-26 — Java stack was
+      torn down before cold-start/p95 could be measured; RSS + image size captured live:
+      cold-start: Java ____s · Rust ____s
+      - idle RSS: Java 498.6MB · Rust 6.0MB
       - p95 GET /api/series (50 rows): Java ____ms · Rust ____ms
       - p95 GET /api/images/{id}/reader: Java ____ms · Rust ____ms
-      - image size: Java ____MB · Rust ____MB
+      - image size: Java 324MB · Rust 119MB
+      (NOTE: rule "Java stack stays UP until baselines recorded" was superseded by the
+      user's explicit teardown order on 2026-08-26 — remaining numbers are N/A now.)
 - [ ] **Step 10** Housekeeping: AGENTS.md + READMEs + release.yml updated, ci-maven.yml
       retired, diff_routes.py comment flipped to post-cutover, `backend/` deleted,
       `rust-backend` merged → main, both remotes pushed, release tagged
@@ -515,63 +526,83 @@ SPRING_DATASOURCE_USERNAME=<user> SPRING_DATASOURCE_PASSWORD=<pw> cargo test   #
 
 ---
 
-## Session handoff — 2026-08-24 (end of Phase 4 steps 4–7 working session)
+## Session handoff — 2026-08-26 (test-report triage; ruststack now serving)
 
 ### State
 
-* Steps 1–6 DONE. Step 7 side-by-side VERIFIED, **hard swap ON HOLD**: the user browsed the
-  Rust instance and saw small/medium issues (details in their test report — do not swap until
-  they are triaged and fixed).
-* Live Java stack untouched and UP throughout; Rust test stack runs alongside it.
-* Commits this session: `8c54a86` (step 4), `25df426` (step 5), `29f923b` (step 6),
-  `58ae6ee` (step 7 fixes) on `rust-backend`, pushed to GitHub. pi5 was unreachable all
-  session — retry `git push pi5 rust-backend` when it's back.
+* Steps 1–6 DONE. Step 7 side-by-side VERIFIED. User UI test report (3 issues) TRIAGED
+  2026-08-26: two confirmed port regressions FIXED, one environmental. Java stack TORN
+  DOWN at the user's request; **the ruststack is now THE serving instance** on loopback.
+  Formal compose swap of the canonical checkout DEFERRED by user ("can be done on the
+  other folder, no need right now").
+* Commits this session: see `git log` — user-report triage + fixes + handoff refresh,
+  pushed to BOTH remotes (pi5 reachable again as of 2026-08-26).
 
-### The test stack (what the user is testing)
+### The 2026-08-26 test report — triage results
 
-```bash
-cd /home/sagnik/Projects/docker-composes/manga-library-rust
-docker compose -p ruststack \
-  -f docker-compose.yml -f docker-compose.rust-test.yml \
-  up -d db redis minio backend worker      # fresh data dirs under ./data/
-docker compose -p ruststack \
-  -f docker-compose.yml -f docker-compose.rust-test.yml \
-  build backend                            # after any source change (VITE_BASE_PATH=/tlhub!)
-```
+1. "Settings defaults not auto-selected" → **NOT a port bug** (environmental). Rust GET
+   /api/settings is wire-identical to Java for identical state (verified field-by-field).
+   Root cause: the rust worktree had NO `.env`, so the worker booted with zero provider
+   API keys and published an empty catalog (`system:providers:config`); empty
+   `activeProviders` renders no dropdown options in SettingsModal.tsx. FIX: curated
+   `.env` in the worktree (canonical values minus POSTGRES_USER/MINIO_ROOT_USER/HOSTNAME,
+   which must stay defaults to match bootstrapped data dirs). Worker now publishes
+   local/neurometric/nvidia/openrouter. Optional frontend hardening (treat empty
+   activeProviders as unavailable so the refetch loop retries) is OUT of migration scope.
+2. "Series cover back-fill from first chapter's first page not working" → **PORT BUG,
+   FIXED**. Java's recalculateChapterCover cascades into recalculateSeriesCover
+   (PageService.java:581); the port dropped the cascade everywhere except update_chapter,
+   so series.cover_image_id stayed NULL forever. Now one shared helper
+   (clone.rs recalculate_chapter_cover + recalculate_series_cover) does both and every
+   upload/delete/reorder/import path uses it; insert_page_no_shift got its missing
+   slot==1 recalc (Java createPageWithExistingImage parity); delete_chapter recalcs
+   after delete (no dangling cover ids). VERIFIED LIVE: fresh series+chapter+upload →
+   coverImageUrl populated instantly.
+3. "Translated regions have no masking — just text on the image" → **PORT BUG, three
+   surfaces, ALL FIXED**:
+   a. Pipeline-created layer_elements got word_wrap=NULL (Java entity default true);
+      reader's isMaskEnabled = cleanScanlationView || wordWrap ⇒ false ⇒ no backdrop.
+      Fixed in coordinator.rs OCR+translation INSERTs; 48 existing rows backfilled via
+      UPDATE ... WHERE word_wrap IS NULL.
+   b. Internal image-info payload lacked layerType/layerVisible/regionType flattening;
+      worker render.py fail-closes without them and rendered bare originals. Flattened
+      onto each element in routes/internal.rs like the Java entity's derived getters.
+   c. maskPolygon serialized as raw JSON array but every frontend consumer JSON.parse()s
+      it (Java maps jsonb through String fields ⇒ wire format = JSON text as string).
+      models.rs now serializes Option<Value> polygons as strings (mask_polygon_wire) and
+      normalizes inbound strings back to structure on write (normalize_mask_polygon)
+      across layers.rs / layers_ops.rs / import-project / OCR callback.
+   VERIFIED LIVE: page payload shows wordWrap:true + string maskPolygon for elements and
+   regions. NOTE: pages translated BEFORE this fix have correct word_wrap after the
+   backfill, but their rendered/{id}.png artifacts were produced by the broken filter —
+   redo translation/render to regenerate if those exports matter.
 
-* UI: http://127.0.0.1:8084/tlhub — admin@test.local / test-password-123 (or register;
-  DB is fresh)
-* Ports renumbered vs live stack: backend 8084, pg 55432, valkey 56379, minio console 19001
-* `./secrets` is a symlink to the canonical checkout's secrets dir (gitignored)
+### Current stack layout
+
+* Serving instance: `docker compose -p ruststack -f docker-compose.yml -f
+  docker-compose.rust-test.yml up -d db redis minio backend worker` from THIS worktree.
+* UI: http://127.0.0.1:8084/tlhub — admin@test.local / test-password-123.
+* Ports: backend 8084, pg 55432, valkey 56379, minio console 19001 (all loopback-only).
+* `.env` (gitignored) supplies provider API keys + model lists; `./secrets` symlink to
+  canonical secrets; db/minio identities stay compose-defaults matching ./data bootstrap.
 * Worker model caches bind-mount read-write from the canonical checkout's
-  `data/worker/{huggingface,paddlex}` — caches only, not app data
-* Teardown: `docker compose -p ruststack -f docker-compose.yml -f docker-compose.rust-test.yml down`
-  (data persists under ./data/ — wipe with a root container if you want truly fresh)
-
-### Acceptance already passed on this stack
-
-register → series/chapter create → upload (corpus/samples/sample133 ja page) →
-panel-detection → ocr (PP-OCRv6 + gemini-2.5-flash VLM OCR) → layout → translation
-(real ja→en text persisted) → render → qa → export ZIP download (808 KB via API).
-Route parity 71/71; gate: fmt+clippy clean, 117 tests green.
+  `data/worker/{huggingface,paddlex}` — caches only, not app data.
+* Canonical checkout: containers DOWN, bind-mount data intact, still on `main`.
 
 ### Known issues / open items for the next session
 
-1. USER REPORTED: small + medium issues browsing the UI on the Rust instance — collect
-   specifics, triage each against Java behavior (parity bugs are Phase 4 blockers; anything
-   else goes to TODO.md). NO SWAP until cleared.
+1. Formal step-7 swap on the CANONICAL checkout deferred by user — when resumed, point
+   its docker-compose.yml backend at the Rust Dockerfile/image (rules below still apply).
 2. arm64 image builds left to the CI release workflow (user decision); amd64 verified.
-3. Step 8 Grafana: dashboards read Postgres directly; point them at the ruststack db or
-   run pipelines on the live-shaped stack and confirm panels fill.
-4. Step 9 baselines need BOTH stacks up (they are right now): cold-start, idle RSS,
-   p95 GET /api/series + /api/images/{id}/reader, image sizes. Record numbers HERE above.
+3. Step 8 Grafana: dashboards read Postgres directly; run a pipeline against ruststack's
+   db (55432) or repoint dashboards and confirm panels fill.
+4. Step 9 baselines PARTIAL only (Java torn down first): idle RSS 498.6MB vs 6.0MB,
+   image 324MB vs 119MB; cold-start/p95 are N/A now unless re-derived another way.
 5. Step 10 housekeeping unchanged (delete backend/, merge, tag, retire ci-maven.yml).
-6. Minor: dispatcher capabilities probe now warns on non-200; RedisService::connect fails
-   after 15s instead of retrying forever. If the worker is slow to boot, backend health is
-   fine but dispatch waits for the next cycle — no action needed.
+6. Minor: dispatcher capabilities probe warns on non-200; RedisService::connect fails
+   after 15s instead of retrying forever. No action needed.
 
 ### Rules that still apply
 
 * Golden OpenAPI frozen; diff_routes.py must stay exactly 71 ops.
-* Java stack stays UP until step 9 baselines are recorded from it.
 * Full gate + BOTH remotes on every commit.

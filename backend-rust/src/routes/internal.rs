@@ -306,14 +306,54 @@ pub async fn get_image_info(
     };
 
     let layer_elements: Value = match page {
-        Some(page) => sqlx::query_as::<_, crate::models::LayerElement>(
-            "SELECT * FROM layer_elements WHERE layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
-        )
-        .bind(page.id)
-        .fetch_all(&state.pool)
-        .await
-        .map(|elements| serde_json::to_value(&elements).unwrap_or_default())
-        .unwrap_or_default(),
+        Some(page) => {
+            let elements: Vec<crate::models::LayerElement> =
+                sqlx::query_as::<_, crate::models::LayerElement>(
+                    "SELECT * FROM layer_elements WHERE layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
+                )
+                .bind(page.id)
+                .fetch_all(&state.pool)
+                .await
+                .unwrap_or_default();
+            // Java's LayerElement entity exposes derived getters the worker's
+            // renderer relies on (render.py fail-closes without them): flatten
+            // layerType/layerVisible/regionType onto every element.
+            let layer_map: std::collections::HashMap<Uuid, (&str, bool)> = layers
+                .iter()
+                .map(|l| (l.id, (l.layer_type.as_str(), l.visible.unwrap_or(true))))
+                .collect();
+            let region_types: std::collections::HashMap<Uuid, String> =
+                sqlx::query_as::<_, (Uuid, Option<String>)>(
+                    "SELECT id, region_type FROM ocr_regions WHERE page_id = $1 AND region_type IS NOT NULL",
+                )
+                .bind(page.id)
+                .fetch_all(&state.pool)
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|(id, rt)| rt.map(|rt| (id, rt)))
+                .collect();
+            Value::Array(
+                elements
+                    .into_iter()
+                    .map(|el| {
+                        let mut v = serde_json::to_value(&el).unwrap_or_default();
+                        if let Some(obj) = v.as_object_mut() {
+                            if let Some((layer_type, layer_visible)) = layer_map.get(&el.layer_id) {
+                                obj.insert("layerType".into(), json!(layer_type));
+                                obj.insert("layerVisible".into(), json!(layer_visible));
+                            }
+                            if let Some(region_type) =
+                                el.region_id.and_then(|rid| region_types.get(&rid))
+                            {
+                                obj.insert("regionType".into(), json!(region_type));
+                            }
+                        }
+                        v
+                    })
+                    .collect(),
+            )
+        }
         None => serde_json::json!([]),
     };
 

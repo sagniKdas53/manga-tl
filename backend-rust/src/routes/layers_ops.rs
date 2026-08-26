@@ -110,7 +110,7 @@ pub async fn create_layer_element(
     .bind(dto.font.clone().unwrap_or_else(|| "Comic Neue".into()))
     .bind(dto.fontStyle.clone().unwrap_or_else(|| "normal".into()))
     .bind(dto.fontWeight.clone().unwrap_or_else(|| "normal".into()))
-    .bind(dto.maskPolygon.clone())
+    .bind(dto.maskPolygon.clone().and_then(crate::models::normalize_mask_polygon))
     .bind(dto.maxHeight.unwrap_or(80))
     .bind(dto.maxWidth.unwrap_or(150))
     .bind(dto.rotation.unwrap_or(0.0))

@@ -107,16 +107,46 @@ async fn shift_pages_up(pool: &PgPool, chapter_id: Uuid, starting_number: i32) {
     .expect("shift phase 2");
 }
 
-async fn recalculate_chapter_cover(pool: &PgPool, chapter_id: Uuid) {
+/// PageService.recalculateChapterCover parity plus its cascade into
+/// recalculateSeriesCover (PageService.java:581). The original port dropped the
+/// series step everywhere except chapter updates, so series covers stayed NULL
+/// forever; one shared helper keeps the two statements from drifting again.
+pub(crate) async fn recalculate_chapter_cover(pool: &PgPool, chapter_id: Uuid) {
     sqlx::query(
         "UPDATE chapters SET cover_image_id = COALESCE((\
              SELECT p.image_id FROM pages p WHERE p.chapter_id = $1 \
-             ORDER BY p.page_number ASC LIMIT 1), NULL) WHERE id = $1",
+             ORDER BY p.page_number ASC LIMIT 1), NULL) \
+         WHERE id = $1",
     )
     .bind(chapter_id)
     .execute(pool)
     .await
     .expect("chapter cover recalculation");
+    let series_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT series_id FROM chapters WHERE id = $1")
+            .bind(chapter_id)
+            .fetch_optional(pool)
+            .await
+            .expect("chapter series lookup");
+    if let Some(series_id) = series_id {
+        recalculate_series_cover(pool, series_id).await;
+    }
+}
+
+/// PageService.recalculateSeriesCover parity: cover of the lowest-numbered
+/// chapter that HAS one (NULL when none do).
+pub(crate) async fn recalculate_series_cover(pool: &PgPool, series_id: Uuid) {
+    sqlx::query(
+        "UPDATE series SET cover_image_id = COALESCE((\
+             SELECT c.cover_image_id FROM chapters c \
+             WHERE c.series_id = $1 AND c.cover_image_id IS NOT NULL \
+             ORDER BY c.chapter_number ASC LIMIT 1), NULL) \
+         WHERE id = $1",
+    )
+    .bind(series_id)
+    .execute(pool)
+    .await
+    .expect("series cover recalculation");
 }
 
 /// ResolvedPipelineConfig for the duplicate-comparison (AUDIT-P1 task keys).
