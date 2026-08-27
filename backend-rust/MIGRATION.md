@@ -47,6 +47,15 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 > Test caveat: this review ran with no Docker daemon available, so only the 81 unit tests
 > (`cargo test --lib`) were executed. The DB/MinIO/Valkey integration suites need
 > `scripts/test-env.sh run` on a machine with Docker before merge.
+>
+> 2026-08-28 — STEP 10 LARGELY LANDED. Both CI blockers above are cleared: the image
+> pipeline now builds `backend-rust/Dockerfile` and triggers on `backend-rust/**`, and
+> `main` is merged in (no conflict — the predicted docker-compose.yml clash did not
+> happen). README, release.yml and diff_routes.py updated; the route gate now enforces
+> equality in both directions instead of a one-way subset. NOT done: `backend/`,
+> `ci-maven.yml` and `docker-compose.rust-test.yml` are still present — the delete was
+> refused by a sandbox guard, not skipped by choice. The two Docker-dependent gates
+> (integration suites, >2 MB real-worker E2E) are still unrun. See step 10.
 
 ## Mission (Phase 4)
 
@@ -561,42 +570,66 @@ zip (archives), hex, base64.
       - image size: Java 324MB · Rust 119MB
       (NOTE: rule "Java stack stays UP until baselines recorded" was superseded by the
       user's explicit teardown order on 2026-08-26 — remaining numbers are N/A now.)
-- [ ] **Step 10** Housekeeping — NOT STARTED, and it is the merge gate. Expanded
-      2026-08-27 from the pre-merge review; the CI item is the one that actually bites.
+- [ ] **Step 10** Housekeeping — IN PROGRESS (2026-08-28). Everything that does not need a
+      Docker daemon or a deletion approval is done, committed and pushed; what remains is
+      listed under "Left for the user".
 
-      **Blocking — the image pipeline still builds Java.**
-      - [ ] `.github/workflows/ci-backend-docker.yml` builds `file: backend/Dockerfile`
-            (line ~95) and triggers on `paths: backend/**, frontend/**`. Merging as-is
-            publishes the JAVA image to `ghcr.io/sagnikdas53/manga-tl:latest` — the exact
-            tag `docker-compose.yml` pulls — while changes under `backend-rust/**` trigger
-            no rebuild at all. Repoint `file:` to `backend-rust/Dockerfile` and swap the
-            path filter to `backend-rust/**` + `frontend/**`. Until this lands, compose
-            must be brought up with `--build`, never `pull`; the note on the backend
-            service in docker-compose.yml says so.
+      **Done — the image pipeline now builds Rust.**
+      - [x] `.github/workflows/ci-backend-docker.yml` repointed: `file:` →
+            `backend-rust/Dockerfile`, path filter → `backend-rust/**` + `frontend/**`.
+            The Java image can no longer reach `ghcr.io/sagnikdas53/manga-tl:latest`, and
+            `docker compose pull` and `docker compose build` now agree. The NOTE on the
+            backend service in docker-compose.yml was dropped accordingly.
       - [ ] Multi-arch: `platforms: linux/amd64,linux/arm64` stays, but the arm64 leg of
-            backend-rust/Dockerfile has never been built — only amd64 was verified live
-            (step 6). First CI run after the repoint is the real test.
-      - [ ] Retire `ci-maven.yml` (dies with `backend/`).
+            backend-rust/Dockerfile has still NEVER been built — only amd64 was verified
+            live (step 6). The first CI run after this merge is the real test, and if it
+            fails, it fails post-merge.
+      - [ ] Retire `ci-maven.yml` — blocked, see "Left for the user".
 
-      **Blocking — branch is behind main.**
-      - [ ] `rust-backend` is 10 commits behind `origin/main` (as of 2026-08-27). Main
-            added Prometheus + cAdvisor and rewrote ~126 lines of `docker-compose.yml`,
-            which is the same file step 7 just edited — expect a real conflict there and
-            resolve it by hand. Checked and harmless: those 10 commits touch NO `backend/**`
-            Java source, so no app feature landed on main that the port is missing, and the
-            new Prometheus scrapes only cAdvisor + itself, so it needs no backend metrics
-            endpoint (see deviation 13).
+      **Done — branch is level with main.**
+      - [x] `main` merged into `rust-backend` on 2026-08-28. The predicted
+            docker-compose.yml conflict did NOT materialise: main's Prometheus + cAdvisor
+            block and step 7's backend-service edits occupy different regions of the file
+            and auto-merged. Verified by hand afterwards that both sides survived. Besides
+            compose, only the `corpus` and `worker` submodule pointers moved.
 
-      **Then the ordinary housekeeping.**
-      - [ ] AGENTS.md + CLAUDE.md + README(s) describe a Spring Boot backend throughout.
-      - [ ] `release.yml` header comment still explains `backend/Dockerfile`'s JAR COPY.
-      - [ ] Flip the diff_routes.py comment to "post-cutover" (PORTED must equal ALL — it
-            already does, 71/71).
-      - [ ] DELETE `backend/`, merge `rust-backend` → main, push both remotes, tag.
+      **Done — the ordinary housekeeping.**
+      - [x] README.md: the architecture diagram and the stack bullet now say Rust/Axum.
+            AGENTS.md and CLAUDE.md needed nothing — they were replaced with GitNexus
+            content at some point and no longer mention Spring anywhere, so the claim
+            above that they "describe a Spring Boot backend throughout" was itself stale.
+            Also corrected a pre-existing error in the same diagram: the transport is SSE
+            (`text/event-stream`), never WebSockets.
+      - [x] `release.yml` header comment rewritten. Tag-only versioning still holds, for a
+            new reason: bumping backend-rust/Cargo.toml dirties Cargo.lock and cold-busts
+            the cargo-chef dependency layer for both architectures.
+      - [x] diff_routes.py flipped to post-cutover. It is now an EQUALITY gate that fails
+            in BOTH directions. A lost route was invisible to the old subset check — it
+            would have let parity slide from 71/71 to 70/71 and still exited 0. Verified
+            against a synthetic lost route and a synthetic added route.
 
-      NOTE: `docker-compose.rust-test.yml` is the side-by-side TEST stack. Decide whether it
-      survives the merge or goes with `backend/`; it currently duplicates the healthcheck
-      override that step 7 folded into the base file.
+      **Left for the user — needs a Docker daemon, or an approval this session lacked.**
+      - [ ] DELETE `backend/` (152 tracked files, 1.7 MB), `.github/workflows/ci-maven.yml`
+            and `docker-compose.rust-test.yml`. Attempted 2026-08-28: `git rm` was refused
+            by the sandbox's deletion guard, and reaching for a different delete command
+            would have defeated the point of the guard. When these are removed, also drop
+            the now-dead Java lines from `.dockerignore` (the "Java backend (until cutover
+            deletes it)" block, `!backend/` + `backend/target`) and from `.gitignore`
+            (`backend/target/`, `backend/src/main/c/*.so`, `backend/.settings/`,
+            `backend/.classpath`, `backend/.project`).
+      - [ ] `scripts/test-env.sh run` — the DB/MinIO integration suites. This is the real
+            gate on the 50MB body-limit fix, which touches upload, chapter-import and
+            import-project; the unit tests that can run without a daemon do not reach
+            those paths.
+      - [ ] Re-run the real-worker E2E with a page LARGER THAN 2 MB. The original run used
+            a small corpus sample, which is exactly why the body-limit bug survived it.
+      - [ ] Then: merge `rust-backend` → main (PR #91), push both remotes, tag.
+
+      DECIDED: `docker-compose.rust-test.yml` goes with `backend/`. Its whole purpose was
+      running the Rust stack ALONGSIDE the Java one on renumbered ports; with the Java half
+      deleted, the canonical stack IS the Rust stack. It also hard-codes an absolute host
+      path for the worker model caches, and its healthcheck override is now redundant —
+      step 7 folded the static probe into the base file with a longer 40s start period.
 
 ### Phase 4 rules of engagement
 
@@ -721,9 +754,9 @@ SPRING_DATASOURCE_USERNAME=<user> SPRING_DATASOURCE_PASSWORD=<pw> cargo test   #
    remaining check = watch panels fill while a pipeline runs on the Rust backend.
 4. Step 9 baselines PARTIAL only (Java torn down first): idle RSS 498.6MB vs 6.0MB,
    image 324MB vs 119MB; cold-start/p95 are N/A now unless re-derived another way.
-5. Step 10 housekeeping DEFERRED by user (no merge planned until more testing); when it
-   happens: AGENTS.md + READMEs + release.yml, retire ci-maven.yml, delete backend/,
-   merge rust-backend → main, tag.
+5. Step 10 housekeeping — mostly landed 2026-08-28 (see the dated note in the status
+   snapshot). Outstanding: delete backend/ + ci-maven.yml + docker-compose.rust-test.yml,
+   run the two Docker-dependent gates, merge rust-backend → main (PR #91), tag.
 6. Frontend hardening proposal written: docs/frontend_hardening_settings_provider_retry.md
    (empty-catalog retry + alert state; post-migration backlog).
 7. Minor: dispatcher capabilities probe warns on non-200; RedisService::connect fails

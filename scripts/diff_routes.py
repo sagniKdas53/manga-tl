@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
-"""Route-table drift check: ported Rust routes must be a subset of the frozen contract.
+"""Route-table drift check: the Rust route table must equal the frozen contract exactly.
 
-golden-routes.txt is exported from the running Java backend (spec/). PORTED lists what the
-Rust backend serves today. The gate fails if anything ported is NOT in the golden file
-(contract drift). It also reports migration progress. At cutover, PORTED must equal ALL.
+golden-routes.txt was exported from the Java backend while it was still running, and is now
+the frozen record of the contract the Rust backend inherited — the Java tree it came from is
+gone, so this file is the only surviving statement of what the API promised. PORTED lists
+what the Rust backend serves today.
+
+Post-cutover this is an equality gate, not a subset gate. It fails in both directions:
+
+  * ported but not golden  — the public contract grew. That is a deliberate act; add the
+    route to golden-routes.txt in the same commit, and regenerate the frontend types.
+  * golden but not ported  — a route was LOST. Callers 404 against a contract that still
+    advertises the endpoint. This is the direction the old subset check could not see: it
+    would have let parity slide from 71/71 to 70/71 and still exited 0.
 """
 
 import sys
@@ -110,17 +119,26 @@ def main() -> int:
         path = rest.split()[0] if " " in rest else rest
         golden.add(f"{method} {path}")
 
-    # Phase 3 complete: the ported surface must equal the golden contract exactly.
-    drift = sorted(PORTED - golden)
-    if drift:
-        print("CONTRACT DRIFT — ported routes missing from golden spec:")
-        for route in drift:
-            print(f"  {route}")
+    # Post-cutover: the ported surface must EQUAL the golden contract, both directions.
+    added = sorted(PORTED - golden)
+    lost = sorted(golden - PORTED)
+
+    if added:
+        print("CONTRACT DRIFT — served but absent from golden spec:")
+        for route in added:
+            print(f"  + {route}")
+    if lost:
+        print("CONTRACT REGRESSION — in golden spec but no longer served:")
+        for route in lost:
+            print(f"  - {route}")
+    if added or lost:
+        print(
+            f"\nroute parity: {len(PORTED)} served vs {len(golden)} in contract, "
+            f"{len(golden & PORTED)} in common — must be exact"
+        )
         return 1
 
-    total = len(golden)
-    done = sum(1 for g in golden if g in PORTED)
-    print(f"route parity: {done}/{total} operations ported ({100 * done / total:.0f}%)")
+    print(f"route parity: {len(golden)}/{len(golden)} operations ported (100%)")
     return 0
 
 
