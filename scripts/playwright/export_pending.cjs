@@ -3,8 +3,23 @@
  * export_pending.cjs — drive the Reader to export pending gaps samples through our app,
  * mirroring how Torii's .torii bundles are built (original / inpainted / translated + metadata).
  *
+ * Uploads run through **throwaway `__scratch__` containers that are reused and then deleted**, so a
+ * 150-page batch no longer buries the real library. It used to create one chapter per sample
+ * (`pending-sample264`), which left 150 chapters behind.
+ *
+ * It cannot always be exactly one series and one chapter, and the reason is the data model:
+ * `readingDirection` is a **series** field while the OCR/TL model choice is a **chapter** field. So
+ * the minimum is one scratch series per (language, direction) and one chapter per model config
+ * within it -- a single-language run really is one and one. Scratch containers are also found and
+ * reused across runs, so an interrupted run leaves the same handful rather than fresh orphans.
+ *
+ * Cleanup, in order: each page is deleted as soon as its artifacts are safely on disk (which also
+ * drops the MinIO objects), then chapters, then series. Deleting a series is ADMIN-only, so a
+ * TRANSLATOR account leaves an empty scratch series that the next run reuses -- harmless. Cleanup
+ * runs in a `finally`, so a crashed run still tidies up. `--keep-scratch` / `--keep-pages` opt out.
+ *
  * Automatically inspects language and image dimensions (standard manga, webtoon vertical strip,
- * double spread) to smartly create or reuse series & chapters:
+ * double spread) to pick the right settings:
  *   - Korean (ko) -> leftToRight, local PP-OCRv5 (korean_PP-OCRv5_mobile_rec)
  *   - Chinese (zh) -> leftToRight, local PP-OCRv6 (PP-OCRv6_medium_rec)
  *   - Japanese (ja) -> rightToLeft, local PP-OCRv6 (PP-OCRv6_medium_rec)
@@ -12,12 +27,13 @@
  *   - Translation engine -> OpenRouter GPT-5.6 Luna (openai/gpt-5.6-luna, matches Torii)
  *
  * It:
- *   1. Resolves/creates smart series & chapter via backend API
+ *   1. Resolves/creates the scratch series & chapter via backend API (reused across samples)
  *   2. Uploads pending source image as page 1 (POST /api/images)
  *   3. Waits for the async pipeline (OCR -> inpaint -> LLM translation -> QA) to settle
  *   4. Captures export.png + project.zip via Reader DOM export controls
  *   5. Unpacks project.zip into project/ directory (with project.json, masks, layer PNGs)
  *   6. Downloads worker rendered image (GET /api/pages/:id/rendered) -> render.png
+ *   7. Deletes the page; at the end of the run, deletes the scratch chapters and series
  *
  * Usage:
  *   TLHUB_EMAIL=you@example.com TLHUB_PASSWORD=secret TLHUB_BASE=http://localhost:8084/tlhub \
@@ -54,6 +70,8 @@ function parseArgs(argv) {
     out: "",
     seriesId: "",
     chapterId: "",
+    keepScratch: false,
+    keepPages: false,
     ocrProvider: "",
     ocrModel: "",
     tlProvider: "",
@@ -73,6 +91,8 @@ function parseArgs(argv) {
       case "--out": a.out = nxt(); break;
       case "--series-id": a.seriesId = nxt(); break;
       case "--chapter-id": a.chapterId = nxt(); break;
+      case "--keep-scratch": a.keepScratch = true; break;
+      case "--keep-pages": a.keepPages = true; break;
       case "--ocr-provider": a.ocrProvider = nxt(); break;
       case "--ocr-model": a.ocrModel = nxt(); break;
       case "--tl-provider": a.tlProvider = nxt(); break;
@@ -241,126 +261,202 @@ function deriveSmartConfig(lang, imageInfo, meta, args) {
   };
 }
 
-async function getOrCreateSeries(page, args, smartConfig) {
+// ---------------------------------------------------------------------------------------------
+// Scratch series/chapters.
+//
+// This used to create one chapter *per sample* ("pending-sample264"), so a 150-page run left 150
+// chapters behind, burying the real library. Now every run funnels into throwaway containers that
+// are reused and then deleted.
+//
+// It cannot always be literally one series and one chapter, and the reason is the data model:
+// `readingDirection` lives on the **series** (ja is rightToLeft, ko/zh and webtoons are
+// leftToRight), while the OCR/TL model choice lives on the **chapter**. So the minimum is one
+// scratch series per (language, direction) actually encountered and one chapter per model config
+// inside it. A single-language run really is one series and one chapter; a mixed ja/ko/zh run is
+// three and three, all named `__scratch__…` and all removed at the end.
+//
+// Scratch containers are also *found and reused* across runs, not just within one, so an
+// interrupted run leaves at most the same handful rather than a fresh orphan every time.
+const SCRATCH_PREFIX = "__scratch__";
+
+function seriesKey(c) { return `${c.lang}|${c.readingDirection}`; }
+function chapterKey(c) { return `${c.ocrProvider}:${c.ocrModel}|${c.tlProvider}:${c.tlModel}|${c.qaProvider || "-"}:${c.qaMode || "-"}`; }
+
+async function getOrCreateSeries(page, args, smartConfig, run) {
   const token = await getAuthToken(page, args);
   if (!token) throw new Error("not authenticated: cannot get token");
-
   if (args.seriesId) return args.seriesId;
 
-  const lang = smartConfig.lang;
+  const key = seriesKey(smartConfig);
+  if (run.series.has(key)) return run.series.get(key);
 
-  // List existing series and find one matching language & direction
-  const listRes = await page.request.get(`${args.base}/api/series?size=100`, {
+  const title = `${SCRATCH_PREFIX} ${smartConfig.lang} ${smartConfig.readingDirection}`;
+  const listRes = await page.request.get(`${args.base}/api/series?size=200`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (listRes.ok()) {
     const lj = await listRes.json().catch(() => ({}));
     const arr = Array.isArray(lj) ? lj : (lj.content || lj.series || []);
-    const match = arr.find(s =>
-      (s.sourceLanguage === lang || s.originalLanguage === lang) &&
-      (s.readingDirection === smartConfig.readingDirection || !s.readingDirection) &&
-      (s.title && s.title.toLowerCase().includes("pending"))
-    ) || arr.find(s => s.sourceLanguage === lang || s.originalLanguage === lang);
+    const match = arr.find(x => x.title === title);
     if (match) {
-      console.log(`Reusing series "${match.title}" (${match.id || match.seriesId}) for lang=${lang}`);
-      return match.id || match.seriesId;
+      const id = match.id || match.seriesId;
+      console.log(`reusing scratch series "${title}" (${id})`);
+      run.series.set(key, id);
+      return id;
     }
   }
 
-  // Create new series with smart defaults
-  const seriesPayload = {
-    title: smartConfig.seriesTitle,
-    originalLanguage: lang,
-    sourceLanguage: lang,
-    targetLanguage: "en",
-    readingDirection: smartConfig.readingDirection,
-    ocrProvider: smartConfig.ocrProvider,
-    ocrModel: smartConfig.ocrModel,
-    tlProvider: smartConfig.tlProvider,
-    tlModel: smartConfig.tlModel,
-    qaProvider: smartConfig.qaProvider,
-    qaMode: smartConfig.qaMode,
-    useFallbackModels: true,
-  };
-
   const createRes = await page.request.post(`${args.base}/api/series`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: seriesPayload,
+    data: {
+      title,
+      originalLanguage: smartConfig.lang,
+      sourceLanguage: smartConfig.lang,
+      targetLanguage: "en",
+      readingDirection: smartConfig.readingDirection,
+      ocrProvider: smartConfig.ocrProvider,
+      ocrModel: smartConfig.ocrModel,
+      tlProvider: smartConfig.tlProvider,
+      tlModel: smartConfig.tlModel,
+      qaProvider: smartConfig.qaProvider,
+      qaMode: smartConfig.qaMode,
+      useFallbackModels: true,
+    },
   });
-  if (createRes.ok()) {
-    const sj = await createRes.json().catch(() => ({}));
-    const id = sj.id || sj.seriesId;
-    console.log(`Created series "${smartConfig.seriesTitle}" (${id}) for lang=${lang} [direction=${smartConfig.readingDirection}, ocr=${smartConfig.ocrModel}]`);
-    return id;
+  if (!createRes.ok()) {
+    throw new Error(`Failed to create scratch series: ${createRes.status()} ${await createRes.text().catch(() => "")}`);
   }
-  throw new Error(`Failed to create series: ${createRes.status()} ${await createRes.text().catch(() => "")}`);
+  const sj = await createRes.json().catch(() => ({}));
+  const id = sj.id || sj.seriesId;
+  console.log(`created scratch series "${title}" (${id}) [direction=${smartConfig.readingDirection}]`);
+  run.series.set(key, id);
+  run.createdSeries.add(id);
+  return id;
 }
 
-async function getOrCreateChapter(page, args, seriesId, sampleId, smartConfig) {
+async function getOrCreateChapter(page, args, seriesId, sampleId, smartConfig, run) {
   const token = await getAuthToken(page, args);
   if (!token) throw new Error("not authenticated: cannot get token");
-
   if (args.chapterId) return args.chapterId;
 
-  const title = `pending-${sampleId}`;
-  const listRes = await page.request.get(`${args.base}/api/series/${seriesId}/chapters?size=100`, {
+  const key = `${seriesId}|${chapterKey(smartConfig)}`;
+  if (run.chapters.has(key)) return run.chapters.get(key);
+
+  const title = `${SCRATCH_PREFIX} ${smartConfig.ocrModel} ${smartConfig.tlModel}`;
+  const listRes = await page.request.get(`${args.base}/api/series/${seriesId}/chapters?size=200`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (listRes.ok()) {
     const cj = await listRes.json().catch(() => ({}));
     const arr = Array.isArray(cj) ? cj : (cj.content || cj.chapters || []);
-    const match = arr.find(c => c.title === title || c.title === sampleId);
+    const match = arr.find(c => c.title === title);
     if (match) {
-      console.log(`Reusing chapter "${match.title}" (${match.id || match.chapterId})`);
-      return match.id || match.chapterId;
+      const id = match.id || match.chapterId;
+      console.log(`reusing scratch chapter "${title}" (${id})`);
+      run.chapters.set(key, id);
+      return id;
     }
   }
 
-  const numMatch = sampleId.match(/\d+/);
-  const chapterNumber = numMatch ? Number(numMatch[0]) : (Date.now() % 100000);
-
-  const chapterPayload = {
-    title,
-    chapterNumber,
-    ocrProvider: smartConfig.ocrProvider,
-    ocrModel: smartConfig.ocrModel,
-    tlProvider: smartConfig.tlProvider,
-    tlModel: smartConfig.tlModel,
-    qaProvider: smartConfig.qaProvider,
-    qaMode: smartConfig.qaMode,
-    useContextMemory: true,
-    useFallbackModels: true,
-  };
-
   const createRes = await page.request.post(`${args.base}/api/series/${seriesId}/chapters`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: chapterPayload,
+    data: {
+      title,
+      chapterNumber: 1,
+      ocrProvider: smartConfig.ocrProvider,
+      ocrModel: smartConfig.ocrModel,
+      tlProvider: smartConfig.tlProvider,
+      tlModel: smartConfig.tlModel,
+      qaProvider: smartConfig.qaProvider,
+      qaMode: smartConfig.qaMode,
+      useContextMemory: true,
+      useFallbackModels: true,
+    },
   });
-  if (createRes.ok()) {
-    const cj = await createRes.json().catch(() => ({}));
-    const id = cj.id || cj.chapterId;
-    console.log(`Created chapter "${title}" (${id}) [num=${chapterNumber}]`);
-    return id;
+  if (!createRes.ok()) {
+    throw new Error(`Failed to create scratch chapter: ${createRes.status()} ${await createRes.text().catch(() => "")}`);
   }
-  throw new Error(`Failed to create chapter: ${createRes.status()} ${await createRes.text().catch(() => "")}`);
+  const cj = await createRes.json().catch(() => ({}));
+  const id = cj.id || cj.chapterId;
+  console.log(`created scratch chapter "${title}" (${id}) [ocr=${smartConfig.ocrModel} tl=${smartConfig.tlModel}]`);
+  run.chapters.set(key, id);
+  run.createdChapters.add(id);
+  return id;
 }
 
-async function uploadSource(page, chapterId, sourcePath, args) {
+async function deletePage(page, args, pageId) {
+  // Pages are deleted as we go so the scratch chapter never grows past a page or two -- the Reader
+  // loads a whole chapter, and a 150-page scratch chapter would slow every later capture down.
+  // DELETE /api/pages/{id} also removes the MinIO objects, so this is a real cleanup, not a
+  // database-only one.
+  try {
+    const token = await getAuthToken(page, args);
+    const r = await page.request.delete(`${args.base}/api/pages/${pageId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok()) console.warn(`  could not delete page ${pageId}: ${r.status()}`);
+    return r.ok();
+  } catch (e) {
+    console.warn(`  could not delete page ${pageId}: ${e.message}`);
+    return false;
+  }
+}
+
+async function cleanupScratch(page, args, run) {
+  if (args.keepScratch) {
+    console.log("\n--keep-scratch: leaving scratch series/chapters in place");
+    return;
+  }
+  const token = await getAuthToken(page, args).catch(() => null);
+  if (!token) { console.warn("cleanup skipped: no auth token"); return; }
+  console.log("\ncleaning up scratch containers");
+
+  for (const id of run.createdChapters) {
+    const r = await page.request.delete(`${args.base}/api/series/chapters/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(e => ({ ok: () => false, status: () => e.message }));
+    console.log(`  chapter ${id}: ${r.ok() ? "deleted" : "FAILED " + r.status()}`);
+  }
+  for (const id of run.createdSeries) {
+    const r = await page.request.delete(`${args.base}/api/series/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(e => ({ ok: () => false, status: () => e.message }));
+    // DELETE /api/series/{id} is ADMIN-only. A TRANSLATOR account gets 403 here, which is not a
+    // failure of the run -- the chapters are already gone and the empty scratch series is reused
+    // by the next run rather than duplicated.
+    console.log(`  series ${id}: ${r.ok() ? "deleted" : "left in place (" + r.status() + ")"}`);
+  }
+}
+
+async function uploadSource(page, chapterId, sourcePath, args, run) {
   const token = await getAuthToken(page, args);
   const buf = fs.readFileSync(sourcePath);
   const mimeType = sourcePath.endsWith(".png") ? "image/png" : "image/jpeg";
+
+  // Page numbering, and why it is not simply always 1.
+  //
+  // Every sample used to get its own chapter, so hardcoding pageNumber=1 was safe. Now that the
+  // chapter is shared across the whole run, two samples uploaded as page 1 would collide. Deleting
+  // each page once its artifacts are captured normally keeps slot 1 free -- so page deletion is
+  // load-bearing here, not just tidiness. `--keep-pages` deliberately breaks that invariant, so in
+  // that mode we increment instead of reusing the slot.
+  const key = String(chapterId);
+  const next = (run && run.pageNo.get(key)) || 1;
+  const pageNumber = args.keepPages ? next : 1;
+  if (run) run.pageNo.set(key, next + 1);
+
   const res = await page.request.post(`${args.base}/api/images`, {
     headers: { Authorization: `Bearer ${token}` },
     multipart: {
       chapterId: String(chapterId),
-      pageNumber: "1",
+      pageNumber: String(pageNumber),
       file: { name: path.basename(sourcePath), mimeType, buffer: buf },
     },
   });
   if (!res.ok()) throw new Error(`upload failed ${res.status()} ${await res.text().catch(()=> "")}`);
   const j = await res.json().catch(()=> ({}));
   return {
-    pageNumber: 1,
+    pageNumber: j.pageNumber || pageNumber,
     pageId: j.pageId,
     imageId: j.imageId,
   };
@@ -398,7 +494,7 @@ async function waitForReader(page, settleMs) {
   if (settleMs > 0) await page.waitForTimeout(settleMs);
 }
 
-async function captureOnce(page, pendingDir, args, stats) {
+async function captureOnce(page, pendingDir, args, stats, run) {
   const meta = JSON.parse(fs.readFileSync(path.join(pendingDir, "meta.json"), "utf8"));
   const sourceFile = meta.source.file;
   const sourcePath = path.join(pendingDir, sourceFile);
@@ -427,9 +523,9 @@ async function captureOnce(page, pendingDir, args, stats) {
 
   console.log(`${sampleId}: [${lang}] ${imageInfo?.width || '?'}x${imageInfo?.height || '?'} (ratio: ${imageInfo?.aspectRatio ? imageInfo.aspectRatio.toFixed(2) : '?'}) -> dir: ${smartConfig.readingDirection}, ocr: ${smartConfig.ocrModel}`);
 
-  const seriesId = await getOrCreateSeries(page, args, smartConfig);
-  const chapterId = await getOrCreateChapter(page, args, seriesId, sampleId, smartConfig);
-  const { pageNumber, pageId } = await uploadSource(page, chapterId, sourcePath, args);
+  const seriesId = await getOrCreateSeries(page, args, smartConfig, run);
+  const chapterId = await getOrCreateChapter(page, args, seriesId, sampleId, smartConfig, run);
+  const { pageNumber, pageId } = await uploadSource(page, chapterId, sourcePath, args, run);
   console.log(`${sampleId}: uploaded as chapter ${chapterId} page ${pageNumber} (pageId ${pageId})`);
 
   // Wait for the backend pipeline to finish OCR + translation + inpainting
@@ -466,16 +562,22 @@ async function captureOnce(page, pendingDir, args, stats) {
     if (r.ok()) fs.writeFileSync(renderPng, await r.body());
   } catch {}
 
-  // Unpack project.json
+  // Unpack project.json.
+  //
+  // The zip is KEPT. It used to be deleted here ("keep only project/"), which was wrong on two
+  // counts: producing it costs a full pipeline run including paid LLM translation, so it is not
+  // cheap to reproduce; and the corpus convention is to keep it — corpus/.gitignore:52 ignores
+  // `samples/**/project.zip` precisely because it "is present locally and absent in a fresh
+  // clone". Unpacking is for greppability, not a replacement for the artifact.
   try {
     const projJson = path.join(outDir, "project.json");
     extractProjectJson(zipPath, projJson);
     // unpack full zip to project/ for greppability
     execFileSync("unzip", ["-o", zipPath, "-d", projectDir]);
-    fs.unlinkSync(zipPath); // keep only project/
+    // project.json now exists inside project/; the top-level copy was only a validity check
     if (fs.existsSync(projJson)) fs.unlinkSync(projJson);
   } catch (e) {
-    console.warn(`${sampleId}: could not unpack project.zip: ${e.message}`);
+    console.warn(`${sampleId}: could not unpack project.zip: ${e.message} (zip kept at ${zipPath})`);
   }
 
   // Copy meta + refs into place if outputting to an external directory
@@ -492,6 +594,9 @@ async function captureOnce(page, pendingDir, args, stats) {
     }
     if (!fs.existsSync(path.join(outDir, sourceFile))) fs.copyFileSync(sourcePath, path.join(outDir, sourceFile));
   }
+
+  // Only now that every artifact is written to disk is it safe to drop the page from the app.
+  if (!args.keepPages) await deletePage(page, args, pageId);
 
   console.log(`${sampleId}: ok -> ${outDir}`);
   stats.captured++;
@@ -516,6 +621,10 @@ Options:
   --force                re-export even if export.png + project/ exist
   --headed               show browser window
   --dry-run              don't upload/capture, just list matching directories
+  --keep-scratch         do not delete the scratch series/chapters at the end (debugging)
+  --keep-pages           do not delete each page after its artifacts are captured.
+                         Pages then accumulate in the shared scratch chapter and are
+                         numbered sequentially instead of reusing slot 1.
   --series-id <uuid>     override / force specific series ID
   --chapter-id <uuid>    override / force specific chapter ID
   --ocr-provider <name>  override OCR provider (default: local)
@@ -548,14 +657,20 @@ Options:
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true });
   const page = await ctx.newPage();
   const stats = { captured: 0, skipped: 0, failed: [] };
+  const run = { series: new Map(), chapters: new Map(), pageNo: new Map(),
+                createdSeries: new Set(), createdChapters: new Set() };
   try {
     await login(page, args);
     console.log(`logged in -> ${page.url()}`);
     for (const dir of slice) {
-      try { await captureOnce(page, dir, args, stats); }
+      try { await captureOnce(page, dir, args, stats, run); }
       catch (e) { console.error(`${dir}: FAILED ${e.message}`); stats.failed.push(dir); }
     }
-  } finally { await browser.close(); }
+  } finally {
+    // Cleanup runs even when the loop threw, so a crashed run does not leave containers behind.
+    try { await cleanupScratch(page, args, run); } catch (e) { console.warn(`cleanup failed: ${e.message}`); }
+    await browser.close();
+  }
   console.log(`\nCaptured ${stats.captured}, skipped ${stats.skipped}, failed ${stats.failed.length}`);
   if (stats.failed.length) console.log("failed:", stats.failed.join(", "));
   process.exit(stats.failed.length ? 1 : 0);

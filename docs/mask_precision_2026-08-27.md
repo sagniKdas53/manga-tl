@@ -121,10 +121,35 @@ not before it.
 
 ## 5. Still open
 
-**The Torii screenshots.** You mentioned sending a few and I have not received them — I have not
-analysed anything I haven't seen. Two specific things I want to read off them: whether their mask is
-per-glyph or per-line, and whether the plate under the text is reconstructed artwork or a smoothed
-approximation. Both change step 3.
+**~~The Torii screenshots~~ — answered, and better than screenshots would have.** No screenshots are
+coming: their API returns the **bare inpainted plate** alongside the render, and `fetch_torii.py`
+already saves it as `torii/images/0_inpainted`. That is strictly better evidence — the actual plate,
+not a recovered diff of a finished page.
+
+Measured on sample264 (817×2048, the one bundle already on disk), differencing their original
+against their inpainted plate:
+
+| | value |
+|---|---|
+| coverage of page | **2.65 %** |
+| connected components | **153** |
+| median component area | **156 px** |
+| p90 / max component | 634 px / 2,939 px |
+| text boxes in their own metadata | 13 |
+| **components per text box** | **11.8** |
+
+**Their mask is per-glyph, not per-line and not per-bubble.** Twelve components per text box at a
+156 px median is individual characters. It lands almost exactly on the footprint recovered from the
+earlier comparison page (2.64 % / 295 cc / 215 px), so that recovery was sound and this is now
+confirmed from their own plate rather than inferred from a render.
+
+Against ours on the same measure — 18.6 % coverage, 49,276 px median component — that is the whole
+gap in two numbers.
+
+The second question, whether the plate is reconstructed artwork or a smoothed approximation, is
+answerable the same way now that the plate is on disk; it needs a visual read of the plate under a
+few balloons rather than a statistic, and it is worth doing once the regeneration run has produced
+more than one bundle.
 
 **Bubbles first, SFX second — this contradicts a decision already on record, so flagging rather than
 building.** You asked for *"only translating the bubbles first and then translating SFX if requested

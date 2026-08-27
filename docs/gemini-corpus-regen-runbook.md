@@ -20,6 +20,38 @@ here, not a footnote.** Record token counts and cost for every model you bench, 
 
 ---
 
+## Artifacts: keep everything, not just the final image
+
+Both arms cost real money — Torii per call, our own app in paid LLM translation. **"It produced the
+render" is not success.** If the intermediates were dropped, the only way back is to pay again.
+
+Three fixes landed on 2026-08-27 before this run was allowed to start:
+
+1. **`fetch_torii.py` now saves the raw API response *first*.** It used to derive every artifact —
+   decode base64, write PNGs, zip a bundle — and only then persist `torii_response.json`. Any
+   failure in that derivation (bad field, full disk, permissions) lost a paid response with nothing
+   on disk. Now the response and a new `torii_call.json` (translator, **credits remaining**,
+   timestamp) are written immediately, and derivation happens after.
+2. **`fetch_torii.py --rederive`** rebuilds every artifact from a saved `torii_response.json` with
+   **no API call and no spend.** This is the recovery path — if a sample looks incomplete, try this
+   before ever re-calling.
+3. **`export_pending.cjs` no longer deletes `project.zip`.** It unpacked the zip to `project/` and
+   then `unlink`ed it. That contradicted the corpus's own convention — `corpus/.gitignore:52`
+   ignores `samples/**/project.zip` precisely because it "is present locally and absent in a fresh
+   clone" — and threw away an artifact that costs a full pipeline run to reproduce.
+
+`regen_run.py` verifies both arms against an explicit artifact list after every run and prints
+what is missing per sample. Running it against the one pre-existing sample proved both bugs:
+sample264 was missing `project.zip` and had no record of what the call cost.
+
+**Expected after the torii arm:** `ref-torii.*`, `torii_response.json`, `torii_call.json`,
+`torii/metadata.json`, `torii/images/0_inpainted`, `0_original`, `0_translated`, `torii/bundle.torii`.
+**Expected after the app arm:** `export.png`, `project.zip`, `project/project.json`, `render.png`.
+
+If the completeness report lists anything, **do not silently re-run the paid call** — report it.
+
+---
+
 ## 0. Environment
 
 ```bash
@@ -27,8 +59,10 @@ cd /home/sagnik/Projects/docker-composes/manga-library
 ```
 
 - Python deps are installed system-wide — **do not create a venv, do not pip install.**
-- `fetch_torii.py` needs `TORII_API_KEY`. `export_pending.cjs` needs `TLHUB_EMAIL`,
-  `TLHUB_PASSWORD`, `TLHUB_BASE` and a running stack (`docker compose up`).
+- `fetch_torii.py` reads its key from `secrets/api_keys.json` if `TORII_API_KEY` is unset.
+  `export_pending.cjs` needs `TLHUB_EMAIL`, `TLHUB_PASSWORD`, `TLHUB_BASE` and a running stack
+  (`docker compose up`). The export account needs **TRANSLATOR** at minimum; **ADMIN** additionally
+  lets it delete the scratch series rather than leaving an empty one.
 - Playwright is not a repo dependency: `npm i -D playwright && npx playwright install chromium`.
 - Torii API limits: **1 req/sec steady**, burst 100; 50 MB / 100k px side / 100 MP per file.
   Respect the 1/sec — do not parallelise the Torii arm.
@@ -57,32 +91,48 @@ There is **no `jp-en` set**. Do not try to build one from `jp-kr`; the target la
 |---|---|---|---|---|
 | **ko** | `corpus/gaps/pending/ko/` | 192 | 1 | Torii **and** our app |
 | **zh** | `corpus/gaps/pending/zh/` | 159 | 2 (our app only) | Torii **and** our app |
-| **ja** | `corpus/samples/ja/` **with `ref-human`** | **58** | 2 have Torii | Torii **and** re-run our app |
+| **ja** | `gaps/pending/ja/` (**new**, from `jp_en_pairs.zip`) + `corpus/samples/ja/` with `ref-human` | see below | — | Torii **and** our app |
 
 Every pending ko/zh sample already carries `ref-human` with `attribution` pointing at the source
 tweet — that is the ground truth, and it is why this set is worth the spend.
 
-**The JP margin is thin: 58 candidates for 50 slots.** Take all 58 if any fail, and say in your
-report how many you actually got. Do not substitute JP pages that have no `ref-human`.
+### The JP set needed building first — `corpus/scripts/ingest_jp_pairs.py`
 
-Generate the three lists first and save them, so the run is reproducible:
+`jp_en_pairs.zip` is **not shaped like the kr/zh sets** and could not be ingested the same way. Its
+MANIFEST has no `role` and no `pair_group`; `source_text_jp` is empty on all 127 entries; and the
+three obvious shortcuts are all wrong:
+
+- *"two images in one tweet = a pair"* — no. Those are usually **the same Japanese page reposted by
+  two handles** (pair009/pair029).
+- *"the tweet text says which it is"* — no. pair062's tweet says "Eng ver" and the image is
+  Japanese; pair047's says "英語版です!" and the image is English.
+- *"`pairNNN_` is a pair id"* — no. pair001 and pair031 are the same two images.
+
+So both halves are recovered from pixels: **pairing** by 32×32 layout signature (washes out text,
+keeps composition; correlation > 0.80 with matching aspect), then **which side is Japanese** by
+PaddleOCR CJK-character ratio, run only on images that made it into a pair. That yields **117 unique
+images → ~36 candidate pairs**, which lands JP short of 50 on its own — so JP is topped up from the
+**58 `corpus/samples/ja` pages that carry `ref-human`**. Report how many you actually got.
 
 ```bash
-python3 - <<'PY' > /tmp/regen_list.json
-import os, json
-out={}
-for lang, base in (("ko","corpus/gaps/pending/ko"), ("zh","corpus/gaps/pending/zh")):
-    out[lang]=sorted(s for s in os.listdir(base)
-                     if os.path.isdir(os.path.join(base,s))
-                     and any(f.startswith("ref-human") for f in os.listdir(os.path.join(base,s))))[:50]
-base="corpus/samples/ja"
-out["ja"]=sorted(s for s in os.listdir(base)
-                 if os.path.isdir(os.path.join(base,s))
-                 and any(f.startswith("ref-human") for f in os.listdir(os.path.join(base,s))))[:50]
-json.dump(out, open("/dev/stdout","w"), indent=1)
-PY
-cat /tmp/regen_list.json
+python3 corpus/scripts/ingest_jp_pairs.py --dry-run     # report pairs, write nothing
+python3 corpus/scripts/ingest_jp_pairs.py               # writes gaps/pending/ja/sample615+
 ```
+
+Note `enable_mkldnn=False` inside that script is load-bearing — the default oneDNN path raises
+`ConvertPirAttribute2RuntimeAttribute not support` on this box and kills the process.
+
+**There is now a driver for all of this — use it rather than hand-rolling loops:**
+
+```bash
+# see what would run, touch nothing
+python3 corpus/scripts/regen_run.py \
+  --targets pending/ja pending/ko pending/zh samples/ja-human --limit 50 --dry-run
+```
+
+`corpus/scripts/regen_run.py` resolves the targets, skips anything already done, runs the Torii arm
+in parallel behind a 1 req/sec token bucket, then runs the app arm, and records per-sample status in
+`corpus/gaps/pending/.regen_state.json` so it is safe to interrupt and re-run.
 
 ---
 
@@ -100,6 +150,29 @@ Loop it over each id in your list, **one at a time**. It already picks reading d
 model from language and page dimensions (ko → PP-OCRv5, ja/zh → PP-OCRv6; aspect ≥ 2.0 → webtoon
 left-to-right) and uses OpenRouter GPT-5.6 Luna for translation to match Torii. **Do not override
 those** — model-matching is deliberate.
+
+### Scratch containers — the library does not get flooded any more
+
+Reworked 2026-08-28. It used to create **one chapter per sample** (`pending-sample264`), so a
+150-page run left 150 chapters burying the real library. Now every upload goes through throwaway
+`__scratch__` containers that are reused and then deleted.
+
+It is not always literally one series and one chapter, and the reason is the data model:
+`readingDirection` is a **series** field while the OCR/TL model choice is a **chapter** field. So
+the minimum is one scratch series per (language, direction) and one chapter per model config inside
+it — a single-language run genuinely is one and one; a mixed ja/ko/zh run is three and three.
+Scratch containers are also found and reused *across* runs, so an interrupted run leaves the same
+handful rather than a fresh orphan each time.
+
+Cleanup order: each page is deleted as soon as its artifacts are on disk (`DELETE /api/pages/{id}`
+drops the MinIO objects too), then chapters, then series — inside a `finally`, so a crashed run
+still tidies up. **Deleting a series is ADMIN-only**; a TRANSLATOR account gets 403 there and leaves
+an empty scratch series behind, which the next run reuses. That is expected, not a failure.
+
+One coupling worth knowing before you touch it: `uploadSource` posts `pageNumber: 1`, so **deleting
+each page is load-bearing** for a shared chapter, not just tidiness — two samples uploaded as page 1
+would collide. `--keep-pages` deliberately breaks that invariant and switches to sequential
+numbering instead. `--keep-scratch` leaves the containers for inspection.
 
 ### The JP pages need re-running, not just re-exporting
 
@@ -126,8 +199,12 @@ than twice, and do not hand-edit a project.
 ## 3. Torii arm — `fetch_torii.py`  (~30 min for 150, plus the sweep)
 
 ```bash
-TORII_API_KEY=sk_torii_... python3 corpus/scripts/fetch_torii.py --sample gaps/pending/ko/sample265
+python3 corpus/scripts/fetch_torii.py --sample gaps/pending/ko/sample265
 ```
+
+The key is resolved in this order: `--api-key`, then `$TORII_API_KEY` / `$TORII_KEY`, then
+**`secrets/api_keys.json`** (gitignored, holds the live keys). So a rotated key is picked up without
+re-exporting anything. There is no hardcoded fallback — it fails loudly instead.
 
 It adds `ref-torii.<ext>`, a `torii/` bundle (original / inpainted / translated + metadata) and a
 `torii_response.json`, and updates `meta.json`. It does **not** replace existing
