@@ -575,6 +575,9 @@ async fn extract_multipart(mut multipart: Multipart) -> Result<MultipartFields, 
         file: None,
     };
     while let Some(field) = multipart.next_field().await.map_err(|e| {
+        if error::is_payload_too_large(&e) {
+            return error::payload_too_large("/api/images");
+        }
         (
             StatusCode::BAD_REQUEST,
             Json(UploadResponse {
@@ -596,6 +599,9 @@ async fn extract_multipart(mut multipart: Multipart) -> Result<MultipartFields, 
             "file" => {
                 let filename = field.file_name().unwrap_or("").to_string();
                 let bytes = field.bytes().await.map_err(|e| {
+                    if error::is_payload_too_large(&e) {
+                        return error::payload_too_large("/api/images");
+                    }
                     (
                         StatusCode::BAD_REQUEST,
                         Json(UploadResponse {
@@ -1878,7 +1884,19 @@ pub async fn import_project(
     let mut project_json: Option<Vec<u8>> = None;
     let mut original: Option<(String, Vec<u8>)> = None;
 
-    while let Ok(Some(mut field)) = multipart.next_field().await {
+    const INSTANCE: &str = "/api/chapters/{chapterId}/import-project";
+    loop {
+        // `while let Ok(Some(..))` used to sit here, which treated a read failure as a
+        // clean end-of-fields: an over-limit ZIP silently became "project.json missing"
+        // instead of a 413, and a truncated one was imported as if complete.
+        let mut field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(err) if error::is_payload_too_large(&err) => {
+                return error::payload_too_large(INSTANCE);
+            }
+            Err(err) => return error::bad_request(&format!("multipart error: {err}"), INSTANCE),
+        };
         let name = field.name().unwrap_or("").to_string();
         if name != "file" {
             continue;
@@ -1889,7 +1907,12 @@ pub async fn import_project(
         while let Some(chunk) = field.next().await {
             match chunk {
                 Ok(data) => bytes.extend_from_slice(&data),
-                Err(_) => break,
+                Err(err) if error::is_payload_too_large(&err) => {
+                    return error::payload_too_large(INSTANCE);
+                }
+                Err(err) => {
+                    return error::bad_request(&format!("file read error: {err}"), INSTANCE);
+                }
             }
         }
         match crate::archive::read_archive(&bytes) {

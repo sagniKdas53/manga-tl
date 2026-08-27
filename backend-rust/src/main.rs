@@ -143,11 +143,14 @@ fn load_dotenv_local() {
 ///   2. LOG_LEVEL (what docker-compose.yml already passes — INFO/DEBUG)
 ///   3. "info"
 fn init_logging() {
-    use tracing_subscriber::EnvFilter;
-
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(env_or_default("LOG_LEVEL", "info")));
-    tracing_subscriber::fmt().with_env_filter(filter).init();
+    // RUST_LOG wins when set, else LOG_LEVEL, matching what compose passes. The directive
+    // is handed to manga_backend::logging so ADMINs can retune targets at runtime through
+    // /actuator/loggers instead of restarting the container with a different LOG_LEVEL.
+    let base = std::env::var("RUST_LOG")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| env_or_default("LOG_LEVEL", "info"));
+    manga_backend::logging::init(base);
 }
 
 fn env_or_default(name: &str, default: &str) -> String {

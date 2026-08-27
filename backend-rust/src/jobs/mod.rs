@@ -11,6 +11,7 @@ pub use coordinator::{HEAVY_QUEUES, LIGHT_QUEUES, PIPELINE_TRACE_TTL_SECS, REDO_
 
 /// Spawns every background loop the Java @Scheduled pool ran:
 ///   * stale-PROCESSING recovery sweep — fixedRate 300_000 ms
+///   * health report (queue depth + Redis probe) — fixedRate 300_000 ms
 ///   * debounced render pass       — fixedDelay  5_000 ms
 ///   * worker dispatch cycle       — WORKER_POLL_MS (default 2000)
 pub fn spawn_scheduled_tasks(state: &crate::state::AppState) {
@@ -18,6 +19,14 @@ pub fn spawn_scheduled_tasks(state: &crate::state::AppState) {
     tokio::spawn(async move {
         loop {
             recovery::recover_stale_processing_jobs(&sweep_state).await;
+            tokio::time::sleep(Duration::from_secs(300)).await;
+        }
+    });
+
+    let health_state = state.clone();
+    tokio::spawn(async move {
+        loop {
+            recovery::report_health(&health_state).await;
             tokio::time::sleep(Duration::from_secs(300)).await;
         }
     });
@@ -34,12 +43,18 @@ pub fn spawn_scheduled_tasks(state: &crate::state::AppState) {
 }
 
 /// Daily export sweeps (Java: ChapterExportService fixedRate 24h + ExportCleanupService
-/// cron 02:00). One loop covers both; their retention windows are near-identical.
+/// cron 02:00). One loop covers both.
+///
+/// Both Java services are run here. `cleanup_old_exports` used to be defined but never
+/// called, which silently made `APP_EXPORT_RETENTION_DAYS` a no-op — the hard-coded
+/// 7-day sweep was the only one running, so a deployment configuring a different
+/// retention window got the default regardless.
 pub fn spawn_export_cleanup(state: &crate::state::AppState) {
     let sweep_state = state.clone();
     tokio::spawn(async move {
         loop {
             crate::export::cleanup_stale_exports(&sweep_state).await;
+            crate::export::cleanup_old_exports(&sweep_state).await;
             // 24 hours, like Java's fixedRate = 86400000.
             tokio::time::sleep(Duration::from_secs(86_400)).await;
         }

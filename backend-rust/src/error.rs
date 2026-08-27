@@ -137,6 +137,18 @@ pub fn access_denied(instance: &str) -> Response {
     )
 }
 
+/// True when a multipart read failed because the request body ran past
+/// `routes::MAX_REQUEST_BODY_BYTES`.
+///
+/// axum reports the overrun through `MultipartError::status()` as 413; Spring raised
+/// `MaxUploadSizeExceededException` for the same condition, which
+/// `GlobalExceptionHandler` answered with the [`payload_too_large`] problem+json below.
+/// Every multipart handler checks this so an oversized upload gets that shape instead of
+/// being reported as a malformed request — or, worse, silently truncated.
+pub fn is_payload_too_large(err: &axum::extract::multipart::MultipartError) -> bool {
+    err.status() == StatusCode::PAYLOAD_TOO_LARGE
+}
+
 /// MaxUploadSizeExceededException → 413 (compose/yml cap is 50MB).
 pub fn payload_too_large(instance: &str) -> Response {
     problem_response(

@@ -12,9 +12,12 @@ from pathlib import Path
 GOLDEN = Path(__file__).parent.parent / "backend-rust" / "spec" / "golden-routes.txt"
 
 # "METHOD path" entries the Rust backend serves today (keep in sync with src/routes/).
-# Served too but NOT part of the OpenAPI contract:
-# GET /actuator/health[/liveness|/readiness] — byte-compatible {"status":"UP"}.
-# GET /v3/api-docs — static bytes of spec/golden-openapi.json (Phase 4 step 1).
+# Served too but NOT part of the OpenAPI contract (springdoc never documented the
+# actuator, so none of these belong in the golden file):
+# GET  /actuator/health[/liveness|/readiness] — byte-compatible {"status":"UP"}.
+# GET  /actuator/loggers, GET/POST /actuator/loggers/{name} — ADMIN-only live log levels,
+#      the port of the `loggers` endpoint application.yml exposed on purpose.
+# GET  /v3/api-docs — static bytes of spec/golden-openapi.json (Phase 4 step 1).
 PORTED = {
     # auth (Phase 2)
     "GET /api/auth/setup-required",

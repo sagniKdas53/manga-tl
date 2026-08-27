@@ -18,6 +18,35 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 > Live Java stack TORN DOWN; the ruststack (-p ruststack) is now THE
 > serving instance, fronted by Traefik at https://ideapad.tail9ece4.ts.net/tlhub.
 > Formal compose swap on the canonical checkout deferred by user.
+>
+> 2026-08-27 — PRE-MERGE REVIEW. Route parity re-verified INDEPENDENTLY (route table read
+> out of src/routes/, not the hand-maintained PORTED list in diff_routes.py): exact 71/71,
+> no drift either way. fmt + clippy clean. Two BLOCKERS found and FIXED:
+>   1. **Every request body over 2 MB was rejected.** axum applies a 2 MB DefaultBodyLimit
+>      to Multipart/Json/Bytes unless a layer says otherwise, and none did — so page
+>      uploads, chapter ZIP imports, import-project and worker OCR callbacks all failed
+>      past 2 MB, where Spring allowed 50 MB. Manga scans are routinely 2–10 MB, so this
+>      broke the primary upload path for real content and surfaced as a confusing 400
+>      "multipart error". NOTHING caught it: every upload fixture in the suite is a 1x1 or
+>      64x64 PNG, the Playwright smoke uses a 1x1 PNG, and the real-worker E2E used one
+>      small corpus sample. Fixed (deviation 12) + 4 regression tests.
+>      Two import paths ALSO swallowed the failure — `while let Ok(Some(field))` treated a
+>      read error as clean end-of-fields, so an over-limit ZIP silently imported truncated
+>      instead of erroring. Both now surface 413/400.
+>   2. **Compose healthcheck could never pass.** docker-compose.yml still ran
+>      `wget --spider` inside a package-free runtime image; `worker` gates on
+>      `backend: service_healthy`, so the whole pipeline would have stayed dead. Step 7
+>      finished: build path → backend-rust/Dockerfile, healthcheck → baked static probe.
+> Also restored, all previously UNDOCUMENTED drops: response compression (deviation 15),
+> `/actuator/loggers` (13), the HealthReporter scheduled task (its parity row was ✅ against
+> the wrong test), and `cleanup_old_exports`, which was dead code that made
+> APP_EXPORT_RETENTION_DAYS a silent no-op. CORS stays unported ON PURPOSE (14).
+> `/actuator/**` no longer falls through to the SPA shell.
+> STILL BLOCKING THE MERGE: step 10 — CI publishes the JAVA image to the tag compose pulls,
+> and the branch is 10 commits behind main. See step 10 for the full list.
+> Test caveat: this review ran with no Docker daemon available, so only the 81 unit tests
+> (`cargo test --lib`) were executed. The DB/MinIO/Valkey integration suites need
+> `scripts/test-env.sh run` on a machine with Docker before merge.
 
 ## Mission (Phase 4)
 
@@ -115,6 +144,30 @@ are FORBIDDEN after 2026-08-26 (they left 16 stray users behind once already).
 11. TraceContext/MDC log-line tracing (X-Trace-Id filter, TraceIdFilterTest) was dropped:
     trace ids live in jobs.trace_id and every worker payload; log-correlation via tracing
     spans is a nice-to-have, not contract. Documented deviation.
+12. Request bodies are capped at 50 MB (`routes::MAX_REQUEST_BODY_BYTES`), matching
+    `spring.servlet.multipart.max-request-size`. axum's own default is 2 MB and applies to
+    EVERY buffering extractor, so the cap is enforced twice: a `Content-Length` guard in
+    front of the router answers 413 problem+json (Java's MaxUploadSizeExceeded shape) on
+    any route, and `DefaultBodyLimit` backstops chunked requests that declare no length.
+    Deviation from Java: Spring capped multipart only and left JSON bodies unbounded; the
+    50 MB ceiling here covers both.
+13. `/actuator/loggers` is ported (ADMIN-only, `crate::logging`), `metrics` and `env` are
+    NOT. Deviation: Spring addressed Java packages, a tracing target is a Rust module path
+    (`manga_backend::jobs::coordinator`), so the runbook command in application.yml changes
+    shape even though the mechanism matches. `metrics`/`env` had no consumer — Grafana reads
+    Postgres directly and Prometheus scrapes only cAdvisor — and a Micrometer-equivalent
+    registry is a feature, not parity.
+14. CORS is deliberately NOT ported. Java allowed any origin WITH `allowCredentials(true)`,
+    which lets any site make credentialed calls; nothing needs it here (production is
+    same-origin behind Traefik and `vite dev` proxies with `changeOrigin`), so re-adding it
+    would import a security weakness for no consumer. Preflight OPTIONS from a third-party
+    origin is the only behavior lost.
+15. `server.compression` IS ported (tower-http `CompressionLayer`, 2 KB threshold like
+    Spring's `min-response-size`). tower-http denylists where Spring allowlisted, so the
+    predicate excludes images, `text/event-stream` (the SSE stream must never be buffered
+    through an encoder), export ZIPs, fonts and octet-stream. This matters more than it did
+    on Spring: the Rust binary serves the embedded SPA itself and the Traefik router in
+    front carries no compress middleware.
 
 ## Gotchas that already bit once
 
@@ -264,7 +317,7 @@ N/A deliberately not portable (say why).
 | WorkerDispatcherServiceTest | ✅ | tests/dispatcher_mock_worker.rs — in-test axum mock worker: 202 started_at stamping + body shape, 400 permanent FAILED w/ error text, 429 cooldown (next cycle zero contact), slot saturation, AUDIT-P3 single-queue stall isolation, pause gate |
 | DebouncedRenderServiceTest | ✅ | recovery::process_pending_renders — threshold query, 5-min recent-failure skip, backdated failure allows re-trigger |
 | ChapterExportServiceTest | ✅ | lifecycle trio + meta-data.json content (model/cost/qa) + hash-id cache hit (deterministic BTree ordering) + EXPORT_SUCCESS/EXPORT_ERROR notifications (export_service.rs vs minio-test) |
-| ExportCleanupServiceTest | ❌ | delete_older_than against minio-test with backdated objects |
+| ExportCleanupServiceTest | 🟡 | Service IS ported and now actually RUNS — `cleanup_old_exports` was defined but never called, silently making APP_EXPORT_RETENTION_DAYS a no-op; jobs::spawn_export_cleanup invokes both sweeps. Still missing: a delete_older_than test against minio-test with backdated objects. |
 | MinioServiceTest | ✅ | tests/minio_service.rs |
 | ProviderConfigCacheTest | ✅ | providers.rs unit tests — exact catalog blob parse, priority ordering, validity/ORPHANED rules, free-tier flags, empty-cache permissive, unparsable-blob keeps stale |
 | SystemSettingsServiceTest / SettingsControllerTest | ✅ | tests/settings_endpoints.rs — get/put round-trip + persistence, validateOverrides DEPRECATED entries with seeded catalog blob, empty-cache {"orphaned":[]}; global table reset to factory after run |
@@ -276,7 +329,7 @@ N/A deliberately not portable (say why).
 | SecurityConfigTest / AuthorizationDenialFilterTest | ✅ | 403 Boot shape + @PreAuthorize problem+json verified live in Phase 2; role-matrix asserted per group (series admin-delete, layers ADMIN/TRANSLATOR, settings/jobs any-auth, internal token) |
 | ForwardControllerTest | ✅ | API-404 + SPA index.html for extension-less non-API path; dotted asset paths stay 404 (Java [^\\.]* mapping parity) |
 | GlobalExceptionHandlerTest | ✅ | shapes exercised across all endpoint suites |
-| HealthReporterTest | ✅ | health router unit test |
+| HealthReporterTest | ✅ | recovery::report_health — 5-min queue-depth log + `health:ping` Redis round-trip, spawned in jobs::spawn_scheduled_tasks. (Was previously marked ✅ against the /actuator/health ROUTE test, which is a different thing; the scheduled reporter was genuinely missing until the pre-merge review.) |
 | OpenApiSpecTest | ✅ | routes/mod.rs: /v3/api-docs serves golden bytes byte-for-byte (include_bytes) + core-path assertions; generate-api diff vs live Java stack is multiset-identical (3058 lines, springdoc emits non-deterministic key order per boot — zero functional drift) |
 | SchemaValidationTest / InitScriptReconciliationTest | ✅ | schema shared verbatim; db_entities round-trips |
 | Repository tests (Chapter/LayerElement/Layer/Page/Series) | ✅ | db_entities.rs rolled-back round-trips (query semantics live in endpoint suites) |
@@ -469,7 +522,14 @@ zip (archives), hex, base64.
       multi-arch buildx left to CI release workflow (user decision). CRITICAL FIX:
       .dockerignore was missing backend-rust/target — 38GB of cargo artifacts entered
       every context send (allowlist-style ignore now). Gate: fmt+clippy clean, 117 tests)
-- [~] **Step 7** Compose swap — SIDE-BY-SIDE VERIFIED 2026-08-24. 2026-08-26: user opted
+- [x] **Step 7** Compose swap — canonical `docker-compose.yml` swapped 2026-08-27:
+      `backend.build.dockerfile` → `backend-rust/Dockerfile`, and the healthcheck moved from
+      `wget --spider` to the baked static probe. That healthcheck was a hard blocker, not a
+      detail: the Rust runtime stage carries zero packages (no wget, no curl), so the old
+      test could never pass, and `worker` gates on `backend: condition: service_healthy` —
+      the backend would have sat unhealthy forever and the worker would never have started.
+      The `image:` tag still points at the Java-publishing CI job; see step 10.
+      Previously — SIDE-BY-SIDE VERIFIED 2026-08-24. 2026-08-26: user opted
       to DEFER the formal swap of the canonical checkout's docker-compose.yml; instead the
       live Java stack was torn down and this worktree's ruststack (-p ruststack, loopback
       :8084, fresh ./data dirs, .env added for provider API keys) is serving as THE stack.
@@ -501,9 +561,42 @@ zip (archives), hex, base64.
       - image size: Java 324MB · Rust 119MB
       (NOTE: rule "Java stack stays UP until baselines recorded" was superseded by the
       user's explicit teardown order on 2026-08-26 — remaining numbers are N/A now.)
-- [ ] **Step 10** Housekeeping: AGENTS.md + READMEs + release.yml updated, ci-maven.yml
-      retired, diff_routes.py comment flipped to post-cutover, `backend/` deleted,
-      `rust-backend` merged → main, both remotes pushed, release tagged
+- [ ] **Step 10** Housekeeping — NOT STARTED, and it is the merge gate. Expanded
+      2026-08-27 from the pre-merge review; the CI item is the one that actually bites.
+
+      **Blocking — the image pipeline still builds Java.**
+      - [ ] `.github/workflows/ci-backend-docker.yml` builds `file: backend/Dockerfile`
+            (line ~95) and triggers on `paths: backend/**, frontend/**`. Merging as-is
+            publishes the JAVA image to `ghcr.io/sagnikdas53/manga-tl:latest` — the exact
+            tag `docker-compose.yml` pulls — while changes under `backend-rust/**` trigger
+            no rebuild at all. Repoint `file:` to `backend-rust/Dockerfile` and swap the
+            path filter to `backend-rust/**` + `frontend/**`. Until this lands, compose
+            must be brought up with `--build`, never `pull`; the note on the backend
+            service in docker-compose.yml says so.
+      - [ ] Multi-arch: `platforms: linux/amd64,linux/arm64` stays, but the arm64 leg of
+            backend-rust/Dockerfile has never been built — only amd64 was verified live
+            (step 6). First CI run after the repoint is the real test.
+      - [ ] Retire `ci-maven.yml` (dies with `backend/`).
+
+      **Blocking — branch is behind main.**
+      - [ ] `rust-backend` is 10 commits behind `origin/main` (as of 2026-08-27). Main
+            added Prometheus + cAdvisor and rewrote ~126 lines of `docker-compose.yml`,
+            which is the same file step 7 just edited — expect a real conflict there and
+            resolve it by hand. Checked and harmless: those 10 commits touch NO `backend/**`
+            Java source, so no app feature landed on main that the port is missing, and the
+            new Prometheus scrapes only cAdvisor + itself, so it needs no backend metrics
+            endpoint (see deviation 13).
+
+      **Then the ordinary housekeeping.**
+      - [ ] AGENTS.md + CLAUDE.md + README(s) describe a Spring Boot backend throughout.
+      - [ ] `release.yml` header comment still explains `backend/Dockerfile`'s JAR COPY.
+      - [ ] Flip the diff_routes.py comment to "post-cutover" (PORTED must equal ALL — it
+            already does, 71/71).
+      - [ ] DELETE `backend/`, merge `rust-backend` → main, push both remotes, tag.
+
+      NOTE: `docker-compose.rust-test.yml` is the side-by-side TEST stack. Decide whether it
+      survives the merge or goes with `backend/`; it currently duplicates the healthcheck
+      override that step 7 folded into the base file.
 
 ### Phase 4 rules of engagement
 

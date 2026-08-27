@@ -13,6 +13,7 @@ pub mod error;
 pub mod export;
 pub mod jobs;
 pub mod jwt;
+pub mod logging;
 pub mod minio;
 pub mod models;
 pub mod password;

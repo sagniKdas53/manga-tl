@@ -23,12 +23,24 @@ pub mod series;
 pub mod settings;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::response::{IntoResponse, Response};
 use rust_embed::RustEmbed;
 use tower_http::catch_panic::CatchPanicLayer;
+use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::state::AppState;
+
+/// Largest request body we accept, matching Spring's
+/// `spring.servlet.multipart.max-request-size: 50MB`.
+///
+/// This is NOT cosmetic. axum applies a 2 MB default body limit to every buffering
+/// extractor (`Multipart`, `Json`, `Bytes`) unless a `DefaultBodyLimit` layer says
+/// otherwise, so without this the port silently rejected any page scan, chapter ZIP or
+/// worker callback payload over 2 MB — well under the size of a routine manga page.
+/// Nothing caught it because every upload fixture in the suite is a 1x1 or 64x64 PNG.
+pub const MAX_REQUEST_BODY_BYTES: usize = 50 * 1024 * 1024;
 
 /// The built frontend, embedded into the binary (Java copied it into BOOT-INF/classes/static).
 /// build.rs guarantees the folder exists even on clean checkouts; the Dockerfile's frontend
@@ -92,6 +104,59 @@ pub fn build_router(state: AppState) -> Router {
         crate::error::internal_error("/unknown")
     }))
     .layer(TraceLayer::new_for_http())
+    .layer(CompressionLayer::new().compress_when(compressible()))
+    .layer(axum::middleware::from_fn(reject_oversized_body))
+    .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+}
+
+/// Rejects an over-limit request up front, on `Content-Length`.
+///
+/// `DefaultBodyLimit` alone is not enough for a clean contract: it surfaces as an
+/// extractor rejection, and most handlers here take `Result<Json<T>, JsonRejection>` and
+/// collapse every rejection to Boot's 400 "Failed to read request" — so an oversized
+/// payload would report as malformed rather than too large. Checking the header before
+/// any extractor runs puts one 413 problem+json on every route, JSON and multipart alike,
+/// which is also where Tomcat enforced it for Spring. The `DefaultBodyLimit` layer stays
+/// as the backstop for chunked requests that declare no length.
+async fn reject_oversized_body(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let declared = request
+        .headers()
+        .get(axum::http::header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
+
+    if declared.is_some_and(|length| length > MAX_REQUEST_BODY_BYTES as u64) {
+        return crate::error::payload_too_large(request.uri().path());
+    }
+    next.run(request).await
+}
+
+/// Which responses get gzip/brotli, standing in for Spring's `server.compression`.
+///
+/// Java compressed responses over 2 KB whose content type was on an allowlist (html, css,
+/// javascript, json, xml, plain text). tower-http works the other way round — compress
+/// everything except a denylist — so the exclusions below reconstruct the same effective
+/// set: `DefaultPredicate` already drops images and `text/event-stream` (the SSE stream
+/// must never be buffered through an encoder), and we add the other already-compressed
+/// payloads this app serves — export ZIPs, embedded fonts and opaque binaries.
+///
+/// This matters more here than it did on Spring: the Rust binary serves the embedded SPA
+/// itself, and the Traefik router in front of it carries no compress middleware, so
+/// without this layer the frontend bundle and every JSON list response ship uncompressed.
+fn compressible() -> impl tower_http::compression::Predicate {
+    use tower_http::compression::predicate::{
+        DefaultPredicate, NotForContentType, Predicate, SizeAbove,
+    };
+
+    DefaultPredicate::new()
+        // Spring's `server.compression.min-response-size` default.
+        .and(SizeAbove::new(2048))
+        .and(NotForContentType::new("application/zip"))
+        .and(NotForContentType::new("application/octet-stream"))
+        .and(NotForContentType::new("font/"))
 }
 
 /// All layer-related routes in one table (kept beside their handlers' two modules).
@@ -128,7 +193,11 @@ fn layer_routes() -> Router<AppState> {
 /// without a file extension -> the SPA shell so client-side routing works.
 async fn spa_fallback(uri: axum::http::Uri) -> Response {
     let path = uri.path();
-    if path.starts_with("/api") {
+    // `/actuator/**` is a management surface, not a client-side route. Letting it reach
+    // the SPA branch below answered `/actuator/metrics` with 200 index.html — an
+    // extension-less path looks exactly like a deep link — where Spring returned 403 for
+    // anyone without ROLE_ADMIN and 404 for endpoints it did not expose.
+    if path.starts_with("/api") || path.starts_with("/actuator") {
         return (
             StatusCode::NOT_FOUND,
             [(axum::http::header::CONTENT_TYPE, "application/json")],
@@ -472,5 +541,188 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), Status::NOT_FOUND);
+    }
+
+    /// Regression: axum applies a 2 MB default body limit to every buffering extractor
+    /// unless a `DefaultBodyLimit` layer overrides it, so before `MAX_REQUEST_BODY_BYTES`
+    /// was wired in, ANY request body over 2 MB was rejected — page scans, chapter ZIPs
+    /// and worker callbacks alike. Spring's cap was 50 MB.
+    ///
+    /// Deliberately malformed JSON on a permitAll route: the extractor rejects it before
+    /// the handler touches Postgres, so the status isolates the body limit from
+    /// everything else. Over the limit the rejection is 413; under it, 400.
+    #[tokio::test]
+    async fn bodies_between_the_axum_default_and_the_spring_cap_are_accepted() {
+        let app = build_router(test_state("/tlhub"));
+        let three_mb = vec![b'x'; 3 * 1024 * 1024];
+
+        let response = app
+            .oneshot(
+                Request::post("/tlhub/api/auth/login")
+                    .header("content-type", "application/json")
+                    .header("content-length", three_mb.len())
+                    .body(Body::from(three_mb))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_ne!(
+            response.status(),
+            Status::PAYLOAD_TOO_LARGE,
+            "a 3 MB body must reach the handler; the 2 MB axum default is not our contract"
+        );
+        assert_eq!(response.status(), Status::BAD_REQUEST, "malformed JSON");
+    }
+
+    #[tokio::test]
+    async fn bodies_past_the_spring_cap_are_still_rejected() {
+        let app = build_router(test_state("/tlhub"));
+
+        // The guard reads Content-Length and answers before the body is touched, which is
+        // the whole point — so the declared length is what the assertion exercises.
+        let response = app
+            .oneshot(
+                Request::post("/tlhub/api/auth/login")
+                    .header("content-type", "application/json")
+                    .header("content-length", MAX_REQUEST_BODY_BYTES + 1)
+                    .body(Body::from(vec![b'x'; 1024]))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), Status::PAYLOAD_TOO_LARGE);
+    }
+
+    /// `/actuator/**` used to fall through to the SPA branch, which answers any
+    /// extension-less path with 200 index.html. Spring returned 403 to non-admins and
+    /// 404 for endpoints it never exposed; either way, never the app shell.
+    #[tokio::test]
+    async fn unknown_actuator_paths_do_not_serve_the_spa_shell() {
+        let app = build_router(test_state("/tlhub"));
+
+        let response = app
+            .oneshot(
+                Request::get("/tlhub/actuator/metrics")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), Status::NOT_FOUND);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        assert!(
+            !bytes.starts_with(b"<!doctype html>"),
+            "actuator paths must not render the SPA"
+        );
+    }
+
+    /// The loggers endpoint carries Spring's `hasRole(\"ADMIN\")` guard; unauthenticated
+    /// callers get the security 403 shape, not a level dump.
+    #[tokio::test]
+    async fn loggers_endpoint_requires_authentication() {
+        let app = build_router(test_state("/tlhub"));
+
+        let response = app
+            .oneshot(
+                Request::get("/tlhub/actuator/loggers")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), Status::FORBIDDEN);
+    }
+
+    /// The upload route is where the 2 MB default actually hurt. Without a Bearer token
+    /// the request stops at the auth extractor, which is the point: reaching auth at all
+    /// proves the 3 MB body was not rejected for its size on the way in.
+    #[tokio::test]
+    async fn multipart_uploads_over_two_megabytes_reach_the_handler() {
+        let app = build_router(test_state("/tlhub"));
+        let boundary = "TESTBOUNDARY";
+        let mut body = Vec::new();
+        body.extend_from_slice(
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; \
+                 filename=\"page.png\"\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        body.extend(std::iter::repeat_n(b'A', 3 * 1024 * 1024));
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+        let response = app
+            .oneshot(
+                Request::post("/tlhub/api/images")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .header("content-length", body.len())
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_ne!(response.status(), Status::PAYLOAD_TOO_LARGE);
+        assert_eq!(
+            response.status(),
+            Status::FORBIDDEN,
+            "expected the auth extractor, not a body-size rejection"
+        );
+    }
+
+    /// Spring set `server.compression.enabled: true`; the Rust binary now serves the SPA
+    /// itself and Traefik in front carries no compress middleware, so losing this shipped
+    /// the whole frontend bundle and every JSON list response uncompressed.
+    #[tokio::test]
+    async fn large_json_responses_are_compressed_when_the_client_asks() {
+        let app = build_router(test_state("/tlhub"));
+
+        let response = app
+            .oneshot(
+                Request::get("/tlhub/v3/api-docs")
+                    .header("accept-encoding", "gzip")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), Status::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get("content-encoding")
+                .and_then(|value| value.to_str().ok()),
+            Some("gzip"),
+            "the golden spec is far past the 2 KB threshold"
+        );
+    }
+
+    /// The SSE stream must never be routed through an encoder, or notifications buffer
+    /// instead of arriving as they are emitted. DefaultPredicate excludes it; assert that
+    /// rather than trusting the dependency to keep doing so.
+    #[tokio::test]
+    async fn event_streams_are_never_compressed() {
+        use tower_http::compression::Predicate;
+
+        let sse = axum::http::Response::builder()
+            .header("content-type", "text/event-stream")
+            .body(Body::empty())
+            .unwrap();
+        assert!(!compressible().should_compress(&sse));
+
+        let zip = axum::http::Response::builder()
+            .header("content-type", "application/zip")
+            .header("content-length", 5_000_000)
+            .body(Body::empty())
+            .unwrap();
+        assert!(!compressible().should_compress(&zip), "export ZIPs");
     }
 }

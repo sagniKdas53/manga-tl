@@ -215,3 +215,41 @@ pub async fn run_startup_recovery(state: AppState) {
         tracing::info!("Queue is globally paused. Skipping requeue.");
     }
 }
+
+/// HealthReporter.reportHealth — every 5 minutes, log queue depth and prove Redis is
+/// answering by round-tripping the `health:ping` key.
+///
+/// This was dropped in the port. Nothing outside the backend reads `health:ping`, so no
+/// consumer broke, but the periodic queue-depth line is the only place a stuck pipeline
+/// shows up in the logs without someone querying Postgres by hand — the Java service
+/// logged it every 5 minutes and operators read it that way.
+pub async fn report_health(state: &AppState) {
+    let counts: (i64, i64, i64) = sqlx::query_as(
+        "SELECT \
+           COUNT(*) FILTER (WHERE status = 'PENDING'), \
+           COUNT(*) FILTER (WHERE status = 'PROCESSING'), \
+           COUNT(*) FILTER (WHERE status = 'FAILED') \
+         FROM jobs",
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or((0, 0, 0));
+    let (pending, processing, failed) = counts;
+
+    // Java wrote then re-read the key and reported DOWN when either half failed or the
+    // value came back wrong; a bare PING would not catch a read-only replica.
+    let redis = match state.redis.as_ref() {
+        None => "DOWN",
+        Some(redis) => match redis.set("health:ping", "pong").await {
+            Ok(()) => match redis.get("health:ping").await {
+                Ok(Some(value)) if value == "pong" => "OK",
+                _ => "DOWN",
+            },
+            Err(_) => "DOWN",
+        },
+    };
+
+    tracing::info!(
+        "Health: queue[pending={pending}, processing={processing}, failed={failed}] redis={redis}"
+    );
+}

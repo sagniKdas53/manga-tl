@@ -957,7 +957,18 @@ pub async fn import_chapter(
         file: None,
     };
 
-    while let Ok(Some(mut field)) = multipart.next_field().await {
+    const INSTANCE: &str = "/api/series/{seriesId}/chapters/import";
+    loop {
+        // See the matching note in page.rs import_project: swallowing the error here made
+        // an over-limit or truncated chapter ZIP look like a well-formed short one.
+        let mut field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(err) if error::is_payload_too_large(&err) => {
+                return error::payload_too_large(INSTANCE);
+            }
+            Err(err) => return error::bad_request(&format!("multipart error: {err}"), INSTANCE),
+        };
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "file" => {
@@ -967,7 +978,15 @@ pub async fn import_chapter(
                 while let Some(chunk) = field.next().await {
                     match chunk {
                         Ok(data) => bytes.extend_from_slice(&data),
-                        Err(_) => break,
+                        Err(err) if error::is_payload_too_large(&err) => {
+                            return error::payload_too_large(INSTANCE);
+                        }
+                        Err(err) => {
+                            return error::bad_request(
+                                &format!("file read error: {err}"),
+                                INSTANCE,
+                            );
+                        }
                     }
                 }
                 fields.file = Some((filename, bytes));

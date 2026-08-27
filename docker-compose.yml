@@ -154,10 +154,15 @@ services:
       retries: 5
 
   backend:
+    # NOTE (cutover): the build below produces the Rust backend, but this tag is still
+    # published by ci-backend-docker.yml from backend/Dockerfile (the Java tree). Until
+    # that workflow is repointed — MIGRATION.md Phase 4 step 10 — `docker compose pull`
+    # fetches a Java image while `docker compose build` produces a Rust one. Build
+    # locally, or repoint CI first.
     image: ghcr.io/sagnikdas53/manga-tl:latest
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: backend-rust/Dockerfile
       args:
         - VITE_BASE_PATH=${CONTEXT_PATH:-/tlhub}
     container_name: manga-backend
@@ -251,7 +256,15 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "wget --spider -q http://localhost:8080$${CONTEXT_PATH:-/tlhub}/actuator/health || exit 1" ]
+      # The Rust runtime stage is package-free debian-slim — no wget, no curl. Installing
+      # either broke the arm64 build under QEMU, so the image bakes a ~2KB static probe
+      # (backend-rust/src/main/c/healthcheck.c) that GETs {CONTEXT_PATH}/actuator/health
+      # exactly like the wget line did, reading PORT/CONTEXT_PATH from the environment.
+      #
+      # This is load-bearing, not cosmetic: `worker` gates on `backend: service_healthy`,
+      # so a healthcheck that cannot run leaves the backend permanently unhealthy and the
+      # worker never starts at all — the whole translation pipeline stays dead.
+      test: [ "CMD", "/usr/local/bin/healthcheck" ]
       interval: 30s
       timeout: 5s
       retries: 3
