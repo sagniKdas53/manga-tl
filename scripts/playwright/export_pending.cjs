@@ -3,30 +3,25 @@
  * export_pending.cjs — drive the Reader to export pending gaps samples through our app,
  * mirroring how Torii's .torii bundles are built (original / inpainted / translated + metadata).
  *
- * Unlike capture_exports.cjs which works on a pre-existing chapter (chapter UUID + page numbers),
- * this works on raw pending directories: gaps/pending/ko|zh/sampleNNN or gaps/scraped_tweets_pairs
- * leftovers, or any dir with source.* + ref-human.* . It:
- *   1. Creates a throwaway chapter via POST /api/chapters
- *   2. Uploads each pending source as a page (POST /api/chapters/:id/pages)
- *   3. Waits for the pipeline (OCR → translate → QA) to settle
- *   4. Captures page-N-export.png + page-N-layers.zip via the same DOM hooks as
- *      capture_exports.cjs (export controls gated on !selectedItem, translation layers in DOM)
- *   5. Unpacks the zip into project/ and writes project.json, then moves the trio into the
- *      sample's dir as export.png / render.png / project/ (like promote_drops does)
- *   6. Leaves ref-torii alongside ref-mangatranslator.ai — does not replace — so Torii automation
- *      (scripts/fetch_torii.py) can run in parallel and add its own ref.
+ * Automatically inspects language and image dimensions (standard manga, webtoon vertical strip,
+ * double spread) to smartly create or reuse series & chapters:
+ *   - Korean (ko) -> leftToRight, local PP-OCRv5 (korean_PP-OCRv5_mobile_rec)
+ *   - Chinese (zh) -> leftToRight, local PP-OCRv6 (PP-OCRv6_medium_rec)
+ *   - Japanese (ja) -> rightToLeft, local PP-OCRv6 (PP-OCRv6_medium_rec)
+ *   - Webtoon strip (aspect ratio >= 2.0) -> leftToRight reading direction
+ *   - Translation engine -> OpenRouter GPT-5.6 Luna (openai/gpt-5.6-luna, matches Torii)
+ *
+ * It:
+ *   1. Resolves/creates smart series & chapter via backend API
+ *   2. Uploads pending source image as page 1 (POST /api/images)
+ *   3. Waits for the async pipeline (OCR -> inpaint -> LLM translation -> QA) to settle
+ *   4. Captures export.png + project.zip via Reader DOM export controls
+ *   5. Unpacks project.zip into project/ directory (with project.json, masks, layer PNGs)
+ *   6. Downloads worker rendered image (GET /api/pages/:id/rendered) -> render.png
  *
  * Usage:
- *   node scripts/playwright/export_pending.cjs \
- *     --pending-dir gaps/pending/ko \
- *     --out samples \
- *     --base http://localhost:8080/tlhub --email you@example.com --password secret
- *
- *   # single sample, dry run (no upload, just show what would happen)
- *   node scripts/playwright/export_pending.cjs --pending-dir gaps/pending/ko/sample264 --dry-run
- *
- *   # limit to a subset
- *   node scripts/playwright/export_pending.cjs --pending-dir gaps/pending --limit 5 --headed
+ *   TLHUB_EMAIL=you@example.com TLHUB_PASSWORD=secret TLHUB_BASE=http://localhost:8084/tlhub \
+ *   node scripts/playwright/export_pending.cjs --pending-dir corpus/gaps/pending/zh/sample501
  *
  * Requires: npm i -D playwright && npx playwright install chromium
  * Respects: --force to re-export already-complete samples
@@ -506,14 +501,30 @@ async function captureOnce(page, pendingDir, args, stats) {
 const USAGE = `
 export_pending.cjs — export gaps/pending samples through our app (Browser + API)
 
-  --pending-dir <dir>   gaps/pending, gaps/pending/ko, or single sample dir (required)
-  --out <dir>           samples root, default corpus/samples (samples/<lang>/sampleId)
-  --limit <n>           only first n pending dirs
-  --base <url>          default http://localhost:8080/tlhub [TLHUB_BASE]
-  --email --password     [TLHUB_EMAIL/PASSWORD]
-  --force               re-export even if export.png + project/ exist
-  --headed              show browser
-  --dry-run             don't upload/capture, just list
+Usage:
+  node scripts/playwright/export_pending.cjs \\
+    --pending-dir corpus/gaps/pending/ko/sample264 \\
+    --base http://localhost:8084/tlhub --email you@example.com --password secret
+
+Options:
+  --pending-dir <dir>    gaps/pending, gaps/pending/ko, or single sample dir (required)
+  --out <dir>            custom output root (default: writes in-place to sample dir)
+  --limit <n>            only process first n pending dirs
+  --base <url>           backend base URL, default http://localhost:8080/tlhub [TLHUB_BASE]
+  --email <email>        login email [TLHUB_EMAIL]
+  --password <pwd>       login password [TLHUB_PASSWORD]
+  --force                re-export even if export.png + project/ exist
+  --headed               show browser window
+  --dry-run              don't upload/capture, just list matching directories
+  --series-id <uuid>     override / force specific series ID
+  --chapter-id <uuid>    override / force specific chapter ID
+  --ocr-provider <name>  override OCR provider (default: local)
+  --ocr-model <name>     override OCR model (default: PP-OCRv5 for KO, PP-OCRv6 for JA/ZH)
+  --tl-provider <name>   override translation provider (default: openrouter)
+  --tl-model <name>      override translation model (default: openai/gpt-5.6-luna)
+  --qa-provider <name>   override QA provider
+  --qa-mode <mode>       override QA mode (auto / disabled / always)
+  --settle-ms <n>        extra wait time in ms after networkidle (default: 1500)
 `;
 
 (async () => {
