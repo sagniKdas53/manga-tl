@@ -687,6 +687,30 @@ zip (archives), hex, base64.
             still sees three separate pages.
       - [ ] Then: merge `rust-backend` → main (PR #91), push both remotes, tag.
 
+      OPERATIONAL TRAP FOUND WHILE BRINGING THE STACK UP (2026-08-28), inherited from main,
+      NOT from this port. `prometheus` declares `user: "${UID:-1000}:${GID:-1000}"` and binds
+      `./data/prometheus`. UID/GID are shell builtins that bash does not export, so compose
+      almost always resolves them to 1000:1000 — but Docker auto-creates a missing bind-mount
+      source as root:root. Result on any FRESH checkout: prometheus crash-loops with
+
+          open /prometheus/queries.active: permission denied
+          panic: Unable to create mmap-ed active query log
+
+      `data/prometheus` does not exist in the canonical checkout either, so this fires there
+      too the first time anyone runs it — it is latent on main right now, not specific to the
+      worktree. One-time fix, no host sudo needed:
+
+          docker run --rm -v "$PWD/data:/d" alpine:3 chown 1000:1000 /d/prometheus
+
+      Same class of problem, different cause: the worker's model caches. The base compose
+      binds `./data/worker/{huggingface,paddlex}`, which in a fresh worktree are empty, so the
+      worker dies with `FileNotFoundError: Required YOLO bubble detection model is not
+      available`. docker-compose.rust-test.yml used to paper over this by pointing those two
+      mounts at the canonical checkout. With the overlay gone they were symlinked to the same
+      place instead (Docker resolves a symlinked bind source on the host), which keeps the
+      overlay's intent — they are ~349 MB of caches, not data, and should not be duplicated
+      per worktree. `rendered_cache` deliberately stays local.
+
       DECIDED: `docker-compose.rust-test.yml` goes with `backend/`. Its whole purpose was
       running the Rust stack ALONGSIDE the Java one on renumbered ports; with the Java half
       deleted, the canonical stack IS the Rust stack. It also hard-codes an absolute host
