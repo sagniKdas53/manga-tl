@@ -4,9 +4,11 @@ name: Release
 # image for it.
 #
 # Tag-only versioning is deliberate: nothing here rewrites a version into a manifest file.
-# backend/Dockerfile hard-codes `COPY … /app/target/library-0.0.1-SNAPSHOT.jar`, so bumping
-# backend/pom.xml's version would break the image build on the very commit that released it.
-# The git tag is the single source of truth and the image tags are derived from it.
+# backend-rust/Cargo.toml's version is read by nothing at runtime, and bumping it would dirty
+# Cargo.lock (which carries a `manga-backend` entry of its own), busting the cargo-chef
+# dependency layer on the very commit that released it — a full cold rebuild of every crate,
+# for both architectures. The git tag is the single source of truth and the image tags are
+# derived from it.
 #
 # REQUIRES AT LEAST ONE EXISTING TAG. github-tag-action anchors its commit range to the most
 # recent tag; with none it falls back to a synthetic v0.0.0 that points at no real commit, so

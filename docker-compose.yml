@@ -154,11 +154,8 @@ services:
       retries: 5
 
   backend:
-    # NOTE (cutover): the build below produces the Rust backend, but this tag is still
-    # published by ci-backend-docker.yml from backend/Dockerfile (the Java tree). Until
-    # that workflow is repointed — MIGRATION.md Phase 4 step 10 — `docker compose pull`
-    # fetches a Java image while `docker compose build` produces a Rust one. Build
-    # locally, or repoint CI first.
+    # Both `docker compose pull` and `docker compose build` now produce the Rust backend:
+    # ci-backend-docker.yml publishes this tag from backend-rust/Dockerfile.
     image: ghcr.io/sagnikdas53/manga-tl:latest
     build:
       context: .

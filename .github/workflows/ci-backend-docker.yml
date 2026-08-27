@@ -16,7 +16,7 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "backend/**"
+      - "backend-rust/**"
       - "frontend/**"
       - ".github/workflows/ci-backend-docker.yml"
   workflow_call:
@@ -92,17 +92,17 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: backend/Dockerfile
+          file: backend-rust/Dockerfile
           push: true
           tags: ${{ steps.meta-ghcr.outputs.tags }}
           # Carries org.opencontainers.image.source, which is what links the GHCR package back
           # to this repository.
           labels: ${{ steps.meta-ghcr.outputs.labels }}
           # The image was amd64-only, so it could not be pulled on an arm64 host at all. This is
-          # affordable because backend/Dockerfile pins its node and maven stages to
-          # $BUILDPLATFORM: the JAR and the frontend bundle are architecture-independent and are
-          # built once natively. Only the small libwebp-imageio compile and the final JRE layer
-          # run per target arch.
+          # affordable because backend-rust/Dockerfile pins its frontend and cargo stages to
+          # $BUILDPLATFORM: the frontend bundle is architecture-independent, and the arm64 binary
+          # is cross-compiled through gcc-aarch64-linux-gnu rather than built under QEMU. Only
+          # the final debian-slim runtime layer is assembled per target arch.
           platforms: linux/amd64,linux/arm64
           # Every push otherwise minted two `unknown/unknown` attestation manifests that no
           # tag references and nothing reclaims. Drop this line to get SLSA provenance back.
