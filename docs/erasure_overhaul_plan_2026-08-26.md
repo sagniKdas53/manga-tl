@@ -258,11 +258,12 @@ nothing, so the metric flattered a mask that was not glyph-shaped at all. Measur
 | morphology v1 (kernel from region size) | 12.00 % | 11 | 36,853 px |
 | morphology v2 (kernel from measured stroke width) | 7.13 % | 12 | 17,260 px |
 | ours today | 15.69 % | 7 | 62,436 px |
-| **CTD seg head (measured 2026-08-26)** | **3.42 %** | **122** | **194 px** |
+| **CTD seg head (measured 2026-08-26)** | **3.20 %** | **122** | **194 px** |
 
 *(CTD row added after the fact — median over 21 corpus pages. See
 `docs/ctd_mask_validation_2026-08-26.md`. It confirms the conclusion below: the granularity comes
-from a learned per-pixel map, and CTD delivers it.)*
+from a learned per-pixel map, and CTD delivers it. Coverage corrected 2026-08-27 from 3.42 %, which
+was the 20-page median taken before sample184 was replaced by sample28.)*
 
 Rendered, v2 is a solid vertical slab over the text column. Precision against toriitranslate.com's footprint is
 **36.9 %**, not 85 %.

@@ -482,8 +482,43 @@ def carry_over_ground_truth(regions, previous, min_iou):
     return carried
 
 
+def resolve_sample_dir(examples_dir, sample_id):
+    """Locate a sample under either corpus layout.
+
+    Before the 2026-08-26 regroup samples were flat (samples/sampleN); they now sit under a
+    source-language directory (samples/<ja|ko|zh>/sampleN). Ids are unchanged everywhere else,
+    so only the path lookup needs to know. _parked holds superseded pages and is skipped.
+    """
+    flat = os.path.join(examples_dir, sample_id)
+    if os.path.isdir(flat):
+        return flat
+    for group in sorted(os.listdir(examples_dir)):
+        if group == "_parked":
+            continue
+        cand = os.path.join(examples_dir, group, sample_id)
+        if os.path.isdir(cand):
+            return cand
+    return flat
+
+
+def list_sample_ids(examples_dir):
+    """Every sample id under examples_dir, in either layout. A bare `sample*` listdir returned
+    nothing after the regroup, so this silently built an empty corpus instead of failing."""
+    ids = set()
+    for name in os.listdir(examples_dir):
+        path = os.path.join(examples_dir, name)
+        if not os.path.isdir(path):
+            continue
+        if re.fullmatch(r"sample\d+", name):
+            ids.add(name)
+        elif name != "_parked":
+            ids.update(n for n in os.listdir(path)
+                       if re.fullmatch(r"sample\d+", n) and os.path.isdir(os.path.join(path, n)))
+    return sorted(ids, key=lambda d: int(re.sub(r"\D", "", d)))
+
+
 def build_sample(sample_id, examples_dir, out_dir, engines_cfg, args):
-    sample_dir = os.path.join(examples_dir, sample_id)
+    sample_dir = resolve_sample_dir(examples_dir, sample_id)
     meta = load_sample_meta(sample_dir)
     if meta is None:
         return None, "no meta.json — run corpus/scripts/flatten_samples.py first"
@@ -673,11 +708,7 @@ def main():
             print("[WARN] No cloud vision models matched — falling back to PaddleOCR only. "
                   "Every region will be tier 'unresolved'.")
 
-    sample_dirs = sorted(
-        (d for d in os.listdir(args.examples_dir)
-         if re.fullmatch(r"sample\d+", d) and os.path.isdir(os.path.join(args.examples_dir, d))),
-        key=lambda d: int(re.sub(r"\D", "", d)),
-    )
+    sample_dirs = list_sample_ids(args.examples_dir)
     if args.sample:
         sample_dirs = [d for d in sample_dirs if d == args.sample]
         if not sample_dirs:

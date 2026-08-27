@@ -192,8 +192,19 @@ def sample_projects(samples_root):
     unpacks, and what render_quality_metrics.py and cover_fill_probe.py already read.
     """
     out = []
-    for path in samples_root.glob("*/project/project.json"):
-        out.append((path.parent.parent.name, path))
+    # Two layouts: flat (samples/sampleN, pre 2026-08-26) and grouped by source language
+    # (samples/<ja|ko|zh>/sampleN, current). The flat glob alone returned nothing after the
+    # regroup. _parked holds superseded pages and is excluded.
+    seen = set()
+    for pattern in ("*/project/project.json", "*/*/project/project.json"):
+        for path in samples_root.glob(pattern):
+            if "_parked" in path.parts:
+                continue
+            name = path.parent.parent.name
+            if name in seen:
+                continue
+            seen.add(name)
+            out.append((name, path))
     for path in samples_root.glob("NSFW/*/project/project.json"):
         out.append(("NSFW/" + path.parent.parent.name, path))
 

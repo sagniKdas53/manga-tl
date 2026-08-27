@@ -82,7 +82,13 @@ def _suite(root: Path) -> int:
     """
     rows: list[tuple[str, str, float, float]] = []
 
-    for sample in sorted(root.glob("sample*"), key=lambda p: (len(p.name), p.name)):
+    # Since the 2026-08-26 regroup, live samples sit under a source-language directory
+    # (samples/<ja|ko|zh>/sampleN). Match both layouts: a bare "sample*" glob silently
+    # returned nothing after the move, so this scored an empty set and reported success.
+    # _parked holds superseded pages and is excluded.
+    candidates = [p for p in list(root.glob("sample*")) + list(root.glob("*/sample*"))
+                  if p.is_dir() and "_parked" not in p.parts]
+    for sample in sorted(candidates, key=lambda p: (len(p.name), p.name)):
         meta_path = sample / "meta.json"
         if not meta_path.is_file():
             continue
