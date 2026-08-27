@@ -617,12 +617,22 @@ zip (archives), hex, base64.
             deletes it)" block, `!backend/` + `backend/target`) and from `.gitignore`
             (`backend/target/`, `backend/src/main/c/*.so`, `backend/.settings/`,
             `backend/.classpath`, `backend/.project`).
-      - [ ] `scripts/test-env.sh run` — the DB/MinIO integration suites. This is the real
-            gate on the 50MB body-limit fix, which touches upload, chapter-import and
-            import-project; the unit tests that can run without a daemon do not reach
-            those paths.
-      - [ ] Re-run the real-worker E2E with a page LARGER THAN 2 MB. The original run used
-            a small corpus sample, which is exactly why the body-limit bug survived it.
+      - [x] `scripts/test-env.sh run` — RUN AND GREEN on 2026-08-28. A Docker daemon WAS
+            available after all (server 29.7.2); the "no daemon" caveat in the 2026-08-27
+            review was an environment limitation of that session, not of this machine.
+            Full gate: fmt + clippy -D warnings + 129 tests (81 unit + 48 across all 17
+            integration suites), 0 failures. The suites that gate the body-limit fix all
+            ran: pages_endpoints, import_export_endpoints, series_endpoints.
+      - [~] The >2 MB E2E. The real-worker pipeline run is STILL PENDING — it needs the
+            ML worker up. But the fixture blind spot that let the bug through is now
+            closed at the source: scripts/e2e-smoke.js uploaded a 1x1 PNG for BOTH the
+            single-image and the ZIP path, so no E2E run could ever have exercised the
+            limit. It now generates a real 1000x900 truecolour PNG of seeded NOISE —
+            2.58 MB encoded, comfortably past the old 2 MB wall. Noise is deliberate:
+            anything flat deflates back down to a few hundred bytes and re-opens the hole.
+            Verified: 2701788 bytes, decodes in PIL as PNG/RGB/1000x900, deterministic
+            across runs, and distinct per colour so the backend's per-chapter hash dedup
+            still sees three separate pages.
       - [ ] Then: merge `rust-backend` → main (PR #91), push both remotes, tag.
 
       DECIDED: `docker-compose.rust-test.yml` goes with `backend/`. Its whole purpose was

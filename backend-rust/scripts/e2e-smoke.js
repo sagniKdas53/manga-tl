@@ -7,15 +7,90 @@ const fs = require("fs");
 
 const BASE = "http://localhost:8083/tlhub";
 const SHOTS = "/tmp/opencode/e2e-shots";
-const PNG_1PX = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);
+const zlib = require("zlib");
+
+// Pages are deliberately LARGER THAN 2 MB.
+//
+// This script used to upload a 1x1 PNG for both the single-image and the ZIP path. That
+// is exactly why the 2 MB DefaultBodyLimit regression (deviation 12) survived a "passing"
+// E2E: axum rejected every real manga scan with a confusing 400 "multipart error", and
+// nothing in the suite ever sent a body big enough to notice. Every upload fixture in the
+// Rust test suite was a 1x1 or 64x64 PNG too.
+//
+// So the fixture is now a real truecolor PNG of realistic page dimensions filled with
+// seeded noise. Noise is the point: it does not compress, so the encoded file stays over
+// the old limit instead of deflating back down to a few hundred bytes.
+const PAGE_W = 1000;
+const PAGE_H = 900; // 1000*3+1 bytes/row * 900 ≈ 2.7 MB encoded
+
+const CRC_TABLE = (() => {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+
+function crc32(buf) {
+  let crc = -1;
+  for (let i = 0; i < buf.length; i++) {
+    crc = CRC_TABLE[(crc ^ buf[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const typed = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(typed), 0);
+  return Buffer.concat([len, typed, crc]);
+}
 
 function pngWithColor(r, g, b) {
-  // 1x1 PNG with an arbitrary RGB pixel: patch the IHDR-less trick is overkill —
-  // reuse the same bytes; dedup by hash only matters within one chapter upload.
-  return Buffer.from(PNG_1PX);
+  // Seeded from the requested tint, so each call yields DIFFERENT bytes (the backend
+  // dedups identical uploads by hash within a chapter) but the same bytes on every run.
+  let seed = (r * 73856093) ^ (g * 19349663) ^ (b * 83492791) ^ 0x9e3779b9;
+  const rand = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return (seed >>> 0) & 0xff;
+  };
+
+  const stride = PAGE_W * 3 + 1; // +1 filter byte per scanline
+  const raw = Buffer.alloc(stride * PAGE_H);
+  for (let y = 0; y < PAGE_H; y++) {
+    const row = y * stride;
+    raw[row] = 0; // filter type 0 (None)
+    for (let x = 0; x < PAGE_W; x++) {
+      const p = row + 1 + x * 3;
+      // Tint toward the requested colour but keep the low bits noisy, so the image is
+      // visually identifiable in a screenshot AND incompressible.
+      raw[p] = (r + rand()) & 0xff;
+      raw[p + 1] = (g + rand()) & 0xff;
+      raw[p + 2] = (b + rand()) & 0xff;
+    }
+  }
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(PAGE_W, 0);
+  ihdr.writeUInt32BE(PAGE_H, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // colour type 2 = truecolour RGB
+  ihdr[10] = 0; // deflate
+  ihdr[11] = 0; // adaptive filtering
+  ihdr[12] = 0; // no interlace
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", zlib.deflateSync(raw, { level: 6 })),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
 }
 
 function zipOf(entries) {
