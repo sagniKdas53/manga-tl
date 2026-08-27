@@ -12,7 +12,7 @@ the exact prompt, system message, and `TRANSLATION_JSON_SCHEMA` that
 `worker/services/translation.py`'s `translate_batch_llm()` uses (reused from
 `scripts/test_translation.py`).
 **Reference/baseline:** `examples/sample28/en-manga-tl-ai.jpg`, watermarked
-`mangatranslator.ai / qwen3-235b` — a paid competitor pipeline, same convention as
+as mangatranslator.ai running qwen3-235b — a paid competitor pipeline, same convention as
 [`render_quality_gap_2026-08-05.md`](../render_quality_gap_2026-08-05.md).
 **Candidates:** all 14 chat-capable models on OpenRouter with `pricing.prompt == 0` as of
 2026-08-06 (queried live from `GET /api/v1/models`, not scraped from the pricing page —

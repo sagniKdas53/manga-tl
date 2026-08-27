@@ -83,7 +83,7 @@ Closed in commit `94bd792` (`fix/gallery-in-place-refresh-and-page-sort`).
 
 ### The 2026-08-13 sitting — Render quality gap investigations (R1–R4) & `reject_sfx` wiring
 
-Set from `corpus/sample10` against `corpus/samples/sample10/ref-mangatranslator.ai.jpeg`. Full details in [render_quality_gap_2026-08-05.md](../render_quality_gap_2026-08-05.md).
+Set from `corpus/sample10` against sample10's mangatranslator.ai rendering. Full details in [render_quality_gap_2026-08-05.md](../render_quality_gap_2026-08-05.md).
 
 - **R1 — Bubble containment guard:** `process_ocr` accepted YOLO mask geometry unconditionally, leading to contours smaller than text (12 of 239 contours across 40-page corpus were smaller than their text). Added containment guard in `bubble_covers_text`.
 - **R2 — Synthesized cover fill for flat/unenclosed regions:** `detect_background_color`/`_poly` returning `None` previously meant "draw nothing" (English drawn over unerased Japanese). Implemented `cover_fill_for_region` to sample a ring outside the text box (`COVER_FILL_RING_FRACTION`) and synthesize a flat balloon shape. Added `readable_text_color` WCAG 3.0 contrast override.

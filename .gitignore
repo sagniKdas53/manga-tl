@@ -37,3 +37,4 @@ exported_images/*
 docs/*.pdf
 corpus/.claude
 scripts/corpus
+docs/reference/mask-eval-candidates-2026-08-26.png

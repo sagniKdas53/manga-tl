@@ -1,0 +1,25 @@
+# The second datasource, and the reason there is one at all is spelled out in postgres.yml next
+# door: Postgres holds the pipeline facts (what ran, how long, what it cost) and this holds the
+# resource curves (what the machine was doing while it ran). Neither can answer the other's
+# question, and config/grafana/dashboards/performance.json puts both on one time axis.
+#
+# No credentials: Prometheus has no auth of its own and is only reachable on manga-net and on the
+# host's loopback. It is not routed through Traefik — see the service in docker-compose.yml.
+apiVersion: 1
+
+datasources:
+  - name: manga-metrics
+    uid: manga-library-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    jsonData:
+      # Must match the scrape_interval in config/prometheus/prometheus.yml. Grafana uses it as the
+      # floor for $__rate_interval, which is what stops a rate() over a window shorter than two
+      # scrapes from rendering as a gap-toothed line or nothing at all.
+      timeInterval: 15s
+      httpMethod: POST
+    # Postgres stays the default: it is the one with the data that predates this container, and an
+    # untyped new panel is more often a pipeline question than a CPU one.
+    isDefault: false
+    editable: false

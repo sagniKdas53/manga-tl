@@ -1,0 +1,73 @@
+# Prometheus for the performance dashboard, and nothing else.
+#
+# The datasource note next door (config/grafana/provisioning/datasources/postgres.yml) says this
+# stack deliberately has no metrics pipeline, because every number worth charting is a pipeline
+# fact the backend already writes to Postgres. That still holds — and this does not contradict it.
+# Resource usage is the one thing that argument does not cover: how much CPU the worker is burning
+# while an OCR job runs is not an event anyone can write to a table, and on a 4-core box where the
+# worker is capped at 2.0 CPUs precisely so the desktop keeps two (see the `deploy:` block on the
+# worker service), it is the number that decides whether a slow run is the pipeline's fault or the
+# machine's. Postgres keeps the pipeline facts; this keeps the resource curves; the dashboard puts
+# them on one time axis.
+#
+# Deliberately not exposed through Traefik. Grafana reaches it at http://prometheus:9090 over
+# manga-net and the host gets 127.0.0.1:9090 for debugging — same treatment as db/redis/minio
+# (AUDIT-D5). The expression browser is a query surface with no auth in front of it.
+
+global:
+  # cAdvisor housekeeps every 15s (--housekeeping_interval on the service), so scraping faster than
+  # that just re-reads the same sample. Matching the two is what keeps this cheap.
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  # Nothing here alerts or records, so this only governs how often Prometheus wakes to do nothing.
+  evaluation_interval: 1m
+  external_labels:
+    stack: manga-library
+
+scrape_configs:
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    # cAdvisor is generous by default: a dozen containers on this host turn into several thousand
+    # series, most of them things this dashboard never plots (per-interface TCP state counters,
+    # filesystem inode counts, one series per cgroup in the systemd tree). Two filters below.
+    metric_relabel_configs:
+      # 1. Keep only the metric families the dashboard actually reads. A keep-list rather than a
+      #    drop-list, because cAdvisor adds families between versions and the default should be
+      #    "not stored" — this is a laptop, and the retention cap below is 2 GB.
+      - source_labels: [__name__]
+        # One line on purpose: a folded YAML block (>-) joins lines with a space, which would
+        # leave a leading space on every alternative after the first and match nothing.
+        regex: "container_cpu_usage_seconds_total|container_cpu_cfs_throttled_seconds_total|container_cpu_cfs_throttled_periods_total|container_cpu_cfs_periods_total|container_memory_working_set_bytes|container_spec_memory_limit_bytes|container_spec_cpu_quota|container_spec_cpu_period|container_fs_reads_bytes_total|container_fs_writes_bytes_total|container_network_receive_bytes_total|container_network_transmit_bytes_total|container_oom_events_total|container_last_seen|machine_cpu_cores|machine_memory_bytes"
+        action: keep
+      # 2. Of what survives, drop the cgroups that are not a container and not the machine.
+      #
+      #    Read it as: name is empty AND id is something below the root. The two source labels are
+      #    joined with "@", so a named container gives "manga-worker@/system.slice/docker-a1b2.scope"
+      #    (leading text, no match, kept), the root cgroup gives "@/" (nothing after the slash, no
+      #    match, kept) and a systemd unit gives "@/system.slice/ssh.service" (match, dropped).
+      #    machine_* carry neither label, giving "@", and are kept.
+      #
+      #    NOT written as a drop-list of /system.slice etc. That was the first attempt and it
+      #    silently deleted everything worth collecting: this host runs cgroup v2 with the systemd
+      #    driver, so Docker's own containers live at /system.slice/docker-<hash>.scope, not the
+      #    /docker/<hash> that most cAdvisor examples assume. Matching on the path dropped all 14
+      #    containers and left only the machine totals.
+      #
+      #    Keeping the root cgroup is deliberate: it is the whole machine, including the browser,
+      #    and the browser starving is what motivated the worker's CPU cap in the first place.
+      #    Summing the containers would miss exactly the process that caused the problem.
+      - source_labels: [name, id]
+        separator: "@"
+        regex: "@/.+"
+        action: drop
+
+  # Self-scrape. One target, a handful of series, and it is what answers "is the dashboard empty
+  # because nothing happened, or because the scrape has been failing for an hour?"
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "up|scrape_duration_seconds|scrape_samples_scraped|prometheus_tsdb_head_series"
+        action: keep

@@ -374,9 +374,14 @@ def main():
     examples_dir = os.path.abspath(args.examples_dir)
     out_dir = os.path.abspath(args.out_dir)
 
+    # Since the 2026-08-26 regroup, live samples sit under a source-language directory
+    # (samples/<ja|ko|zh>/sampleN). Match both layouts -- a bare "sample*" glob silently returned
+    # nothing after the move, so this reported zero eligible samples instead of failing.
+    # _parked holds superseded pages and is excluded.
     sample_dirs = sorted(
-        d for d in glob.glob(os.path.join(examples_dir, "sample*"))
-        if os.path.isdir(d)
+        d for d in (glob.glob(os.path.join(examples_dir, "sample*"))
+                    + glob.glob(os.path.join(examples_dir, "*", "sample*")))
+        if os.path.isdir(d) and "_parked" not in d.split(os.sep)
     )
 
     eligible = []

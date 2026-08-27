@@ -188,6 +188,21 @@ Open:
 - [ ] **Decide whether Loki is wanted after living with the cleaned-up logs.** Deliberately deferred:
   shipping 65k unstructured lines/hour into it would have relocated the noise rather than removed
   it. Revisit once there is a concrete search Dozzle cannot answer.
+- [x] **Resource metrics, and the Stack Performance dashboard** (2026-08-23). The line above about
+  no Prometheus and no exporters held for pipeline facts and still does — it just never covered
+  what the machine was doing. cAdvisor + Prometheus now feed a second dashboard (`/tlstats`,
+  `config/grafana/dashboards/performance.json`) with per-container CPU, memory, disk and network,
+  the root cgroup for whole-machine load, and the worker's CFS throttling against its 2.0-CPU cap.
+  Pipeline panels on it still come from Postgres, and one panel draws on both at once. This is
+  `scripts/capture-run.sh`'s `sample_resources` loop made standing: the same numbers that set the
+  worker's `deploy:` limits, without having to remember to start a capture first.
+  Two things worth knowing about the setup, both of which cost an hour:
+  - Docker's cgroups on this host are at `/system.slice/docker-<hash>.scope`, not the `/docker/<hash>`
+    every cAdvisor example assumes (cgroup v2, systemd driver). A relabel rule written against the
+    documented path silently dropped every container and left only machine totals.
+  - `container_cpu_usage_seconds_total` carries a `cpu="total"` label that `container_spec_cpu_quota`
+    does not, so dividing them to get "percent of cap" matches nothing and renders as No data.
+    `ignoring(cpu)` is what makes it work.
 - [ ] **Backfill or accept null `started_at` on pre-2026-08-15 rows.** The wait-vs-work panels are
   empty for them; there is no way to reconstruct a dispatch time after the fact.
 

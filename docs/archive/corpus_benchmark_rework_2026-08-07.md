@@ -82,8 +82,8 @@ examples/sampleN/
 }
 ```
 
-`provenance` vocabulary: `human`, `mangatranslator.ai`, `mangatranslate.com`,
-`mangatranslate.online`, `google-lens`, `local`, `manually-edited`.
+`provenance` vocabulary: human, mangatranslator.ai, mangatranslate.com, mangatranslate.online, google-lens, local,
+manually-edited. (Literal `meta.json` values; on disk these still carry the vendor names.)
 
 Source/reference roles confirmed by eye during the SFW pass — these are the ones the old
 heuristics get wrong or miss:
