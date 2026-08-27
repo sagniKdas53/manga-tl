@@ -52,10 +52,21 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 > pipeline now builds `backend-rust/Dockerfile` and triggers on `backend-rust/**`, and
 > `main` is merged in (no conflict — the predicted docker-compose.yml clash did not
 > happen). README, release.yml and diff_routes.py updated; the route gate now enforces
-> equality in both directions instead of a one-way subset. NOT done: `backend/`,
-> `ci-maven.yml` and `docker-compose.rust-test.yml` are still present — the delete was
-> refused by a sandbox guard, not skipped by choice. The two Docker-dependent gates
-> (integration suites, >2 MB real-worker E2E) are still unrun. See step 10.
+> equality in both directions instead of a one-way subset.
+>
+> THE ARM64 LEG WAS BROKEN AND IS NOW FIXED. Built for the first time, it failed with
+> `error[E0463]: can't find crate for std` — `rustup target add` ran before
+> rust-toolchain.toml existed, so aarch64's std went to the image's `1.98.0` toolchain
+> while the build ran under `stable`. amd64 could never catch it (it adds no target).
+> Fixed, rebuilt, and the emitted binaries confirmed to be aarch64 ELF. Had this merged
+> on the "first CI run is the real test" assumption, that run would have failed and
+> `latest` would have stayed on the old Java image.
+>
+> The integration gate has now been RUN: 129 tests green (81 unit + 48 integration across
+> all 17 suites). e2e-smoke.js now uploads a 2.58 MB page instead of a 1x1 PNG.
+> NOT done: `backend/`, `ci-maven.yml` and `docker-compose.rust-test.yml` are still
+> present — the delete was refused by a sandbox guard, not skipped by choice. The
+> real-worker >2 MB pipeline run and the arm64 RUNTIME stage remain unverified. See step 10.
 
 ## Mission (Phase 4)
 
@@ -580,10 +591,44 @@ zip (archives), hex, base64.
             The Java image can no longer reach `ghcr.io/sagnikdas53/manga-tl:latest`, and
             `docker compose pull` and `docker compose build` now agree. The NOTE on the
             backend service in docker-compose.yml was dropped accordingly.
-      - [ ] Multi-arch: `platforms: linux/amd64,linux/arm64` stays, but the arm64 leg of
-            backend-rust/Dockerfile has still NEVER been built — only amd64 was verified
-            live (step 6). The first CI run after this merge is the real test, and if it
-            fails, it fails post-merge.
+      - [x] Multi-arch: the arm64 leg was BROKEN, and is now fixed and verified
+            (2026-08-28). It had never been built — only amd64 was verified live in step 6
+            — and building it for the first time failed outright:
+
+                error[E0463]: can't find crate for `std`
+
+            ROOT CAUSE. `backend-rust/rust-toolchain.toml` asks for `channel = "stable"`.
+            The rust:1-bookworm image's default toolchain is named
+            `1.98.0-x86_64-unknown-linux-gnu`, and rustup resolves `stable` to a SEPARATE
+            install, `stable-x86_64-unknown-linux-gnu` — same rustc 1.98.0, different
+            directory. The Dockerfile ran `rustup target add aarch64-unknown-linux-gnu`
+            BEFORE any part of backend-rust/ was copied in, so aarch64's std landed in
+            `1.98.0`, while `cargo build --target aarch64-unknown-linux-gnu` later ran
+            under `stable`, which has no aarch64 std.
+
+            WHY AMD64 NEVER CAUGHT IT: the amd64 path adds no target at all, so it does not
+            care which of the two toolchains is active. Both have x86_64 std. The arm64 leg
+            was in `platforms:` and looked fine precisely because nothing ever ran it.
+
+            FIX: `COPY backend-rust/rust-toolchain.toml ./` now happens before the
+            `rustup target add`, so the target is installed into the toolchain that
+            actually performs the build.
+
+            VERIFIED, not just "exit 0": the builder stage was built for linux/arm64 and
+            both artefacts extracted and inspected —
+              manga-backend: ELF 64-bit LSB pie executable, ARM aarch64, dynamically linked
+                             against /lib/ld-linux-aarch64.so.1 (matches the glibc
+                             debian-slim runtime, which is why the Dockerfile is not musl)
+              healthcheck:   ELF 64-bit LSB executable, ARM aarch64, statically linked,
+                             stripped
+            The amd64 leg was rebuilt afterwards to confirm the shared builder stage did
+            not regress.
+
+            STILL UNVERIFIED: the final runtime stage. Its `groupadd`/`useradd` execute
+            arm64 instructions, so it needs QEMU binfmt, which is not registered on this
+            host and which nothing here installed. It is 4 COPYs plus two useradd calls on
+            debian:bookworm-slim — low risk, but say "unverified", not "fine". CI's
+            setup-qemu-action covers it there.
       - [ ] Retire `ci-maven.yml` — blocked, see "Left for the user".
 
       **Done — branch is level with main.**

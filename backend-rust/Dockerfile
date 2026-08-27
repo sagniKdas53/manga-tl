@@ -49,6 +49,20 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 ARG TARGETARCH
+WORKDIR /app/backend-rust
+# rust-toolchain.toml selects the toolchain for every rustup/cargo call under this directory,
+# and it MUST land before `rustup target add`.
+#
+# The image's default toolchain is named `1.98.0-x86_64-unknown-linux-gnu`; the file asks for
+# `channel = "stable"`, which rustup resolves to a SEPARATE install named
+# `stable-x86_64-unknown-linux-gnu` — same rustc, different directory. Add the target with no
+# toolchain file present and aarch64's std goes into `1.98.0`, while the build later runs
+# under `stable` and dies with: error[E0463]: can't find crate for `std`.
+#
+# amd64 could never catch this: it adds no target at all, so it does not care which of the two
+# toolchains is active. That is exactly how this shipped unnoticed — arm64 was in the
+# `platforms:` list but had never actually been built.
+COPY backend-rust/rust-toolchain.toml ./
 # Cross toolchain for arm64: rustc emits the object files, the GNU linker links them.
 # amd64 builds run fully native and need nothing extra.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
@@ -57,7 +71,6 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
         && apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
         && rm -rf /var/lib/apt/lists/*; \
     fi
-WORKDIR /app/backend-rust
 COPY --from=planner /app/backend-rust/recipe.json recipe.json
 # Cook dependencies only — this layer stays cached until Cargo.toml/lock change.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
