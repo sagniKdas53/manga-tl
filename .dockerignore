@@ -1,17 +1,13 @@
 # Allowlist-style: exclude everything, then re-include ONLY what
-# backend/Dockerfile and backend-rust/Dockerfile actually COPY.
+# backend-rust/Dockerfile actually COPYs.
 # The build context is the repo root; without this, a single `cargo test`
 # run in backend-rust/ drags its 38 GB target/ into every build.
 *
 
-# --- Frontend source (stage 1 of both Dockerfiles) ---
+# --- Frontend source (stage 1 of backend-rust/Dockerfile) ---
 !frontend/
 frontend/node_modules
 frontend/dist
-
-# --- Java backend (until cutover deletes it) ---
-!backend/
-backend/target
 
 # --- Rust backend ---
 !backend-rust/

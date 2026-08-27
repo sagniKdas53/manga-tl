@@ -657,11 +657,18 @@ zip (archives), hex, base64.
       - [ ] DELETE `backend/` (152 tracked files, 1.7 MB), `.github/workflows/ci-maven.yml`
             and `docker-compose.rust-test.yml`. Attempted 2026-08-28: `git rm` was refused
             by the sandbox's deletion guard, and reaching for a different delete command
-            would have defeated the point of the guard. When these are removed, also drop
-            the now-dead Java lines from `.dockerignore` (the "Java backend (until cutover
-            deletes it)" block, `!backend/` + `backend/target`) and from `.gitignore`
-            (`backend/target/`, `backend/src/main/c/*.so`, `backend/.settings/`,
-            `backend/.classpath`, `backend/.project`).
+            would have defeated the point of the guard. Everything AROUND the deletion is
+            already done, so this is now exactly two commands:
+
+                git rm -r backend/
+                git rm .github/workflows/ci-maven.yml docker-compose.rust-test.yml
+
+            The dead Java rules are already out of `.dockerignore` (the `!backend/` block)
+            and `.gitignore` (`backend/target/`, `backend/src/main/c/*.so`,
+            `backend/.settings/`, `.classpath`, `.project`). Removing them early was safe:
+            nothing builds backend/Dockerfile any more, and no backend/target existed on
+            disk to become newly-visible. The amd64 image was rebuilt afterwards against
+            the trimmed build context to confirm it still builds.
       - [x] `scripts/test-env.sh run` — RUN AND GREEN on 2026-08-28. A Docker daemon WAS
             available after all (server 29.7.2); the "no daemon" caveat in the 2026-08-27
             review was an environment limitation of that session, not of this machine.

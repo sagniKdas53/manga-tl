@@ -1,9 +1,6 @@
 inputs/
 .claude/
 .agents/
-backend/target/
-# Compiled native artifacts (built in the Dockerfile webp-native-build stage)
-backend/src/main/c/*.so
 data/
 logs/
 *__pycache__
@@ -19,9 +16,6 @@ frontend/coverage
 # every corpus is derived from, so it now lives beside them. Gitignored there too, and it
 # must stay that way: third-party copyrighted scans, some of it adult content.
 .coverage
-backend/.settings/
-backend/.classpath
-backend/.project
 pytest*
 exported_minio/*
 exported_images/*
