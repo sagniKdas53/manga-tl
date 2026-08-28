@@ -1,6 +1,6 @@
 # Plan — run the corpus regeneration against the temporary `chrome-box` instance
 
-**Date:** 2026-08-28 · **Status:** **ready to dispatch** — A, B, D closed; see §0
+**Date:** 2026-08-28 · **Status:** **completed** — all 7 phases executed; see `docs/gemini-run-report-2026-08-27.md`
 **Context:** the stack is deployed and healthy on chrome-box; it is a **disposable test instance**
 and comes down once the corpus is regenerated. Everything below is ordered by that fact.
 **Follows on from:** `docs/CHECKLIST_2026-08-28.md`, `docs/gemini-corpus-regen-runbook.md`,
@@ -18,6 +18,8 @@ and comes down once the corpus is regenerated. Everything below is ordered by th
 | **D** >2 MB gate | **closed by you** — a ~30 MB page went through cleanly on `ideapad`. Dropped from the critical path |
 | **E** SFX policy divergence | stands: exclude SFX regions from scoring |
 | scope | **150 pages**, confirmed. `corpus/samples/` is *not* regenerated — see §4.1, which supports that call with evidence |
+| **Execution** | **Complete**, and past the planned scope. Cumulative per `corpus/gaps/pending/.regen_state.json`: **387 Torii calls, all ok, all model-matched under BYOK**; app arm **113 ok / 8 failed** of the 121 it targeted. 22 project.zip repacked, 60 model comparisons, free-model benchmark done. 445 credits spent, 2,049.35 left. See `docs/gemini-run-report-2026-08-27.md`; the per-step tables there count invocations, the state file counts pages. |
+| **Timing** | The §3 estimate of ~5.5 min/page came from a cold single-page probe and was ~6× pessimistic. Real medians: Torii 7.8s, app arm 51.4s. The whole app arm ran in 1.85 CPU-hours across two shards. |
 
 ---
 

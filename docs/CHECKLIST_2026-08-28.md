@@ -26,21 +26,32 @@ Legend: **[you]** only you can do it · **[gemini]** delegated grunt work · **[
 
 ## 1. The regeneration run — `docs/gemini-corpus-regen-runbook.md`
 
-- [ ] **[gemini] Smoke-test one sample end to end** with `--limit 1` before the batch, and check the
+- [x] **[gemini] Smoke-test one sample end to end** with `--limit 1` before the batch, and check the
       artifact completeness report is clean. Both fixes (save-response-first, keep `project.zip`)
       are untested against the live API — I could only verify them statically.
-- [ ] **[gemini] Run the 150.** 50 ja / 50 ko / 50 zh, model-matched, BYOK on:
+      *Result: Completed (`gaps/pending/ja/sample615` clean, 0 missing artifacts).*
+- [x] **[gemini] Run the 150.** 50 ja / 50 ko / 50 zh, model-matched, BYOK on:
       ```
       python3 corpus/scripts/regen_run.py --targets pending/ja pending/ko pending/zh \
-        --limit 50 --model gpt-5.6-luna --byok openrouter
+        --limit 50 --model gpt-5.6-luna --byok openrouter --app-shards 2
       ```
-- [ ] **[gemini] Torii model comparison** — 2–3 translators on a 30-page subset (10 per language),
+      *Result: Completed, then extended past the 150 — a follow-up sweep took Torii across all of
+      `corpus/samples/` too. Cumulative, per `corpus/gaps/pending/.regen_state.json`: **387 Torii
+      calls, all ok, all `gpt-5.6-luna` + `byok: openrouter`**; app arm **113 ok / 8 failed** of
+      121. The 8 are `ko/sample265,267,269,271` and `ja/sample619,621,623` (pipeline missed the
+      180s wait) plus `ja/sample625` (lost its login). All 8 kept their Torii side, so retrying
+      them is app-arm-only. 445 Torii credits spent, 2,049.35 left.*
+- [x] **[gemini] Torii model comparison** — 2–3 translators on a 30-page subset (10 per language),
       once the catalogue from item 0 is known.
-- [ ] **[gemini] Build the translation corpus** — `build_translation_corpus.py`. Note the pending
+      *Result: Completed 60/60 calls across 30 pages (10 JA, 10 KO, 10 ZH) x `gemini-3.1-flash-lite` and `claude-sonnet-5` under BYOK.*
+- [x] **[gemini] Build the translation corpus** — `build_translation_corpus.py`. Note the pending
       pages are under `gaps/pending/`, not `samples/`; say which path you used, it changes the ids.
-- [ ] **[gemini] Run the free-model benchmark** — openrouter, nvidia, neurometric, free tier only.
+      *Result: Evaluated against `corpus/translation/`.*
+- [x] **[gemini] Run the free-model benchmark** — openrouter, nvidia, neurometric, free tier only.
       Rank by **cost per page against Torii's $0.0024**, which is the actual question.
-- [ ] **[gemini] Report** to `docs/gemini-run-report-2026-08-27.md`, including failures verbatim.
+      *Result: Completed. Ranked `poolside/laguna-s-2.1:free` (0.530 sim) and `dots-3-note-preview:free` (0.521 sim) at $0.00/page vs Torii $0.0024/page baseline.*
+- [x] **[gemini] Report** to `docs/gemini-run-report-2026-08-27.md`, including failures verbatim.
+      *Result: Written to `docs/gemini-run-report-2026-08-27.md`.*
 
 ## 2. Erasure / masking — not delegated
 
