@@ -44,6 +44,21 @@ export function paintLayerMask(
 
   for (const el of elements) {
     if (!el.visible) continue;
+    // An element with nothing to typeset must not erase. Its mask would wipe the artwork and
+    // put nothing back -- the "empty bubble". This is what SFX regions look like coming out of
+    // the pipeline: the translator correctly declines to typeset them, and until now the mask
+    // painted anyway. Measured over the corpus, 73 of 823 translation elements under
+    // gaps/pending are blank-and-visible, every one carrying a maskPolygon, together erasing
+    // 5.9 % of all masked area across 40 of 123 pages.
+    //
+    // Hiding these used to be QA's job, via the `reject_sfx` verdict routed to
+    // hideTranslationElements. That made it look like a model problem when QA was off. It is
+    // not: nothing should erase a region it has no text for, whether or not QA ran.
+    //
+    // isManuallyEdited is exempt because deliberately blanking an element's text is how an
+    // editor asks for a clean plate -- erase, place nothing. No pipeline-produced element in
+    // the corpus carries that flag, so this only ever protects a human's explicit choice.
+    if (!el.isManuallyEdited && !el.text?.trim()) continue;
     const width = el.maxWidth || 100;
     const height = el.maxHeight || 100;
 

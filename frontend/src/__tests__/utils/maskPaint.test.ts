@@ -66,6 +66,7 @@ function recordingCtx() {
 function element(over: Partial<LayerElement> = {}): LayerElement {
   return {
     id: "e1",
+    text: "hello",
     layerId: "l1",
     autoSize: false,
     wordWrap: true,
@@ -142,6 +143,29 @@ describe("paintLayerMask", () => {
     ]);
     expect(calls.map((c) => c.kind)).toEqual(["fillRect", "fill"]);
     expect(calls.every((c) => c.op === "destination-over")).toBe(true);
+  });
+
+  // An element with no text must not erase: the mask would wipe the artwork and put nothing
+  // back. That is the "empty bubble", and it is what SFX regions produce -- correctly left
+  // untranslated, but masked anyway until this rule.
+  it.each([
+    ["null", null],
+    ["empty", ""],
+    ["whitespace", "   \n "],
+  ])("does not erase an element whose text is %s", (_label, text) => {
+    const { calls } = run([
+      element({ id: "a", text, maskPolygon: square(0) }),
+      element({ id: "b", text: "kept", maskPolygon: square(5) }),
+    ]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("still erases a blank element an editor blanked on purpose", () => {
+    // Deliberately clearing the text is how a clean plate is requested -- erase, place nothing.
+    const { calls } = run([
+      element({ text: "", isManuallyEdited: true, maskPolygon: square(0) }),
+    ]);
+    expect(calls).toHaveLength(1);
   });
 
   it("defaults a missing backgroundColor to white", () => {
