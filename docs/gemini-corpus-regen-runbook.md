@@ -227,6 +227,75 @@ If a translator is not available on the subscribed tier, say so rather than subs
 
 ---
 
+## 3b. Model matching — the benchmark was invalid without this
+
+**The two arms were on different models.** `fetch_torii.py` defaulted to `gemini-3.1-flash-lite`
+while `export_pending.cjs` defaulted to `openai/gpt-5.6-luna`. Any quality difference measured that
+way is **the model, not the pipeline**, which is the one thing this benchmark must not confound.
+
+There is now a single flag that sets both, and a mismatch is a hard error:
+
+```bash
+python3 corpus/scripts/regen_run.py --targets pending/ja pending/ko pending/zh \
+  --limit 50 --model gpt-5.6-luna
+# model: gpt-5.6-luna  ->  torii translator=gpt-5.6-luna  app=openrouter:openai/gpt-5.6-luna
+```
+
+`MODEL_MAP` in `regen_run.py` holds the pairings. It deliberately contains **only entries with a
+source** — `gemini-3.1-flash-lite` is Torii's documented default, `gpt-5.6-luna` is the pairing this
+repo already encoded. **Torii's full translator catalogue is not in the API PDF** (it is a dropdown
+on their API page), so before benchmarking a third model, read the exact translator string off that
+dropdown and add it to the table. Do not guess: an unrecognised translator string risks silently
+falling back to their default, which re-creates the mismatch.
+
+`--torii-translator` / `--app-model` override individual sides and will refuse to run unless you
+also pass `--allow-model-mismatch` — which is only meaningful when you are deliberately measuring
+the model rather than the pipeline.
+
+## 3c. BYOK — yes, Torii supports it, and it is worth using
+
+Confirmed in `corpus/docs/tori/Image Translation and OCR API _ Torii Image Translator.pdf`. Torii
+accepts a Bring-Your-Own-Key header: `x-byok-openrouter`, `x-byok-openai`, `x-byok-google`,
+`x-byok-anthropic`, `x-byok-deepseek`, `x-byok-xai`, `x-byok-local` (with `x-byok-local-url` for a
+self-hosted OpenAI-compatible endpoint).
+
+```bash
+python3 corpus/scripts/regen_run.py --targets pending/ko --limit 50 \
+  --model gpt-5.6-luna --byok openrouter
+```
+
+Three things it buys, and they compound:
+
+1. **Their prompts become visible.** With the call billed to our OpenRouter account, OpenRouter's
+   own request logging records what Torii actually sends — the system prompt, the batching, the
+   context format. That is the highest-value reverse-engineering artifact available here and it
+   costs nothing extra to collect. **Turn on request logging in the OpenRouter dashboard before
+   the run, or the calls pass through unrecorded.**
+2. **Torii's cost collapses to a flat 1 credit per image** — their docs: *"Image translation will be
+   reduced to 1 credit (OCR/server costs), no matter text length or model chosen"*. The LLM cost
+   moves onto our OpenRouter bill instead, which is the side we are trying to measure anyway.
+3. **It removes all doubt about which model ran**, since we can see the request.
+
+The key is read from `--byok-key`, then `$OPENROUTER_API_KEY`, then `secrets/api_keys.json`.
+
+**Caveat worth stating in the report:** a BYOK run and a credits run are not identical conditions.
+Record which mode each sample used — `torii_call.json` now carries a `byok` field — and do not mix
+the two within one comparison.
+
+## 3d. `bubbles_only` — the documented flag behind their bubbles-first behaviour
+
+The same PDF documents `bubbles_only`: *"only text inside detected speech bubbles will be
+translated, and also text that is very long and high-confidence, even if not inside a bubble."*
+That is a direct answer to the "do they do bubbles first and SFX only sometimes?" question — it is
+a request flag, not an inference. Exposed as `--bubbles-only` on both `fetch_torii.py` and
+`regen_run.py`.
+
+Two further parameters are now plumbed through and worth knowing about, both undocumented in our
+own notes until today: `custom_prompt` (max 1000 chars) and `context` (max 10000 chars, a **context
+chain** — pass `"None"` on the first image, then feed each response's `context` back into the next
+page to carry names and terminology forward). We do not use context chaining yet; our own pipeline
+has `useContextMemory`, so a like-for-like run should probably enable both or neither.
+
 ## 4. Build the translation corpus
 
 ```bash

@@ -168,3 +168,19 @@ deliberate one. Two notes if you want it:
   largest text on the page was dialogue), and recogniser confidence does not either (0.994 for ドキ,
   0.976 for dialogue). Whatever "obstructing" means, it has to be geometric — SFX polygon area
   overlapping dialogue polygons — not a property of the text itself.
+
+**Confirmed 2026-08-28: it is a documented Torii request flag, not an inference.** Their API docs
+(`corpus/docs/tori/Image Translation and OCR API…pdf`) define `bubbles_only`:
+
+> *"If true, only text inside detected speech bubbles will be translated **and also text that is
+> very long and high-confidence**, even if not inside a bubble."*
+
+So the behaviour you noticed is real and switchable, and their escape hatch for text outside a
+bubble is **length plus detector confidence** — not a size heuristic and not a semantic
+classification. That is a cheaper rule than anything we considered, and notably it does not try to
+identify SFX at all; it identifies *things worth translating* and lets everything else through
+untouched. Worth weighing against our QA-VLM approach, which spends a model call to reach a
+similar outcome.
+
+`--bubbles-only` is now plumbed through `fetch_torii.py` and `regen_run.py`, so the flag's effect
+can be measured directly on our own corpus rather than argued about.
