@@ -1,26 +1,26 @@
-.git
-.github
-.idea
-.vscode
-.venv
-.gitnexus
+# Allowlist-style: exclude everything, then re-include ONLY what
+# backend-rust/Dockerfile actually COPYs.
+# The build context is the repo root; without this, a single `cargo test`
+# run in backend-rust/ drags its 38 GB target/ into every build.
+*
 
-# Frontend dependencies (handled inside Docker)
+# --- Frontend source (stage 1 of backend-rust/Dockerfile) ---
+!frontend/
 frontend/node_modules
 frontend/dist
 
-# Backend build output (handled inside Docker)
-backend/target
+# --- Rust backend ---
+!backend-rust/
+backend-rust/target
 
-# Logs
-*.log
-logs/
+# --- Shared runtime files referenced by compose/config ---
+!config/
+!database/
+!scripts/diff_routes.py
 
-# Secrets / env
+# Never enter a build context, even via an allowed directory:
+**/*.log
+**/logs/
 .env
+**/.env.local
 secrets/
-
-# Misc
-*.md
-data/
-inputs/

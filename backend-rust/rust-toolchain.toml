@@ -1,0 +1,4 @@
+# Pins which Rust toolchain cargo/rustup uses in this directory.
+# "stable" tracks whatever stable release is installed (currently 1.98.0).
+[toolchain]
+channel = "stable"

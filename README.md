@@ -13,9 +13,9 @@ The platform is designed as a distributed service coordinated via a Valkey job q
                   │   React / Vite Web    │
                   │       Frontend        │
                   └───────────┬───────────┘
-                              │ REST / WebSockets
+                              │ REST / SSE
                   ┌───────────▼───────────┐
-                  │      Spring Boot      │
+                  │      Rust / Axum      │
                   │     Backend API       │
                   └───────────┬───────────┘
                               │
@@ -33,7 +33,9 @@ The platform is designed as a distributed service coordinated via a Valkey job q
 ```
 
 1. **Frontend**: React, TypeScript, Vite, Vanilla CSS.
-2. **Backend**: Spring Boot, Java, PostgreSQL, Hibernate, MinIO SDK.
+2. **Backend**: Rust, Axum + Tokio, PostgreSQL via SQLx (compile-time-checked queries,
+   no ORM), and the AWS S3 SDK against MinIO. The SPA is embedded into the binary with
+   rust-embed, so the backend image serves the API and the frontend from one process.
 3. **Database & Storage**: PostgreSQL for metadata, layers, and edit history; MinIO S3 for raw/processed images and generated masks.
 4. **Job Pipeline**: Valkey coordinates workers through specialized job queues (panel detection, OCR, layout analysis, translation, and rendering). An optional database-driven queue is supported for brokerless deployments.
 5. **ML Workers**: A unified Python runner executing local OCR (PaddleOCR + YOLO bubble detector) and AI Translation pipelines.

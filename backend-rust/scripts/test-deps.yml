@@ -1,0 +1,61 @@
+# Throwaway dependencies for the Rust backend's integration tests.
+#
+# Managed by scripts/test-env.sh; never run this by hand unless you know why:
+#   docker compose -p mangatest -f backend-rust/scripts/test-deps.yml up -d --wait
+#
+# Design: the SERVING ruststack (55432/56379/19001) and anything else on the host
+# are never touched — every port here lives in its own range (55490/56390/19090),
+# postgres data is tmpfs (gone on container stop), and minio/redis start empty.
+# Integration tests get their own private world and cannot clog or poison the
+# running stack: settings_endpoints' global-key PUTs land HERE, not in the live
+# system_settings table or the live system:providers:config catalog blob.
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: manga-test-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: testdbpass
+      POSTGRES_DB: manga_library
+    ports:
+      - "127.0.0.1:55490:5432"
+    tmpfs:
+      # Ephemeral by construction: schema is applied by scripts/test-env.sh after
+      # boot (with CI's sed treatment), so no state leaks between runs.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d manga_library" ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: valkey/valkey:8-alpine
+    container_name: manga-test-redis
+    ports:
+      - "127.0.0.1:56390:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: [ "CMD", "valkey-cli", "ping" ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio
+    container_name: manga-test-minio
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "127.0.0.1:19090:9000"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: [ "CMD-SHELL", "mc ready local || exit 1" ]
+      interval: 3s
+      timeout: 3s
+      retries: 20

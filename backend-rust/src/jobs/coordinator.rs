@@ -1,0 +1,2747 @@
+//! Job pipeline coordination — port of JobCoordinatorService (~2.3k lines Java).
+//!
+//! Structure mirrors the Java service function-for-function. The transaction-boundary
+//! rules from the Java audit are preserved exactly:
+//!   * SSE fan-out happens immediately (Java emitted inside the transaction);
+//!   * Redis queue pushes happen strictly AFTER the DB write commits (Java's
+//!     afterCommit hook) — see [`enqueue_job_directly`], which takes an optional
+//!     `&mut PgTransaction`-style executor and returns a "pending push" the caller
+//!     performs once its transaction has committed.
+//!   * callback application is claimed ONCE per job row (`claim_callback`) — duplicate
+//!     worker callbacks after a recovery requeue are dropped, not reapplied.
+//!   * trace ids: `pipeline:trace:{imageId}` with a 12h TTL refreshed on every enqueue.
+
+use serde_json::{Value, json};
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::models::{Chapter, Image, Job, Layer, OcrRegion, Page, Panel, Series};
+use crate::resolve::resolve_model;
+use crate::settings::load_global_settings;
+use crate::state::AppState;
+
+pub const PIPELINE_TRACE_TTL_SECS: u64 = 12 * 3600;
+pub const REDO_REASON_TTL_SECS: u64 = 24 * 3600;
+/// Worker queues in drain order (heavy first). Also used by the dispatcher.
+pub const HEAVY_QUEUES: [&str; 4] = [
+    "queue:qa-re-ocr",
+    "queue:region-redo-ocr",
+    "queue:ocr",
+    "queue:panel-detection",
+];
+pub const LIGHT_QUEUES: [&str; 5] = [
+    "queue:region-redo-tl",
+    "queue:qa",
+    "queue:render",
+    "queue:translation",
+    "queue:layout",
+];
+
+/// Everything a callback needs to resolve its job row (AUDIT-P5): prefer the echoed
+/// jobId exactly; fall back to newest job of that type for the image only when absent,
+/// never trusting a jobId that points at a row of a different type.
+pub async fn resolve_callback_job(
+    pool: &PgPool,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    job_type: &str,
+) -> Option<Job> {
+    if let Some(id) = job_id.map(str::trim).filter(|s| !s.is_empty()) {
+        let by_id: Option<Job> = sqlx::query_as("SELECT * FROM jobs WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+        match by_id {
+            Some(job) if job.job_type == job_type => return Some(job),
+            Some(job) => tracing::warn!(
+                "{job_type} callback for image {image_id} carried jobId {id}, but that job is of type {} — refusing to claim it",
+                job.job_type
+            ),
+            None => tracing::warn!(
+                "{job_type} callback for image {image_id} carried jobId {id}, but no such job row exists"
+            ),
+        }
+    }
+    sqlx::query_as(
+        "SELECT * FROM jobs WHERE image_id = $1 AND type = $2 ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(image_id)
+    .bind(job_type)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Claims the right to apply a result callback (AUDIT-P4). False ⇒ already applied:
+/// log and drop the duplicate.
+pub async fn claim_callback(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    job_type: &str,
+) -> bool {
+    let Some(job) = resolve_callback_job(&state.pool, job_id, image_id, job_type).await else {
+        return true; // nothing to deduplicate against — apply
+    };
+    let result = sqlx::query(
+        "UPDATE jobs SET callback_applied_at = now() WHERE id = $1 AND callback_applied_at IS NULL",
+    )
+    .bind(&job.id)
+    .execute(&state.pool)
+    .await;
+    match result {
+        Ok(res) if res.rows_affected() > 0 => true,
+        Ok(_) => {
+            tracing::warn!(
+                "Ignoring duplicate {job_type} callback for image {image_id} — job {} already applied its result at {:?}",
+                job.id,
+                job.callback_applied_at
+            );
+            false
+        }
+        Err(err) => {
+            tracing::error!("claimCallback failed for job {}: {err}", job.id);
+            true // fail-open like a lost race, never lose a genuine result
+        }
+    }
+}
+
+/// Resolves the page a callback reports on: exact pageId first, then first page for
+/// the image.
+pub async fn resolve_page_for_callback(
+    pool: &PgPool,
+    image_id: Uuid,
+    page_id: Option<Uuid>,
+) -> Option<Page> {
+    if let Some(page_id) = page_id {
+        return sqlx::query_as("SELECT * FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+    }
+    sqlx::query_as("SELECT * FROM pages WHERE image_id = $1 ORDER BY created_at ASC LIMIT 1")
+        .bind(image_id)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+}
+
+/// Marks the job a callback belongs to FAILED and pushes the update down the stream.
+pub async fn fail_job(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    job_type: &str,
+    error: &str,
+) {
+    let Some(mut job) = resolve_callback_job(&state.pool, job_id, image_id, job_type).await else {
+        tracing::warn!("No {job_type} job row found for image {image_id} — cannot mark it FAILED");
+        return;
+    };
+    let _ = sqlx::query(
+        "UPDATE jobs SET status = 'FAILED', error = $2, updated_at = now() WHERE id = $1",
+    )
+    .bind(&job.id)
+    .bind(error)
+    .execute(&state.pool)
+    .await;
+    job.status = "FAILED".into();
+    job.error = Some(error.to_string());
+    state
+        .sse
+        .emit_event_for_image(
+            image_id,
+            "job_update",
+            &serde_json::to_string(&job).unwrap_or_default(),
+        )
+        .await;
+}
+
+fn extract_uuid(map: &Value, key: &str) -> Option<Uuid> {
+    map.get(key)?.as_str().and_then(|s| Uuid::parse_str(s).ok())
+}
+
+// ---------------------------------------------------------------------------
+// Enqueue path
+// ---------------------------------------------------------------------------
+
+/// Port of startPipeline: mint/refresh the trace id, reuse existing panels (detection
+/// is geometric and shared across pages), enter at OCR when they exist.
+pub async fn start_pipeline(
+    state: &AppState,
+    image_id: Uuid,
+    page_id: Option<Uuid>,
+    chapter_id: Option<Uuid>,
+) {
+    if let Some(redis) = &state.redis {
+        let trace_id = Uuid::new_v4().to_string();
+        let _ = redis
+            .set_ex(
+                &format!("pipeline:trace:{image_id}"),
+                &trace_id,
+                PIPELINE_TRACE_TTL_SECS,
+            )
+            .await;
+        tracing::info!("Pipeline trace for image {image_id} is {trace_id}");
+    }
+
+    let panels_exist: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM panels WHERE image_id = $1)")
+            .bind(image_id)
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or(false);
+
+    if panels_exist {
+        tracing::info!(
+            "Panels already exist for image {image_id} — reusing them and starting pipeline at OCR"
+        );
+        enqueue_job_directly(
+            state,
+            "ocr",
+            image_id,
+            page_id,
+            chapter_id,
+            "normal",
+            |_| {},
+        )
+        .await;
+        return;
+    }
+    enqueue_job_directly(
+        state,
+        "panel-detection",
+        image_id,
+        page_id,
+        chapter_id,
+        "normal",
+        |_| {},
+    )
+    .await;
+}
+
+/// The AUTHORITY for payload construction (task keys ocr/tl/qaLLM/qaVLM live here).
+///
+/// Returns whether the DB insert happened; the Redis push is performed here AFTER our
+/// own single-statement insert has committed (each handler-level transaction wraps the
+/// CALLER's writes; the job row itself commits atomically inside this function).
+#[allow(clippy::too_many_arguments)]
+pub async fn enqueue_job_directly(
+    state: &AppState,
+    job_type: &str,
+    image_id: Uuid,
+    page_id: Option<Uuid>,
+    chapter_id: Option<Uuid>,
+    priority: &str,
+    customize: impl FnOnce(&mut serde_json::Map<String, Value>),
+) {
+    // Trace id: read or create, refreshing the TTL on every hand-off (AUDIT-P8).
+    let trace_id = match &state.redis {
+        Some(redis) => match redis.get(&format!("pipeline:trace:{image_id}")).await {
+            Ok(Some(existing)) => {
+                let _ = redis
+                    .expire(
+                        &format!("pipeline:trace:{image_id}"),
+                        PIPELINE_TRACE_TTL_SECS,
+                    )
+                    .await;
+                existing
+            }
+            _ => {
+                let fresh = Uuid::new_v4().to_string();
+                let _ = redis
+                    .set_ex(
+                        &format!("pipeline:trace:{image_id}"),
+                        &fresh,
+                        PIPELINE_TRACE_TTL_SECS,
+                    )
+                    .await;
+                fresh
+            }
+        },
+        None => Uuid::new_v4().to_string(),
+    };
+
+    let job_row_id = Uuid::new_v4().to_string();
+    let mut job = serde_json::Map::new();
+    job.insert("jobId".into(), json!(job_row_id));
+    job.insert("traceId".into(), json!(trace_id));
+    job.insert("type".into(), json!(job_type));
+    job.insert("imageId".into(), json!(image_id.to_string()));
+    job.insert("priority".into(), json!(priority));
+    job.insert("attempt".into(), json!(1));
+    job.insert("maxAttempts".into(), json!(3));
+    job.insert("createdAt".into(), json!(chrono::Utc::now().to_rfc3339()));
+
+    // Resolve the page: explicit id > chapter+image > first page for the image.
+    let mut page_opt: Option<Page> = None;
+    if let Some(pid) = page_id {
+        page_opt = sqlx::query_as("SELECT * FROM pages WHERE id = $1")
+            .bind(pid)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+    }
+    if page_opt.is_none()
+        && let Some(cid) = chapter_id
+    {
+        page_opt =
+            sqlx::query_as("SELECT * FROM pages WHERE chapter_id = $1 AND image_id = $2 LIMIT 1")
+                .bind(cid)
+                .bind(image_id)
+                .fetch_optional(&state.pool)
+                .await
+                .ok()
+                .flatten();
+    }
+    if page_opt.is_none() {
+        page_opt = sqlx::query_as(
+            "SELECT * FROM pages WHERE image_id = $1 ORDER BY page_number ASC LIMIT 1",
+        )
+        .bind(image_id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten();
+    }
+
+    if let Some(page) = &page_opt {
+        job.insert("pageId".into(), json!(page.id.to_string()));
+        job.insert("chapterId".into(), json!(page.chapter_id.to_string()));
+
+        let chapter: Option<Chapter> = sqlx::query_as("SELECT * FROM chapters WHERE id = $1")
+            .bind(page.chapter_id)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+        if let Some(chapter) = &chapter {
+            let series: Option<Series> = sqlx::query_as("SELECT * FROM series WHERE id = $1")
+                .bind(chapter.series_id)
+                .fetch_optional(&state.pool)
+                .await
+                .ok()
+                .flatten();
+            if let Some(series) = &series {
+                job.insert(
+                    "readingDirection".into(),
+                    json!(series.reading_direction.trim().to_lowercase()),
+                );
+                if let Some(lang) = &series.source_language {
+                    job.insert("sourceLanguage".into(), json!(lang.trim().to_lowercase()));
+                }
+                if let Some(lang) = &series.target_language {
+                    job.insert("targetLanguage".into(), json!(lang.trim().to_lowercase()));
+                }
+                job.insert("pageNumber".into(), json!(page.page_number));
+                job.insert("chapterNumber".into(), json!(chapter.chapter_number));
+                if let Some(title) = &chapter.title {
+                    job.insert("chapterTitle".into(), json!(title));
+                }
+                job.insert("seriesTitle".into(), json!(series.title));
+
+                let defaults = crate::settings::PipelineDefaults::from_env();
+                let settings = load_global_settings(&state.pool, &defaults).await;
+
+                let ch_ocr_provider = chapter.ocr_provider.as_deref();
+                let s_ocr_provider = series.ocr_provider.as_deref();
+                let resolved_ocr_provider =
+                    resolve_model(ch_ocr_provider, s_ocr_provider, &settings.ocr_provider);
+                job.insert("ocrProvider".into(), json!(resolved_ocr_provider));
+
+                let global_ocr_model = if resolved_ocr_provider == "local" {
+                    settings.local_ocr_model.clone()
+                } else {
+                    settings.ocr_model.clone()
+                };
+                job.insert(
+                    "ocrModel".into(),
+                    json!(crate::resolve::resolve_model_with_check(
+                        state,
+                        chapter.ocr_model.as_deref(),
+                        series.ocr_model.as_deref(),
+                        &global_ocr_model,
+                        &resolved_ocr_provider,
+                        "ocr",
+                    )),
+                );
+
+                let resolved_tl_provider = resolve_model(
+                    chapter.tl_provider.as_deref(),
+                    series.tl_provider.as_deref(),
+                    &settings.tl_provider,
+                );
+                job.insert("tlProvider".into(), json!(resolved_tl_provider));
+                job.insert(
+                    "tlModel".into(),
+                    json!(crate::resolve::resolve_model_with_check(
+                        state,
+                        chapter.tl_model.as_deref(),
+                        series.tl_model.as_deref(),
+                        &settings.tl_model,
+                        &resolved_tl_provider,
+                        "tl",
+                    )),
+                );
+
+                let resolved_qa_provider = resolve_model(
+                    chapter.qa_provider.as_deref(),
+                    series.qa_provider.as_deref(),
+                    &settings.qa_provider,
+                );
+                job.insert("qaProvider".into(), json!(resolved_qa_provider));
+
+                let resolved_qa_llm = crate::resolve::resolve_model_with_check(
+                    state,
+                    chapter.qa_llm_model.as_deref(),
+                    series.qa_llm_model.as_deref(),
+                    &settings.qa_llm_model,
+                    &resolved_qa_provider,
+                    "qaLLM",
+                );
+                job.insert("qaLlmModel".into(), json!(resolved_qa_llm.clone()));
+
+                job.insert(
+                    "routingStrategy".into(),
+                    json!(resolve_model(
+                        chapter.routing_strategy.as_deref(),
+                        series.routing_strategy.as_deref(),
+                        &settings.routing_strategy,
+                    )),
+                );
+
+                let resolved_qa_vlm = crate::resolve::resolve_model_with_check(
+                    state,
+                    chapter.qa_vlm_model.as_deref(),
+                    series.qa_vlm_model.as_deref(),
+                    &settings.qa_vlm_model,
+                    &resolved_qa_provider,
+                    "qaVLM",
+                );
+                job.insert("qaVlmModel".into(), json!(resolved_qa_vlm.clone()));
+
+                let mut resolved_qa_mode = resolve_model(
+                    chapter.qa_mode.as_deref(),
+                    series.qa_mode.as_deref(),
+                    &settings.qa_mode,
+                );
+                let vlm_usable =
+                    has_usable_model(state, &resolved_qa_provider, &resolved_qa_vlm, "qaVLM");
+                let llm_usable =
+                    has_usable_model(state, &resolved_qa_provider, &resolved_qa_llm, "qaLLM");
+
+                // Mode "auto" prefers VLM, falling back to LLM when unsupported; explicit
+                // modes also gracefully fall back to the other when unavailable.
+                if resolved_qa_mode.eq_ignore_ascii_case("auto") {
+                    if vlm_usable {
+                        resolved_qa_mode = "vlm".into();
+                    } else if llm_usable {
+                        resolved_qa_mode = "llm".into();
+                    }
+                } else if resolved_qa_mode.eq_ignore_ascii_case("vlm") && !vlm_usable && llm_usable
+                {
+                    tracing::warn!(
+                        "VLM mode explicitly requested but not available for provider '{resolved_qa_provider}'. Falling back to LLM."
+                    );
+                    resolved_qa_mode = "llm".into();
+                } else if resolved_qa_mode.eq_ignore_ascii_case("llm") && !llm_usable && vlm_usable
+                {
+                    tracing::warn!(
+                        "LLM mode explicitly requested but not available for provider '{resolved_qa_provider}'. Falling back to VLM."
+                    );
+                    resolved_qa_mode = "vlm".into();
+                }
+                job.insert("qaMode".into(), json!(resolved_qa_mode));
+
+                let resolved_fallback = chapter
+                    .use_fallback_models
+                    .or(series.use_fallback_models)
+                    .unwrap_or(settings.use_fallback_models);
+                job.insert("useFallbackModels".into(), json!(resolved_fallback));
+            }
+        }
+    }
+
+    customize(&mut job);
+
+    let payload = Value::Object(job).to_string();
+
+    let inserted: Result<(), sqlx::Error> = async {
+        sqlx::query(
+            "INSERT INTO jobs (id, type, status, image_id, attempt, max_attempts, trace_id, payload, created_at, updated_at) \
+             VALUES ($1, $2, 'PENDING', $3, 1, 3, $4, $5, now(), now())",
+        )
+        .bind(&job_row_id)
+        .bind(job_type)
+        .bind(image_id)
+        .bind(&trace_id)
+        .bind(&payload)
+        .execute(&state.pool)
+        .await?;
+        Ok(())
+    }
+    .await;
+
+    match inserted {
+        Ok(()) => {
+            // SSE first (Java emitted inside the tx), Redis push after the commit.
+            let db_job = JobRowSnapshot {
+                id: job_row_id.clone(),
+                job_type: job_type.to_string(),
+                image_id: Some(image_id),
+                trace_id: Some(trace_id),
+                payload: Some(payload.clone()),
+                status: "PENDING".into(),
+                attempt: Some(1),
+                max_attempts: Some(3),
+                error: None,
+                started_at: None,
+                created_at: None,
+                updated_at: None,
+                callback_applied_at: None,
+                page_id: page_opt.map(|p| p.id),
+            };
+            state
+                .sse
+                .emit_event_for_image(
+                    image_id,
+                    "job_update",
+                    &serde_json::to_string(&db_job).unwrap_or_default(),
+                )
+                .await;
+            push_persisted_job_if_queue_running(state, &job_row_id, job_type, &payload).await;
+        }
+        Err(err) => tracing::error!("Failed to enqueue {job_type} job for image {image_id}: {err}"),
+    }
+}
+
+/// Minimal Job-shaped view for SSE serialization right after insert (the full struct
+/// round-trip is unnecessary; fields mirror models::Job's camelCase output).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JobRowSnapshot {
+    id: String,
+    #[serde(rename = "type")]
+    job_type: String,
+    image_id: Option<Uuid>,
+    page_id: Option<Uuid>,
+    attempt: Option<i32>,
+    callback_applied_at: Option<chrono::DateTime<chrono::Utc>>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    error: Option<String>,
+    max_attempts: Option<i32>,
+    payload: Option<String>,
+    started_at: Option<chrono::DateTime<chrono::Utc>>,
+    status: String,
+    trace_id: Option<String>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// afterCommit parity: push to the stage queue unless the global pause gate is closed.
+pub async fn push_persisted_job_if_queue_running(
+    state: &AppState,
+    job_id: &str,
+    job_type: &str,
+    payload: &str,
+) {
+    let Some(redis) = &state.redis else { return };
+    match redis.queue_paused().await {
+        Ok(false) => push_job_to_redis(state, job_type, payload).await,
+        Ok(true) => {
+            tracing::info!("Queue is paused. Job {job_id} saved to DB but not pushed to Redis.")
+        }
+        Err(err) => tracing::error!("Failed to check queue pause gate for job {job_id}: {err}"),
+    }
+}
+
+/// RPUSH the payload onto `queue:{type}`.
+pub async fn push_job_to_redis(state: &AppState, job_type: &str, payload: &str) {
+    if let Some(redis) = &state.redis {
+        let queue_name = format!("queue:{job_type}");
+        if let Err(err) = redis.push_to_queue(&queue_name, payload).await {
+            tracing::error!("Failed to push job onto {queue_name}: {err}");
+        }
+    }
+}
+
+/// Re-pushes every PENDING job after wiping the queues (startup / resume).
+pub async fn requeue_pending_jobs(state: &AppState) {
+    let Some(redis) = &state.redis else { return };
+    for key in HEAVY_QUEUES.into_iter().chain(LIGHT_QUEUES) {
+        let _ = redis.delete(key).await;
+    }
+
+    let pending: Vec<Job> =
+        sqlx::query_as("SELECT * FROM jobs WHERE status = 'PENDING' ORDER BY created_at ASC")
+            .fetch_all(&state.pool)
+            .await
+            .unwrap_or_default();
+    tracing::info!(
+        "Re-queuing {} PENDING jobs onto Redis queues",
+        pending.len()
+    );
+    for job in &pending {
+        if let Some(payload) = &job.payload {
+            push_job_to_redis(state, &job.job_type, payload).await;
+        }
+    }
+}
+
+/// Rewrites the `attempt` field of a stored payload; returns the original on failure.
+pub fn update_payload_attempt(payload: &str, attempt: i32) -> String {
+    match serde_json::from_str::<Value>(payload) {
+        Ok(mut value) => {
+            if let Some(obj) = value.as_object_mut() {
+                obj.insert("attempt".into(), json!(attempt));
+            }
+            value.to_string()
+        }
+        Err(err) => {
+            tracing::error!("Failed to update payload attempt: {err}");
+            payload.to_string()
+        }
+    }
+}
+
+fn has_usable_model(state: &AppState, provider: &str, model: &str, task: &str) -> bool {
+    let trimmed = model.trim();
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("N/A")
+        || trimmed == "inherit"
+        || trimmed == "default"
+        || trimmed.contains("[ORPHANED]")
+    {
+        return false;
+    }
+    // An empty cache is permissive (pre-publish deployments still work).
+    state
+        .providers
+        .is_valid_provider_model(provider, trimmed, task)
+}
+
+// ---------------------------------------------------------------------------
+// Redo triggers
+// ---------------------------------------------------------------------------
+
+/// POST /api/ocr-regions/{id}/redo backend: enqueue region-redo-{ocr|tl} with high priority.
+pub async fn trigger_redo(
+    state: &AppState,
+    region_id: Uuid,
+    redo_type: &str,
+) -> Result<(), String> {
+    let region: OcrRegion = sqlx::query_as("SELECT * FROM ocr_regions WHERE id = $1")
+        .bind(region_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Region not found: {region_id}"))?;
+
+    let page: Option<Page> = sqlx::query_as("SELECT * FROM pages WHERE id = $1")
+        .bind(region.page_id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten();
+    let image_id = page.as_ref().map(|p| p.image_id);
+    let page_id = page.as_ref().map(|p| p.id);
+    // Region without a page cannot be attributed; Java NPE'd into a 500 here.
+    let Some(image_id) = image_id else {
+        return Err(format!("Region {region_id} has no page — cannot redo"));
+    };
+
+    let job_type = if redo_type.eq_ignore_ascii_case("ocr") {
+        "region-redo-ocr"
+    } else {
+        "region-redo-tl"
+    };
+
+    let region_str = region_id.to_string();
+    let redo = redo_type.to_string();
+    enqueue_job_directly(
+        state,
+        job_type,
+        image_id,
+        page_id,
+        None,
+        "high",
+        move |job| {
+            job.insert("regionId".into(), json!(region_str));
+            job.insert("redoType".into(), json!(redo));
+        },
+    )
+    .await;
+    Ok(())
+}
+
+fn reason_key_for(job_type: &str, image_id: Uuid) -> Option<(String, &'static str)> {
+    match job_type {
+        "ocr" => Some((format!("image:ocr:reason:{image_id}"), "manual-re-ocr")),
+        "translation" => Some((
+            format!("image:translation:reason:{image_id}"),
+            "manual-re-translate",
+        )),
+        _ => None,
+    }
+}
+
+async fn clear_trace_and_set_reason(state: &AppState, image_id: Uuid, job_type: &str) {
+    if let Some(redis) = &state.redis {
+        if let Some((key, reason)) = reason_key_for(job_type, image_id) {
+            let _ = redis.set_ex(&key, reason, REDO_REASON_TTL_SECS).await;
+        }
+        let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;
+    }
+}
+
+/// Page-scoped redo: same as image redo but keeps the page context pinned.
+pub async fn trigger_page_redo(
+    state: &AppState,
+    page_id: Uuid,
+    job_type: &str,
+    chapter_id: Option<Uuid>,
+) -> Result<(), String> {
+    let page: Page = sqlx::query_as("SELECT * FROM pages WHERE id = $1")
+        .bind(page_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Page not found: {page_id}"))?;
+
+    clear_trace_and_set_reason(state, page.image_id, job_type).await;
+
+    let effective_chapter = chapter_id.or(Some(page.chapter_id));
+    enqueue_job_directly(
+        state,
+        job_type,
+        page.image_id,
+        Some(page_id),
+        effective_chapter,
+        "normal",
+        |_| {},
+    )
+    .await;
+    Ok(())
+}
+
+/// Image-scoped redo (no page pinning).
+pub async fn trigger_image_redo(
+    state: &AppState,
+    image_id: Uuid,
+    job_type: &str,
+    chapter_id: Option<Uuid>,
+) {
+    clear_trace_and_set_reason(state, image_id, job_type).await;
+    enqueue_job_directly(
+        state,
+        job_type,
+        image_id,
+        None,
+        chapter_id,
+        "normal",
+        |_| {},
+    )
+    .await;
+}
+
+// ---------------------------------------------------------------------------
+// Callback handlers
+// ---------------------------------------------------------------------------
+
+pub async fn handle_panel_callback(state: &AppState, dto: &Value) -> Result<(), String> {
+    let image_id = extract_uuid(dto, "imageId").ok_or("imageId missing")?;
+    tracing::info!(
+        "Received panel callback for image: {} with {} panels",
+        image_id,
+        dto.get("panels")
+            .and_then(|p| p.as_array())
+            .map(Vec::len)
+            .unwrap_or(0)
+    );
+
+    let job_id = dto.get("jobId").and_then(|v| v.as_str());
+    if !claim_callback(state, job_id, image_id, "panel-detection").await {
+        return Ok(());
+    }
+
+    sqlx::query_as::<_, Image>("SELECT * FROM images WHERE id = $1")
+        .bind(image_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Image not found: {image_id}"))?;
+
+    let page = resolve_page_for_callback(&state.pool, image_id, extract_uuid(dto, "pageId")).await;
+
+    let existing_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM panels WHERE image_id = $1")
+        .bind(image_id)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(0);
+
+    if existing_count == 0 {
+        if let Some(panels) = dto.get("panels").and_then(|p| p.as_array()) {
+            for p in panels {
+                sqlx::query(
+                    "INSERT INTO panels (id, bbox_x, bbox_y, bbox_w, bbox_h, grid_row, grid_col, reading_order, image_id) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                )
+                .bind(Uuid::new_v4())
+                .bind(p.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(p.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(p.get("width").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(p.get("height").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(p.get("gridRow").and_then(|v| v.as_i64()).map(|v| v as i32))
+                .bind(p.get("gridCol").and_then(|v| v.as_i64()).map(|v| v as i32))
+                .bind(p.get("readingOrder").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                .bind(image_id)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            }
+        }
+    } else {
+        tracing::info!(
+            "Image {image_id} already has {existing_count} panels — reusing them instead of re-detecting"
+        );
+    }
+
+    enqueue_job_directly(
+        state,
+        "ocr",
+        image_id,
+        page.map(|p| p.id),
+        None,
+        "normal",
+        |_| {},
+    )
+    .await;
+    Ok(())
+}
+
+pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), String> {
+    let image_id = extract_uuid(dto, "imageId").ok_or("imageId missing")?;
+    tracing::info!(
+        "Received OCR callback for image: {} with {} regions",
+        image_id,
+        dto.get("regions")
+            .and_then(|r| r.as_array())
+            .map(Vec::len)
+            .unwrap_or(0)
+    );
+
+    let job_id = dto.get("jobId").and_then(|v| v.as_str());
+    if !claim_callback(state, job_id, image_id, "ocr").await {
+        return Ok(());
+    }
+
+    sqlx::query_as::<_, Image>("SELECT * FROM images WHERE id = $1")
+        .bind(image_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Image not found: {image_id}"))?;
+
+    let regions_empty = dto
+        .get("regions")
+        .and_then(|r| r.as_array())
+        .map(Vec::is_empty)
+        .unwrap_or(true);
+    if regions_empty {
+        tracing::info!("OCR found 0 regions for image {image_id} — skipping downstream pipeline");
+        if let Some(mut job) = resolve_callback_job(&state.pool, job_id, image_id, "ocr").await {
+            sqlx::query("UPDATE jobs SET status='COMPLETED', updated_at=now() WHERE id=$1")
+                .bind(&job.id)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            job.status = "COMPLETED".into();
+            state
+                .sse
+                .emit_event_for_image(
+                    image_id,
+                    "job_update",
+                    &serde_json::to_string(&job).unwrap_or_default(),
+                )
+                .await;
+        }
+        return Ok(());
+    }
+
+    let page = resolve_page_for_callback(&state.pool, image_id, extract_uuid(dto, "pageId")).await;
+    // AUDIT-P9: page deleted mid-pipeline ⇒ fail the job with a reason instead of
+    // letting NOT NULL constraints roll the whole result back.
+    let Some(page) = page else {
+        tracing::warn!(
+            "OCR callback for image {image_id} has no page (deleted mid-pipeline?) — failing the job"
+        );
+        fail_job(
+            state,
+            job_id,
+            image_id,
+            "ocr",
+            "Page no longer exists — it was deleted while OCR was running",
+        )
+        .await;
+        return Ok(());
+    };
+
+    // Hide old OCR layers, compute next z-order.
+    let layers: Vec<Layer> = sqlx::query_as("SELECT * FROM layers WHERE page_id = $1")
+        .bind(page.id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut max_z = 0;
+    for layer in &layers {
+        if layer.z_order > max_z {
+            max_z = layer.z_order;
+        }
+        if layer.layer_type.eq_ignore_ascii_case("ocr") {
+            // Keep existing layers for multi-pass history, but hide old OCR ones.
+            sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+                .bind(layer.id)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    let next_z = max_z + 1;
+
+    let panels: Vec<Panel> = sqlx::query_as("SELECT * FROM panels WHERE image_id = $1")
+        .bind(image_id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let regions = dto
+        .get("regions")
+        .and_then(|r| r.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut saved_region_ids: Vec<Uuid> = Vec::with_capacity(regions.len());
+
+    // One transaction around the whole result application (Java @Transactional).
+    let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+    for r in &regions {
+        let rx = r.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let ry = r.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let rw = r.get("width").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let rh = r.get("height").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let matching = find_matching_panel(rx, ry, rw, rh, &panels);
+        let confidence = r.get("confidence").and_then(|v| v.as_f64());
+        let region_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO ocr_regions (id, text, detected_language, confidence, ocr_score, rotation, \
+             bbox_x, bbox_y, bbox_w, bbox_h, panel_reading_order, bubble_reading_order, background_color, \
+             bubble_x, bubble_y, bubble_w, bubble_h, bubble_id, detection_confidence, mask_polygon, \
+             safe_text_x, safe_text_y, safe_text_w, safe_text_h, page_id, panel_id) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)",
+        )
+        .bind(region_id)
+        .bind(r.get("text").and_then(|v| v.as_str()))
+        .bind(r.get("detectedLanguage").and_then(|v| v.as_str()).unwrap_or(""))
+        .bind(confidence)
+        .bind(confidence) // ocr_score mirrors confidence
+        .bind(r.get("rotation").and_then(|v| v.as_f64()).or(Some(0.0)))
+        .bind(rx)
+        .bind(ry)
+        .bind(rw)
+        .bind(rh)
+        .bind(matching.map(|p| p.reading_order))
+        .bind(r.get("bubbleReadingOrder").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(r.get("backgroundColor").and_then(|v| v.as_str()))
+        .bind(r.get("bubbleX").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(r.get("bubbleY").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(r.get("bubbleWidth").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(r.get("bubbleHeight").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(r.get("bubbleId").and_then(|v| v.as_str()))
+        .bind(r.get("detectionConfidence").and_then(|v| v.as_f64()))
+        .bind(mask_polygon_value(r.get("maskPolygon")))
+        .bind(r.get("safeTextX").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(r.get("safeTextY").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(r.get("safeTextW").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(r.get("safeTextH").and_then(|v| v.as_i64()).map(|v| v as i32))
+        .bind(page.id)
+        .bind(matching.map(|p| p.id))
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        saved_region_ids.push(region_id);
+    }
+
+    // Default OCR overlay layer + one element per saved region.
+    let mut metadata = serde_json::Map::new();
+    metadata.insert("provider".into(), json!("OCR Worker"));
+    metadata.insert(
+        "model".into(),
+        json!(
+            dto.get("modelIdentifier")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+        ),
+    );
+    metadata.insert("time".into(), json!(chrono::Utc::now().to_rfc3339()));
+    metadata.insert(
+        "confidence".into(),
+        json!(
+            dto.get("confidence")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0)
+        ),
+    );
+
+    let mut ocr_reason: Option<String> = None;
+    if let Some(redis) = &state.redis {
+        ocr_reason = redis
+            .get(&format!("image:ocr:reason:{image_id}"))
+            .await
+            .ok()
+            .flatten();
+        if ocr_reason.is_some() {
+            let _ = redis.delete(&format!("image:ocr:reason:{image_id}")).await;
+        }
+    }
+    metadata.insert(
+        "layer_name".into(),
+        json!(match &ocr_reason {
+            Some(reason) => format!("OCR ({reason})"),
+            None => "OCR".to_string(),
+        }),
+    );
+
+    if let Some(cost) = dto.get("cost").filter(|c| !c.is_null()) {
+        metadata.insert("cost".into(), cost.clone());
+        save_job_costs(state, image_id, cost).await;
+    }
+
+    metadata.insert("layer_order".into(), json!(next_z));
+    metadata.insert(
+        "last_modified".into(),
+        json!(chrono::Utc::now().to_rfc3339()),
+    );
+
+    let layer_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'ocr',TRUE,$2,$3,$4,now())",
+    )
+    .bind(layer_id)
+    .bind(next_z)
+    .bind(Value::Object(metadata.clone()))
+    .bind(page.id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    for region_id in &saved_region_ids {
+        let region: Option<OcrRegion> = sqlx::query_as("SELECT * FROM ocr_regions WHERE id = $1")
+            .bind(region_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        let Some(region) = region else { continue };
+        sqlx::query(
+            "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, word_wrap, layer_id, region_id) \
+             VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,$7,$8)",
+        )
+        .bind(Uuid::new_v4())
+        .bind(&region.text)
+        .bind(region.bbox_x as f64)
+        .bind(region.bbox_y as f64)
+        .bind(region.bbox_w)
+        .bind(region.bbox_h)
+        .bind(layer_id)
+        .bind(region.id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    enqueue_job_directly(
+        state,
+        "layout",
+        image_id,
+        Some(page.id),
+        None,
+        "normal",
+        |_| {},
+    )
+    .await;
+    Ok(())
+}
+
+/// The worker sends maskPolygon as a JSON string; store it as jsonb structure
+/// either way (shared normalization lives in models).
+fn mask_polygon_value(raw: Option<&Value>) -> Option<Value> {
+    crate::models::normalize_mask_polygon(raw?.clone())
+}
+
+pub fn find_matching_panel(rx: i32, ry: i32, rw: i32, rh: i32, panels: &[Panel]) -> Option<&Panel> {
+    let mut best: Option<(&Panel, f64)> = None;
+    for p in panels {
+        let overlap_x = (rx + rw)
+            .min(p.bbox_x + p.bbox_w)
+            .saturating_sub(rx.max(p.bbox_x))
+            .max(0);
+        let overlap_y = (ry + rh)
+            .min(p.bbox_y + p.bbox_h)
+            .saturating_sub(ry.max(p.bbox_y))
+            .max(0);
+        let area = (overlap_x * overlap_y) as f64;
+        if area > best.map(|(_, a)| a).unwrap_or(0.0) {
+            best = Some((p, area));
+        }
+    }
+    best.map(|(p, _)| p)
+}
+
+/// Layout callback: region types, conversations, reader-mode short-circuit.
+pub async fn handle_layout_callback(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    callback_page_id: Option<Uuid>,
+    payload: &Value,
+) -> Result<(), String> {
+    if !claim_callback(state, job_id, image_id, "layout").await {
+        return Ok(());
+    }
+
+    sqlx::query_as::<_, Image>("SELECT * FROM images WHERE id = $1")
+        .bind(image_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Image not found: {image_id}"))?;
+
+    let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+
+    if let Some(region_types) = payload.get("regionTypes").and_then(|v| v.as_array()) {
+        for rt in region_types {
+            let Some(region_id) = rt
+                .get("regionId")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok())
+            else {
+                continue;
+            };
+            let region_type = rt
+                .get("regionType")
+                .and_then(|v| v.as_str())
+                .unwrap_or("speech");
+            let _ = sqlx::query("UPDATE ocr_regions SET region_type = $2 WHERE id = $1")
+                .bind(region_id)
+                .bind(region_type)
+                .execute(&mut *tx)
+                .await;
+        }
+    }
+
+    let callback_page = resolve_page_for_callback(&state.pool, image_id, callback_page_id).await;
+
+    if let Some(conversations) = payload.get("conversations").and_then(|v| v.as_array()) {
+        for conv_data in conversations {
+            let scene_type = conv_data
+                .get("sceneType")
+                .and_then(|v| v.as_str())
+                .unwrap_or("dialogue")
+                .to_string();
+            let conv_id = Uuid::new_v4();
+            let Some(page) = &callback_page else { continue };
+            if sqlx::query("INSERT INTO conversations (id, scene_type, page_id) VALUES ($1,$2,$3)")
+                .bind(conv_id)
+                .bind(&scene_type)
+                .bind(page.id)
+                .execute(&mut *tx)
+                .await
+                .is_err()
+            {
+                continue;
+            }
+            if let Some(region_ids) = conv_data.get("regionIds").and_then(|v| v.as_array()) {
+                let mut position = 1;
+                for rid in region_ids {
+                    if let Some(region_id) = rid.as_str().and_then(|s| Uuid::parse_str(s).ok()) {
+                        let pos = position;
+                        position += 1;
+                        let _ = sqlx::query(
+                            "INSERT INTO conversation_regions (conversation_id, region_id, position) VALUES ($1,$2,$3)",
+                        )
+                        .bind(conv_id)
+                        .bind(region_id)
+                        .bind(pos)
+                        .execute(&mut *tx)
+                        .await;
+                    }
+                }
+            }
+        }
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    // Reader mode: source==target ends the pipeline here; complete the layout job.
+    let series: Option<Series> = match &callback_page {
+        Some(page) => {
+            let chapter: Option<Chapter> = sqlx::query_as("SELECT * FROM chapters WHERE id = $1")
+                .bind(page.chapter_id)
+                .fetch_optional(&state.pool)
+                .await
+                .ok()
+                .flatten();
+            match chapter {
+                Some(ch) => sqlx::query_as("SELECT * FROM series WHERE id = $1")
+                    .bind(ch.series_id)
+                    .fetch_optional(&state.pool)
+                    .await
+                    .ok()
+                    .flatten(),
+                None => None,
+            }
+        }
+        None => None,
+    };
+
+    let reader_mode = series.as_ref().is_some_and(|s| {
+        s.source_language
+            .as_deref()
+            .zip(s.target_language.as_deref())
+            .map(|(src, tgt)| src.trim().eq_ignore_ascii_case(tgt.trim()))
+            .unwrap_or(false)
+    });
+
+    if reader_mode {
+        if let Some(series) = &series {
+            tracing::info!(
+                "Reader mode detected (source=target={}) for image {image_id}. Skipping translation, render, and QA.",
+                series.source_language.as_deref().unwrap_or("")
+            );
+        }
+        if let Some(mut layout_job) =
+            resolve_callback_job(&state.pool, job_id, image_id, "layout").await
+        {
+            sqlx::query("UPDATE jobs SET status='COMPLETED', updated_at=now() WHERE id=$1")
+                .bind(&layout_job.id)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            layout_job.status = "COMPLETED".into();
+            state
+                .sse
+                .emit_event_for_image(
+                    image_id,
+                    "job_update",
+                    &serde_json::to_string(&layout_job).unwrap_or_default(),
+                )
+                .await;
+        }
+        return Ok(());
+    }
+
+    enqueue_job_directly(
+        state,
+        "translation",
+        image_id,
+        callback_page.map(|p| p.id),
+        None,
+        "normal",
+        |_| {},
+    )
+    .await;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Cost recording
+// ---------------------------------------------------------------------------
+
+/// Persists cost entries from a worker cost blob ({breakdown:[...]} or {estimated_cost}).
+pub async fn save_job_costs(state: &AppState, image_id: Uuid, cost_map: &Value) {
+    let Some(obj) = cost_map.as_object() else {
+        return;
+    };
+    if obj.is_empty() {
+        return;
+    }
+    let entries: Vec<&Value> = match obj.get("breakdown").and_then(|b| b.as_array()) {
+        Some(list) => list.iter().collect(),
+        None if obj.contains_key("estimated_cost") => vec![cost_map],
+        None => Vec::new(),
+    };
+    for entry in entries {
+        let Some(entry_obj) = entry.as_object() else {
+            continue;
+        };
+        let number = |key: &str| entry_obj.get(key).and_then(|v| v.as_i64());
+        let float = |key: &str| entry_obj.get(key).and_then(|v| v.as_f64());
+        let text = |key: &str| entry_obj.get(key).and_then(|v| v.as_str());
+        if let Err(err) = sqlx::query(
+            "INSERT INTO job_costs (id, image_id, provider, model, prompt_tokens, completion_tokens, estimated_cost, created_at) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,now())",
+        )
+        .bind(Uuid::new_v4())
+        .bind(image_id)
+        .bind(text("provider"))
+        .bind(text("model"))
+        .bind(number("prompt_tokens").map(|v| v as i32))
+        .bind(number("completion_tokens").map(|v| v as i32))
+        .bind(float("estimated_cost"))
+        .execute(&state.pool)
+        .await
+        {
+            tracing::error!("Error saving job costs for image {image_id}: {err}");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Text-box geometry (Java's TextBox/textBoxFor/freeTextBox)
+// ---------------------------------------------------------------------------
+
+const TEXT_BOX_PADDING: i32 = 20;
+const MIN_TEXT_BOX: i32 = 24;
+const FREE_TEXT_PADDING: i32 = 20;
+const FREE_TEXT_COLUMN_ASPECT: f64 = 1.5;
+const FREE_TEXT_TARGET_ASPECT: f64 = 1.0;
+const FREE_TEXT_MAX_WIDEN: f64 = 2.5;
+
+/// Where translated text is laid out, in original image pixels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextBox {
+    pub x: f64,
+    pub y: f64,
+    pub w: i32,
+    pub h: i32,
+}
+
+/// True when bubble* describes a container LARGER than the bbox (a real detected
+/// bubble rather than the bbox echo the worker fills in for free-floating text).
+pub fn has_detected_bubble(region: &OcrRegion) -> bool {
+    match (region.bubble_w, region.bubble_h) {
+        (Some(bw), Some(bh)) => {
+            !(Some(bw) == region.bbox_w.into_option() && Some(bh) == region.bbox_h.into_option())
+        }
+        _ => false,
+    }
+}
+
+trait IntoOptionI32 {
+    fn into_option(self) -> Option<i32>;
+}
+impl IntoOptionI32 for i32 {
+    fn into_option(self) -> Option<i32> {
+        Some(self)
+    }
+}
+
+async fn page_bounds<'a>(pool: &'a PgPool, region: &'a OcrRegion) -> Option<(i32, i32)> {
+    let image: Option<Image> = sqlx::query_as(
+        "SELECT i.* FROM images i JOIN pages p ON p.image_id = i.id WHERE p.id = $1",
+    )
+    .bind(region.page_id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+    image.and_then(|img| img.width.zip(img.height))
+}
+
+/// Geometry source selection — textBoxFor's exact chain: bubble extent/origin when the
+/// bubble exists, else safeText, else the bbox (all-or-nothing like Java's null check).
+fn geometry_source(region: &OcrRegion) -> (f64, f64, i32, i32) {
+    let w = region.bubble_w.or(region.safe_text_w);
+    let h = region.bubble_h.or(region.safe_text_h);
+    let x = if region.bubble_w.is_some() {
+        region.bubble_x
+    } else {
+        region.safe_text_x
+    };
+    let y = if region.bubble_h.is_some() {
+        region.bubble_y
+    } else {
+        region.safe_text_y
+    };
+    match (x, y, w, h) {
+        (Some(x), Some(y), Some(w), Some(h)) => (x as f64, y as f64, w, h),
+        _ => (
+            region.bbox_x as f64,
+            region.bbox_y as f64,
+            region.bbox_w,
+            region.bbox_h,
+        ),
+    }
+}
+
+/// Pure text-box geometry: everything textBoxFor decides given the page bounds.
+/// Split from [`text_box_for`] so TextBoxForTest ports as database-free unit tests.
+pub fn text_box_geometry(region: &OcrRegion, page: Option<(f64, f64)>) -> TextBox {
+    if !has_detected_bubble(region) {
+        let (x, y, w, h) = geometry_source(region);
+        let half_pad = (FREE_TEXT_PADDING / 2) as f64;
+        return free_text_box(
+            x - half_pad,
+            y - half_pad,
+            w + FREE_TEXT_PADDING,
+            h + FREE_TEXT_PADDING,
+            page,
+        );
+    }
+
+    let (x, y, w, h) = geometry_source(region);
+    // Only inset when there is room; a tiny bubble keeps its full extent.
+    let inset_w = w > MIN_TEXT_BOX + TEXT_BOX_PADDING;
+    let inset_h = h > MIN_TEXT_BOX + TEXT_BOX_PADDING;
+    let half_pad = (TEXT_BOX_PADDING / 2) as f64;
+
+    TextBox {
+        x: (x + if inset_w { half_pad } else { 0.0 }).max(0.0),
+        y: (y + if inset_h { half_pad } else { 0.0 }).max(0.0),
+        w: if inset_w { w - TEXT_BOX_PADDING } else { w },
+        h: if inset_h { h - TEXT_BOX_PADDING } else { h },
+    }
+}
+
+/// Text box for a region: inset into a detected bubble, grown outward + squared up
+/// for free-floating columns (Japanese vertical text).
+pub async fn text_box_for(pool: &PgPool, region: &OcrRegion) -> TextBox {
+    // Java consults page bounds only on the free-text path.
+    if has_detected_bubble(region) {
+        return text_box_geometry(region, None);
+    }
+    let page = page_bounds(pool, region)
+        .await
+        .map(|(pw, ph)| (pw as f64, ph as f64));
+    text_box_geometry(region, page)
+}
+
+/// Squares a thin vertical column into an English-settable box of equal area,
+/// centred on the original spot and clamped to the page.
+fn free_text_box(x: f64, y: f64, w: i32, h: i32, page: Option<(f64, f64)>) -> TextBox {
+    if w <= 0 || (h as f64) < w as f64 * FREE_TEXT_COLUMN_ASPECT {
+        return TextBox {
+            x: x.max(0.0),
+            y: y.max(0.0),
+            w,
+            h,
+        };
+    }
+
+    let area = w as f64 * h as f64;
+    let mut new_w = ((area * FREE_TEXT_TARGET_ASPECT)
+        .sqrt()
+        .min(w as f64 * FREE_TEXT_MAX_WIDEN))
+    .round() as i32;
+    new_w = new_w.max(w);
+    let new_h = ((area / new_w as f64).round() as i32).max(MIN_TEXT_BOX);
+
+    let mut nx = x + w as f64 / 2.0 - new_w as f64 / 2.0;
+    let mut ny = y + h as f64 / 2.0 - new_h as f64 / 2.0;
+    match page {
+        Some((page_w, page_h)) => {
+            nx = nx.clamp(0.0, (page_w - new_w as f64).max(0.0));
+            ny = ny.clamp(0.0, (page_h - new_h as f64).max(0.0));
+        }
+        None => {
+            nx = nx.max(0.0);
+            ny = ny.max(0.0);
+        }
+    }
+    TextBox {
+        x: nx,
+        y: ny,
+        w: new_w,
+        h: new_h,
+    }
+}
+
+fn contrasting_text_color(hex_color: Option<&str>) -> String {
+    let Some(hex) = hex_color else {
+        return "#000000".into();
+    };
+    let body = hex.strip_prefix('#').unwrap_or(hex);
+    if hex.len() < 7 || !body.chars().all(|c| c.is_ascii_hexdigit()) || hex.len() != 7 {
+        return "#000000".into();
+    }
+    let parse = |range: std::ops::Range<usize>| u8::from_str_radix(&hex[range], 16);
+    match (parse(1..3), parse(3..5), parse(5..7)) {
+        (Ok(r), Ok(g), Ok(b)) => {
+            let luminance = (0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64) / 255.0;
+            if luminance < 0.5 {
+                "#ffffff".into()
+            } else {
+                "#000000".into()
+            }
+        }
+        _ => "#000000".into(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Translation / render / QA callbacks
+// ---------------------------------------------------------------------------
+
+/// Translation callback. `payload` is the raw translations array plus optional cost map.
+pub async fn handle_translation_callback(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    translations: &[Value],
+    cost: Option<&Value>,
+) -> Result<(), String> {
+    tracing::info!(
+        "Received Translation callback for image: {} with {} translations",
+        image_id,
+        translations.len()
+    );
+
+    if !claim_callback(state, job_id, image_id, "translation").await {
+        return Ok(());
+    }
+
+    sqlx::query_as::<_, Image>("SELECT * FROM images WHERE id = $1")
+        .bind(image_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Image not found: {image_id}"))?;
+
+    let tl_page_id = translations.first().and_then(|t| extract_uuid(t, "pageId"));
+    let page = resolve_page_for_callback(&state.pool, image_id, tl_page_id).await;
+
+    // Series target language decides which translation layers count as "current".
+    let mut target_language: Option<String> = None;
+    if let Some(page) = &page {
+        let chapter: Option<Chapter> = sqlx::query_as("SELECT * FROM chapters WHERE id = $1")
+            .bind(page.chapter_id)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+        if let Some(chapter) = chapter {
+            let series: Option<Series> = sqlx::query_as("SELECT * FROM series WHERE id = $1")
+                .bind(chapter.series_id)
+                .fetch_optional(&state.pool)
+                .await
+                .ok()
+                .flatten();
+            target_language = series
+                .and_then(|s| s.target_language)
+                .map(|lang| lang.trim().to_lowercase());
+        }
+    }
+    let target_language = target_language.unwrap_or_else(|| "en".to_string());
+
+    let success_count = translations
+        .iter()
+        .filter(|r| !r.get("translationFailed").map(falsy).unwrap_or(false))
+        .count();
+
+    if success_count == 0 {
+        tracing::warn!("All translations failed for image {image_id} — not creating empty layer");
+        if let Some(mut job) =
+            resolve_callback_job(&state.pool, job_id, image_id, "translation").await
+        {
+            sqlx::query("UPDATE jobs SET status='FAILED', error=$2, updated_at=now() WHERE id=$1")
+                .bind(&job.id)
+                .bind("Translation failed: no regions were successfully translated")
+                .execute(&state.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            job.status = "FAILED".into();
+            state
+                .sse
+                .emit_event_for_image(
+                    image_id,
+                    "job_update",
+                    &serde_json::to_string(&job).unwrap_or_default(),
+                )
+                .await;
+        }
+        return Ok(());
+    }
+
+    // Existing translation layers for this page+language ⇒ this is a redo pass.
+    let all_layers: Vec<Layer> = match &page {
+        Some(page) => sqlx::query_as("SELECT * FROM layers WHERE page_id = $1")
+            .bind(page.id)
+            .fetch_all(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?,
+        None => Vec::new(),
+    };
+    let existing_translation_layers: Vec<&Layer> = all_layers
+        .iter()
+        .filter(|l| {
+            l.layer_type.eq_ignore_ascii_case("translation")
+                && l.target_language
+                    .as_deref()
+                    .map(|l| l.eq_ignore_ascii_case(&target_language))
+                    .unwrap_or(false)
+        })
+        .collect();
+
+    let is_redo = !existing_translation_layers.is_empty();
+    if is_redo {
+        for old in &existing_translation_layers {
+            sqlx::query("UPDATE layers SET visible = FALSE WHERE id = $1")
+                .bind(old.id)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
+
+    // Z-order over ALL layers so the new one is always on top.
+    let next_z = all_layers.iter().map(|l| l.z_order).max().unwrap_or(0) + 1;
+
+    // Metadata: provider/model split from "org/model" identifiers, reason labels.
+    let first = translations.first().cloned().unwrap_or(Value::Null);
+    let model_identifier = first
+        .get("modelIdentifier")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let avg_confidence = first
+        .get("confidence")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.0);
+    let (provider_label, model_label) = match model_identifier.split_once('/') {
+        Some((provider, model)) => (provider.to_string(), model.to_string()),
+        None => ("Translation Worker".to_string(), model_identifier.clone()),
+    };
+
+    let mut metadata = serde_json::Map::new();
+    metadata.insert("provider".into(), json!(provider_label));
+    metadata.insert("model".into(), json!(model_label));
+    metadata.insert("time".into(), json!(chrono::Utc::now().to_rfc3339()));
+    metadata.insert("confidence".into(), json!(avg_confidence));
+
+    let mut trans_reason: Option<String> = None;
+    if let Some(redis) = &state.redis {
+        trans_reason = redis
+            .get(&format!("image:translation:reason:{image_id}"))
+            .await
+            .ok()
+            .flatten();
+        if trans_reason.is_some() {
+            let _ = redis
+                .delete(&format!("image:translation:reason:{image_id}"))
+                .await;
+        }
+    }
+    metadata.insert(
+        "layer_name".into(),
+        json!(match (&trans_reason, is_redo) {
+            (Some(reason), _) => format!("Translation ({reason})"),
+            (None, true) => "Translation (retry)".to_string(),
+            (None, false) => "Translation".to_string(),
+        }),
+    );
+    metadata.insert("layer_order".into(), json!(next_z));
+    metadata.insert(
+        "last_modified".into(),
+        json!(chrono::Utc::now().to_rfc3339()),
+    );
+
+    if let Some(cost) = cost.filter(|c| !c.is_null()) {
+        metadata.insert("tl".into(), json!({ "cost": cost }));
+        save_job_costs(state, image_id, cost).await;
+    }
+
+    let layer_id = Uuid::new_v4();
+    let mut tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+    sqlx::query(
+        "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
+         VALUES ($1,'translation',$2,TRUE,$3,$4,$5,now())",
+    )
+    .bind(layer_id)
+    .bind(&target_language)
+    .bind(next_z)
+    .bind(Value::Object(metadata.clone()))
+    .bind(page.as_ref().map(|p| p.id))
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    for t in translations {
+        let Some(region_id) = t
+            .get("regionId")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok())
+        else {
+            continue;
+        };
+        let translated_text = t
+            .get("translatedText")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let failed = t.get("translationFailed").map(falsy).unwrap_or(false);
+        let score = t.get("translationScore").and_then(|v| v.as_f64());
+
+        // Backward-compatible OcrRegion fields.
+        sqlx::query(
+            "UPDATE ocr_regions SET translated_text=$2, translation_failed=$3, translation_score=$4 WHERE id=$1",
+        )
+        .bind(region_id)
+        .bind(&translated_text)
+        .bind(failed)
+        .bind(score)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        // Find or create the LayerElement in THIS layer.
+        let existing: Option<crate::models::LayerElement> = sqlx::query_as(
+            "SELECT * FROM layer_elements WHERE region_id = $1 AND layer_id = $2 LIMIT 1",
+        )
+        .bind(region_id)
+        .bind(layer_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let region: Option<OcrRegion> = sqlx::query_as("SELECT * FROM ocr_regions WHERE id = $1")
+            .bind(region_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        match (existing, &region) {
+            (Some(element), Some(region)) => {
+                let manually_edited = element.is_manually_edited.unwrap_or(false);
+                if manually_edited {
+                    // Never touch a hand-tuned layout — text only.
+                    sqlx::query("UPDATE layer_elements SET text=$2 WHERE id=$1")
+                        .bind(element.id)
+                        .bind(&translated_text)
+                        .execute(&mut *tx)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                } else {
+                    let box_geom = text_box_for(&state.pool, region).await;
+                    sqlx::query(
+                        "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7 WHERE id=$1",
+                    )
+                    .bind(element.id)
+                    .bind(&translated_text)
+                    .bind(box_geom.x)
+                    .bind(box_geom.y)
+                    .bind(box_geom.w)
+                    .bind(box_geom.h)
+                    .bind(&region.mask_polygon)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                }
+            }
+            (_, Some(region)) => {
+                let box_geom = text_box_for(&state.pool, region).await;
+                sqlx::query(
+                    "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, font, font_weight, \
+                     background_color, text_color, box_shape, mask_polygon, word_wrap, layer_id, region_id) \
+                     VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,'Comic Neue','bold',$7,$8,$9,$10,TRUE,$11,$12)",
+                )
+                .bind(Uuid::new_v4())
+                .bind(&translated_text)
+                .bind(box_geom.x)
+                .bind(box_geom.y)
+                .bind(box_geom.w)
+                .bind(box_geom.h)
+                .bind(&region.background_color)
+                .bind(contrasting_text_color(region.background_color.as_deref()))
+                .bind(if region.region_type.as_deref().unwrap_or("").eq_ignore_ascii_case("speech") {
+                    "elliptical"
+                } else {
+                    "rectangular"
+                })
+                .bind(&region.mask_polygon)
+                .bind(layer_id)
+                .bind(region_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+            }
+            (Some(element), None) => {
+                sqlx::query("UPDATE layer_elements SET text=$2 WHERE id=$1")
+                    .bind(element.id)
+                    .bind(&translated_text)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            (None, None) => {}
+        }
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    enqueue_job_directly(
+        state,
+        "render",
+        image_id,
+        page.map(|p| p.id),
+        None,
+        "normal",
+        |_| {},
+    )
+    .await;
+    Ok(())
+}
+
+fn falsy(value: &Value) -> bool {
+    matches!(value, Value::Bool(true))
+        || value
+            .as_str()
+            .map(|s| s.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+}
+
+/// Render callback: stamp pages rendered, skip QA when manual edits exist, else queue QA.
+pub async fn handle_render_callback(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    page_id: Option<Uuid>,
+) -> Result<(), String> {
+    if !claim_callback(state, job_id, image_id, "render").await {
+        return Ok(());
+    }
+
+    let pages: Vec<Page> = match page_id {
+        Some(page_id) => sqlx::query_as("SELECT * FROM pages WHERE id = $1")
+            .bind(page_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .collect(),
+        None => sqlx::query_as("SELECT * FROM pages WHERE image_id = $1")
+            .bind(image_id)
+            .fetch_all(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?,
+    };
+
+    for page in &pages {
+        sqlx::query("UPDATE pages SET last_rendered_at = now() WHERE id = $1")
+            .bind(page.id)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    let mut manual_changes_done = false;
+    for page in &pages {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM layer_elements WHERE is_manually_edited = TRUE AND layer_id IN (SELECT id FROM layers WHERE page_id = $1)",
+        )
+        .bind(page.id)
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(0);
+        if count > 0 {
+            manual_changes_done = true;
+            break;
+        }
+    }
+
+    if manual_changes_done {
+        tracing::info!(
+            "Received Render callback for image: {image_id}. Skipping QA as manual edits exist."
+        );
+        if let Some(redis) = &state.redis {
+            let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;
+        }
+    } else {
+        tracing::info!("Received Render callback for image: {image_id}. Enqueuing QA job...");
+        let qa_page_id = page_id.or_else(|| pages.first().map(|p| p.id));
+        let retries = qa_retry_count(state, image_id, qa_page_id).await;
+        enqueue_job_directly(
+            state,
+            "qa",
+            image_id,
+            qa_page_id,
+            None,
+            "normal",
+            move |job| {
+                job.insert("qaPass".into(), json!(retries + 1));
+            },
+        )
+        .await;
+    }
+    Ok(())
+}
+
+/// QA retries are counted per PAGE when known (two chapters sharing a duplicated image
+/// must not consume each other's retry budget), per image otherwise.
+/// QA retries are counted per PAGE when known (two chapters sharing a duplicated image
+/// must not consume each other's retry budget), per image otherwise.
+fn qa_retry_key(image_id: Uuid, page_id: Option<Uuid>) -> String {
+    match page_id {
+        Some(page_id) => format!("page:qa:retries:{page_id}"),
+        None => format!("image:qa:retries:{image_id}"),
+    }
+}
+
+async fn qa_retry_count(state: &AppState, image_id: Uuid, page_id: Option<Uuid>) -> i64 {
+    let key = qa_retry_key(image_id, page_id);
+    match &state.redis {
+        Some(redis) => redis
+            .get(&key)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0),
+        None => 0,
+    }
+}
+
+/// QA Re-OCR callback: write corrected text back, then retry translation with the new OCR.
+pub async fn handle_qa_re_ocr_callback(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    callback_page_id: Option<Uuid>,
+    results: &[Value],
+) -> Result<(), String> {
+    tracing::info!(
+        "Received QA Re-OCR callback for image: {} with {} results",
+        image_id,
+        results.len()
+    );
+
+    if !claim_callback(state, job_id, image_id, "qa-re-ocr").await {
+        return Ok(());
+    }
+
+    for r in results {
+        let Some(region_id) = r
+            .get("regionId")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok())
+        else {
+            continue;
+        };
+        let text = r.get("text").and_then(|v| v.as_str());
+        let confidence = r.get("confidence").and_then(|v| v.as_f64());
+        let language = r.get("detectedLanguage").and_then(|v| v.as_str());
+        let _ = sqlx::query(
+            "UPDATE ocr_regions SET text=COALESCE($2,text), confidence=$3, detected_language=COALESCE($4,detected_language), qa_status='re_ocr_completed' WHERE id=$1",
+        )
+        .bind(region_id)
+        .bind(text)
+        .bind(confidence)
+        .bind(language)
+        .execute(&state.pool)
+        .await;
+    }
+
+    tracing::info!("QA Re-OCR complete for image {image_id}. Enqueuing translation job...");
+    let reocr_page = resolve_page_for_callback(&state.pool, image_id, callback_page_id).await;
+    if let Some(redis) = &state.redis {
+        let _ = redis
+            .set_ex(
+                &format!("image:translation:reason:{image_id}"),
+                "qa-re-ocr",
+                REDO_REASON_TTL_SECS,
+            )
+            .await;
+    }
+    enqueue_job_directly(
+        state,
+        "translation",
+        image_id,
+        reocr_page.map(|p| p.id),
+        None,
+        "normal",
+        |_| {},
+    )
+    .await;
+    Ok(())
+}
+
+/// Hybrid QA first pass (LLM): apply direct fixes / SFX rejections, then fix layer
+/// visibility so exactly the newest translation layer shows.
+pub async fn prepare_hybrid_qa(
+    state: &AppState,
+    image_id: Uuid,
+    callback_page_id: Option<Uuid>,
+    qa_results: &[Value],
+) -> Result<(), String> {
+    tracing::info!(
+        "Preparing hybrid QA for image: {image_id} with {} LLM first pass results",
+        qa_results.len()
+    );
+
+    let hybrid_page = resolve_page_for_callback(&state.pool, image_id, callback_page_id).await;
+    let Some(page) = &hybrid_page else {
+        return Ok(());
+    };
+
+    // Latest translation layer by z_order (Java compared zOrder for the same purpose).
+    let layers: Vec<Layer> = sqlx::query_as("SELECT * FROM layers WHERE page_id = $1")
+        .bind(page.id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let latest_translation = layers
+        .iter()
+        .filter(|l| l.layer_type.eq_ignore_ascii_case("translation"))
+        .max_by_key(|l| l.z_order)
+        .map(|l| l.id);
+
+    for r in qa_results {
+        let Some(region_id) = r
+            .get("regionId")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok())
+        else {
+            continue;
+        };
+        let status = r.get("qaStatus").and_then(|v| v.as_str());
+        let score = r.get("qaScore").and_then(|v| v.as_f64());
+        let feedback = r.get("qaFeedback").and_then(|v| v.as_str());
+
+        if status
+            .map(|s| s.eq_ignore_ascii_case("direct_fix"))
+            .unwrap_or(false)
+            && r.get("directFix").is_some()
+        {
+            let corrected = r
+                .get("directFix")
+                .and_then(|df| df.get("correctedText"))
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let font_size = r
+                .get("directFix")
+                .and_then(|df| df.get("suggestedFontSize"))
+                .and_then(|v| v.as_f64());
+            apply_direct_fix(state, region_id, latest_translation, corrected, font_size).await;
+            // direct_fix lands as "fixed" (Java overwrote the status after fixing).
+            let _ = sqlx::query(
+                "UPDATE ocr_regions SET qa_status='fixed', qa_score=$2, qa_feedback=$3 WHERE id=$1",
+            )
+            .bind(region_id)
+            .bind(score)
+            .bind(feedback)
+            .execute(&state.pool)
+            .await;
+        } else if status
+            .map(|s| s.eq_ignore_ascii_case("reject_sfx"))
+            .unwrap_or(false)
+        {
+            hide_translation_elements(state, region_id, latest_translation).await;
+            let _ = sqlx::query(
+                "UPDATE ocr_regions SET qa_status=$2, qa_score=$3, qa_feedback=$4 WHERE id=$1",
+            )
+            .bind(region_id)
+            .bind(status)
+            .bind(score)
+            .bind(feedback)
+            .execute(&state.pool)
+            .await;
+        } else {
+            let _ = sqlx::query(
+                "UPDATE ocr_regions SET qa_status=$2, qa_score=$3, qa_feedback=$4 WHERE id=$1",
+            )
+            .bind(region_id)
+            .bind(status)
+            .bind(score)
+            .bind(feedback)
+            .execute(&state.pool)
+            .await;
+        }
+    }
+
+    // Visibility sweep: newest translation visible, OCR hidden, SFX visible, others kept.
+    for layer in &layers {
+        let should_be_visible = if layer.layer_type.eq_ignore_ascii_case("translation") {
+            latest_translation == Some(layer.id)
+        } else if layer.layer_type.eq_ignore_ascii_case("ocr") {
+            false
+        } else if layer.layer_type.eq_ignore_ascii_case("sfx") {
+            true
+        } else {
+            layer.visible.unwrap_or(true)
+        };
+        if layer.visible.unwrap_or(true) != should_be_visible {
+            let _ = sqlx::query("UPDATE layers SET visible=$2 WHERE id=$1")
+                .bind(layer.id)
+                .bind(should_be_visible)
+                .execute(&state.pool)
+                .await;
+        }
+    }
+    Ok(())
+}
+
+async fn apply_direct_fix(
+    state: &AppState,
+    region_id: Uuid,
+    latest_translation: Option<Uuid>,
+    corrected_text: Option<String>,
+    font_size: Option<f64>,
+) {
+    let elements: Vec<crate::models::LayerElement> =
+        sqlx::query_as("SELECT * FROM layer_elements WHERE region_id = $1")
+            .bind(region_id)
+            .fetch_all(&state.pool)
+            .await
+            .unwrap_or_default();
+    for el in elements {
+        let in_latest = match latest_translation {
+            Some(latest) => el.layer_id == latest,
+            None => false,
+        };
+        if !in_latest {
+            continue;
+        }
+        let layer_type: Option<String> =
+            sqlx::query_scalar("SELECT type FROM layers WHERE id = $1")
+                .bind(el.layer_id)
+                .fetch_optional(&state.pool)
+                .await
+                .ok()
+                .flatten();
+        if !layer_type
+            .as_deref()
+            .map(|t| t.eq_ignore_ascii_case("translation"))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let _ = sqlx::query(
+            "UPDATE layer_elements SET text=COALESCE($2,text), size=COALESCE($3,size) WHERE id=$1",
+        )
+        .bind(el.id)
+        .bind(corrected_text.clone().or(el.text.clone()))
+        .bind(font_size.or(el.size))
+        .execute(&state.pool)
+        .await;
+        if corrected_text.is_some() {
+            let _ = sqlx::query("UPDATE ocr_regions SET translated_text=$2 WHERE id=$1")
+                .bind(region_id)
+                .bind(corrected_text.clone())
+                .execute(&state.pool)
+                .await;
+        }
+    }
+}
+
+/// Hide typeset text for a region QA judged a sound effect. Hidden, not deleted: an
+/// editor may disagree, and the renderer skips invisible elements anyway.
+pub async fn hide_translation_elements(
+    state: &AppState,
+    region_id: Uuid,
+    latest_translation: Option<Uuid>,
+) {
+    let elements: Vec<crate::models::LayerElement> =
+        sqlx::query_as("SELECT * FROM layer_elements WHERE region_id = $1")
+            .bind(region_id)
+            .fetch_all(&state.pool)
+            .await
+            .unwrap_or_default();
+    for el in elements {
+        let layer_type: Option<String> =
+            sqlx::query_scalar("SELECT type FROM layers WHERE id = $1")
+                .bind(el.layer_id)
+                .fetch_optional(&state.pool)
+                .await
+                .ok()
+                .flatten();
+        let is_translation = layer_type
+            .as_deref()
+            .map(|t| t.eq_ignore_ascii_case("translation"))
+            .unwrap_or(false);
+        if !is_translation {
+            continue;
+        }
+        if let Some(latest) = latest_translation
+            && el.layer_id != latest
+        {
+            continue; // older translation layers are already superseded history
+        }
+        let _ = sqlx::query("UPDATE layer_elements SET visible=FALSE WHERE id=$1")
+            .bind(el.id)
+            .execute(&state.pool)
+            .await;
+        tracing::info!(
+            "QA rejected region {region_id} as SFX — hiding its typeset element {}",
+            el.id
+        );
+    }
+}
+
+/// The full QA verdict. Returns one of DUPLICATE / MANUAL_REVIEW / RETRIED /
+/// COMPLETED_NO_QA / COMPLETED — the controller turns the last two into SSE notifications.
+pub async fn handle_qa_callback(
+    state: &AppState,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    callback_page_id: Option<Uuid>,
+    qa_results: &[Value],
+    cost: Option<&Value>,
+) -> Result<&'static str, String> {
+    tracing::info!(
+        "Received QA callback for image: {} with {} results",
+        image_id,
+        qa_results.len()
+    );
+
+    if !claim_callback(state, job_id, image_id, "qa").await {
+        return Ok("DUPLICATE");
+    }
+
+    let mut needs_retry = false;
+    let mut needs_manual_intervention = false;
+    let mut regions_to_re_ocr: Vec<String> = Vec::new();
+    let mut failed_regions_list: Vec<Value> = Vec::new();
+    // 0 total, 1 passed, 2 failed, 3 fixed/direct_fix, 4 manual_review
+    let mut stats = [0i64; 5];
+    let mut score_sum = 0.0f64;
+    let mut score_count = 0i64;
+    let mut discarded_results = 0i64;
+
+    for r in qa_results {
+        // A truncated model response loses its identifying fields; without this guard
+        // the counters stayed at zero — which scored as a clean "passed".
+        let raw_region_id = r.get("regionId").and_then(|v| v.as_str()).unwrap_or("");
+        if raw_region_id.trim().is_empty() {
+            discarded_results += 1;
+            tracing::warn!(
+                "Discarding QA result without a regionId for image {image_id} (likely a truncated model response)"
+            );
+            continue;
+        }
+        let Ok(region_id) = Uuid::parse_str(raw_region_id) else {
+            discarded_results += 1;
+            continue;
+        };
+        let status_before = r
+            .get("qaStatus")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let score = r.get("qaScore").and_then(|v| v.as_f64());
+        let feedback = r.get("qaFeedback").and_then(|v| v.as_str());
+
+        let existing: Option<OcrRegion> = sqlx::query_as("SELECT * FROM ocr_regions WHERE id = $1")
+            .bind(region_id)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+
+        if let Some(mut region) = existing {
+            let mut final_status = status_before.to_string();
+
+            if status_before.eq_ignore_ascii_case("direct_fix") && r.get("directFix").is_some() {
+                let corrected = r
+                    .get("directFix")
+                    .and_then(|df| df.get("correctedText"))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+                let font_size = r
+                    .get("directFix")
+                    .and_then(|df| df.get("suggestedFontSize"))
+                    .and_then(|v| v.as_f64());
+                apply_direct_fix(state, region_id, None, corrected, font_size).await;
+                final_status = "fixed".into();
+            } else if status_before.eq_ignore_ascii_case("failed") && r.get("escalation").is_some()
+            {
+                let escalation = r.get("escalation").cloned().unwrap_or(Value::Null);
+                let flag = |key: &str| {
+                    escalation
+                        .get(key)
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                };
+                if flag("needsManualIntervention") {
+                    final_status = "manual_review".into();
+                } else if flag("needsReOcr") {
+                    regions_to_re_ocr.push(region_id.to_string());
+                } else if flag("ocrBad") && escalation.get("correctedSourceText").is_some() {
+                    let _ = sqlx::query("UPDATE ocr_regions SET text=$2 WHERE id=$1")
+                        .bind(region_id)
+                        .bind(
+                            escalation
+                                .get("correctedSourceText")
+                                .and_then(Value::as_str),
+                        )
+                        .execute(&state.pool)
+                        .await;
+                }
+                if flag("orderBad") && escalation.get("suggestedReadingOrderIndex").is_some() {
+                    let order = escalation
+                        .get("suggestedReadingOrderIndex")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0) as i32;
+                    let _ =
+                        sqlx::query("UPDATE ocr_regions SET bubble_reading_order=$2 WHERE id=$1")
+                            .bind(region_id)
+                            .bind(order)
+                            .execute(&state.pool)
+                            .await;
+                    region.bubble_reading_order = Some(order);
+                }
+            } else if status_before.eq_ignore_ascii_case("reject_sfx") {
+                hide_translation_elements(state, region_id, None).await;
+            }
+
+            let _ = sqlx::query(
+                "UPDATE ocr_regions SET qa_status=$2, qa_score=$3, qa_feedback=$4 WHERE id=$1",
+            )
+            .bind(region_id)
+            .bind(if final_status.is_empty() {
+                None
+            } else {
+                Some(final_status.as_str())
+            })
+            .bind(score)
+            .bind(feedback)
+            .execute(&state.pool)
+            .await;
+
+            stats[0] += 1;
+            match final_status.as_str() {
+                s if s.eq_ignore_ascii_case("passed") => stats[1] += 1,
+                s if s.eq_ignore_ascii_case("failed") => stats[2] += 1,
+                s if s.eq_ignore_ascii_case("fixed") || s.eq_ignore_ascii_case("direct_fix") => {
+                    stats[3] += 1
+                }
+                s if s.eq_ignore_ascii_case("manual_review") => stats[4] += 1,
+                _ => {}
+            }
+            if let Some(score) = score {
+                score_sum += score;
+                score_count += 1;
+            }
+
+            if !final_status.eq_ignore_ascii_case("passed") {
+                failed_regions_list.push(json!({
+                    "regionId": region_id.to_string(),
+                    "bubbleReadingOrder": region.bubble_reading_order,
+                    "qaStatus": final_status,
+                    "qaScore": score,
+                    "qaFeedback": feedback,
+                    "escalation": r.get("escalation"),
+                }));
+            }
+        }
+
+        if status_before.eq_ignore_ascii_case("failed") {
+            let manual = r
+                .get("escalation")
+                .and_then(|e| e.get("needsManualIntervention"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if manual {
+                needs_manual_intervention = true;
+            } else {
+                needs_retry = true;
+            }
+        }
+    }
+
+    // A QA pass that scored nothing is not a QA pass.
+    let qa_unusable = discarded_results > 0 && stats[0] == 0;
+    if qa_unusable {
+        tracing::error!(
+            "QA produced no usable results for image {image_id} ({discarded_results} discarded). Not reporting a pass."
+        );
+    }
+
+    let qa_page = resolve_page_for_callback(&state.pool, image_id, callback_page_id).await;
+    let qa_page_id = qa_page.as_ref().map(|p| p.id);
+    let retries = qa_retry_count(state, image_id, qa_page_id).await;
+
+    // Record the pass on the NEWEST translation layer only (per-cycle results).
+    if let Some(page) = &qa_page {
+        let newest: Option<Layer> = sqlx::query_as(
+            "SELECT * FROM layers WHERE page_id = $1 AND type ILIKE 'translation' ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(page.id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten();
+
+        if let Some(layer) = newest {
+            let mut metadata = layer
+                .metadata_json
+                .clone()
+                .and_then(|v| v.as_object().cloned())
+                .unwrap_or_default();
+
+            let status = if qa_unusable {
+                "error"
+            } else if needs_manual_intervention || stats[4] > 0 {
+                "manual_review"
+            } else if stats[2] > 0 {
+                if needs_retry {
+                    "partial_pass"
+                } else {
+                    "failed"
+                }
+            } else if stats[3] > 0 {
+                "partial_pass"
+            } else {
+                "passed"
+            };
+
+            let mut qa_node = serde_json::Map::new();
+            qa_node.insert("status".into(), json!(status));
+            if discarded_results > 0 {
+                qa_node.insert("discarded_results".into(), json!(discarded_results));
+            }
+            qa_node.insert("total_regions".into(), json!(stats[0]));
+            qa_node.insert("passed".into(), json!(stats[1]));
+            qa_node.insert("failed".into(), json!(stats[2]));
+            qa_node.insert("direct_fix".into(), json!(stats[3]));
+            qa_node.insert("manual_review".into(), json!(stats[4]));
+            qa_node.insert(
+                "avg_score".into(),
+                json!(if score_count > 0 {
+                    score_sum / score_count as f64
+                } else {
+                    0.0
+                }),
+            );
+            qa_node.insert("last_qa_at".into(), json!(chrono::Utc::now().to_rfc3339()));
+            qa_node.insert("retries_used".into(), json!(retries));
+            qa_node.insert(
+                "failed_regions".into(),
+                Value::Array(failed_regions_list.clone()),
+            );
+            if let Some(cost) = cost.filter(|c| !c.is_null()) {
+                qa_node.insert("cost".into(), cost.clone());
+            }
+            metadata.insert("qa".into(), Value::Object(qa_node));
+
+            if needs_manual_intervention {
+                let current = metadata
+                    .get("layer_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Translation")
+                    .to_string();
+                if !current.contains("qa-manual-review-needed") {
+                    metadata.insert(
+                        "layer_name".into(),
+                        json!(format!("{current} (qa-manual-review-needed)")),
+                    );
+                }
+            }
+
+            let _ = sqlx::query("UPDATE layers SET metadata_json=$2 WHERE id=$1")
+                .bind(layer.id)
+                .bind(Value::Object(metadata))
+                .execute(&state.pool)
+                .await;
+
+            if cost.is_some() {
+                save_job_costs(state, image_id, cost.unwrap_or(&Value::Null)).await;
+            }
+        }
+    }
+
+    if needs_manual_intervention {
+        tracing::warn!("QA requested manual intervention for image {image_id}. Halting pipeline.");
+        if let Some(redis) = &state.redis {
+            if let Some(page_id) = qa_page_id {
+                let _ = redis.delete(&format!("page:qa:retries:{page_id}")).await;
+            }
+            let _ = redis.delete(&qa_retry_key(image_id, qa_page_id)).await;
+            let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;
+        }
+        Ok("MANUAL_REVIEW")
+    } else if needs_retry && retries < 2 {
+        if let Some(redis) = &state.redis {
+            let _ = redis
+                .set(
+                    &qa_retry_key(image_id, qa_page_id),
+                    &(retries + 1).to_string(),
+                )
+                .await;
+        }
+        if !regions_to_re_ocr.is_empty() {
+            tracing::info!(
+                "QA failed for image {image_id} with Re-OCR request. Retry {}/2. Enqueuing qa-re-ocr job...",
+                retries + 1
+            );
+            let payload_regions = regions_to_re_ocr.clone();
+            enqueue_job_directly(
+                state,
+                "qa-re-ocr",
+                image_id,
+                qa_page_id,
+                None,
+                "high",
+                move |job| {
+                    job.insert("regionsToReOcr".into(), json!(payload_regions));
+                },
+            )
+            .await;
+        } else {
+            tracing::info!(
+                "QA failed for image {image_id}. Retry {}/2. Enqueuing translation job...",
+                retries + 1
+            );
+            if let Some(redis) = &state.redis {
+                let _ = redis
+                    .set_ex(
+                        &format!("image:translation:reason:{image_id}"),
+                        "qa-re-translate",
+                        REDO_REASON_TTL_SECS,
+                    )
+                    .await;
+            }
+            enqueue_job_directly(
+                state,
+                "translation",
+                image_id,
+                qa_page_id,
+                None,
+                "normal",
+                |_| {},
+            )
+            .await;
+        }
+        Ok("RETRIED")
+    } else {
+        if needs_retry {
+            tracing::warn!(
+                "QA failed for image {image_id} but reached max retries. Completing pipeline."
+            );
+        } else if qa_unusable {
+            tracing::warn!(
+                "QA returned no usable results for image {image_id}. Completing pipeline without a QA verdict."
+            );
+        } else {
+            tracing::info!("QA passed for image {image_id}. Pipeline complete!");
+        }
+        if let Some(redis) = &state.redis {
+            let _ = redis.delete(&qa_retry_key(image_id, qa_page_id)).await;
+            let _ = redis.delete(&format!("pipeline:trace:{image_id}")).await;
+        }
+        Ok(if qa_unusable {
+            "COMPLETED_NO_QA"
+        } else {
+            "COMPLETED"
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TextBoxForTest port — pure geometry, no database.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod textbox_tests {
+    use super::*;
+    use uuid::Uuid;
+
+    /// OcrRegion fixtures via JSON (camelCase, same as the wire shape).
+    fn region(value: serde_json::Value) -> OcrRegion {
+        serde_json::from_value(value).expect("region fixture")
+    }
+
+    /// A region with a real detected bubble: the bubble is strictly larger than the bbox.
+    fn bubble_region(bx: i32, by: i32, bw: i32, bh: i32) -> serde_json::Value {
+        serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::new_v4(),
+            "detectedLanguage": "ja",
+            "bubbleId": "bubble_0",
+            "bubbleX": bx, "bubbleY": by, "bubbleW": bw, "bubbleH": bh,
+            // The text sits well inside the bubble, as it does when detection fires.
+            "bboxX": bx + bw / 4, "bboxY": by + bh / 4, "bboxW": bw / 2, "bboxH": bh / 2,
+        })
+    }
+
+    /// A free-floating region: the worker copies bubble* from the text bbox.
+    fn direct_text_region(x: i32, y: i32, w: i32, h: i32) -> serde_json::Value {
+        serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::new_v4(),
+            "detectedLanguage": "ja",
+            "bubbleId": "direct_text_0",
+            "bubbleX": x, "bubbleY": y, "bubbleW": w, "bubbleH": h,
+            "bboxX": x, "bboxY": y, "bboxW": w, "bboxH": h,
+            "safeTextX": x, "safeTextY": y, "safeTextW": w, "safeTextH": h,
+        })
+    }
+
+    #[test]
+    fn insets_inside_the_bubble_rather_than_growing_past_it() {
+        let box_geom = text_box_geometry(&region(bubble_region(100, 200, 300, 400)), None);
+        assert_eq!(box_geom.x, 110.0);
+        assert_eq!(box_geom.y, 210.0);
+        assert_eq!(box_geom.w, 280);
+        assert_eq!(box_geom.h, 380);
+        assert!(box_geom.x >= 100.0, "left edge inside bubble");
+        assert!(box_geom.y >= 200.0, "top edge inside bubble");
+        assert!(
+            box_geom.x + box_geom.w as f64 <= 400.0,
+            "right edge inside bubble"
+        );
+        assert!(
+            box_geom.y + box_geom.h as f64 <= 600.0,
+            "bottom edge inside bubble"
+        );
+    }
+
+    #[test]
+    fn uses_bubble_width_not_the_vertical_japanese_text_extent() {
+        let mut r = bubble_region(0, 0, 300, 200);
+        // safeText traces the source text: tall and narrow — English must not inherit it.
+        r["safeTextX"] = serde_json::json!(120);
+        r["safeTextY"] = serde_json::json!(10);
+        r["safeTextW"] = serde_json::json!(60);
+        r["safeTextH"] = serde_json::json!(180);
+
+        let box_geom = text_box_geometry(&region(r), None);
+        assert_eq!(
+            box_geom.w, 280,
+            "should take the bubble's width, not safeText's 60"
+        );
+        assert!(
+            box_geom.w > box_geom.h,
+            "a wide bubble should yield a wide text box"
+        );
+    }
+
+    #[test]
+    fn tiny_bubble_keeps_its_extent_instead_of_collapsing() {
+        let box_geom = text_box_geometry(&region(bubble_region(5, 5, 30, 18)), None);
+        assert!(
+            box_geom.w > 0 && box_geom.h > 0,
+            "must never invert to zero or negative"
+        );
+        assert_eq!(box_geom.w, 30);
+        assert_eq!(box_geom.h, 18);
+    }
+
+    /// The f3aa160 regression: a 49x489 vertical caption squares up to a settable box
+    /// of equal area and centre instead of setting English one word per line.
+    #[test]
+    fn squares_up_the_source_column_instead_of_setting_english_down_it() {
+        let box_geom = text_box_geometry(&region(direct_text_region(71, 675, 49, 489)), None);
+        assert_eq!(
+            box_geom.w, 173,
+            "2.5x the padded 69px column, the ceiling on widening"
+        );
+        assert_eq!(box_geom.h, 203);
+        assert!(box_geom.w > 3 * 49, "must be several words wide, not one");
+        assert_eq!(
+            box_geom.x + box_geom.w as f64 / 2.0,
+            95.5,
+            "centre preserved"
+        );
+        assert_eq!(
+            box_geom.y + box_geom.h as f64 / 2.0,
+            919.5,
+            "centre preserved"
+        );
+        let expected_area = 69.0 * 509.0;
+        let actual_area = (box_geom.w * box_geom.h) as f64;
+        assert!(
+            (actual_area - expected_area).abs() <= 0.02 * expected_area,
+            "area preserved within 2%: {actual_area} vs {expected_area}"
+        );
+    }
+
+    /// Rows written before bubbleId existed are caught by the geometry, not the tag.
+    #[test]
+    fn treats_bubble_geometry_identical_to_the_bbox_as_no_bubble_at_all() {
+        let mut untagged = direct_text_region(1050, 631, 57, 428);
+        untagged["bubbleId"] = serde_json::Value::Null;
+        assert_eq!(text_box_geometry(&region(untagged), None).w, 186);
+    }
+
+    /// Horizontal text is already a shape English fits; reshaping would only move it.
+    #[test]
+    fn leaves_text_that_is_not_a_vertical_column_alone() {
+        let box_geom = text_box_geometry(&region(direct_text_region(100, 100, 540, 120)), None);
+        assert_eq!(box_geom.w, 560);
+        assert_eq!(box_geom.h, 140);
+        assert_eq!(box_geom.x, 90.0);
+    }
+
+    /// A column near the edge of the page reshapes onto the paper, not off it.
+    #[test]
+    fn keeps_a_reshaped_box_on_the_page() {
+        let box_geom = text_box_geometry(
+            &region(direct_text_region(5, 700, 40, 400)),
+            Some((1200.0, 1600.0)),
+        );
+        assert!(box_geom.x >= 0.0, "left edge on the page");
+        assert!(
+            box_geom.x + box_geom.w as f64 <= 1200.0,
+            "right edge on the page"
+        );
+        assert!(
+            box_geom.y >= 0.0 && box_geom.y + box_geom.h as f64 <= 1600.0,
+            "vertically on the page"
+        );
+        assert!(box_geom.w > 60, "still widened");
+    }
+
+    /// The worker's contour fallback can supply a real container for a region YOLO
+    /// matched to no bubble; the direct_text tag must not decide this.
+    #[test]
+    fn insets_a_contour_recovered_bubble_even_though_it_is_still_tagged_direct_text() {
+        let mut recovered = direct_text_region(71, 675, 49, 489);
+        recovered["bubbleX"] = serde_json::json!(30);
+        recovered["bubbleY"] = serde_json::json!(640);
+        recovered["bubbleW"] = serde_json::json!(127);
+        recovered["bubbleH"] = serde_json::json!(560);
+
+        let box_geom = text_box_geometry(&region(recovered), None);
+        assert_eq!(
+            box_geom.w, 107,
+            "inset into the recovered bubble, not grown past it"
+        );
+        assert_eq!(box_geom.h, 540);
+        assert!(
+            box_geom.x >= 30.0 && box_geom.x + box_geom.w as f64 <= 157.0,
+            "stays within the recovered bubble"
+        );
+    }
+
+    /// Absent bubble == synthetic bubble: safeText then bbox both grow rather than inset.
+    #[test]
+    fn falls_back_to_safe_text_then_bbox_when_bubble_geometry_is_missing() {
+        let no_bubble = serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::new_v4(),
+            "detectedLanguage": "ja",
+            "safeTextX": 50, "safeTextY": 60, "safeTextW": 200, "safeTextH": 100,
+            "bboxX": 0, "bboxY": 0, "bboxW": 999, "bboxH": 999,
+        });
+        let box_geom = text_box_geometry(&region(no_bubble), None);
+        assert_eq!(
+            box_geom.w, 220,
+            "safeText preferred over bbox when bubble is absent"
+        );
+        assert_eq!(box_geom.x, 40.0);
+
+        let bbox_only = serde_json::json!({
+            "id": Uuid::new_v4(), "pageId": Uuid::new_v4(),
+            "detectedLanguage": "ja",
+            "bboxX": 10, "bboxY": 10, "bboxW": 120, "bboxH": 120,
+        });
+        assert_eq!(text_box_geometry(&region(bbox_only), None).w, 140);
+    }
+
+    #[test]
+    fn never_positions_off_the_top_left_of_the_image() {
+        assert!(text_box_geometry(&region(bubble_region(0, 0, 200, 200)), None).x >= 0.0);
+        assert!(text_box_geometry(&region(bubble_region(0, 0, 200, 200)), None).y >= 0.0);
+        // Free-floating text grows outward — the case that can go negative.
+        assert!(text_box_geometry(&region(direct_text_region(0, 0, 200, 200)), None).x >= 0.0);
+        assert!(text_box_geometry(&region(direct_text_region(0, 0, 200, 200)), None).y >= 0.0);
+    }
+}

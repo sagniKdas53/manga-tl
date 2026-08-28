@@ -1,0 +1,76 @@
+# Cargo is Rust's build tool AND its package manager (think: Maven + npm combined).
+# This file is the equivalent of pom.xml.
+#
+#   [package]  describes OUR project.
+#   [dependencies] lists crates (libraries) we pull from crates.io — like <dependencies> in Maven,
+#                  except version numbers here mean "this minor version or newer compatible ones"
+#                  (Cargo's equivalent of semver ranges). Exact pins live in Cargo.lock, which is
+#                  committed, so builds are reproducible like npm ci.
+#
+# Useful commands (run inside backend-rust/):
+#   cargo build            compile (debug build, fast)
+#   cargo run              compile + start the server
+#   cargo test             run all tests
+#   cargo clippy           linter (our replacement for SpotBugs/PMD)
+#   cargo fmt              auto-format (our replacement for Spotless)
+
+[package]
+name = "manga-backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Web framework. Axum is built by the tokio team, dominates new Rust web projects,
+# and gives us routing, extractors, SSE and streaming responses out of the box.
+axum = { version = "0.8", features = ["multipart"] }
+
+# The async runtime. Rust has no built-in event loop; tokio provides one.
+# Features chosen:
+#   macros          -> #[tokio::main] attribute
+#   rt-multi-thread -> multi-threaded scheduler
+#   signal          -> graceful shutdown on Ctrl-C / SIGTERM (compose sends SIGTERM!)
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+
+# JSON serialization/deserialization. "serde" = SERialize + DEserialize.
+# This is our Jackson replacement. The "derive" feature generates the
+# serialization code automatically from struct definitions (like @Data + Jackson annotations).
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+# Structured logging. tracing : logback :: axum : spring-web.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Loads backend-rust/.env.local during development so `cargo run` works with zero exports.
+# Production containers have no such file; every value comes from real env vars + secrets.
+dotenvy = "0.15"
+
+# Ready-made HTTP middleware for axum/tower. We start with request tracing;
+# compression, CORS, static files etc. get enabled here as we port more of the app.
+tower-http = { version = "0.6", features = ["catch-panic", "trace", "compression-gzip", "compression-br"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "chrono", "uuid", "json"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+jsonwebtoken = "9"
+aws-sdk-s3 = "1"
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+futures-util = { version = "0.3", features = ["std"] }
+webp = "0.3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp"] }
+bcrypt = "0.15"
+getrandom = "0.3"
+sha2 = "0.10"
+# URL-safe encoding of single-use SSE tickets (Java used Base64.getUrlEncoder()).
+base64 = "0.22"
+# HTTP client for the worker dispatcher (Java used java.net.http.HttpClient).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+# ZIP reading (chapter/project imports) and writing (chapter exports).
+zip = { version = "4", default-features = false, features = ["deflate"] }
+hex = "0.4"
+rust-embed = "8.12.0"
+
+# --- Test-only dependencies ([dev-dependencies] are NOT compiled into the release binary) ---
+[dev-dependencies]
+# Lets tests drive the router directly (no network port, no real server).
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }

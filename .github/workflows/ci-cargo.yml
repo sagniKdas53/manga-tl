@@ -1,0 +1,122 @@
+name: CI - Backend (Rust)
+
+# Mirrors ci-maven.yml's gates for backend-rust/: format check, clippy (SpotBugs/PMD
+# equivalent) and the test suite, against a real Postgres so Phase 1+ integration tests work.
+on:
+  push:
+    branches: ["main", "rust-backend"]
+    paths:
+      - "backend-rust/**"
+      - ".github/workflows/ci-cargo.yml"
+  pull_request:
+    paths:
+      - "backend-rust/**"
+      - ".github/workflows/ci-cargo.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test Rust backend
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: manga_library
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      # NOTE: MinIO is NOT a service container on purpose — GitHub Actions cannot pass a
+      # command to services, and minio/minio exits printing usage unless run as
+      # `server /data`. The "Start MinIO" step below runs it via docker run instead.
+
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # Swatinem/rust-cache caches ~/.cargo and target/ keyed on Cargo.lock,
+      # the same role the maven cache block plays in ci-maven.yml.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend-rust
+
+      # MinIO must run with `server /data` (service containers can't take a command),
+      # so it is a plain docker run with an explicit health wait.
+      - name: Start MinIO
+        run: |
+          docker run -d --name ci-minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9000/minio/health/live > /dev/null; then
+              echo "MinIO healthy"; exit 0
+            fi
+            sleep 1
+          done
+          docker logs ci-minio
+          echo "MinIO did not become healthy in 30s" >&2
+          exit 1
+
+      - name: Format check
+        working-directory: backend-rust
+        run: cargo fmt --check
+
+      # The service container starts EMPTY; apply the canonical schema so integration
+      # tests see the same tables as production. \restrict/\unrestrict are pg_dump 15
+      # artifacts that some psql versions reject, so strip them first.
+      - name: Initialize database schema
+        run: |
+          sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' \
+              -e 's/OWNER TO [a-zA-Z_]*;/OWNER TO postgres;/' \
+              database/init.sql > /tmp/init-cleaned.sql
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres \
+            -d manga_library -v ON_ERROR_STOP=1 -f /tmp/init-cleaned.sql
+
+      - name: Clippy
+        working-directory: backend-rust
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Route contract drift check
+        run: python3 scripts/diff_routes.py
+
+      - name: Test
+        working-directory: backend-rust
+        env:
+          APP_PROFILE: test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/manga_library
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
+          MINIO_TEST_ENDPOINT: http://127.0.0.1:9000
+          MINIO_TEST_ACCESS_KEY: minioadmin
+          MINIO_TEST_SECRET_KEY: minioadmin
+          REDIS_TEST_ADDR: 127.0.0.1:6379
+          # The jobs/recovery suite refuses shared databases by construction; CI's
+          # throwaway postgres is exactly the dedicated DB it wants.
+          JOBS_E2E_DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/manga_library
+        run: cargo test

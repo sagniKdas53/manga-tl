@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict eOlyiAbDGRH6LrQFm6nu7Zv20f31x3z8Gvna5tuiqUWOMseDIVYRLLVxBcW56CJ
 
 -- Dumped from database version 15.18
 -- Dumped by pg_dump version 15.18
@@ -839,5 +838,4 @@ ALTER TABLE ONLY public.translation_regions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict eOlyiAbDGRH6LrQFm6nu7Zv20f31x3z8Gvna5tuiqUWOMseDIVYRLLVxBcW56CJ
 
