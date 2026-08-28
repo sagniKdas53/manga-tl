@@ -522,3 +522,286 @@ async fn ocr_region_patch_translated_clears_failure_flag() {
         .await
         .expect("user cleanup");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Page ordering: delete must close the gap, and page management must keep working afterwards.
+//
+// Java's deletePageDb ended with an explicit "Re-sequence remaining pages in chapter to maintain
+// sequence 1..N" loop. The Rust port dropped it, so deleting page 2 of 5 left 1, 3, 4, 5.
+// ---------------------------------------------------------------------------------------------
+
+// Every test below owns a distinct namespace. The suite runs in parallel and each test
+// pre-cleans its own rows, so a shared prefix would have them deleting each other's fixtures
+// mid-run -- which is exactly what a shared one did on the first attempt.
+
+/// A 64x64 PNG unique to `seed`. The upload endpoint rejects a byte-identical re-upload as a
+/// duplicate, so every page of every fixture chapter needs its own image -- reusing png_bytes()
+/// produced a one-page chapter, and seeding only by page number made the second test's uploads
+/// duplicates of the first's. Callers seed from a fresh Uuid so runs never collide either.
+fn seeded_png(seed: u32) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(64, 64, |x, y| {
+        // Cheap LCG over (seed, position): distinct seeds give distinct pixels, not just
+        // distinct average colour, so no two fixture images can hash alike.
+        let mut v = seed
+            .wrapping_mul(0x9E37_79B9)
+            .wrapping_add(y.wrapping_mul(64).wrapping_add(x));
+        v ^= v >> 13;
+        v = v.wrapping_mul(0x5BD1_E995);
+        v ^= v >> 15;
+        image::Rgba([(v >> 16) as u8, (v >> 8) as u8, v as u8, 255])
+    });
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut cursor, image::ImageFormat::Png).unwrap();
+    cursor.into_inner()
+}
+
+/// Series + chapter + `count` uploaded pages. Returns (chapter_id, page ids in page order).
+async fn chapter_with_pages(
+    app: &Router,
+    pool: &sqlx::PgPool,
+    token: &str,
+    title: &str,
+    count: u32,
+) -> (String, Vec<String>) {
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "POST",
+        "/tlhub/api/series",
+        token,
+        format!(r#"{{"title":"{title}","readingDirection":"rightToLeft"}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let series_id = json_field(&body, "id");
+
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters"),
+        token,
+        r#"{"chapterNumber":1}"#.to_string(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let chapter_id = json_field(&body, "id");
+
+    // Seed from a fresh Uuid so two tests -- or two runs against the same database -- never
+    // upload the same bytes and trip the duplicate check.
+    let seed_base = Uuid::new_v4().as_u128() as u32;
+    let mut page_ids = Vec::new();
+    for n in 1..=count {
+        let body = multipart_body(
+            &chapter_id,
+            n,
+            &format!("p{n}.png"),
+            &seeded_png(seed_base.wrapping_add(n)),
+        );
+        let (status, _, body, _) =
+            send_multipart(app.clone(), "/tlhub/api/images", token, body).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        page_ids.push(json_field(&body, "pageId"));
+    }
+    assert_eq!(
+        numbers(pool, &chapter_id).await,
+        vec![1, 2, 3, 4, 5][..count as usize].to_vec()
+    );
+    (chapter_id, page_ids)
+}
+
+/// The chapter's page numbers, in ascending order — read straight from the DB so the assertion
+/// cannot be softened by whatever the list endpoint chooses to sort by.
+async fn numbers(pool: &sqlx::PgPool, chapter_id: &str) -> Vec<i32> {
+    sqlx::query_scalar::<_, i32>(
+        "SELECT page_number FROM pages WHERE chapter_id = $1::uuid ORDER BY page_number ASC",
+    )
+    .bind(chapter_id)
+    .fetch_all(pool)
+    .await
+    .expect("page numbers")
+}
+
+async fn number_of(pool: &sqlx::PgPool, page_id: &str) -> i32 {
+    sqlx::query_scalar::<_, i32>("SELECT page_number FROM pages WHERE id = $1::uuid")
+        .bind(page_id)
+        .fetch_one(pool)
+        .await
+        .expect("page number")
+}
+
+async fn order_probe(pool: &sqlx::PgPool, ns: &str, title: &str) -> String {
+    sqlx::query("DELETE FROM series WHERE title = $1")
+        .bind(title)
+        .execute(pool)
+        .await
+        .expect("series pre-clean");
+    sqlx::query(
+        "DELETE FROM images WHERE created_by IN (SELECT id FROM users WHERE email LIKE $1 || '%')",
+    )
+    .bind(ns)
+    .execute(pool)
+    .await
+    .expect("image pre-clean");
+    sqlx::query("DELETE FROM users WHERE email LIKE $1 || '%'")
+        .bind(ns)
+        .execute(pool)
+        .await
+        .expect("user pre-clean");
+    let email = format!("{ns}-{}@example.invalid", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'admin')",
+    )
+    .bind(&email)
+    .execute(pool)
+    .await
+    .expect("probe user");
+    JwtUtils::new(SECRET.into(), 3_600_000)
+        .generate_token(&email)
+        .expect("token")
+}
+
+async fn order_cleanup(pool: &sqlx::PgPool, ns: &str, title: &str) {
+    sqlx::query("DELETE FROM series WHERE title = $1")
+        .bind(title)
+        .execute(pool)
+        .await
+        .expect("series cleanup");
+    sqlx::query(
+        "DELETE FROM images WHERE created_by IN (SELECT id FROM users WHERE email LIKE $1 || '%')",
+    )
+    .bind(ns)
+    .execute(pool)
+    .await
+    .expect("image cleanup");
+    sqlx::query("DELETE FROM users WHERE email LIKE $1 || '%'")
+        .bind(ns)
+        .execute(pool)
+        .await
+        .expect("user cleanup");
+}
+
+#[tokio::test]
+async fn delete_page_closes_the_gap_in_page_numbers() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgdel-e2e";
+    const TITLE: &str = "PageOrder Delete Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 5).await;
+
+    // Delete the second of five.
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/pages/{}", page_ids[1]),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    assert_eq!(
+        numbers(&pool, &chapter_id).await,
+        vec![1, 2, 3, 4],
+        "deleting page 2 of 5 must leave 1..4, not 1,3,4,5"
+    );
+    // Identity, not just the shape: pages 3/4/5 each moved down exactly one slot.
+    assert_eq!(number_of(&pool, &page_ids[0]).await, 1);
+    assert_eq!(number_of(&pool, &page_ids[2]).await, 2);
+    assert_eq!(number_of(&pool, &page_ids[3]).await, 3);
+    assert_eq!(number_of(&pool, &page_ids[4]).await, 4);
+
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
+#[tokio::test]
+async fn page_number_can_still_reach_the_last_slot_after_a_delete() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgmove-e2e";
+    const TITLE: &str = "PageOrder Move Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 5).await;
+
+    let (status, ..) = send_json(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/pages/{}", page_ids[1]),
+        &token,
+        String::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // update_page_number validates newNumber against COUNT(*). With a hole left by the delete the
+    // highest real page number exceeds the count, so this move used to be rejected as "greater
+    // than total pages" -- one delete broke reordering for the rest of the chapter.
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PATCH",
+        &format!("/tlhub/api/pages/{}/number", page_ids[0]),
+        &token,
+        r#"{"newNumber":4}"#.to_string(),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "moving to the last slot must work: {body}"
+    );
+
+    assert_eq!(
+        number_of(&pool, &page_ids[0]).await,
+        4,
+        "moved page lands last"
+    );
+    assert_eq!(
+        numbers(&pool, &chapter_id).await,
+        vec![1, 2, 3, 4],
+        "the sequence stays contiguous after the move"
+    );
+    // The three that shifted up to fill the vacated slot, in their original relative order.
+    assert_eq!(number_of(&pool, &page_ids[2]).await, 1);
+    assert_eq!(number_of(&pool, &page_ids[3]).await, 2);
+    assert_eq!(number_of(&pool, &page_ids[4]).await, 3);
+
+    order_cleanup(&pool, NS, TITLE).await;
+}
+
+#[tokio::test]
+async fn reorder_pages_applies_the_requested_order() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL or MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+    const NS: &str = "__pgreorder-e2e";
+    const TITLE: &str = "PageOrder Reorder Probe";
+    let token = order_probe(&pool, NS, TITLE).await;
+    let (chapter_id, page_ids) = chapter_with_pages(&app, &pool, &token, TITLE, 4).await;
+
+    // Reverse it. Every page changes number, which is what the two-phase renumber exists for:
+    // a naive single pass would collide on the unique (chapter_id, page_number) pair.
+    let reversed: Vec<&String> = page_ids.iter().rev().collect();
+    let payload = serde_json::to_string(&reversed).unwrap();
+    let (status, _, body, _) = send_json(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/chapters/{chapter_id}/pages/reorder"),
+        &token,
+        payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    assert_eq!(numbers(&pool, &chapter_id).await, vec![1, 2, 3, 4]);
+    assert_eq!(number_of(&pool, &page_ids[3]).await, 1);
+    assert_eq!(number_of(&pool, &page_ids[2]).await, 2);
+    assert_eq!(number_of(&pool, &page_ids[1]).await, 3);
+    assert_eq!(number_of(&pool, &page_ids[0]).await, 4);
+
+    order_cleanup(&pool, NS, TITLE).await;
+}
