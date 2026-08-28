@@ -10,6 +10,31 @@ Report what happened, including failures, verbatim.
 
 ---
 
+## ⚠️ Corrections — read these before following anything below
+
+This runbook was written 2026-08-27. `docs/PLAN_corpus-regen-on-chrome-box_2026-08-28.md`
+supersedes it on four points, verified against the live deployment. **Where the two disagree, the
+plan wins.** The commands you were dispatched with already encode these corrections — do not
+"fix" them back toward the prose below.
+
+1. **The app arm is 121 pages, not 150.** JP's 59 `samples/ja` pages already carry
+   `gpt-5.6-luna` exports that are model-matched to the Torii arm, so they need the **Torii arm
+   alone**. Only the 24 new JP pairs go through the app. §2's "the JP pages need re-running" is
+   **reversed** — do not force them through OCR.
+
+2. **Do not read the TL/QA model from `metadataJson.model`.** That field was stamped from the
+   worker's static default, not the model that ran. It is fixed on the box as of 2026-08-28, so it
+   is correct for pages **you** generate — but every pre-existing `corpus/samples/` page still
+   carries `deepseek/deepseek-v4-pro` while `gpt-5.6-luna` actually translated it. Always take the
+   model from **`tl.cost.breakdown[].model`**, which was right all along.
+
+3. **Budget ~7–10 h for the app arm at `--app-shards 2`, not 4–6.** Measured 5.5 min/page on the
+   deployed box. This is an overnight run; it has not hung.
+
+4. **Exclude SFX regions from the scoring set.** Torii translates SFX by instruction; our policy is
+   that SFX are never typeset. Scored naively, that measures the policy, not the pipeline.
+
+
 ## Why this run exists — the number that matters
 
 Torii charges **$6 for 2,500 translations** — **$0.0024 per page**. Running the same pages through
@@ -136,7 +161,7 @@ in parallel behind a 1 req/sec token bucket, then runs the app arm, and records 
 
 ---
 
-## 2. Our-app arm — `export_pending.cjs`  (~4-6 h, run first)
+## 2. Our-app arm — `export_pending.cjs`  (~7-10 h at `--app-shards 2`, run first)
 
 This uploads the source, waits for the full async pipeline (OCR → inpaint → LLM translation → QA),
 then captures `export.png`, `project.zip` (unpacked to `project/`) and `render.png`.
@@ -174,7 +199,7 @@ each page is load-bearing** for a shared chapter, not just tidiness — two samp
 would collide. `--keep-pages` deliberately breaks that invariant and switches to sequential
 numbering instead. `--keep-scratch` leaves the containers for inspection.
 
-### The JP pages need re-running, not just re-exporting
+### ~~The JP pages need re-running, not just re-exporting~~ — REVERSED, see correction 1
 
 All 58 JP samples already have an `export.png` and a `project/`. **54 of them are stale** and must
 go through OCR again. The test is the minimum `layers[].metadataJson.time` in `project.json` against
@@ -191,7 +216,8 @@ into the project, so re-rendering a stale page does not fix it** — it has to g
 Treat every JP page except those four as needing a full re-run.
 
 **Record:** for each page, success/failure, wall-clock, and the TL + QA model and cost from
-`project.json`'s `metadataJson`. Any page that fails, leave as it is and note it — do not retry more
+`project.json`'s **`metadataJson.tl.cost.breakdown[].model`** — *not* `metadataJson.model`, see
+correction 2. Any page that fails, leave as it is and note it — do not retry more
 than twice, and do not hand-edit a project.
 
 ---

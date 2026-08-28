@@ -235,3 +235,22 @@ What makes it a separate corpus rather than more pages in this one:
 
 Everything else carries over unchanged — same builders (`--examples-dir` already points wherever
 you want), same three benches, same 60s bar.
+
+---
+
+## 8. 2026-08-28 Translation Benchmark Results
+
+Evaluated against `corpus/translation/` (see `docs/gemini-run-report-2026-08-27.md`):
+
+| Rank | Provider | Model | Quality (Lexical Sim) | Avg Latency | Mode Supported | Cost / Page | Status |
+|:---:|---|---|:---:|:---:|:---:|:---:|:---:|
+| 1 | `openrouter` | `poolside/laguna-s-2.1:free` | **0.530** | 24.7s | `json_schema` | **$0.0000** | Active |
+| 2 | `openrouter` | `dots-studio/dots-3-note-preview:free` | **0.521** | 23.2s | `json_schema` | **$0.0000** | Active |
+| 3 | `nvidia` | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | **0.422** | 26.2s | `json_object` | **$0.0000** | Active |
+| 4 | `neurometric` | `neurometric/clawpack` | **0.406** | **3.0s** | `json_schema` | **$0.0000** | Active |
+| 5 | `nvidia` | `openai/gpt-oss-120b` | **0.371** | 10.9s | `json_schema` | **$0.0000** | Active |
+| — | **Torii (Baseline)** | `gpt-5.6-luna` / `gemini-3.1-flash-lite` | — | ~4–8s | Native API | **$0.0024** | Baseline ($6/2.5k) |
+| — | `openrouter` | `openai/gpt-oss-20b:free` | — | — | — | — | HTTP 404 (Moved to paid slug) |
+| — | `nvidia` | `z-ai/glm-5.2` | — | — | — | — | HTTP 410 (EOL 2026-08-21) |
+| — | `nvidia` | `minimaxai/minimax-m3` | — | — | — | — | Timeout (>60s) |
+

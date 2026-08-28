@@ -32,6 +32,17 @@ def main():
         f.write(worker_api_secret)
     print("[✔] Generated secrets/worker_api_secret.txt")
 
+    grafana_admin_password = secrets.token_urlsafe(24)
+    with open("secrets/grafana_admin_password.txt", "w") as f:
+        f.write(grafana_admin_password)
+    print("[✔] Generated secrets/grafana_admin_password.txt")
+
+    grafana_db_password = secrets.token_urlsafe(24)
+    with open("secrets/grafana_db_password.txt", "w") as f:
+        f.write(grafana_db_password)
+    print("[✔] Generated secrets/grafana_db_password.txt")
+
+
     print("\n--- Configuring API Keys ---")
     api_keys = {}
     
