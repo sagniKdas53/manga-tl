@@ -83,6 +83,7 @@ function parseArgs(argv) {
     headed: false,
     dryRun: false,
     settleMs: 1500,
+    shard: "",
   };
   for (let i = 2; i < argv.length; i++) {
     const v = argv[i], nxt = () => argv[++i];
@@ -107,6 +108,7 @@ function parseArgs(argv) {
       case "--headed": a.headed = true; break;
       case "--dry-run": a.dryRun = true; break;
       case "--settle-ms": a.settleMs = Number(nxt()); break;
+      case "--shard": a.shard = nxt(); break;
       case "-h": case "--help": a.help = true; break;
       default: throw new Error(`unknown arg: ${v}`);
     }
@@ -342,37 +344,76 @@ async function getOrCreateChapter(page, args, seriesId, sampleId, smartConfig, r
   const key = `${seriesId}|${chapterKey(smartConfig)}`;
   if (run.chapters.has(key)) return run.chapters.get(key);
 
-  const title = `${SCRATCH_PREFIX} ${smartConfig.ocrModel} ${smartConfig.tlModel}`;
-  const listRes = await page.request.get(`${args.base}/api/series/${seriesId}/chapters?size=200`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (listRes.ok()) {
-    const cj = await listRes.json().catch(() => ({}));
-    const arr = Array.isArray(cj) ? cj : (cj.content || cj.chapters || []);
-    const match = arr.find(c => c.title === title);
-    if (match) {
-      const id = match.id || match.chapterId;
-      console.log(`reusing scratch chapter "${title}" (${id})`);
+  // --shard MUST be distinct for every runner working the corpus at the same time.
+  //
+  // uploadSource puts every sample at pageNumber 1 and relies on the page being deleted after
+  // capture to free the slot -- safe only while one process owns the chapter. Two shards that
+  // resolve to the same chapter both upload page 1 and both then open
+  // `/chapters/<id>/reader/1`, so each exports whichever page most recently landed in the slot.
+  // That is not theoretical: it put another sample's export into 7 of the 123 pages under
+  // gaps/pending (ja/sample616, 634; ko/sample271, 280, 290, 296, 304) and into samples/ja/sample2,
+  // and it is invisible whenever the two pages happen to share dimensions.
+  //
+  // Putting the shard label in the title gives each runner its own chapter, so page 1 is private
+  // again and cleanupScratch still only deletes what this process created.
+  const shardSuffix = args.shard ? ` #${args.shard}` : "";
+  const title = `${SCRATCH_PREFIX} ${smartConfig.ocrModel} ${smartConfig.tlModel}${shardSuffix}`;
+  const listChapters = async () => {
+    const res = await page.request.get(`${args.base}/api/series/${seriesId}/chapters?size=200`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok()) return [];
+    const cj = await res.json().catch(() => ({}));
+    return Array.isArray(cj) ? cj : (cj.content || cj.chapters || []);
+  };
+
+  const existing = await listChapters();
+  const match = existing.find(c => c.title === title);
+  if (match) {
+    const id = match.id || match.chapterId;
+    console.log(`reusing scratch chapter "${title}" (${id})`);
+    run.chapters.set(key, id);
+    return id;
+  }
+
+  // chapterNumber has to be free, not just 1. The backend rejects a duplicate number within a
+  // series with 409, and once shards get their own chapters there is more than one scratch
+  // chapter in the series -- so a hardcoded 1 fails for every shard after the first. Take the
+  // next number above whatever is already there, and retry on 409, because two shards computing
+  // "next" at the same moment will compute the same one.
+  const used = new Set(existing.map(c => Number(c.chapterNumber)).filter(Number.isFinite));
+  let chapterNumber = 1;
+  while (used.has(chapterNumber)) chapterNumber++;
+
+  let createRes;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    createRes = await page.request.post(`${args.base}/api/series/${seriesId}/chapters`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        title,
+        chapterNumber,
+        ocrProvider: smartConfig.ocrProvider,
+        ocrModel: smartConfig.ocrModel,
+        tlProvider: smartConfig.tlProvider,
+        tlModel: smartConfig.tlModel,
+        qaProvider: smartConfig.qaProvider,
+        qaMode: smartConfig.qaMode,
+        useContextMemory: true,
+        useFallbackModels: true,
+      },
+    });
+    if (createRes.status() !== 409) break;
+    // Someone else took this number between the list and the create. It may also be that they
+    // created OUR title, in which case reuse theirs rather than fighting for a number.
+    const raced = (await listChapters()).find(c => c.title === title);
+    if (raced) {
+      const id = raced.id || raced.chapterId;
+      console.log(`reusing scratch chapter "${title}" (${id}) [created concurrently]`);
       run.chapters.set(key, id);
       return id;
     }
+    chapterNumber++;
   }
-
-  const createRes = await page.request.post(`${args.base}/api/series/${seriesId}/chapters`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      title,
-      chapterNumber: 1,
-      ocrProvider: smartConfig.ocrProvider,
-      ocrModel: smartConfig.ocrModel,
-      tlProvider: smartConfig.tlProvider,
-      tlModel: smartConfig.tlModel,
-      qaProvider: smartConfig.qaProvider,
-      qaMode: smartConfig.qaMode,
-      useContextMemory: true,
-      useFallbackModels: true,
-    },
-  });
   if (!createRes.ok()) {
     throw new Error(`Failed to create scratch chapter: ${createRes.status()} ${await createRes.text().catch(() => "")}`);
   }
@@ -619,6 +660,9 @@ Options:
   --email <email>        login email [TLHUB_EMAIL]
   --password <pwd>       login password [TLHUB_PASSWORD]
   --force                re-export even if export.png + project/ exist
+  --shard <label>        REQUIRED when several runners work at once: gives this one its own
+                         scratch chapter. Sharing a chapter means sharing page slot 1, and the
+                         shards then export each other's pages. See getOrCreateChapter.
   --headed               show browser window
   --dry-run              don't upload/capture, just list matching directories
   --keep-scratch         do not delete the scratch series/chapters at the end (debugging)
