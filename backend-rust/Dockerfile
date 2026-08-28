@@ -73,7 +73,16 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     fi
 COPY --from=planner /app/backend-rust/recipe.json recipe.json
 # Cook dependencies only — this layer stays cached until Cargo.toml/lock change.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+#
+# The cache id MUST be scoped by $TARGETARCH. This stage is `FROM --platform=$BUILDPLATFORM` but
+# branches on TARGETARCH, so buildx instantiates it once per target platform and runs both legs
+# concurrently. An unscoped `type=cache` mount is shared by default, which puts two cargo processes
+# into the same registry directory unpacking the same crates — and cargo's unpack is not
+# concurrency-safe. It fails the moment one leg finds the other's half-written marker:
+#   failed to open .../tracing-core-0.1.36/.cargo-ok  Caused by: File exists (os error 17)
+# That took out every `main` build from the rust-backend merge onward. `sharing=locked` on top
+# serialises any two builds that do land on the same id.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARGETARCH},sharing=locked \
     if [ "$TARGETARCH" = "arm64" ]; then \
         export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
         && cargo chef cook --release --target aarch64-unknown-linux-gnu --recipe-path recipe.json; \
@@ -86,7 +95,8 @@ COPY backend-rust/ ./
 COPY --from=frontend-build /app/dist ../frontend/dist
 # Static healthcheck probe (src/main/c/healthcheck.c) — see its header comment for why
 # it exists instead of curl-in-runtime.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+# Same arch-scoped cache id as the cook step above, for the same reason.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARGETARCH},sharing=locked \
     if [ "$TARGETARCH" = "arm64" ]; then \
         export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
         && aarch64-linux-gnu-gcc -static -O2 -s src/main/c/healthcheck.c -o /usr/local/bin/healthcheck \
