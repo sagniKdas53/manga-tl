@@ -32,3 +32,10 @@ docs/*.pdf
 corpus/.claude
 scripts/corpus
 docs/reference/mask-eval-candidates-2026-08-26.png
+backend/*
+
+# There is now a package.json at the repo root, holding exactly one dependency: playwright, for
+# scripts/playwright/*.cjs. Node resolves `require("playwright")` upward from the script, so the
+# install has to land here rather than in frontend/. Committed so the corpus run is reproducible;
+# the tree it installs is not.
+node_modules/

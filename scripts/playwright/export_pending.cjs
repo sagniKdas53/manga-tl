@@ -654,7 +654,7 @@ Options:
   }
 
   const browser = await loadChromium().launch({ headless: !args.headed });
-  const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true });
+  const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true, ignoreHTTPSErrors: true });
   const page = await ctx.newPage();
   const stats = { captured: 0, skipped: 0, failed: [] };
   const run = { series: new Map(), chapters: new Map(), pageNo: new Map(),
