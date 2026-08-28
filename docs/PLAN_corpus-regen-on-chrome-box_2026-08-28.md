@@ -1,6 +1,6 @@
 # Plan — run the corpus regeneration against the temporary `chrome-box` instance
 
-**Date:** 2026-08-28 · **Status:** decisions taken; findings A, B, D closed — see §0
+**Date:** 2026-08-28 · **Status:** **ready to dispatch** — A, B, D closed; see §0
 **Context:** the stack is deployed and healthy on chrome-box; it is a **disposable test instance**
 and comes down once the corpus is regenerated. Everything below is ordered by that fact.
 **Follows on from:** `docs/CHECKLIST_2026-08-28.md`, `docs/gemini-corpus-regen-runbook.md`,
@@ -13,7 +13,7 @@ and comes down once the corpus is regenerated. Everything below is ordered by th
 | item | state |
 |---|---|
 | **A** watchtower | **done.** `docker-compose.chrome-box.yml` written on the box; both containers recreated; `manga-backend` and `manga-worker` now report `watchtower.enable=false` |
-| **B** wrong TL model | **fixed in source**, 2 regression tests added, all four worker gates green. **Not yet deployed to the box** — blocked pending permission, see §6 Phase 0 |
+| **B** wrong TL model | **fixed, deployed, verified on the box.** A translation redo on the test page now records `openrouter/openai/gpt-5.6-luna` on all 7 regions, where it previously recorded `openrouter/deepseek/deepseek-v4-pro` |
 | **C** JP staleness | stands: 57 of 59 stale against the deployed worker |
 | **D** >2 MB gate | **closed by you** — a ~30 MB page went through cleanly on `ideapad`. Dropped from the critical path |
 | **E** SFX policy divergence | stands: exclude SFX regions from scoring |
@@ -300,20 +300,29 @@ comparison as a second batch. This avoids ~26–35 h of re-running on a box bein
 The box is disposable, so the ordering principle is: **nothing that can run locally should run
 while the box is up.**
 
-### Phase 0 — get the model fix onto the box (open)
+### Phase 0 — get the model fix onto the box — **done**
 
-The source fix is committed to the worker tree and green on all four gates, but the **running
-container still has the old code**, confirmed by reading `/app/worker/handlers/translation.py:323`
-inside it. Two ways to close that:
+The worker runs from a published image, and chrome-box has no build cache after the earlier
+`docker builder prune`, so a rebuild would have reinstalled the heavy PaddleOCR/onnxruntime layers
+on two Broadwell cores. The Dockerfile's **last** layer is `COPY src/worker/ ./worker/`, so copying
+the single fixed file in is byte-identical to what a rebuild would have produced:
 
-- **Patch the container** — `docker cp` the fixed file into `manga-worker` and restart. Seconds, and
-  reversible by recreating the container from its image. The box is disposable and watchtower is now
-  off, so nothing will silently revert it. Drawback: the running worker no longer matches any
-  published image, which must be stated in the report.
-- **Rebuild and publish the worker image**, then pull on the box. Clean and reproducible, but it is
-  a 1.94 GB image and an outward-facing push.
+```bash
+scp worker/src/worker/handlers/translation.py chrome-box:/tmp/translation.fixed.py
+ssh chrome-box '
+  docker cp /tmp/translation.fixed.py manga-worker:/app/worker/handlers/translation.py
+  docker exec -u root manga-worker chown worker:worker /app/worker/handlers/translation.py
+  docker exec -u root manga-worker rm -rf /app/worker/handlers/__pycache__
+  docker restart manga-worker'
+```
 
-Either way, **verify after restart** that a page records the model that actually ran.
+Verified: sha256 inside the container matches the local file; the worker came back healthy with
+PaddleOCR seeded and uvicorn up; and a `POST /api/images/{id}/redo?type=translation` on the test
+page produced `modelIdentifier: openrouter/openai/gpt-5.6-luna` on all 7 regions.
+
+**The running worker no longer matches any published image — say so in the report.** Recreating the
+container from its image reverts the fix, so if anything recreates `manga-worker`, re-apply this
+before continuing the batch.
 
 ### Phase 1 — on the box, before anything paid (~5 min)
 1. ~~Apply the watchtower override~~ — **done**, both labels verified `false`.
