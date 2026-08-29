@@ -61,7 +61,7 @@ bcrypt = "0.15"
 getrandom = "0.3"
 sha2 = "0.10"
 # URL-safe encoding of single-use SSE tickets (Java used Base64.getUrlEncoder()).
-base64 = "0.22"
+base64 = "0.23"
 # HTTP client for the worker dispatcher (Java used java.net.http.HttpClient).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 # ZIP reading (chapter/project imports) and writing (chapter exports).
