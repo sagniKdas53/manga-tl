@@ -489,7 +489,12 @@ export const fitTextInBox = (
   type Wrap = { lines: string[]; lineCenters: number[]; failed: boolean };
   const evaluated = new Map<
     number,
-    { res: Wrap; fitsHeight: boolean; fitsClean: boolean }
+    {
+      res: Wrap;
+      fitsHeight: boolean;
+      fitsClean: boolean;
+      fitsContained: boolean;
+    }
   >();
 
   /** True when the wrap cut a word apart to make it fit — "collection" as "collect" / "ion". */
@@ -516,20 +521,28 @@ export const fitTextInBox = (
       !res.failed &&
       !brokeAWord(res) &&
       widestLine(res, fSize) <= maxWidth;
-    const out = { res, fitsHeight, fitsClean };
+    // Contained is the weaker promise: the text is inside its box, but a word may have been
+    // broken to get it there. It is what the middle tier below searches on.
+    const fitsContained = fitsHeight && widestLine(res, fSize) <= maxWidth;
+    const out = { res, fitsHeight, fitsClean, fitsContained };
     evaluated.set(fSize, out);
     return out;
   };
 
-  const largestSizeWhere = (clean: boolean) => {
+  const largestSizeWhere = (criterion: "clean" | "contained" | "height") => {
     let low = minFontSize;
     let high = startSize;
     let best: { fs: number; res: Wrap } | null = null;
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
-      const { res, fitsHeight, fitsClean } = evaluate(mid);
-      if (clean ? fitsClean : fitsHeight) {
-        best = { fs: mid, res };
+      const ev = evaluate(mid);
+      const ok = {
+        clean: ev.fitsClean,
+        contained: ev.fitsContained,
+        height: ev.fitsHeight,
+      }[criterion];
+      if (ok) {
+        best = { fs: mid, res: ev.res };
         low = mid + 1;
       } else {
         high = mid - 1;
@@ -548,7 +561,17 @@ export const fitTextInBox = (
   //
   // When nothing sets cleanly — a single word wider than the box even at 6px — fall back to the old
   // height-only rule, so such a region still gets the largest legible size rather than the minimum.
-  const best = largestSizeWhere(true) ?? largestSizeWhere(false);
+  //
+  // The height-only fallback this used to drop straight to is a bad trade: it grows the type
+  // until the *height* runs out while the lines get arbitrarily wider than the box. render.py
+  // gained a middle tier for that (sample27's 44px box came out at 43px type, lines twice the
+  // region's width, drawn across the neighbouring balloon) and this is the same search, so it
+  // needs the same tier -- 11.2% of corpus elements fail the clean tier and reach it. A broken
+  // word is ugly and local; text outside its box lands on someone else's panel.
+  const best =
+    largestSizeWhere("clean") ??
+    largestSizeWhere("contained") ??
+    largestSizeWhere("height");
   const bestFs = best?.fs ?? minFontSize;
   const bestRes = best?.res ?? wrapText(cleanText, minFontSize);
 

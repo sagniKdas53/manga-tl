@@ -25,17 +25,32 @@
  * composite onto a page image must paint the layer's masks here first and then `drawImage`
  * the result on top -- see `handleExportPng` in `Reader.tsx`.
  */
-import type { LayerElement } from "../types";
+import type { LayerElement, OcrRegion } from "../types";
+
+/**
+ * True when the bubble detector put this region inside a balloon, rather than echoing the bbox
+ * back because it matched none. Mirrors `has_detected_bubble` in the backend's `coordinator.rs`
+ * and `render.py`; all three have to agree or the erased area and the text box disagree.
+ */
+export function hasDetectedBubble(region: OcrRegion): boolean {
+  const { bubbleW, bubbleH } = region;
+  if (bubbleW == null || bubbleH == null) return false;
+  return !(bubbleW === region.bboxW && bubbleH === region.bboxH);
+}
 
 /**
  * Fill every visible element's mask shape onto `ctx`, first-writer-wins.
  *
  * @param ctx  2D context of a **fresh transparent** canvas sized to the page.
  * @param elements  the layer's elements, in paint order (earlier wins on overlap).
+ * @param regionsById  the page's OCR regions, so free-floating text can have its box erased as
+ *   well as its mask. Omit and every element is treated as balloon text, which is the old
+ *   behaviour: mask only.
  */
 export function paintLayerMask(
   ctx: CanvasRenderingContext2D,
   elements: LayerElement[],
+  regionsById?: Map<string, OcrRegion>,
 ): void {
   const previousOp = ctx.globalCompositeOperation;
   // Every fill below lands behind what is already on the canvas, so the first element to
@@ -88,6 +103,21 @@ export function paintLayerMask(
       ctx.fillStyle = el.backgroundColor || "#ffffff";
       ctx.fill();
       ctx.restore();
+
+      // Erase the box too when there is no balloon.
+      //
+      // The mask covers the source text and the box is where the English goes. Inside a balloon
+      // the box is an inset of the bubble the mask fills, so it needs nothing more. For
+      // free-floating text the box is `free_text_box`'s padded -- and for a very narrow column,
+      // widened -- rectangle, and the difference between the two was being drawn onto bare
+      // artwork. Filling both costs nothing where they overlap.
+      const region = el.regionId ? regionsById?.get(el.regionId) : undefined;
+      if (region && !hasDetectedBubble(region)) {
+        ctx.save();
+        ctx.fillStyle = el.backgroundColor || "#ffffff";
+        ctx.fillRect(el.x, el.y, width, height);
+        ctx.restore();
+      }
     } else {
       // No polygon: fall back to the element's box. Rotation applies only here, because a
       // maskPolygon is already in absolute page coordinates.

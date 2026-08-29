@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type {
   User,
@@ -18,7 +24,7 @@ import {
   ensureFontsLoaded,
 } from "../utils/fitText";
 import { loadOriginalImage, toReaderUrl } from "../utils/readerImage";
-import { paintLayerMask } from "../utils/maskPaint";
+import { hasDetectedBubble, paintLayerMask } from "../utils/maskPaint";
 import { usePersistedState } from "../hooks/usePersistedState";
 import ConfirmModal from "./ConfirmModal";
 import InfoModal from "./InfoModal";
@@ -278,6 +284,12 @@ export const Reader: React.FC<ReaderProps> = ({
   // Reader States
   const [panels, setPanels] = useState<Panel[]>([]);
   const [ocrRegions, setOcrRegions] = useState<OcrRegion[]>([]);
+  // Erasure needs to know which regions have no balloon, so their text box can be
+  // erased alongside their mask; see `paintLayerMask`.
+  const regionsById = useMemo(
+    () => new Map(ocrRegions.map((r) => [r.id, r])),
+    [ocrRegions],
+  );
   const [imageDims, setImageDims] = useState({ w: 800, h: 1200 });
   // True once the server has told us the original size, which makes the displayed image's
   // naturalWidth irrelevant. Kept in a ref because handleImgLoad reads it outside React's flow.
@@ -2292,7 +2304,7 @@ export const Reader: React.FC<ReaderProps> = ({
         layerMaskCanvas.height = H;
         const layerMaskCtx = layerMaskCanvas.getContext("2d");
         if (layerMaskCtx) {
-          paintLayerMask(layerMaskCtx, lData.elements);
+          paintLayerMask(layerMaskCtx, lData.elements, regionsById);
           ctx.drawImage(layerMaskCanvas, 0, 0);
         }
 
@@ -2410,6 +2422,7 @@ export const Reader: React.FC<ReaderProps> = ({
     selectedPage,
     user,
     imageDims,
+    regionsById,
     layers,
     sortedLayers,
     cleanScanlationView,
@@ -2475,7 +2488,7 @@ export const Reader: React.FC<ReaderProps> = ({
         maskCanvas.height = H;
         const maskCtx = maskCanvas.getContext("2d")!;
 
-        paintLayerMask(maskCtx, lData.elements);
+        paintLayerMask(maskCtx, lData.elements, regionsById);
 
         const maskBlob = await new Promise<Blob>((res) =>
           maskCanvas.toBlob((b) => res(b!), "image/png"),
@@ -2664,6 +2677,7 @@ export const Reader: React.FC<ReaderProps> = ({
     selectedPage,
     user,
     imageDims,
+    regionsById,
     layers,
     dirtyElements,
     saveAllPendingChanges,
@@ -3529,13 +3543,32 @@ export const Reader: React.FC<ReaderProps> = ({
                                     .map((p) => `${p[0]},${p[1]}`)
                                     .join(" ");
                                   return (
-                                    <polygon
-                                      points={pointsStr}
-                                      fill={
-                                        element.backgroundColor || "#ffffff"
-                                      }
-                                      stroke="none"
-                                    />
+                                    <>
+                                      <polygon
+                                        points={pointsStr}
+                                        fill={
+                                          element.backgroundColor || "#ffffff"
+                                        }
+                                        stroke="none"
+                                      />
+                                      {/* No balloon: the mask covers the source column, the box
+                                          is where the English goes, and the difference was
+                                          landing on artwork. Same rule as paintLayerMask. */}
+                                      {relatedRegion &&
+                                        !hasDetectedBubble(relatedRegion) && (
+                                          <rect
+                                            x={element.x}
+                                            y={element.y}
+                                            width={width}
+                                            height={height}
+                                            fill={
+                                              element.backgroundColor ||
+                                              "#ffffff"
+                                            }
+                                            stroke="none"
+                                          />
+                                        )}
+                                    </>
                                   );
                                 }
                               } catch {

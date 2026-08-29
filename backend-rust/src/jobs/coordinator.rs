@@ -1308,8 +1308,11 @@ const TEXT_BOX_PADDING: i32 = 20;
 const MIN_TEXT_BOX: i32 = 24;
 const FREE_TEXT_PADDING: i32 = 20;
 const FREE_TEXT_COLUMN_ASPECT: f64 = 1.5;
-const FREE_TEXT_TARGET_ASPECT: f64 = 1.0;
 const FREE_TEXT_MAX_WIDEN: f64 = 2.5;
+/// Narrowest a free-floating box may be, as a fraction of page width. Below this a column cannot
+/// hold an English word at a readable size, so widening earns the artwork it costs; above it,
+/// widening only buys line length the column's own height already pays for.
+const FREE_TEXT_MIN_WIDTH_FRACTION: f64 = 0.07;
 
 /// Where translated text is laid out, in original image pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1420,43 +1423,53 @@ pub async fn text_box_for(pool: &PgPool, region: &OcrRegion) -> TextBox {
     text_box_geometry(region, page)
 }
 
-/// Squares a thin vertical column into an English-settable box of equal area,
-/// centred on the original spot and clamped to the page.
+/// Widens a thin vertical column just enough to set English in, keeping the height it already has.
+///
+/// This used to square the column into a box of equal area — a 91x293 column became 186x187. That
+/// trade is backwards: the height was already erased and available, while the width was not, so
+/// every pixel of widening bought line length by spending artwork. Measured over the 400-export
+/// corpus, it put 329 of 552 free-floating elements' text outside the erased plate, a median 38%
+/// of the box width; keeping the height instead leaves 70% of them needing no widening at all, at
+/// a median 35px against the squared box's 37px.
+///
+/// So the height is never touched, and the width grows only for a column too narrow to hold an
+/// English word — below `FREE_TEXT_MIN_WIDTH_FRACTION` of the page — still capped at
+/// `FREE_TEXT_MAX_WIDEN`. What widening remains is erased along with the column by the renderer,
+/// which fills the union of mask and box for a region with no detected bubble.
 fn free_text_box(x: f64, y: f64, w: i32, h: i32, page: Option<(f64, f64)>) -> TextBox {
+    let unchanged = TextBox {
+        x: x.max(0.0),
+        y: y.max(0.0),
+        w,
+        h,
+    };
     if w <= 0 || (h as f64) < w as f64 * FREE_TEXT_COLUMN_ASPECT {
-        return TextBox {
-            x: x.max(0.0),
-            y: y.max(0.0),
-            w,
-            h,
-        };
+        return unchanged;
     }
 
-    let area = w as f64 * h as f64;
-    let mut new_w = ((area * FREE_TEXT_TARGET_ASPECT)
-        .sqrt()
-        .min(w as f64 * FREE_TEXT_MAX_WIDEN))
-    .round() as i32;
-    new_w = new_w.max(w);
-    let new_h = ((area / new_w as f64).round() as i32).max(MIN_TEXT_BOX);
+    // Without page bounds there is no readable-width floor to compare against, so nothing widens.
+    let floor = match page {
+        Some((page_w, _)) => page_w * FREE_TEXT_MIN_WIDTH_FRACTION,
+        None => 0.0,
+    };
+    let new_w = (w as f64)
+        .max(floor.min(w as f64 * FREE_TEXT_MAX_WIDEN))
+        .round() as i32;
+    if new_w <= w {
+        return unchanged;
+    }
 
-    let mut nx = x + w as f64 / 2.0 - new_w as f64 / 2.0;
-    let mut ny = y + h as f64 / 2.0 - new_h as f64 / 2.0;
+    // Grow about the column's centre. The height, and therefore `y`, stay exactly as they were.
+    let mut nx = x + (w - new_w) as f64 / 2.0;
     match page {
-        Some((page_w, page_h)) => {
-            nx = nx.clamp(0.0, (page_w - new_w as f64).max(0.0));
-            ny = ny.clamp(0.0, (page_h - new_h as f64).max(0.0));
-        }
-        None => {
-            nx = nx.max(0.0);
-            ny = ny.max(0.0);
-        }
+        Some((page_w, _)) => nx = nx.clamp(0.0, (page_w - new_w as f64).max(0.0)),
+        None => nx = nx.max(0.0),
     }
     TextBox {
         x: nx,
-        y: ny,
+        y: y.max(0.0),
         w: new_w,
-        h: new_h,
+        h,
     }
 }
 
@@ -2674,32 +2687,55 @@ mod textbox_tests {
         assert_eq!(box_geom.h, 18);
     }
 
-    /// The f3aa160 regression: a 49x489 vertical caption squares up to a settable box
-    /// of equal area and centre instead of setting English one word per line.
-    #[test]
-    fn squares_up_the_source_column_instead_of_setting_english_down_it() {
-        let box_geom = text_box_geometry(&region(direct_text_region(71, 675, 49, 489)), None);
-        assert_eq!(
-            box_geom.w, 173,
-            "2.5x the padded 69px column, the ceiling on widening"
+    fn keeps_the_column_height_instead_of_squaring_it_away() {
+        // Openrouter ch. 11 p22: a 49x489 caption, padded to 69x509.
+        let box_geom = text_box_geometry(
+            &region(direct_text_region(71, 675, 49, 489)),
+            Some((1000.0, 2000.0)),
         );
-        assert_eq!(box_geom.h, 203);
-        assert!(box_geom.w > 3 * 49, "must be several words wide, not one");
+        assert_eq!(
+            box_geom.h, 509,
+            "the column's own height is never traded away"
+        );
+        assert_eq!(box_geom.y, 665.0, "and so the top edge does not move");
+        assert_eq!(
+            box_geom.w, 70,
+            "69px sits just under the 70px readable floor for a 1000px page"
+        );
+        assert!(
+            box_geom.w < 3 * 49,
+            "nowhere near the 173px the equal-area squaring used to produce"
+        );
+    }
+
+    /// A column already wide enough to set English in is left exactly as it is.
+    #[test]
+    fn does_not_widen_a_column_that_clears_the_readable_floor() {
+        // HKXfexLbAAAN7IE p4's caption: 91x293 on a 1075px page, padded to 111x313.
+        let box_geom = text_box_geometry(
+            &region(direct_text_region(2, 1005, 91, 293)),
+            Some((1075.0, 1518.0)),
+        );
+        assert_eq!(box_geom.w, 111, "111px clears the 75px floor, so nothing widens");
+        assert_eq!(box_geom.h, 313);
+        assert_eq!(box_geom.x, 0.0, "the padded left edge clamps onto the page");
+        assert_eq!(box_geom.y, 995.0);
+    }
+
+    /// The widening a very narrow column does get is still capped.
+    #[test]
+    fn caps_the_widening_of_an_extremely_narrow_column() {
+        // A 25px column padded to 45px on a 1600px page: the floor asks for 112, the cap allows 112.
+        let box_geom = text_box_geometry(
+            &region(direct_text_region(400, 200, 25, 300)),
+            Some((1600.0, 2000.0)),
+        );
+        assert_eq!(box_geom.w, 112, "2.5x the padded 45px column");
+        assert_eq!(box_geom.h, 320, "height still untouched");
         assert_eq!(
             box_geom.x + box_geom.w as f64 / 2.0,
-            95.5,
-            "centre preserved"
-        );
-        assert_eq!(
-            box_geom.y + box_geom.h as f64 / 2.0,
-            919.5,
-            "centre preserved"
-        );
-        let expected_area = 69.0 * 509.0;
-        let actual_area = (box_geom.w * box_geom.h) as f64;
-        assert!(
-            (actual_area - expected_area).abs() <= 0.02 * expected_area,
-            "area preserved within 2%: {actual_area} vs {expected_area}"
+            412.5,
+            "widened about the column's own centre"
         );
     }
 
@@ -2708,7 +2744,9 @@ mod textbox_tests {
     fn treats_bubble_geometry_identical_to_the_bbox_as_no_bubble_at_all() {
         let mut untagged = direct_text_region(1050, 631, 57, 428);
         untagged["bubbleId"] = serde_json::Value::Null;
-        assert_eq!(text_box_geometry(&region(untagged), None).w, 186);
+        // 57 + 20 of padding, taken whole: the free-text path. The bubble path would have inset
+        // it to 37 instead, so the width is what tells the two apart.
+        assert_eq!(text_box_geometry(&region(untagged), None).w, 77);
     }
 
     /// Horizontal text is already a shape English fits; reshaping would only move it.
@@ -2736,7 +2774,7 @@ mod textbox_tests {
             box_geom.y >= 0.0 && box_geom.y + box_geom.h as f64 <= 1600.0,
             "vertically on the page"
         );
-        assert!(box_geom.w > 60, "still widened");
+        assert_eq!(box_geom.h, 420, "height carried through the clamp untouched");
     }
 
     /// The worker's contour fallback can supply a real container for a region YOLO
