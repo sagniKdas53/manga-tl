@@ -2031,14 +2031,18 @@ pub async fn prepare_hybrid_qa(
                 .get("directFix")
                 .and_then(|df| df.get("suggestedFontSize"))
                 .and_then(|v| v.as_f64());
-            apply_direct_fix(state, region_id, latest_translation, corrected, font_size).await;
-            // direct_fix lands as "fixed" (Java overwrote the status after fixing).
+            let fixed =
+                apply_direct_fix(state, region_id, latest_translation, corrected, font_size).await;
+            // direct_fix lands as "fixed" (Java overwrote the status after fixing) -- but only
+            // when the correction actually reached an element. Stamping "fixed" over a write that
+            // did not happen is what let the dropped-bubble bug stay invisible.
             let _ = sqlx::query(
-                "UPDATE ocr_regions SET qa_status='fixed', qa_score=$2, qa_feedback=$3 WHERE id=$1",
+                "UPDATE ocr_regions SET qa_status=$4, qa_score=$2, qa_feedback=$3 WHERE id=$1",
             )
             .bind(region_id)
             .bind(score)
             .bind(feedback)
+            .bind(if fixed { "fixed" } else { "failed" })
             .execute(&state.pool)
             .await;
         } else if status
@@ -2096,20 +2100,25 @@ async fn apply_direct_fix(
     latest_translation: Option<Uuid>,
     corrected_text: Option<String>,
     font_size: Option<f64>,
-) {
+) -> bool {
     let elements: Vec<crate::models::LayerElement> =
         sqlx::query_as("SELECT * FROM layer_elements WHERE region_id = $1")
             .bind(region_id)
             .fetch_all(&state.pool)
             .await
             .unwrap_or_default();
+    let mut applied = 0usize;
     for el in elements {
-        let in_latest = match latest_translation {
-            Some(latest) => el.layer_id == latest,
-            None => false,
-        };
-        if !in_latest {
-            continue;
+        // `None` means "no particular layer" -- apply to every translation layer -- which is what
+        // hide_translation_elements has always done with it. This used to read `None => false`,
+        // i.e. match nothing, so the whole loop body was skipped: handle_qa_callback passes None,
+        // making every direct_fix from the VLM QA path a silent no-op. The VLM would correctly
+        // spot an untranslated bubble, write the correction, and the correction went nowhere
+        // while the region was still stamped qa_status='fixed'.
+        if let Some(latest) = latest_translation
+            && el.layer_id != latest
+        {
+            continue; // older translation layers are already superseded history
         }
         let layer_type: Option<String> =
             sqlx::query_scalar("SELECT type FROM layers WHERE id = $1")
@@ -2140,7 +2149,15 @@ async fn apply_direct_fix(
                 .execute(&state.pool)
                 .await;
         }
+        applied += 1;
     }
+    if applied == 0 {
+        tracing::warn!(
+            "QA direct_fix for region {region_id} matched no translation element — \
+             the correction was not applied"
+        );
+    }
+    applied > 0
 }
 
 /// Hide typeset text for a region QA judged a sound effect. Hidden, not deleted: an
@@ -2217,6 +2234,27 @@ pub async fn handle_qa_callback(
     let mut score_count = 0i64;
     let mut discarded_results = 0i64;
 
+    // Latest translation layer by z_order, so a direct_fix edits the layer the reader is looking
+    // at rather than every superseded retranslation sharing the region. Same derivation as
+    // prepare_hybrid_qa. None (page unresolved) still works: both helpers read it as "any
+    // translation layer".
+    let qa_page = resolve_page_for_callback(&state.pool, image_id, callback_page_id).await;
+    let latest_translation = match &qa_page {
+        Some(page) => {
+            let layers: Vec<Layer> = sqlx::query_as("SELECT * FROM layers WHERE page_id = $1")
+                .bind(page.id)
+                .fetch_all(&state.pool)
+                .await
+                .unwrap_or_default();
+            layers
+                .iter()
+                .filter(|l| l.layer_type.eq_ignore_ascii_case("translation"))
+                .max_by_key(|l| l.z_order)
+                .map(|l| l.id)
+        }
+        None => None,
+    };
+
     for r in qa_results {
         // A truncated model response loses its identifying fields; without this guard
         // the counters stayed at zero — which scored as a clean "passed".
@@ -2260,8 +2298,10 @@ pub async fn handle_qa_callback(
                     .get("directFix")
                     .and_then(|df| df.get("suggestedFontSize"))
                     .and_then(|v| v.as_f64());
-                apply_direct_fix(state, region_id, None, corrected, font_size).await;
-                final_status = "fixed".into();
+                let fixed =
+                    apply_direct_fix(state, region_id, latest_translation, corrected, font_size)
+                        .await;
+                final_status = if fixed { "fixed".into() } else { "failed".into() };
             } else if status_before.eq_ignore_ascii_case("failed") && r.get("escalation").is_some()
             {
                 let escalation = r.get("escalation").cloned().unwrap_or(Value::Null);
@@ -2300,7 +2340,7 @@ pub async fn handle_qa_callback(
                     region.bubble_reading_order = Some(order);
                 }
             } else if status_before.eq_ignore_ascii_case("reject_sfx") {
-                hide_translation_elements(state, region_id, None).await;
+                hide_translation_elements(state, region_id, latest_translation).await;
             }
 
             let _ = sqlx::query(
