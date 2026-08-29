@@ -270,8 +270,12 @@ pub async fn handle_duplicate_image_cloning(
     image_id: Uuid,
     target_chapter: &Chapter,
 ) {
+    // pages has NO created_at column: ordering by it made this query ERROR, and
+    // unwrap_or_default() turned that into an empty Vec, so the is_empty() guard below
+    // returned before any cloning OR the start_pipeline fallback could run. Every call
+    // was a silent no-op. Order by page_number, which the table actually has.
     let pages: Vec<Page> =
-        sqlx::query_as("SELECT * FROM pages WHERE image_id = $1 ORDER BY created_at ASC")
+        sqlx::query_as("SELECT * FROM pages WHERE image_id = $1 ORDER BY page_number ASC")
             .bind(image_id)
             .fetch_all(&state.pool)
             .await

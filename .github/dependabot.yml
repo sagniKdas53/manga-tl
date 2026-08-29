@@ -1,7 +1,7 @@
 version: 2
 updates:
-  - package-ecosystem: "maven"
-    directory: "/backend"
+  - package-ecosystem: "cargo"
+    directory: "/backend-rust"
     schedule:
       interval: "weekly"
 
@@ -11,7 +11,7 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "docker"
-    directory: "/backend"
+    directory: "/backend-rust"
     schedule:
       interval: "weekly"
 

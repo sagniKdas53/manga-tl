@@ -460,3 +460,160 @@ async fn cleanup(pool: &sqlx::PgPool) {
         .await
         .ok();
 }
+
+/// Re-importing an archive after its chapter was deleted must still run the pipeline.
+///
+/// Deleting a chapter cascades to its pages but leaves the `images` rows behind, so the
+/// second import matches every hash and takes the duplicate-image branch. That branch
+/// hands off to `handle_duplicate_image_cloning`, which used to order a page lookup by a
+/// column `pages` does not have: the query errored, `unwrap_or_default()` turned it into
+/// an empty Vec, and the early return fired BEFORE the `start_pipeline` fallback. The
+/// pages came back with no OCR and no translation, and nothing logged a failure.
+///
+/// This also pins the import order end-to-end: the entries are unpadded and out of order
+/// in the archive, so a plain lexicographic sort would lay them out 1, 10, 2.
+#[tokio::test]
+async fn reimporting_a_deleted_chapter_still_enters_the_pipeline() {
+    let Some((app, pool)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR/MINIO_TEST_ENDPOINT not set");
+        return;
+    };
+
+    let email = format!("__reimport-{}@example.invalid", uuid::Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO users (id, created_at, display_name, email, password_hash, role) \
+         VALUES (uuid_generate_v4(), now(), 'Reimport', $1, 'x', 'admin')",
+    )
+    .bind(&email)
+    .execute(&pool)
+    .await
+    .expect("probe user");
+    let token = JwtUtils::new(SECRET.into(), 3_600_000)
+        .generate_token(&email)
+        .unwrap();
+
+    let (status, _, body) = send(
+        &app,
+        "POST",
+        "/tlhub/api/series",
+        &token,
+        Some("application/json"),
+        br#"{"title":"ReimportProbe","readingDirection":"rightToLeft"}"#.to_vec(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let series_id = json_field(&body, "id").await;
+
+    // Unpadded and shuffled, like the archives that exposed the ordering bug.
+    let archive = zip_of(
+        vec![
+            ("10.png".into(), png_bytes([10, 90, 10])),
+            ("2.png".into(), png_bytes([20, 90, 20])),
+            ("1.png".into(), png_bytes([30, 90, 30])),
+        ],
+        None,
+    );
+
+    let import = |chapter_number: &str, title: &str| {
+        multipart(
+            &[
+                ("chapterNumber", chapter_number.to_string()),
+                ("title", title.to_string()),
+            ],
+            Some(("file", "chapter.zip", &archive)),
+        )
+    };
+
+    // ---- first import: fresh images ----
+    let (status, _, resp) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters/import"),
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        import("41", "First"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&resp));
+    let first_chapter = uuid::Uuid::parse_str(&json_field(&resp, "id").await).unwrap();
+
+    let order: Vec<String> = sqlx::query_scalar(
+        "SELECT i.filename FROM pages p JOIN images i ON i.id = p.image_id \
+         WHERE p.chapter_id = $1 ORDER BY p.page_number",
+    )
+    .bind(first_chapter)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        order,
+        ["1.png", "2.png", "10.png"],
+        "unpadded names must import in reading order"
+    );
+
+    // ---- delete the chapter; its images rows survive ----
+    let (status, _, resp) = send(
+        &app,
+        "DELETE",
+        &format!("/tlhub/api/series/chapters/{first_chapter}"),
+        &token,
+        None,
+        Vec::new(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&resp));
+
+    let surviving_images: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM images WHERE filename IN ('1.png','2.png','10.png') AND storage_path LIKE 'originals/%'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        surviving_images >= 3,
+        "the images rows must outlive the chapter — that is what makes the re-import a duplicate"
+    );
+
+    // ---- re-import the SAME bytes: every hash already exists ----
+    let (status, _, resp) = send(
+        &app,
+        "POST",
+        &format!("/tlhub/api/series/{series_id}/chapters/import"),
+        &token,
+        Some("multipart/form-data; boundary=__import_boundary__"),
+        import("42", "Second"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&resp));
+    let second_chapter = uuid::Uuid::parse_str(&json_field(&resp, "id").await).unwrap();
+
+    let new_pages: Vec<uuid::Uuid> =
+        sqlx::query_scalar("SELECT id FROM pages WHERE chapter_id = $1 ORDER BY page_number")
+            .bind(second_chapter)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(new_pages.len(), 3, "re-import must recreate every page");
+
+    for page_id in &new_pages {
+        let queued: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM jobs WHERE payload LIKE '%' || $1::text || '%'",
+        )
+        .bind(page_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(
+            queued >= 1,
+            "page {page_id} was re-imported onto a known image and never entered the pipeline"
+        );
+    }
+
+    let _ = sqlx::query("DELETE FROM series WHERE id = $1")
+        .bind(uuid::Uuid::parse_str(&series_id).unwrap())
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM users WHERE email = $1")
+        .bind(&email)
+        .execute(&pool)
+        .await;
+}

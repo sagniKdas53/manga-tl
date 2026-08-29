@@ -1,7 +1,7 @@
 name: CI - Backend (Rust)
 
-# Mirrors ci-maven.yml's gates for backend-rust/: format check, clippy (SpotBugs/PMD
-# equivalent) and the test suite, against a real Postgres so Phase 1+ integration tests work.
+# The backend's only CI gate since the Java tree was deleted: format check, clippy and the
+# test suite, against a real Postgres so the integration tests work.
 on:
   push:
     branches: ["main", "rust-backend"]
@@ -59,8 +59,7 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      # Swatinem/rust-cache caches ~/.cargo and target/ keyed on Cargo.lock,
-      # the same role the maven cache block plays in ci-maven.yml.
+      # Swatinem/rust-cache caches ~/.cargo and target/ keyed on Cargo.lock.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:

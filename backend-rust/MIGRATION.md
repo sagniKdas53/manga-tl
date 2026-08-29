@@ -64,9 +64,17 @@ The frozen contract lives in `spec/golden-openapi.json` (71 operations, 26 schem
 >
 > The integration gate has now been RUN: 129 tests green (81 unit + 48 integration across
 > all 17 suites). e2e-smoke.js now uploads a 2.58 MB page instead of a 1x1 PNG.
-> NOT done: `backend/`, `ci-maven.yml` and `docker-compose.rust-test.yml` are still
-> present — the delete was refused by a sandbox guard, not skipped by choice. The
-> real-worker >2 MB pipeline run and the arm64 RUNTIME stage remain unverified. See step 10.
+> The real-worker >2 MB pipeline run and the arm64 RUNTIME stage remain unverified.
+> See step 10.
+>
+> 2026-08-29 — **THE JAVA TREE IS DELETED.** `backend/` (152 tracked files),
+> `.github/workflows/ci-maven.yml` and `docker-compose.rust-test.yml` are gone; the
+> sandbox guard that refused it on 2026-08-28 was lifted by the user. dependabot's maven
+> ecosystem is replaced by cargo on `/backend-rust`, and docs/guides/quality_gate.md now
+> documents the Rust gate. Route parity was re-run at 71/71 BEFORE the delete, against the
+> Java tree, so the frozen contract in spec/golden-routes.txt is confirmed, not assumed.
+> Landed in the same commit: unpadded archive filenames now import in reading order
+> (see `archive::natural_cmp`) and coordinator.rs is rustfmt-clean again.
 
 ## Mission (Phase 4)
 
@@ -654,14 +662,14 @@ zip (archives), hex, base64.
             against a synthetic lost route and a synthetic added route.
 
       **Left for the user — needs a Docker daemon, or an approval this session lacked.**
-      - [ ] DELETE `backend/` (152 tracked files, 1.7 MB), `.github/workflows/ci-maven.yml`
-            and `docker-compose.rust-test.yml`. Attempted 2026-08-28: `git rm` was refused
-            by the sandbox's deletion guard, and reaching for a different delete command
-            would have defeated the point of the guard. Everything AROUND the deletion is
-            already done, so this is now exactly two commands:
-
-                git rm -r backend/
-                git rm .github/workflows/ci-maven.yml docker-compose.rust-test.yml
+      - [x] DELETE `backend/` (152 tracked files, 1.7 MB), `.github/workflows/ci-maven.yml`
+            and `docker-compose.rust-test.yml`. DONE 2026-08-29 — the 2026-08-28 attempt was
+            refused by the sandbox's deletion guard; the user authorised it explicitly this
+            time. Route parity was re-run at 71/71 against the still-present Java tree
+            immediately before the delete, so the contract is confirmed rather than assumed.
+            Also updated in the same commit: `.github/dependabot.yml` (maven ecosystem on
+            `/backend` → cargo on `/backend-rust`, docker likewise) and
+            `docs/guides/quality_gate.md` (Java mvn gate → fmt/clippy/test-env/diff_routes).
 
             The dead Java rules are already out of `.dockerignore` (the `!backend/` block)
             and `.gitignore` (`backend/target/`, `backend/src/main/c/*.so`,
@@ -840,9 +848,9 @@ SPRING_DATASOURCE_USERNAME=<user> SPRING_DATASOURCE_PASSWORD=<pw> cargo test   #
    remaining check = watch panels fill while a pipeline runs on the Rust backend.
 4. Step 9 baselines PARTIAL only (Java torn down first): idle RSS 498.6MB vs 6.0MB,
    image 324MB vs 119MB; cold-start/p95 are N/A now unless re-derived another way.
-5. Step 10 housekeeping — mostly landed 2026-08-28 (see the dated note in the status
-   snapshot). Outstanding: delete backend/ + ci-maven.yml + docker-compose.rust-test.yml,
-   run the two Docker-dependent gates, merge rust-backend → main (PR #91), tag.
+5. Step 10 housekeeping — the deletes landed 2026-08-29 (backend/, ci-maven.yml,
+   docker-compose.rust-test.yml). Outstanding: run the two Docker-dependent gates,
+   merge rust-backend → main (PR #91), tag.
 6. Frontend hardening proposal written: docs/frontend_hardening_settings_provider_retry.md
    (empty-catalog retry + alert state; post-migration backlog).
 7. Minor: dispatcher capabilities probe warns on non-200; RedisService::connect fails

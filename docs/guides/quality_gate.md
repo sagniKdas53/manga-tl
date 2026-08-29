@@ -9,31 +9,34 @@
 > [!WARNING]
 > **This PC is not very powerful. Do NOT run too many tasks in parallel during the quality gate, otherwise it will lock up and waste all the effort. Run checks sequentially.**
 
-### Backend (Java) — `cd backend`
+### Backend (Rust) — `cd backend-rust`
 
 ```bash
 # 1. Format code (auto-fix)
-mvn spotless:apply
+cargo fmt
 
-# 2. Compile + unit tests + PMD + SpotBugs + JaCoCo coverage gate (≥80% expected)
-mvn clean verify -DforkCount=1 -DreuseForks=true
+# 2. Verify formatting (CI parity check — must match what CI runs)
+cargo fmt --check
 
-# (Optional) Generate HTML coverage report explicitly at target/site/jacoco/index.html
-mvn jacoco:report
+# 3. Lint; CI runs this with -D warnings, so a warning here fails the build
+cargo clippy --all-targets -- -D warnings
 
-# 3. Verify formatting (CI parity check — must match what CI runs)
-mvn spotless:check
+# 4. Full test suite against throwaway postgres/valkey/minio containers.
+#    Never point cargo test at the live stack — see MIGRATION.md.
+scripts/test-env.sh run
+
+# 5. The API contract must not drift: exactly 71/71 operations
+python3 ../scripts/diff_routes.py
 ```
 
 **What each tool catches:**
 
 | Tool | What it detects | Bound to |
 | ------ | --------------- | ---------- |
-| **Spotless** | Formatting (Google Java Format), unused imports, trailing whitespace | Manual / pre-commit |
-| **PMD 3.28.0** | God classes, complex methods, dead code, copy-paste, style violations | `mvn verify` |
-| **SpotBugs 4.10.2** | Null pointer bugs, resource leaks, concurrency issues, bad practices (bytecode analysis) | `mvn verify` |
-| **JaCoCo 0.8.15** | Line coverage gate — fails build if coverage < 80% | `mvn verify` |
-| **Surefire** | Unit test failures | `mvn verify` |
+| **rustfmt** | Formatting drift | `cargo fmt --check` |
+| **Clippy** | Correctness traps, dead code, needless clones, style — warnings are errors in CI | `cargo clippy --all-targets -- -D warnings` |
+| **cargo test** | Unit tests plus the integration suites under `backend-rust/tests/` | `scripts/test-env.sh run` |
+| **diff_routes.py** | Route-table drift in BOTH directions — a route added to or lost from the frozen contract | `python3 scripts/diff_routes.py` |
 
 ### Frontend (React/TypeScript) — `cd frontend`
 
