@@ -4,7 +4,8 @@
 //!
 //! ```bash
 //! docker run --rm -d --name rust-minio-test -p 19000:9000 \
-//!   -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio
+//!   -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+//!   minio/minio server /data
 //! MINIO_TEST_ENDPOINT=http://127.0.0.1:19000 cargo test --test minio_service
 //! docker rm -f rust-minio-test
 //! ```
