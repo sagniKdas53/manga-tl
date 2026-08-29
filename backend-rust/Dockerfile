@@ -21,7 +21,12 @@
 # Stage 1: Frontend bundle (architecture-independent)
 # ---------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM node:26-alpine AS frontend-build
-ARG VITE_BASE_PATH=/
+# Defaults to the context path this app is actually deployed under, not to `/`. Vite bakes
+# `base` into index.html at build time, so a `/` bundle served under /tlhub asks for
+# /assets/*.js, gets a 404 from the backend (which only serves them under CONTEXT_PATH), and
+# renders a blank page. A `/` default made every build that forgot the arg silently produce
+# that -- which is exactly what CI shipped. Override it for a root-mounted deployment.
+ARG VITE_BASE_PATH=/tlhub
 ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 WORKDIR /app
 

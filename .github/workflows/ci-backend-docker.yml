@@ -94,6 +94,14 @@ jobs:
           context: .
           file: backend-rust/Dockerfile
           push: true
+          # Without this the SPA bakes its asset URLs at `/` and the published image renders a
+          # BLANK PAGE under the context path: index.html loads, then its /assets/*.js 404s
+          # because the backend only serves them under CONTEXT_PATH. `docker compose build`
+          # never hit this -- docker-compose.yml passes the arg -- so the trap was invisible
+          # until an image came from CI rather than a local build. Keep in step with the
+          # CONTEXT_PATH default in docker-compose.yml.
+          build-args: |
+            VITE_BASE_PATH=/tlhub
           tags: ${{ steps.meta-ghcr.outputs.tags }}
           # Carries org.opencontainers.image.source, which is what links the GHCR package back
           # to this repository.
