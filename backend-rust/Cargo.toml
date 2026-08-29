@@ -65,7 +65,7 @@ base64 = "0.23"
 # HTTP client for the worker dispatcher (Java used java.net.http.HttpClient).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 # ZIP reading (chapter/project imports) and writing (chapter exports).
-zip = { version = "4", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 hex = "0.4"
 rust-embed = "8.12.0"
 
