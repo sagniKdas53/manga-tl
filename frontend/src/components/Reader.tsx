@@ -176,6 +176,27 @@ async function saveElementChanges(
   }
 }
 
+/**
+ * An OCR layer is working state and never belongs in a deliverable.
+ *
+ * The exports used to decide this from `cleanScanlationView` — the on-screen overlay toggle — so
+ * whether a downloaded PNG carried the source-text boxes depended on how the reader happened to be
+ * configured when the button was pressed. With the toggle off, an export came out with the OCR
+ * boxes and their backdrops painted over the finished translation.
+ *
+ * A view setting must not decide what lands in a file. The backend render has always been right
+ * here: `render.py` draws only `translation` and `sfx` layers, whatever the reader is showing, so
+ * the rendered PNG and the chapter ZIP were already clean and only the frontend's own exports
+ * disagreed. This is that same rule, stated once for both of them.
+ *
+ * The layer is still drawn on screen — the toggle keeps its job there, and
+ * `manuallyShownOcrLayers` still reveals a hidden one in the reader. Neither reaches an export.
+ */
+const EXPORTABLE_LAYER_TYPES = new Set(["translation", "sfx", "mask"]);
+
+const isExportableLayer = (layer: Layer): boolean =>
+  EXPORTABLE_LAYER_TYPES.has((layer.type || "").toLowerCase());
+
 export const Reader: React.FC<ReaderProps> = ({
   user,
   selectedSeries,
@@ -2282,17 +2303,9 @@ export const Reader: React.FC<ReaderProps> = ({
       // Draw the base page image
       ctx.drawImage(img, 0, 0, W, H);
 
-      const hasTranslation = layers.some(
-        (ld) => ld.layer.type === "translation",
-      );
       // Draw visible layer elements
       sortedLayers.forEach((lData) => {
-        const isOcrHidden =
-          cleanScanlationView &&
-          hasTranslation &&
-          lData.layer.type === "ocr" &&
-          !manuallyShownOcrLayers.has(lData.layer.id);
-        if (!lData.layer.visible || isOcrHidden) return;
+        if (!lData.layer.visible || !isExportableLayer(lData.layer)) return;
         // Masks for the whole layer first, then text. Painting mask-then-text per element
         // let a later element's mask paint over an earlier element's already-drawn
         // translation -- measured on 39 % of exported pages, and on the worst of them a
@@ -2423,10 +2436,7 @@ export const Reader: React.FC<ReaderProps> = ({
     user,
     imageDims,
     regionsById,
-    layers,
     sortedLayers,
-    cleanScanlationView,
-    manuallyShownOcrLayers,
     dirtyElements,
     saveAllPendingChanges,
   ]);
@@ -2478,8 +2488,13 @@ export const Reader: React.FC<ReaderProps> = ({
       );
       zip.file("original.png", origBlob);
 
-      // 2. Render and save mask/translation image files for each layer
+      // 2. Render and save mask/translation image files for each layer.
+      //
+      // project.json below still carries every layer including OCR, so a re-import is lossless --
+      // `import_project` reads only that. These PNGs are the rasterised deliverable, and an OCR
+      // layer has no business in one. See `isExportableLayer`.
       for (const lData of layers) {
+        if (!isExportableLayer(lData.layer)) continue;
         const layerId = lData.layer.id;
 
         // Draw mask for this specific layer

@@ -125,6 +125,42 @@ const layerPayload = [
       },
     ],
   },
+  // An OCR layer, so the export path has one to leave out. It is working state: its rasters must
+  // never reach the archive, while project.json still carries it so a re-import is lossless.
+  {
+    layer: {
+      id: "layer-ocr",
+      type: "ocr",
+      targetLanguage: null,
+      visible: true,
+      zOrder: 0,
+      metadataJson: {},
+    },
+    elements: [
+      {
+        id: "el-ocr-1",
+        text: "\u79c1\u306f\u2026",
+        font: "Comic Neue",
+        size: 16,
+        autoSize: true,
+        x: 61,
+        y: 665,
+        maxWidth: 69,
+        maxHeight: 509,
+        rotation: 0,
+        visible: true,
+        wordWrap: true,
+        backgroundColor: "#ffffff",
+        textColor: "#000000",
+        fontWeight: "normal",
+        fontStyle: "normal",
+        isManuallyEdited: false,
+        boxShape: "rectangular",
+        maskPolygon: null,
+        regionId: "r1",
+      },
+    ],
+  },
 ];
 
 /** Enough of a 2d context for the export path to run; none of it produces real pixels. */
@@ -251,12 +287,27 @@ describe("Reader project ZIP export", () => {
     expect(names).toContain("layer-layer-1-mask.png");
     expect(names).toContain("layer-layer-1-translation.png");
 
+    // An OCR layer is working state; it is drawn on screen and never rasterised into an export.
+    // This used to depend on the `cleanScanlationView` overlay toggle, so a downloaded file's
+    // contents changed with a view setting.
+    expect(names).not.toContain("layer-layer-ocr-mask.png");
+    expect(names).not.toContain("layer-layer-ocr-translation.png");
+    expect(names.filter((n) => n.includes("ocr"))).toEqual([]);
+
     const project = JSON.parse(await zip.file("project.json")!.async("string"));
     expect(project.pageNumber).toBe(22);
     expect(project.imageId).toBe("img1");
     expect(project.dimensions).toEqual({ width: 1200, height: 1600 });
-    expect(project.layers).toHaveLength(1);
-    expect(project.layers[0].elements[0].text).toBe(
+    // Both layers survive into project.json -- only the rasters are filtered.
+    expect(project.layers).toHaveLength(2);
+    expect(project.layers.map((l: { type: string }) => l.type).sort()).toEqual([
+      "ocr",
+      "translation",
+    ]);
+    const translation = project.layers.find(
+      (l: { type: string }) => l.type === "translation",
+    );
+    expect(translation.elements[0].text).toBe(
       "Am I... going to be taken too...??",
     );
     // Cost is summed out of each layer's metadata rather than stored, so a change in that
