@@ -380,3 +380,94 @@ async fn reader_mode_short_circuits_after_layout() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+/// A region the worker gave up on must not produce a visible element.
+///
+/// The worker reports it as translationFailed:true with a null translatedText, having already
+/// tried the batch, a retry pass and a per-region fallback. The coordinator read that flag onto
+/// ocr_regions but created the layer element with a hardcoded visible=TRUE, so the element kept
+/// the region's mask_polygon and no text: it erased the artwork and drew nothing back. That is
+/// the "empty bubble" — measured on 40 of 123 corpus pages.
+#[tokio::test]
+async fn failed_translation_does_not_create_a_visible_masking_element() {
+    let Some((pool, _redis, state)) = app().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL / REDIS not set");
+        return;
+    };
+    let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool, None, Some("en")).await;
+
+    async fn region(pool: &sqlx::PgPool, page_id: Uuid, text: &str) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO ocr_regions (id, bbox_x, bbox_y, bbox_w, bbox_h, detected_language, text, \
+             mask_polygon, region_type, page_id) \
+             VALUES (uuid_generate_v4(), 10, 10, 80, 40, 'ja', $1, '[[10,10],[90,10],[90,50],[10,50]]', 'speech', $2) \
+             RETURNING id",
+        )
+        .bind(text)
+        .bind(page_id)
+        .fetch_one(pool)
+        .await
+        .expect("region")
+    }
+    let ok_region = region(&pool, page_id, "こんにちは").await;
+    let failed_region = region(&pool, page_id, "違うんです").await;
+
+    let translations = vec![
+        serde_json::json!({
+            "regionId": ok_region.to_string(),
+            "pageId": page_id.to_string(),
+            "translatedText": "Hello",
+            "translationFailed": false,
+        }),
+        serde_json::json!({
+            "regionId": failed_region.to_string(),
+            "pageId": page_id.to_string(),
+            "translatedText": null,
+            "translationFailed": true,
+        }),
+    ];
+
+    manga_backend::jobs::coordinator::handle_translation_callback(
+        &state,
+        None,
+        image_id,
+        &translations,
+        None,
+    )
+    .await
+    .expect("translation callback");
+
+    // mask_polygon is JSONB, so it decodes as Value rather than String.
+    async fn element(
+        pool: &sqlx::PgPool,
+        region_id: Uuid,
+    ) -> (bool, Option<String>, Option<serde_json::Value>) {
+        sqlx::query_as::<_, (bool, Option<String>, Option<serde_json::Value>)>(
+            "SELECT e.visible, e.text, e.mask_polygon FROM layer_elements e \
+             JOIN layers l ON l.id = e.layer_id \
+             WHERE e.region_id = $1 AND l.type = 'translation' LIMIT 1",
+        )
+        .bind(region_id)
+        .fetch_one(pool)
+        .await
+        .expect("element")
+    }
+
+    let (ok_visible, ok_text, _) = element(&pool, ok_region).await;
+    assert!(ok_visible, "a translated region stays visible");
+    assert_eq!(ok_text.as_deref(), Some("Hello"));
+
+    let (failed_visible, failed_text, failed_mask) = element(&pool, failed_region).await;
+    assert!(
+        !failed_visible,
+        "a region the worker gave up on must be hidden, or its mask erases the artwork \
+         and puts nothing back"
+    );
+    assert!(failed_text.is_none() || failed_text.as_deref() == Some(""));
+    assert!(
+        failed_mask.is_some(),
+        "the element still carries the mask — visibility is the only thing keeping it off the page"
+    );
+
+    cleanup_series(&pool, series_id).await;
+}

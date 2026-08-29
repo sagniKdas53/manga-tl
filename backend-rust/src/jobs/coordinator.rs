@@ -1726,7 +1726,7 @@ pub async fn handle_translation_callback(
                 } else {
                     let box_geom = text_box_for(&state.pool, region).await;
                     sqlx::query(
-                        "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7 WHERE id=$1",
+                        "UPDATE layer_elements SET text=$2, x=$3, y=$4, max_width=$5, max_height=$6, mask_polygon=$7, visible=$8 WHERE id=$1",
                     )
                     .bind(element.id)
                     .bind(&translated_text)
@@ -1735,6 +1735,7 @@ pub async fn handle_translation_callback(
                     .bind(box_geom.w)
                     .bind(box_geom.h)
                     .bind(&region.mask_polygon)
+                    .bind(!failed)
                     .execute(&mut *tx)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -1742,10 +1743,16 @@ pub async fn handle_translation_callback(
             }
             (_, Some(region)) => {
                 let box_geom = text_box_for(&state.pool, region).await;
+                // visible = !failed. The worker reports a region it could not translate as
+                // translationFailed:true with a null translatedText, having already tried the
+                // batch, a retry pass and a per-region fallback. Creating that element visible
+                // anyway gave it a mask_polygon and no text, so it erased the artwork and drew
+                // nothing back -- the empty bubble. The flag was read and written onto
+                // ocr_regions but never consulted here.
                 sqlx::query(
                     "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, font, font_weight, \
                      background_color, text_color, box_shape, mask_polygon, word_wrap, layer_id, region_id) \
-                     VALUES ($1,$2,$3,$4,$5,$6,TRUE,TRUE,'Comic Neue','bold',$7,$8,$9,$10,TRUE,$11,$12)",
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,'Comic Neue','bold',$8,$9,$10,$11,TRUE,$12,$13)",
                 )
                 .bind(Uuid::new_v4())
                 .bind(&translated_text)
@@ -1753,6 +1760,7 @@ pub async fn handle_translation_callback(
                 .bind(box_geom.y)
                 .bind(box_geom.w)
                 .bind(box_geom.h)
+                .bind(!failed)
                 .bind(&region.background_color)
                 .bind(contrasting_text_color(region.background_color.as_deref()))
                 .bind(if region.region_type.as_deref().unwrap_or("").eq_ignore_ascii_case("speech") {
@@ -1768,9 +1776,10 @@ pub async fn handle_translation_callback(
                 .map_err(|e| e.to_string())?;
             }
             (Some(element), None) => {
-                sqlx::query("UPDATE layer_elements SET text=$2 WHERE id=$1")
+                sqlx::query("UPDATE layer_elements SET text=$2, visible=$3 WHERE id=$1")
                     .bind(element.id)
                     .bind(&translated_text)
+                    .bind(!failed)
                     .execute(&mut *tx)
                     .await
                     .map_err(|e| e.to_string())?;

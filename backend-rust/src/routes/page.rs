@@ -961,6 +961,27 @@ pub async fn delete_page(
         .execute(&state.pool)
         .await
         .expect("page delete");
+
+    // Close the gap the delete just opened. Java's deletePageDb ends with an explicit
+    // "Re-sequence remaining pages in chapter to maintain sequence 1..N" loop; the port dropped
+    // it, so deleting page 2 of 5 left 1, 3, 4, 5 and every later page kept its old number.
+    //
+    // That is not only cosmetic. update_page_number validates the requested number against
+    // COUNT(*), so with a hole in the sequence the highest real page number is out of range and
+    // moving a page there is rejected as "greater than total pages" -- one delete quietly breaks
+    // page reordering for the whole chapter.
+    //
+    // A single decrement is safe where reorder_pages needs its two-phase parking trick: every
+    // page above the hole moves down one, into a slot whose previous occupant has already moved
+    // or is the deleted page itself, so no unique (chapter_id, page_number) pair ever collides.
+    sqlx::query(
+        "UPDATE pages SET page_number = page_number - 1 WHERE chapter_id = $1 AND page_number > $2",
+    )
+    .bind(page.chapter_id)
+    .bind(page.page_number)
+    .execute(&state.pool)
+    .await
+    .expect("resequence pages after delete");
     if let Some(image) = &image {
         // Only remove the image when no other page references it (Java deletes via pageService;
         // its deletePageDb collects paths from the page's own image only).
