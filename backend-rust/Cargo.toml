@@ -57,7 +57,12 @@ uuid = { version = "1", features = ["serde", "v4"] }
 # aws_lc_rs is free for us: aws-sdk-s3's rustls stack already compiles aws-lc-sys.
 # `use_pem` (the lone default feature) stays off; we only ever key from a raw secret.
 jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
-aws-sdk-s3 = "1"
+# MinIO/S3 client. `default-features = false` + the default list minus `rustls`: that
+# deprecated feature drags in aws-smithy-http-client/legacy-rustls-ring, i.e. the whole
+# hyper 0.14 + rustls 0.21 stack (and rustls-webpki 0.101, which has no patched release).
+# Nothing here uses the legacy client -- `default-https-client` gives us rustls 0.23 +
+# aws-lc-rs, which is what the SDK actually dials with.
+aws-sdk-s3 = { version = "1", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 futures-util = { version = "0.3", features = ["std"] }
 webp = "0.3"

@@ -9,14 +9,26 @@
 //! docker rm -f rust-minio-test
 //! ```
 //!
-//! CI (ci-cargo.yml) runs the same image as a service container.
+//! CI (ci-cargo.yml) starts the same image with `docker run` (service containers cannot
+//! take the `server /data` argument minio/minio needs) and exports the same variables.
 
 use manga_backend::config::MinioConfig;
 use manga_backend::minio::MinioService;
 use tokio::io::AsyncReadExt;
 
 fn test_service() -> Option<MinioService> {
-    let endpoint = std::env::var("MINIO_TEST_ENDPOINT").ok()?;
+    let Ok(endpoint) = std::env::var("MINIO_TEST_ENDPOINT") else {
+        // Skipping is right on a laptop with no MinIO, but in CI it would quietly turn
+        // this whole file into a no-op that still reports green -- exactly the failure
+        // you would not notice. ci-cargo.yml always exports the endpoint, so its absence
+        // there means the workflow broke, not that there is nothing to test.
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "MINIO_TEST_ENDPOINT must be set under CI -- check the Start MinIO step and \
+             the Test step env block in .github/workflows/ci-cargo.yml"
+        );
+        return None;
+    };
     Some(MinioService::new(&MinioConfig {
         endpoint,
         external_url: None,
