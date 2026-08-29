@@ -135,6 +135,17 @@ fn internal(
 }
 
 /// Seeds series → chapter → page → image; returns their ids.
+/// Serialises the tests that touch a job queue.
+///
+/// `queue:panel-detection`, `queue:ocr` and friends are global Redis lists, and cargo runs
+/// the tests in this binary concurrently. Without this, one test pops a sibling's payload
+/// (CI run 33264451712 failed exactly that way: the popped `pageId` was another test's
+/// page), and `duplicate_callbacks_are_dropped` — which asserts a queue is EMPTY — can see
+/// a neighbour's enqueue and fail the opposite way. Every test that pushes or pops holds
+/// this for its whole body; the two that never touch a queue stay parallel.
+static QUEUE_GUARD: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+
 async fn seed_pipeline(pool: &sqlx::PgPool) -> (Uuid, Uuid, Uuid, Uuid) {
     use uuid::Uuid;
     let series_id = Uuid::new_v4();
@@ -254,6 +265,7 @@ async fn full_pipeline_walks_every_stage() {
         eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR not set");
         return;
     };
+    let _queue_guard = QUEUE_GUARD.lock().await;
     let (series_id, chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
 
     // --- startPipeline: panel-detection job lands in DB and Redis ---
@@ -539,6 +551,7 @@ async fn duplicate_callbacks_are_dropped() {
         eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR not set");
         return;
     };
+    let _queue_guard = QUEUE_GUARD.lock().await;
     let (series_id, chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
 
     manga_backend::jobs::coordinator::start_pipeline(
@@ -620,6 +633,7 @@ async fn job_status_patch_validates_and_updates() {
         eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR not set");
         return;
     };
+    let _queue_guard = QUEUE_GUARD.lock().await;
     let (series_id, chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
     manga_backend::jobs::coordinator::start_pipeline(
         &state,
@@ -730,6 +744,7 @@ async fn redo_endpoints_enqueue_and_validate() {
         eprintln!("skipping: SPRING_DATASOURCE_URL/REDIS_TEST_ADDR not set");
         return;
     };
+    let _queue_guard = QUEUE_GUARD.lock().await;
     let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
 
     // Translator JWT for the ADMIN/TRANSLATOR gate.
