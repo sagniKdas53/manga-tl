@@ -51,7 +51,12 @@ tower-http = { version = "0.6", features = ["catch-panic", "trace", "compression
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "chrono", "uuid", "json"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["serde", "v4"] }
-jsonwebtoken = "11"
+# HMAC-signed session tokens. 10.0 turned the crypto backend into a trait, so exactly one
+# of `rust_crypto` / `aws_lc_rs` has to be selected here — otherwise every sign/verify
+# panics at runtime with "Could not automatically determine the process-level CryptoProvider".
+# aws_lc_rs is free for us: aws-sdk-s3's rustls stack already compiles aws-lc-sys.
+# `use_pem` (the lone default feature) stays off; we only ever key from a raw secret.
+jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
 aws-sdk-s3 = "1"
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 futures-util = { version = "0.3", features = ["std"] }
