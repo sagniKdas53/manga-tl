@@ -12,7 +12,7 @@
 
 use manga_backend::config::DatabaseConfig;
 use manga_backend::db;
-use manga_backend::models::{ModelRate, SystemSetting, User};
+use manga_backend::models::{ModelRate, Page, SystemSetting, User};
 
 /// Builds a DatabaseConfig from the standard env vars; None when not configured.
 fn db_config_from_env() -> Option<DatabaseConfig> {
@@ -123,4 +123,96 @@ async fn user_roundtrip_covers_uuid_and_timestamptz() {
     assert_eq!(user.role, "ADMIN");
 
     tx.rollback().await.expect("rollback");
+}
+
+/// The lookups that find a page from its image must actually RUN against the real schema.
+///
+/// `pages` has no `created_at` column, so `ORDER BY created_at` errored at the database.
+/// Both call sites swallowed that (`unwrap_or_default()` / `.ok().flatten()`), turning a
+/// broken query into "this image has no pages" — which silently disabled duplicate-image
+/// cloning entirely and made every re-import of an already-known image skip the pipeline.
+/// A query that cannot fail loudly has to be pinned by a test that talks to Postgres.
+///
+/// This one calls `resolve_page_for_callback` itself rather than restating its SQL, so
+/// reverting the ORDER BY in the source fails the test. It seeds through the pool (the
+/// function takes `&PgPool`, so a rolled-back tx is not visible to it) and cleans up its
+/// own `__rust-probe-pageorder` rows afterwards.
+#[tokio::test]
+async fn page_lookups_by_image_order_by_a_column_that_exists() {
+    const PROBE: &str = "__rust-probe-pageorder";
+
+    let Some(pool) = test_pool().await else {
+        eprintln!("skipping: SPRING_DATASOURCE_URL not set");
+        return;
+    };
+
+    let series_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \
+         VALUES (uuid_generate_v4(), now(), now(), $1, 'RTL', 'ja') RETURNING id",
+    )
+    .bind(PROBE)
+    .fetch_one(&pool)
+    .await
+    .expect("insert series");
+
+    let chapter_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO chapters (id, created_at, updated_at, chapter_number, title, series_id) \
+         VALUES (uuid_generate_v4(), now(), now(), 1, $1, $2) RETURNING id",
+    )
+    .bind(PROBE)
+    .bind(series_id)
+    .fetch_one(&pool)
+    .await
+    .expect("insert chapter");
+
+    let image_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO images (id, created_at, filename, storage_path, hash) \
+         VALUES (uuid_generate_v4(), now(), '2.webp', 'originals/probe.webp', $1) RETURNING id",
+    )
+    .bind(PROBE)
+    .fetch_one(&pool)
+    .await
+    .expect("insert image");
+
+    sqlx::query(
+        "INSERT INTO pages (id, page_number, chapter_id, image_id) \
+         VALUES (uuid_generate_v4(), 1, $1, $2)",
+    )
+    .bind(chapter_id)
+    .bind(image_id)
+    .execute(&pool)
+    .await
+    .expect("insert page");
+
+    // The real function, with no page_id, so it takes the by-image branch.
+    let resolved =
+        manga_backend::jobs::coordinator::resolve_page_for_callback(&pool, image_id, None).await;
+
+    // The shape clone::handle_duplicate_image_cloning depends on: a page-bearing image
+    // must never come back as an empty Vec, or its is_empty() guard skips the pipeline.
+    let all: Result<Vec<Page>, _> =
+        sqlx::query_as("SELECT * FROM pages WHERE image_id = $1 ORDER BY page_number ASC")
+            .bind(image_id)
+            .fetch_all(&pool)
+            .await;
+
+    // Clean up before asserting, so a failure cannot leave probe rows behind.
+    let _ = sqlx::query("DELETE FROM series WHERE title = $1")
+        .bind(PROBE)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM images WHERE hash = $1")
+        .bind(PROBE)
+        .execute(&pool)
+        .await;
+
+    assert!(
+        resolved.is_some(),
+        "a callback with no page_id must still resolve its page"
+    );
+    assert_eq!(
+        all.expect("pages-by-image must not error").len(),
+        1,
+        "the seeded page must come back, not an empty Vec"
+    );
 }

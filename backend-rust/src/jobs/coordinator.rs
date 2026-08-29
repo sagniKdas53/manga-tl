@@ -124,7 +124,9 @@ pub async fn resolve_page_for_callback(
             .ok()
             .flatten();
     }
-    sqlx::query_as("SELECT * FROM pages WHERE image_id = $1 ORDER BY created_at ASC LIMIT 1")
+    // Same trap as clone.rs: pages has no created_at, so this ordering errored and
+    // .ok().flatten() reported "no such page" for every page_id-less callback.
+    sqlx::query_as("SELECT * FROM pages WHERE image_id = $1 ORDER BY page_number ASC LIMIT 1")
         .bind(image_id)
         .fetch_optional(pool)
         .await
