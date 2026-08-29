@@ -2314,7 +2314,11 @@ pub async fn handle_qa_callback(
                 let fixed =
                     apply_direct_fix(state, region_id, latest_translation, corrected, font_size)
                         .await;
-                final_status = if fixed { "fixed".into() } else { "failed".into() };
+                final_status = if fixed {
+                    "fixed".into()
+                } else {
+                    "failed".into()
+                };
             } else if status_before.eq_ignore_ascii_case("failed") && r.get("escalation").is_some()
             {
                 let escalation = r.get("escalation").cloned().unwrap_or(Value::Null);
@@ -2687,6 +2691,7 @@ mod textbox_tests {
         assert_eq!(box_geom.h, 18);
     }
 
+    #[test]
     fn keeps_the_column_height_instead_of_squaring_it_away() {
         // Openrouter ch. 11 p22: a 49x489 caption, padded to 69x509.
         let box_geom = text_box_geometry(
@@ -2716,7 +2721,10 @@ mod textbox_tests {
             &region(direct_text_region(2, 1005, 91, 293)),
             Some((1075.0, 1518.0)),
         );
-        assert_eq!(box_geom.w, 111, "111px clears the 75px floor, so nothing widens");
+        assert_eq!(
+            box_geom.w, 111,
+            "111px clears the 75px floor, so nothing widens"
+        );
         assert_eq!(box_geom.h, 313);
         assert_eq!(box_geom.x, 0.0, "the padded left edge clamps onto the page");
         assert_eq!(box_geom.y, 995.0);
@@ -2774,7 +2782,10 @@ mod textbox_tests {
             box_geom.y >= 0.0 && box_geom.y + box_geom.h as f64 <= 1600.0,
             "vertically on the page"
         );
-        assert_eq!(box_geom.h, 420, "height carried through the clamp untouched");
+        assert_eq!(
+            box_geom.h, 420,
+            "height carried through the clamp untouched"
+        );
     }
 
     /// The worker's contour fallback can supply a real container for a region YOLO
