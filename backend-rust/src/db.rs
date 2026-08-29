@@ -86,7 +86,8 @@ mod tests {
 
     #[test]
     fn plain_credentials_pass_through() {
-        let password = std::env::var("TEST_DB_PASSWORD").unwrap_or_else(|_| "test_password".to_string());
+        let password =
+            std::env::var("TEST_DB_PASSWORD").expect("TEST_DB_PASSWORD must be set for this test");
         let expected = format!("postgres://postgres:{}@db:5432/manga_library", password);
         assert_eq!(build_postgres_url(&db("postgres", &password)), expected);
     }
