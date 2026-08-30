@@ -294,10 +294,16 @@ export function formatCost(cost: number | null | undefined): string {
  * share one metadata document — QA updates the translation layer rather than creating its own — so
  * they namespace under `tl` and `qa` to avoid colliding.
  */
+type CostNode = {
+  estimated_cost?: number | null;
+  /** How many calls the worker could not price. Absent on payloads written before it reported. */
+  unknown_calls?: number | null;
+};
+
 export type LayerCostMeta = {
-  cost?: { estimated_cost?: number | null };
-  tl?: { cost?: { estimated_cost?: number | null } };
-  qa?: { cost?: { estimated_cost?: number | null } };
+  cost?: CostNode;
+  tl?: { cost?: CostNode };
+  qa?: { cost?: CostNode };
 } | null;
 
 /**
@@ -309,6 +315,12 @@ export type LayerCostMeta = {
  *
  * The worker omits `estimated_cost` entirely when it has no price, rather than sending zero. A cost
  * node with no number is therefore "unknown", not "free", and is counted rather than ignored.
+ *
+ * `unknown_calls` is the authoritative count when present, and says how many calls went unpriced —
+ * treating a node reporting eight of them as a single unknown understates the gap. This mirrors
+ * `absorb()` in backend-rust/src/export.rs deliberately: the two produce the same totals for the
+ * same document, and a client-side export that disagreed with the server's would be worse than
+ * either being wrong alone.
  */
 export function layerCosts(meta: LayerCostMeta): {
   total: number;
@@ -321,7 +333,9 @@ export function layerCosts(meta: LayerCostMeta): {
   for (const node of [meta.cost, meta.tl?.cost, meta.qa?.cost]) {
     if (!node) continue;
     if (typeof node.estimated_cost === "number") total += node.estimated_cost;
-    else unpriced += 1;
+
+    if (typeof node.unknown_calls === "number") unpriced += node.unknown_calls;
+    else if (typeof node.estimated_cost !== "number") unpriced += 1;
   }
   return { total, unpriced };
 }

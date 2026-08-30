@@ -397,4 +397,24 @@ describe("layerCosts", () => {
     expect(layerCosts(null)).toEqual({ total: 0, unpriced: 0 });
     expect(layerCosts({})).toEqual({ total: 0, unpriced: 0 });
   });
+
+  it("uses unknown_calls as the count when the payload reports it", async () => {
+    const { layerCosts } = await import("../../utils");
+    // A node that could not price eight calls is eight unknowns, not one. Counting the node
+    // instead of the calls understates the gap, and would disagree with what export.rs publishes
+    // for the very same document.
+    const result = layerCosts({ tl: { cost: { unknown_calls: 8 } } });
+    expect(result.total).toBe(0);
+    expect(result.unpriced).toBe(8);
+  });
+
+  it("counts unknown_calls even alongside a priced total", async () => {
+    const { layerCosts } = await import("../../utils");
+    const result = layerCosts({
+      cost: { estimated_cost: 0.01, unknown_calls: 2 },
+      qa: { cost: { estimated_cost: 0.02, unknown_calls: 0 } },
+    });
+    expect(result.total).toBeCloseTo(0.03);
+    expect(result.unpriced).toBe(2);
+  });
 });
