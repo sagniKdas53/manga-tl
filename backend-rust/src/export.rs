@@ -229,6 +229,7 @@ async fn build_chapter_meta(
     let mut page_metadata_list: Vec<Value> = Vec::with_capacity(pages.len());
     let mut chapter_total_cost = 0.0f64;
     let mut chapter_has_cost = false;
+    let mut chapter_unpriced: usize = 0;
 
     for page in pages {
         let image: Image = sqlx::query_as("SELECT * FROM images WHERE id = $1")
@@ -369,13 +370,21 @@ async fn build_chapter_meta(
             .fetch_all(&state.pool)
             .await
             .unwrap_or_default();
-        let (total, source): (f64, &str) = if !db_costs.is_empty() {
+        // A NULL estimated_cost means the call had no known price. Summing skips those rows, so the
+        // total is only as complete as this count says it is — without it, "we could not price 8 of
+        // these calls" and "these calls were free" produce the same number.
+        let unpriced_calls = db_costs
+            .iter()
+            .filter(|c| c.estimated_cost.is_none())
+            .count();
+        let (total, source, has_cost): (f64, &str, bool) = if !db_costs.is_empty() {
             (
                 db_costs.iter().filter_map(|c| c.estimated_cost).sum(),
                 "database",
+                true,
             )
         } else {
-            (page_total_cost, "layer-metadata")
+            (page_total_cost, "layer-metadata", page_has_cost)
         };
         if !db_costs.is_empty() {
             let recorded: BTreeSet<String> =
@@ -392,11 +401,21 @@ async fn build_chapter_meta(
             "layerCount": layers.len(),
             "layers": layers_meta_list,
             "modelsUsed": models_used.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<BTreeMap<String, Value>>(),
-            "totalCost": { "estimated_cost": total, "display": display, "currency": "USD" },
+            "totalCost": {
+                "estimated_cost": total,
+                "display": display,
+                "currency": "USD",
+                "unpricedCalls": unpriced_calls,
+                "complete": unpriced_calls == 0,
+            },
         });
         page_meta["costSource"] = json!(source);
-        if page_has_cost {
+        // Gated on the source that actually produced `total`. This used to check page_has_cost,
+        // which is only ever set by the layer-metadata path — so a page whose cost came from the
+        // database reported a total of its own and then contributed nothing to the chapter.
+        if has_cost {
             chapter_total_cost += total;
+            chapter_unpriced += unpriced_calls;
             chapter_has_cost = true;
         }
 
@@ -484,6 +503,8 @@ async fn build_chapter_meta(
                 "estimated_cost": chapter_total_cost,
                 "display": format_cost(chapter_total_cost),
                 "currency": "USD",
+                "unpricedCalls": chapter_unpriced,
+                "complete": chapter_unpriced == 0,
             }),
         );
     }
