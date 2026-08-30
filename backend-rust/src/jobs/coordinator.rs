@@ -1020,7 +1020,13 @@ pub async fn handle_ocr_callback(state: &AppState, dto: &Value) -> Result<(), St
 
     if let Some(cost) = dto.get("cost").filter(|c| !c.is_null()) {
         metadata.insert("cost".into(), cost.clone());
-        save_job_costs(state, image_id, cost).await;
+        save_job_costs(
+            state,
+            image_id,
+            dto.get("jobId").and_then(Value::as_str),
+            cost,
+        )
+        .await;
     }
 
     metadata.insert("layer_order".into(), json!(next_z));
@@ -1264,7 +1270,12 @@ pub async fn handle_layout_callback(
 // ---------------------------------------------------------------------------
 
 /// Persists cost entries from a worker cost blob ({breakdown:[...]} or {estimated_cost}).
-pub async fn save_job_costs(state: &AppState, image_id: Uuid, cost_map: &Value) {
+pub async fn save_job_costs(
+    state: &AppState,
+    image_id: Uuid,
+    job_id: Option<&str>,
+    cost_map: &Value,
+) {
     let Some(obj) = cost_map.as_object() else {
         return;
     };
@@ -1283,17 +1294,32 @@ pub async fn save_job_costs(state: &AppState, image_id: Uuid, cost_map: &Value) 
         let number = |key: &str| entry_obj.get(key).and_then(|v| v.as_i64());
         let float = |key: &str| entry_obj.get(key).and_then(|v| v.as_f64());
         let text = |key: &str| entry_obj.get(key).and_then(|v| v.as_str());
+        // The worker sends "" rather than omitting these, and an empty string is not a value —
+        // storing it would make `WHERE generation_id IS NULL` miss the rows that have no id.
+        let text_opt = |key: &str| text(key).filter(|s| !s.is_empty());
         if let Err(err) = sqlx::query(
-            "INSERT INTO job_costs (id, image_id, provider, model, prompt_tokens, completion_tokens, estimated_cost, created_at) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7,now())",
+            "INSERT INTO job_costs (id, image_id, job_id, provider, model, prompt_tokens, completion_tokens, \
+             estimated_cost, generation_id, upstream_provider, cached_tokens, cost_source, stage, duration_ms, created_at) \
+             VALUES ($1,$2,(SELECT id FROM jobs WHERE id = $3),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now())",
         )
         .bind(Uuid::new_v4())
         .bind(image_id)
+        // Resolved through a subquery rather than bound directly: the row carries a foreign key to
+        // jobs(id), and a callback can land after its job was cleared. Binding a stale id would
+        // fail the whole insert and lose the cost outright; the subquery yields NULL instead, which
+        // is exactly what the ON DELETE SET NULL rule would have left behind anyway.
+        .bind(job_id.filter(|s| !s.is_empty()))
         .bind(text("provider"))
         .bind(text("model"))
         .bind(number("prompt_tokens").map(|v| v as i32))
         .bind(number("completion_tokens").map(|v| v as i32))
         .bind(float("estimated_cost"))
+        .bind(text_opt("generation_id"))
+        .bind(text_opt("upstream_provider"))
+        .bind(number("cached_tokens").map(|v| v as i32))
+        .bind(text_opt("cost_source"))
+        .bind(text_opt("stage"))
+        .bind(number("duration_ms").map(|v| v as i32))
         .execute(&state.pool)
         .await
         {
@@ -1666,7 +1692,7 @@ pub async fn handle_translation_callback(
 
     if let Some(cost) = cost.filter(|c| !c.is_null()) {
         metadata.insert("tl".into(), json!({ "cost": cost }));
-        save_job_costs(state, image_id, cost).await;
+        save_job_costs(state, image_id, job_id, cost).await;
     }
 
     let layer_id = Uuid::new_v4();
@@ -2513,7 +2539,7 @@ pub async fn handle_qa_callback(
                 .await;
 
             if cost.is_some() {
-                save_job_costs(state, image_id, cost.unwrap_or(&Value::Null)).await;
+                save_job_costs(state, image_id, job_id, cost.unwrap_or(&Value::Null)).await;
             }
         }
     }
