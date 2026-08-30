@@ -288,6 +288,44 @@ export function formatCost(cost: number | null | undefined): string {
   return `$${cost.toExponential(2)}`;
 }
 
+/**
+ * A layer's cost metadata. The same figure lives under three different keys depending on which
+ * stage wrote it: OCR creates its own layer and uses the bare `cost`, while translation and QA
+ * share one metadata document — QA updates the translation layer rather than creating its own — so
+ * they namespace under `tl` and `qa` to avoid colliding.
+ */
+export type LayerCostMeta = {
+  cost?: { estimated_cost?: number | null };
+  tl?: { cost?: { estimated_cost?: number | null } };
+  qa?: { cost?: { estimated_cost?: number | null } };
+} | null;
+
+/**
+ * Totals every cost a layer carries, and counts the ones that could not be priced.
+ *
+ * Reading all three keys in one place is the point: this export previously summed `cost` and
+ * `qa.cost` but not `tl.cost`, so every translation — the largest line item — was silently missing
+ * from the total. A caller that forgets a key is the failure mode, so callers no longer choose.
+ *
+ * The worker omits `estimated_cost` entirely when it has no price, rather than sending zero. A cost
+ * node with no number is therefore "unknown", not "free", and is counted rather than ignored.
+ */
+export function layerCosts(meta: LayerCostMeta): {
+  total: number;
+  unpriced: number;
+} {
+  let total = 0;
+  let unpriced = 0;
+  if (!meta || typeof meta !== "object") return { total, unpriced };
+
+  for (const node of [meta.cost, meta.tl?.cost, meta.qa?.cost]) {
+    if (!node) continue;
+    if (typeof node.estimated_cost === "number") total += node.estimated_cost;
+    else unpriced += 1;
+  }
+  return { total, unpriced };
+}
+
 export interface ResolvedValue {
   value: string;
   source: "global" | "series" | "chapter";

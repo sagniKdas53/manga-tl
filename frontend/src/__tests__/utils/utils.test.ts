@@ -356,3 +356,45 @@ describe("utils helpers", () => {
     expect(formatResolverHint("chapter")).toBe("");
   });
 });
+
+describe("layerCosts", () => {
+  it("counts translation cost, which lives under tl.cost", async () => {
+    const { layerCosts } = await import("../../utils");
+    // The regression this guards: the ZIP export summed `cost` and `qa.cost` but never `tl.cost`,
+    // so every translation — the largest line item — was silently missing from the total.
+    expect(layerCosts({ tl: { cost: { estimated_cost: 0.02 } } })).toEqual({
+      total: 0.02,
+      unpriced: 0,
+    });
+  });
+
+  it("sums all three keys a layer can carry", async () => {
+    const { layerCosts } = await import("../../utils");
+    const result = layerCosts({
+      cost: { estimated_cost: 0.01 },
+      tl: { cost: { estimated_cost: 0.02 } },
+      qa: { cost: { estimated_cost: 0.03 } },
+    });
+    expect(result.total).toBeCloseTo(0.06);
+    expect(result.unpriced).toBe(0);
+  });
+
+  it("treats a cost with no number as unknown rather than free", async () => {
+    const { layerCosts } = await import("../../utils");
+    // The worker omits estimated_cost entirely when it could not price the job, so a cost node
+    // with no number means "unknown". Silently reading it as 0 is what made unpriced work look
+    // free all the way through to the dashboard.
+    const result = layerCosts({
+      cost: { estimated_cost: 0.01 },
+      tl: { cost: {} },
+    });
+    expect(result.total).toBeCloseTo(0.01);
+    expect(result.unpriced).toBe(1);
+  });
+
+  it("handles absent or malformed metadata", async () => {
+    const { layerCosts } = await import("../../utils");
+    expect(layerCosts(null)).toEqual({ total: 0, unpriced: 0 });
+    expect(layerCosts({})).toEqual({ total: 0, unpriced: 0 });
+  });
+});
