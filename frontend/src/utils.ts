@@ -288,6 +288,58 @@ export function formatCost(cost: number | null | undefined): string {
   return `$${cost.toExponential(2)}`;
 }
 
+/**
+ * A layer's cost metadata. The same figure lives under three different keys depending on which
+ * stage wrote it: OCR creates its own layer and uses the bare `cost`, while translation and QA
+ * share one metadata document — QA updates the translation layer rather than creating its own — so
+ * they namespace under `tl` and `qa` to avoid colliding.
+ */
+type CostNode = {
+  estimated_cost?: number | null;
+  /** How many calls the worker could not price. Absent on payloads written before it reported. */
+  unknown_calls?: number | null;
+};
+
+export type LayerCostMeta = {
+  cost?: CostNode;
+  tl?: { cost?: CostNode };
+  qa?: { cost?: CostNode };
+} | null;
+
+/**
+ * Totals every cost a layer carries, and counts the ones that could not be priced.
+ *
+ * Reading all three keys in one place is the point: this export previously summed `cost` and
+ * `qa.cost` but not `tl.cost`, so every translation — the largest line item — was silently missing
+ * from the total. A caller that forgets a key is the failure mode, so callers no longer choose.
+ *
+ * The worker omits `estimated_cost` entirely when it has no price, rather than sending zero. A cost
+ * node with no number is therefore "unknown", not "free", and is counted rather than ignored.
+ *
+ * `unknown_calls` is the authoritative count when present, and says how many calls went unpriced —
+ * treating a node reporting eight of them as a single unknown understates the gap. This mirrors
+ * `absorb()` in backend-rust/src/export.rs deliberately: the two produce the same totals for the
+ * same document, and a client-side export that disagreed with the server's would be worse than
+ * either being wrong alone.
+ */
+export function layerCosts(meta: LayerCostMeta): {
+  total: number;
+  unpriced: number;
+} {
+  let total = 0;
+  let unpriced = 0;
+  if (!meta || typeof meta !== "object") return { total, unpriced };
+
+  for (const node of [meta.cost, meta.tl?.cost, meta.qa?.cost]) {
+    if (!node) continue;
+    if (typeof node.estimated_cost === "number") total += node.estimated_cost;
+
+    if (typeof node.unknown_calls === "number") unpriced += node.unknown_calls;
+    else if (typeof node.estimated_cost !== "number") unpriced += 1;
+  }
+  return { total, unpriced };
+}
+
 export interface ResolvedValue {
   value: string;
   source: "global" | "series" | "chapter";

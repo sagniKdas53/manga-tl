@@ -145,8 +145,19 @@ CREATE TABLE public.job_costs (
     model text,
     prompt_tokens integer,
     completion_tokens integer,
+    -- Nullable on purpose, and it stays that way: NULL means "no price was available for this
+    -- call", which is not the same as $0.00 and must never be rendered as one. Readers report the
+    -- unpriced count alongside the total instead of summing NULLs away.
     estimated_cost double precision,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    -- Provenance, all nullable. generation_id is the provider's own id for the call (OpenRouter's
+    -- gen-...) and is what makes a row reconcilable against an invoice after the fact.
+    generation_id text,
+    upstream_provider text,
+    cached_tokens integer,
+    cost_source text,
+    stage text,
+    duration_ms integer
 );
 
 
@@ -699,6 +710,15 @@ CREATE INDEX idx_job_costs_image ON public.job_costs USING btree (image_id);
 
 
 --
+-- Name: idx_job_costs_created; Type: INDEX; Schema: public; Owner: postgres
+--
+
+-- Every cost panel in config/grafana/dashboards/pipeline.json filters on created_at and nothing
+-- else; without this each one is a sequential scan of the whole table.
+CREATE INDEX idx_job_costs_created ON public.job_costs USING btree (created_at);
+
+
+--
 -- Name: layer_elements fk7qyvypb91ygmpsr7fdb7uqblm; Type: FK CONSTRAINT; Schema: public; Owner: tladmin
 --
 
@@ -822,8 +842,12 @@ ALTER TABLE ONLY public.job_costs
 -- Name: job_costs job_costs_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
+-- SET NULL, not CASCADE. Spend outlives the job that incurred it: `DELETE FROM jobs WHERE status =
+-- ANY(...)` is a user-facing "clear jobs" action (routes/jobs.rs), so under CASCADE one click would
+-- delete the cost history behind every spend panel in Grafana. Blanking the link keeps the row,
+-- which is still attached to a live image and still true.
 ALTER TABLE ONLY public.job_costs
-    ADD CONSTRAINT job_costs_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE CASCADE;
+    ADD CONSTRAINT job_costs_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE SET NULL;
 
 
 --

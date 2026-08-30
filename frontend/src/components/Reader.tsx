@@ -17,7 +17,13 @@ import type {
   LayerElement,
   Series,
 } from "../types";
-import { safeFetch, toSlug, formatCost } from "../utils";
+import {
+  safeFetch,
+  toSlug,
+  formatCost,
+  layerCosts,
+  type LayerCostMeta,
+} from "../utils";
 import {
   fitTextInBox,
   clampLineCenter,
@@ -2581,19 +2587,13 @@ export const Reader: React.FC<ReaderProps> = ({
 
       // 4. project.json
       let totalCostVal = 0.0;
+      let unpricedCalls = 0;
       layers.forEach((lData) => {
-        const meta = lData.layer.metadataJson as {
-          cost?: { estimated_cost?: number };
-          qa?: { cost?: { estimated_cost?: number } };
-        } | null;
-        if (meta && typeof meta === "object") {
-          if (typeof meta.cost?.estimated_cost === "number") {
-            totalCostVal += meta.cost.estimated_cost;
-          }
-          if (typeof meta.qa?.cost?.estimated_cost === "number") {
-            totalCostVal += meta.qa.cost.estimated_cost;
-          }
-        }
+        const { total, unpriced } = layerCosts(
+          lData.layer.metadataJson as LayerCostMeta,
+        );
+        totalCostVal += total;
+        unpricedCalls += unpriced;
       });
 
       const projectData = {
@@ -2604,6 +2604,9 @@ export const Reader: React.FC<ReaderProps> = ({
           estimated_cost: totalCostVal,
           display: formatCost(totalCostVal),
           currency: "USD",
+          // Mirrors the server export: the total is only as complete as this says it is.
+          unpricedCalls,
+          complete: unpricedCalls === 0,
         },
         exportedAt: new Date().toISOString(),
         layers: layers.map((lData) => {

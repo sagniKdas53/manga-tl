@@ -229,6 +229,7 @@ async fn build_chapter_meta(
     let mut page_metadata_list: Vec<Value> = Vec::with_capacity(pages.len());
     let mut chapter_total_cost = 0.0f64;
     let mut chapter_has_cost = false;
+    let mut chapter_unpriced: usize = 0;
 
     for page in pages {
         let image: Image = sqlx::query_as("SELECT * FROM images WHERE id = $1")
@@ -272,6 +273,7 @@ async fn build_chapter_meta(
         let mut layers_meta_list: Vec<Value> = Vec::with_capacity(layers.len());
         let mut page_total_cost = 0.0f64;
         let mut page_has_cost = false;
+        let mut page_unpriced_meta = 0usize;
 
         for layer in &layers {
             let mut layer_meta = json!({
@@ -307,6 +309,7 @@ async fn build_chapter_meta(
 
                 let mut accumulated = 0.0f64;
                 let mut cost_found = false;
+                let mut unpriced_nodes = 0usize;
                 let mut absorb = |cost_node: &Value, target: &mut BTreeSet<String>| {
                     let Some(obj) = cost_node.as_object() else {
                         return;
@@ -314,6 +317,19 @@ async fn build_chapter_meta(
                     if let Some(cost) = obj.get("estimated_cost").and_then(Value::as_f64) {
                         cost_found = true;
                         accumulated += cost;
+                    }
+                    // Unpriced work has to be counted here too, not only on the database path. A
+                    // page with no job_costs rows — a restored project, whose importer copies
+                    // metadata_json without recreating cost rows — falls back to this branch, and
+                    // an uncounted unknown here would be published as complete.
+                    match obj.get("unknown_calls").and_then(Value::as_u64) {
+                        // Payloads from the current worker say exactly how many calls it could not
+                        // price.
+                        Some(unknown) => unpriced_nodes += unknown as usize,
+                        // Older ones only omit estimated_cost when the total is unknown, so the
+                        // absence of the key is the signal.
+                        None if !obj.contains_key("estimated_cost") => unpriced_nodes += 1,
+                        None => {}
                     }
                     if let Some(breakdown) = obj.get("breakdown").and_then(Value::as_array) {
                         for item in breakdown {
@@ -358,6 +374,9 @@ async fn build_chapter_meta(
                     page_total_cost += accumulated;
                     page_has_cost = true;
                 }
+                // Outside the cost_found guard on purpose: a layer whose every stage was unpriced
+                // contributes no total at all, and that is exactly the case worth reporting.
+                page_unpriced_meta += unpriced_nodes;
             }
 
             layers_meta_list.push(layer_meta);
@@ -369,14 +388,31 @@ async fn build_chapter_meta(
             .fetch_all(&state.pool)
             .await
             .unwrap_or_default();
-        let (total, source): (f64, &str) = if !db_costs.is_empty() {
-            (
-                db_costs.iter().filter_map(|c| c.estimated_cost).sum(),
-                "database",
-            )
-        } else {
-            (page_total_cost, "layer-metadata")
-        };
+        // A NULL estimated_cost means the call had no known price. Summing skips those rows, so the
+        // total is only as complete as this count says it is — without it, "we could not price 8 of
+        // these calls" and "these calls were free" produce the same number.
+        let (total, source, has_cost, unpriced_calls): (f64, &str, bool, usize) =
+            if !db_costs.is_empty() {
+                (
+                    db_costs.iter().filter_map(|c| c.estimated_cost).sum(),
+                    "database",
+                    true,
+                    db_costs
+                        .iter()
+                        .filter(|c| c.estimated_cost.is_none())
+                        .count(),
+                )
+            } else {
+                // The unpriced count has to come from the same source as the total, or a fallback
+                // export reports the database's count (zero, because there are no rows) against a
+                // metadata total and claims to be complete.
+                (
+                    page_total_cost,
+                    "layer-metadata",
+                    page_has_cost,
+                    page_unpriced_meta,
+                )
+            };
         if !db_costs.is_empty() {
             let recorded: BTreeSet<String> =
                 db_costs.iter().filter_map(|c| c.model.clone()).collect();
@@ -392,13 +428,26 @@ async fn build_chapter_meta(
             "layerCount": layers.len(),
             "layers": layers_meta_list,
             "modelsUsed": models_used.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<BTreeMap<String, Value>>(),
-            "totalCost": { "estimated_cost": total, "display": display, "currency": "USD" },
+            "totalCost": {
+                "estimated_cost": total,
+                "display": display,
+                "currency": "USD",
+                "unpricedCalls": unpriced_calls,
+                "complete": unpriced_calls == 0,
+            },
         });
         page_meta["costSource"] = json!(source);
-        if page_has_cost {
+        // Gated on the source that actually produced `total`. This used to check page_has_cost,
+        // which is only ever set by the layer-metadata path — so a page whose cost came from the
+        // database reported a total of its own and then contributed nothing to the chapter.
+        if has_cost {
             chapter_total_cost += total;
             chapter_has_cost = true;
         }
+        // Outside the guard, for the same reason the per-layer count is: a page where every stage
+        // was unpriced has no total to contribute, and that is precisely when the chapter most
+        // needs to know it is incomplete.
+        chapter_unpriced += unpriced_calls;
 
         // Active visible translation layer drives the manual flags.
         let active_layer = layers.iter().find(|l| {
@@ -477,13 +526,18 @@ async fn build_chapter_meta(
             json!(!matches!(fallback, Some(false))),
         );
     }
-    if chapter_has_cost {
+    // Emitted when there is a cost OR when there are calls nobody could price. A chapter whose
+    // every call was unpriced has a total of zero and would otherwise omit the object entirely,
+    // leaving the reader to guess between "free" and "unknown" from silence.
+    if chapter_has_cost || chapter_unpriced > 0 {
         chapter_meta.insert(
             "totalCost".into(),
             json!({
                 "estimated_cost": chapter_total_cost,
                 "display": format_cost(chapter_total_cost),
                 "currency": "USD",
+                "unpricedCalls": chapter_unpriced,
+                "complete": chapter_unpriced == 0,
             }),
         );
     }
