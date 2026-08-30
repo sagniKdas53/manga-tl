@@ -1,8 +1,13 @@
-# Plan: structured OCR provenance
+# Plan: structured OCR provenance, and populating `job_costs.stage`
 
 **Status:** deferred, not started. Split out of the cost-accounting work (worker PR #30, parent
-branch `cost-accounting-downstream`) so it can be shaped alongside the versioned export schema
-rather than bolted onto the cost fixes.
+PR #110) so it can be shaped alongside the versioned export schema rather than bolted onto the cost
+fixes.
+
+**Two pieces, deliberately batched.** The OCR provenance object is the larger one; populating
+`job_costs.stage` is a handful of lines. They are here together because the provenance design
+*depends* on stage being populated (see "Populating `job_costs.stage`" below) and because the real
+cost of either is the release — a worker commit, a submodule bump and a redeploy — not the code.
 
 ## Why
 
@@ -84,6 +89,49 @@ plus the remote half and one entry per chunk:
 The per-chunk `calls[]` array is what fixes problem 2 — it removes the shared variable rather than
 guarding it, so there is nothing left to race.
 
+## Populating `job_costs.stage`
+
+The column exists and is always NULL. It was added with the rest of the provenance columns in
+PR #110 and wired up in exactly one place — `worker/src/worker/services/ocr.py:125`, the cloud-OCR
+path — so every call through the normal client records a blank. `record_llm_call` defaults it to
+`""` and `llm_client._parse_response` never passes one.
+
+**What it buys.** Which step of the pipeline spent the money: `ocr`, `translation`, `qa`,
+`qa-re-ocr`, `region-redo-ocr`, `region-redo-tl`. Today that cannot be recovered from the row —
+model name is not a proxy, because the same model serves several stages (all seven of the first
+real provenance rows were `google/gemini-3.7-flash`, across different steps). Without it, "is OCR
+or translation costing more per page" has no answer, and the Grafana per-model table cannot be
+grouped by stage.
+
+**Why it belongs with the OCR work.** The `calls[]` array below is specified as a filter over the
+job's existing cost records — `stage == "ocr"` — rather than a parallel structure that can drift.
+That filter matches nothing until stage is populated, so building the provenance object first would
+mean writing a filter against a permanently blank field.
+
+**How.** Not by threading a parameter through `LLMClient` and the shared helpers in
+`services/translation.py` — those are called by QA and redo as well as translation, so every caller
+would have to supply it. Bind it as a `ContextVar` instead, in the one place every job already
+passes through:
+
+- `rq_tasks.process_job_rq(queue_name, job_data)` already receives the queue name and already binds
+  both the trace id and (since PR #30) the job-scoped cost list. Bind the stage there too.
+- The queue name *is* the stage: `queue_name.removeprefix("queue:")` yields `ocr`, `translation`,
+  `qa`, `qa-re-ocr`, `region-redo-ocr`, `region-redo-tl` directly. No mapping table, and the two
+  redo queues distinguish their own types without anyone reading `redoType`.
+- `record_llm_call` reads the ContextVar when its `stage` argument is empty, so the explicit
+  `stage="ocr"` already in `services/ocr.py:125` keeps working and nothing else needs a signature
+  change.
+- Chunk workers already inherit this: the executor call sites submit through
+  `contextvars.copy_context().run`, added in PR #30 for the cost list.
+
+Roughly five lines, mirroring the `trace_id` pattern in `worker/src/worker/config.py:35`.
+
+**Caveat if this slips further.** Rows written in the meantime keep a blank stage permanently —
+nothing in the row records which handler produced it, so there is nothing to backfill from. Same
+shape as the 204 pre-PR-#30 rows that can never be priced. If stage-level spend breakdowns matter
+for the intervening data, this half is worth pulling forward on its own; it is independent of
+everything else here except the `calls[]` filter.
+
 ## Notes for whoever picks this up
 
 - **The YOLO checksum already exists.** `worker/src/worker/services/bubble_detector.py:21` defines
@@ -91,7 +139,8 @@ guarding it, so there is nothing left to race.
 - **`calls[]` entries should reuse the cost breakdown, not duplicate it.** After PR #30 each LLM
   call already produces a record carrying `generation_id`, `upstream_provider`, `model_resolved`,
   tokens, `cost_source` and `duration_ms`. Filter the job's cost list by `stage == "ocr"` rather
-  than assembling a parallel structure that can drift.
+  than assembling a parallel structure that can drift — which is why the stage work above has to
+  land first, or at the same time.
 - **Keep `modelIdentifier` byte-identical for at least one release.** `corpus/scripts/
   corpus_audit.py:184` reads `metadataJson.model` off the OCR layer to answer "which engine read
   this page". Changing that string breaks the corpus audit silently. Add the structured object
@@ -113,3 +162,25 @@ Run one page in each mode and confirm:
 - forcing the primary VLM to fail produces `usedFallbackModel: true` and a `modelUsed` that differs
   from `modelRequested`;
 - `modelIdentifier` is unchanged, and `corpus_audit.py` still reports the same `ocr_model`.
+
+For the stage half, run one page end to end and check the column is populated for every step, not
+just OCR:
+
+```sql
+SELECT stage, count(*), round(sum(estimated_cost)::numeric, 5) AS spend
+FROM job_costs
+WHERE created_at > now() - interval '1 hour'
+GROUP BY stage ORDER BY spend DESC NULLS LAST;
+```
+
+Expect one row per step the page went through and no NULL stage. Then confirm the two properties
+that the ContextVar approach is chosen for:
+
+- **chunked stages stay attributed** — force several OCR chunks and confirm every resulting row
+  still carries `stage = 'ocr'`, which is what proves the `copy_context().run` propagation covers
+  this too;
+- **concurrent jobs do not bleed** — run an OCR job and a translation job at once and confirm no
+  row carries the other's stage.
+
+Once it is populated, the Grafana per-model table can group by stage, which is the point of the
+exercise.
