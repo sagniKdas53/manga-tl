@@ -1,8 +1,15 @@
 # Plan: structured OCR provenance, and populating `job_costs.stage`
 
-**Status:** deferred, not started. Split out of the cost-accounting work (worker PR #30, parent
-PR #110) so it can be shaped alongside the versioned export schema rather than bolted onto the cost
-fixes.
+**Status:** partially done, 2026-08-31, on worker branch `fix/cost-stage-and-ocr-model-label`
+(committed, not pushed). The `job_costs.stage` half is complete, and the chunk-model bug below is
+fixed. The `ocrProvenance` object itself is still not started — it was judged diagnostics rather
+than output quality, and deferred deliberately. Split out of the cost-accounting work (worker
+PR #30, parent PR #110) so it can be shaped alongside the versioned export schema rather than
+bolted onto the cost fixes.
+
+**Corrections found when the plan was picked up.** Two claims below were wrong and are marked
+inline: the chunk problem is not a concurrency race, and the verification section named an env var
+that does not exist.
 
 **Two pieces, deliberately batched.** The OCR provenance object is the larger one; populating
 `job_costs.stage` is a handful of lines. They are here together because the provenance design
@@ -33,11 +40,15 @@ or which of several chunks used which model. Three concrete problems follow from
    "cloud OCR" page still went through local PP-OCR detection and the local YOLO bubble detector,
    and nothing anywhere says which versions.
 
-2. **Concurrent chunks record whichever finished last.** `vlm_model_used` is a single variable
-   (`ocr.py:565`) assigned through `nonlocal` from inside the per-chunk worker (`ocr.py:1038`), at
-   three different fallback tiers (`:1076` user model, `:1112` global model, `:1163` local model).
-   With chunks running concurrently the last writer wins, so a page whose chunks used two different
-   models reports one of them, arbitrarily.
+2. **~~Concurrent chunks record whichever finished last.~~ FIXED 2026-08-31.** `vlm_model_used`
+   was a single variable (`ocr.py:565`) assigned through `nonlocal` from inside the per-chunk worker
+   (`ocr.py:1038`), at three fallback tiers (`:1076` user model, `:1112` global model, `:1163` local
+   model), so a page whose chunks used two models reported only one.
+
+   **This was not a race, as originally written.** The pool at `ocr.py:1178` runs `max_workers=1`,
+   so chunks are sequential and the last one deterministically wins — mundane, not a concurrency
+   bug. Now replaced by a list appended per chunk, with the label naming every distinct model in
+   first-use order; single-model pages keep a byte-identical string.
 
 3. **Silent model substitution is invisible.** Those three tiers are a fallback ladder: when the
    configured model fails, the next one is tried and only a warning is logged. Downstream there is
@@ -89,9 +100,9 @@ plus the remote half and one entry per chunk:
 The per-chunk `calls[]` array is what fixes problem 2 — it removes the shared variable rather than
 guarding it, so there is nothing left to race.
 
-## Populating `job_costs.stage`
+## Populating `job_costs.stage` — DONE 2026-08-31
 
-The column exists and is always NULL. It was added with the rest of the provenance columns in
+The column existed and was always NULL. It was added with the rest of the provenance columns in
 PR #110 and wired up in exactly one place — `worker/src/worker/services/ocr.py:125`, the cloud-OCR
 path — so every call through the normal client records a blank. `record_llm_call` defaults it to
 `""` and `llm_client._parse_response` never passes one.
@@ -108,7 +119,7 @@ job's existing cost records — `stage == "ocr"` — rather than a parallel stru
 That filter matches nothing until stage is populated, so building the provenance object first would
 mean writing a filter against a permanently blank field.
 
-**How.** Not by threading a parameter through `LLMClient` and the shared helpers in
+**How (as implemented).** Not by threading a parameter through `LLMClient` and the shared helpers in
 `services/translation.py` — those are called by QA and redo as well as translation, so every caller
 would have to supply it. Bind it as a `ContextVar` instead, in the one place every job already
 passes through:
@@ -118,15 +129,20 @@ passes through:
 - The queue name *is* the stage: `queue_name.removeprefix("queue:")` yields `ocr`, `translation`,
   `qa`, `qa-re-ocr`, `region-redo-ocr`, `region-redo-tl` directly. No mapping table, and the two
   redo queues distinguish their own types without anyone reading `redoType`.
-- `record_llm_call` reads the ContextVar when its `stage` argument is empty, so the explicit
-  `stage="ocr"` already in `services/ocr.py:125` keeps working and nothing else needs a signature
-  change.
+- `record_llm_call` reads the ContextVar when its `stage` argument is empty, so an explicit stage
+  still wins and nothing needs a signature change.
+- **Correction to the original plan:** it said the hardcoded `stage="ocr"` in `services/ocr.py:125`
+  "keeps working". It kept working *wrongly*. That call site is `_record_cloud_ocr_cost`, reached
+  only from `perform_redo_ocr`, whose only importers are `handlers/qa_re_ocr.py` and
+  `handlers/redo.py` — so the one place a stage was ever set was the one place it was wrong,
+  flattening every QA re-OCR and region redo to plain `ocr` and defeating exactly the distinction
+  the ContextVar is chosen for. It was removed rather than kept.
 - Chunk workers already inherit this: the executor call sites submit through
   `contextvars.copy_context().run`, added in PR #30 for the cost list.
 
 Roughly five lines, mirroring the `trace_id` pattern in `worker/src/worker/config.py:35`.
 
-**Caveat if this slips further.** Rows written in the meantime keep a blank stage permanently —
+**Caveat, now realised.** The 362 rows written before this landed keep a blank stage permanently —
 nothing in the row records which handler produced it, so there is nothing to backfill from. Same
 shape as the 204 pre-PR-#30 rows that can never be priced. If stage-level spend breakdowns matter
 for the intervening data, this half is worth pulling forward on its own; it is independent of
@@ -139,8 +155,8 @@ everything else here except the `calls[]` filter.
 - **`calls[]` entries should reuse the cost breakdown, not duplicate it.** After PR #30 each LLM
   call already produces a record carrying `generation_id`, `upstream_provider`, `model_resolved`,
   tokens, `cost_source` and `duration_ms`. Filter the job's cost list by `stage == "ocr"` rather
-  than assembling a parallel structure that can drift — which is why the stage work above has to
-  land first, or at the same time.
+  than assembling a parallel structure that can drift. The stage work above has now landed, so this
+  filter has something to match.
 - **Keep `modelIdentifier` byte-identical for at least one release.** `corpus/scripts/
   corpus_audit.py:184` reads `metadataJson.model` off the OCR layer to answer "which engine read
   this page". Changing that string breaks the corpus audit silently. Add the structured object
@@ -157,14 +173,21 @@ Run one page in each mode and confirm:
 - local mode records detector, recogniser and the routing decision, and `autoRouted` is true when
   the language forces a different catalogue model than the one requested;
 - cloud mode still records the local detector and bubble-detector checksum;
-- a page split into N chunks produces N `calls[]` entries, each with its own generation id — set
-  `OCR_BATCH_SIZE` low enough to force several;
+- a page split into N chunks produces N `calls[]` entries, each with its own generation id.
+  **Correction:** the original plan said to set `OCR_BATCH_SIZE` low to force several chunks. No
+  such env var exists anywhere in the worker — the chunk size is hardcoded to 10 at `ocr.py:1035`.
+  Forcing multiple chunks means supplying more than ten regions, which is what
+  `test_model_identifier_names_every_model_that_read_the_page` does with eleven;
 - forcing the primary VLM to fail produces `usedFallbackModel: true` and a `modelUsed` that differs
   from `modelRequested`;
 - `modelIdentifier` is unchanged, and `corpus_audit.py` still reports the same `ocr_model`.
 
-For the stage half, run one page end to end and check the column is populated for every step, not
-just OCR:
+For the stage half — **covered by unit tests, still wants one live page.** The properties below are
+pinned in `tests/test_rq_tasks_extra.py` (queue-name derivation for all six stages, and unbinding
+after a handler raises) and `tests/test_rate_limit.py` (chunk-thread inheritance, concurrent jobs not
+bleeding, explicit stage winning). What no unit test covers is the round trip through the backend
+into Postgres, so after the submodule bump and redeploy, run one page end to end and check the
+column is populated for every step, not just OCR:
 
 ```sql
 SELECT stage, count(*), round(sum(estimated_cost)::numeric, 5) AS spend
@@ -173,14 +196,8 @@ WHERE created_at > now() - interval '1 hour'
 GROUP BY stage ORDER BY spend DESC NULLS LAST;
 ```
 
-Expect one row per step the page went through and no NULL stage. Then confirm the two properties
-that the ContextVar approach is chosen for:
-
-- **chunked stages stay attributed** — force several OCR chunks and confirm every resulting row
-  still carries `stage = 'ocr'`, which is what proves the `copy_context().run` propagation covers
-  this too;
-- **concurrent jobs do not bleed** — run an OCR job and a translation job at once and confirm no
-  row carries the other's stage.
+Expect one row per step the page went through and no NULL stage. Note that rows predating this
+change stay NULL, so scope the query to recent rows or the old ones will look like a failure.
 
 Once it is populated, the Grafana per-model table can group by stage, which is the point of the
 exercise.
