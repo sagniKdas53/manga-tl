@@ -148,6 +148,32 @@ shape as the 204 pre-PR-#30 rows that can never be priced. If stage-level spend 
 for the intervening data, this half is worth pulling forward on its own; it is independent of
 everything else here except the `calls[]` filter.
 
+## Redo cost accounting — DONE 2026-08-31, found while validating the above
+
+Validating the stage work on chapter `d1e38221` turned up two holes that made the redo stages
+impossible to observe: the spend never reached the database at all. Both predate this work — the
+region-redo jobs from 2026-08-30 have no cost rows either — and both are now fixed.
+
+1. **Worker, `handlers/redo.py`.** The cost payload was attached inside the `translation` branch
+   only. `perform_redo_ocr` goes out to a paid cloud model whenever the OCR provider is not local,
+   so a region redo billed for the call and dropped it — the same bug PR #30 fixed for redo
+   translation and missed for redo OCR. The attach now happens once after both branches. The
+   callback also carries `jobId` now, so the row can be tied back to the job that spent it.
+2. **Backend, `handle_qa_re_ocr_callback`.** It never accepted a `cost` argument, and
+   `save_job_costs` was only ever called from the OCR, translation and QA handlers. The worker has
+   always sent one (`qa_re_ocr.py:113`); the backend took the callback and discarded the spend.
+   `region_callback` had the same hole and had to resolve the image through the region's page
+   before it could write the row.
+
+Seven paid cloud-OCR calls went unrecorded before this was found (five on 2026-08-31, two on
+2026-08-30). Those rows cannot be recovered.
+
+**Testing note that cost an hour.** The backend integration suite silently no-ops when it cannot
+reach Postgres: `app()` returns `None` and every test returns early, reporting green. It needs
+`SPRING_DATASOURCE_USERNAME=tladmin`, not `postgres` — with the wrong user all seven tests in
+`internal_endpoints.rs` "pass" in about a second without executing anything. Check the wall time
+before believing a green run.
+
 ## Notes for whoever picks this up
 
 - **The YOLO checksum already exists.** `worker/src/worker/services/bubble_detector.py:21` defines
