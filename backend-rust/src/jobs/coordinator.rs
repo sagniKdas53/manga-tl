@@ -1959,6 +1959,7 @@ pub async fn handle_qa_re_ocr_callback(
     image_id: Uuid,
     callback_page_id: Option<Uuid>,
     results: &[Value],
+    cost: Option<&Value>,
 ) -> Result<(), String> {
     tracing::info!(
         "Received QA Re-OCR callback for image: {} with {} results",
@@ -1990,6 +1991,12 @@ pub async fn handle_qa_re_ocr_callback(
         .bind(language)
         .execute(&state.pool)
         .await;
+    }
+
+    // The worker attaches this (qa_re_ocr.py), and until now the handler took the callback and
+    // dropped the spend on the floor — a cloud re-OCR cost real money and left no row behind.
+    if let Some(cost) = cost.filter(|c| !c.is_null()) {
+        save_job_costs(state, image_id, job_id, cost).await;
     }
 
     tracing::info!("QA Re-OCR complete for image {image_id}. Enqueuing translation job...");
