@@ -2391,14 +2391,29 @@ pub async fn create_region_redo_overlay(
     // this type, not merely the one the geometry came from. Layers are composited, so a single
     // stale element left visible anywhere below draws straight through the new one. More than one
     // can be showing at a time: the reader's duplicate-layer button leaves both copies visible.
-    let _ = sqlx::query(
+    //
+    // Which ones were hidden is recorded on the overlay so the change can be undone. The flag lives
+    // on the element, not on the overlay, so hiding or deleting the overlay to get back to the
+    // previous reading would otherwise leave the bubble blank instead of reverting it — and being
+    // able to go back is the entire reason for keeping the original.
+    let hidden: Vec<Uuid> = sqlx::query_scalar(
         "UPDATE layer_elements SET visible = FALSE \
          WHERE region_id = $1 AND visible = TRUE AND layer_id <> $2 \
-           AND layer_id IN (SELECT id FROM layers WHERE type ILIKE $3)",
+           AND layer_id IN (SELECT id FROM layers WHERE type ILIKE $3) \
+         RETURNING id",
     )
     .bind(region_id)
     .bind(layer_id)
     .bind(layer_type)
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let _ = sqlx::query(
+        "UPDATE layers SET metadata_json = jsonb_set(metadata_json::jsonb, '{superseded_elements}', $2::jsonb) WHERE id = $1",
+    )
+    .bind(layer_id)
+    .bind(json!(hidden.iter().map(|i| i.to_string()).collect::<Vec<_>>()))
     .execute(&state.pool)
     .await;
 
@@ -2408,6 +2423,60 @@ pub async fn create_region_redo_overlay(
         prev.layer_id
     );
     Some(layer_id)
+}
+
+/// Keeps a redo overlay and the elements it superseded in step.
+///
+/// The overlay hides what it replaces so the two do not composite on top of each other, but that
+/// flag lives on the *element*, not on the overlay. Hiding or deleting the overlay therefore left
+/// the bubble blank rather than reverting it — the previous reading was still in the database and
+/// still unreachable, which defeats the point of keeping it.
+///
+/// `active` is whether the overlay is (about to be) in effect: false when it is being hidden or
+/// deleted, which restores what it replaced; true when it is shown again, which hides them once
+/// more. A no-op for any layer that is not a redo overlay.
+pub async fn sync_superseded_elements(state: &AppState, layer_id: Uuid, active: bool) {
+    let metadata: Option<Value> =
+        sqlx::query_scalar("SELECT metadata_json FROM layers WHERE id = $1")
+            .bind(layer_id)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+    let Some(metadata) = metadata else {
+        return;
+    };
+    if !metadata
+        .get("overlay")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return;
+    }
+    let ids: Vec<Uuid> = metadata
+        .get("superseded_elements")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(Value::as_str)
+                .filter_map(|s| Uuid::parse_str(s).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    if ids.is_empty() {
+        return;
+    }
+    let _ = sqlx::query("UPDATE layer_elements SET visible = $2 WHERE id = ANY($1)")
+        .bind(&ids)
+        .bind(!active)
+        .execute(&state.pool)
+        .await;
+    tracing::info!(
+        "Redo overlay {layer_id} {} — {} superseded element(s) {}",
+        if active { "re-applied" } else { "stood down" },
+        ids.len(),
+        if active { "hidden again" } else { "restored" }
+    );
 }
 
 /// The full QA verdict. Returns one of DUPLICATE / MANUAL_REVIEW / RETRIED /

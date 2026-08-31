@@ -986,20 +986,24 @@ pub async fn region_callback(
             // Everything below it is not idempotent, which is why it needs claiming at all: a
             // repeat delivery would stack a second history layer, write the cost twice, and, for a
             // re-read, queue a second paid translation.
-            if let Some(image_id) = image_id {
+            // Only deduplicate a delivery that names its job. Without a jobId, claim_callback falls
+            // back to the newest job matching image and type — and region redos are routinely in
+            // flight several at a time on one image, one per bubble. The first callback would then
+            // claim another region's job and that region's own callback would be discarded as a
+            // duplicate, losing its overlay, its cost and its translation. Redoing nothing is a
+            // worse failure than recording something twice, and the worker has sent jobId since the
+            // redo cost fix.
+            let claim_job_id = fields
+                .get("jobId")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty());
+            if let (Some(image_id), Some(job_id)) = (image_id, claim_job_id) {
                 let job_type = if translated {
                     "region-redo-tl"
                 } else {
                     "region-redo-ocr"
                 };
-                if !coordinator::claim_callback(
-                    &state,
-                    fields.get("jobId").and_then(Value::as_str),
-                    image_id,
-                    job_type,
-                )
-                .await
-                {
+                if !coordinator::claim_callback(&state, Some(job_id), image_id, job_type).await {
                     // Already applied. claim_callback has logged it; the first delivery did the work.
                     return StatusCode::OK.into_response();
                 }

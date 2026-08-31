@@ -21,6 +21,9 @@ pub async fn delete_layer(
     if let Some(denied) = deny_viewer(&user, "/api/layers/{id}") {
         return denied;
     }
+    // Deleting a redo overlay has to give back what it hid, or the bubble it patched vanishes:
+    // the overlay held the new text and the element underneath is still flagged invisible.
+    crate::jobs::coordinator::sync_superseded_elements(&state, id, false).await;
     let result = sqlx::query("DELETE FROM layers WHERE id = $1")
         .bind(id)
         .execute(&state.pool)
@@ -66,6 +69,12 @@ pub async fn update_layer(
 
     if updated.rows_affected() == 0 {
         return StatusCode::NOT_FOUND.into_response();
+    }
+    // Toggling a redo overlay off restores the reading it replaced, and toggling it back on hides
+    // that reading again — so the layer switch actually compares the two, which is what it looks
+    // like it should do.
+    if let Some(visible) = visible {
+        crate::jobs::coordinator::sync_superseded_elements(&state, id, visible).await;
     }
     touch_page(&state.pool, id).await;
     StatusCode::OK.into_response()

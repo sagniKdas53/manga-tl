@@ -463,3 +463,172 @@ async fn layer_and_element_lifecycle_with_gating() {
     let _ = ocr_layer;
     cleanup(&pool).await;
 }
+
+/// Codex, third pass. The overlay hides the element it replaces so the two do not composite, but
+/// that flag lives on the element rather than on the overlay — so toggling the overlay off, or
+/// deleting it to get back to the previous reading, left the bubble blank instead of reverting it.
+/// The original was still in the database and still unreachable, which defeats keeping it at all.
+#[tokio::test]
+async fn hiding_or_deleting_a_redo_overlay_gives_the_original_back() {
+    let Some((app, pool, jwt)) = app().await else {
+        return;
+    };
+    // Deliberately not seed_page/probe_user: both key off '__layers-e2e-%' and wipe it on entry,
+    // so sharing them with the other test in this file means whichever seeds second deletes the
+    // other's user out from under it. This fixture is named so nothing else claims it.
+    let series_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \
+         VALUES ($1, now(), now(), '__layers-redo-overlay-series__', 'rightToLeft', 'ja')",
+    )
+    .bind(series_id)
+    .execute(&pool)
+    .await
+    .expect("series");
+    let chapter_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO chapters (id, chapter_number, created_at, updated_at, use_context_memory, series_id) VALUES ($1, 1, now(), now(), TRUE, $2)")
+        .bind(chapter_id)
+        .bind(series_id)
+        .execute(&pool)
+        .await
+        .expect("chapter");
+    let image_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) VALUES ($1, now(), 'probe.png', 'originals/redo-overlay.png', $2, 64, 64)")
+        .bind(image_id)
+        .bind(format!("hash-redo-{image_id}"))
+        .execute(&pool)
+        .await
+        .expect("image");
+    let page_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, 1, $2, $3)")
+        .bind(page_id)
+        .bind(chapter_id)
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("page");
+
+    let email = format!("__layers-redo-overlay-{}@example.invalid", Uuid::new_v4());
+    sqlx::query("INSERT INTO users (id, created_at, display_name, email, password_hash, role) VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'EDITOR')")
+        .bind(&email)
+        .execute(&pool)
+        .await
+        .expect("user");
+    let token = jwt.generate_token(&email).expect("token");
+
+    let region_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','ja',10,20,100,50,$2)")
+        .bind(region_id)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("region");
+
+    // The reading that is on screen…
+    let base_layer = Uuid::new_v4();
+    let base_element = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation',TRUE,0,$2,$3,now())")
+        .bind(base_layer)
+        .bind(serde_json::json!({"layer_name": "Translation"}))
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("base layer");
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,'original',10,20,100,50,TRUE,$2,$3)")
+        .bind(base_element)
+        .bind(base_layer)
+        .bind(region_id)
+        .execute(&pool)
+        .await
+        .expect("base element");
+
+    // …and the overlay that replaced it, recording what it hid.
+    let overlay = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation',TRUE,1,$2,$3,now())")
+        .bind(overlay)
+        .bind(serde_json::json!({
+            "layer_name": "Translation (region redo)",
+            "overlay": true,
+            "region_id": region_id.to_string(),
+            "superseded_elements": [base_element.to_string()],
+        }))
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .expect("overlay layer");
+    sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,'redone',10,20,100,50,TRUE,$2,$3)")
+        .bind(Uuid::new_v4())
+        .bind(overlay)
+        .bind(region_id)
+        .execute(&pool)
+        .await
+        .expect("overlay element");
+    sqlx::query("UPDATE layer_elements SET visible = FALSE WHERE id = $1")
+        .bind(base_element)
+        .execute(&pool)
+        .await
+        .expect("hide base");
+
+    let base_visible = |pool: sqlx::PgPool| async move {
+        sqlx::query_scalar::<_, Option<bool>>("SELECT visible FROM layer_elements WHERE id = $1")
+            .bind(base_element)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    };
+
+    // Toggle the overlay off — the original comes back.
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{overlay}"),
+        Some(&token),
+        Some(serde_json::json!({"visible": false}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        base_visible(pool.clone()).await,
+        Some(true),
+        "hiding the overlay must restore what it replaced, not blank the bubble"
+    );
+
+    // Toggle it back on — the original steps aside again so the two never composite.
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{overlay}"),
+        Some(&token),
+        Some(serde_json::json!({"visible": true}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(base_visible(pool.clone()).await, Some(false));
+
+    // Delete the overlay — same again, and this time permanently.
+    let (status, _, _) = send(
+        app.clone(),
+        "DELETE",
+        &format!("/tlhub/api/layers/{overlay}"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        base_visible(pool.clone()).await,
+        Some(true),
+        "deleting the overlay must leave the previous reading showing"
+    );
+
+    sqlx::query("DELETE FROM series WHERE id = $1")
+        .bind(series_id)
+        .execute(&pool)
+        .await
+        .expect("cleanup series");
+    sqlx::query("DELETE FROM users WHERE email = $1")
+        .bind(&email)
+        .execute(&pool)
+        .await
+        .expect("cleanup user");
+}
