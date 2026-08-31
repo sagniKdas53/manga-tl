@@ -632,3 +632,107 @@ async fn hiding_or_deleting_a_redo_overlay_gives_the_original_back() {
         .await
         .expect("cleanup user");
 }
+
+/// Codex, fourth pass. Redo a region twice and the overlays chain: the first records the base
+/// element, the second records the first overlay's. Switching the *first* one off must not put the
+/// base element back while the second is still showing, or the oldest and newest readings render
+/// together.
+#[tokio::test]
+async fn standing_down_an_overlay_leaves_a_newer_one_alone() {
+    let Some((app, pool, jwt)) = app().await else {
+        return;
+    };
+
+    let series_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO series (id, created_at, updated_at, title, reading_direction, original_language) \
+         VALUES ($1, now(), now(), '__layers-redo-chain-series__', 'rightToLeft', 'ja')",
+    )
+    .bind(series_id)
+    .execute(&pool)
+    .await
+    .expect("series");
+    let chapter_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO chapters (id, chapter_number, created_at, updated_at, use_context_memory, series_id) VALUES ($1, 1, now(), now(), TRUE, $2)")
+        .bind(chapter_id).bind(series_id).execute(&pool).await.expect("chapter");
+    let image_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO images (id, created_at, filename, storage_path, hash, width, height) VALUES ($1, now(), 'p.png', 'originals/redo-chain.png', $2, 64, 64)")
+        .bind(image_id).bind(format!("hash-chain-{image_id}")).execute(&pool).await.expect("image");
+    let page_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO pages (id, page_number, chapter_id, image_id) VALUES ($1, 1, $2, $3)")
+        .bind(page_id)
+        .bind(chapter_id)
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .expect("page");
+
+    let email = format!("__layers-redo-chain-{}@example.invalid", Uuid::new_v4());
+    sqlx::query("INSERT INTO users (id, created_at, display_name, email, password_hash, role) VALUES (uuid_generate_v4(), now(), 'Probe', $1, 'x', 'EDITOR')")
+        .bind(&email).execute(&pool).await.expect("user");
+    let token = jwt.generate_token(&email).expect("token");
+
+    let region_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'あんなに','ja',10,20,100,50,$2)")
+        .bind(region_id).bind(page_id).execute(&pool).await.expect("region");
+
+    // base ← overlay1 ← overlay2, each hiding the one before it.
+    let base_element = Uuid::new_v4();
+    let first_element = Uuid::new_v4();
+    let mut layer_ids = Vec::new();
+    for (z, name, element, hides, visible) in [
+        (0, "Translation", base_element, None, false),
+        (1, "redo 1", first_element, Some(base_element), false),
+        (2, "redo 2", Uuid::new_v4(), Some(first_element), true),
+    ] {
+        let layer = Uuid::new_v4();
+        let metadata = match hides {
+            Some(hidden) => serde_json::json!({
+                "layer_name": name, "overlay": true,
+                "region_id": region_id.to_string(),
+                "superseded_elements": [hidden.to_string()],
+            }),
+            None => serde_json::json!({"layer_name": name}),
+        };
+        sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'translation',TRUE,$2,$3,$4,now())")
+            .bind(layer).bind(z).bind(metadata).bind(page_id).execute(&pool).await.expect("layer");
+        sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,$2,10,20,100,50,$3,$4,$5)")
+            .bind(element).bind(name).bind(visible).bind(layer).bind(region_id)
+            .execute(&pool).await.expect("element");
+        layer_ids.push(layer);
+    }
+
+    // Stand down the FIRST overlay while the second is still showing.
+    let (status, _, _) = send(
+        app.clone(),
+        "PUT",
+        &format!("/tlhub/api/layers/{}", layer_ids[1]),
+        Some(&token),
+        Some(serde_json::json!({"visible": false}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let base_visible: Option<bool> =
+        sqlx::query_scalar("SELECT visible FROM layer_elements WHERE id = $1")
+            .bind(base_element)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        base_visible,
+        Some(false),
+        "the base reading must stay hidden while a newer overlay still supersedes this region"
+    );
+
+    sqlx::query("DELETE FROM series WHERE id = $1")
+        .bind(series_id)
+        .execute(&pool)
+        .await
+        .expect("cleanup");
+    sqlx::query("DELETE FROM users WHERE email = $1")
+        .bind(&email)
+        .execute(&pool)
+        .await
+        .expect("cleanup user");
+}

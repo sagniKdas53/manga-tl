@@ -109,6 +109,54 @@ pub async fn claim_callback(
     }
 }
 
+/// Transaction-scoped `claim_callback`, for callers whose writes must land or fail *with* the
+/// claim.
+///
+/// The pool-based version marks the delivery applied in its own statement, so a caller that claims
+/// and then fails leaves the job flagged and the worker's retry discarded as a duplicate — the
+/// result lost. Claiming inside the caller's transaction makes a rollback release the claim too.
+///
+/// Returns Ok(false) when the delivery was already applied.
+pub async fn claim_callback_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job_id: Option<&str>,
+    image_id: Uuid,
+    job_type: &str,
+) -> Result<bool, sqlx::Error> {
+    let job: Option<Job> = match job_id.filter(|s| !s.is_empty()) {
+        Some(id) => {
+            sqlx::query_as("SELECT * FROM jobs WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&mut **tx)
+                .await?
+        }
+        // Deliberately no fallback to "newest job for this image and type". Region redos run
+        // several at a time on one image, one per bubble, so that lookup claims another region's
+        // job and drops this region's result as a duplicate.
+        None => None,
+    };
+    let Some(job) = job else {
+        return Ok(true); // nothing to deduplicate against — apply
+    };
+    if !job.job_type.eq_ignore_ascii_case(job_type) {
+        return Ok(true);
+    }
+    let res = sqlx::query(
+        "UPDATE jobs SET callback_applied_at = now() WHERE id = $1 AND callback_applied_at IS NULL",
+    )
+    .bind(&job.id)
+    .execute(&mut **tx)
+    .await?;
+    if res.rows_affected() == 0 {
+        tracing::warn!(
+            "Ignoring duplicate {job_type} callback for image {image_id} — job {} already applied its result",
+            job.id
+        );
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 /// Resolves the page a callback reports on: exact pageId first, then first page for
 /// the image.
 pub async fn resolve_page_for_callback(
@@ -2269,11 +2317,11 @@ pub async fn hide_translation_elements(
 /// Returns the new layer's id, or None when there is nothing to supersede (a region with no
 /// visible element of this type yet — in that case the in-place write is all there is to do).
 pub async fn create_region_redo_overlay(
-    state: &AppState,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     region_id: Uuid,
     new_text: Option<&str>,
     layer_type: &str,
-) -> Option<Uuid> {
+) -> Result<Option<Uuid>, sqlx::Error> {
     // The element being superseded, topmost first. It supplies the geometry and styling the
     // overlay has to reproduce exactly, or the redone bubble would be typeset unlike the one it
     // replaces.
@@ -2287,30 +2335,35 @@ pub async fn create_region_redo_overlay(
     // that sits above a visible one, and then the update below hides something already invisible
     // while the visible stale text stays underneath the new overlay — old and new composited on top
     // of each other. Visible first, then topmost; hidden matches only when nothing is showing.
-    let prev: LayerElement = sqlx::query_as(
+    let Some(prev): Option<LayerElement> = sqlx::query_as(
         "SELECT e.* FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
          WHERE e.region_id = $1 AND l.type ILIKE $2 \
          ORDER BY (e.visible AND l.visible) DESC NULLS LAST, l.z_order DESC LIMIT 1",
     )
     .bind(region_id)
     .bind(layer_type)
-    .fetch_optional(&state.pool)
-    .await
-    .ok()
-    .flatten()?;
+    .fetch_optional(&mut **tx)
+    .await?
+    else {
+        // Nothing to supersede — a region with no element of this type yet. Not an error: the
+        // in-place write is all there is to do. Distinct from the Err path, which means the write
+        // genuinely failed and the caller must not acknowledge the delivery.
+        return Ok(None);
+    };
 
-    let source_layer: Layer = sqlx::query_as("SELECT * FROM layers WHERE id = $1")
+    let Some(source_layer): Option<Layer> = sqlx::query_as("SELECT * FROM layers WHERE id = $1")
         .bind(prev.layer_id)
-        .fetch_optional(&state.pool)
-        .await
-        .ok()
-        .flatten()?;
+        .fetch_optional(&mut **tx)
+        .await?
+    else {
+        return Ok(None);
+    };
     let page_id = source_layer.page_id;
 
     let next_z: i32 =
         sqlx::query_scalar("SELECT COALESCE(MAX(z_order), -1) + 1 FROM layers WHERE page_id = $1")
             .bind(page_id)
-            .fetch_one(&state.pool)
+            .fetch_one(&mut **tx)
             .await
             .unwrap_or(0);
 
@@ -2332,7 +2385,7 @@ pub async fn create_region_redo_overlay(
     });
 
     let layer_id = Uuid::new_v4();
-    if let Err(err) = sqlx::query(
+    sqlx::query(
         "INSERT INTO layers (id, type, target_language, visible, z_order, metadata_json, page_id, created_at) \
          VALUES ($1,$2,$3,TRUE,$4,$5,$6,now())",
     )
@@ -2342,14 +2395,10 @@ pub async fn create_region_redo_overlay(
     .bind(next_z)
     .bind(&metadata)
     .bind(page_id)
-    .execute(&state.pool)
-    .await
-    {
-        tracing::error!("Could not create redo overlay layer for region {region_id}: {err}");
-        return None;
-    }
+    .execute(&mut **tx)
+    .await?;
 
-    if let Err(err) = sqlx::query(
+    sqlx::query(
         "INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, auto_size, \
          font, font_style, font_weight, background_color, text_color, box_shape, mask_polygon, \
          word_wrap, rotation, size, layer_id, region_id) \
@@ -2374,28 +2423,9 @@ pub async fn create_region_redo_overlay(
     .bind(prev.size)
     .bind(layer_id)
     .bind(region_id)
-    .execute(&state.pool)
-    .await
-    {
-        tracing::error!("Could not create redo overlay element for region {region_id}: {err}");
-        // Leave no half-made layer behind: an empty visible layer renders nothing but shows up in
-        // the layer list as if it held the redo.
-        let _ = sqlx::query("DELETE FROM layers WHERE id = $1")
-            .bind(layer_id)
-            .execute(&state.pool)
-            .await;
-        return None;
-    }
+    .execute(&mut **tx)
+    .await?;
 
-    // Hide everything this supersedes — every element still showing for this region on a layer of
-    // this type, not merely the one the geometry came from. Layers are composited, so a single
-    // stale element left visible anywhere below draws straight through the new one. More than one
-    // can be showing at a time: the reader's duplicate-layer button leaves both copies visible.
-    //
-    // Which ones were hidden is recorded on the overlay so the change can be undone. The flag lives
-    // on the element, not on the overlay, so hiding or deleting the overlay to get back to the
-    // previous reading would otherwise leave the bubble blank instead of reverting it — and being
-    // able to go back is the entire reason for keeping the original.
     let hidden: Vec<Uuid> = sqlx::query_scalar(
         "UPDATE layer_elements SET visible = FALSE \
          WHERE region_id = $1 AND visible = TRUE AND layer_id <> $2 \
@@ -2405,24 +2435,23 @@ pub async fn create_region_redo_overlay(
     .bind(region_id)
     .bind(layer_id)
     .bind(layer_type)
-    .fetch_all(&state.pool)
-    .await
-    .unwrap_or_default();
+    .fetch_all(&mut **tx)
+    .await?;
 
-    let _ = sqlx::query(
+    sqlx::query(
         "UPDATE layers SET metadata_json = jsonb_set(metadata_json::jsonb, '{superseded_elements}', $2::jsonb) WHERE id = $1",
     )
     .bind(layer_id)
     .bind(json!(hidden.iter().map(|i| i.to_string()).collect::<Vec<_>>()))
-    .execute(&state.pool)
-    .await;
+    .execute(&mut **tx)
+    .await?;
 
     tracing::info!(
         "Region {region_id} redo recorded as overlay layer {layer_id} (z={next_z}), superseding element {} on layer {}",
         prev.id,
         prev.layer_id
     );
-    Some(layer_id)
+    Ok(Some(layer_id))
 }
 
 /// Keeps a redo overlay and the elements it superseded in step.
@@ -2466,6 +2495,49 @@ pub async fn sync_superseded_elements(state: &AppState, layer_id: Uuid, active: 
     if ids.is_empty() {
         return;
     }
+
+    // Restoring is only safe when nothing newer is still standing on this region. Redo twice and
+    // the layers chain — the first overlay records the base element, the second records the first
+    // overlay's. Switching the *first* one off would otherwise put the base element back while the
+    // second overlay is still showing, and the oldest and newest readings would render together.
+    // Hiding is always safe, so this guard applies to restoration only.
+    if !active {
+        let region_id = metadata
+            .get("region_id")
+            .and_then(Value::as_str)
+            .and_then(|s| Uuid::parse_str(s).ok());
+        if let Some(region_id) = region_id {
+            let z_order: Option<i32> =
+                sqlx::query_scalar("SELECT z_order FROM layers WHERE id = $1")
+                    .bind(layer_id)
+                    .fetch_optional(&state.pool)
+                    .await
+                    .ok()
+                    .flatten();
+            let successor: Option<Uuid> = sqlx::query_scalar(
+                "SELECT l.id FROM layers l \
+                 WHERE l.page_id = (SELECT page_id FROM layers WHERE id = $1) \
+                   AND l.id <> $1 AND l.visible = TRUE \
+                   AND l.metadata_json->>'overlay' = 'true' \
+                   AND l.metadata_json->>'region_id' = $2 \
+                   AND l.z_order > $3 LIMIT 1",
+            )
+            .bind(layer_id)
+            .bind(region_id.to_string())
+            .bind(z_order.unwrap_or(i32::MIN))
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+            if let Some(successor) = successor {
+                tracing::info!(
+                    "Redo overlay {layer_id} stood down, but overlay {successor} still supersedes region {region_id} — leaving its elements hidden"
+                );
+                return;
+            }
+        }
+    }
+
     let _ = sqlx::query("UPDATE layer_elements SET visible = $2 WHERE id = ANY($1)")
         .bind(&ids)
         .bind(!active)

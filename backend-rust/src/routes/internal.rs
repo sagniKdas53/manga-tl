@@ -947,7 +947,50 @@ pub async fn region_callback(
     .ok()
     .flatten();
 
-    let result = sqlx::query(
+    // Claim, region write and history layer go in together or not at all.
+    //
+    // Claiming first and failing left the delivery flagged applied with nothing written, so the
+    // worker's retry was dropped as a duplicate and the result lost. Claiming afterwards was worse
+    // in a different way: a stale redelivery of an older job overwrote the canonical text *before*
+    // being recognised as a duplicate, so the region carried an old reading while the visible
+    // overlay showed the newer one — and the next translation redo read the stale value. A rollback
+    // now releases the claim, so a retry can do the work properly.
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => {
+            tracing::error!("Region {region_id} callback could not open a transaction: {err}");
+            return internal_error_text(err);
+        }
+    };
+
+    // Only deduplicate a delivery that names its job: without one there is no safe way to tell
+    // which of several in-flight region redos on this image it belongs to.
+    let claim_job_id = fields
+        .get("jobId")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty());
+    if let (Some(image_id), Some(job_id)) = (image_id, claim_job_id) {
+        let job_type = if translated {
+            "region-redo-tl"
+        } else {
+            "region-redo-ocr"
+        };
+        match coordinator::claim_callback_tx(&mut tx, Some(job_id), image_id, job_type).await {
+            Ok(true) => {}
+            Ok(false) => {
+                // Already applied; the first delivery did the work. Nothing written, nothing to undo.
+                let _ = tx.rollback().await;
+                return StatusCode::OK.into_response();
+            }
+            Err(err) => {
+                tracing::error!("Region {region_id} callback could not claim its job: {err}");
+                let _ = tx.rollback().await;
+                return internal_error_text(err);
+            }
+        }
+    }
+
+    if let Err(err) = sqlx::query(
         "UPDATE ocr_regions SET \
            text = COALESCE($2, text), \
            detected_language = COALESCE($3, detected_language), \
@@ -971,58 +1014,43 @@ pub async fn region_callback(
             .unwrap_or(false),
     )
     .bind(fields.get("confidence").and_then(Value::as_f64))
-    .execute(&state.pool)
-    .await;
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("Error processing region callback: {err}");
+        let _ = tx.rollback().await;
+        return internal_error_text(err);
+    }
 
-    match result {
-        Ok(_) => {
-            // Claimed only once the region write has succeeded, and deliberately after it rather
-            // than before. Marking the delivery applied and *then* failing would leave the worker's
-            // retry classified as a duplicate and dropped, losing the result outright. Everything
-            // above this line is idempotent — re-running the write with the same payload is a
-            // no-op — and nothing below it can return an error, so a claim now means the work is
-            // genuinely done.
-            //
-            // Everything below it is not idempotent, which is why it needs claiming at all: a
-            // repeat delivery would stack a second history layer, write the cost twice, and, for a
-            // re-read, queue a second paid translation.
-            // Only deduplicate a delivery that names its job. Without a jobId, claim_callback falls
-            // back to the newest job matching image and type — and region redos are routinely in
-            // flight several at a time on one image, one per bubble. The first callback would then
-            // claim another region's job and that region's own callback would be discarded as a
-            // duplicate, losing its overlay, its cost and its translation. Redoing nothing is a
-            // worse failure than recording something twice, and the worker has sent jobId since the
-            // redo cost fix.
-            let claim_job_id = fields
-                .get("jobId")
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty());
-            if let (Some(image_id), Some(job_id)) = (image_id, claim_job_id) {
-                let job_type = if translated {
-                    "region-redo-tl"
-                } else {
-                    "region-redo-ocr"
-                };
-                if !coordinator::claim_callback(&state, Some(job_id), image_id, job_type).await {
-                    // Already applied. claim_callback has logged it; the first delivery did the work.
-                    return StatusCode::OK.into_response();
-                }
-            }
+    // Record the redo as a one-element layer stacked on top rather than overwriting the element in
+    // place. The old text used to be destroyed here — the only step in the editor that could not be
+    // undone, in the one place a user is most likely to want to compare two readings.
+    let (layer_type, new_text) = if translated {
+        (
+            "translation",
+            fields.get("translatedText").and_then(Value::as_str),
+        )
+    } else {
+        ("ocr", fields.get("text").and_then(Value::as_str))
+    };
+    // Ok(None) means there was nothing to supersede, which is fine. An Err means the history layer
+    // genuinely failed to write, and acknowledging that would leave the canonical text changed with
+    // no record of what it replaced and no retry able to repair it.
+    if let Err(err) =
+        coordinator::create_region_redo_overlay(&mut tx, region_id, new_text, layer_type).await
+    {
+        tracing::error!("Region {region_id} redo overlay could not be written: {err}");
+        let _ = tx.rollback().await;
+        return internal_error_text(err);
+    }
 
-            // Record the redo as a one-element layer stacked on top rather than overwriting the
-            // element in place. The old text used to be destroyed here — the only step in the
-            // editor that could not be undone, in the one place a user is most likely to want to
-            // compare two readings side by side.
-            let (layer_type, new_text) = if translated {
-                (
-                    "translation",
-                    fields.get("translatedText").and_then(Value::as_str),
-                )
-            } else {
-                ("ocr", fields.get("text").and_then(Value::as_str))
-            };
-            coordinator::create_region_redo_overlay(&state, region_id, new_text, layer_type).await;
+    if let Err(err) = tx.commit().await {
+        tracing::error!("Region {region_id} callback could not commit: {err}");
+        return internal_error_text(err);
+    }
 
+    {
+        {
             // A re-read invalidates the translation that was made from the old text, so redoing the
             // OCR carries on into a redo of that bubble's translation: one new OCR layer, then one
             // new translation layer. The translation job reads the region's current text, which is
@@ -1032,11 +1060,17 @@ pub async fn region_callback(
             // Redoing a translation on its own does not come back the other way. Asking for a new
             // wording is not a claim that the source text was misread, and re-running OCR would
             // throw away the reading the user was working from.
+            //
+            // Enqueued after the commit, so it cannot be rolled back once queued. The cost of that
+            // ordering is that a failure here leaves a re-read page with its old translation and no
+            // retry to fix it — logged loudly, and recoverable by redoing the translation by hand.
             if !translated
                 && let Err(err) = coordinator::trigger_redo(&state, region_id, "translation").await
             {
                 tracing::error!(
-                    "Region {region_id} was re-read but its translation could not be requeued: {err}"
+                    "Region {region_id} was re-read but its translation could not be requeued ({err}) \
+                     — the page now shows a new reading with its previous translation, redo the \
+                     translation for this bubble to resolve it"
                 );
             }
             // A region redo can go out to a paid cloud model — perform_redo_ocr does whenever the
@@ -1060,10 +1094,6 @@ pub async fn region_callback(
                 }
             }
             StatusCode::OK.into_response()
-        }
-        Err(err) => {
-            tracing::error!("Error processing region callback: {err}");
-            internal_error_text(err)
         }
     }
 }

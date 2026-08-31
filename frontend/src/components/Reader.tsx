@@ -2053,6 +2053,26 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   };
 
+  // A region-redo overlay owns the visibility of the element it replaced: switching the overlay
+  // off restores that element server-side, and deleting it restores it permanently. Neither shows
+  // up in the optimistic local update, which only touches the overlay's own `visible` flag — so
+  // without this the bubble reads blank until a full reload. Bust the cache and let the page
+  // reload, the same way a completed job does.
+  const isRedoOverlay = (layer: Layer) =>
+    (layer.metadataJson as { overlay?: boolean } | undefined)?.overlay === true;
+
+  const refreshAfterOverlayChange = useCallback(() => {
+    if (!selectedPage) return;
+    pageDetailsCache.current.delete(selectedPage.id);
+    pageDetailsCache.current.delete(selectedPage.imageId);
+    prefetchQueue.current.delete(selectedPage.id);
+    cacheEpochRef.current += 1;
+    Promise.resolve().then(() => {
+      setCacheEpoch(cacheEpochRef.current);
+      setLoadedImageId(null);
+    });
+  }, [selectedPage]);
+
   const handleToggleLayerVisibility = async (layerId: string) => {
     const layerData = layers.find((l) => l.layer.id === layerId);
     if (!layerData) return;
@@ -2085,6 +2105,9 @@ export const Reader: React.FC<ReaderProps> = ({
         },
         body: JSON.stringify({ visible: nextVisible }),
       });
+      if (isRedoOverlay(layerData.layer)) {
+        refreshAfterOverlayChange();
+      }
     } catch (err) {
       console.error("Failed to persist layer visibility toggle:", err);
     }
@@ -2109,7 +2132,11 @@ export const Reader: React.FC<ReaderProps> = ({
           });
 
           if (res.ok) {
+            const deleted = layers.find((l) => l.layer.id === layerId);
             setLayers((prev) => prev.filter((l) => l.layer.id !== layerId));
+            if (deleted && isRedoOverlay(deleted.layer)) {
+              refreshAfterOverlayChange();
+            }
             showToast("Layer deleted successfully", "success");
           } else if (res.status === 403) {
             showToast(
