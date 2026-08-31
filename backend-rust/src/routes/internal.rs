@@ -271,9 +271,22 @@ pub async fn get_image_info(
         }
         None => Vec::new(),
     };
+    // The latest *complete* OCR pass. Region-redo overlays are skipped: an overlay is a
+    // one-element patch that sits at the top of the stack, and the filter below treats whatever
+    // this picks as the definitive set of regions for the page. Counting one would collapse
+    // `ocrRegions` to the single redone bubble for every consumer of this endpoint — the reader and
+    // the worker's own redo handler included.
     let latest_ocr_layer = layers
         .iter()
-        .filter(|l| l.layer_type.eq_ignore_ascii_case("ocr"))
+        .filter(|l| {
+            l.layer_type.eq_ignore_ascii_case("ocr")
+                && !l
+                    .metadata_json
+                    .as_ref()
+                    .and_then(|m| m.get("overlay"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+        })
         .max_by_key(|l| l.z_order);
 
     let all_regions: Vec<OcrRegion> = match page {
@@ -924,11 +937,7 @@ pub async fn region_callback(
 
     let translated = fields.contains_key("translatedText");
 
-    // Claim the delivery before anything non-idempotent runs. Every other callback in this pipeline
-    // is guarded this way (AUDIT-P4); this one was not, which was survivable while it only wrote
-    // text — that update is idempotent — but no longer is. A repeat delivery would now stack a
-    // second history layer, write the cost a second time, and, for a re-read, queue a second paid
-    // translation. Resolved once here and reused below rather than looked up again per side effect.
+    // Resolved once and reused: the claim below and the cost write both need it.
     let image_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT p.image_id FROM ocr_regions r JOIN pages p ON p.id = r.page_id WHERE r.id = $1",
     )
@@ -937,24 +946,6 @@ pub async fn region_callback(
     .await
     .ok()
     .flatten();
-    if let Some(image_id) = image_id {
-        let job_type = if translated {
-            "region-redo-tl"
-        } else {
-            "region-redo-ocr"
-        };
-        if !coordinator::claim_callback(
-            &state,
-            fields.get("jobId").and_then(Value::as_str),
-            image_id,
-            job_type,
-        )
-        .await
-        {
-            // Already applied. claim_callback has logged it; the first delivery did the work.
-            return StatusCode::OK.into_response();
-        }
-    }
 
     let result = sqlx::query(
         "UPDATE ocr_regions SET \
@@ -985,6 +976,35 @@ pub async fn region_callback(
 
     match result {
         Ok(_) => {
+            // Claimed only once the region write has succeeded, and deliberately after it rather
+            // than before. Marking the delivery applied and *then* failing would leave the worker's
+            // retry classified as a duplicate and dropped, losing the result outright. Everything
+            // above this line is idempotent — re-running the write with the same payload is a
+            // no-op — and nothing below it can return an error, so a claim now means the work is
+            // genuinely done.
+            //
+            // Everything below it is not idempotent, which is why it needs claiming at all: a
+            // repeat delivery would stack a second history layer, write the cost twice, and, for a
+            // re-read, queue a second paid translation.
+            if let Some(image_id) = image_id {
+                let job_type = if translated {
+                    "region-redo-tl"
+                } else {
+                    "region-redo-ocr"
+                };
+                if !coordinator::claim_callback(
+                    &state,
+                    fields.get("jobId").and_then(Value::as_str),
+                    image_id,
+                    job_type,
+                )
+                .await
+                {
+                    // Already applied. claim_callback has logged it; the first delivery did the work.
+                    return StatusCode::OK.into_response();
+                }
+            }
+
             // Record the redo as a one-element layer stacked on top rather than overwriting the
             // element in place. The old text used to be destroyed here — the only step in the
             // editor that could not be undone, in the one place a user is most likely to want to

@@ -1623,3 +1623,103 @@ async fn redo_supersedes_the_element_that_is_actually_rendering() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+/// Codex P1 on the second pass, and the most damaging bug in this branch. get_image_info treats
+/// the highest-z OCR layer as the definitive set of regions for the page. A region-redo overlay is
+/// a one-element layer that sits at the top of that stack, so counting it collapsed `ocrRegions`
+/// to the single redone bubble — for the reader and for the worker's own redo handler, which reads
+/// this endpoint to find the region it was asked to redo.
+#[tokio::test]
+async fn an_ocr_overlay_does_not_shrink_the_page_to_one_region() {
+    let Some((app, pool, _redis, _state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
+
+    // A full OCR pass over three bubbles.
+    let full_layer = Uuid::new_v4();
+    sqlx::query("INSERT INTO layers (id, type, visible, z_order, metadata_json, page_id, created_at) VALUES ($1,'ocr',TRUE,0,$2,$3,now())")
+        .bind(full_layer)
+        .bind(serde_json::json!({"layer_name": "OCR"}))
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let mut region_ids = Vec::new();
+    for i in 0..3 {
+        let region_id = Uuid::new_v4();
+        sqlx::query("INSERT INTO ocr_regions (id, text, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,$2,'ja',$3,20,100,50,$4)")
+            .bind(region_id)
+            .bind(format!("bubble {i}"))
+            .bind(i * 10)
+            .bind(page_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO layer_elements (id, text, x, y, max_width, max_height, visible, layer_id, region_id) VALUES ($1,$2,$3,20,100,50,TRUE,$4,$5)")
+            .bind(Uuid::new_v4())
+            .bind(format!("bubble {i}"))
+            .bind(f64::from(i * 10))
+            .bind(full_layer)
+            .bind(region_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        region_ids.push(region_id);
+    }
+
+    // Redo one of them, which lands a one-element OCR overlay above the full pass.
+    let (status, _, body) = request(
+        &app,
+        "POST",
+        &format!("/tlhub/api/internal/ocr-regions/{}/callback", region_ids[1]),
+        internal(None),
+        Some(serde_json::json!({"text": "re-read", "detectedLanguage": "ja"}).to_string()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let overlay_z: Option<i32> = sqlx::query_scalar(
+        "SELECT MAX(z_order) FROM layers WHERE page_id = $1 AND metadata_json->>'overlay' = 'true'",
+    )
+    .bind(page_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        overlay_z.unwrap() > 0,
+        "overlay must sit above the full pass for this to be a real test"
+    );
+
+    let (status, _, body) = request(
+        &app,
+        "GET",
+        &format!("/tlhub/api/internal/images/{image_id}?pageId={page_id}"),
+        internal(None),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let info: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let returned = info["ocrRegions"].as_array().expect("ocrRegions");
+    assert_eq!(
+        returned.len(),
+        3,
+        "the page still has three bubbles; an overlay is a patch, not a complete pass"
+    );
+
+    // And the redone one carries its new text.
+    let redone = returned
+        .iter()
+        .find(|r| r["id"] == region_ids[1].to_string())
+        .expect("redone region still present");
+    assert_eq!(redone["text"], "re-read");
+
+    sqlx::query("DELETE FROM jobs WHERE image_id = $1")
+        .bind(image_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    cleanup_series(&pool, series_id).await;
+}
