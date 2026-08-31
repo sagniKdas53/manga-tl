@@ -968,3 +968,128 @@ async fn image_info_filters_regions_by_latest_ocr_layer_and_carries_context() {
 
     cleanup_series(&pool, series_id).await;
 }
+
+
+/// Redo callbacks used to drop their spend on the floor. A region redo goes out to a paid cloud
+/// model whenever the OCR provider is not local (perform_redo_ocr), and the worker attaches what it
+/// spent — but this route only ever wrote the text, so four paid redos on 2026-08-31 left no rows.
+/// The qa-re-ocr handler had the matching hole: it took `cost` and never persisted it.
+#[tokio::test]
+async fn redo_callbacks_persist_their_spend() {
+    let Some((app, pool, _redis, _state)) = app().await else {
+        return;
+    };
+    let (series_id, _chapter_id, page_id, image_id) = seed_pipeline(&pool).await;
+
+    let region_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO ocr_regions (id, detected_language, bbox_x, bbox_y, bbox_w, bbox_h, page_id) VALUES ($1,'ja',0,0,1,1,$2)")
+        .bind(region_id)
+        .bind(page_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let cost = serde_json::json!({
+        "currency": "USD",
+        "estimated_cost": 0.00011,
+        "prompt_tokens": 800,
+        "completion_tokens": 20,
+        "cached_tokens": 0,
+        "unknown_calls": 0,
+        "priced_calls": 1,
+        "breakdown": [{
+            "model": "qwen/qwen3-vl-32b-instruct",
+            "provider": "openrouter",
+            "estimated_cost": 0.00011,
+            "prompt_tokens": 800,
+            "completion_tokens": 20,
+            "cached_tokens": 0,
+            "generation_id": "gen-redo-1",
+            "upstream_provider": "Alibaba",
+            "cost_source": "authoritative",
+            "stage": "region-redo-ocr",
+            "duration_ms": 4200
+        }]
+    });
+
+    let (status, _, body) = request(
+        &app,
+        "POST",
+        &format!("/tlhub/api/internal/ocr-regions/{region_id}/callback"),
+        internal(None),
+        Some(
+            serde_json::json!({
+                "text": "あんなに大きかったけ…",
+                "confidence": 1.0,
+                "detectedLanguage": "ja",
+                "cost": cost,
+            })
+            .to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (stage, spend): (Option<String>, Option<f64>) = sqlx::query_as(
+        "SELECT stage, estimated_cost FROM job_costs WHERE image_id = $1 AND generation_id = 'gen-redo-1'",
+    )
+    .bind(image_id)
+    .fetch_one(&pool)
+    .await
+    .expect("region redo cost row");
+    assert_eq!(stage.as_deref(), Some("region-redo-ocr"));
+    assert_eq!(spend, Some(0.00011));
+
+    // Same hole on the qa-re-ocr callback, which does carry an imageId of its own.
+    let qa_cost = serde_json::json!({
+        "currency": "USD",
+        "estimated_cost": 0.00022,
+        "prompt_tokens": 900,
+        "completion_tokens": 30,
+        "cached_tokens": 0,
+        "unknown_calls": 0,
+        "priced_calls": 1,
+        "breakdown": [{
+            "model": "qwen/qwen3-vl-32b-instruct",
+            "provider": "openrouter",
+            "estimated_cost": 0.00022,
+            "prompt_tokens": 900,
+            "completion_tokens": 30,
+            "cached_tokens": 0,
+            "generation_id": "gen-qa-reocr-1",
+            "upstream_provider": "Alibaba",
+            "cost_source": "authoritative",
+            "stage": "qa-re-ocr",
+            "duration_ms": 1700
+        }]
+    });
+    let (status, _, body) = request(
+        &app,
+        "POST",
+        "/tlhub/api/internal/jobs/callback/qa-re-ocr",
+        internal(None),
+        Some(
+            serde_json::json!({
+                "imageId": image_id.to_string(),
+                "pageId": page_id.to_string(),
+                "results": [{"regionId": region_id.to_string(), "text": "再OCR", "confidence": 0.9, "detectedLanguage": "ja"}],
+                "cost": qa_cost,
+            })
+            .to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (stage, spend): (Option<String>, Option<f64>) = sqlx::query_as(
+        "SELECT stage, estimated_cost FROM job_costs WHERE image_id = $1 AND generation_id = 'gen-qa-reocr-1'",
+    )
+    .bind(image_id)
+    .fetch_one(&pool)
+    .await
+    .expect("qa-re-ocr cost row");
+    assert_eq!(stage.as_deref(), Some("qa-re-ocr"));
+    assert_eq!(spend, Some(0.00022));
+
+    cleanup_series(&pool, series_id).await;
+}
