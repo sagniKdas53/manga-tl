@@ -965,6 +965,23 @@ pub async fn region_callback(
                 ("ocr", fields.get("text").and_then(Value::as_str))
             };
             coordinator::create_region_redo_overlay(&state, region_id, new_text, layer_type).await;
+
+            // A re-read invalidates the translation that was made from the old text, so redoing the
+            // OCR carries on into a redo of that bubble's translation: one new OCR layer, then one
+            // new translation layer. The translation job reads the region's current text, which is
+            // why the in-place write above is kept — the layers are the history, `ocr_regions` is
+            // what the next stage reads.
+            //
+            // Redoing a translation on its own does not come back the other way. Asking for a new
+            // wording is not a claim that the source text was misread, and re-running OCR would
+            // throw away the reading the user was working from.
+            if !translated {
+                if let Err(err) = coordinator::trigger_redo(&state, region_id, "translation").await {
+                    tracing::error!(
+                        "Region {region_id} was re-read but its translation could not be requeued: {err}"
+                    );
+                }
+            }
             // A region redo can go out to a paid cloud model — perform_redo_ocr does whenever the
             // OCR provider is not local — and the worker now attaches what it spent. This route
             // only knows the region, so the image it belongs to has to be resolved before the cost

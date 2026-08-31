@@ -2277,9 +2277,15 @@ pub async fn create_region_redo_overlay(
     // The element being superseded, topmost first. It supplies the geometry and styling the
     // overlay has to reproduce exactly, or the redone bubble would be typeset unlike the one it
     // replaces.
+    //
+    // Deliberately not filtered on visibility, of either the element or its layer. A bubble is
+    // resolved through the region it belongs to, so whichever layers happen to be hidden or
+    // stacked over each other at the time cannot change which region a redo lands on. Requiring
+    // `visible = TRUE` meant a redo silently did nothing whenever the user had toggled the layer
+    // off — or, on a second redo, whenever the first had already hidden what it replaced.
     let prev: LayerElement = sqlx::query_as(
         "SELECT e.* FROM layer_elements e JOIN layers l ON l.id = e.layer_id \
-         WHERE e.region_id = $1 AND l.type ILIKE $2 AND e.visible = TRUE AND l.visible = TRUE \
+         WHERE e.region_id = $1 AND l.type ILIKE $2 \
          ORDER BY l.z_order DESC LIMIT 1",
     )
     .bind(region_id)
